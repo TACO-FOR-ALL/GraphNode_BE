@@ -1,40 +1,101 @@
 ---
 applyTo: '**'
 ---
-## 목표
+Account / Session (BFF + 서버 세션)
+목표
 
-- 본 서비스는 **데스크톱 앱**이 프론트이며, **BFF(백엔드)** 가 모든 인증을 책임진다. 프론트는 토큰을 직접 교환·관리하지 않는다. [Microsoft Learn+1](https://learn.microsoft.com/en-us/azure/architecture/patterns/backends-for-frontends?utm_source=chatgpt.com)
-- **보안 단순화(MVP)**: 한 번 로그인하면 **무기한 로그인 상태**를 유지한다(사용자 로그아웃·서버 철회 시까지).
-- **한 Provider = 한 User** 원칙: 동일 Provider 계정은 하나의 User에만 매핑한다(Provider Linking 미도입).
+BFF 서버 세션으로 로그인 상태를 유지한다. 프론트(데스크톱 앱)는 토큰을 직접 관리하지 않고 세션 쿠키 자동 전송만 한다. BFF는 프론트의 인증을 전담한다. 
+Microsoft Learn
 
-## 범위
+MVP 단계에서는 서버 메모리 세션을 사용(단, 운영 전환 시 외부 스토어로 교체 전제). 
+Express
 
-- 서버의 **사용자/세션/권한** 파트 전반과 데스크톱 앱과의 인터페이스.
+사용자가 로그아웃하거나 서버가 철회하기 전까지 사실상 무기한 로그인 UX를 제공한다(긴 maxAge + 필요 시 rolling).
 
-## 필수 규칙
+범위
 
-1. **BFF 소유권**
-    - OAuth2 교환(Authorization Code, 토큰 저장/갱신)은 **항상 서버에서만** 수행한다. 클라이언트에는 **우리 서버 세션 토큰(불투명 ID)** 만 전달한다. [Microsoft Learn](https://learn.microsoft.com/en-us/azure/architecture/patterns/backends-for-frontends?utm_source=chatgpt.com)
-2. **무기한 세션(간소화)**
-    - 서버는 **장기 세션 토큰(만료 없음)** 을 발급한다(철회/로그아웃/재로그인 시 폐기).
-    - 토큰은 **고엔트로피 불투명 값**(예: 256비트 랜덤)으로 발급하고, 서버 DB에 해시(단방향)로 저장한다.
-    - 토큰 탈취 리스크는 MVP에서 수용하되, **옵션**으로 “사용자-주도 토큰 철회”만 지원.
-3. **Provider 토큰은 서버에만**
-    - Google/Apple **access/refresh token은 서버 DB에 암호화 저장**하고, 클라이언트에 절대 노출하지 않는다.
-    - Google/Apple refresh token은 **언제든 무효화 가능**(사용자 철회, 6개월 미사용 등)하므로, 실패 시 재로그인 UX를 제공한다. [Google for Developers+1](https://developers.google.com/identity/protocols/oauth2/policies?utm_source=chatgpt.com)
-4. **한 Provider = 한 User**
-    - `users(provider, provider_user_id)`는 유니크 제약. 이메일 기반 자동 병합/링킹은 **금지**.
-5. **데스크톱 UX 전제**
-    - 로그인은 시스템 외부 브라우저에서 진행(임베디드 WebView 금지). 이는 Google·표준 권고에 부합한다. [datatracker.ietf.org+1](https://datatracker.ietf.org/doc/html/rfc8252?utm_source=chatgpt.com)
-6. **권한 모델(간단)**
-    - MVP에선 **단일 권한(일반 사용자)** 만. 관리자 페이지 필요 시 별도 역할 추가.
-7. **탈퇴/철회**
-    - 사용자 탈퇴 시 우리 세션 무효화 + 외부 Provider 권한 철회(가능 범위 내).
+세션 발급/검증/소멸, 세션 쿠키 정책, /me·/logout API, CSRF 최소 대책.
 
+필수 규칙
 
+세션 소유권(서버)
 
-## 승인 기준(AC)
+로그인 성공 시 불투명 세션ID를 발급하고 서버 측 저장소(메모리)에 sessionID → userId 매핑을 보관한다.
 
-- [정적] API 어디에서도 Provider access/refresh token을 프론트로 반환하지 않는다.
-- [런타임] 로그인 후 세션 토큰만 클라이언트가 보유하며, 재기동 후에도 세션이 유효하다(무기한).
-- [오류] Provider refresh 실패 시 표준 에러(RFC 9457) + “재로그인 필요” 가이드가 반환된다
+프론트는 세션 쿠키만 사용하며, 별도 토큰(Access/Refresh/JWT)을 다루지 않는다.
+
+세션 쿠키 보안 속성
+
+Set-Cookie: __Host-session=<opaque>; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=<long>
+
+HttpOnly/Secure/SameSite는 필수. 필요 시 크로스사이트에서만 SameSite=None; Secure.
+
+__Host- 접두사는 덮어쓰기·경로 혼선 완화에 도움. 
+MDN Web Docs
++2
+MDN Web Docs
++2
+
+세션 저장소(MVP: 메모리)
+
+express-session MemoryStore 사용(개발·MVP 한정). 운영에는 적합하지 않으므로 교체 계획을 문서화. 
+Express
+
+CSRF 최소 대책
+
+SameSite=Strict/Lax로 1차 방어 + 변경 요청(POST/PUT/PATCH/DELETE)에서 Origin/Referer 검사 적용. (SameSite만으로는 충분치 않을 수 있음) 
+web.dev
+
+세션 수명 정책
+
+maxAge를 길게 설정(“사실상 무기한”). 필요 시 rolling(슬라이딩 연장) 활성화. 서버 재시작 시 메모리 세션은 소실됨(재로그인 필요) — 문서화 필수. 
+Express
+
+동시 세션 정책(선택)
+
+기본: 멀티 세션 허용(기기별 세션 독립).
+
+옵션: 단일 세션(새 로그인 시 기존 세션 즉시 폐기). 다음 요청에서 401 반환 → 프론트는 쿠키 삭제 후 재로그인 유도.
+
+엔드포인트 / 흐름
+
+GET /me : 세션 검증 → 200 { userId, displayName, avatarUrl } / 비로그인 401
+
+POST /logout : 세션 소멸 후 쿠키 만료(Set-Cookie: ...; Max-Age=0)
+
+(내부) 세션 미들웨어: 쿠키 파싱 → 세션 조회 → req.userId 바인딩
+
+데이터 / 저장
+
+세션: 메모리(KV: sessionID → { userId, createdAt, ... })
+
+유저(참조): users(id, provider, provider_user_id, email, display_name, avatar_url, created_at, last_login_at)
+
+(provider, provider_user_id) UNIQUE (Linking 미도입)
+
+오류/응답 규격
+
+Problem Details (RFC 9457) 포맷 사용(예: 401 type: "session.invalid" / 419 type: "session.expired")
+
+단일-세션 정책 사용 시, 폐기된 세션의 다음 요청은 401 + SESSION_REVOKED 코드
+
+승인 기준(AC)
+
+[보안] 세션 쿠키는 HttpOnly; Secure; SameSite 로 설정됨(MDN 권고 준수). 
+MDN Web Docs
++1
+
+[런타임] 로그인 후 앱 재시작 시에도 세션이 유지(서버 미재시작 가정).
+
+[정책] 서버 재기동 시 메모리 세션 소실·재로그인 필요를 문서화. 
+Express
+
+[CSRF] 변경 요청에서 Origin/Referer 검사가 동작한다. 
+web.dev
+
+구현 메모
+
+쿠키 이름은 __Host-session 권장(HTTPS·Path=/ 요구). 
+MDN Web Docs
+
+MemoryStore 경고는 정상(“운영 비권장”). 이후 Redis 등으로 교체 시, 코드 변경 최소화를 위해 세션 어댑터 인터페이스를 도입해 두기

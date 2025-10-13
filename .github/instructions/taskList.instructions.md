@@ -12,76 +12,119 @@ Provide project context and coding guidelines that AI should follow when generat
 
 ## Week 1
 
+### Week 1
+
 ### Day 1 — 레포 셋업 & 기본 뼈대
 
-* **Node/TS/Express 초기화**
-
-  * `npm init -y`, `tsconfig.json`, `src/index.ts`(Express 부팅), `nodemon`/`ts-node-dev`.
-  * **폴더 구조**: `src/app/{routes,controllers,middlewares}`, `src/core/{services,domain,ports}`, `src/infra/{repositories,db}`, `src/shared/{dtos,errors,utils}`, `src/config`, `src/bootstrap`.
-  * **헬스체크 라우트**: `GET /healthz` 200.
-* **완료 기준**: 로컬에서 `GET /healthz` 200 응답, ESLint/Prettier 설정 끝.
+- **Node/TS/Express 초기화 & 헬스체크**
+    - `npm init -y`, TS/ESLint/Prettier, `src/index.ts`, `GET /healthz` 200.
+- **AC**: 로컬에서 `/healthz` 200.
 
 ### Day 2 — 중앙 에러/로깅 토대
 
-* **중앙 에러 핸들러(Express 4-arity)**: 모든 예외 → **Problem Details(RFC 9457)** 응답(JSON, `application/problem+json`). ([datatracker.ietf.org][7])
-* **로깅**: pino(pino-http)로 **JSON 구조 로그** + 요청 ID/traceparent 전파 미들웨어. ([expressjs.com][6])
-* **AC**: 잘못된 경로 호출 시 404가 RFC 9457 스키마로 응답.
+- **중앙 에러 핸들러(Express 4-arity)** → **Problem Details(RFC 9457)**로 표준화.
+- **요청 로깅**: pino + 요청 ID/traceparent.
+- **AC**: 존재하지 않는 경로 404가 Problem Details(JSON)로 응답. [Express+1](https://expressjs.com/en/guide/error-handling.html?utm_source=chatgpt.com)
 
 ### Day 3 — DB 연결 & 마이그레이션
 
-* **MySQL 연결**(+ 마이그레이션 도구 예: Prisma/Knex)
+Day 3 — DB 연결 & 마이그레이션 (Docker dev, Cloud-ready)
 
-  * 테이블: `users(id, provider, provider_user_id, email, created_at)`, `sessions(id, user_id, token_hash, created_at, revoked_at)`
-* **MongoDB 연결**
+목표
 
-  * 컬렉션: `conversations`, `messages` (각각 `created_at/updated_at/deleted_at` 포함)
-* **AC**: 부팅 시 두 DB 연결 성공 로그, 마이그레이션 적용.
+- 개발: Docker Compose로 MySQL 8 + MongoDB 7 컨테이너를 띄우고 앱이 두 DB에 연결한다.
+- 초기 스키마: MySQL은 users 테이블을 자동 생성, MongoDB는 필수 인덱스를 보장한다.
+- 클라우드 전환: 운영 배포 시에는 환경변수(MYSQL_URL, MONGODB_URL)만 바꾸면 RDS/Atlas 등으로 즉시 연결된다(애플리케이션 코드 변경 없음).
+- 보안/품질: ENV 런타임 검증, 로그는 pino(JSON)로 stdout.
+
+산출물
+
+- docker-compose.yml, .env(.env.example)
+- 초기 스키마: db/mysql/init/001_init.sql
+- DB 어댑터: src/infra/db/{mysql.ts,mongodb.ts,migrate.ts,index.ts}
+- ENV 검증: src/config/env.ts
+- 서버 부트스트랩에서 initDatabases() 연동
+- NPM 스크립트: db:up/down/logs
+
+디자인 원칙
+
+- 12-Factor Config: 모든 연결 정보는 환경변수. 코드에 자격증명/호스트 하드코딩 금지.
+- 레이어링: infra/db 어댑터는 Express 비의존. app/bootstrap만 infra를 호출.
+- 마이그레이션: Day3는 간단 SQL+인덱스 보장. 차후 Knex/Prisma 등으로 대체 가능.
+- 운영: 앱은 stdout(JSON)만 출력, 수집·보관은 인프라(CloudWatch/Fluent Bit) 담당.
+- **AC**: 승인 기준(AC)
+
+- docker-compose로 MySQL/Mongo 기동, healthcheck 통과.
+- 서버 부팅 시 순서대로 로그가 stdout(JSON)으로 출력:
+    - db.connected (mysql)
+    - db.migrations_checked
+    - db.connected (mongodb)
+    - db.ready
+- /healthz 200 응답 유지.
+- MySQL users 테이블 존재, MongoDB 인덱스 생성 확인.
+- .env 없이 부팅 시 ENV_VALIDATION_FAILED로 안전 중단.
+
+트러블슈팅
+
+- 포트 충돌: compose 포트를 변경(예: "3307:3306", "27018:27017").
+- 초기화 레이스: healthcheck가 안정화 후 앱 실행. 여전히 실패 시 재시도 로직 보강.
+- 인증 실패: .env 자격증명과 compose 환경 일치 확인.
+
+요약
+
+- 개발은 Docker Compose, 운영은 환경변수로 RDS/Atlas에 전환.
+- 레포의 코드/레이어 구조는 그대로 유지되며, 커넥션 URL만 바꾸면 환경 전환이 즉시 가능하다.
 
 ### Day 4 — 도메인/서비스/리포지토리 틀
 
-* **Ports & Repos**: `UserRepository`(MySQL), `ConversationRepository`/`MessageRepository`(Mongo) 인터페이스 정의 및 목 구현.
-* **Service 샘플**: `CreateConversationService`(빈 구현) 생성.
-* **AC**: Controller가 Repository를 직접 import하지 않고 Service만 호출(의존성 규칙 점검).
+- **Ports & Repos**: `UserRepository`(MySQL), `Conversation/MessageRepository`(Mongo) 인터페이스 + 목 구현.
+- **Service 샘플**: `CreateConversationService`.
+- **AC**: Controller→Service→Repository 계층 규칙 준수.
 
-### Day 5 — OAuth2(BFF) Google: Start/Callback
+### Day 5 — OAuth2(BFF) Google: Start/Callback (+PKCE/state)
 
-* **Start**: `GET /auth/google/start` → Google Auth URL(외부 브라우저)로 302. 파라미터: scope, state, code_challenge(PKCE 선택). 가이드 준수. ([Google for Developers][8])
-* **Callback**: `GET /auth/google/callback?code&state` → 서버에서 코드 교환(토큰 저장은 서버만), **우리 세션 토큰 발급**(랜덤 불투명, DB 해시 저장).
-* **AC**: 수동 테스트로 Google 로그인 → 세션 토큰 발급·저장 확인. WebView 금지 원칙 문서화(외부 브라우저 사용). ([datatracker.ietf.org][3])
+- **Start**: `GET /auth/google/start` → 외부 브라우저로 302 (scope, **state**, **code_challenge=S256**).
+- **Callback**: `GET /auth/google/callback?code&state`
+    - 서버에서 **state 검증 → (선택) PKCE 검증 → 코드 교환**, Provider 토큰은 **서버에만 저장**.
+    - **세션 생성**: **express-session MemoryStore**에 `sessionID→userId`, **세션 쿠키(HttpOnly/Secure/SameSite)** 발급.
+- **AC**: 실제 구글 계정으로 로그인 성공, **쿠키 기반 세션 생성** 확인(브라우저 DevTools로 쿠키 속성 점검). WebView 금지 주석/문서화. [IETF Datatracker+1](https://datatracker.ietf.org/doc/html/rfc8252?utm_source=chatgpt.com)
 
-## Week 2
+### Week 2
 
-### Day 6 — Apple OAuth2: Start/Callback + client secret
+### Day 6 — Apple OAuth2: Start/Callback + Client Secret 로테이션
 
-* **Apple client secret(JWT) 생성 유틸**(키/키ID/팀ID 기반): 만료/회전 주기 설정. ([Apple Developer][9])
-* **Start/Callback** 엔드포인트 구현(동일 패턴).
-* **AC**: Apple 로그인 플로우 수동 검증(테스트 키로). 실패 시 RFC 9457로 에러 응답.
+- **Apple client secret(JWT) 유틸**: 팀ID/키ID/프라이빗 키로 생성, **유효기간 ≤ 6개월** + 갱신 알람.
+- **Start/Callback**: Google과 동일 패턴(state/PKCE 적용 가능).
+- **AC**: Apple 로그인 수동 검증, client secret 만료·로테이션 가이드 문서 포함. [Microsoft Learn](https://learn.microsoft.com/en-us/azure/active-directory-b2c/identity-provider-apple-id?utm_source=chatgpt.com)
 
-### Day 7 — 세션/프로필 & 로그아웃
+### Day 7 — 세션/프로필 & 로그아웃 (**쿠키 기반으로 수정**)
 
-* **`GET /me`**: 세션 토큰(Bearer) 검증 → 사용자 정보 반환.
-* **`POST /auth/logout`**: 세션 `revoked_at` 세팅(현재 토큰 폐기).
-* **AC**: 로그인 후 앱 재시작해도 세션 유효(무기한). 로그아웃 후 `GET /me`는 401 Problem Details.
+- **`GET /me`**: **세션 쿠키(HttpOnly)** 검증 → `{ userId, displayName, avatarUrl }` 반환.
+- taskList Day 7 섹션에 “core/ports/SessionStore 정의 + infra 구현체(MySQL→개발, Redis→운영용) + DI로 바인딩(SESSION_BACKEND로 선택)”
+- **`POST /auth/logout`**: 메모리 세션 삭제 + 쿠키 만료(`Max-Age=0`).
+- **AC**: 로그인 후 앱 재실행 시 **서버가 재시작되지 않았다면** 세션 유지. 로그아웃 후 `/me`는 401 Problem Details.
 
-### Day 8 — Conversations API
+### Day 8 — 쿠키/CSRF 하드닝 & 데스크톱 브릿지(선택)
 
-* **스펙(OpenAPI 3.1) 먼저 작성**: `/v1/conversations` `POST/GET`, `/v1/conversations/{id}` `GET`
-* **구현**: Controller→Service→Repository 흐름, 생성 시 201 + `Location` 헤더(REST 원칙).
-* **AC**: OpenAPI 문서와 실제 응답 일치(상태코드/헤더/스키마).
+- **쿠키 정책**: `__Host-session` 이름 사용(HTTPS, **Path=/**, **Domain 미포함**, **Secure**, **HttpOnly**, **SameSite=Strict** 기본).
+- **CSRF 최소 대책**: 변경 메서드에서 **Origin/Referer 검사**.
+- **데스크톱 브릿지(선택)**: 앱이 브라우저 쿠키를 재사용 못할 환경일 때
+    - **루프백 리다이렉트/커스텀 스킴**(RFC 8252) 또는
+    - **/auth/complete?txn=** 폴링로 **세션 바인딩 신호** 전달.
+- **AC**: 쿠키 속성 자동 테스트 추가, 외부 브라우저 경유 흐름 E2E 통과. [MDN Web Docs+1](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie?utm_source=chatgpt.com)
 
-### Day 9 — Messages API
+### Day 9 — Conversations API
 
-* **스펙**: `/v1/conversations/{id}/messages` `GET/POST`
-* **구현**: 메시지 append, 페이지네이션(예: `limit`, `cursor`), 인덱스 `(conversation_id, created_at)`
-* **AC**: 대화 생성→메시지 추가→조회 플로우 통과. 잘못된 입력은 400 Problem Details.
+- **OpenAPI 3.1 스펙**: `/v1/conversations` `POST/GET`, `/v1/conversations/{id}` `GET`.
+- **구현**: Controller→Service→Repository, 생성 시 201 + `Location`.
+- **AC**: 스펙과 응답 합치.
 
-### Day 10 — 문서/테스트/하드닝
+### Day 10 — Messages API + 문서/테스트/하드닝
 
-* **OpenAPI 3.1** 최종 정리 + 예시(JSON) 추가. ([OpenAPI Initiative Publications][5])
-* **API 테스트**: Supertest로 핵심 플로우(로그인·/me·대화/메시지) 시나리오, 오류는 **Problem Details** 스키마(Ajv 2020-12)로 검증. ([datatracker.ietf.org][7])
-* **간단 보안 점검**: 비밀키는 env/시크릿에만, 로그 민감정보 미기록.
-* **AC**: CI에서 테스트 통과, 문서 미리보기(Swagger UI/Redoc) 정상 빌드.
-
+- **스펙**: `/v1/conversations/{id}/messages` `GET/POST` (+페이지네이션).
+- **테스트**: Supertest로 로그인→`/me`→대화/메시지 시나리오, **Problem Details(JSON)** 스키마 검증.
+- **운영 메모**: MemoryStore는 **프로덕션 부적합**—추후 Redis 등 외부 스토어 전환 계획 문서화.
+- **AC**: CI 통과, Swagger UI/Redoc 미리보기 OK.
 ---
 
 ## 산출물 체크리스트(최종)
