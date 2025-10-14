@@ -1,0 +1,68 @@
+openapi: 3.1.0
+info:
+  title: GraphNode API
+  version: 0.1.0
+  description: >-
+    Backend API for GraphNode. Errors follow RFC 9457 Problem Details.
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required: [ok]
+              examples:
+                ok:
+                  externalValue: ./examples/health-ok.json   # ← 파일 예제 사용
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+              examples:
+                sample:
+                  externalValue: ./examples/problem-404.json  # ← 파일 예제 사용
+  /v1/healthz:
+    get:
+      summary: Health check (versioned)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required: [ok]
+              examples:
+                ok:
+                  externalValue: ./examples/health-ok.json
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+              examples:
+                sample:
+                  externalValue: ./examples/problem-404.json
+components:
+  schemas:
+    Problem:
+      $ref: ../schemas/problem.json
+    Conversation :
+      $ref: ../schemas/conversation.json
+    Message :
+      $ref: ../schemas/message.json

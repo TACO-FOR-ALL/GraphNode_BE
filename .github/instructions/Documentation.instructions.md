@@ -135,6 +135,58 @@ paths:
     - OAS/Schema JSON 스키마 검증.
     - 예시 payload 유효성 테스트(샘플 호출에 스키마 적용).
 
+
+---
+applyTo: '**'
+---
+# Day별 개발 일지(Daily Dev Log) 작성 및 만든 API와 type, DTO들에 대한 문서화 작성명령문
+
+목표
+- 매 Day 작업 완료 시, 누구나 같은 절차로 변경 내용을 이해·재현 가능하도록 **표준 템플릿 문서**를 남긴다. 
+
+API 및 type 문서 작성 항목
+
+
+
+
+Day별 개발 일지 항목
+위치/명명
+- 위치: `docs/guides/`
+- 파일명: `DAY<n>-<주제-케밥>.md` (예: `DAY3-db-connection.md`)
+- 템플릿: `docs/guides/templates/DAYn-devlog-template.md`
+
+필수 포함 섹션
+- TL;DR(목표/결과/영향)
+- 산출물(추가/수정/삭제 파일)
+- 메서드/클래스 변경 상세(시그니처/예외/로깅)
+- 실행/온보딩(사전 조건, 명령어, 검증 절차)
+- 구성/가정/제약(DB·ENV·보안 전제)
+- 리스크/부채/트러블슈팅
+- 다음 Day 목표/후속 작업
+- 참고/링크, 변경 이력
+
+프로세스(매 Day 종료 시)
+1) 템플릿 복사 → 파일 생성
+   - Windows PowerShell:
+     - `Copy-Item docs\guides\templates\DAYn-devlog-template.md docs\guides\DAY<n>-<주제>.md`
+2) 내용 채우기(빈 섹션 금지, N/A 허용)
+3) 필요한 경우 OpenAPI/Schema/ADR/CHANGELOG도 갱신
+4) PR 시 체크리스트
+   - [ ] 본 Day 일지 파일 경로를 PR 설명에 링크
+   - [ ] 에러 응답은 Problem Details 규격 확인
+   - [ ] 온보딩/명령어가 최신(재현 가능)
+
+승인 기준(AC)
+- `docs/guides/DAY<n>-*.md` 존재, 필수 섹션 채움
+- 재현 절차로 로컬에서 서버기동 및 검증 가능(`/healthz`, 404 Problem Details)
+- 변경된 공개 API는 `/docs/api/openapi.yaml` 업데이트/린트 통과
+- DB/스키마 변경 시 마이그레이션/인덱스 절차 명시
+
+주의
+- 시크릿/토큰은 문서·로그에 노출 금지
+- 레이어 규칙 및 에러/로깅 표준은 기존 명령문과 일치해야 함
+
+
 ## 승인 기준(AC)
 
 - **[정적]** `/docs/api/openapi.yaml` 이 존재하고, 모든 공개 API가 등재되어 있으며 **Spectral 린트 0 경고**. [stoplight.io](https://stoplight.io/open-source/spectral?utm_source=chatgpt.com)
@@ -142,3 +194,115 @@ paths:
 - **[런타임]** 에러 응답이 전부 `application/problem+json` 스키마에 부합한다(자동 테스트). [rfc-editor.org](https://www.rfc-editor.org/rfc/rfc9457.html?utm_source=chatgpt.com)
 - **[문서]** CHANGELOG가 Keep a Changelog 포맷으로 최신 상태이며 릴리스마다 갱신. [keepachangelog.com](https://keepachangelog.com/en/1.1.0/?utm_source=chatgpt.com)
 - **[구성]** 문서 타입(튜토리얼/하우투/레퍼런스/설명)이 **Diátaxis** 구분으로 정리되어 탐색 가능. [diataxis.fr](https://diataxis.fr/?utm_source=chatgpt.com)
+
+
+---
+
+## API·타입 레퍼런스 생성(보강)
+
+- TypeDoc으로 코드 주석(JSDoc)을 HTML/MD 참조로 산출:
+  - 출력 위치: `docs/reference/api`
+  - 소스 링크: 각 심볼에 GitHub 소스 링크 표시
+  - 공개 범위: `@public` 만 문서화, `@internal`은 제외
+- NPM Scripts(권장)
+  - `docs:typedoc` — TypeDoc 실행
+  - `docs:preview` — Swagger UI/Redoc + TypeDoc 정적 미리보기
+- 네비게이션
+  - Reference는 “코드 심볼(함수/타입/클래스)” 중심, OpenAPI/Schema는 “계약/데이터 모델” 중심
+  - Guide(How-to) 문서와 교차 링크: 컨트롤러/서비스 설명에서 관련 심볼/스키마로 연결
+
+## 문서화 범주·책임(보강, Diátaxis와 합치)
+
+- Tutorials(튜토리얼): 빠른 시작/온보딩/환경설정
+- How-to(가이드): OAuth 플로우, 동기화 절차, DB 마이그레이션
+- Reference(참조): OpenAPI, JSON Schema, TypeDoc(API/타입)
+- Explanation(설명): 아키텍처 결정(ADR), 에러 코드 레지스트리 배경
+- 변경 시 원칙
+  - 엔드포인트/스키마 변경 → OpenAPI/Schema + 예시 업데이트
+  - 코드 심볼 변경 → TypeDoc 재생성(공개 API 변경 시 CHANGELOG 항목 추가)
+  - 에러 코드 추가 → 에러 레지스트리 + Problem Details 스키마/예시 반영
+
+## 예시/샘플 데이터(보강)
+
+- 모든 엔드포인트는 최소 1개 이상의 요청/응답 예시(JSON)를 `/docs/api/examples`에 둔다.
+- 에러 응답 예시는 `application/problem+json` 형식으로, `correlationId` 포함.
+- JSON Schema 예시(`examples`)는 실제 유효한 값으로 Spectral/Ajv 검증 통과.
+
+## 교차 참조 정책(보강)
+
+- OpenAPI → Schema: `$ref` 우선
+- OpenAPI/Schema → TypeDoc: description 또는 externalDocs로 참조 링크 추가
+- Guides → OpenAPI/TypeDoc: “참고” 섹션에 직접 링크
+- Error Registry → RFC 9457 스키마 → 중앙 에러 핸들러 흐름으로 연결 고리 유지
+
+## PR 체크리스트(추가)
+
+- [ ] OpenAPI 변경사항 반영 및 Spectral 린트 통과
+- [ ] JSON Schema `$id/$schema`·예시 추가/수정
+- [ ] 공개 API/JSDoc 갱신(TypeDoc 재생성)
+- [ ] Problem Details 응답 예시 최신화
+- [ ] Guides/README 온보딩 명령 최신화
+
+## 승인 기준(AC, 보강)
+
+- [정적] TypeDoc 빌드 경고 0건, `docs/reference/api`가 최신화.
+- [정적] 공개 export 심볼 JSDoc 커버리지 100%(@public 기준).
+- [계약] OpenAPI/Schema/Spectral 통과 + 예시 유효성(Ajv) 통과.
+- [상호참조] Guides ↔ Reference ↔ OpenAPI 간 최소 1개 이상의 교차링크 보유.
+
+```// filepath: c:\Users\KANG\Desktop\BIT_Uni_record\TACO 4\TeamProject\GraphNode\GraphNode_BE\.github\instructions\Documentation.instructions.md
+// ...existing code...
+
+---
+
+## API·타입 레퍼런스 생성(보강)
+
+- TypeDoc으로 코드 주석(JSDoc)을 HTML/MD 참조로 산출:
+  - 출력 위치: `docs/reference/api`
+  - 소스 링크: 각 심볼에 GitHub 소스 링크 표시
+  - 공개 범위: `@public` 만 문서화, `@internal`은 제외
+- NPM Scripts(권장)
+  - `docs:typedoc` — TypeDoc 실행
+  - `docs:preview` — Swagger UI/Redoc + TypeDoc 정적 미리보기
+- 네비게이션
+  - Reference는 “코드 심볼(함수/타입/클래스)” 중심, OpenAPI/Schema는 “계약/데이터 모델” 중심
+  - Guide(How-to) 문서와 교차 링크: 컨트롤러/서비스 설명에서 관련 심볼/스키마로 연결
+
+## 문서화 범주·책임(보강, Diátaxis와 합치)
+
+- Tutorials(튜토리얼): 빠른 시작/온보딩/환경설정
+- How-to(가이드): OAuth 플로우, 동기화 절차, DB 마이그레이션
+- Reference(참조): OpenAPI, JSON Schema, TypeDoc(API/타입)
+- Explanation(설명): 아키텍처 결정(ADR), 에러 코드 레지스트리 배경
+- 변경 시 원칙
+  - 엔드포인트/스키마 변경 → OpenAPI/Schema + 예시 업데이트
+  - 코드 심볼 변경 → TypeDoc 재생성(공개 API 변경 시 CHANGELOG 항목 추가)
+  - 에러 코드 추가 → 에러 레지스트리 + Problem Details 스키마/예시 반영
+
+## 예시/샘플 데이터(보강)
+
+- 모든 엔드포인트는 최소 1개 이상의 요청/응답 예시(JSON)를 `/docs/api/examples`에 둔다.
+- 에러 응답 예시는 `application/problem+json` 형식으로, `correlationId` 포함.
+- JSON Schema 예시(`examples`)는 실제 유효한 값으로 Spectral/Ajv 검증 통과.
+
+## 교차 참조 정책(보강)
+
+- OpenAPI → Schema: `$ref` 우선
+- OpenAPI/Schema → TypeDoc: description 또는 externalDocs로 참조 링크 추가
+- Guides → OpenAPI/TypeDoc: “참고” 섹션에 직접 링크
+- Error Registry → RFC 9457 스키마 → 중앙 에러 핸들러 흐름으로 연결 고리 유지
+
+## PR 체크리스트(추가)
+
+- [ ] OpenAPI 변경사항 반영 및 Spectral 린트 통과
+- [ ] JSON Schema `$id/$schema`·예시 추가/수정
+- [ ] 공개 API/JSDoc 갱신(TypeDoc 재생성)
+- [ ] Problem Details 응답 예시 최신화
+- [ ] Guides/README 온보딩 명령 최신화
+
+## 승인 기준(AC, 보강)
+
+- [정적] TypeDoc 빌드 경고 0건, `docs/reference/api`가 최신화.
+- [정적] 공개 export 심볼 JSDoc 커버리지 100%(@public 기준).
+- [계약] OpenAPI/Schema/Spectral 통과 + 예시 유효성(Ajv) 통과.
+- [상호참조] Guides ↔ Reference ↔ OpenAPI 간 최소 1개 이상의 교차링크 보유.

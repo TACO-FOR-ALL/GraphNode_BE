@@ -1,0 +1,14 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src"],
+  "entryPointStrategy": "expand",
+  "tsconfig": "tsconfig.json",
+  "out": "docs/reference/api",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "excludeExternals": false,
+  "includeVersion": true,
+  "hideGenerator": true,
+  "categorizeByGroup": true,
+  "readme": "none"
+}

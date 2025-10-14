@@ -9,6 +9,12 @@ import { errorHandler } from '../app/middlewares/error';
 import { NotFoundError } from '../shared/errors/domain';
 import { logger } from '../shared/utils/logger';
 
+/**
+ * Express 앱 부트스트랩.
+ * - HTTP 계층 전용: 미들웨어/라우터/에러 핸들러 조립.
+ * - 로깅/트레이싱/Problem Details 규약을 이 레이어에서 보장한다.
+ * @returns 구성된 Express 애플리케이션
+ */
 export function createApp() {
   const app = express();
   app.use(helmet());
@@ -32,6 +38,13 @@ export function createApp() {
   return app;
 }
 
+/**
+ * HTTP 서버를 기동한다.
+ * @param port 리스닝 포트(기본 3000)
+ * @returns NodeJS.Server 핸들
+ * @example
+ * const srv = startServer(3000);
+ */
 export function startServer(port = Number(process.env.PORT) || 3000) {
   const app = createApp();
   return app.listen(port, () => {
