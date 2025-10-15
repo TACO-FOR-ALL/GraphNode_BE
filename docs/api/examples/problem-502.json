@@ -1,0 +1,9 @@
+{
+  "type": "https://graphnode.dev/problems/upstream-error",
+  "title": "UPSTREAM_ERROR",
+  "status": 502,
+  "detail": "Google token exchange failed: 500 internal error",
+  "instance": "/auth/google/callback",
+  "correlationId": "00000000-0000-4000-8000-000000000000",
+  "retryable": true
+}

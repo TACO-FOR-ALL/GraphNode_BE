@@ -1,6 +1,7 @@
 import type { Request } from 'express';
 
 import { AppError } from '../../shared/errors/base';
+import type { ProblemDetails } from '../../shared/dtos';
 
 function codeToTypeUri(code: string) {
   const kebab = code.toLowerCase().replace(/_/g, '-');
@@ -18,7 +19,7 @@ function codeToTypeUri(code: string) {
  * @param req 현재 요청(경로/상관관계ID 추출)
  * @returns Problem Details 바디(JSON 직렬화 가능)
  */
-export function toProblem(e: AppError, req: Request) {
+export function toProblem(e: AppError, req: Request): ProblemDetails {
   return {
     type: codeToTypeUri(e.code),
     title: e.code.replace(/_/g, ' '),

@@ -1,0 +1,8 @@
+{
+  "type": "https://graphnode.dev/problems/validation-failed",
+  "title": "Validation Failed",
+  "status": 400,
+  "detail": "Missing required query parameter 'state'.",
+  "instance": "/auth/google/callback",
+  "correlationId": "00000000-0000-4000-8000-000000000000"
+}

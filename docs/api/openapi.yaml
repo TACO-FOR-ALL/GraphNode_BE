@@ -22,7 +22,7 @@ paths:
                 required: [ok]
               examples:
                 ok:
-                  externalValue: ./examples/health-ok.json   # ← 파일 예제 사용
+                  externalValue: ./examples/health-ok.json
         '404':
           description: Not Found
           content:
@@ -30,8 +30,8 @@ paths:
               schema:
                 $ref: ../schemas/problem.json
               examples:
-                sample:
-                  externalValue: ./examples/problem-404.json  # ← 파일 예제 사용
+                not-found:
+                  externalValue: ./examples/problem-404.json
   /v1/healthz:
     get:
       summary: Health check (versioned)
@@ -56,8 +56,67 @@ paths:
               schema:
                 $ref: ../schemas/problem.json
               examples:
-                sample:
+                not-found:
                   externalValue: ./examples/problem-404.json
+  /auth/google/start:
+    get:
+      summary: Start Google OAuth (redirects)
+      description: Initiates Google OAuth2 authorization with state and PKCE. Redirects to Google's consent screen.
+      responses:
+        '302':
+          description: Redirects to Google authorization URL
+  /auth/google/callback:
+    get:
+      summary: Google OAuth callback
+      description: Handles Google OAuth2 authorization code exchange. On success, sets a session cookie and returns ok.
+      parameters:
+        - in: query
+          name: code
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: state
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Login succeeded, session cookie set
+          headers:
+            Set-Cookie:
+              description: Session cookie set by server
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required: [ok]
+              examples:
+                success:
+                  externalValue: ./examples/oauth-login-ok.json
+        '400':
+          description: Bad Request (missing/invalid parameters or state mismatch)
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+              examples:
+                bad-request:
+                  externalValue: ./examples/problem-400.json
+        '502':
+          description: Upstream error (provider failure)
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+              examples:
+                upstream-error:
+                  externalValue: ./examples/problem-502.json
 components:
   schemas:
     Problem:

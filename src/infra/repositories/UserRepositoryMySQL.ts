@@ -6,8 +6,9 @@ import { getMySql } from '../db/mysql';
 
 /**
  * UserRepository (MySQL 구현)
- * - 테이블: users
- * - 주키: AUTO_INCREMENT id
+ * @remarks
+ * - 테이블: users(id, provider, provider_user_id, email, display_name, avatar_url, created_at, last_login_at)
+ * - 제약: UNIQUE(provider, provider_user_id)
  */
 export class UserRepositoryMySQL implements UserRepository {
   /**
@@ -49,12 +50,30 @@ export class UserRepositoryMySQL implements UserRepository {
     const [rows] = await getMySql().query<RowDataPacket[]>('SELECT * FROM users WHERE id=?', [res.insertId]);
     return mapUser(rows[0]);
   }
+
+  /**
+   * provider+provider_user_id 기준으로 레코드를 조회하고, 없으면 생성한다.
+   * @param input.provider 제공자
+   * @param input.providerUserId 제공자 측 사용자 ID
+   * @param input.email 이메일(선택)
+   * @param input.displayName 표시 이름(선택)
+   * @param input.avatarUrl 아바타 URL(선택)
+   * @returns User 엔티티
+   */
+  async findOrCreateFromProvider(input: { provider: Provider; providerUserId: string; email?: string | null; displayName?: string | null; avatarUrl?: string | null; }): Promise<User> {
+    const existing = await this.findByProvider(input.provider, input.providerUserId);
+    if (existing) {
+      await getMySql().query('UPDATE users SET last_login_at=CURRENT_TIMESTAMP WHERE id=?', [existing.id]);
+      return { ...existing, lastLoginAt: new Date() } as unknown as User; // keep type simple
+    }
+    return this.create(input);
+  }
 }
 
 /**
  * RowDataPacket을 User 도메인 엔티티로 매핑한다.
- * @param r MySQL RowDataPacket
- * @returns User 엔티티
+ * @param r MySQL RowDataPacket(컬럼: users.*)
+ * @returns User 엔티티(불변)
  */
 function mapUser(r: RowDataPacket): User {
   return new User({
