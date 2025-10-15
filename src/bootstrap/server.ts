@@ -6,7 +6,7 @@
 import express from 'express';
 import session from 'express-session';
 import cors from 'cors';
-import helmet from 'helmet';
+// import helmet from 'helmet';
 
 import healthRouter from '../app/routes/health';
 import { loadEnv } from '../config/env';
@@ -25,7 +25,7 @@ import { logger } from '../shared/utils/logger';
  */
 export function createApp() {
   const app = express();
-  app.use(helmet());
+  // app.use(helmet());
   app.use(cors());
   app.use(express.json());
   app.use(requestContext);
@@ -49,7 +49,7 @@ export function createApp() {
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      sameSite: 'strict',
+      sameSite: 'lax',
       secure: isProd && !devInsecure,
       path: '/',
       maxAge: 1000 * 60 * 60 * 24 * 365 // ~1 year
