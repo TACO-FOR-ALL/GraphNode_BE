@@ -8,8 +8,8 @@ import { randomUUID } from 'crypto';
 
 import { GoogleOAuthService } from '../../core/services/GoogleOAuthService';
 import { loadEnv } from '../../config/env';
+import { completeLogin } from '../utils/authLogin';
 import { ValidationError } from '../../shared/errors/domain';
-import { UserRepositoryMySQL } from '../../infra/repositories/UserRepositoryMySQL';
 
 /**
  * GoogleOAuthService 인스턴스를 생성한다.
@@ -61,16 +61,13 @@ export async function callback(req: Request, res: Response, next: NextFunction) 
     const token = await svc.exchangeCode(code);
     const info = await svc.fetchUserInfo(token);
 
-    const repo = new UserRepositoryMySQL();
-    const user = await repo.findOrCreateFromProvider({
+    await completeLogin(req, res, {
       provider: 'google',
       providerUserId: info.sub,
       email: info.email ?? null,
       displayName: info.name ?? null,
       avatarUrl: info.picture ?? null
     });
-    // 로그인 성공: 세션에 사용자 ID 바인딩
-    req.session.userId = user.id;
     res.status(200).json({ ok: true });
   } catch (err) {
     next(err);

@@ -20,18 +20,16 @@ paths:
                   ok:
                     type: boolean
                 required: [ok]
-              examples:
-                ok:
-                  externalValue: ./examples/health-ok.json
+              example:
+                $ref: './examples/health-ok.json'
         '404':
           description: Not Found
           content:
             application/problem+json:
               schema:
                 $ref: ../schemas/problem.json
-              examples:
-                not-found:
-                  externalValue: ./examples/problem-404.json
+              example:
+                $ref: './examples/problem-404.json'
   /v1/healthz:
     get:
       summary: Health check (versioned)
@@ -46,18 +44,16 @@ paths:
                   ok:
                     type: boolean
                 required: [ok]
-              examples:
-                ok:
-                  externalValue: ./examples/health-ok.json
+              example:
+                $ref: './examples/health-ok.json'
         '404':
           description: Not Found
           content:
             application/problem+json:
               schema:
                 $ref: ../schemas/problem.json
-              examples:
-                not-found:
-                  externalValue: ./examples/problem-404.json
+              example:
+                $ref: './examples/problem-404.json'
   /auth/google/start:
     get:
       summary: Start Google OAuth (redirects)
@@ -96,32 +92,82 @@ paths:
                   ok:
                     type: boolean
                 required: [ok]
-              examples:
-                success:
-                  externalValue: ./examples/oauth-login-ok.json
+              example:
+                $ref: './examples/oauth-login-ok.json'
         '400':
           description: Bad Request (missing/invalid parameters or state mismatch)
           content:
             application/problem+json:
               schema:
                 $ref: ../schemas/problem.json
-              examples:
-                bad-request:
-                  externalValue: ./examples/problem-400.json
+              example:
+                $ref: './examples/problem-400.json'
         '502':
           description: Upstream error (provider failure)
           content:
             application/problem+json:
               schema:
                 $ref: ../schemas/problem.json
-              examples:
-                upstream-error:
-                  externalValue: ./examples/problem-502.json
+              example:
+                $ref: './examples/problem-502.json'
+  /v1/me:
+    get:
+      summary: Check login status
+      description: Returns current user if session cookie (server session) exists.
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/me-response.json
+              example:
+                $ref: './examples/me-get-200.json'
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+              example:
+                $ref: './examples/me-get-401.json'
+  /auth/logout:
+    post:
+      summary: Logout and destroy session
+      responses:
+        '204':
+          description: Session destroyed
+          headers:
+            Set-Cookie:
+              description: Session cookie cleared (Max-Age=0)
+              schema:
+                type: string
+        '401':
+          description: Not authenticated (if already logged out, implementation may still return 204)
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
 components:
   schemas:
     Problem:
       $ref: ../schemas/problem.json
-    Conversation :
+    Conversation:
       $ref: ../schemas/conversation.json
-    Message :
+    Message:
       $ref: ../schemas/message.json
+  examples:
+    meGet200:
+      externalValue: ./examples/me-get-200.json
+    healthOk:
+      externalValue: ./examples/health-ok.json
+    problem404:
+      externalValue: ./examples/problem-404.json
+    oauthLoginOk:
+      externalValue: ./examples/oauth-login-ok.json
+    problem400:
+      externalValue: ./examples/problem-400.json
+    problem502:
+      externalValue: ./examples/problem-502.json
+    me401:
+      externalValue: ./examples/me-get-401.json

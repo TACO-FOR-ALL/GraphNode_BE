@@ -7,10 +7,13 @@ import express from 'express';
 import session from 'express-session';
 import cors from 'cors';
 // import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 
 import healthRouter from '../app/routes/health';
 import { loadEnv } from '../config/env';
 import authGoogleRouter from '../app/routes/auth.google';
+import meRouter from '../app/routes/me';
+import authSessionRouter from '../app/routes/auth.session';
 import { requestContext } from '../app/middlewares/request-context';
 import { httpLogger } from '../shared/utils/logger';
 import { errorHandler } from '../app/middlewares/error';
@@ -26,8 +29,9 @@ import { logger } from '../shared/utils/logger';
 export function createApp() {
   const app = express();
   // app.use(helmet());
-  app.use(cors());
+  app.use(cors({ origin: true, credentials: true }));
   app.use(express.json());
+  app.use(cookieParser());
   app.use(requestContext);
   app.use(httpLogger);
 
@@ -61,6 +65,8 @@ export function createApp() {
   app.use('/v1', healthRouter);
   // Auth routes
   app.use('/auth/google', authGoogleRouter);
+  app.use('/v1/me', meRouter);
+  app.use('/auth', authSessionRouter);
 
   // 404 fall-through → Problem Details 형식으로 응답
   app.use((req, _res, next) => {

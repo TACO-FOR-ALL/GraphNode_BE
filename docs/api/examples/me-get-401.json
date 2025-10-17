@@ -1,0 +1,8 @@
+{
+  "type": "https://graphnode.dev/problems/auth-required",
+  "title": "Authentication Required",
+  "status": 401,
+  "detail": "Authentication required",
+  "instance": "/v1/me",
+  "correlationId": "0000000000000000"
+}
