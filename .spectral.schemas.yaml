@@ -1,0 +1,16 @@
+# JSON Schemas rules (docs/schemas/*.json)
+rules:
+  schema-must-declare-dialect:
+    description: JSON Schema 2020-12 dialect 선언은 필수입니다.
+    severity: error
+    given: "$"
+    then:
+      field: "$schema"
+      function: truthy
+  schema-must-declare-id:
+    description: JSON Schema는 고유 $id를 가져야 합니다.
+    severity: error
+    given: "$"
+    then:
+      field: "$id"
+      function: truthy

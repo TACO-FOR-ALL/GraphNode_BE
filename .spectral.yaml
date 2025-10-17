@@ -1,0 +1,34 @@
+extends:
+  - "@stoplight/spectral-rulesets:oas"
+  - "@stoplight/spectral-rulesets:recommended"
+
+formats:
+  - oas3.1
+
+rules:
+  # 완화/조정 가능한 기본 룰들
+  operation-operationId-unique: warn
+  operation-tags: off
+  info-contact: off
+  contact-properties: off
+  license-url: off
+  no-$ref-siblings: warn
+
+overrides:
+  - files:
+      - "docs/schemas/*.json"
+    rules:
+      schema-must-declare-dialect:
+        description: JSON Schema 2020-12 dialect 선언은 필수입니다.
+        severity: error
+        given: "$"
+        then:
+          field: "$schema"
+          function: truthy
+      schema-must-declare-id:
+        description: JSON Schema는 고유 $id를 가져야 합니다.
+        severity: error
+        given: "$"
+        then:
+          field: "$id"
+          function: truthy

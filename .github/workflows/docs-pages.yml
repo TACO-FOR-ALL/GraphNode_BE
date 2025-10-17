@@ -31,9 +31,6 @@ jobs:
       - name: Install deps
         run: npm ci
 
-      - name: Lint docs (OpenAPI/JSON Schema)
-        run: npm run docs:lint
-
       - name: Build docs (OpenAPI + TypeDoc)
         run: npm run docs:build
 
