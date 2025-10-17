@@ -95,5 +95,9 @@ app.use(errorHandler);
 - `/.github/instructions/ErrorFormat.instructions.md`
 - `/.github/instructions/MVS.instructions.md`
 
+## 관련 문서/스키마 위치
+- OpenAPI(3.1): `docs/api/openapi.yaml`
+- Problem Details 스키마(2020-12): `docs/schemas/problem.json`
+
 ---
 Day 3부터는 DB 연결/마이그레이션에 착수합니다. 필요 시 이 문서에 에러 코드 레지스트리 링크와 OpenAPI 에러 스키마 참조를 추가할 예정입니다.

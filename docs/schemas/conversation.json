@@ -1,0 +1,15 @@
+{
+  "$id": "https://graphnode.dev/schemas/conversation.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Conversation",
+  "type": "object",
+  "required": ["id", "ownerUserId", "title", "createdAt", "updatedAt"],
+  "properties": {
+    "id": { "type": "string" },
+    "ownerUserId": { "type": "integer", "minimum": 1 },
+    "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

@@ -5,9 +5,12 @@ import importPlugin from 'eslint-plugin-import';
 import unusedImports from 'eslint-plugin-unused-imports';
 
 export default [
+  // Global ignores (flat config replaces .eslintignore)
+  {
+    ignores: ['dist/**', 'node_modules/**', 'coverage/**']
+  },
   {
     files: ['**/*.ts'],
-    ignores: ['dist/**', 'node_modules/**', 'coverage/**'],
     languageOptions: {
       parser: tsparser,
       parserOptions: { ecmaVersion: 'latest', sourceType: 'module' }

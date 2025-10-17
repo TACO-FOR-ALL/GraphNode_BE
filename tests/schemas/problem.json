@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://graphnode.dev/tests/schemas/problem.json",
+  "title": "Problem Details (Test Copy)",
+  "$comment": "Keep in sync with docs/schemas/problem.json",
+  "type": "object",
+  "required": ["type", "title", "status", "detail", "instance"],
+  "properties": {
+    "type": { "type": "string", "format": "uri" },
+    "title": { "type": "string" },
+    "status": { "type": "integer", "minimum": 100, "maximum": 599 },
+    "detail": { "type": "string" },
+    "instance": { "type": "string" },
+    "correlationId": { "type": "string" },
+    "retryable": { "type": "boolean" },
+    "errors": { "type": "array", "items": { "type": "object" } }
+  },
+  "additionalProperties": true
+}

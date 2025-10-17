@@ -1,0 +1,16 @@
+{
+  "$id": "https://graphnode.dev/schemas/message.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Message",
+  "type": "object",
+  "required": ["id", "conversationId", "role", "text", "createdAt", "updatedAt"],
+  "properties": {
+    "id": { "type": "string" },
+    "conversationId": { "type": "string" },
+    "role": { "type": "string", "enum": ["user", "assistant", "system"] },
+    "text": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}
