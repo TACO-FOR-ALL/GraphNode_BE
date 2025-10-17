@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Markdown Viewer</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; margin: 2rem; line-height: 1.6; }
+    .container { max-width: 860px; margin: 0 auto; }
+    pre, code { background: #f6f8fa; }
+    pre { padding: 1rem; overflow: auto; }
+    code { padding: 0.1rem 0.3rem; border-radius: 4px; }
+    h1, h2, h3 { border-bottom: 1px solid #eee; padding-bottom: .3rem; }
+    nav { margin-bottom: 1rem; }
+    nav a { margin-right: .75rem; color: #0366d6; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <nav>
+      <a href="./index.html">← 문서 포털</a>
+    </nav>
+    <article id="content">로딩 중…</article>
+  </div>
+  <script>
+    // 매우 경량의 MD 렌더: GitHub Flavored Markdown 최소 반영(코드블럭/헤더/리스트/링크)
+    async function main() {
+      const params = new URLSearchParams(location.search);
+      const file = params.get('file');
+      if (!file) { document.getElementById('content').textContent = 'file 파라미터가 필요합니다.'; return; }
+      const res = await fetch(file);
+      if (!res.ok) { document.getElementById('content').textContent = '문서를 불러올 수 없습니다.'; return; }
+      const md = await res.text();
+      document.getElementById('content').innerHTML = renderMarkdown(md);
+    }
+    function esc(s){ return s.replace(/[&<>\"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+    function renderMarkdown(md){
+      // 아주 단순한 처리: fenced code, headings, lists, bold/italic, inline code, links
+      md = md.replace(/```([\s\S]*?)```/g, (_, code) => '<pre><code>' + esc(code.trim()) + '</code></pre>');
+      md = md.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
+      md = md.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>');
+      md = md.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>');
+      md = md.replace(/^\s*[-*]\s+(.+)$/gm, '<li>$1</li>');
+      md = md.replace(/(<li>.*<\/li>)(\n<li>.*<\/li>)+/gms, m => '<ul>' + m + '</ul>');
+      md = md.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      md = md.replace(/\*(.+?)\*/g, '<em>$1</em>');
+      md = md.replace(/`([^`]+)`/g, '<code>$1</code>');
+      md = md.replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2">$1<\/a>');
+      md = md.replace(/\n{2,}/g, '<br/><br/>' );
+      return md;
+    }
+    main();
+  </script>
+</body>
+</html>

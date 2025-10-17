@@ -142,6 +142,13 @@ paths:
 - 산출 URL: GitHub Actions `deploy-pages` 출력의 `page_url` (예: `https://<org>.github.io/<repo>/`).
 - Notion(Plan A): 포털/Redoc/TypeDoc URL을 Notion 페이지에 Embed 블록으로 1회 추가. 이후 CI 배포만으로 항상 최신 상태 노출.
 
+### 문서 포털(index.html) 운영 규칙
+
+- `docs/index.html`은 수동 유지되는 문서 허브(포털)이며, **매 Day 작업 종료 시 반드시 갱신**한다.
+- 포털은 `docs/` 하위의 **모든 문서 파일(Markdown/HTML 등)** 을 **직접 또는 간접 링크**로 탐색 가능하게 참조해야 한다(신규/변경 문서 누락 금지).
+- 주요 고정 섹션 권장: API(OpenAPI), 타입 레퍼런스(TypeDoc), Guides 인덱스, Schemas, CHANGELOG, 추가 스타일가이드/ADR 링크.
+- 경로/파일명 변경 시 포털 링크도 즉시 갱신한다.
+
 
 ---
 applyTo: '**'
@@ -177,7 +184,7 @@ Day별 개발 일지 항목
    - Windows PowerShell:
      - `Copy-Item docs\guides\templates\DAYn-devlog-template.md docs\guides\DAY<n>-<주제>.md`
 2) 내용 채우기(빈 섹션 금지, N/A 허용)
-3) 필요한 경우 OpenAPI/Schema/ADR/CHANGELOG도 갱신
+3) 필요한 경우 OpenAPI/Schema/ADR/CHANGELOG **및 `docs/index.html`(문서 포털)** 도 갱신(신규/변경 문서 링크 반영)
 4) PR 시 체크리스트
    - [ ] 본 Day 일지 파일 경로를 PR 설명에 링크
    - [ ] 에러 응답은 Problem Details 규격 확인
@@ -188,6 +195,7 @@ Day별 개발 일지 항목
 - 재현 절차로 로컬에서 서버기동 및 검증 가능(`/healthz`, 404 Problem Details)
 - 변경된 공개 API는 `/docs/api/openapi.yaml` 업데이트/린트 통과
 - DB/스키마 변경 시 마이그레이션/인덱스 절차 명시
+ - `docs/index.html` 포털이 **docs/ 하위의 모든 문서(MD/HTML)** 를 참조(직/간접 링크)하고, 당일 변경분(추가/수정/삭제)이 반영됨(누락 0건)
 
 주의
 - 시크릿/토큰은 문서·로그에 노출 금지
