@@ -135,6 +135,13 @@ paths:
     - OAS/Schema JSON 스키마 검증.
     - 예시 payload 유효성 테스트(샘플 호출에 스키마 적용).
 
+### 퍼블리싱(GitHub Pages) 및 외부 공유(Plan A: Notion 임베드)
+
+- 퍼블리싱 대상: `/docs` 폴더(포털 `docs/index.html`, OpenAPI HTML, TypeDoc, 가이드/스키마 링크).
+- 워크플로우: `.github/workflows/docs-pages.yml` — `main` 푸시 시 `npm ci` → `npm run docs:build` → Pages 배포.
+- 산출 URL: GitHub Actions `deploy-pages` 출력의 `page_url` (예: `https://<org>.github.io/<repo>/`).
+- Notion(Plan A): 포털/Redoc/TypeDoc URL을 Notion 페이지에 Embed 블록으로 1회 추가. 이후 CI 배포만으로 항상 최신 상태 노출.
+
 
 ---
 applyTo: '**'

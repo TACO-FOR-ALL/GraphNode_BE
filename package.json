@@ -10,8 +10,11 @@
     "lint": "eslint . --ext .ts",
     "format": "prettier --write .",
     "test": "jest",
+  "docs:lint": "npx @stoplight/spectral-cli lint docs/api/openapi.yaml docs/schemas/*.json",
     "docs:openapi:build": "npx @redocly/cli build-docs docs/api/openapi.yaml -o docs/api/openapi.html",
     "docs:typedoc": "typedoc --options typedoc.json",
+  "docs:copy:changelog": "node -e \"require('fs').cpSync('CHANGELOG.md','docs/CHANGELOG.md',{recursive:false})\"",
+  "docs:build": "npm run docs:openapi:build && npm run docs:typedoc && npm run docs:copy:changelog",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down -v",
     "db:logs": "docker compose logs -f"

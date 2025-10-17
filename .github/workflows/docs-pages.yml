@@ -1,0 +1,64 @@
+name: Docs Pages
+
+on:
+  push:
+    branches: [ "main" ]
+  # 수동 실행 버튼(초기 디버그용)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Lint docs (OpenAPI/JSON Schema)
+        run: npm run docs:lint
+
+      - name: Build docs (OpenAPI + TypeDoc)
+        run: npm run docs:build
+
+      # Pages 빌드 구성(권장 스텝)
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # docs 폴더(정적 산출물) 전체 배포
+          path: docs
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    # 조직 정책으로 기본 권한이 제한적일 수 있어 잡 단위로 재명시
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      # actions/deploy-pages가 배출하는 page_url을 환경 URL로 사용
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
