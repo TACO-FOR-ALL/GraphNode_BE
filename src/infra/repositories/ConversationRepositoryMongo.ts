@@ -1,17 +1,24 @@
-import { randomUUID } from 'crypto';
+/**
+ * 모듈: ConversationRepository MongoDB 구현
+ * 책임
+ * - conversations 컬렉션에 대한 영속화 어댑터를 제공한다.
+ * 외부 의존
+ * - mongodb 드라이버(컬렉션 접근), getMongo 커넥션 팩토리
+ * 공개 인터페이스
+ * - ConversationRepository 구현체
+ * 로깅 컨텍스트
+ * - 실제 구현 시 중앙 로거를 사용하고 traceparent에서 correlationId를 바인딩한다.
+ *
+ * 현재 상태
+ * - DTO/계약 확정 전으로, 모든 메서드는 NotImplemented 에러를 던진다.
+ */
 import type { Collection } from 'mongodb';
 
 import { Conversation } from '../../core/domain/Conversation';
 import { ConversationRepository } from '../../core/ports/ConversationRepository';
 import { getMongo } from '../db/mongodb';
-
-type ConversationDoc = {
-  _id: string;
-  ownerUserId: number;
-  title: string;
-  createdAt: Date;
-  updatedAt: Date;
-};
+import type { Provider, Source } from '../../shared/dtos/ai';
+import type { ConversationDoc } from '../db/models/ai';
 
 /**
  * ConversationRepository (MongoDB 구현)
@@ -22,17 +29,27 @@ export class ConversationRepositoryMongo implements ConversationRepository {
   private col(): Collection<ConversationDoc> { return getMongo().db().collection<ConversationDoc>('conversations'); }
 
   /**
-   * 신규 문서 삽입.
-   * @param ownerUserId 사용자 ID
-   * @param title 제목(1~200자)
-   * @returns 생성된 Conversation 엔티티
+   * 신규 문서 삽입(V2 입력 기반)
+   * @description
+   * - 현재는 계약 확정 전 단계로 실제 DB 작업을 수행하지 않는다.
+   * @param _input V2 대화 메타데이터 입력(미사용)
+   * @returns Promise<Conversation>
+   * @throws {Error} 항상 NotImplemented 에러를 던진다.
+   * @example
+   * await repo.create({...}); // 런타임 시 NotImplemented 오류
    */
-  async create(ownerUserId: number, title: string): Promise<Conversation> {
-    const id = randomUUID();
-    const now = new Date();
-    const doc = { _id: id, ownerUserId, title, createdAt: now, updatedAt: now };
-    await this.col().insertOne(doc);
-    return new Conversation({ id, ownerUserId, title, createdAt: now, updatedAt: now });
+  async create(_input: {
+    id: string;
+    ownerUserId: number;
+    provider: Provider;
+    model: string;
+    title?: string | null;
+    source?: Source;
+    createdAt: string;
+    updatedAt: string;
+    tags?: string[];
+  }): Promise<Conversation> {
+    throw new Error('NotImplemented: ConversationRepositoryMongo.create');
   }
 
   /**
@@ -40,10 +57,14 @@ export class ConversationRepositoryMongo implements ConversationRepository {
    * @param id 대화 ID(UUID/ULID)
    * @returns Conversation 또는 null
    */
-  async findById(id: string): Promise<Conversation | null> {
-  const d = await this.col().findOne({ _id: id });
-    if (!d) return null;
-    return new Conversation({ id: d._id, ownerUserId: d.ownerUserId, title: d.title, createdAt: d.createdAt, updatedAt: d.updatedAt });
+  /**
+   * ID로 단건 조회(스텁)
+   * @param _id 대화 ID(UUID/ULID)
+   * @returns 항상 NotImplemented 에러를 throw
+   * @throws {Error} NotImplemented
+   */
+  async findById(_id: string): Promise<Conversation | null> {
+    throw new Error('NotImplemented: ConversationRepositoryMongo.findById');
   }
 
   /**
@@ -55,13 +76,15 @@ export class ConversationRepositoryMongo implements ConversationRepository {
    * @param cursor 다음 페이지 시작점(_id)
    * @returns items와 nextCursor(없으면 null)
    */
-  async listByOwner(ownerUserId: number, limit: number, cursor?: string) {
-    const q: any = { ownerUserId };
-    const find = this.col().find(q).sort({ _id: 1 }).limit(limit + 1);
-    if (cursor) find.filter({ _id: { $gt: cursor } });
-    const docs = await find.toArray();
-    const items = docs.slice(0, limit).map(d => new Conversation({ id: d._id, ownerUserId: d.ownerUserId, title: d.title, createdAt: d.createdAt, updatedAt: d.updatedAt }));
-    const nextCursor = docs.length > limit ? String(docs[limit]._id) : null;
-    return { items, nextCursor };
+  /**
+   * 소유자 기준 커서 페이징(스텁)
+   * @param _ownerUserId 소유 사용자 ID
+   * @param _limit 페이지 크기(1~100)
+   * @param _cursor 다음 페이지 커서(opaque)
+   * @returns 항상 NotImplemented 에러를 throw
+   * @throws {Error} NotImplemented
+   */
+  async listByOwner(_ownerUserId: number, _limit: number, _cursor?: string): Promise<{ items: Conversation[]; nextCursor?: string | null }> {
+    throw new Error('NotImplemented: ConversationRepositoryMongo.listByOwner');
   }
 }

@@ -1,7 +1,11 @@
 {
   "id": "c_123",
   "ownerUserId": 1,
+  "provider": "openai",
+  "model": "gpt-4o-mini",
   "title": "Welcome",
+  "source": "api",
+  "tags": ["intro"],
   "createdAt": "2025-10-14T11:00:00Z",
   "updatedAt": "2025-10-14T11:00:00Z"
 }

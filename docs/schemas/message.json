@@ -1,14 +1,25 @@
 {
   "$id": "https://graphnode.dev/schemas/message.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Message",
+  "title": "MessageV2",
   "type": "object",
-  "required": ["id", "conversationId", "role", "text", "createdAt", "updatedAt"],
+  "required": ["id", "conversationId", "role", "content", "createdAt", "updatedAt"],
   "properties": {
     "id": { "type": "string" },
     "conversationId": { "type": "string" },
-    "role": { "type": "string", "enum": ["user", "assistant", "system"] },
-    "text": { "type": "string" },
+    "role": { "type": "string", "enum": ["system", "user", "assistant", "tool"] },
+    "content": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "object", "required": ["type", "text"], "properties": { "type": { "const": "text" }, "text": { "type": "string" } }, "additionalProperties": false },
+          { "type": "object", "required": ["type"], "properties": { "type": { "const": "image" }, "mime": { "type": "string" }, "dataRef": { "type": "string" }, "base64": { "type": "string" }, "url": { "type": "string", "format": "uri" } }, "additionalProperties": false },
+          { "type": "object", "required": ["type", "toolName", "arguments"], "properties": { "type": { "const": "tool_call" }, "toolName": { "type": "string" }, "arguments": {}, "callId": { "type": "string" } }, "additionalProperties": false },
+          { "type": "object", "required": ["type", "result"], "properties": { "type": { "const": "tool_result" }, "callId": { "type": "string" }, "result": {}, "isError": { "type": "boolean" } }, "additionalProperties": false },
+          { "type": "object", "required": ["type", "payload"], "properties": { "type": { "const": "other" }, "payload": {} }, "additionalProperties": false }
+        ]
+      }
+    },
     "createdAt": { "type": "string", "format": "date-time" },
     "updatedAt": { "type": "string", "format": "date-time" }
   },
