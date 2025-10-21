@@ -3,10 +3,11 @@
  * 책임: OAuth provider 콜백 이후 공통 로그인 처리(findOrCreate → 세션 바인딩 → 표시용 쿠키).
  */
 import type { Request, Response } from 'express';
+import { SessionData } from 'express-session';
 
 import { UserRepositoryMySQL } from '../../infra/repositories/UserRepositoryMySQL';
 import { setHelperLoginCookies } from './sessionCookies';
-import type { Provider } from '../../core/domain/User';
+import type { Provider, User } from '../../core/domain/User';
 
 export interface ProviderUserInput {
   provider: Provider;
@@ -38,14 +39,15 @@ export async function completeLogin(req: Request, res: Response, input: Provider
   });
 
   // 세션에 사용자 ID 바인딩
-  (req.session as any).userId = (user as any).id;
+  // (req.session as any).userId = (user as any).id;
+  (req.session as SessionData).userId = (user as User).id;
 
   // 표시용 보조 쿠키 설정
   setHelperLoginCookies(res, {
-    id: (user as any).id,
-    displayName: (user as any).displayName ?? null,
-    avatarUrl: (user as any).avatarUrl ?? null
+    id: (user as User).id,
+    displayName: (user as User).displayName ?? null,
+    avatarUrl: (user as User).avatarUrl ?? null
   });
 
-  return { userId: (user as any).id };
+  return { userId: (user as User).id };
 }
