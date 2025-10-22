@@ -9,15 +9,11 @@ import 'express-session';
 declare module 'express-session' {
   interface SessionData {
     /** 로그인된 사용자 ID(없으면 비로그인) */
-    userId?: number;
+    userId?: string;
     /** OAuth state 값(시작 시 생성, 콜백 후 제거 가능) */
     oauth_state?: string;
   }
 }
 
-declare module 'express-serve-static-core' {
-  interface Request {
-    /** 세션 데이터 (express-session에 의해 주입됨) */
-    session: import('express-session').Session & Partial<import('express-session').SessionData>;
-  }
-}
+
+

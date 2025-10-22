@@ -77,7 +77,7 @@ export class UserRepositoryMySQL implements UserRepository {
  */
 function mapUser(r: RowDataPacket): User {
   return new User({
-    id: Number(r.id),
+    id: String(r.id),
     provider: r.provider as Provider,
     providerUserId: String(r.provider_user_id),
     email: r.email ?? null,

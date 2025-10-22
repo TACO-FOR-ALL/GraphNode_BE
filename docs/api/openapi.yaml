@@ -131,6 +131,203 @@ paths:
                 $ref: ../schemas/problem.json
               example:
                 $ref: './examples/me-get-401.json'
+  /v1/ai/conversations:
+    post:
+      summary: Create conversation
+      description: Creates a new conversation using client-provided UUID/ULID as id. Optionally accepts initial messages.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, title]
+              properties:
+                id: { type: string }
+                title: { type: string }
+                messages:
+                  type: array
+                  items: { $ref: ../schemas/message.json }
+            examples:
+              default:
+                externalValue: ./examples/ai-conversation-create-request.json
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location:
+              description: Resource URL of the created conversation
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: ../schemas/conversation.json }
+              examples:
+                default:
+                  externalValue: ./examples/ai-conversation-create-201.json
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+    get:
+      summary: List conversations
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - in: query
+          name: cursor
+          schema: { type: string, description: ISO 8601 cursor }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: ../schemas/conversation.json }
+                  nextCursor:
+                    oneOf:
+                      - { type: string }
+                      - { type: 'null' }
+              examples:
+                default:
+                  externalValue: ./examples/ai-conversation-list-200.json
+  /v1/ai/conversations/{conversationId}:
+    get:
+      summary: Get conversation
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: ../schemas/conversation.json }
+              examples:
+                default:
+                  externalValue: ./examples/ai-conversation-get-200.json
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+    patch:
+      summary: Update conversation
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+            examples:
+              default:
+                externalValue: ./examples/ai-conversation-update-request.json
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: ../schemas/conversation.json }
+              examples:
+                default:
+                  externalValue: ./examples/ai-conversation-update-200.json
+    delete:
+      summary: Delete conversation
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: No Content
+  /v1/ai/conversations/{conversationId}/messages:
+    post:
+      summary: Create message
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/message.json
+            examples:
+              default:
+                externalValue: ./examples/ai-message-create-request.json
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: ../schemas/message.json }
+              examples:
+                default:
+                  externalValue: ./examples/ai-message-create-201.json
+  /v1/ai/conversations/{conversationId}/messages/{messageId}:
+    patch:
+      summary: Update message
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: messageId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role: { type: string, enum: [user, assistant, system] }
+                content: { type: string }
+            examples:
+              default:
+                externalValue: ./examples/ai-message-update-request.json
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: ../schemas/message.json }
+              examples:
+                default:
+                  externalValue: ./examples/ai-message-update-200.json
+    delete:
+      summary: Delete message
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: messageId
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: No Content
   /auth/logout:
     post:
       summary: Logout and destroy session

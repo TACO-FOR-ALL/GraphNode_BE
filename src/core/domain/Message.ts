@@ -25,8 +25,8 @@ export interface MessageProps {
   conversationId: string;
   /** 역할: 사용자/어시스턴트/시스템 */
   role: Role;
-  /** 본문 텍스트 */
-  text: string;
+  /** 본문 텍스트(문서/DTO와 일치: content) */
+  content: string;
   /** 생성 시각(Date, UTC) */
   createdAt: Date;
   /** 수정 시각(Date, UTC) */
@@ -43,7 +43,7 @@ export class Message {
   /** 역할 */
   get role() { return this.props.role; }
   /** 본문 */
-  get text() { return this.props.text; }
+  get content() { return this.props.content; }
   /** 생성 시각 */
   get createdAt() { return this.props.createdAt; }
   /** 수정 시각 */

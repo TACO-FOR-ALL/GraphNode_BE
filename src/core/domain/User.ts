@@ -19,7 +19,7 @@ export type Provider = 'google' | 'apple';
  */
 export interface UserProps {
   /** 내부 사용자 식별자(AUTO_INCREMENT 정수) */
-  id: number;
+  id: string;
   /** 소셜 로그인 제공자 */
   provider: Provider;
   /** 제공자 측 사용자 식별자 */

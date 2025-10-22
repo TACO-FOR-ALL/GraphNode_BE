@@ -1,16 +1,14 @@
 {
   "$id": "https://graphnode.dev/schemas/message.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Message",
+  "title": "ChatMessage",
   "type": "object",
-  "required": ["id", "conversationId", "role", "text", "createdAt", "updatedAt"],
+  "required": ["id", "role", "content", "ts"],
   "properties": {
-    "id": { "type": "string" },
-    "conversationId": { "type": "string" },
+    "id": { "type": "string", "description": "FE가 생성한 메시지 ID(UUID/ULID)" },
     "role": { "type": "string", "enum": ["user", "assistant", "system"] },
-    "text": { "type": "string" },
-    "createdAt": { "type": "string", "format": "date-time" },
-    "updatedAt": { "type": "string", "format": "date-time" }
+    "content": { "type": "string" },
+    "ts": { "type": "string", "format": "date-time" }
   },
   "additionalProperties": false
 }

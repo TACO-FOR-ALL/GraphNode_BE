@@ -19,6 +19,9 @@ import { httpLogger } from '../shared/utils/logger';
 import { errorHandler } from '../app/middlewares/error';
 import { NotFoundError } from '../shared/errors/domain';
 import { logger } from '../shared/utils/logger';
+// AI 라우터 import
+import { initDatabases } from '../infra/db';
+import { makeAiRouter } from './modules/ai.module'; // <-- 조립 모듈 사용
 
 /**
  * Express 앱 부트스트랩.
@@ -62,7 +65,10 @@ export function createApp() {
 
   // Health endpoints: available at /healthz and /v1/healthz
   app.use('/', healthRouter);
-  app.use('/v1', healthRouter);
+
+  // AI 라우터(조립된 Router 장착)
+  app.use('/v1/ai', makeAiRouter());
+
   // Auth routes
   app.use('/auth/google', authGoogleRouter);
   app.use('/v1/me', meRouter);
@@ -79,16 +85,23 @@ export function createApp() {
   return app;
 }
 
-/**
- * HTTP 서버를 기동한다.
- * @param port 리스닝 포트(기본 3000)
- * @returns NodeJS.Server 핸들
- * @example
- * const srv = startServer(3000);
- */
-export function startServer(port = Number(process.env.PORT) || 3000) {
+export async function bootstrap() {
   const app = createApp();
-  return app.listen(port, () => {
-    logger.info({ event: 'server.start', port }, `GraphNode API listening on http://localhost:${port}`);
-  });
+  const mongo = await initDatabases();
+
+  return { app, mongo };
+}
+
+if (require.main === module) {
+  bootstrap()
+    .then(({ app }) => {
+      const port = process.env.PORT || 3000;
+      app.listen(port, () => {
+        logger.info(`Server is running on http://localhost:${port}`);
+      });
+    })
+    .catch(err => {
+      logger.fatal('Failed to bootstrap server', err);
+      process.exit(1);
+    });
 }

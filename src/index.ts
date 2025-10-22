@@ -1,5 +1,4 @@
-import { startServer } from './bootstrap/server';
-import { initDatabases } from './infra/db';
+import { bootstrap } from './bootstrap/server';
 
 /**
  * 프로세스 엔트리포인트.
@@ -8,8 +7,8 @@ import { initDatabases } from './infra/db';
  */
 (async () => {
 	try {
-		await initDatabases();
-		startServer();
+		await bootstrap();
+		
 	} catch (err) {
 		// eslint-disable-next-line no-console
 		console.error('BOOT_FAILED', err);

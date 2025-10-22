@@ -1,15 +1,17 @@
 {
   "$id": "https://graphnode.dev/schemas/conversation.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Conversation",
+  "title": "ChatThread",
   "type": "object",
-  "required": ["id", "ownerUserId", "title", "createdAt", "updatedAt"],
+  "required": ["id", "title", "updatedAt", "messages"],
   "properties": {
-    "id": { "type": "string" },
-    "ownerUserId": { "type": "integer", "minimum": 1 },
+    "id": { "type": "string", "description": "FE가 생성한 UUID/ULID" },
     "title": { "type": "string", "minLength": 1, "maxLength": 200 },
-    "createdAt": { "type": "string", "format": "date-time" },
-    "updatedAt": { "type": "string", "format": "date-time" }
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "messages": {
+      "type": "array",
+      "items": { "$ref": "./message.json" }
+    }
   },
   "additionalProperties": false
 }

@@ -1,18 +1,7 @@
-extends:
-  - "@stoplight/spectral-rulesets:oas"
-  - "@stoplight/spectral-rulesets:recommended"
-
 formats:
   - oas3.1
 
-rules:
-  # 완화/조정 가능한 기본 룰들
-  operation-operationId-unique: warn
-  operation-tags: off
-  info-contact: off
-  contact-properties: off
-  license-url: off
-  no-$ref-siblings: warn
+rules: {}
 
 overrides:
   - files:

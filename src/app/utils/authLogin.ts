@@ -4,9 +4,11 @@
  */
 import type { Request, Response } from 'express';
 
+
 import { UserRepositoryMySQL } from '../../infra/repositories/UserRepositoryMySQL';
 import { setHelperLoginCookies } from './sessionCookies';
 import type { Provider } from '../../core/domain/User';
+import {bindUserIdToSession} from "./request";
 
 export interface ProviderUserInput {
   provider: Provider;
@@ -17,7 +19,7 @@ export interface ProviderUserInput {
 }
 
 export interface LoginResult {
-  userId: string | number;
+  userId: string;
 }
 
 /**
@@ -38,14 +40,14 @@ export async function completeLogin(req: Request, res: Response, input: Provider
   });
 
   // 세션에 사용자 ID 바인딩
-  (req.session as any).userId = (user as any).id;
+  bindUserIdToSession(req, user.id);
 
   // 표시용 보조 쿠키 설정
   setHelperLoginCookies(res, {
-    id: (user as any).id,
-    displayName: (user as any).displayName ?? null,
-    avatarUrl: (user as any).avatarUrl ?? null
+    id: user.id,
+    displayName: user.displayName ?? null,
+    avatarUrl: user.avatarUrl ?? null
   });
 
-  return { userId: (user as any).id };
+  return { userId: user.id };
 }
