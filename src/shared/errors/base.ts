@@ -27,9 +27,43 @@ export abstract class AppError extends Error {
  */
 export function unknownToAppError(err: unknown): AppError {
   const e = err as any;
+
+  // ZodError 매핑 → 400 ValidationError
+  if (e && (e.name === 'ZodError' || Array.isArray(e?.issues))) {
+    const { ValidationError } = require('./domain');
+    const msg = 'Validation failed';
+    const details = { issues: e.issues };
+    return new ValidationError(msg, details);
+  }
+
+  // code 필드가 있는 일반 객체를 표준 에러로 매핑
+  if (e && typeof e.code === 'string') {
+    const {
+      ValidationError,
+      AuthError,
+      ForbiddenError,
+      NotFoundError,
+      ConflictError,
+      RateLimitError,
+      UpstreamError,
+      UpstreamTimeout
+    } = require('./domain');
+
+    const message = e.message || String(e.code).replace(/_/g, ' ');
+    switch (e.code) {
+      case 'VALIDATION_FAILED': return new ValidationError(message, e.details);
+      case 'AUTH_REQUIRED':     return new AuthError(message, e.details);
+      case 'FORBIDDEN':         return new ForbiddenError(message, e.details);
+      case 'NOT_FOUND':         return new NotFoundError(message, e.details);
+      case 'CONFLICT':          return new ConflictError(message, e.details);
+      case 'RATE_LIMITED':      return new RateLimitError(message, e.details);
+      case 'UPSTREAM_ERROR':    return new UpstreamError(message, e.details);
+      case 'UPSTREAM_TIMEOUT':  return new UpstreamTimeout(message, e.details);
+      default: break;
+    }
+  }
+
+  // 기본: 500 UNKNOWN_ERROR
   const message = e?.message || 'Unknown error';
-  return new (class extends AppError {
-    code = 'UNKNOWN_ERROR';
-    httpStatus = 500;
-  })(message);
+  return new (class extends AppError { code = 'UNKNOWN_ERROR'; httpStatus = 500; })(message);
 }

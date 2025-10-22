@@ -8,7 +8,6 @@
  */
 /**
  * Problem Details(에러 응답) DTO.
- * @description
  * - RFC 9457 필수/확장 필드를 포함한다.
  * - 모든 에러 응답은 Content-Type: application/problem+json 으로 본 스키마를 따른다.
  * @remarks

@@ -12,7 +12,13 @@ let pool: MySqlPool | undefined;
  * @throws {Error} 연결 실패 시
  */
 export async function initMySql(url: string) {
-  pool = mysql.createPool(url);
+  pool = mysql.createPool({
+    uri: url,                // DSN을 그대로 사용
+    supportBigNumbers: true, // BIGINT 처리
+    bigNumberStrings: true,  // 문자열로 반환
+    // dateStrings: true,    // 필요 시 DATE/TIMESTAMP도 문자열로
+    // namedPlaceholders: true, // 선택
+  });
   await pool.query('SELECT 1');
   logger.info({ event: 'db.connected', system: 'mysql' }, 'MySQL connected');
   return pool;

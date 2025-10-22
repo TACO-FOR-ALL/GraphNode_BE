@@ -12,79 +12,106 @@
  * 현재 상태
  * - 계약 확정 전 단계로, 모든 메서드는 NotImplemented 에러를 던진다.
  */
-import type { Collection } from 'mongodb';
+import { Collection } from 'mongodb';
 
-import { Message } from '../../core/domain/Message';
+import { ChatMessage } from '../../shared/dtos/ai';
 import { MessageRepository } from '../../core/ports/MessageRepository';
 import { getMongo } from '../db/mongodb';
-import type { MessageRole, ContentBlock } from '../../shared/dtos/ai';
-
-
-/**
- * 메시지 문서 형식
- * - 컬렉션: messages
- * - 커서: _id 문자열 기준 ASC 페이징
- * @param _id 내부 메시지 식별자(UUID/ULID)
- * @param conversationId 소속 대화 ID(UUID/ULID)
- * @param role 메시지 역할
- * @param content 컨텐츠 블록 배열
- * @param createdAt RFC3339 UTC 생성 시각
- * @param updatedAt RFC3339 UTC 수정 시각
- */
-type MessageDoc = {
-  _id: string;
-  conversationId: string;
-  role: MessageRole;
-  content: ContentBlock[];
-  createdAt: Date;
-  updatedAt: Date;
-};
+import { MessageDoc } from '../db/models/ai';
+import { toChatMessageDto, toMessageDoc } from '../../shared/mappers/ai';
+import { NotFoundError } from '../../shared/errors/domain';
 
 /**
  * MessageRepository (MongoDB 구현)
  * - 컬렉션: messages
- * - 커서: _id 문자열 기준 ASC 페이징
  */
 export class MessageRepositoryMongo implements MessageRepository {
-  private col(): Collection<MessageDoc> { return getMongo().db().collection<MessageDoc>('messages'); }
-
-  /**
-   * 메시지 문서 생성(V2 입력)
-   * @description
-   * - 현재는 계약 확정 전 단계로 실제 DB 작업을 수행하지 않는다.
-   * @param _input V2 메시지 입력(미사용)
-   * @returns Promise<Message>
-   * @throws {Error} 항상 NotImplemented 에러를 던진다.
-   */
-  async create(_input: {
-    id: string;
-    conversationId: string;
-    role: MessageRole;
-    content: ContentBlock[];
-    createdAt: string;
-    updatedAt: string;
-  }): Promise<Message> {
-    throw new Error('NotImplemented: MessageRepositoryMongo.create');
+  private col(): Collection<MessageDoc> {
+    return getMongo().db().collection<MessageDoc>('messages');
   }
 
   /**
-   * 대화별 메시지 커서 페이징.
-   * - 정렬: _id ASC
-   * - 커서: 마지막 항목의 _id를 opaque 문자열로 반환
-   * @param conversationId 대화 ID
-   * @param limit 페이지 크기(1~100)
-   * @param cursor 다음 페이지 시작점(_id)
-   * @returns items와 nextCursor(없으면 null)
+   * 단일 메시지를 생성합니다.
+   * @param conversationId 메시지가 속한 대화 ID.
+   * @param message 생성할 메시지 DTO.
+   * @returns 생성된 메시지 DTO.
    */
+  async create(conversationId: string, message: ChatMessage): Promise<ChatMessage> {
+    const doc = toMessageDoc(message, conversationId);
+    await this.col().insertOne(doc);
+    return toChatMessageDto(doc);
+  }
+
   /**
-   * 대화별 메시지 커서 페이징(스텁)
-   * @param _conversationId 대화 ID
-   * @param _limit 페이지 크기(1~100)
-   * @param _cursor 다음 페이지 커서(opaque)
-   * @returns 항상 NotImplemented 에러를 throw
-   * @throws {Error} NotImplemented
+   * 여러 메시지를 한 번에 생성합니다 (Bulk Insert).
+   * @param conversationId 메시지들이 속한 대화 ID.
+   * @param messages 생성할 메시지 DTO 배열.
+   * @returns 생성된 메시지 DTO 배열.
    */
-  async listByConversation(_conversationId: string, _limit: number, _cursor?: string): Promise<{ items: Message[]; nextCursor?: string | null }> {
-    throw new Error('NotImplemented: MessageRepositoryMongo.listByConversation');
+  async createMany(conversationId: string, messages: ChatMessage[]): Promise<ChatMessage[]> {
+    if (messages.length === 0) {
+      return [];
+    }
+    const docs = messages.map(msg => toMessageDoc(msg, conversationId));
+    await this.col().insertMany(docs);
+    return docs.map(toChatMessageDto);
+  }
+
+  /**
+   * 대화에 속한 모든 메시지를 조회합니다.
+   * @param conversationId 대화 ID.
+   * @returns 해당 대화의 모든 메시지 DTO 배열.
+   */
+  async findAllByConversationId(conversationId: string): Promise<ChatMessage[]> {
+    const docs = await this.col().find({ conversationId }).sort({ ts: 1 }).toArray();
+    return docs.map(doc => toChatMessageDto(doc as MessageDoc));
+  }
+
+  /**
+   * 메시지를 업데이트합니다.
+   * @param id 업데이트할 메시지 ID.
+   * @param conversationId 메시지가 속한 대화 ID.
+   * @param updates 업데이트할 필드.
+   * @returns 업데이트된 메시지 DTO 또는 null.
+   */
+  async update(id: string, conversationId: string, updates: Partial<Omit<ChatMessage, 'id'>>): Promise<ChatMessage | null> {
+    const partialDoc: Partial<MessageDoc> = {};
+    if (updates.role) partialDoc.role = updates.role;
+    if (typeof updates.content !== 'undefined') partialDoc.content = updates.content;
+    if (updates.ts) partialDoc.ts = new Date(updates.ts).getTime();
+    partialDoc.updatedAt = Date.now();
+
+    const result = await this.col().findOneAndUpdate(
+      { _id: id, conversationId },
+      { $set: partialDoc },
+      { returnDocument: 'after' , includeResultMetadata:true}
+    );
+
+    const updated = result.value;
+    if (!updated) {
+      throw new NotFoundError(`Message with id ${id} not found in conversation ${conversationId}`);
+    }
+    return toChatMessageDto(updated);
+  }
+
+  /**
+   * 메시지를 삭제합니다.
+   * @param id 삭제할 메시지 ID.
+   * @param conversationId 메시지가 속한 대화 ID.
+   * @returns 삭제 성공 여부.
+   */
+  async delete(id: string, conversationId: string): Promise<boolean> {
+    const result = await this.col().deleteOne({ _id: id, conversationId });
+    return result.deletedCount === 1;
+  }
+
+  /**
+   * 대화에 속한 모든 메시지를 삭제합니다.
+   * @param conversationId 대화 ID.
+   * @returns 삭제된 메시지 수.
+   */
+  async deleteAllByConversationId(conversationId: string): Promise<number> {
+    const result = await this.col().deleteMany({ conversationId });
+    return result.deletedCount;
   }
 }

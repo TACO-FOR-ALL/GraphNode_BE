@@ -1,56 +1,72 @@
 /**
- * 모듈: AI 대화 도큐먼트 모델 (영속 계층)
- * 책임
- * - MongoDB 등 영속 계층에서 사용하는 Conversation/Message 도큐먼트 타입을 정의한다.
- * 외부 의존: 없음(타입 전용)
+ * 모듈: AI 대화 데이터베이스 문서 모델
+ * 책임: MongoDB에 저장될 대화 및 메시지 문서의 타입을 정의한다.
+ * 외부 의존: mongodb
  * 공개 인터페이스: ConversationDoc, MessageDoc
- * 주의
- * - 날짜는 Date로 유지하여 인덱스/쿼리 연산에 유리하게 한다.
  */
-import type { ContentBlock, MessageRole, Provider, Source } from '../../../shared/dtos/ai';
+import type { ChatRole } from '../../../shared/dtos/ai';
 
-/** Conversation 도큐먼트 스키마(저장 전용) 
+/**
+ * AI 공급자 식별자.
+ * @public
+ */
+export type Provider =
+  | 'openai'
+  | 'azure-openai'
+  | 'anthropic'
+  | 'gemini'
+  | 'cohere'
+  | 'mistral'
+  | 'ollama'
+  | 'openrouter'
+  | 'unknown';
+
+/**
+ * 데이터 원천.
+ * @public
+ */
+export type Source = 'api' | 'export' | 'import';
+
+/**
+ * 대화 문서(Conversation) BSON 모델.
  * - 컬렉션: conversations
- * - 커서: _id 문자열을 opaque 커서로 사용(정렬: _id ASC)
- * @param _id 내부 식별자(UUID/ULID). DB 기본 키 문자열
- * @param ownerUserId 소유 사용자 ID(정수)
- * @param provider AI 공급자 식별자
- * @param model 모델 문자열(벤더 명명 그대로)
- * @param title 제목(선택)
- * @param source 데이터 원천(선택)
- * @param createdAt Date 객체 생성 시각
- * @param updatedAt Date 객체 수정 시각
- * @param tags 태그 배열(선택)
-*/
-export interface ConversationDoc {
-  /** 내부 식별자(_id). DB 기본 키 문자열 */
-  _id: string;
-  ownerUserId: number;
-  provider: Provider;
-  model: string;
-  title?: string | null;
+ * @param _id DTO의 id와 매핑되는 문자열 ID
+ * @param ownerUserId 소유 사용자 ID
+ * @param title 대화 제목
+ * @param updatedAt 최종 수정 시각 (Unix epoch, milliseconds)
+ * @param createdAt 생성 시각 (Unix epoch, milliseconds). DTO에 없으므로 선택적.
+ * @param provider AI 공급자. DTO에 없으므로 선택적.
+ * @param model 사용된 AI 모델. DTO에 없으므로 선택적.
+ * @param source 데이터 출처. DTO에 없으므로 선택적.
+ * @param tags 태그 배열. DTO에 없으므로 선택적.
+ */
+export type ConversationDoc = {
+  _id: string; // DTO의 id와 매핑
+  ownerUserId: string;
+  title: string;
+  updatedAt: number;
+  createdAt?: number;
+  provider?: Provider;
+  model?: string;
   source?: Source;
-  createdAt: Date;
-  updatedAt: Date;
   tags?: string[];
-}
+};
 
-/** Message 도큐먼트 스키마(저장 전용) 
+/**
+ * 메시지 문서(Message) BSON 모델.
  * - 컬렉션: messages
- * - 커서: _id 문자열 기준 ASC 페이징
- * @param _id 내부 식별자(UUID/ULID). DB 기본 키 문자열
- * @param conversationId 소속 대화 ID(UUID/ULID)
+ * @param _id DTO의 id와 매핑되는 문자열 ID
+ * @param conversationId 소속 대화 ID
  * @param role 메시지 역할
- * @param content 컨텐츠 블록 배열
- * @param createdAt Date 객체 생성 시각
- * @param updatedAt Date 객체 수정 시각
-*/
-export interface MessageDoc {
-  /** 내부 식별자(_id). DB 기본 키 문자열 */
-  _id: string;
+ * @param content 메시지 내용 (텍스트)
+ * @param ts 메시지 타임스탬프 (Unix epoch, milliseconds)
+ */
+export type MessageDoc = {
+  _id: string; // DTO의 id와 매핑
   conversationId: string;
-  role: MessageRole;
-  content: ContentBlock[];
-  createdAt: Date;
-  updatedAt: Date;
-}
+  role: ChatRole;
+  content: string;
+  ts: number;
+  createdAt: number;
+  updatedAt: number;
+};

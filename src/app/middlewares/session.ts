@@ -9,6 +9,7 @@
  */
 import type { Request, Response, NextFunction } from 'express';
 
+
 /**
  * 세션에서 사용자 ID를 읽어 req.userId에 주입한다.
  * 세션이 없거나 비로그인 상태면 아무 것도 하지 않는다.
@@ -28,9 +29,9 @@ import type { Request, Response, NextFunction } from 'express';
  */
 export function bindSessionUser(req: Request, _res: Response, next: NextFunction) {
   // express-session 타입 보강 참고: src/types/express-session.d.ts
-  const sid = (req.session as any);
-  if (sid && typeof sid.userId !== 'undefined') {
-    (req as any).userId = sid.userId;
+  const uid = req.session?.userId;
+  if (typeof uid !== 'undefined') {
+    req.userId = uid;
   }
   next();
 }

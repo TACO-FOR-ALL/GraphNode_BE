@@ -1,19 +1,17 @@
 {
   "$id": "https://graphnode.dev/schemas/conversation.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "ConversationV2",
+  "title": "ChatThread",
   "type": "object",
-  "required": ["id", "ownerUserId", "provider", "model", "createdAt", "updatedAt"],
+  "required": ["id", "title", "updatedAt", "messages"],
   "properties": {
-    "id": { "type": "string" },
-    "ownerUserId": { "type": "integer", "minimum": 1 },
-    "provider": { "type": "string", "enum": ["openai", "azure-openai", "anthropic", "gemini", "cohere", "mistral", "ollama", "openrouter", "unknown"] },
-    "model": { "type": "string", "minLength": 1 },
-    "title": { "type": ["string", "null"], "minLength": 1, "maxLength": 200 },
-    "source": { "type": "string", "enum": ["api", "export", "import"] },
-    "createdAt": { "type": "string", "format": "date-time" },
+    "id": { "type": "string", "description": "FE가 생성한 UUID/ULID" },
+    "title": { "type": "string", "minLength": 1, "maxLength": 200 },
     "updatedAt": { "type": "string", "format": "date-time" },
-    "tags": { "type": "array", "items": { "type": "string" } }
+    "messages": {
+      "type": "array",
+      "items": { "$ref": "./message.json" }
+    }
   },
   "additionalProperties": false
 }

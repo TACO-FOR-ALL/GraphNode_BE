@@ -14,8 +14,8 @@
 export interface ConversationProps {
   /** 대화 식별자(UUID/ULID 등 문자열) */
   id: string;
-  /** 소유 사용자 내부 식별자(AUTO_INCREMENT 정수) */
-  ownerUserId: number;
+  /** 소유 사용자 내부 식별자(문자열 일원화: MySQL BIGINT 안전성 고려) */
+  ownerUserId: string;
   /** 제목(1~200자 권장) */
   title: string;
   /** 생성 시각(Date 객체, UTC) */
@@ -33,7 +33,7 @@ export class Conversation {
   get id() { return this.props.id; }
   /** 제목을 반환한다. 공백만의 제목은 저장 단계에서 거부된다. */
   get title() { return this.props.title; }
-  /** 소유자 사용자 ID(정수)를 반환한다. */
+  /** 소유자 사용자 ID(문자열)를 반환한다. */
   get ownerUserId() { return this.props.ownerUserId; }
   /** 생성 시각(Date, UTC)을 반환한다. */
   get createdAt() { return this.props.createdAt; }
