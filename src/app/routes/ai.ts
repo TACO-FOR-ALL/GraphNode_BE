@@ -7,6 +7,7 @@ import { Router } from 'express';
 import type { ConversationService } from '../../core/services/ConversationService';
 import type { MessageService } from '../../core/services/MessageService';
 import { AiController } from '../controllers/ai';
+import { asyncHandler } from '../utils/asyncHandler';
 import { bindSessionUser } from '../middlewares/session';
 import { requireLogin } from '../middlewares/auth';
 
@@ -21,16 +22,16 @@ export function createAiRouter(deps: {
   router.use(bindSessionUser, requireLogin);
 
   // Conversations
-  router.post('/conversations', (req, res, next) => aiController.createConversation(req, res, next));
-  router.get('/conversations', (req, res, next) => aiController.listConversations(req, res, next));
-  router.get('/conversations/:conversationId', (req, res, next) => aiController.getConversation(req, res, next));
-  router.patch('/conversations/:conversationId', (req, res, next) => aiController.updateConversation(req, res, next));
-  router.delete('/conversations/:conversationId', (req, res, next) => aiController.deleteConversation(req, res, next));
+  router.post('/conversations', asyncHandler(aiController.createConversation.bind(aiController)));
+  router.get('/conversations', asyncHandler(aiController.listConversations.bind(aiController)));
+  router.get('/conversations/:conversationId', asyncHandler(aiController.getConversation.bind(aiController)));
+  router.patch('/conversations/:conversationId', asyncHandler(aiController.updateConversation.bind(aiController)));
+  router.delete('/conversations/:conversationId', asyncHandler(aiController.deleteConversation.bind(aiController)));
 
   // Messages
-  router.post('/conversations/:conversationId/messages', (req, res, next) => aiController.createMessage(req, res, next));
-  router.patch('/conversations/:conversationId/messages/:messageId', (req, res, next) => aiController.updateMessage(req, res, next));
-  router.delete('/conversations/:conversationId/messages/:messageId', (req, res, next) => aiController.deleteMessage(req, res, next));
+  router.post('/conversations/:conversationId/messages', asyncHandler(aiController.createMessage.bind(aiController)));
+  router.patch('/conversations/:conversationId/messages/:messageId', asyncHandler(aiController.updateMessage.bind(aiController)));
+  router.delete('/conversations/:conversationId/messages/:messageId', asyncHandler(aiController.deleteMessage.bind(aiController)));
 
   return router;
 }

@@ -22,6 +22,7 @@ import { logger } from '../shared/utils/logger';
 // AI 라우터 import
 import { initDatabases } from '../infra/db';
 import { makeAiRouter } from './modules/ai.module'; // <-- 조립 모듈 사용
+import {makeGraphRouter} from "./modules/graph.module"; // Graph 모듈 임포트
 
 /**
  * Express 앱 부트스트랩.
@@ -69,6 +70,9 @@ export function createApp() {
   // AI 라우터(조립된 Router 장착)
   app.use('/v1/ai', makeAiRouter());
 
+  // Graph Router(조립된 Router 장착)
+  app.use('/v1/graph', makeGraphRouter());
+
   // Auth routes
   app.use('/auth/google', authGoogleRouter);
   app.use('/v1/me', meRouter);
@@ -87,9 +91,9 @@ export function createApp() {
 
 export async function bootstrap() {
   const app = createApp();
-  const mongo = await initDatabases();
+  const database = await initDatabases();
 
-  return { app, mongo };
+  return { app, database };
 }
 
 if (require.main === module) {
