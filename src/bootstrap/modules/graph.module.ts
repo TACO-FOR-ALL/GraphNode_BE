@@ -5,21 +5,21 @@
 import type { Router } from 'express';
 
 import { getQdrantAdapter } from '../../infra/db/qdrantClient';
-import { loadEnv } from '../../config/env';
 import { GraphVectorService } from '../../core/services/GraphVectorService';
+import { createAuditProxy } from '../../shared/audit/auditProxy';
 import { createGraphRouter } from '../../app/routes/graph';
 
 export function makeGraphRouter() : Router {
 
-    //ENV
-    const env = loadEnv();
 
     //Repositories(Adapter)
     const qdrantAdapter = getQdrantAdapter();
     
 
     // Services
-    const graphService = new GraphVectorService(qdrantAdapter);
+    const rawGraphService = new GraphVectorService(qdrantAdapter);
+    // Wrap service with audit proxy (summary-only logging)
+    const graphService = createAuditProxy(rawGraphService, 'GraphVectorService');
 
     //Router(Factory)
     return createGraphRouter(graphService);
