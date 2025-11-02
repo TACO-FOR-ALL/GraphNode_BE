@@ -12,13 +12,13 @@ import { GraphController } from '../controllers/graph';
 
 /**
  * 라우터 팩토리 함수
- * @param graphService - 그래프 관련 서비스 인스턴스
+ * @param graphVectorService - 그래프 관련 서비스 인스턴스
  * @returns 라우터 객체
  */
-export function createGraphRouter(graphService: GraphVectorService) {
+export function createGraphRouter(graphVectorService: GraphVectorService) {
 
     const router = Router();
-    const graphController = new GraphController(graphService);
+    const graphController = new GraphController(graphVectorService);
 
     // 공통 미들웨어 적용: 세션 사용자 바인딩 및 로그인 요구
     router.use(bindSessionUser, requireLogin);

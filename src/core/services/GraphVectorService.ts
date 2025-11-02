@@ -1,97 +1,139 @@
 
 /**
- * Graph 정보를 담을 Vector DB 비즈니스 로직 담당
+ * GraphVectorService — orchestration utilities for Graph <-> Vector interactions
+ *
+ * 이 서비스는 실제 도메인 로직(검증/영속성)을 직접 수행하지 않습니다. 대신
+ * GraphService와 VectorService 간의 조정, 배치 적용, 동기화/정합성 유틸리티
+ * 를 제공합니다. 이렇게 레이어를 분리하면 즉시 적용, 배치 처리, 또는 아웃박스
+ * 기반의 eventual consistency 중 원하는 전략을 선택하여 사용할 수 있습니다.
  */
 
-
-import type { VectorStore, VectorItem } from '../ports/VectorStore';
-import { ValidationError, UpstreamError } from '../../shared/errors/domain';
-import { AppError } from '../../shared/errors/base';
+import type { GraphService } from './GraphService';
+import type { VectorService } from './VectorService';
+import type { GraphNode } from '../ports/GraphStore';
 
 export class GraphVectorService {
-    constructor(private store: VectorStore, private defaultCollection = 'graph_vectors') {}
+  constructor(private graphService: GraphService, private vectorService: VectorService) {}
 
-    /**
-     * 사용자 소유의 벡터들을 업서트한다.
-     * @param userId 소유자 식별자 (userId를 payload에 포함하여 격리)
-     * @param items VectorItem[] (vector + payload without userId)
-     */
-    async upsertForUser(
-        userId: string,
-        items: Array<{
-            id: string;
-            vector: number[];
-            payload?: Record<string, any>;
-        }>
-    ) {
-        try {
-            if (!userId) throw new ValidationError('userId required');
-            if (!Array.isArray(items) || items.length === 0) return; // no-op
+  /**
+   * Prepare a combined payload for creating a node and its vector.
+   *
+   * - Side-effect free: returns payloads only.
+   * - Caller decides whether to persist immediately, batch, or enqueue.
+   *
+   * @param node Partial node fields; must include `id` and `userId`.
+   * @param embedding Optional numeric embedding array.
+   * @param meta Optional metadata to attach to vector payload.
+   * @returns An object { nodePayload, vectorPayload } where vectorPayload may be null.
+   * @throws Error when required identifiers are missing.
+   */
+  prepareNodeAndVector(node: Partial<GraphNode>, embedding?: number[], meta?: Record<string, any>) {
+    if (!node.id) throw new Error('prepareNodeAndVector: node.id is required');
+    if (!node.userId) throw new Error('prepareNodeAndVector: node.userId is required');
 
-            // payload에 userId 주입
-            const toStore: VectorItem[] = items.map(i => ({
-                id: i.id,
-                vector: i.vector,
-                payload: { ...(i.payload ?? {}), userId },
-            }));
+    const nodePayload: GraphNode = {
+      id: node.id,
+      userId: node.userId,
+      title: (node as any).title ?? null,
+      createdAt: (node as any).createdAt ?? new Date().toISOString(),
+      updatedAt: (node as any).updatedAt ?? new Date().toISOString(),
+      ...(node as any),
+    } as GraphNode;
 
-            // 컬렉션 보장 후 업서트
-            await this.store.ensureCollection(this.defaultCollection);
-            await this.store.upsert(this.defaultCollection, toStore);
-        } catch (err: unknown) {
-            if (err instanceof AppError) throw err;
-            throw new UpstreamError('GraphVectorService.upsertForUser failed', { cause: String(err) });
+    const vectorPayload = embedding
+      ? {
+          collection: `user_${node.userId}_nodes`,
+          items: [
+            {
+              id: node.id,
+              vector: embedding,
+              payload: { ...(meta ?? {}), userId: node.userId, nodeId: node.id },
+            },
+          ],
         }
+      : null;
+
+    return { nodePayload, vectorPayload } as const;
+  }
+
+  /**
+   * Apply a small batch of node+vector prepared payloads.
+   *
+   * This two-phase helper:
+   *  - Phase A: attempts to persist nodes via GraphService (best-effort)
+   *  - Phase B: attempts to upsert vectors for successfully created nodes
+   *
+   * The function returns detailed results so callers can implement retries or
+   * an outbox pattern when stronger guarantees are required.
+   *
+   * @param items Array of { nodePayload, vectorPayload } produced by prepareNodeAndVector
+   */
+  async applyBatchNodes(items: Array<{ nodePayload: GraphNode; vectorPayload: any | null }>) {
+    const created: string[] = [];
+    const vectorUpserted: string[] = [];
+    const errors: any[] = [];
+
+    // Phase A: persist nodes
+    for (const it of items) {
+      try {
+        await this.graphService.createNode(it.nodePayload);
+        created.push(it.nodePayload.id);
+      } catch (err) {
+        errors.push({ stage: 'graph.create', id: it.nodePayload.id, error: err });
+      }
     }
 
-    /**
-     * 사용자 범위에서 유사도 검색
-     * @param userId 검색 대상 사용자 (권한/격리를 위해 필터로 사용)
-     * @param queryVector embedding vector
-     */
-    async searchForUser(userId: string, queryVector: number[], opts?: { limit?: number }) {
-        try {
-            if (!userId) throw new ValidationError('userId required');
-            if (!Array.isArray(queryVector) || queryVector.length === 0) throw new ValidationError('queryVector required');
-
-            // Qdrant 호환 filter (user isolation)
-            const filter = {
-                must: [{ key: 'userId', match: { value: userId } }],
-            };
-
-            const hits = await this.store.search(this.defaultCollection, queryVector, { filter, limit: opts?.limit });
-            return hits;
-        } catch (err: unknown) {
-            if (err instanceof AppError) throw err;
-            throw new UpstreamError('GraphVectorService.searchForUser failed', { cause: String(err) });
-        }
+    // Phase B: upsert vectors only for nodes that were created
+    for (const it of items) {
+      if (!it.vectorPayload) continue;
+      if (!created.includes(it.nodePayload.id)) {
+        errors.push({ stage: 'vector.skip_node_missing', id: it.nodePayload.id });
+        continue;
+      }
+      try {
+        // VectorService expects (userId, items)
+        await this.vectorService.upsertForUser(it.nodePayload.userId, it.vectorPayload.items);
+        vectorUpserted.push(it.nodePayload.id);
+      } catch (err) {
+        errors.push({ stage: 'vector.upsert', id: it.nodePayload.id, error: err });
+      }
     }
 
-    /**
-     * 사용자 소유 벡터 삭제 (filter 기반)
-     * @param userId 소유자 ID (required)
-     * @param extraFilter 추가 필터(예: conversationId 등)
-     * @throws {Error}
-     */
-    async deleteForUser(userId: string, extraFilter?: Record<string, any>) {
-        try {
-            if (!userId) throw new ValidationError('userId required');
+    return { created, vectorUpserted, errors } as const;
+  }
 
-            const must = [{ key: 'userId', match: { value: userId } }];
+  /**
+   * Search by vector and fetch corresponding graph nodes, merging results.
+   *
+   * This helper first queries the vector store for candidate node ids and
+   * then loads nodes from GraphService. The returned array preserves the
+   * vector result ordering and attaches the score.
+   */
+  async searchNodesByVector(userId: string, _collection: string | undefined, queryVector: number[], limit = 10) {
+    // _collection is currently informational; VectorService uses a default collection
+    const vecRes = await this.vectorService.searchForUser(userId, queryVector, { limit });
+    const ids = vecRes.map(r => r.id);
+    const nodes = await Promise.all(ids.map(id => this.graphService.getNodeById(id)));
+    return ids.map((id, i) => ({ node: nodes[i] ?? null, score: vecRes[i]?.score ?? 0 }));
+  }
 
-            // extraFilter이 있을 경우 must에 추가 (간단 변환 - AI팀 요구에 따라 확장)
-            if (extraFilter) {
-                // extraFilter 은 { key: value } 형태 기대. key별로 match 추가
-                for (const [k, v] of Object.entries(extraFilter)) {
-                    must.push({ key: k, match: { value: v } });
-                }
-            }
-
-            const filter = { must };
-            await this.store.deleteByFilter(this.defaultCollection, filter);
-        } catch (err: unknown) {
-            if (err instanceof AppError) throw err;
-            throw new UpstreamError('GraphVectorService.deleteForUser failed', { cause: String(err) });
-        }
+  /**
+   * Find nodes (by id list) that do not yet have vector entries.
+   *
+   * Note: naive implementation that queries for each id; suitable for
+   * small batches. For large-scale reconciliation use an index or metadata
+   * approach and/or run in a worker with pagination.
+   */
+  async findNodesMissingVectors(userId: string, collection: string, nodeIds: string[]) {
+    const missing: string[] = [];
+    for (const id of nodeIds) {
+      try {
+  const res = await this.vectorService.searchForUser(userId, [0], { filter: { nodeId: id }, limit: 1 });
+        if (!res || res.length === 0) missing.push(id);
+      } catch (err) {
+        missing.push(id);
+      }
     }
+    return missing;
+  }
 }

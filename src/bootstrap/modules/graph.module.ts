@@ -8,20 +8,37 @@ import { getQdrantAdapter } from '../../infra/db/qdrantClient';
 import { GraphVectorService } from '../../core/services/GraphVectorService';
 import { createAuditProxy } from '../../shared/audit/auditProxy';
 import { createGraphRouter } from '../../app/routes/graph';
+import { GraphRepositoryMongo } from '../../infra/repositories/GraphRepositoryMongo';
+import { GraphService } from '../../core/services/GraphService';
+import { VectorService } from '../../core/services/VectorService';
+import MemoryVectorStore from '../../infra/repositories/MemoryVectorStore';
 
 export function makeGraphRouter() : Router {
 
 
     //Repositories(Adapter)
-    const qdrantAdapter = getQdrantAdapter();
-    
+    let qdrantAdapter;
+    try {
+        qdrantAdapter = getQdrantAdapter();
+    } catch (e) {
+        // tests or local runs may not initialize Qdrant — fall back to in-memory store
+        qdrantAdapter = new MemoryVectorStore();
+    }
+    const graphRepo = new GraphRepositoryMongo();
 
     // Services
-    const rawGraphService = new GraphVectorService(qdrantAdapter);
-    // Wrap service with audit proxy (summary-only logging)
-    const graphService = createAuditProxy(rawGraphService, 'GraphVectorService');
+    const rawGraphService = new GraphService(graphRepo);
+    const rawVectorService = new VectorService(qdrantAdapter);
 
-    //Router(Factory)
-    return createGraphRouter(graphService);
+    // wrap with audit proxies so service method calls are audited
+    const graphService = createAuditProxy(rawGraphService, 'GraphService');
+    const vectorService = createAuditProxy(rawVectorService, 'VectorService');
+
+    // Composite service (graph + vector)
+    const rawGraphVector = new GraphVectorService(graphService, vectorService);
+    const graphVectorService = createAuditProxy(rawGraphVector, 'GraphVectorService');
+
+    //Router(Factory) - expose composite (or graphService) to router as appropriate
+    return createGraphRouter(graphVectorService);
 
 }
