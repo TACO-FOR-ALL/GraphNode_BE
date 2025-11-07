@@ -9,4 +9,16 @@ export class GoogleAuthApi {
   startUrl(): string {
     return this.baseUrl.replace(/\/$/, '') + '/auth/google/start';
   }
+
+
+
+    /**
+   * 브라우저를 Google 로그인 페이지로 리다이렉트한다.
+   * @param windowObj window 객체(테스트/SSR 대응, 기본값 window)
+   * @example
+   * sdk.googleAuth.login(); // 자동으로 리다이렉트
+   */
+  login(windowObj: Window = window): void {
+    windowObj.location.href = this.startUrl();
+  }
 }

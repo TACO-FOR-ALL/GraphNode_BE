@@ -43,6 +43,7 @@ export class RequestBuilder {
 
   /**
    * 경로 조각을 추가한다. '/v1/me' 같은 절대 경로도 허용한다.
+  * @internal SDK 내부에서만 사용된다. FE에서는 직접 호출하지 말 것.
    */
   path(p: string): RequestBuilder {
     if (!p) return this;
@@ -56,6 +57,7 @@ export class RequestBuilder {
 
   /**
    * 쿼리 파라미터를 추가한다.
+  * @internal SDK 내부에서만 사용된다. FE에서는 직접 호출하지 말 것.
    */
   query(params?: Record<string, unknown>): RequestBuilder {
     if (!params) return this;
