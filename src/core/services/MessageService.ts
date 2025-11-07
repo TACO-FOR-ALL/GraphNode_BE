@@ -10,7 +10,8 @@
 import { ChatMessage } from '../../shared/dtos/ai';
 import { MessageRepository } from '../ports/MessageRepository';
 import { ConversationRepository } from '../ports/ConversationRepository';
-import { NotFoundError, ValidationError } from '../../shared/errors/domain';
+import { NotFoundError, ValidationError, UpstreamError } from '../../shared/errors/domain';
+import { AppError } from '../../shared/errors/base';
 
 export class MessageService {
   constructor(
@@ -28,23 +29,29 @@ export class MessageService {
    * @throws {NotFoundError} 대화 없음/권한 불일치
    */
   async create(ownerUserId: string, conversationId: string, message: ChatMessage): Promise<ChatMessage> {
-    await this.validateConversationOwner(conversationId, ownerUserId);
+    try {
+      await this.validateConversationOwner(conversationId, ownerUserId);
 
-    if (!message.id || message.id.trim().length === 0) {
-      throw new ValidationError('Message id is required');
+      if (!message.id || message.id.trim().length === 0) {
+        throw new ValidationError('Message id is required');
+      }
+      if (!message.content || message.content.trim().length === 0) {
+        throw new ValidationError('Message content cannot be empty');
+      }
+
+      const newMessage: ChatMessage = {
+        ...message, // ← FE 제공 ID 그대로 사용
+        ts: message.ts ?? new Date().toISOString(),
+      };
+
+      const createdMessage = await this.messageRepo.create(conversationId, newMessage);
+      await this.conversationRepo.update(conversationId, ownerUserId, { updatedAt: new Date().toISOString() });
+      return createdMessage;
+    } catch (err: unknown) {
+      // Pass through AppError (domain) unchanged, wrap unexpected errors
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('MessageService.create failed', { cause: String(err) });
     }
-    if (!message.content || message.content.trim().length === 0) {
-      throw new ValidationError('Message content cannot be empty');
-    }
-
-    const newMessage: ChatMessage = {
-      ...message,                          // ← FE 제공 ID 그대로 사용
-      ts: message.ts ?? new Date().toISOString(),
-    };
-
-    const createdMessage = await this.messageRepo.create(conversationId, newMessage);
-    await this.conversationRepo.update(conversationId, ownerUserId, { updatedAt: new Date().toISOString() });
-    return createdMessage;
   }
 
   /**
@@ -56,17 +63,22 @@ export class MessageService {
    * @returns 업데이트된 메시지
    */
   async update(ownerUserId: string, conversationId: string, messageId: string, updates: Partial<Omit<ChatMessage, 'id'>>): Promise<ChatMessage> {
-    await this.validateConversationOwner(conversationId, ownerUserId);
+    try {
+      await this.validateConversationOwner(conversationId, ownerUserId);
 
-    const updatedMessage = await this.messageRepo.update(messageId, conversationId, updates);
-    if (!updatedMessage) {
-      throw new NotFoundError(`Message with id ${messageId} not found`);
+      const updatedMessage = await this.messageRepo.update(messageId, conversationId, updates);
+      if (!updatedMessage) {
+        throw new NotFoundError(`Message with id ${messageId} not found`);
+      }
+
+      // 대화의 updatedAt을 갱신
+      await this.conversationRepo.update(conversationId, ownerUserId, { updatedAt: new Date().toISOString() });
+
+      return updatedMessage;
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('MessageService.update failed', { cause: String(err) });
     }
-    
-    // 대화의 updatedAt을 갱신
-    await this.conversationRepo.update(conversationId, ownerUserId, { updatedAt: new Date().toISOString() });
-
-    return updatedMessage;
   }
 
   /**
@@ -77,17 +89,22 @@ export class MessageService {
    * @returns 삭제 성공 여부
    */
   async delete(ownerUserId: string, conversationId: string, messageId: string): Promise<boolean> {
-    await this.validateConversationOwner(conversationId, ownerUserId);
+    try {
+      await this.validateConversationOwner(conversationId, ownerUserId);
 
-    const success = await this.messageRepo.delete(messageId, conversationId);
-    if (!success) {
-      throw new NotFoundError(`Message with id ${messageId} not found`);
+      const success = await this.messageRepo.delete(messageId, conversationId);
+      if (!success) {
+        throw new NotFoundError(`Message with id ${messageId} not found`);
+      }
+
+      // 대화의 updatedAt을 갱신
+      await this.conversationRepo.update(conversationId, ownerUserId, { updatedAt: new Date().toISOString() });
+
+      return true;
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('MessageService.delete failed', { cause: String(err) });
     }
-
-    // 대화의 updatedAt을 갱신
-    await this.conversationRepo.update(conversationId, ownerUserId, { updatedAt: new Date().toISOString() });
-
-    return true;
   }
 
   /**

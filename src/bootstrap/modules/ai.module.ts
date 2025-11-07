@@ -8,6 +8,7 @@ import { ConversationRepositoryMongo } from '../../infra/repositories/Conversati
 import { MessageRepositoryMongo } from '../../infra/repositories/MessageRepositoryMongo';
 import { ConversationService } from '../../core/services/ConversationService';
 import { MessageService } from '../../core/services/MessageService';
+import { createAuditProxy } from '../../shared/audit/auditProxy';
 import { createAiRouter } from '../../app/routes/ai';
 
 export function makeAiRouter(): Router {
@@ -16,8 +17,10 @@ export function makeAiRouter(): Router {
   const conversationRepo = new ConversationRepositoryMongo(messageRepo);
 
   // Services
-  const conversationService = new ConversationService(conversationRepo, messageRepo);
-  const messageService = new MessageService(messageRepo, conversationRepo);
+  const rawConversationService = new ConversationService(conversationRepo, messageRepo);
+  const rawMessageService = new MessageService(messageRepo, conversationRepo);
+  const conversationService = createAuditProxy(rawConversationService, 'ConversationService');
+  const messageService = createAuditProxy(rawMessageService, 'MessageService');
 
   // Router(factory)
   return createAiRouter({ conversationService, messageService });
