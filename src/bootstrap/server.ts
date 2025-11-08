@@ -3,11 +3,13 @@
  * 책임: Express 앱 생성(보안/로깅/세션/라우팅/에러) 및 서버 기동.
  * 정책: 개발은 DEV_INSECURE_COOKIES=true일 때 Secure 쿠키를 비활성화, 운영은 __Host-session; Secure; HttpOnly; SameSite=Strict.
  */
+// import http from 'http';
 import express from 'express';
 import session from 'express-session';
 import cors from 'cors';
 // import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+// import { AddressInfo } from 'net';
 
 import healthRouter from '../app/routes/health';
 import { loadEnv } from '../config/env';
@@ -23,6 +25,7 @@ import { logger } from '../shared/utils/logger';
 import { initDatabases } from '../infra/db';
 import { makeAiRouter } from './modules/ai.module'; // <-- 조립 모듈 사용
 import {makeGraphRouter} from "./modules/graph.module"; // Graph 모듈 임포트
+
 
 /**
  * Express 앱 부트스트랩.
@@ -96,16 +99,63 @@ export async function bootstrap() {
   return { app, database };
 }
 
+
+// if (require.main === module) {
+//   bootstrap()
+//     .then(({ app }) => {
+//       const port: number = Number(process.env.PORT) || 3000;
+//       const host: string = process.env.HOST && !process.env.HOST.includes('://')
+//         ? process.env.HOST
+//         : '127.0.0.1'; // 컨테이너/WSL이면 '0.0.0.0' 권장
+
+//       // 1) 서버 객체를 먼저 만들고
+//       const server = http.createServer(app);
+
+//       // 2) 에러/리스닝 리스너를 선부착(레이스 방지)
+//       server.once('error', (err: NodeJS.ErrnoException) => {
+//         logger.error(
+//           { event: 'server.error', code: err.code, message: err.message, port, host },
+//           'Listen failed'
+//         );
+//         // final 미사용이므로 한 틱 뒤 종료해 버퍼 플러시 여지 확보
+//         setTimeout(() => process.exit(1), 10);
+//       });
+
+//       server.once('listening', () => {
+//         const addr = server.address() as AddressInfo | null;
+//         const shownPort = addr?.port ?? port;
+//         const url = `http://${host}:${shownPort}`;
+//         logger.info({ event: 'server.started', port: shownPort, url }, 'Server is running');
+//       });
+
+//       console.log(`Server listening on http://${host}:${port}`);
+//       // 3) 마지막에 리슨 호출
+//       server.listen(port);
+//       console.log(`Server listening on http://${host}:${port}`);
+//     })
+//     .catch((err) => {
+//       logger.fatal({ err }, 'Failed to bootstrap server');
+//       setTimeout(() => process.exit(1), 10);
+//     });
+// }
+
+
+
 if (require.main === module) {
+
   bootstrap()
     .then(({ app }) => {
       const port = process.env.PORT || 3000;
+      console.log(`Server listening on http://localhost:${port}`);
       app.listen(port, () => {
-        logger.info(`Server is running on http://localhost:${port}`);
+        logger.info({ event: 'server.started', port, url: `http://localhost:${port}` }, 'Server is running');
       });
+      
     })
     .catch(err => {
       logger.fatal('Failed to bootstrap server', err);
       process.exit(1);
     });
 }
+
+ 
