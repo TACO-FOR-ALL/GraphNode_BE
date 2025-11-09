@@ -20,7 +20,7 @@ import { requestContext } from '../app/middlewares/request-context';
 import { httpLogger } from '../shared/utils/logger';
 import { errorHandler } from '../app/middlewares/error';
 import { NotFoundError } from '../shared/errors/domain';
-import { logger } from '../shared/utils/logger';
+// import { logger } from '../shared/utils/logger';
 // AI 라우터 import
 import { initDatabases } from '../infra/db';
 import { makeAiRouter } from './modules/ai.module'; // <-- 조립 모듈 사용
@@ -100,62 +100,38 @@ export async function bootstrap() {
 }
 
 
-// if (require.main === module) {
-//   bootstrap()
-//     .then(({ app }) => {
-//       const port: number = Number(process.env.PORT) || 3000;
-//       const host: string = process.env.HOST && !process.env.HOST.includes('://')
-//         ? process.env.HOST
-//         : '127.0.0.1'; // 컨테이너/WSL이면 '0.0.0.0' 권장
 
-//       // 1) 서버 객체를 먼저 만들고
-//       const server = http.createServer(app);
 
-//       // 2) 에러/리스닝 리스너를 선부착(레이스 방지)
-//       server.once('error', (err: NodeJS.ErrnoException) => {
-//         logger.error(
-//           { event: 'server.error', code: err.code, message: err.message, port, host },
-//           'Listen failed'
-//         );
-//         // final 미사용이므로 한 틱 뒤 종료해 버퍼 플러시 여지 확보
-//         setTimeout(() => process.exit(1), 10);
-//       });
 
-//       server.once('listening', () => {
-//         const addr = server.address() as AddressInfo | null;
-//         const shownPort = addr?.port ?? port;
-//         const url = `http://${host}:${shownPort}`;
-//         logger.info({ event: 'server.started', port: shownPort, url }, 'Server is running');
-//       });
 
-//       console.log(`Server listening on http://${host}:${port}`);
-//       // 3) 마지막에 리슨 호출
-//       server.listen(port);
-//       console.log(`Server listening on http://${host}:${port}`);
-//     })
-//     .catch((err) => {
-//       logger.fatal({ err }, 'Failed to bootstrap server');
-//       setTimeout(() => process.exit(1), 10);
+
+// console.log('[TRACE] Main: calling bootstrap...');
+
+// bootstrap()
+//   .then(({ app }) => {
+//     console.log('[TRACE] Main: bootstrap resolved!');
+    
+//     const port = process.env.PORT || 3000;
+//     console.log(`[TRACE] Main: about to call app.listen on port ${port}`);
+    
+//     const server = app.listen(port, () => {
+//       console.log('[TRACE] Main: app.listen callback fired!');
+//       logger.info({ event: 'server.started', port, url: `http://localhost:${port}` }, 'Server is running');
 //     });
-// }
+    
+//     console.log('[TRACE] Main: app.listen returned server instance');
+    
+//     // 핸들 누수 확인
+//     setTimeout(() => {
+//       console.log('[TRACE] Active handles:', (process as any)._getActiveHandles?.()?.length);
+//       console.log('[TRACE] Active requests:', (process as any)._getActiveRequests?.()?.length);
+//     }, 1000);
+//   })
+//   .catch(err => {
+//     console.error('[TRACE] Main: bootstrap rejected!', err);
+//     logger.fatal('Failed to bootstrap server', err);
+//     process.exit(1);
+//   });
 
+// console.log('[TRACE] Main: bootstrap() called (async)');
 
-
-if (require.main === module) {
-
-  bootstrap()
-    .then(({ app }) => {
-      const port = process.env.PORT || 3000;
-      console.log(`Server listening on http://localhost:${port}`);
-      app.listen(port, () => {
-        logger.info({ event: 'server.started', port, url: `http://localhost:${port}` }, 'Server is running');
-      });
-      
-    })
-    .catch(err => {
-      logger.fatal('Failed to bootstrap server', err);
-      process.exit(1);
-    });
-}
-
- 
