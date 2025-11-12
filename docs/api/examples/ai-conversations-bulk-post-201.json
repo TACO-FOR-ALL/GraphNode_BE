@@ -1,0 +1,44 @@
+{
+  "conversations": [
+    {
+      "id": "conv_2a7d2f5a-0b3c-4d8e-8f6a-9b2c1d0e4f5a",
+      "title": "First Bulk Conversation",
+      "messages": [
+        {
+          "id": "msg_1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+          "conversationId": "conv_2a7d2f5a-0b3c-4d8e-8f6a-9b2c1d0e4f5a",
+          "role": "user",
+          "content": "This is the first message of the first conversation.",
+          "createdAt": "2025-11-12T10:00:00.000Z",
+          "updatedAt": "2025-11-12T10:00:00.000Z"
+        }
+      ],
+      "createdAt": "2025-11-12T10:00:00.000Z",
+      "updatedAt": "2025-11-12T10:00:00.000Z"
+    },
+    {
+      "id": "conv_3b8e3g6b-1c4d-5e9f-9g7b-0c3d2e1f5g6b",
+      "title": "Second Bulk Conversation",
+      "messages": [
+        {
+          "id": "msg_2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+          "conversationId": "conv_3b8e3g6b-1c4d-5e9f-9g7b-0c3d2e1f5g6b",
+          "role": "user",
+          "content": "Initial message.",
+          "createdAt": "2025-11-12T10:01:00.000Z",
+          "updatedAt": "2025-11-12T10:01:00.000Z"
+        },
+        {
+          "id": "msg_3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
+          "conversationId": "conv_3b8e3g6b-1c4d-5e9f-9g7b-0c3d2e1f5g6b",
+          "role": "assistant",
+          "content": "Response from assistant.",
+          "createdAt": "2025-11-12T10:01:05.000Z",
+          "updatedAt": "2025-11-12T10:01:05.000Z"
+        }
+      ],
+      "createdAt": "2025-11-12T10:01:00.000Z",
+      "updatedAt": "2025-11-12T10:01:05.000Z"
+    }
+  ]
+}

@@ -131,6 +131,55 @@ paths:
                 $ref: ../schemas/problem.json
               example:
                 $ref: './examples/me-get-401.json'
+  /v1/ai/conversations/bulk:
+    post:
+      summary: Bulk create conversations
+      description: Creates multiple conversations and their associated messages in a single request.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                conversations:
+                  type: array
+                  items:
+                    $ref: ../schemas/conversation.json
+            examples:
+              default:
+                $ref: ./examples/ai-conversations-bulk-post-request.json
+      responses:
+        '201':
+          description: Bulk creation successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversations:
+                    type: array
+                    items:
+                      $ref: ../schemas/conversation.json
+              examples:
+                default:
+                  $ref: ./examples/ai-conversations-bulk-post-201.json
+        '400':
+          description: Bad Request (e.g., validation error)
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+              example:
+                $ref: ./examples/problem-400.json
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+              example:
+                $ref: ./examples/me-get-401.json
   /v1/ai/conversations:
     post:
       summary: Create conversation
