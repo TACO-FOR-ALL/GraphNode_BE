@@ -1,5 +1,5 @@
 import { RequestBuilder } from '../http-builder.js';
-import type { ConversationDto, ConversationCreateDto, ConversationUpdateDto } from '../types/conversation.js';
+import type { ConversationDto, ConversationCreateDto, ConversationUpdateDto, ConversationBulkCreateDto } from '../types/conversation.js';
 import type { MessageCreateDto, MessageUpdateDto, MessageDto } from '../types/message.js';
 
 export class ConversationsApi {
@@ -7,6 +7,14 @@ export class ConversationsApi {
 
   create(dto: ConversationCreateDto): Promise<ConversationDto> {
     return this.rb.path('/v1/ai/conversations').post<ConversationDto>(dto);
+  }
+
+  bulkCreate(
+    dto: ConversationBulkCreateDto
+  ): Promise<{ conversations: ConversationDto[] }> {
+    return this.rb
+      .path('/v1/ai/conversations/bulk')
+      .post<{ conversations: ConversationDto[] }>(dto);
   }
 
   list(): Promise<ConversationDto[]> {

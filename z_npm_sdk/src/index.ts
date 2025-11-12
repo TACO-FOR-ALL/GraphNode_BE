@@ -13,6 +13,6 @@ export { GraphApi } from './endpoints/graph.js';
 // Types
 export type { ProblemDetails } from './types/problem.js';
 export type { MeResponseDto, MeProfileDto } from './types/me.js';
-export type { ConversationDto, ConversationCreateDto, ConversationUpdateDto } from './types/conversation.js';
+export type { ConversationDto, ConversationCreateDto, ConversationUpdateDto, ConversationBulkCreateDto } from './types/conversation.js';
 export type { MessageDto, MessageCreateDto, MessageUpdateDto } from './types/message.js';
 

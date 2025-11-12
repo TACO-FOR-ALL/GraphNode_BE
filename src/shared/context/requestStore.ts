@@ -16,3 +16,12 @@ export const requestStore = new AsyncLocalStorage<RequestContext>();
 export function getRequestContext(): RequestContext | undefined {
   return requestStore.getStore();
 }
+
+
+/**
+ * Retrieves the correlation ID from the current request context.
+ * @returns The correlation ID, or undefined if not in a request scope.
+ */
+export function getCorrelationId(): string | undefined {
+  return getRequestContext()?.correlationId;
+}

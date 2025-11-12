@@ -16,3 +16,7 @@ export interface ConversationCreateDto {
 export interface ConversationUpdateDto {
   title?: string;
 }
+
+export interface ConversationBulkCreateDto {
+  conversations: ConversationCreateDto[];
+}
