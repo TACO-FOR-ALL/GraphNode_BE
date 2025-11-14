@@ -81,6 +81,8 @@ export function createApp() {
   app.use('/v1/me', meRouter);
   app.use('/auth', authSessionRouter);
 
+
+  
   // 404 fall-through → Problem Details 형식으로 응답
   app.use((req, _res, next) => {
     next(new NotFoundError('Not Found'));

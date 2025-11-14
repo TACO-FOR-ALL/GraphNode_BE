@@ -394,6 +394,388 @@ paths:
             application/problem+json:
               schema:
                 $ref: ../schemas/problem.json
+  /v1/graph/nodes:
+    post:
+      summary: Create or update a graph node
+      description: Inserts a new node or updates an existing one based on its ID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/graph-node.json
+      responses:
+        '201':
+          description: Node created/updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/graph-node.json
+        '400':
+          description: Bad Request (validation error).
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+    get:
+      summary: List all graph nodes for the user
+      description: Retrieves a list of all graph nodes associated with the authenticated user.
+      responses:
+        '200':
+          description: A list of graph nodes.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: ../schemas/graph-node.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/nodes/{nodeId}:
+    get:
+      summary: Get a specific graph node
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: The requested graph node.
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/graph-node.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '404':
+          description: Node not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+    patch:
+      summary: Update a graph node
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clusterId: { type: string }
+                clusterName: { type: string }
+      responses:
+        '204':
+          description: Node updated successfully.
+        '400':
+          description: Bad Request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '404':
+          description: Node not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+    delete:
+      summary: Delete a graph node
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Node deleted successfully.
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/nodes/{nodeId}/cascade:
+    delete:
+      summary: Delete a graph node and its connected edges
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Node and edges deleted successfully.
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/edges:
+    post:
+      summary: Create or update a graph edge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/graph-edge.json
+      responses:
+        '201':
+          description: Edge created/updated successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+        '400':
+          description: Bad Request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+    get:
+      summary: List all graph edges for the user
+      responses:
+        '200':
+          description: A list of graph edges.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: ../schemas/graph-edge.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/edges/{edgeId}:
+    delete:
+      summary: Delete a graph edge
+      parameters:
+        - name: edgeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Edge deleted successfully.
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/clusters:
+    post:
+      summary: Create or update a graph cluster
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/graph-cluster.json
+      responses:
+        '201':
+          description: Cluster created/updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/graph-cluster.json
+        '400':
+          description: Bad Request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+    get:
+      summary: List all graph clusters for the user
+      responses:
+        '200':
+          description: A list of graph clusters.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: ../schemas/graph-cluster.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/clusters/{clusterId}:
+    get:
+      summary: Get a specific graph cluster
+      parameters:
+        - name: clusterId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The requested graph cluster.
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/graph-cluster.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '404':
+          description: Cluster not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+    delete:
+      summary: Delete a graph cluster
+      parameters:
+        - name: clusterId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Cluster deleted successfully.
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/clusters/{clusterId}/cascade:
+    delete:
+      summary: Delete a cluster and its contained nodes and edges
+      parameters:
+        - name: clusterId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Cluster and contents deleted successfully.
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/stats:
+    get:
+      summary: Get graph statistics
+      responses:
+        '200':
+          description: Graph statistics for the user.
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/graph-stats.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/snapshot:
+    get:
+      summary: Get a full graph snapshot
+      responses:
+        '200':
+          description: A full snapshot of the user's graph.
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/graph-snapshot.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+    post:
+      summary: Persist a full graph snapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                snapshot:
+                  $ref: ../schemas/graph-snapshot.json
+              required:
+                - snapshot
+      responses:
+        '204':
+          description: Snapshot persisted successfully.
+        '400':
+          description: Bad Request (validation error).
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
 components:
   schemas:
     Problem:
@@ -402,6 +784,16 @@ components:
       $ref: ../schemas/conversation.json
     Message:
       $ref: ../schemas/message.json
+    GraphNode:
+      $ref: ../schemas/graph-node.json
+    GraphEdge:
+      $ref: ../schemas/graph-edge.json
+    GraphCluster:
+      $ref: ../schemas/graph-cluster.json
+    GraphStats:
+      $ref: ../schemas/graph-stats.json
+    GraphSnapshot:
+      $ref: ../schemas/graph-snapshot.json
   examples:
     meGet200:
       externalValue: ./examples/me-get-200.json

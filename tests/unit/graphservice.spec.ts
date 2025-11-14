@@ -1,76 +1,130 @@
 import { GraphService } from '../../src/core/services/GraphService';
-import type { GraphStore, GraphNode, GraphEdge } from '../../src/core/ports/GraphStore';
+import type {
+  GraphClusterRecord,
+  GraphEdgeRecord,
+  GraphNodeRecord,
+  GraphStatsRecord,
+  GraphStore,
+} from '../../src/core/ports/GraphStore';
 import { NotFoundError } from '../../src/shared/errors/domain';
 
 class InMemoryGraphStore implements GraphStore {
-  nodes = new Map<string, any>();
-  edges: any[] = [];
+  private nodes = new Map<string, GraphNodeRecord>();
+  private edges = new Map<string, GraphEdgeRecord>();
+  private clusters = new Map<string, GraphClusterRecord>();
+  private stats = new Map<string, GraphStatsRecord>();
 
-  async createNode(node: GraphNode) {
-    this.nodes.set(node.id, { ...node });
+  private nodeKey(userId: string, nodeId: number) {
+    return `${userId}::${nodeId}`;
   }
-  async updateNode(nodeId: string, patch: Partial<GraphNode>) {
-    const n = this.nodes.get(nodeId);
-    if (!n) throw new NotFoundError('Node not found');
-    this.nodes.set(nodeId, { ...n, ...patch });
+
+  private edgeKey(userId: string, source: number, target: number, id?: string) {
+    return id ?? `${userId}::${source}->${target}`;
   }
-  async deleteNode(nodeId: string) {
-    this.nodes.delete(nodeId);
-    this.edges = this.edges.filter(e => e.from !== nodeId && e.to !== nodeId);
+
+  private clusterKey(userId: string, clusterId: string) {
+    return `${userId}::${clusterId}`;
   }
-  async addEdge(edge: GraphEdge) {
-    const id = edge.id ?? `e_${this.edges.length + 1}`;
-    this.edges.push({ ...edge, id });
+
+  async upsertNode(node: GraphNodeRecord): Promise<void> {
+    this.nodes.set(this.nodeKey(node.userId, node.id), { ...node });
   }
-  async removeEdgeById(edgeId: string) {
-    this.edges = this.edges.filter(e => e.id !== edgeId);
+
+  async updateNode(userId: string, nodeId: number, patch: Partial<GraphNodeRecord>): Promise<void> {
+    const key = this.nodeKey(userId, nodeId);
+    const existing = this.nodes.get(key);
+    if (!existing) throw new NotFoundError('Node not found');
+    this.nodes.set(key, { ...existing, ...patch });
   }
-  async removeEdgeBetween(from: string, to: string) {
-    this.edges = this.edges.filter(e => !( (e.from===from && e.to===to) || (e.from===to && e.to===from) ));
-  }
-  async getNodeById(nodeId: string) {
-    const v = this.nodes.get(nodeId);
-    return v ? { id: nodeId, ...v } : null;
-  }
-  async getNeighbors(nodeId: string, opts?: any) {
-    const neigh = new Set<string>();
-    for (const e of this.edges) {
-      if (e.from === nodeId) neigh.add(e.to);
-      if (e.to === nodeId) neigh.add(e.from);
-    }
-    const out: GraphNode[] = [];
-    for (const id of Array.from(neigh).slice(0, opts?.limit ?? 100)) {
-      const n = await this.getNodeById(id);
-      if (n) out.push(n);
-    }
-    return out;
-  }
-  async getSubgraph(rootId: string, depth: number, opts?: any) {
-    // simple BFS using in-memory edges
-    const visited = new Set<string>([rootId]);
-    let frontier = [rootId];
-    let d = 0;
-    const nodes: any[] = [];
-    const edges: any[] = [];
-    while (frontier.length && d <= depth) {
-      const next: string[] = [];
-      for (const id of frontier) {
-        for (const e of this.edges) {
-          if (e.from === id || e.to === id) {
-            edges.push(e);
-            const other = e.from === id ? e.to : e.from;
-            if (!visited.has(other)) { visited.add(other); next.push(other); }
-          }
-        }
+
+  async deleteNode(userId: string, nodeId: number): Promise<void> {
+    const key = this.nodeKey(userId, nodeId);
+    this.nodes.delete(key);
+    for (const [edgeId, edge] of Array.from(this.edges.entries())) {
+      if (edge.userId === userId && (edge.source === nodeId || edge.target === nodeId)) {
+        this.edges.delete(edgeId);
       }
-      frontier = next;
-      d++;
     }
-    for (const id of Array.from(visited)) {
-      const n = await this.getNodeById(id);
-      if (n) nodes.push(n);
+  }
+
+  async deleteNodes(userId: string, nodeIds: number[]): Promise<void> {
+    for (const nodeId of nodeIds) {
+      this.nodes.delete(this.nodeKey(userId, nodeId));
     }
-    return { nodes, edges };
+  }
+
+  async findNode(userId: string, nodeId: number): Promise<GraphNodeRecord | null> {
+    return this.nodes.get(this.nodeKey(userId, nodeId)) ?? null;
+  }
+
+  async listNodes(userId: string): Promise<GraphNodeRecord[]> {
+    return Array.from(this.nodes.values()).filter(n => n.userId === userId);
+  }
+
+  async listNodesByCluster(userId: string, clusterId: string): Promise<GraphNodeRecord[]> {
+    return Array.from(this.nodes.values()).filter(n => n.userId === userId && n.clusterId === clusterId);
+  }
+
+  async upsertEdge(edge: GraphEdgeRecord): Promise<string> {
+    const key = this.edgeKey(edge.userId, edge.source, edge.target, edge.id);
+    this.edges.set(key, { ...edge, id: key });
+    return key;
+  }
+
+  async deleteEdge(userId: string, edgeId: string): Promise<void> {
+    const current = this.edges.get(edgeId);
+    if (current && current.userId === userId) {
+      this.edges.delete(edgeId);
+    }
+  }
+
+  async deleteEdgeBetween(userId: string, source: number, target: number): Promise<void> {
+    for (const [key, edge] of Array.from(this.edges.entries())) {
+      const matches =
+        edge.userId === userId &&
+        ((edge.source === source && edge.target === target) || (edge.source === target && edge.target === source));
+      if (matches) this.edges.delete(key);
+    }
+  }
+
+  async deleteEdgesByNodeIds(userId: string, nodeIds: number[]): Promise<void> {
+    for (const [key, edge] of Array.from(this.edges.entries())) {
+      if (edge.userId === userId && (nodeIds.includes(edge.source) || nodeIds.includes(edge.target))) {
+        this.edges.delete(key);
+      }
+    }
+  }
+
+  async listEdges(userId: string): Promise<GraphEdgeRecord[]> {
+    return Array.from(this.edges.values()).filter(e => e.userId === userId);
+  }
+
+  async upsertCluster(cluster: GraphClusterRecord): Promise<void> {
+    this.clusters.set(this.clusterKey(cluster.userId, cluster.id), { ...cluster });
+  }
+
+  async deleteCluster(userId: string, clusterId: string): Promise<void> {
+    this.clusters.delete(this.clusterKey(userId, clusterId));
+  }
+
+  async findCluster(userId: string, clusterId: string): Promise<GraphClusterRecord | null> {
+    return this.clusters.get(this.clusterKey(userId, clusterId)) ?? null;
+  }
+
+  async listClusters(userId: string): Promise<GraphClusterRecord[]> {
+    return Array.from(this.clusters.values()).filter(c => c.userId === userId);
+  }
+
+  async saveStats(stats: GraphStatsRecord): Promise<void> {
+    this.stats.set(stats.userId, { ...stats });
+  }
+
+  async getStats(userId: string): Promise<GraphStatsRecord | null> {
+    return this.stats.get(userId) ?? null;
+  }
+
+  async deleteStats(userId: string): Promise<void> {
+    this.stats.delete(userId);
   }
 }
 
@@ -83,42 +137,78 @@ describe('GraphService (unit)', () => {
     svc = new GraphService(store as unknown as GraphStore);
   });
 
-  test('create/update/get/delete node', async () => {
-    const node = { id: 'n1', userId: 'u1', title: 'T1' };
-    await svc.createNode(node);
-    const loaded = await svc.getNodeById('n1');
-    expect(loaded).not.toBeNull();
-    expect(loaded?.title).toBe('T1');
+  test('node lifecycle', async () => {
+    const node: GraphNodeRecord = {
+      id: 1,
+      userId: 'u1',
+      origId: 'conv-1',
+      clusterId: 'c1',
+      clusterName: 'Cluster',
+      timestamp: null,
+      numMessages: 10,
+    };
+    await svc.upsertNode(node);
+    const listed = await svc.listNodes('u1');
+    expect(listed).toHaveLength(1);
+    expect(listed[0].origId).toBe('conv-1');
 
-    await svc.updateNode('n1', { title: 'New' });
-    const after = await svc.getNodeById('n1');
-    expect(after?.title).toBe('New');
+    await svc.updateNode('u1', 1, { clusterName: 'Updated' });
+    const updated = await svc.findNode('u1', 1);
+    expect(updated?.clusterName).toBe('Updated');
 
-    await svc.deleteNode('n1');
-    const gone = await svc.getNodeById('n1');
+    await svc.deleteNode('u1', 1);
+    const gone = await svc.findNode('u1', 1);
     expect(gone).toBeNull();
   });
 
-  test('add and remove edge and neighbors', async () => {
-    await svc.createNode({ id: 'a', userId: 'u1' });
-    await svc.createNode({ id: 'b', userId: 'u1' });
-    await svc.addEdge({ from: 'a', to: 'b', userId: 'u1' });
-    const neigh = await svc.getNeighbors('a');
-    expect(neigh.map(n => n.id)).toContain('b');
-    await svc.removeEdgeBetween('a','b');
-    const neigh2 = await svc.getNeighbors('a');
-    expect(neigh2.length).toBe(0);
+  test('edge lifecycle', async () => {
+    const baseNode: GraphNodeRecord = {
+      id: 1,
+      userId: 'u1',
+      origId: 'conv',
+      clusterId: 'c1',
+      clusterName: 'c',
+      timestamp: null,
+      numMessages: 1,
+    };
+    await svc.upsertNode(baseNode);
+    await svc.upsertNode({ ...baseNode, id: 2 });
+    const edge: GraphEdgeRecord = {
+      userId: 'u1',
+      source: 1,
+      target: 2,
+      weight: 0.5,
+      type: 'hard',
+      intraCluster: true,
+    };
+    const edgeId = await svc.upsertEdge(edge);
+    const edges = await svc.listEdges('u1');
+    expect(edges).toHaveLength(1);
+    expect(edges[0].id).toBe(edgeId);
+
+    await svc.deleteEdge('u1', edgeId);
+    expect(await svc.listEdges('u1')).toHaveLength(0);
   });
 
-  test('getSubgraph BFS', async () => {
-    // build small chain a-b-c
-    await svc.createNode({ id: 'a', userId: 'u1' });
-    await svc.createNode({ id: 'b', userId: 'u1' });
-    await svc.createNode({ id: 'c', userId: 'u1' });
-    await svc.addEdge({ from: 'a', to: 'b', userId: 'u1' });
-    await svc.addEdge({ from: 'b', to: 'c', userId: 'u1' });
-    const sub = await svc.getSubgraph('a', 2, { maxNodes: 10 });
-    const ids = sub.nodes.map(n => n.id).sort();
-    expect(ids).toEqual(expect.arrayContaining(['a','b','c']));
+  test('cluster and stats lifecycle', async () => {
+    const cluster: GraphClusterRecord = {
+      id: 'cluster-1',
+      userId: 'u1',
+      name: 'Focus',
+      description: 'desc',
+      size: 2,
+      themes: ['topic'],
+    };
+    await svc.upsertCluster(cluster);
+    expect((await svc.listClusters('u1')).map(c => c.id)).toContain('cluster-1');
+
+    const stats: GraphStatsRecord = { userId: 'u1', nodes: 2, edges: 1, clusters: 1 };
+    await svc.saveStats(stats);
+    expect((await svc.getStats('u1'))?.nodes).toBe(2);
+
+    await svc.deleteCluster('u1', 'cluster-1');
+    expect(await svc.findCluster('u1', 'cluster-1')).toBeNull();
+    await svc.deleteStats('u1');
+    expect(await svc.getStats('u1')).toBeNull();
   });
 });

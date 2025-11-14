@@ -8,6 +8,7 @@ import { Router } from 'express'
 import type { GraphVectorService } from '../../core/services/GraphVectorService'
 import { bindSessionUser } from '../middlewares/session';
 import { requireLogin } from '../middlewares/auth';
+import { asyncHandler } from '../utils/asyncHandler';
 import { GraphController } from '../controllers/graph';
 
 /**
@@ -24,14 +25,33 @@ export function createGraphRouter(graphVectorService: GraphVectorService) {
     router.use(bindSessionUser, requireLogin);
 
 
-    // 필요한 Graph 관련 라우트들을 여기에 추가
-    // TODO : fixme
+    // Node routes
+    router.post('/nodes', asyncHandler(graphController.createNode.bind(graphController)));
+    router.get('/nodes', asyncHandler(graphController.listNodes.bind(graphController)));
+    router.get('/nodes/:nodeId', asyncHandler(graphController.getNode.bind(graphController)));
+    router.patch('/nodes/:nodeId', asyncHandler(graphController.updateNode.bind(graphController)));
+    router.delete('/nodes/:nodeId', asyncHandler(graphController.deleteNode.bind(graphController)));
+    router.delete('/nodes/:nodeId/cascade', asyncHandler(graphController.deleteNodeCascade.bind(graphController)));
 
-    //upsert vector route
+    // Edge routes
+    router.post('/edges', asyncHandler(graphController.createEdge.bind(graphController)));
+    router.get('/edges', asyncHandler(graphController.listEdges.bind(graphController)));
+    router.delete('/edges/:edgeId', asyncHandler(graphController.deleteEdge.bind(graphController)));
 
-    //search vector route
+    // Cluster routes
+    router.post('/clusters', asyncHandler(graphController.createCluster.bind(graphController)));
+    router.get('/clusters', asyncHandler(graphController.listClusters.bind(graphController)));
+    router.get('/clusters/:clusterId', asyncHandler(graphController.getCluster.bind(graphController)));
+    router.delete('/clusters/:clusterId', asyncHandler(graphController.deleteCluster.bind(graphController)));
+    router.delete('/clusters/:clusterId/cascade', asyncHandler(graphController.deleteClusterCascade.bind(graphController)));
 
-    //delete vector route
+    // Stats routes
+    router.get('/stats', asyncHandler(graphController.getStats.bind(graphController)));
+
+    // Snapshot routes
+    router.get('/snapshot', asyncHandler(graphController.getSnapshot.bind(graphController)));
+    router.post('/snapshot', asyncHandler(graphController.saveSnapshot.bind(graphController)));
+
 
     return router;
 }

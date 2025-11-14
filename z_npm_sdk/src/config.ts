@@ -6,4 +6,4 @@
  * @public
  */
 export const GRAPHNODE_BASE_URL: string =
-  (globalThis as any).__GRAPHNODE_BASE_URL__?.replace(/\/$/, '') || 'https://api.graphnode.dev';
+  (globalThis as any).__GRAPHNODE_BASE_URL__?.replace(/\/$/, '') || 'https://taco4graphnode.online';

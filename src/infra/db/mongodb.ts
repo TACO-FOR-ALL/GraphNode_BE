@@ -2,7 +2,7 @@ import { MongoClient } from 'mongodb';
 
 import { logger } from '../../shared/utils/logger';
 
-let client: MongoClient | undefined;
+export let client: MongoClient | undefined;
 
 /**
  * MongoDB 클라이언트를 초기화하고 필수 인덱스를 보장한다.

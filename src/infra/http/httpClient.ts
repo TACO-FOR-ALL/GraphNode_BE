@@ -1,12 +1,13 @@
 /**
- * @file src/infra/http/httpClient.ts
- * @description A generic HTTP client for external API communication.
+ * A generic HTTP client for external API communication.
  * @module infra/http/httpClient
  *
- * @requires axios
- * @requires src/shared/utils/logger
- * @requires src/shared/errors/domain
- * @requires src/shared/context/cls
+ * @remarks
+ * This module depends on:
+ * - axios
+ * - `src/shared/utils/logger`
+ * - `src/shared/errors/domain`
+ * - `src/shared/context/cls`
  *
  * @see MVS.instructions.md - This module belongs to the infra layer.
  * @see LogCentrally.instructions.md - Logs should be structured and include correlationId.

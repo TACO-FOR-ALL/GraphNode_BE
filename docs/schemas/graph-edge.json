@@ -1,0 +1,60 @@
+{
+  "$id": "https://graphnode.dev/schemas/graph-edge.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Graph Edge",
+  "description": "Schema for a graph edge.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "description": "The unique identifier for the edge.",
+      "type": "string",
+      "minLength": 1
+    },
+    "userId": {
+      "description": "The server-internal user identifier.",
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "description": "The ID of the source node.",
+      "type": "integer"
+    },
+    "target": {
+      "description": "The ID of the target node.",
+      "type": "integer"
+    },
+    "weight": {
+      "description": "The weight of the edge (0 to 1).",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "type": {
+      "description": "The type of the edge.",
+      "type": "string",
+      "enum": ["hard", "insight"]
+    },
+    "intraCluster": {
+      "description": "Whether the edge connects nodes within the same cluster.",
+      "type": "boolean"
+    },
+    "createdAt": {
+      "description": "Creation timestamp (ISO 8601 UTC).",
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "description": "Update timestamp (ISO 8601 UTC).",
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "userId",
+    "source",
+    "target",
+    "weight",
+    "type",
+    "intraCluster"
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "$id": "https://graphnode.dev/schemas/graph-cluster.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Graph Cluster",
+  "description": "Schema for a graph cluster.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "description": "The unique identifier for the cluster.",
+      "type": "string",
+      "minLength": 1
+    },
+    "userId": {
+      "description": "The server-internal user identifier.",
+      "type": "string",
+      "minLength": 1
+    },
+    "name": {
+      "description": "The name of the cluster.",
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "description": "A description of the cluster.",
+      "type": "string",
+      "minLength": 1
+    },
+    "size": {
+      "description": "The number of nodes in the cluster.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "themes": {
+      "description": "Core themes of the cluster (up to 3).",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "maxItems": 3
+    },
+    "createdAt": {
+      "description": "Creation timestamp (ISO 8601 UTC).",
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "description": "Update timestamp (ISO 8601 UTC).",
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "id",
+    "userId",
+    "name",
+    "description",
+    "size",
+    "themes"
+  ]
+}

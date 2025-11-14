@@ -1,0 +1,63 @@
+{
+  "$id": "https://graphnode.dev/schemas/graph-snapshot.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Graph Snapshot",
+  "description": "Schema for a full graph snapshot for a single user.",
+  "type": "object",
+  "properties": {
+    "nodes": {
+      "description": "List of graph nodes.",
+      "type": "array",
+      "items": {
+        "$ref": "./graph-node.json"
+      }
+    },
+    "edges": {
+      "description": "List of graph edges.",
+      "type": "array",
+      "items": {
+        "$ref": "./graph-edge.json"
+      }
+    },
+    "clusters": {
+      "description": "List of graph clusters.",
+      "type": "array",
+      "items": {
+        "$ref": "./graph-cluster.json"
+      }
+    },
+    "stats": {
+      "description": "Graph statistics.",
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "edges": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "clusters": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": ["nodes", "edges", "clusters"]
+    }
+  },
+  "required": [
+    "nodes",
+    "edges",
+    "clusters",
+    "stats"
+  ]
+}

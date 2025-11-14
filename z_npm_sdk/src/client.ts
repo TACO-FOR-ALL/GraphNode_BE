@@ -31,3 +31,4 @@ export class GraphNodeClient {
 export function createGraphNodeClient(opts?: GraphNodeClientOptions): GraphNodeClient {
   return new GraphNodeClient(opts);
 }
+
