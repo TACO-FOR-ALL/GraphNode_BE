@@ -28,6 +28,7 @@ Purpose: Help AI coding agents work effectively in this repo from day one.
 - Dev: `npm run dev` (uses tsx). Server listens on `http://localhost:3000`.
 - Build: `npm run build`; Start compiled: `npm start`.
 - Lint/Format: `npm run lint` / `npm run format` (ESLint v9 flat config in `eslint.config.js`).
+- Docs lint/build: `npm run docs:lint` / `npm run docs:build`.
 
 ## Patterns and gotchas
 - Keep imports framework-free in `core/**`. Don’t import Express types beyond `app/**`.
@@ -39,10 +40,11 @@ Purpose: Help AI coding agents work effectively in this repo from day one.
 ## Example slices
 - Health route: `src/app/routes/health.ts`
 - App bootstrap: `src/bootstrap/server.ts`
+- Graph API: `src/app/routes/graph.ts` and `src/app/controllers/graph.ts`
 
 ## When adding features
 - Start with OpenAPI under `/docs/api/openapi.yaml`, then implement controller → service → repository.
 - Return 201 + Location for creates; use `application/problem+json` for any error path.
 - Add JSDoc to public APIs; prefer mappers/presenters to keep layers clean.
 
-If anything here is unclear or missing (e.g., actual logger, error middleware, OpenAPI docs path), tell us what you need and propose a minimal change. 
+If anything here is unclear or missing (e.g., actual logger, error middleware, OpenAPI docs path), tell us what you need and propose a minimal change.
