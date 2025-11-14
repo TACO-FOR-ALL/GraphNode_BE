@@ -12,10 +12,13 @@ import { ConversationService } from '../../core/services/ConversationService';
 import { MessageService } from '../../core/services/MessageService';
 import { getUserIdFromRequest } from '../utils/request';
 // Zod schemas imported from shared DTOs
-import { createConversationSchema as _createConversationSchema } from '../../shared/dtos/ai.schemas';
-import { updateConversationSchema as _updateConversationSchema } from '../../shared/dtos/ai.schemas';
-import { createMessageSchema as _createMessageSchema } from '../../shared/dtos/ai.schemas';
-import { updateMessageSchema as _updateMessageSchema } from '../../shared/dtos/ai.schemas';
+import {
+  createConversationSchema as _createConversationSchema,
+  updateConversationSchema as _updateConversationSchema,
+  createMessageSchema as _createMessageSchema,
+  updateMessageSchema as _updateMessageSchema,
+  bulkCreateConversationsSchema as _bulkCreateConversationsSchema,
+} from '../../shared/dtos/ai.schemas';
 
 // Removed duplicate imports
 
@@ -29,6 +32,28 @@ export class AiController {
     private readonly conversationService: ConversationService,
     private readonly messageService: MessageService
   ) {}
+
+  /**
+   * 대량의 대화 및 메시지를 한 번에 생성하는 컨트롤러 메서드
+   */
+  async bulkCreateConversations(req: Request, res: Response) {
+    const { conversations } = _bulkCreateConversationsSchema.parse(req.body);
+    const ownerUserId = getUserIdFromRequest(req)!;
+
+    const createdConversations = await Promise.all(
+      conversations.map(conv => {
+        const { id, title, messages } = conv;
+        return this.conversationService.create(
+          ownerUserId,
+          id,
+          title,
+          messages
+        );
+      })
+    );
+
+    res.status(201).json({ conversations: createdConversations });
+  }
 
   /**
    * Conversation 생성 Controller 메서드 

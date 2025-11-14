@@ -1,0 +1,64 @@
+{
+  "$id": "https://graphnode.dev/schemas/graph-node.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Graph Node",
+  "description": "Schema for a graph node.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "description": "The integer ID of the node, unique per user.",
+      "type": "integer"
+    },
+    "userId": {
+      "description": "The server-internal user identifier.",
+      "type": "string",
+      "minLength": 1
+    },
+    "origId": {
+      "description": "The original conversation ID this node refers to.",
+      "type": "string",
+      "minLength": 1
+    },
+    "clusterId": {
+      "description": "The ID of the cluster this node belongs to.",
+      "type": "string",
+      "minLength": 1
+    },
+    "clusterName": {
+      "description": "The name of the cluster this node belongs to.",
+      "type": "string",
+      "minLength": 1
+    },
+    "timestamp": {
+      "description": "The timestamp of the conversation (ISO 8601) or null.",
+      "oneOf": [
+        { "type": "string", "format": "date-time" },
+        { "type": "null" }
+      ]
+    },
+    "numMessages": {
+      "description": "The number of messages included in this node.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "createdAt": {
+      "description": "Creation timestamp (ISO 8601 UTC).",
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "description": "Update timestamp (ISO 8601 UTC).",
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "id",
+    "userId",
+    "origId",
+    "clusterId",
+    "clusterName",
+    "timestamp",
+    "numMessages"
+  ]
+}

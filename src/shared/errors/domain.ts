@@ -1,5 +1,7 @@
 import { AppError } from './base';
 
+export { AppError };
+
 /** 입력 유효성 실패(400). 재시도 무의미. */
 export class ValidationError extends AppError { code = 'VALIDATION_FAILED'; httpStatus = 400; }
 /** 인증 필요(401). 로그인 후 재시도. */

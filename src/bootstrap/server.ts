@@ -3,11 +3,13 @@
  * 책임: Express 앱 생성(보안/로깅/세션/라우팅/에러) 및 서버 기동.
  * 정책: 개발은 DEV_INSECURE_COOKIES=true일 때 Secure 쿠키를 비활성화, 운영은 __Host-session; Secure; HttpOnly; SameSite=Strict.
  */
+// import http from 'http';
 import express from 'express';
 import session from 'express-session';
 import cors from 'cors';
 // import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+// import { AddressInfo } from 'net';
 
 import healthRouter from '../app/routes/health';
 import { loadEnv } from '../config/env';
@@ -18,11 +20,12 @@ import { requestContext } from '../app/middlewares/request-context';
 import { httpLogger } from '../shared/utils/logger';
 import { errorHandler } from '../app/middlewares/error';
 import { NotFoundError } from '../shared/errors/domain';
-import { logger } from '../shared/utils/logger';
+// import { logger } from '../shared/utils/logger';
 // AI 라우터 import
 import { initDatabases } from '../infra/db';
 import { makeAiRouter } from './modules/ai.module'; // <-- 조립 모듈 사용
 import {makeGraphRouter} from "./modules/graph.module"; // Graph 모듈 임포트
+
 
 /**
  * Express 앱 부트스트랩.
@@ -78,6 +81,8 @@ export function createApp() {
   app.use('/v1/me', meRouter);
   app.use('/auth', authSessionRouter);
 
+
+  
   // 404 fall-through → Problem Details 형식으로 응답
   app.use((req, _res, next) => {
     next(new NotFoundError('Not Found'));
@@ -96,16 +101,39 @@ export async function bootstrap() {
   return { app, database };
 }
 
-if (require.main === module) {
-  bootstrap()
-    .then(({ app }) => {
-      const port = process.env.PORT || 3000;
-      app.listen(port, () => {
-        logger.info(`Server is running on http://localhost:${port}`);
-      });
-    })
-    .catch(err => {
-      logger.fatal('Failed to bootstrap server', err);
-      process.exit(1);
-    });
-}
+
+
+
+
+
+
+// console.log('[TRACE] Main: calling bootstrap...');
+
+// bootstrap()
+//   .then(({ app }) => {
+//     console.log('[TRACE] Main: bootstrap resolved!');
+    
+//     const port = process.env.PORT || 3000;
+//     console.log(`[TRACE] Main: about to call app.listen on port ${port}`);
+    
+//     const server = app.listen(port, () => {
+//       console.log('[TRACE] Main: app.listen callback fired!');
+//       logger.info({ event: 'server.started', port, url: `http://localhost:${port}` }, 'Server is running');
+//     });
+    
+//     console.log('[TRACE] Main: app.listen returned server instance');
+    
+//     // 핸들 누수 확인
+//     setTimeout(() => {
+//       console.log('[TRACE] Active handles:', (process as any)._getActiveHandles?.()?.length);
+//       console.log('[TRACE] Active requests:', (process as any)._getActiveRequests?.()?.length);
+//     }, 1000);
+//   })
+//   .catch(err => {
+//     console.error('[TRACE] Main: bootstrap rejected!', err);
+//     logger.fatal('Failed to bootstrap server', err);
+//     process.exit(1);
+//   });
+
+// console.log('[TRACE] Main: bootstrap() called (async)');
+

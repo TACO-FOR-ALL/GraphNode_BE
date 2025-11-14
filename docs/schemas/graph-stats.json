@@ -1,0 +1,45 @@
+{
+  "$id": "https://graphnode.dev/schemas/graph-stats.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Graph Stats",
+  "description": "Schema for graph statistics.",
+  "type": "object",
+  "properties": {
+    "userId": {
+      "description": "The server-internal user identifier.",
+      "type": "string",
+      "minLength": 1
+    },
+    "nodes": {
+      "description": "Total number of nodes.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "edges": {
+      "description": "Total number of edges.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "clusters": {
+      "description": "Total number of clusters.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "generatedAt": {
+      "description": "Timestamp when the stats were generated (ISO 8601 UTC).",
+      "type": "string",
+      "format": "date-time"
+    },
+    "metadata": {
+      "description": "Additional metadata.",
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "userId",
+    "nodes",
+    "edges",
+    "clusters"
+  ]
+}

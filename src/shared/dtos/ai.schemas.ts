@@ -20,6 +20,10 @@ export const createConversationSchema = z.object({
     .optional(),
 });
 
+export const bulkCreateConversationsSchema = z.object({
+  conversations: z.array(createConversationSchema),
+});
+
 export const updateConversationSchema = z.object({
   title: z.string().min(1).max(200).optional(),
 });
@@ -38,5 +42,8 @@ export const updateMessageSchema = z.object({
 
 export type CreateConversationRequest = z.infer<typeof createConversationSchema>;
 export type UpdateConversationRequest = z.infer<typeof updateConversationSchema>;
+export type BulkCreateConversationsRequest = z.infer<
+  typeof bulkCreateConversationsSchema
+>;
 export type CreateMessageRequest = z.infer<typeof createMessageSchema>;
 export type UpdateMessageRequest = z.infer<typeof updateMessageSchema>;

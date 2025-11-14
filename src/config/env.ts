@@ -17,7 +17,7 @@ const EnvSchema = z.object({
   OAUTH_GOOGLE_REDIRECT_URI: z.string().url('OAUTH_GOOGLE_REDIRECT_URI must be URL'),
   
   // Qdrant(VectorDB)
-  QDRANT_URL: z.string().url('QDRANT_URL must be URL'),
+  QDRANT_URL: z.string().min(1, 'QDRANT_URL must be URL'),
   QDRANT_API_KEY: z.string().min(1, 'QDRANT_API_KEY required'),
   QDRANT_COLLECTION_NAME: z.string().min(1, 'QDRANT_COLLECTION_NAME required'),
   QDRANT_VECTOR_SIZE: z.coerce.number().int().positive().default(1536),

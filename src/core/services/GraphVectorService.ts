@@ -1,4 +1,3 @@
-
 /**
  * GraphVectorService — orchestration utilities for Graph <-> Vector interactions
  *
@@ -10,130 +9,360 @@
 
 import type { GraphService } from './GraphService';
 import type { VectorService } from './VectorService';
-import type { GraphNode } from '../ports/GraphStore';
+import type {
+  GraphClusterRecord,
+  GraphEdgeRecord,
+  GraphNodeRecord,
+  GraphStatsRecord,
+} from '../ports/GraphStore';
+import type { GraphSnapshotDto, PersistGraphPayloadDto } from '../../shared/dtos/graph';
+import { getMongo } from '../../infra/db/mongodb';
 
 export class GraphVectorService {
-  constructor(private graphService: GraphService, private vectorService: VectorService) {}
+  constructor(public readonly graphService: GraphService, private readonly vectorService?: VectorService) {}
 
   /**
-   * Prepare a combined payload for creating a node and its vector.
-   *
-   * - Side-effect free: returns payloads only.
-   * - Caller decides whether to persist immediately, batch, or enqueue.
-   *
-   * @param node Partial node fields; must include `id` and `userId`.
-   * @param embedding Optional numeric embedding array.
-   * @param meta Optional metadata to attach to vector payload.
-   * @returns An object { nodePayload, vectorPayload } where vectorPayload may be null.
-   * @throws Error when required identifiers are missing.
+   * 벡터 관련 기능이 비활성화되었음을 알리는 예외를 발생시킵니다.
+   * @deprecated 벡터 동기화 기능은 현재 요구사항에서 제외되었습니다.
    */
-  prepareNodeAndVector(node: Partial<GraphNode>, embedding?: number[], meta?: Record<string, any>) {
-    if (!node.id) throw new Error('prepareNodeAndVector: node.id is required');
-    if (!node.userId) throw new Error('prepareNodeAndVector: node.userId is required');
+  private throwVectorDisabledError() {
+    throw new Error('Vector operations are temporarily disabled');
+  }
 
-    const nodePayload: GraphNode = {
-      id: node.id,
-      userId: node.userId,
-      title: (node as any).title ?? null,
-      createdAt: (node as any).createdAt ?? new Date().toISOString(),
-      updatedAt: (node as any).updatedAt ?? new Date().toISOString(),
-      ...(node as any),
-    } as GraphNode;
+  /**
+   * 노드와 벡터 데이터를 준비합니다. (현재 비활성화)
+   * @deprecated 벡터 동기화 기능은 현재 요구사항에서 제외되었습니다.
+   */
+  async prepareNodeAndVector(_node: Partial<GraphNodeRecord>, _embedding?: number[], _meta?: Record<string, unknown>) {
+    this.throwVectorDisabledError();
+  }
 
-    const vectorPayload = embedding
-      ? {
-          collection: `user_${node.userId}_nodes`,
-          items: [
-            {
-              id: node.id,
-              vector: embedding,
-              payload: { ...(meta ?? {}), userId: node.userId, nodeId: node.id },
-            },
-          ],
+  /**
+   * 여러 노드를 일괄적으로 적용합니다. (현재 비활성화)
+   * @deprecated 벡터 동기화 기능은 현재 요구사항에서 제외되었습니다.
+   */
+  async applyBatchNodes(_items: Array<{ nodePayload: GraphNodeRecord; vectorPayload: unknown }>) {
+    this.throwVectorDisabledError();
+  }
+
+  /**
+   * 벡터 검색을 통해 노드를 찾습니다. (현재 비활성화)
+   * @deprecated 벡터 검색 기능은 비활성화되었습니다.
+   */
+  async searchNodesByVector(_userId: string, _collection: string | undefined, _queryVector: number[], _limit = 10) {
+    this.throwVectorDisabledError();
+  }
+
+  /**
+   * 벡터가 누락된 노드를 찾습니다. (현재 비활성화)
+   * @deprecated 벡터 정합성 검증은 비활성화되었습니다.
+   */
+  async findNodesMissingVectors(_userId: string, _collection: string, _nodeIds: Array<number | string>) {
+    this.throwVectorDisabledError();
+  }
+
+  /**
+   * 그래프 노드를 생성하거나 갱신합니다.
+   * @param node - 저장할 노드 데이터. `userId`와 `id`는 필수입니다.
+   * @returns Promise<void>
+   * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
+   * @example
+   * await service.upsertNode({ userId: 'u-123', id: 1, origId: 'conv-abc', ... });
+   */
+  upsertNode(node: GraphNodeRecord) {
+    return this.graphService.upsertNode(node);
+  }
+
+  /**
+   * 기존 그래프 노드의 일부 속성을 갱신합니다.
+   * @param userId - 작업을 요청한 사용자 ID
+   * @param nodeId - 갱신할 노드의 ID
+   * @param patch - 갱신할 속성 객체
+   * @returns Promise<void>
+   * @throws {NotFoundError | UpstreamError} - 노드가 없거나 DB 오류 발생 시
+   * @example
+   * await service.updateNode('u-123', 1, { clusterName: '새 클러스터' });
+   */
+  updateNode(userId: string, nodeId: number, patch: Partial<GraphNodeRecord>) {
+    return this.graphService.updateNode(userId, nodeId, patch);
+  }
+
+  /**
+   * 특정 노드를 삭제합니다.
+   * 이 메서드는 단일 노드만 삭제하며, 연결된 엣지는 `GraphService` 또는 `GraphRepository` 레벨에서 처리됩니다.
+   * @param userId - 작업을 요청한 사용자 ID
+   * @param nodeId - 삭제할 노드의 ID
+   * @returns Promise<void>
+   * @throws {UpstreamError} - DB 오류 발생 시
+   * @see removeNodeCascade - 노드와 연결된 모든 엣지를 함께 삭제하려면 이 메서드를 사용하세요.
+   */
+  deleteNode(userId: string, nodeId: number) {
+    return this.graphService.deleteNode(userId, nodeId);
+  }
+
+  /**
+   * 특정 노드를 조회합니다.
+   * @param userId - 작업을 요청한 사용자 ID
+   * @param nodeId - 조회할 노드의 ID
+   * @returns 조회된 노드 객체. 없으면 `null`을 반환합니다.
+   * @throws {UpstreamError} - DB 오류 발생 시
+   */
+  findNode(userId: string, nodeId: number) {
+    return this.graphService.findNode(userId, nodeId);
+  }
+
+  /**
+   * 특정 사용자의 모든 노드 목록을 조회합니다.
+   * @param userId - 작업을 요청한 사용자 ID
+   * @returns 노드 객체 배열
+   * @throws {UpstreamError} - DB 오류 발생 시
+   */
+  listNodes(userId: string) {
+    return this.graphService.listNodes(userId);
+  }
+
+  /**
+   * 그래프 엣지를 생성하거나 갱신합니다.
+   * @param edge - 저장할 엣지 데이터. `userId`, `source`, `target`은 필수입니다.
+   * @returns 생성된 엣지의 고유 ID
+   * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
+   */
+  upsertEdge(edge: GraphEdgeRecord) {
+    return this.graphService.upsertEdge(edge);
+  }
+
+  /**
+   * 특정 엣지를 ID로 삭제합니다.
+   * @param userId - 작업을 요청한 사용자 ID
+   * @param edgeId - 삭제할 엣지의 ID
+   * @returns Promise<void>
+   * @throws {UpstreamError} - DB 오류 발생 시
+   */
+  deleteEdge(userId: string, edgeId: string) {
+    return this.graphService.deleteEdge(userId, edgeId);
+  }
+
+  /**
+   * 두 노드 사이에 있는 모든 엣지를 삭제합니다.
+   * @param userId - 작업을 요청한 사용자 ID
+   * @param source - 출발 노드 ID
+   * @param target - 도착 노드 ID
+   * @returns Promise<void>
+   * @throws {UpstreamError} - DB 오류 발생 시
+   */
+  deleteEdgeBetween(userId: string, source: number, target: number) {
+    return this.graphService.deleteEdgeBetween(userId, source, target);
+  }
+
+  /**
+   * 특정 사용자의 모든 엣지 목록을 조회합니다.
+   * @param userId - 작업을 요청한 사용자 ID
+   * @returns 엣지 객체 배열
+   * @throws {UpstreamError} - DB 오류 발생 시
+   */
+  listEdges(userId: string) {
+    return this.graphService.listEdges(userId);
+  }
+
+  /**
+   * 그래프 클러스터를 생성하거나 갱신합니다.
+   * 이 작업은 트랜잭션 내에서 실행되어 원자성을 보장합니다.
+   * @param cluster - 저장할 클러스터 데이터. `userId`와 `id`는 필수입니다.
+   * @returns Promise<void>
+   * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
+   */
+  async upsertCluster(cluster: GraphClusterRecord): Promise<void> {
+    const mongoClient = getMongo();
+    if (!mongoClient) {
+      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
+    }
+    const session = mongoClient.startSession();
+    try {
+      await session.withTransaction(async () => {
+        await this.graphService.upsertCluster(cluster, { session });
+      });
+    } finally {
+      await session.endSession();
+    }
+  }
+
+  /**
+   * 특정 클러스터를 삭제합니다.
+   * @param userId - 작업을 요청한 사용자 ID
+   * @param clusterId - 삭제할 클러스터의 ID
+   * @returns Promise<void>
+   * @throws {UpstreamError} - DB 오류 발생 시
+   * @see removeClusterCascade - 클러스터와 속한 모든 노드/엣지를 삭제하려면 이 메서드를 사용하세요.
+   */
+  async deleteCluster(userId: string, clusterId: string): Promise<void> {
+    const mongoClient = getMongo();
+    if (!mongoClient) {
+      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
+    }
+    const session = mongoClient.startSession();
+    try {
+      await session.withTransaction(async () => {
+        await this.graphService.deleteCluster(userId, clusterId, { session });
+      });
+    } finally {
+      await session.endSession();
+    }
+  }
+
+  /**
+   * 특정 클러스터를 조회합니다.
+   * @param userId - 작업을 요청한 사용자 ID
+   * @param clusterId - 조회할 클러스터의 ID
+   * @returns 조회된 클러스터 객체. 없으면 `null`을 반환합니다.
+   * @throws {UpstreamError} - DB 오류 발생 시
+   */
+  findCluster(userId: string, clusterId: string) {
+    return this.graphService.findCluster(userId, clusterId);
+  }
+
+  /**
+   * 특정 사용자의 모든 클러스터 목록을 조회합니다.
+   * @param userId - 작업을 요청한 사용자 ID
+   * @returns 클러스터 객체 배열
+   * @throws {UpstreamError} - DB 오류 발생 시
+   */
+  listClusters(userId: string) {
+    return this.graphService.listClusters(userId);
+  }
+
+  /**
+   * 그래프 통계를 저장합니다.
+   * @param stats - 저장할 통계 데이터. `userId`는 필수입니다.
+   * @returns Promise<void>
+   * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
+   */
+  saveStats(stats: GraphStatsRecord) {
+    return this.graphService.saveStats(stats);
+  }
+
+  /**
+   * 특정 사용자의 그래프 통계를 조회합니다.
+   * @param userId - 작업을 요청한 사용자 ID
+   * @returns 조회된 통계 객체. 없으면 `null`을 반환합니다.
+   * @throws {UpstreamError} - DB 오류 발생 시
+   */
+  getStats(userId: string) {
+    return this.graphService.getStats(userId);
+  }
+
+  /**
+   * 특정 사용자의 그래프 통계를 삭제합니다.
+   * @param userId - 작업을 요청한 사용자 ID
+   * @returns Promise<void>
+   * @throws {UpstreamError} - DB 오류 발생 시
+   */
+  deleteStats(userId: string) {
+    return this.graphService.deleteStats(userId);
+  }
+
+  /**
+   * 특정 노드와 연결된 모든 엣지를 함께 삭제합니다. (Cascade)
+   * 이 메서드는 `GraphService.deleteNode`를 호출하며, 해당 서비스의 레포지토리 구현체에서
+   * 노드와 엣지를 트랜잭션처럼 처리하는 로직에 의존합니다.
+   * @param userId - 작업을 요청한 사용자 ID
+   * @param nodeId - 삭제할 노드의 ID
+   * @returns Promise<void>
+   * @throws {UpstreamError} - DB 작업 중 오류 발생 시
+   * @example
+   * // 노드 5와 연결된 모든 엣지를 함께 삭제
+   * await service.removeNodeCascade('u-123', 5);
+   */
+  async removeNodeCascade(userId: string, nodeId: number): Promise<void> {
+    // GraphRepositoryMongo.deleteNode 에 이미 관련 엣지 삭제 로직이 포함되어 있음
+    await this.graphService.deleteNode(userId, nodeId);
+  }
+
+  /**
+   * 특정 클러스터와 그에 속한 모든 노드 및 관련 엣지를 삭제합니다. (Cascade)
+   * 이 작업은 여러 단계로 이루어지며, 부분적으로만 성공할 수 있는 위험이 있습니다.
+   * @param userId - 작업을 요청한 사용자 ID
+   * @param clusterId - 삭제할 클러스터의 ID
+   * @returns Promise<void>
+   * @throws {UpstreamError} - DB 작업 중 오류 발생 시
+   * @remarks
+   * 이 작업은 MongoDB 트랜잭션을 사용하여 원자적으로 처리됩니다.
+   * 작업이 중간에 실패하면 모든 변경 사항이 롤백됩니다.
+   */
+  async removeClusterCascade(userId: string, clusterId: string): Promise<void> {
+    const mongoClient = getMongo();
+    if (!mongoClient) {
+      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
+    }
+    const session = mongoClient.startSession();
+    try {
+      await session.withTransaction(async () => {
+        const nodesInCluster = await this.graphService.listNodesByCluster(userId, clusterId);
+        if (nodesInCluster.length > 0) {
+          const nodeIds = nodesInCluster.map(n => n.id);
+          // 1. 클러스터에 속한 모든 노드와 관련 엣지 삭제
+          await this.graphService.deleteEdgesByNodeIds(userId, nodeIds, { session });
+          await this.graphService.deleteNodes(userId, nodeIds, { session });
         }
-      : null;
-
-    return { nodePayload, vectorPayload } as const;
+        // 2. 클러스터 자체 삭제
+        await this.graphService.deleteCluster(userId, clusterId, { session });
+      });
+    } finally {
+      await session.endSession();
+    }
   }
 
   /**
-   * Apply a small batch of node+vector prepared payloads.
-   *
-   * This two-phase helper:
-   *  - Phase A: attempts to persist nodes via GraphService (best-effort)
-   *  - Phase B: attempts to upsert vectors for successfully created nodes
-   *
-   * The function returns detailed results so callers can implement retries or
-   * an outbox pattern when stronger guarantees are required.
-   *
-   * @param items Array of { nodePayload, vectorPayload } produced by prepareNodeAndVector
+   * 특정 사용자의 전체 그래프 데이터를 스냅샷 형태로 조회합니다.
+   * @param userId - 조회할 사용자 ID
+   * @returns 그래프 스냅샷 DTO. 데이터가 없으면 각 배열은 비어있고, stats는 null일 수 있습니다.
+   * @throws {UpstreamError} - DB 조회 중 오류 발생 시
    */
-  async applyBatchNodes(items: Array<{ nodePayload: GraphNode; vectorPayload: any | null }>) {
-    const created: string[] = [];
-    const vectorUpserted: string[] = [];
-    const errors: any[] = [];
+  async getSnapshotForUser(userId: string): Promise<GraphSnapshotDto> {
+    const [nodes, edges, clusters, stats] = await Promise.all([
+      this.graphService.listNodes(userId),
+      this.graphService.listEdges(userId),
+      this.graphService.listClusters(userId),
+      this.graphService.getStats(userId),
+    ]);
 
-    // Phase A: persist nodes
-    for (const it of items) {
-      try {
-        await this.graphService.createNode(it.nodePayload);
-        created.push(it.nodePayload.id);
-      } catch (err) {
-        errors.push({ stage: 'graph.create', id: it.nodePayload.id, error: err });
-      }
-    }
-
-    // Phase B: upsert vectors only for nodes that were created
-    for (const it of items) {
-      if (!it.vectorPayload) continue;
-      if (!created.includes(it.nodePayload.id)) {
-        errors.push({ stage: 'vector.skip_node_missing', id: it.nodePayload.id });
-        continue;
-      }
-      try {
-        // VectorService expects (userId, items)
-        await this.vectorService.upsertForUser(it.nodePayload.userId, it.vectorPayload.items);
-        vectorUpserted.push(it.nodePayload.id);
-      } catch (err) {
-        errors.push({ stage: 'vector.upsert', id: it.nodePayload.id, error: err });
-      }
-    }
-
-    return { created, vectorUpserted, errors } as const;
+    return {
+      nodes,
+      edges,
+      clusters,
+      stats: stats ? { nodes: stats.nodes, edges: stats.edges, clusters: stats.clusters } : { nodes: 0, edges: 0, clusters: 0 },
+    };
   }
 
   /**
-   * Search by vector and fetch corresponding graph nodes, merging results.
-   *
-   * This helper first queries the vector store for candidate node ids and
-   * then loads nodes from GraphService. The returned array preserves the
-   * vector result ordering and attaches the score.
+   * 그래프 스냅샷 데이터를 DB에 일괄적으로 저장(upsert)합니다.
+   * @param payload - 사용자 ID와 그래프 스냅샷 데이터
+   * @returns Promise<void>
+   * @throws {UpstreamError} - DB 저장 중 오류 발생 시
+   * @remarks
+   * 이 메서드는 여러 데이터를 병렬로 처리하며, 전체 작업의 원자성을 보장하기 위해
+   * MongoDB 트랜잭션을 사용합니다.
    */
-  async searchNodesByVector(userId: string, _collection: string | undefined, queryVector: number[], limit = 10) {
-    // _collection is currently informational; VectorService uses a default collection
-    const vecRes = await this.vectorService.searchForUser(userId, queryVector, { limit });
-    const ids = vecRes.map(r => r.id);
-    const nodes = await Promise.all(ids.map(id => this.graphService.getNodeById(id)));
-    return ids.map((id, i) => ({ node: nodes[i] ?? null, score: vecRes[i]?.score ?? 0 }));
-  }
-
-  /**
-   * Find nodes (by id list) that do not yet have vector entries.
-   *
-   * Note: naive implementation that queries for each id; suitable for
-   * small batches. For large-scale reconciliation use an index or metadata
-   * approach and/or run in a worker with pagination.
-   */
-  async findNodesMissingVectors(userId: string, collection: string, nodeIds: string[]) {
-    const missing: string[] = [];
-    for (const id of nodeIds) {
-      try {
-  const res = await this.vectorService.searchForUser(userId, [0], { filter: { nodeId: id }, limit: 1 });
-        if (!res || res.length === 0) missing.push(id);
-      } catch (err) {
-        missing.push(id);
-      }
+  async persistSnapshot(payload: PersistGraphPayloadDto): Promise<void> {
+    const mongoClient = getMongo();
+    if (!mongoClient) {
+      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
     }
-    return missing;
+    const session = mongoClient.startSession();
+    try {
+      await session.withTransaction(async () => {
+        const { userId, snapshot } = payload;
+
+        const upsertPromises = [
+          ...snapshot.nodes.map(node => this.graphService.upsertNode({ ...node, userId }, { session })),
+          ...snapshot.edges.map(edge => this.graphService.upsertEdge({ ...edge, userId }, { session })),
+          ...snapshot.clusters.map(cluster => this.graphService.upsertCluster({ ...cluster, userId }, { session })),
+          this.graphService.saveStats({ ...snapshot.stats, userId }, { session }),
+        ];
+
+        await Promise.all(upsertPromises);
+      });
+    } finally {
+      await session.endSession();
+    }
   }
 }

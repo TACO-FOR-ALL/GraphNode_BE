@@ -22,7 +22,14 @@ export function createAiRouter(deps: {
   router.use(bindSessionUser, requireLogin);
 
   // Conversations
-  router.post('/conversations', asyncHandler(aiController.createConversation.bind(aiController)));
+  router.post(
+    '/conversations/bulk',
+    asyncHandler(aiController.bulkCreateConversations.bind(aiController))
+  );
+  router.post(
+    '/conversations',
+    asyncHandler(aiController.createConversation.bind(aiController))
+  );
   router.get('/conversations', asyncHandler(aiController.listConversations.bind(aiController)));
   router.get('/conversations/:conversationId', asyncHandler(aiController.getConversation.bind(aiController)));
   router.patch('/conversations/:conversationId', asyncHandler(aiController.updateConversation.bind(aiController)));
