@@ -23,6 +23,9 @@ const EnvSchema = z.object({
   QDRANT_VECTOR_SIZE: z.coerce.number().int().positive().default(1536),
   QDRANT_DISTANCE_METRIC: z.enum(['Cosine', 'Euclidean']).default('Cosine'),
 
+  // Redis
+  REDIS_URL: z.string().min(1, 'REDIS_URL required'),
+
   // Cookies
   DEV_INSECURE_COOKIES: z
     .string()
@@ -39,6 +42,7 @@ const EnvSchema = z.object({
  * @property OAUTH_GOOGLE_CLIENT_ID Google OAuth 클라이언트 ID
  * @property OAUTH_GOOGLE_CLIENT_SECRET Google OAuth 클라이언트 시크릿(민감정보)
  * @property OAUTH_GOOGLE_REDIRECT_URI Google OAuth 리디렉션 URI
+ * @property REDIS_URL Redis 연결 DSN
  * @property DEV_INSECURE_COOKIES 개발용 Secure 쿠키 비활성화 토글(true/false)
  */
 export type Env = z.infer<typeof EnvSchema>;
