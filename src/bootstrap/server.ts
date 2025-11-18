@@ -9,6 +9,8 @@ import session from 'express-session';
 import cors from 'cors';
 // import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import { RedisStore } from 'connect-redis';
+import { createClient } from "redis"
 // import { AddressInfo } from 'net';
 
 import healthRouter from '../app/routes/health';
@@ -42,7 +44,7 @@ export function createApp() {
   app.use(requestContext);
   app.use(httpLogger);
 
-  // Session (MVP: MemoryStore)
+  // Session (RedisStore)
   /**
    * 세션 미들웨어 구성
    * - 개발: name="sid", secure=false
@@ -50,10 +52,26 @@ export function createApp() {
    * - maxAge: 사실상 무기한 UX를 위해 1년(정책상 롤링 가능)
    */
   const env = loadEnv();
+
+  // Initialize client.
+  const redisClient = createClient({
+    url: env.REDIS_URL,
+  });
+  redisClient.connect().catch(err => {
+    console.error('Failed to connect to Redis', { error: err });
+  });
+
+  // Initialize store.
+  const redisStore = new RedisStore({
+    client: redisClient,
+    prefix: 'session:',
+  });
+
   const devInsecure = !!env.DEV_INSECURE_COOKIES;
   const isProd = env.NODE_ENV === 'production';
   const cookieName = isProd && !devInsecure ? '__Host-session' : 'sid';
   app.use(session({
+    store: redisStore,
     name: cookieName,
     secret: process.env.SESSION_SECRET || 'dev-secret-change-me',
     resave: false,
