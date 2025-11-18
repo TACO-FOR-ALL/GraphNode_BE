@@ -5,7 +5,7 @@ This SDK provides a convenient way to interact with the GraphNode Backend API fr
 ## Installation
 
 ```bash
-npm install <path-to-sdk-package>
+npm install @taco/graphnode-sdk
 ```
 
 ## Getting Started
@@ -15,7 +15,7 @@ npm install <path-to-sdk-package>
 First, create a client instance. You need to provide the base URL of the API server.
 
 ```typescript
-import { createGraphNodeClient } from 'graphnode-sdk';
+import { createGraphNodeClient } from '@taco/graphnode-sdk';
 
 const client = createGraphNodeClient({
   baseUrl: 'http://localhost:3000',
@@ -114,7 +114,7 @@ console.log(newMessage);
 The SDK uses a custom `HttpError` for API-related errors. You can check the `problem` property for RFC 9457 Problem Details.
 
 ```typescript
-import { HttpError } from 'graphnode-sdk';
+import { HttpError } from '@taco/graphnode-sdk';
 
 try {
   await client.conversations.get('non-existent-id');

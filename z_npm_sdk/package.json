@@ -1,5 +1,5 @@
 {
-  "name": "@yourname/graphnode-sdk",
+  "name": "@taco/graphnode-sdk",
   "version": "0.1.0",
   "description": "GraphNode frontend SDK (cookie-based session)",
   "type": "module",
@@ -8,10 +8,13 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist",
+    "README.md"],
   "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.json",
