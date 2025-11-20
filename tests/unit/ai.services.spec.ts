@@ -6,68 +6,84 @@ import { ConversationService } from '../../src/core/services/ConversationService
 import { MessageService } from '../../src/core/services/MessageService';
 import type { ConversationRepository } from '../../src/core/ports/ConversationRepository';
 import type { MessageRepository } from '../../src/core/ports/MessageRepository';
-import type { ChatMessage, ChatThread } from '../../src/shared/dtos/ai';
+import type { ConversationDoc, MessageDoc } from '../../src/core/types/persistence/ai.persistence';
 
 class InMemoryConvRepo implements ConversationRepository {
-  data = new Map<string, { doc: Omit<ChatThread, 'messages'>; owner: string }>();
-  async create(thread: Omit<ChatThread, 'messages'>, ownerUserId: string): Promise<ChatThread> {
-    this.data.set(thread.id, { doc: { ...thread }, owner: ownerUserId });
-    return { ...thread, messages: [] } as ChatThread;
+  data = new Map<string, ConversationDoc>();
+  
+  async create(doc: ConversationDoc): Promise<ConversationDoc> {
+    this.data.set(doc._id, doc);
+    return doc;
   }
-  async findById(id: string, ownerUserId: string): Promise<ChatThread | null> {
-    const v = this.data.get(id);
-    if (!v || v.owner !== ownerUserId) return null;
-    return { ...v.doc, messages: [] } as ChatThread;
+  
+  async findById(id: string, ownerUserId: string): Promise<ConversationDoc | null> {
+    const doc = this.data.get(id);
+    if (!doc || doc.ownerUserId !== ownerUserId) return null;
+    return doc;
   }
-  async listByOwner(ownerUserId: string, limit: number): Promise<{ items: ChatThread[]; nextCursor?: string | null; }> {
-    const items = Array.from(this.data.values()).filter(v => v.owner === ownerUserId).slice(0, limit).map(v => ({ ...v.doc, messages: [] } as ChatThread));
+  
+  async listByOwner(ownerUserId: string, limit: number, cursor?: string): Promise<{ items: ConversationDoc[]; nextCursor?: string | null; }> {
+    const items = Array.from(this.data.values())
+      .filter(v => v.ownerUserId === ownerUserId)
+      .slice(0, limit);
     return { items, nextCursor: null };
   }
-  async update(id: string, ownerUserId: string, updates: Partial<Omit<ChatThread, 'id' | 'messages'>>): Promise<ChatThread | null> {
-    const v = this.data.get(id);
-    if (!v || v.owner !== ownerUserId) return null;
-    v.doc = { ...v.doc, ...(updates as any) };
-    return { ...v.doc, messages: [] } as ChatThread;
+  
+  async update(id: string, ownerUserId: string, updates: Partial<ConversationDoc>): Promise<ConversationDoc | null> {
+    const doc = this.data.get(id);
+    if (!doc || doc.ownerUserId !== ownerUserId) return null;
+    const updated = { ...doc, ...updates };
+    this.data.set(id, updated);
+    return updated;
   }
+  
   async delete(id: string, ownerUserId: string): Promise<boolean> {
-    const v = this.data.get(id);
-    if (!v || v.owner !== ownerUserId) return false;
+    const doc = this.data.get(id);
+    if (!doc || doc.ownerUserId !== ownerUserId) return false;
     this.data.delete(id);
     return true;
   }
 }
 
 class InMemoryMsgRepo implements MessageRepository {
-  msgs = new Map<string, ChatMessage[]>();
-  async create(conversationId: string, message: ChatMessage): Promise<ChatMessage> {
-    const a = this.msgs.get(conversationId) || [];
-    a.push(message);
-    this.msgs.set(conversationId, a);
-    return message;
+  msgs = new Map<string, MessageDoc[]>();
+  
+  async create(doc: MessageDoc): Promise<MessageDoc> {
+    const a = this.msgs.get(doc.conversationId) || [];
+    a.push(doc);
+    this.msgs.set(doc.conversationId, a);
+    return doc;
   }
-  async createMany(conversationId: string, messages: ChatMessage[]): Promise<ChatMessage[]> {
+  
+  async createMany(docs: MessageDoc[]): Promise<MessageDoc[]> {
+    if (docs.length === 0) return [];
+    const conversationId = docs[0].conversationId;
     const a = this.msgs.get(conversationId) || [];
-    a.push(...messages);
+    a.push(...docs);
     this.msgs.set(conversationId, a);
-    return messages;
+    return docs;
   }
-  async findAllByConversationId(conversationId: string): Promise<ChatMessage[]> {
+  
+  async findAllByConversationId(conversationId: string): Promise<MessageDoc[]> {
     return this.msgs.get(conversationId) || [];
   }
-  async update(id: string, conversationId: string, updates: Partial<Omit<ChatMessage, 'id'>>): Promise<ChatMessage | null> {
+  
+  async update(id: string, conversationId: string, updates: Partial<MessageDoc>): Promise<MessageDoc | null> {
     const a = this.msgs.get(conversationId) || [];
-    const m = a.find(x => x.id === id);
+    const m = a.find(x => x._id === id);
     if (!m) return null;
     Object.assign(m, updates);
     return m;
   }
+  
   async delete(id: string, conversationId: string): Promise<boolean> {
     const a = this.msgs.get(conversationId) || [];
-    const filtered = a.filter(x => x.id !== id);
+    const filtered = a.filter(x => x._id !== id);
     const deleted = filtered.length !== a.length;
     this.msgs.set(conversationId, filtered);
     return deleted;
   }
+  
   async deleteAllByConversationId(conversationId: string): Promise<number> {
     const a = this.msgs.get(conversationId) || [];
     this.msgs.delete(conversationId);

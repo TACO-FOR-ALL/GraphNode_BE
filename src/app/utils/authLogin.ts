@@ -7,7 +7,7 @@ import type { Request, Response } from 'express';
 
 import { UserRepositoryMySQL } from '../../infra/repositories/UserRepositoryMySQL';
 import { setHelperLoginCookies } from './sessionCookies';
-import type { Provider } from '../../core/domain/User';
+import type { Provider } from '../../core/types/persistence/UserPersistence';
 import {bindUserIdToSession} from "./request";
 
 export interface ProviderUserInput {

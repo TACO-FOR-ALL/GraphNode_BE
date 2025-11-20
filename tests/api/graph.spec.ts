@@ -2,7 +2,7 @@ import { Express } from 'express';
 import request from 'supertest';
 
 import { createApp } from '../../src/bootstrap/server';
-import { GraphEdgeRecord, GraphNodeRecord } from '../../src/core/ports/GraphStore';
+import type { GraphEdgeDto, GraphNodeDto } from '../../src/shared/dtos/graph';
 
 // Mock the service layer
 const mockGraphVectorService = {
@@ -74,6 +74,18 @@ describe('Graph API', () => {
     // Reset mocks before each test
     jest.clearAllMocks();
 
+    process.env.NODE_ENV = 'test';
+    process.env.SESSION_SECRET = 'test-secret';
+    process.env.OAUTH_GOOGLE_CLIENT_ID = 'test-client';
+    process.env.OAUTH_GOOGLE_CLIENT_SECRET = 'test-secret';
+    process.env.OAUTH_GOOGLE_REDIRECT_URI = 'http://localhost:3000/auth/google/callback';
+    process.env.MYSQL_URL = 'mysql://user:pass@localhost:3306/db';
+    process.env.MONGODB_URL = 'mongodb://localhost:27017/db';
+    process.env.QDRANT_URL = 'http://localhost:6333';
+    process.env.QDRANT_API_KEY = 'test-key';
+    process.env.QDRANT_COLLECTION_NAME = 'test-collection';
+    process.env.REDIS_URL = 'redis://localhost:6379';
+
     app = createApp();
     agent = request.agent(app);
 
@@ -86,7 +98,7 @@ describe('Graph API', () => {
 
   describe('Nodes API', () => {
     it('should create a node', async () => {
-      const node: Omit<GraphNodeRecord, 'userId'> = {
+      const node: Omit<GraphNodeDto, 'userId'> = {
         id: 1,
         origId: 'conv-1',
         clusterId: 'cluster-1',
@@ -107,7 +119,7 @@ describe('Graph API', () => {
     });
 
     it('should get a node', async () => {
-      const node: GraphNodeRecord = {
+      const node: GraphNodeDto = {
         id: 1,
         userId: 'user-test-id',
         origId: 'conv-1',
@@ -115,8 +127,6 @@ describe('Graph API', () => {
         clusterName: 'Test Cluster',
         timestamp: '2025-01-01T00:00:00.000Z',
         numMessages: 1,
-        createdAt: '2025-01-01T00:00:00.000Z',
-        updatedAt: '2025-01-01T00:00:00.000Z',
       };
       mockGraphVectorService.findNode.mockResolvedValue(node);
 
@@ -129,7 +139,7 @@ describe('Graph API', () => {
     });
 
     it('should update a node', async () => {
-      const patch: Partial<GraphNodeRecord> = {
+      const patch: Partial<GraphNodeDto> = {
         clusterName: 'Updated Cluster',
       };
       mockGraphVectorService.updateNode.mockResolvedValue(undefined);
@@ -166,7 +176,7 @@ describe('Graph API', () => {
   // --- Edge Tests ---
   describe('Edges API', () => {
     it('should create an edge and return its ID', async () => {
-      const newEdge: Omit<GraphEdgeRecord, 'userId' | 'id'> = {
+      const newEdge: Omit<GraphEdgeDto, 'userId' | 'id'> = {
         source: 1,
         target: 2,
         weight: 1,
@@ -186,7 +196,7 @@ describe('Graph API', () => {
     });
 
     it('should list all edges for a user', async () => {
-      const edges: GraphEdgeRecord[] = [
+      const edges: GraphEdgeDto[] = [
         {
           id: 'edge-1',
           source: 1,

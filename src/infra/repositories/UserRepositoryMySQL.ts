@@ -1,6 +1,6 @@
 import type { RowDataPacket, ResultSetHeader } from 'mysql2/promise';
 
-import { User, Provider } from '../../core/domain/User';
+import { User, Provider } from '../../core/types/persistence/UserPersistence';
 import { UserRepository } from '../../core/ports/UserRepository';
 import { getMySql } from '../db/mysql';
 

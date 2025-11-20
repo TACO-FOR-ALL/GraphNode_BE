@@ -111,6 +111,12 @@ function appWithTestEnv() {
   process.env.OAUTH_GOOGLE_CLIENT_ID = 'test-client';
   process.env.OAUTH_GOOGLE_CLIENT_SECRET = 'test-secret';
   process.env.OAUTH_GOOGLE_REDIRECT_URI = 'http://localhost:3000/auth/google/callback';
+  process.env.MYSQL_URL = 'mysql://user:pass@localhost:3306/db';
+  process.env.MONGODB_URL = 'mongodb://localhost:27017/db';
+  process.env.QDRANT_URL = 'http://localhost:6333';
+  process.env.QDRANT_API_KEY = 'test-key';
+  process.env.QDRANT_COLLECTION_NAME = 'test-collection';
+  process.env.REDIS_URL = 'redis://localhost:6379';
   return createApp();
 }
 

@@ -1,18 +1,24 @@
 import { GraphService } from '../../src/core/services/GraphService';
+import type { GraphStore } from '../../src/core/ports/GraphStore';
 import type {
-  GraphClusterRecord,
-  GraphEdgeRecord,
-  GraphNodeRecord,
-  GraphStatsRecord,
-  GraphStore,
-} from '../../src/core/ports/GraphStore';
+  GraphClusterDoc,
+  GraphEdgeDoc,
+  GraphNodeDoc,
+  GraphStatsDoc,
+} from '../../src/core/types/persistence/graph.persistence';
+import type {
+  GraphClusterDto,
+  GraphEdgeDto,
+  GraphNodeDto,
+  GraphStatsDto,
+} from '../../src/shared/dtos/graph';
 import { NotFoundError } from '../../src/shared/errors/domain';
 
 class InMemoryGraphStore implements GraphStore {
-  private nodes = new Map<string, GraphNodeRecord>();
-  private edges = new Map<string, GraphEdgeRecord>();
-  private clusters = new Map<string, GraphClusterRecord>();
-  private stats = new Map<string, GraphStatsRecord>();
+  private nodes = new Map<string, GraphNodeDoc>();
+  private edges = new Map<string, GraphEdgeDoc>();
+  private clusters = new Map<string, GraphClusterDoc>();
+  private stats = new Map<string, GraphStatsDoc>();
 
   private nodeKey(userId: string, nodeId: number) {
     return `${userId}::${nodeId}`;
@@ -26,11 +32,11 @@ class InMemoryGraphStore implements GraphStore {
     return `${userId}::${clusterId}`;
   }
 
-  async upsertNode(node: GraphNodeRecord): Promise<void> {
-    this.nodes.set(this.nodeKey(node.userId, node.id), { ...node });
+  async upsertNode(node: GraphNodeDoc): Promise<void> {
+    this.nodes.set(this.nodeKey(node.userId, node.nodeId), { ...node });
   }
 
-  async updateNode(userId: string, nodeId: number, patch: Partial<GraphNodeRecord>): Promise<void> {
+  async updateNode(userId: string, nodeId: number, patch: Partial<GraphNodeDoc>): Promise<void> {
     const key = this.nodeKey(userId, nodeId);
     const existing = this.nodes.get(key);
     if (!existing) throw new NotFoundError('Node not found');
@@ -53,21 +59,21 @@ class InMemoryGraphStore implements GraphStore {
     }
   }
 
-  async findNode(userId: string, nodeId: number): Promise<GraphNodeRecord | null> {
+  async findNode(userId: string, nodeId: number): Promise<GraphNodeDoc | null> {
     return this.nodes.get(this.nodeKey(userId, nodeId)) ?? null;
   }
 
-  async listNodes(userId: string): Promise<GraphNodeRecord[]> {
+  async listNodes(userId: string): Promise<GraphNodeDoc[]> {
     return Array.from(this.nodes.values()).filter(n => n.userId === userId);
   }
 
-  async listNodesByCluster(userId: string, clusterId: string): Promise<GraphNodeRecord[]> {
+  async listNodesByCluster(userId: string, clusterId: string): Promise<GraphNodeDoc[]> {
     return Array.from(this.nodes.values()).filter(n => n.userId === userId && n.clusterId === clusterId);
   }
 
-  async upsertEdge(edge: GraphEdgeRecord): Promise<string> {
-    const key = this.edgeKey(edge.userId, edge.source, edge.target, edge.id);
-    this.edges.set(key, { ...edge, id: key });
+  async upsertEdge(edge: GraphEdgeDoc): Promise<string> {
+    const key = this.edgeKey(edge.userId, edge.source, edge.target, edge._id);
+    this.edges.set(key, { ...edge, _id: key });
     return key;
   }
 
@@ -95,31 +101,31 @@ class InMemoryGraphStore implements GraphStore {
     }
   }
 
-  async listEdges(userId: string): Promise<GraphEdgeRecord[]> {
+  async listEdges(userId: string): Promise<GraphEdgeDoc[]> {
     return Array.from(this.edges.values()).filter(e => e.userId === userId);
   }
 
-  async upsertCluster(cluster: GraphClusterRecord): Promise<void> {
-    this.clusters.set(this.clusterKey(cluster.userId, cluster.id), { ...cluster });
+  async upsertCluster(cluster: GraphClusterDoc): Promise<void> {
+    this.clusters.set(this.clusterKey(cluster.userId, cluster.clusterId), { ...cluster });
   }
 
   async deleteCluster(userId: string, clusterId: string): Promise<void> {
     this.clusters.delete(this.clusterKey(userId, clusterId));
   }
 
-  async findCluster(userId: string, clusterId: string): Promise<GraphClusterRecord | null> {
+  async findCluster(userId: string, clusterId: string): Promise<GraphClusterDoc | null> {
     return this.clusters.get(this.clusterKey(userId, clusterId)) ?? null;
   }
 
-  async listClusters(userId: string): Promise<GraphClusterRecord[]> {
+  async listClusters(userId: string): Promise<GraphClusterDoc[]> {
     return Array.from(this.clusters.values()).filter(c => c.userId === userId);
   }
 
-  async saveStats(stats: GraphStatsRecord): Promise<void> {
+  async saveStats(stats: GraphStatsDoc): Promise<void> {
     this.stats.set(stats.userId, { ...stats });
   }
 
-  async getStats(userId: string): Promise<GraphStatsRecord | null> {
+  async getStats(userId: string): Promise<GraphStatsDoc | null> {
     return this.stats.get(userId) ?? null;
   }
 
@@ -138,7 +144,7 @@ describe('GraphService (unit)', () => {
   });
 
   test('node lifecycle', async () => {
-    const node: GraphNodeRecord = {
+    const node: GraphNodeDto = {
       id: 1,
       userId: 'u1',
       origId: 'conv-1',
@@ -162,7 +168,7 @@ describe('GraphService (unit)', () => {
   });
 
   test('edge lifecycle', async () => {
-    const baseNode: GraphNodeRecord = {
+    const baseNode: GraphNodeDto = {
       id: 1,
       userId: 'u1',
       origId: 'conv',
@@ -173,7 +179,7 @@ describe('GraphService (unit)', () => {
     };
     await svc.upsertNode(baseNode);
     await svc.upsertNode({ ...baseNode, id: 2 });
-    const edge: GraphEdgeRecord = {
+    const edge: GraphEdgeDto = {
       userId: 'u1',
       source: 1,
       target: 2,
@@ -191,7 +197,7 @@ describe('GraphService (unit)', () => {
   });
 
   test('cluster and stats lifecycle', async () => {
-    const cluster: GraphClusterRecord = {
+    const cluster: GraphClusterDto = {
       id: 'cluster-1',
       userId: 'u1',
       name: 'Focus',
@@ -202,7 +208,7 @@ describe('GraphService (unit)', () => {
     await svc.upsertCluster(cluster);
     expect((await svc.listClusters('u1')).map(c => c.id)).toContain('cluster-1');
 
-    const stats: GraphStatsRecord = { userId: 'u1', nodes: 2, edges: 1, clusters: 1 };
+    const stats: GraphStatsDto = { userId: 'u1', nodes: 2, edges: 1, clusters: 1 };
     await svc.saveStats(stats);
     expect((await svc.getStats('u1'))?.nodes).toBe(2);
 

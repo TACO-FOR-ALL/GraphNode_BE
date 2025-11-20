@@ -11,3 +11,4 @@ coverage
 *.log
 .gitignore
 Dockerfile
+z_npm_sdk

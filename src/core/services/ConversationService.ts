@@ -4,13 +4,18 @@
  * 외부 의존:
  * - ConversationRepository: 대화 영속성
  * - MessageRepository: 메시지 영속성
+ * - **Rule 1**: Service handles DTOs/Domain objects and uses Mappers to talk to Repo (which uses Docs).
  */
-
 
 import { ChatThread, ChatMessage } from '../../shared/dtos/ai';
 import { ConversationRepository } from '../ports/ConversationRepository';
 import { MessageRepository } from '../ports/MessageRepository';
 import { NotFoundError, ValidationError, UpstreamError } from '../../shared/errors/domain';
+import {
+  toChatThreadDto,
+  toConversationDoc,
+  toMessageDoc,
+} from '../../shared/mappers/ai';
 
 export class ConversationService {
   constructor(
@@ -36,47 +41,45 @@ export class ConversationService {
         throw new ValidationError('Conversation id is required');
       }
 
-      const newThread: Omit<ChatThread, 'messages'> = {
-        id: threadId, // ← FE 제공 ID 그대로 사용
+      const newThreadDto: Omit<ChatThread, 'messages'> = {
+        id: threadId,
         title,
         updatedAt: new Date().toISOString(),
       };
 
-      const createdThread = await this.conversationRepo.create(newThread, ownerUserId);
+      const convDoc = toConversationDoc(newThreadDto, ownerUserId);
+      await this.conversationRepo.create(convDoc);
 
-      let createdMessages: ChatMessage[] = [];
+      let createdMessageDocs: any[] = [];
       if (messages && messages.length > 0) {
-        // FE가 보낸 각 message.id를 그대로 사용, ts 없으면 서버 시각으로 보정
-        const prepared = messages.map(m => {
+        const messageDocs = messages.map(m => {
           if (!m.id || m.id.trim().length === 0) {
             throw new ValidationError('Message id is required');
           }
           if (!m.content || m.content.trim().length === 0) {
             throw new ValidationError('Message content cannot be empty');
           }
-          return {
-            ...m,
-            ts: m.ts ?? new Date().toISOString(),
-          };
+          // Ensure timestamp is set
+          const msgDto = { ...m, ts: m.ts ?? new Date().toISOString() };
+          return toMessageDoc(msgDto, threadId);
         });
 
-        createdMessages = await this.messageRepo.createMany(createdThread.id, prepared);
+        createdMessageDocs = await this.messageRepo.createMany(messageDocs);
 
-        // 대화 updatedAt을 최신 메시지 시각으로 동기화(선택적 권장)
-        const timestamps: string[] = [
-          ...createdMessages.map(m => m.ts).filter((t): t is string => typeof t === 'string'),
-          createdThread.updatedAt,
-        ].filter((t): t is string => typeof t === 'string');
-        const latestIso = timestamps.reduce((a, b) => (new Date(a).getTime() >= new Date(b).getTime() ? a : b));
-        await this.conversationRepo.update(createdThread.id, ownerUserId, { updatedAt: latestIso });
+        // Update conversation timestamp to latest message
+        const timestamps = [
+          ...createdMessageDocs.map(d => d.ts),
+          convDoc.updatedAt,
+        ];
+        const latestTs = Math.max(...timestamps);
+        
+        // Update doc in memory and DB
+        convDoc.updatedAt = latestTs;
+        await this.conversationRepo.update(threadId, ownerUserId, { updatedAt: latestTs });
       }
 
-      return {
-        ...createdThread,
-        messages: createdMessages,
-      };
+      return toChatThreadDto(convDoc, createdMessageDocs);
     } catch (err: unknown) {
-      // If already an AppError let it bubble, otherwise wrap as UpstreamError
       const e: any = err;
       if (e && typeof e.code === 'string') throw err;
       throw new UpstreamError('Failed to create conversation', { cause: err as any });
@@ -91,11 +94,12 @@ export class ConversationService {
    */
   async getById(id: string, ownerUserId: string): Promise<ChatThread> {
     try {
-      const thread = await this.conversationRepo.findById(id, ownerUserId);
-      if (!thread) {
+      const convDoc = await this.conversationRepo.findById(id, ownerUserId);
+      if (!convDoc) {
         throw new NotFoundError(`Conversation with id ${id} not found`);
       }
-      return thread;
+      const messageDocs = await this.messageRepo.findAllByConversationId(id);
+      return toChatThreadDto(convDoc, messageDocs);
     } catch (err: unknown) {
       const e: any = err;
       if (e && typeof e.code === 'string') throw err;
@@ -112,7 +116,10 @@ export class ConversationService {
    */
   async listByOwner(ownerUserId: string, limit: number, cursor?: string): Promise<{ items: ChatThread[]; nextCursor?: string | null }> {
     try {
-      return await this.conversationRepo.listByOwner(ownerUserId, limit, cursor);
+      const { items: docs, nextCursor } = await this.conversationRepo.listByOwner(ownerUserId, limit, cursor);
+      // For list view, we don't fetch messages for performance.
+      const items = docs.map(doc => toChatThreadDto(doc, []));
+      return { items, nextCursor };
     } catch (err: unknown) {
       const e: any = err;
       if (e && typeof e.code === 'string') throw err;
@@ -133,16 +140,15 @@ export class ConversationService {
         throw new ValidationError('Title cannot be empty');
       }
 
-      const updatePayload = {
-        ...updates,
-        updatedAt: new Date().toISOString(),
-      };
-
-      const updatedThread = await this.conversationRepo.update(id, ownerUserId, updatePayload);
-      if (!updatedThread) {
+      const updatePayload: any = { ...updates, updatedAt: Date.now() }; // Partial Doc
+      
+      const updatedDoc = await this.conversationRepo.update(id, ownerUserId, updatePayload);
+      if (!updatedDoc) {
         throw new NotFoundError(`Conversation with id ${id} not found`);
       }
-      return updatedThread;
+      
+      const messageDocs = await this.messageRepo.findAllByConversationId(id);
+      return toChatThreadDto(updatedDoc, messageDocs);
     } catch (err: unknown) {
       const e: any = err;
       if (e && typeof e.code === 'string') throw err;

@@ -1,3 +1,5 @@
+import fs from 'fs/promises';
+import path from 'path';
 import mysql from 'mysql2/promise';
 
 import { logger } from '../../shared/utils/logger';
@@ -18,7 +20,22 @@ export async function initMySql(url: string) {
     bigNumberStrings: true,  // 문자열로 반환
     // dateStrings: true,    // 필요 시 DATE/TIMESTAMP도 문자열로
     // namedPlaceholders: true, // 선택
+    multipleStatements: true, // 다중 쿼리 허용 (init 스크립트용)
   });
+
+  try {
+    const initSqlPath = path.join(__dirname, 'mysql/init/001_init.sql');
+    const sql = await fs.readFile(initSqlPath, 'utf-8');
+    // 세미콜론으로 분리하여 실행 (multipleStatements: true가 있어도 안전하게 분리 실행 권장)
+    const statements = sql.split(';').map((s) => s.trim()).filter((s) => s.length > 0);
+    for (const stmt of statements) {
+      await pool.query(stmt);
+    }
+    logger.info({ event: 'db.init', system: 'mysql' }, 'Executed init SQL');
+  } catch (err) {
+    logger.warn({ event: 'db.init_failed', system: 'mysql', err }, 'Failed to execute init SQL (file missing or error)');
+  }
+
   await pool.query('SELECT 1');
   logger.info({ event: 'db.connected', system: 'mysql' }, 'MySQL connected');
   return pool;
