@@ -32,8 +32,46 @@ function handleError(err) {
 
 // Auth
 document.getElementById('btn-login-google').onclick = () => {
-    // SDK의 login 메서드는 window.location.href를 변경함
-    client.googleAuth.login();
+    // [수정] SDK의 기본 리다이렉트 방식 대신 '팝업'을 사용하여 테스트 편의성 증대
+    // 주의: 백엔드 주소가 정확해야 합니다. (로그 기반: https://taco4graphnode.online)
+    // 로컬 테스트라면 'http://localhost:3000'으로 변경하세요.
+    const BACKEND_URL = 'https://taco4graphnode.online'; 
+    const loginUrl = `${BACKEND_URL}/auth/google/start`;
+
+    const width = 500;
+    const height = 600;
+    const left = (screen.width - width) / 2;
+    const top = (screen.height - height) / 2;
+
+    log(`Opening login popup: ${loginUrl}`);
+    
+    const popup = window.open(
+        loginUrl,
+        'google_login',
+        `width=${width},height=${height},top=${top},left=${left}`
+    );
+
+    if (!popup) {
+        return log("Popup blocked! Please allow popups for this site.", true);
+    }
+
+    // 팝업이 닫혔는지 주기적으로 확인
+    const timer = setInterval(async () => {
+        if (popup.closed) {
+            clearInterval(timer);
+            log("Popup closed. Verifying session...");
+            
+            try {
+                // 팝업 닫힌 후 세션 확인 시도
+                const me = await client.me.get();
+                log("Login Verified!");
+                log(me);
+            } catch (e) {
+                handleError(e);
+                log("Login verification failed. (Check Cross-Site Cookie settings if Backend is remote)", true);
+            }
+        }
+    }, 1000);
 };
 
 document.getElementById('btn-me').onclick = async () => {
@@ -184,3 +222,16 @@ document.getElementById('btn-create-edge').onclick = async () => {
         log(res);
     } catch (e) { handleError(e); }
 };
+
+// [추가] 페이지 로드 시 자동 세션 체크
+// 사용자가 Google 로그인 후 {ok:true} 화면에서 '뒤로 가기'나 URL 입력으로 돌아왔을 때,
+// 로그인이 잘 되었는지 바로 확인하기 위함.
+(async () => {
+    try {
+        const me = await client.me.get();
+        log("Session restored automatically: " + me.displayName);
+    } catch (e) {
+        // 401 등 에러는 아직 로그인 안 된 상태이므로 무시 (로그만 남김)
+        console.log("Auto-check: Not logged in yet or session expired.");
+    }
+})();

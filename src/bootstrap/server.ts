@@ -58,7 +58,7 @@ export function createApp() {
     url: env.REDIS_URL,
   });
   redisClient.connect().catch(err => {
-    console.error('Failed to connect to Redis', { error: err });
+    throw new Error('Failed to connect to Redis: ' + err.message);
   });
 
   // Initialize store.
@@ -78,7 +78,7 @@ export function createApp() {
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      sameSite: 'lax',
+      sameSite: 'none',
       secure: isProd && !devInsecure,
       path: '/',
       maxAge: 1000 * 60 * 60 * 24 * 365 // ~1 year
