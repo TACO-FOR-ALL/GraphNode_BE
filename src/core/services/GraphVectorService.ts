@@ -10,12 +10,13 @@
 import type { GraphService } from './GraphService';
 import type { VectorService } from './VectorService';
 import type {
-  GraphClusterRecord,
-  GraphEdgeRecord,
-  GraphNodeRecord,
-  GraphStatsRecord,
-} from '../ports/GraphStore';
-import type { GraphSnapshotDto, PersistGraphPayloadDto } from '../../shared/dtos/graph';
+  GraphClusterDto,
+  GraphEdgeDto,
+  GraphNodeDto,
+  GraphStatsDto,
+  GraphSnapshotDto,
+  PersistGraphPayloadDto
+} from '../../shared/dtos/graph';
 import { getMongo } from '../../infra/db/mongodb';
 
 export class GraphVectorService {
@@ -33,7 +34,7 @@ export class GraphVectorService {
    * 노드와 벡터 데이터를 준비합니다. (현재 비활성화)
    * @deprecated 벡터 동기화 기능은 현재 요구사항에서 제외되었습니다.
    */
-  async prepareNodeAndVector(_node: Partial<GraphNodeRecord>, _embedding?: number[], _meta?: Record<string, unknown>) {
+  async prepareNodeAndVector(_node: Partial<GraphNodeDto>, _embedding?: number[], _meta?: Record<string, unknown>) {
     this.throwVectorDisabledError();
   }
 
@@ -41,7 +42,7 @@ export class GraphVectorService {
    * 여러 노드를 일괄적으로 적용합니다. (현재 비활성화)
    * @deprecated 벡터 동기화 기능은 현재 요구사항에서 제외되었습니다.
    */
-  async applyBatchNodes(_items: Array<{ nodePayload: GraphNodeRecord; vectorPayload: unknown }>) {
+  async applyBatchNodes(_items: Array<{ nodePayload: GraphNodeDto; vectorPayload: unknown }>) {
     this.throwVectorDisabledError();
   }
 
@@ -69,7 +70,7 @@ export class GraphVectorService {
    * @example
    * await service.upsertNode({ userId: 'u-123', id: 1, origId: 'conv-abc', ... });
    */
-  upsertNode(node: GraphNodeRecord) {
+  upsertNode(node: GraphNodeDto) {
     return this.graphService.upsertNode(node);
   }
 
@@ -83,7 +84,7 @@ export class GraphVectorService {
    * @example
    * await service.updateNode('u-123', 1, { clusterName: '새 클러스터' });
    */
-  updateNode(userId: string, nodeId: number, patch: Partial<GraphNodeRecord>) {
+  updateNode(userId: string, nodeId: number, patch: Partial<GraphNodeDto>) {
     return this.graphService.updateNode(userId, nodeId, patch);
   }
 
@@ -127,7 +128,7 @@ export class GraphVectorService {
    * @returns 생성된 엣지의 고유 ID
    * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
    */
-  upsertEdge(edge: GraphEdgeRecord) {
+  upsertEdge(edge: GraphEdgeDto) {
     return this.graphService.upsertEdge(edge);
   }
 
@@ -171,7 +172,7 @@ export class GraphVectorService {
    * @returns Promise<void>
    * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
    */
-  async upsertCluster(cluster: GraphClusterRecord): Promise<void> {
+  async upsertCluster(cluster: GraphClusterDto): Promise<void> {
     const mongoClient = getMongo();
     if (!mongoClient) {
       throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
@@ -236,7 +237,7 @@ export class GraphVectorService {
    * @returns Promise<void>
    * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
    */
-  saveStats(stats: GraphStatsRecord) {
+  saveStats(stats: GraphStatsDto) {
     return this.graphService.saveStats(stats);
   }
 

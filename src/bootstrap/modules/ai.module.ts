@@ -14,7 +14,7 @@ import { createAiRouter } from '../../app/routes/ai';
 export function makeAiRouter(): Router {
   // Repositories
   const messageRepo = new MessageRepositoryMongo();
-  const conversationRepo = new ConversationRepositoryMongo(messageRepo);
+  const conversationRepo = new ConversationRepositoryMongo();
 
   // Services
   const rawConversationService = new ConversationService(conversationRepo, messageRepo);

@@ -1,4 +1,4 @@
-import { User } from '../domain/User';
+import { User } from '../types/persistence/UserPersistence';
 
 /**
  * UserRepository 포트(Port)

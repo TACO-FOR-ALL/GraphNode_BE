@@ -1,31 +1,42 @@
-import type {
-  GraphClusterRecord,
-  GraphEdgeRecord,
-  GraphNodeRecord,
-  GraphStatsRecord,
-  GraphStore,
-  RepoOptions,
-} from '../ports/GraphStore';
+import type { GraphStore, RepoOptions } from '../ports/GraphStore';
 import { ValidationError, UpstreamError } from '../../shared/errors/domain';
 import { AppError } from '../../shared/errors/base';
+import type {
+  GraphClusterDto,
+  GraphEdgeDto,
+  GraphNodeDto,
+  GraphStatsDto,
+} from '../../shared/dtos/graph';
+import {
+  toGraphClusterDoc,
+  toGraphClusterDto,
+  toGraphEdgeDoc,
+  toGraphEdgeDto,
+  toGraphNodeDoc,
+  toGraphNodeDto,
+  toGraphStatsDoc,
+  toGraphStatsDto,
+} from '../../shared/mappers/graph';
 
 /**
  * GraphService: graph persistence and basic graph queries.
  * - Delegates to GraphStore (port) for DB operations.
+ * - **Rule 1**: Service handles DTOs/Domain objects and uses Mappers to talk to Repo (which uses Docs).
  */
 export class GraphService {
   constructor(private readonly repo: GraphStore) {}
 
   /**
    * 노드를 생성 또는 갱신한다.
-   * @param node 저장할 노드 레코드
+   * @param node 저장할 노드 DTO
    * @throws {ValidationError | UpstreamError}
    */
-  async upsertNode(node: GraphNodeRecord, options?: RepoOptions): Promise<void> {
+  async upsertNode(node: GraphNodeDto, options?: RepoOptions): Promise<void> {
     try {
       this.assertUser(node.userId);
       if (typeof node.id !== 'number') throw new ValidationError('node.id must be a number');
-      await this.repo.upsertNode({ ...node, createdAt: node.createdAt ?? new Date().toISOString(), updatedAt: new Date().toISOString() }, options);
+      const doc = toGraphNodeDoc(node);
+      await this.repo.upsertNode(doc, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.upsertNode failed', { cause: String(err) });
@@ -36,14 +47,22 @@ export class GraphService {
    * 노드 일부 속성을 갱신한다.
    * @param userId 사용자 ID
    * @param nodeId 노드 ID
-   * @param patch 갱신할 필드
+   * @param patch 갱신할 필드 (DTO Partial)
    * @throws {ValidationError | UpstreamError}
    */
-  async updateNode(userId: string, nodeId: number, patch: Partial<GraphNodeRecord>, options?: RepoOptions): Promise<void> {
+  async updateNode(userId: string, nodeId: number, patch: Partial<GraphNodeDto>, options?: RepoOptions): Promise<void> {
     try {
       this.assertUser(userId);
       this.assertNodeId(nodeId);
-      await this.repo.updateNode(userId, nodeId, { ...patch, updatedAt: new Date().toISOString() }, options);
+      // Partial DTO -> Partial Doc mapping is tricky.
+      // For now, we assume simple field mapping or we might need a specific mapper for partials.
+      // Since our mapper is simple, we can just cast or map manually for now.
+      // Ideally, we should have `toGraphNodeDocPartial`.
+      // Let's do a manual map for now as it's safer.
+      const patchDoc: any = { ...patch };
+      if (patch.updatedAt) patchDoc.updatedAt = patch.updatedAt;
+      
+      await this.repo.updateNode(userId, nodeId, patchDoc, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.updateNode failed', { cause: String(err) });
@@ -86,12 +105,14 @@ export class GraphService {
    * 단일 노드를 조회한다.
    * @param userId 사용자 ID
    * @param nodeId 노드 ID
+   * @returns GraphNodeDto or null
    */
-  async findNode(userId: string, nodeId: number) {
+  async findNode(userId: string, nodeId: number): Promise<GraphNodeDto | null> {
     try {
       this.assertUser(userId);
       this.assertNodeId(nodeId);
-      return await this.repo.findNode(userId, nodeId);
+      const doc = await this.repo.findNode(userId, nodeId);
+      return doc ? toGraphNodeDto(doc) : null;
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.findNode failed', { cause: String(err) });
@@ -101,11 +122,13 @@ export class GraphService {
   /**
    * 사용자 노드 목록을 반환한다.
    * @param userId 사용자 ID
+   * @returns GraphNodeDto[]
    */
-  async listNodes(userId: string) {
+  async listNodes(userId: string): Promise<GraphNodeDto[]> {
     try {
       this.assertUser(userId);
-      return await this.repo.listNodes(userId);
+      const docs = await this.repo.listNodes(userId);
+      return docs.map(toGraphNodeDto);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.listNodes failed', { cause: String(err) });
@@ -116,11 +139,13 @@ export class GraphService {
    * 특정 클러스터의 노드 목록을 반환한다.
    * @param userId 사용자 ID
    * @param clusterId 클러스터 ID
+   * @returns GraphNodeDto[]
    */
-  async listNodesByCluster(userId: string, clusterId: string) {
+  async listNodesByCluster(userId: string, clusterId: string): Promise<GraphNodeDto[]> {
     try {
       this.assertUser(userId);
-      return await this.repo.listNodesByCluster(userId, clusterId);
+      const docs = await this.repo.listNodesByCluster(userId, clusterId);
+      return docs.map(toGraphNodeDto);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.listNodesByCluster failed', { cause: String(err) });
@@ -129,16 +154,17 @@ export class GraphService {
 
   /**
    * 엣지를 생성 또는 갱신한다.
-   * @param edge 저장할 엣지 레코드
+   * @param edge 저장할 엣지 DTO
    * @returns MongoDB 문서 ID
    */
-  async upsertEdge(edge: GraphEdgeRecord, options?: RepoOptions): Promise<string> {
+  async upsertEdge(edge: GraphEdgeDto, options?: RepoOptions): Promise<string> {
     try {
       this.assertUser(edge.userId);
       this.assertNodeId(edge.source);
       this.assertNodeId(edge.target);
       if (!['hard', 'insight'].includes(edge.type)) throw new ValidationError('edge.type must be hard or insight');
-      return await this.repo.upsertEdge({ ...edge, createdAt: edge.createdAt ?? new Date().toISOString(), updatedAt: new Date().toISOString() }, options);
+      const doc = toGraphEdgeDoc(edge);
+      return await this.repo.upsertEdge(doc, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.upsertEdge failed', { cause: String(err) });
@@ -198,11 +224,13 @@ export class GraphService {
   /**
    * 사용자 엣지 목록을 반환한다.
    * @param userId 사용자 ID
+   * @returns GraphEdgeDto[]
    */
-  async listEdges(userId: string) {
+  async listEdges(userId: string): Promise<GraphEdgeDto[]> {
     try {
       this.assertUser(userId);
-      return await this.repo.listEdges(userId);
+      const docs = await this.repo.listEdges(userId);
+      return docs.map(toGraphEdgeDto);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.listEdges failed', { cause: String(err) });
@@ -211,13 +239,14 @@ export class GraphService {
 
   /**
    * 클러스터를 생성 또는 갱신한다.
-   * @param cluster 클러스터 레코드
+   * @param cluster 클러스터 DTO
    */
-  async upsertCluster(cluster: GraphClusterRecord, options?: RepoOptions): Promise<void> {
+  async upsertCluster(cluster: GraphClusterDto, options?: RepoOptions): Promise<void> {
     try {
       this.assertUser(cluster.userId);
       if (!cluster.id) throw new ValidationError('cluster.id required');
-      await this.repo.upsertCluster({ ...cluster, createdAt: cluster.createdAt ?? new Date().toISOString(), updatedAt: new Date().toISOString() }, options);
+      const doc = toGraphClusterDoc(cluster);
+      await this.repo.upsertCluster(doc, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.upsertCluster failed', { cause: String(err) });
@@ -244,12 +273,14 @@ export class GraphService {
    * 클러스터 단건을 조회한다.
    * @param userId 사용자 ID
    * @param clusterId 클러스터 ID
+   * @returns GraphClusterDto or null
    */
-  async findCluster(userId: string, clusterId: string) {
+  async findCluster(userId: string, clusterId: string): Promise<GraphClusterDto | null> {
     try {
       this.assertUser(userId);
       if (!clusterId) throw new ValidationError('clusterId required');
-      return await this.repo.findCluster(userId, clusterId);
+      const doc = await this.repo.findCluster(userId, clusterId);
+      return doc ? toGraphClusterDto(doc) : null;
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.findCluster failed', { cause: String(err) });
@@ -259,11 +290,13 @@ export class GraphService {
   /**
    * 사용자 클러스터 목록을 반환한다.
    * @param userId 사용자 ID
+   * @returns GraphClusterDto[]
    */
-  async listClusters(userId: string) {
+  async listClusters(userId: string): Promise<GraphClusterDto[]> {
     try {
       this.assertUser(userId);
-      return await this.repo.listClusters(userId);
+      const docs = await this.repo.listClusters(userId);
+      return docs.map(toGraphClusterDto);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.listClusters failed', { cause: String(err) });
@@ -272,12 +305,13 @@ export class GraphService {
 
   /**
    * 그래프 통계를 저장한다.
-   * @param stats 통계 레코드
+   * @param stats 통계 DTO
    */
-  async saveStats(stats: GraphStatsRecord, options?: RepoOptions): Promise<void> {
+  async saveStats(stats: GraphStatsDto, options?: RepoOptions): Promise<void> {
     try {
       this.assertUser(stats.userId);
-      await this.repo.saveStats({ ...stats, generatedAt: stats.generatedAt ?? new Date().toISOString() }, options);
+      const doc = toGraphStatsDoc(stats);
+      await this.repo.saveStats(doc, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.saveStats failed', { cause: String(err) });
@@ -287,11 +321,13 @@ export class GraphService {
   /**
    * 그래프 통계를 조회한다.
    * @param userId 사용자 ID
+   * @returns GraphStatsDto or null
    */
-  async getStats(userId: string) {
+  async getStats(userId: string): Promise<GraphStatsDto | null> {
     try {
       this.assertUser(userId);
-      return await this.repo.getStats(userId);
+      const doc = await this.repo.getStats(userId);
+      return doc ? toGraphStatsDto(doc) : null;
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.getStats failed', { cause: String(err) });

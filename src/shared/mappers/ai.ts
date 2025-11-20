@@ -5,7 +5,7 @@
  * 공개 인터페이스: toConversationDoc, toChatThreadDto, toMessageDoc, toChatMessageDto
  */
 import type { ChatMessage, ChatThread } from '../dtos/ai';
-import type { ConversationDoc, MessageDoc } from '../../infra/db/models/ai';
+import type { ConversationDoc, MessageDoc } from '../../core/types/persistence/ai.persistence';
 
 /**
  * ChatThread DTO와 추가 정보를 ConversationDoc으로 변환한다.

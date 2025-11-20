@@ -18,8 +18,25 @@ export class GraphNodeClient {
   private readonly rb: RequestBuilder;
 
   constructor(opts: GraphNodeClientOptions = {}) {
+    let fetchFn = opts.fetch;
+
+    if (!fetchFn) {
+      if (typeof window !== 'undefined' && window.fetch) {
+        // 1. 브라우저 / Electron Renderer 환경
+        // window.fetch를 그냥 넘기면 'Illegal invocation' 발생하므로 bind 처리
+        fetchFn = window.fetch.bind(window);
+      } else if (typeof globalThis !== 'undefined' && (globalThis as any).fetch) {
+        // 2. Node.js (v18+) / 기타 환경
+        fetchFn = (globalThis as any).fetch.bind(globalThis);
+      }
+    }
+
     // 내부 고정 baseUrl 사용, FE는 fetch/headers/credentials 정도만 선택 주입 가능
-    this.rb = createRequestBuilder({ baseUrl: GRAPHNODE_BASE_URL, ...opts });
+    this.rb = createRequestBuilder({ 
+      baseUrl: GRAPHNODE_BASE_URL, 
+      ...opts,
+      fetch: fetchFn // 바인딩된 fetch 주입
+    });
     this.health = new HealthApi(this.rb);
     this.me = new MeApi(this.rb);
     this.conversations = new ConversationsApi(this.rb);

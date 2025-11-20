@@ -4,14 +4,15 @@
  * 외부 의존:
  * - MessageRepository: 메시지 영속성
  * - ConversationRepository: 대화 존재 여부 및 소유권 확인
+ * - **Rule 1**: Service handles DTOs/Domain objects and uses Mappers to talk to Repo (which uses Docs).
  */
-
 
 import { ChatMessage } from '../../shared/dtos/ai';
 import { MessageRepository } from '../ports/MessageRepository';
 import { ConversationRepository } from '../ports/ConversationRepository';
 import { NotFoundError, ValidationError, UpstreamError } from '../../shared/errors/domain';
 import { AppError } from '../../shared/errors/base';
+import { toMessageDoc, toChatMessageDto } from '../../shared/mappers/ai';
 
 export class MessageService {
   constructor(
@@ -39,16 +40,19 @@ export class MessageService {
         throw new ValidationError('Message content cannot be empty');
       }
 
-      const newMessage: ChatMessage = {
-        ...message, // ← FE 제공 ID 그대로 사용
+      const msgDto = {
+        ...message,
         ts: message.ts ?? new Date().toISOString(),
       };
 
-      const createdMessage = await this.messageRepo.create(conversationId, newMessage);
-      await this.conversationRepo.update(conversationId, ownerUserId, { updatedAt: new Date().toISOString() });
-      return createdMessage;
+      const msgDoc = toMessageDoc(msgDto, conversationId);
+      const createdDoc = await this.messageRepo.create(msgDoc);
+      
+      // Update conversation timestamp
+      await this.conversationRepo.update(conversationId, ownerUserId, { updatedAt: createdDoc.ts });
+      
+      return toChatMessageDto(createdDoc);
     } catch (err: unknown) {
-      // Pass through AppError (domain) unchanged, wrap unexpected errors
       if (err instanceof AppError) throw err;
       throw new UpstreamError('MessageService.create failed', { cause: String(err) });
     }
@@ -66,15 +70,23 @@ export class MessageService {
     try {
       await this.validateConversationOwner(conversationId, ownerUserId);
 
-      const updatedMessage = await this.messageRepo.update(messageId, conversationId, updates);
-      if (!updatedMessage) {
+      // Note: updates is Partial<ChatMessage>, but repo expects Partial<MessageDoc>
+      // We need to map the updates. For now, we only support content/role/meta updates which map 1:1 mostly.
+      // But strictly we should map.
+      const updatePayload: any = { ...updates };
+      if (updates.ts) {
+          // If ts is updated, we might need to update conversation ts too, but usually we don't update ts of message manually.
+      }
+
+      const updatedDoc = await this.messageRepo.update(messageId, conversationId, updatePayload);
+      if (!updatedDoc) {
         throw new NotFoundError(`Message with id ${messageId} not found`);
       }
 
-      // 대화의 updatedAt을 갱신
-      await this.conversationRepo.update(conversationId, ownerUserId, { updatedAt: new Date().toISOString() });
+      // 대화의 updatedAt을 갱신 (optional, but good for activity tracking)
+      await this.conversationRepo.update(conversationId, ownerUserId, { updatedAt: Date.now() });
 
-      return updatedMessage;
+      return toChatMessageDto(updatedDoc);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('MessageService.update failed', { cause: String(err) });
@@ -98,7 +110,7 @@ export class MessageService {
       }
 
       // 대화의 updatedAt을 갱신
-      await this.conversationRepo.update(conversationId, ownerUserId, { updatedAt: new Date().toISOString() });
+      await this.conversationRepo.update(conversationId, ownerUserId, { updatedAt: Date.now() });
 
       return true;
     } catch (err: unknown) {

@@ -1,12 +1,11 @@
 import { getMongo } from '../db/mongodb';
 import type {
-  GraphClusterRecord,
-  GraphEdgeRecord,
-  GraphNodeRecord,
-  GraphStatsRecord,
-  GraphStore,
-  RepoOptions,
-} from '../../core/ports/GraphStore';
+  GraphClusterDoc,
+  GraphEdgeDoc,
+  GraphNodeDoc,
+  GraphStatsDoc,
+} from '../../core/types/persistence/graph.persistence';
+import type { GraphStore, RepoOptions } from '../../core/ports/GraphStore';
 import { UpstreamError, ValidationError, NotFoundError } from '../../shared/errors/domain';
 
 /**
@@ -26,19 +25,19 @@ export class GraphRepositoryMongo implements GraphStore {
   }
 
   private graphNodes_col() {
-    return this.db().collection('graph_nodes');
+    return this.db().collection<GraphNodeDoc>('graph_nodes');
   }
 
   private graphEdges_col() {
-    return this.db().collection('graph_edges');
+    return this.db().collection<GraphEdgeDoc>('graph_edges');
   }
 
   private graphClusters_col() {
-    return this.db().collection('graph_clusters');
+    return this.db().collection<GraphClusterDoc>('graph_clusters');
   }
 
   private graphStats_col() {
-    return this.db().collection('graph_stats');
+    return this.db().collection<GraphStatsDoc>('graph_stats');
   }
 
   /**
@@ -76,25 +75,14 @@ export class GraphRepositoryMongo implements GraphStore {
 
   /**
    * 그래프 노드를 생성하거나 갱신합니다(upsert).
-   * @param node 저장할 노드 레코드. `userId`와 `id`는 필수입니다.
+   * @param node 저장할 노드 문서.
    * @throws {UpstreamError} MongoDB 작업 실패 시
    */
-  async upsertNode(node: GraphNodeRecord, options?: RepoOptions): Promise<void> {
+  async upsertNode(node: GraphNodeDoc, options?: RepoOptions): Promise<void> {
     try {
-      const docId = this.nodeKey(node.userId, node.id);
-      const baseDoc = {
-        _id: docId,
-        userId: node.userId,
-        nodeId: node.id,
-        origId: node.origId,
-        clusterId: node.clusterId,
-        clusterName: node.clusterName,
-        timestamp: node.timestamp,
-        numMessages: node.numMessages,
-        createdAt: node.createdAt ?? new Date().toISOString(),
-        updatedAt: node.updatedAt ?? new Date().toISOString(),
-      } satisfies Record<string, unknown>;
-      await this.graphNodes_col().updateOne({ _id: docId } as any, { $set: baseDoc }, { upsert: true, ...options });
+      // _id는 이미 Mapper에서 생성되어 전달됨을 가정하거나, 여기서 검증할 수 있음.
+      // 하지만 Rule 1에 따라 Repo는 DB Type을 그대로 받으므로, _id가 포함되어 있어야 함.
+      await this.graphNodes_col().updateOne({ _id: node._id } as any, { $set: node }, { upsert: true, ...options });
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.upsertNode failed', { cause: String(err) });
     }
@@ -108,7 +96,7 @@ export class GraphRepositoryMongo implements GraphStore {
    * @throws {NotFoundError} 해당 노드가 없을 경우
    * @throws {UpstreamError} MongoDB 작업 실패 시
    */
-  async updateNode(userId: string, nodeId: number, patch: Partial<GraphNodeRecord>, options?: RepoOptions): Promise<void> {
+  async updateNode(userId: string, nodeId: number, patch: Partial<GraphNodeDoc>, options?: RepoOptions): Promise<void> {
     try {
       const docId = this.nodeKey(userId, nodeId);
       const update = { ...patch, updatedAt: patch.updatedAt ?? new Date().toISOString() };
@@ -130,7 +118,7 @@ export class GraphRepositoryMongo implements GraphStore {
     try {
       const docId = this.nodeKey(userId, nodeId);
       await this.graphNodes_col().deleteOne({ _id: docId } as any, options);
-      await this.graphEdges_col().deleteMany({ userId, $or: [{ source: nodeId }, { target: nodeId }] }, options);
+      await this.graphEdges_col().deleteMany({ userId, $or: [{ source: nodeId }, { target: nodeId }] } as any, options);
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.deleteNode failed', { cause: String(err) });
     }
@@ -156,16 +144,14 @@ export class GraphRepositoryMongo implements GraphStore {
    * 특정 노드를 조회합니다.
    * @param userId 사용자 ID
    * @param nodeId 조회할 노드의 ID
-   * @returns 조회된 노드 레코드. 없으면 `null`을 반환합니다.
+   * @returns 조회된 노드 문서. 없으면 `null`을 반환합니다.
    * @throws {UpstreamError} MongoDB 작업 실패 시
    */
-  async findNode(userId: string, nodeId: number): Promise<GraphNodeRecord | null> {
+  async findNode(userId: string, nodeId: number): Promise<GraphNodeDoc | null> {
     try {
       const docId = this.nodeKey(userId, nodeId);
       const doc = await this.graphNodes_col().findOne({ _id: docId } as any);
-      if (!doc) return null;
-      const { nodeId: storedNodeId, _id, ...rest } = doc as any;
-      return { id: storedNodeId ?? nodeId, userId, ...rest } as GraphNodeRecord;
+      return doc;
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.findNode failed', { cause: String(err) });
     }
@@ -174,17 +160,13 @@ export class GraphRepositoryMongo implements GraphStore {
   /**
    * 특정 사용자의 모든 노드 목록을 조회합니다.
    * @param userId 사용자 ID
-   * @returns 노드 레코드 배열
+   * @returns 노드 문서 배열
    * @throws {UpstreamError} MongoDB 작업 실패 시
    */
-  async listNodes(userId: string): Promise<GraphNodeRecord[]> {
+  async listNodes(userId: string): Promise<GraphNodeDoc[]> {
     try {
       const cursor = this.graphNodes_col().find({ userId } as any);
-      const docs = await cursor.toArray();
-      return docs.map(doc => {
-        const { nodeId, _id, ...rest } = doc as any;
-        return { id: nodeId, userId, ...rest } as GraphNodeRecord;
-      });
+      return await cursor.toArray();
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.listNodes failed', { cause: String(err) });
     }
@@ -194,17 +176,13 @@ export class GraphRepositoryMongo implements GraphStore {
    * 특정 클러스터에 속한 모든 노드 목록을 조회합니다.
    * @param userId 사용자 ID
    * @param clusterId 클러스터 ID
-   * @returns 노드 레코드 배열
+   * @returns 노드 문서 배열
    * @throws {UpstreamError} MongoDB 작업 실패 시
    */
-  async listNodesByCluster(userId: string, clusterId: string): Promise<GraphNodeRecord[]> {
+  async listNodesByCluster(userId: string, clusterId: string): Promise<GraphNodeDoc[]> {
     try {
       const cursor = this.graphNodes_col().find({ userId, clusterId } as any);
-      const docs = await cursor.toArray();
-      return docs.map(doc => {
-        const { nodeId, _id, ...rest } = doc as any;
-        return { id: nodeId, userId, ...rest } as GraphNodeRecord;
-      });
+      return await cursor.toArray();
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.listNodesByCluster failed', { cause: String(err) });
     }
@@ -212,28 +190,17 @@ export class GraphRepositoryMongo implements GraphStore {
 
   /**
    * 그래프 엣지를 생성하거나 갱신합니다(upsert).
-   * @param edge 저장할 엣지 레코드. `userId`, `source`, `target`은 필수입니다.
-   * @returns 생성되거나 갱신된 엣지의 ID
+   * @param edge 저장할 엣지 문서.
+   * @returns 생성되거나 갱신된 엣지의 ID (_id)
    * @throws {ValidationError} 출발지와 목적지가 같은 엣지일 경우
    * @throws {UpstreamError} MongoDB 작업 실패 시
    */
-  async upsertEdge(edge: GraphEdgeRecord, options?: RepoOptions): Promise<string> {
+  async upsertEdge(edge: GraphEdgeDoc, options?: RepoOptions): Promise<string> {
     try {
       if (edge.source === edge.target) throw new ValidationError('edge source and target must differ');
-      const docId = this.edgeKey(edge.userId, edge.source, edge.target, edge.id);
-      const baseDoc = {
-        _id: docId,
-        userId: edge.userId,
-        source: edge.source,
-        target: edge.target,
-        weight: edge.weight,
-        type: edge.type,
-        intraCluster: edge.intraCluster,
-        createdAt: edge.createdAt ?? new Date().toISOString(),
-        updatedAt: edge.updatedAt ?? new Date().toISOString(),
-      };
-      await this.graphEdges_col().updateOne({ _id: docId } as any, { $set: baseDoc }, { upsert: true, ...options });
-      return docId;
+      // _id는 Mapper에서 생성되어야 함.
+      await this.graphEdges_col().updateOne({ _id: edge._id } as any, { $set: edge }, { upsert: true, ...options });
+      return edge._id;
     } catch (err: unknown) {
       if (err instanceof ValidationError) throw err;
       throw new UpstreamError('GraphRepositoryMongo.upsertEdge failed', { cause: String(err) });
@@ -302,16 +269,12 @@ export class GraphRepositoryMongo implements GraphStore {
   /**
    * 특정 사용자의 모든 엣지 목록을 조회합니다.
    * @param userId 사용자 ID
-   * @returns 엣지 레코드 배열
+   * @returns 엣지 문서 배열
    * @throws {UpstreamError} MongoDB 작업 실패 시
    */
-  async listEdges(userId: string): Promise<GraphEdgeRecord[]> {
+  async listEdges(userId: string): Promise<GraphEdgeDoc[]> {
     try {
-      const docs = await this.graphEdges_col().find({ userId } as any).toArray();
-      return docs.map(doc => {
-        const { _id, ...rest } = doc as any;
-        return { id: String(_id), ...rest } as GraphEdgeRecord;
-      });
+      return await this.graphEdges_col().find({ userId } as any).toArray();
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.listEdges failed', { cause: String(err) });
     }
@@ -319,24 +282,12 @@ export class GraphRepositoryMongo implements GraphStore {
 
   /**
    * 그래프 클러스터를 생성하거나 갱신합니다(upsert).
-   * @param cluster 저장할 클러스터 레코드. `userId`와 `id`는 필수입니다.
+   * @param cluster 저장할 클러스터 문서.
    * @throws {UpstreamError} MongoDB 작업 실패 시
    */
-  async upsertCluster(cluster: GraphClusterRecord, options?: RepoOptions): Promise<void> {
+  async upsertCluster(cluster: GraphClusterDoc, options?: RepoOptions): Promise<void> {
     try {
-      const docId = this.clusterKey(cluster.userId, cluster.id);
-      const baseDoc = {
-        _id: docId,
-        userId: cluster.userId,
-        clusterId: cluster.id,
-        name: cluster.name,
-        description: cluster.description,
-        size: cluster.size,
-        themes: cluster.themes,
-        createdAt: cluster.createdAt ?? new Date().toISOString(),
-        updatedAt: cluster.updatedAt ?? new Date().toISOString(),
-      } satisfies Record<string, unknown>;
-      await this.graphClusters_col().updateOne({ _id: docId } as any, { $set: baseDoc }, { upsert: true, ...options });
+      await this.graphClusters_col().updateOne({ _id: cluster._id } as any, { $set: cluster }, { upsert: true, ...options });
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.upsertCluster failed', { cause: String(err) });
     }
@@ -361,16 +312,13 @@ export class GraphRepositoryMongo implements GraphStore {
    * 특정 클러스터를 조회합니다.
    * @param userId 사용자 ID
    * @param clusterId 조회할 클러스터의 ID
-   * @returns 조회된 클러스터 레코드. 없으면 `null`을 반환합니다.
+   * @returns 조회된 클러스터 문서. 없으면 `null`을 반환합니다.
    * @throws {UpstreamError} MongoDB 작업 실패 시
    */
-  async findCluster(userId: string, clusterId: string): Promise<GraphClusterRecord | null> {
+  async findCluster(userId: string, clusterId: string): Promise<GraphClusterDoc | null> {
     try {
       const docId = this.clusterKey(userId, clusterId);
-      const doc = await this.graphClusters_col().findOne({ _id: docId } as any);
-      if (!doc) return null;
-      const { clusterId: storedClusterId, _id, ...rest } = doc as any;
-      return { id: storedClusterId ?? clusterId, userId, ...rest } as GraphClusterRecord;
+      return await this.graphClusters_col().findOne({ _id: docId } as any);
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.findCluster failed', { cause: String(err) });
     }
@@ -379,16 +327,12 @@ export class GraphRepositoryMongo implements GraphStore {
   /**
    * 특정 사용자의 모든 클러스터 목록을 조회합니다.
    * @param userId 사용자 ID
-   * @returns 클러스터 레코드 배열
+   * @returns 클러스터 문서 배열
    * @throws {UpstreamError} MongoDB 작업 실패 시
    */
-  async listClusters(userId: string): Promise<GraphClusterRecord[]> {
+  async listClusters(userId: string): Promise<GraphClusterDoc[]> {
     try {
-      const docs = await this.graphClusters_col().find({ userId } as any).toArray();
-      return docs.map(doc => {
-        const { clusterId, _id, ...rest } = doc as any;
-        return { id: clusterId, userId, ...rest } as GraphClusterRecord;
-      });
+      return await this.graphClusters_col().find({ userId } as any).toArray();
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.listClusters failed', { cause: String(err) });
     }
@@ -396,21 +340,12 @@ export class GraphRepositoryMongo implements GraphStore {
 
   /**
    * 그래프 통계를 저장합니다. 사용자 ID를 키로 사용합니다.
-   * @param stats 저장할 통계 레코드. `userId`는 필수입니다.
+   * @param stats 저장할 통계 문서.
    * @throws {UpstreamError} MongoDB 작업 실패 시
    */
-  async saveStats(stats: GraphStatsRecord, options?: RepoOptions): Promise<void> {
+  async saveStats(stats: GraphStatsDoc, options?: RepoOptions): Promise<void> {
     try {
-      const doc = {
-        _id: stats.userId,
-        userId: stats.userId,
-        nodes: stats.nodes,
-        edges: stats.edges,
-        clusters: stats.clusters,
-        generatedAt: stats.generatedAt ?? new Date().toISOString(),
-        metadata: stats.metadata ?? {},
-      } satisfies Record<string, unknown>;
-      await this.graphStats_col().updateOne({ _id: stats.userId } as any, { $set: doc }, { upsert: true, ...options });
+      await this.graphStats_col().updateOne({ _id: stats.userId } as any, { $set: stats }, { upsert: true, ...options });
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.saveStats failed', { cause: String(err) });
     }
@@ -419,15 +354,12 @@ export class GraphRepositoryMongo implements GraphStore {
   /**
    * 특정 사용자의 그래프 통계를 조회합니다.
    * @param userId 사용자 ID
-   * @returns 조회된 통계 레코드. 없으면 `null`을 반환합니다.
+   * @returns 조회된 통계 문서. 없으면 `null`을 반환합니다.
    * @throws {UpstreamError} MongoDB 작업 실패 시
    */
-  async getStats(userId: string): Promise<GraphStatsRecord | null> {
+  async getStats(userId: string): Promise<GraphStatsDoc | null> {
     try {
-      const doc = await this.graphStats_col().findOne({ _id: userId } as any);
-      if (!doc) return null;
-      const { _id, ...rest } = doc as any;
-      return { userId, ...rest } as GraphStatsRecord;
+      return await this.graphStats_col().findOne({ _id: userId } as any);
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.getStats failed', { cause: String(err) });
     }
