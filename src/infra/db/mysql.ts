@@ -1,7 +1,6 @@
-import fs from 'fs/promises';
-import path from 'path';
 import mysql from 'mysql2/promise';
 
+import { MYSQL_INIT_SCHEMA } from './mysql/schema'; // 스키마 import
 import { logger } from '../../shared/utils/logger';
 
 export type MySqlPool = mysql.Pool;
@@ -24,8 +23,9 @@ export async function initMySql(url: string) {
   });
 
   try {
-    const initSqlPath = path.join(__dirname, 'mysql/init/001_init.sql');
-    const sql = await fs.readFile(initSqlPath, 'utf-8');
+    // 파일 읽기 로직 제거하고 import한 상수 사용
+    const sql = MYSQL_INIT_SCHEMA;
+    
     // 세미콜론으로 분리하여 실행 (multipleStatements: true가 있어도 안전하게 분리 실행 권장)
     const statements = sql.split(';').map((s) => s.trim()).filter((s) => s.length > 0);
     for (const stmt of statements) {
@@ -33,7 +33,8 @@ export async function initMySql(url: string) {
     }
     logger.info({ event: 'db.init', system: 'mysql' }, 'Executed init SQL');
   } catch (err) {
-    logger.warn({ event: 'db.init_failed', system: 'mysql', err }, 'Failed to execute init SQL (file missing or error)');
+    logger.warn({ event: 'db.init_failed', system: 'mysql', err }, 'Failed to execute init SQL');
+    // 초기화 실패는 치명적일 수 있으나, 기존 로직 유지 (warn only)
   }
 
   await pool.query('SELECT 1');
