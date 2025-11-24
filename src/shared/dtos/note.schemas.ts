@@ -10,7 +10,7 @@ import { z } from 'zod';
  */
 export const createNoteSchema = z.object({
   /** 노트 제목 (선택). 생략 시 내용의 첫 줄이나 기본값 사용 */
-  title: z.string().optional(),
+  title: z.string().min(1).optional(),
   /** 노트 내용 (필수). Markdown 형식 */
   content: z.string().min(1, "Content is required"),
   /** 소속 폴더 ID (선택). 생략 또는 null 시 최상위 */
@@ -22,9 +22,9 @@ export const createNoteSchema = z.object({
  */
 export const updateNoteSchema = z.object({
   /** 변경할 제목 (선택) */
-  title: z.string().optional(),
+  title: z.string().min(1).optional(),
   /** 변경할 내용 (선택) */
-  content: z.string().optional(),
+  content: z.string().min(1).optional(),
   /** 이동할 폴더 ID (선택). null로 설정 시 최상위로 이동 */
   folderId: z.string().nullable().optional(),
 });
@@ -44,7 +44,7 @@ export const createFolderSchema = z.object({
  */
 export const updateFolderSchema = z.object({
   /** 변경할 폴더 이름 (선택) */
-  name: z.string().optional(),
+  name: z.string().min(1).optional(),
   /** 이동할 상위 폴더 ID (선택). null로 설정 시 최상위로 이동 */
   parentId: z.string().nullable().optional(),
 });

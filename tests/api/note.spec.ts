@@ -3,6 +3,7 @@
  * 접근: Service 레이어를 jest.mock으로 인메모리 구현으로 대체한다.
  */
 import request from 'supertest';
+
 import { createApp } from '../../src/bootstrap/server';
 
 // 인메모리 스토어
@@ -21,6 +22,23 @@ jest.mock('../../src/core/services/GoogleOAuthService', () => {
       }
       async exchangeCode(_code: string) { return { access_token: 'at', expires_in: 3600, token_type: 'Bearer' }; }
       async fetchUserInfo(_token: any) { return { sub: 'google-uid-1', email: 'u@example.com', name: 'U', picture: 'https://img' }; }
+    }
+  };
+});
+
+// Mock authLogin to bypass DB and ensure session is set
+jest.mock('../../src/app/utils/authLogin', () => {
+  return {
+    completeLogin: async (req: any, res: any, input: any) => {
+      // Mock user ID
+      const userId = 'u_1';
+      if (req.session) {
+        req.session.userId = userId;
+      }
+      if (res.cookie) {
+        res.cookie('gn-logged-in', '1');
+      }
+      return { userId };
     }
   };
 });
@@ -142,15 +160,25 @@ jest.mock('redis', () => ({
     disconnect: jest.fn().mockResolvedValue(undefined),
   }),
 }));
-jest.mock('connect-redis', () => ({
-  RedisStore: class {
-    constructor() {}
-    get(sid: string, cb: any) { cb(null, { userId: 'u_1' }); } // Always return session
-    set(sid: string, sess: any, cb: any) { cb(null); }
-    destroy(sid: string, cb: any) { cb(null); }
-    on(event: string, cb: any) { } // Mock event emitter
-  }
-}));
+jest.mock('connect-redis', () => {
+  const session = require('express-session');
+  const Store = session.Store;
+  const store = new Map();
+  return {
+    RedisStore: class extends Store {
+      constructor() { super(); }
+      get(sid: string, cb: any) { 
+        cb(null, store.get(sid)); 
+      }
+      set(sid: string, sess: any, cb: any) { 
+        store.set(sid, sess); 
+        cb(null); 
+      }
+      destroy(sid: string, cb: any) { store.delete(sid); cb(null); }
+      on(event: string, cb: any) { } // Mock event emitter
+    }
+  };
+});
 
 
 describe('Note API', () => {
@@ -181,16 +209,39 @@ describe('Note API', () => {
     const f1 = res1.body;
     expect(f1.name).toBe('Folder1');
 
+    // Validation Error (Create)
+    const res1Fail = await request(app).post('/v1/folders').set('Cookie', cookie).send({ name: '' }); // Empty name
+    expect(res1Fail.status).toBe(400);
+
     // List
     const res2 = await request(app).get('/v1/folders').set('Cookie', cookie);
     expect(res2.status).toBe(200);
     expect(res2.body).toHaveLength(1);
     expect(res2.body[0].id).toBe(f1.id);
 
+    // Get Detail (Success)
+    const resGet = await request(app).get(`/v1/folders/${f1.id}`).set('Cookie', cookie);
+    expect(resGet.status).toBe(200);
+    expect(resGet.body.id).toBe(f1.id);
+
+    // List with parentId (Cover query param branch)
+    // Create a folder with parentId
+    const resSub = await request(app).post('/v1/folders').set('Cookie', cookie).send({ name: 'SubFolder', parentId: 'root' });
+    expect(resSub.status).toBe(201);
+    
+    const res2Query = await request(app).get('/v1/folders').query({ parentId: 'root' }).set('Cookie', cookie);
+    expect(res2Query.status).toBe(200);
+    expect(res2Query.body).toHaveLength(1);
+    expect(res2Query.body[0].id).toBe(resSub.body.id);
+
     // Update
     const res3 = await request(app).patch(`/v1/folders/${f1.id}`).set('Cookie', cookie).send({ name: 'Folder1_Renamed' });
     expect(res3.status).toBe(200);
     expect(res3.body.name).toBe('Folder1_Renamed');
+
+    // Validation Error (Update)
+    const res3Fail = await request(app).patch(`/v1/folders/${f1.id}`).set('Cookie', cookie).send({ name: '' });
+    expect(res3Fail.status).toBe(400);
 
     // Delete
     const res4 = await request(app).delete(`/v1/folders/${f1.id}`).set('Cookie', cookie);
@@ -208,18 +259,45 @@ describe('Note API', () => {
     const n1 = res1.body;
     expect(n1.title).toBe('Note1');
 
+    // Validation Error (Create)
+    const res1Fail = await request(app).post('/v1/notes').set('Cookie', cookie).send({ title: '' }); // Empty title
+    expect(res1Fail.status).toBe(400);
+
     // List
     const res2 = await request(app).get('/v1/notes').set('Cookie', cookie);
     expect(res2.status).toBe(200);
     expect(res2.body).toHaveLength(1);
+
+    // List with folderId (Cover query param branch)
+    // Create a note in a folder
+    const resNoteInFolder = await request(app).post('/v1/notes').set('Cookie', cookie).send({ title: 'NoteInFolder', content: 'C', folderId: 'f_1' });
+    expect(resNoteInFolder.status).toBe(201);
+
+    const res2Query = await request(app).get('/v1/notes').query({ folderId: 'f_1' }).set('Cookie', cookie);
+    expect(res2Query.status).toBe(200);
+    expect(res2Query.body).toHaveLength(1);
+    expect(res2Query.body[0].id).toBe(resNoteInFolder.body.id);
+
+    // Get Detail (Missing in previous test)
+    const resGet = await request(app).get(`/v1/notes/${n1.id}`).set('Cookie', cookie);
+    expect(resGet.status).toBe(200);
+    expect(resGet.body.id).toBe(n1.id);
 
     // Update
     const res3 = await request(app).patch(`/v1/notes/${n1.id}`).set('Cookie', cookie).send({ content: 'Content_Updated' });
     expect(res3.status).toBe(200);
     expect(res3.body.content).toBe('Content_Updated');
 
+    // Validation Error (Update)
+    const res3Fail = await request(app).patch(`/v1/notes/${n1.id}`).set('Cookie', cookie).send({ title: '' });
+    expect(res3Fail.status).toBe(400);
+
     // Delete
     const res4 = await request(app).delete(`/v1/notes/${n1.id}`).set('Cookie', cookie);
     expect(res4.status).toBe(204);
+    
+    // Get 404
+    const res5 = await request(app).get(`/v1/notes/${n1.id}`).set('Cookie', cookie);
+    expect(res5.status).toBe(404);
   });
 });

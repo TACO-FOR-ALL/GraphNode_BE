@@ -3,6 +3,7 @@
  * 접근: NoteRepository를 인메모리 스텁으로 구현하여 서비스 로직만 검증한다.
  */
 import { ClientSession } from 'mongodb';
+
 import { NoteService } from '../../src/core/services/NoteService';
 import type { NoteRepository } from '../../src/core/ports/NoteRepository';
 import type { NoteDoc, FolderDoc } from '../../src/core/types/persistence/note.persistence';
@@ -206,5 +207,25 @@ describe('NoteService', () => {
     await expect(service.getFolder('u1', childFolder.id)).rejects.toThrow(NotFoundError);
     await expect(service.getNote('u1', noteInRoot.id)).rejects.toThrow(NotFoundError);
     await expect(service.getNote('u1', noteInChild.id)).rejects.toThrow(NotFoundError);
+  });
+
+  test('deleteFolder handles transaction error', async () => {
+    // Mock getMongo to throw error in transaction
+    const { getMongo } = require('../../src/infra/db/mongodb');
+    const originalGetMongo = getMongo();
+    
+    // Override mock for this test
+    require('../../src/infra/db/mongodb').getMongo = () => ({
+      startSession: () => ({
+        withTransaction: async () => { throw new Error('Tx Failed'); },
+        endSession: async () => {},
+      }),
+    });
+
+    const folder = await service.createFolder('u1', { name: 'F' });
+    await expect(service.deleteFolder('u1', folder.id)).rejects.toThrow('Tx Failed');
+
+    // Restore mock
+    require('../../src/infra/db/mongodb').getMongo = () => originalGetMongo;
   });
 });

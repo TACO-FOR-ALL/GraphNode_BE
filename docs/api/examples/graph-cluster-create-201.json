@@ -1,0 +1,10 @@
+{
+  "id": "cl_9876543210",
+  "userId": "u_1234567890",
+  "name": "Project Alpha",
+  "description": "Discussions related to Project Alpha development.",
+  "size": 15,
+  "themes": ["development", "planning", "architecture"],
+  "createdAt": "2025-01-01T10:00:00Z",
+  "updatedAt": "2025-01-01T10:00:00Z"
+}

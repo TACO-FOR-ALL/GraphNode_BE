@@ -1,0 +1,16 @@
+{
+  "$id": "https://graphnode.dev/schemas/note.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Note",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "ownerUserId": { "type": "string" },
+    "title": { "type": "string" },
+    "content": { "type": "string" },
+    "folderId": { "type": ["string", "null"], "format": "uuid" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["id", "ownerUserId", "title", "content", "createdAt", "updatedAt"]
+}

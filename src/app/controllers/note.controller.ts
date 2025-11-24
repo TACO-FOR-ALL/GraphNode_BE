@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { NoteService } from '../../core/services/NoteService';
 import { createNoteSchema, updateNoteSchema, createFolderSchema, updateFolderSchema } from '../../shared/dtos/note.schemas';
 import { ValidationError } from '../../shared/errors/domain';
+import { getUserIdFromRequest } from '../utils/request';
 
 /**
  * 모듈: NoteController
@@ -22,7 +23,7 @@ export class NoteController {
    * POST /v1/notes
    */
   async createNote(req: Request, res: Response) {
-    const userId = (req as any).userId;
+    const userId = getUserIdFromRequest(req)!;
     const validation = createNoteSchema.safeParse(req.body);
     if (!validation.success) {
       throw new ValidationError(validation.error.message);
@@ -36,7 +37,7 @@ export class NoteController {
    * GET /v1/notes/:id
    */
   async getNote(req: Request, res: Response) {
-    const userId = (req as any).userId;
+    const userId = getUserIdFromRequest(req)!;
     const { id } = req.params;
     const note = await this.noteService.getNote(userId, id);
     res.json(note);
@@ -47,7 +48,7 @@ export class NoteController {
    * GET /v1/notes?folderId=...
    */
   async listNotes(req: Request, res: Response) {
-    const userId = (req as any).userId;
+    const userId = getUserIdFromRequest(req)!;
     const folderId = typeof req.query.folderId === 'string' ? req.query.folderId : null;
     const notes = await this.noteService.listNotes(userId, folderId);
     res.json(notes);
@@ -58,7 +59,7 @@ export class NoteController {
    * PATCH /v1/notes/:id
    */
   async updateNote(req: Request, res: Response) {
-    const userId = (req as any).userId;
+    const userId = getUserIdFromRequest(req)!;
     const { id } = req.params;
     const validation = updateNoteSchema.safeParse(req.body);
     if (!validation.success) {
@@ -73,7 +74,7 @@ export class NoteController {
    * DELETE /v1/notes/:id
    */
   async deleteNote(req: Request, res: Response) {
-    const userId = (req as any).userId;
+    const userId = getUserIdFromRequest(req)!;
     const { id } = req.params;
     await this.noteService.deleteNote(userId, id);
     res.status(204).send();
@@ -86,7 +87,7 @@ export class NoteController {
    * POST /v1/folders
    */
   async createFolder(req: Request, res: Response) {
-    const userId = (req as any).userId;
+    const userId = getUserIdFromRequest(req)!;
     const validation = createFolderSchema.safeParse(req.body);
     if (!validation.success) {
       throw new ValidationError(validation.error.message);
@@ -100,7 +101,7 @@ export class NoteController {
    * GET /v1/folders/:id
    */
   async getFolder(req: Request, res: Response) {
-    const userId = (req as any).userId;
+    const userId = getUserIdFromRequest(req)!;
     const { id } = req.params;
     const folder = await this.noteService.getFolder(userId, id);
     res.json(folder);
@@ -111,7 +112,7 @@ export class NoteController {
    * GET /v1/folders?parentId=...
    */
   async listFolders(req: Request, res: Response) {
-    const userId = (req as any).userId;
+    const userId = getUserIdFromRequest(req)!;
     const parentId = typeof req.query.parentId === 'string' ? req.query.parentId : null;
     const folders = await this.noteService.listFolders(userId, parentId);
     res.json(folders);
@@ -122,7 +123,7 @@ export class NoteController {
    * PATCH /v1/folders/:id
    */
   async updateFolder(req: Request, res: Response) {
-    const userId = (req as any).userId;
+    const userId = getUserIdFromRequest(req)!;
     const { id } = req.params;
     const validation = updateFolderSchema.safeParse(req.body);
     if (!validation.success) {
@@ -137,7 +138,7 @@ export class NoteController {
    * DELETE /v1/folders/:id
    */
   async deleteFolder(req: Request, res: Response) {
-    const userId = (req as any).userId;
+    const userId = getUserIdFromRequest(req)!;
     const { id } = req.params;
     await this.noteService.deleteFolder(userId, id);
     res.status(204).send();

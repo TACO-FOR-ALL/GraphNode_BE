@@ -1,0 +1,11 @@
+{
+  "id": "e_1234567890",
+  "userId": "u_1234567890",
+  "source": 101,
+  "target": 102,
+  "weight": 0.85,
+  "type": "insight",
+  "intraCluster": true,
+  "createdAt": "2025-01-02T15:00:00Z",
+  "updatedAt": "2025-01-02T15:00:00Z"
+}
