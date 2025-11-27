@@ -1,50 +1,40 @@
 import { AsyncLocalStorage } from 'async_hooks';
 
 /**
- * ¸ğµâ: Request Context Store (¿äÃ» ÄÁÅØ½ºÆ® ÀúÀå¼Ò)
+ * ëª¨ë“ˆ: Request Context Store (ìš”ì²­ ì»¨í…ìŠ¤íŠ¸ ì €ì¥ì†Œ)
  * 
- * Ã¥ÀÓ:
- * - Node.jsÀÇ AsyncLocalStorage¸¦ »ç¿ëÇÏ¿© HTTP ¿äÃ»º°·Î °íÀ¯ÇÑ ÄÁÅØ½ºÆ® µ¥ÀÌÅÍ¸¦ ÀúÀåÇÏ°í °ü¸®ÇÕ´Ï´Ù.
- * - ¿äÃ»ÀÌ Ã³¸®µÇ´Â µ¿¾È ¾îµğ¼­µç(Service, Repository µî) ÇöÀç ¿äÃ»ÀÇ ¸ŞÅ¸µ¥ÀÌÅÍ(»ç¿ëÀÚ ID, ¿äÃ» ID µî)¿¡ Á¢±ÙÇÒ ¼ö ÀÖ°Ô ÇÕ´Ï´Ù.
- * - ÀÌ¸¦ ÅëÇØ ÇÔ¼ö ÀÎÀÚ·Î °è¼ÓÇØ¼­ context¸¦ ³Ñ°ÜÁÖÁö ¾Ê¾Æµµ µË´Ï´Ù (Thread-local storage¿Í À¯»ç).
+ * ì±…ì„:
+ * - Node.jsì˜ AsyncLocalStorageë¥¼ ì‚¬ìš©í•˜ì—¬ HTTP ìš”ì²­ë³„ë¡œ ê³ ìœ í•œ ì»¨í…ìŠ¤íŠ¸ ë°ì´í„°ë¥¼ ì €ì¥í•˜ê³  ê´€ë¦¬í•©ë‹ˆë‹¤.
+ * - ìš”ì²­ì´ ì²˜ë¦¬ë˜ëŠ” ë™ì•ˆ ì–´ë””ì„œë“ (Service, Repository ë“±) í˜„ì¬ ìš”ì²­ì˜ ë©”íƒ€ë°ì´í„°(ì‚¬ìš©ì ID, ìš”ì²­ ID ë“±)ì— ì ‘ê·¼í•  ìˆ˜ ìˆê²Œ í•©ë‹ˆë‹¤.
+ * - ì´ë¥¼ í†µí•´ í•¨ìˆ˜ ì¸ìë¡œ ê³„ì†í•´ì„œ contextë¥¼ ë„˜ê²¨ì£¼ì§€ ì•Šì•„ë„ ë©ë‹ˆë‹¤ (Thread-local storageì™€ ìœ ì‚¬).
  */
 
 /**
- * ¿äÃ» ÄÁÅØ½ºÆ® Å¸ÀÔ Á¤ÀÇ
+ * ìš”ì²­ ì»¨í…ìŠ¤íŠ¸ íƒ€ì… ì •ì˜
  */
 export type RequestContext = {
-  /** ¿äÃ» °íÀ¯ ID (ÃßÀû¿ë, Trace ID) */
+  /** ìš”ì²­ ê³ ìœ  ID (ì¶”ì ìš©, Trace ID) */
   correlationId: string;
-  /** ÇöÀç ·Î±×ÀÎÇÑ »ç¿ëÀÚ ID (¾øÀ¸¸é ºñ·Î±×ÀÎ) */
+  /** í˜„ì¬ ë¡œê·¸ì¸í•œ ì‚¬ìš©ì ID (ì—†ìœ¼ë©´ ë¹„ë¡œê·¸ì¸) */
   userId?: string;
-  /** Å¬¶óÀÌ¾ğÆ® IP ÁÖ¼Ò */
+  /** í´ë¼ì´ì–¸íŠ¸ IP ì£¼ì†Œ */
   ip?: string;
-  /** User-Agent Çì´õ °ª */
+  /** User-Agent í—¤ë” ê°’ */
   userAgent?: string;
-  // ÃßÈÄ È®Àå: ¿ªÇÒ(roles), Å¬¶óÀÌ¾ğÆ® ID, Çì´õ ½º³À¼¦ µî
+  // ì¶”í›„ í™•ì¥: ì—­í• (roles), í´ë¼ì´ì–¸íŠ¸ ID, í—¤ë” ìŠ¤ëƒ…ìƒ· ë“±
 };
 
-/**
- * Àü¿ª AsyncLocalStorage ÀÎ½ºÅÏ½º
- * ÀÌ °´Ã¼¸¦ ÅëÇØ ÄÁÅØ½ºÆ®¸¦ ÀúÀå(run)ÇÏ°í Á¶È¸(getStore)ÇÕ´Ï´Ù.
- */
 export const requestStore = new AsyncLocalStorage<RequestContext>();
 
-/**
- * ÇöÀç ½ÇÇà ÁßÀÎ ¿äÃ»ÀÇ ÄÁÅØ½ºÆ®¸¦ °¡Á®¿É´Ï´Ù.
- * 
- * @returns ÇöÀç ¿äÃ»ÀÇ RequestContext °´Ã¼, ¶Ç´Â ¿äÃ» ¹üÀ§ ¹ÛÀÌ¶ó¸é undefined
- */
 export function getRequestContext(): RequestContext | undefined {
   return requestStore.getStore();
 }
 
+
 /**
- * ÇöÀç ¿äÃ»ÀÇ Correlation ID(ÃßÀû ID)¸¦ °¡Á®¿É´Ï´Ù.
- * 
- * @returns Correlation ID ¹®ÀÚ¿­, ¶Ç´Â undefined
+ * Retrieves the correlation ID from the current request context.
+ * @returns The correlation ID, or undefined if not in a request scope.
  */
 export function getCorrelationId(): string | undefined {
   return getRequestContext()?.correlationId;
 }
-
