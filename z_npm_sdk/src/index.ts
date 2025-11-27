@@ -9,10 +9,12 @@ export { MeApi } from './endpoints/me.js';
 export { ConversationsApi } from './endpoints/conversations.js';
 export { GoogleAuthApi } from './endpoints/auth.google.js';
 export { GraphApi } from './endpoints/graph.js';
+export { NoteApi } from './endpoints/note.js';
 
 // Types
 export type { ProblemDetails } from './types/problem.js';
 export type { MeResponseDto, MeProfileDto } from './types/me.js';
 export type { ConversationDto, ConversationCreateDto, ConversationUpdateDto, ConversationBulkCreateDto } from './types/conversation.js';
 export type { MessageDto, MessageCreateDto, MessageUpdateDto } from './types/message.js';
+export type { NoteDto, NoteCreateDto, NoteUpdateDto, FolderDto, FolderCreateDto, FolderUpdateDto } from './types/note.js';
 

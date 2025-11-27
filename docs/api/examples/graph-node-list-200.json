@@ -1,0 +1,24 @@
+[
+  {
+    "id": 101,
+    "userId": "u_1234567890",
+    "origId": "c_abcdef123456",
+    "clusterId": "cl_9876543210",
+    "clusterName": "Project Alpha",
+    "timestamp": "2025-01-01T12:00:00Z",
+    "numMessages": 5,
+    "createdAt": "2025-01-01T12:00:00Z",
+    "updatedAt": "2025-01-01T12:00:00Z"
+  },
+  {
+    "id": 102,
+    "userId": "u_1234567890",
+    "origId": "c_abcdef654321",
+    "clusterId": "cl_9876543210",
+    "clusterName": "Project Alpha",
+    "timestamp": "2025-01-02T14:30:00Z",
+    "numMessages": 3,
+    "createdAt": "2025-01-02T14:30:00Z",
+    "updatedAt": "2025-01-02T14:30:00Z"
+  }
+]

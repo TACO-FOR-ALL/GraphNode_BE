@@ -1,0 +1,11 @@
+{
+  "userId": "u_1234567890",
+  "nodes": 150,
+  "edges": 300,
+  "clusters": 12,
+  "generatedAt": "2025-01-03T09:00:00Z",
+  "metadata": {
+    "version": "1.0",
+    "status": "healthy"
+  }
+}

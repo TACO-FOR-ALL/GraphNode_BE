@@ -5,6 +5,7 @@ import { MeApi } from './endpoints/me.js';
 import { ConversationsApi } from './endpoints/conversations.js';
 import { GoogleAuthApi } from './endpoints/auth.google.js';
 import { GraphApi } from './endpoints/graph.js';
+import { NoteApi } from './endpoints/note.js';
 
 // FE에서는 baseUrl을 전달할 수 없도록, 옵션에서 baseUrl 제거
 export interface GraphNodeClientOptions extends Omit<BuilderOptions, 'baseUrl'> {}
@@ -15,6 +16,7 @@ export class GraphNodeClient {
   readonly conversations: ConversationsApi;
   readonly googleAuth: GoogleAuthApi;
   readonly graph: GraphApi;
+  readonly note: NoteApi;
   private readonly rb: RequestBuilder;
 
   constructor(opts: GraphNodeClientOptions = {}) {
@@ -42,6 +44,7 @@ export class GraphNodeClient {
     this.conversations = new ConversationsApi(this.rb);
     this.googleAuth = new GoogleAuthApi(GRAPHNODE_BASE_URL);
     this.graph = new GraphApi(this.rb);
+    this.note = new NoteApi(this.rb);
   }
 }
 

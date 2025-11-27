@@ -1,4 +1,4 @@
-openapi: 3.1.0
+﻿openapi: 3.1.0
 info:
   title: GraphNode API
   version: 0.1.0
@@ -171,7 +171,7 @@ paths:
               schema:
                 $ref: ../schemas/problem.json
               example:
-                $ref: ./examples/problem-400.json
+                $ref: './examples/problem-400.json'
         '401':
           description: Not authenticated
           content:
@@ -179,7 +179,7 @@ paths:
               schema:
                 $ref: ../schemas/problem.json
               example:
-                $ref: ./examples/me-get-401.json
+                $ref: './examples/me-get-401.json'
   /v1/ai/conversations:
     post:
       summary: Create conversation
@@ -411,6 +411,9 @@ paths:
             application/json:
               schema:
                 $ref: ../schemas/graph-node.json
+              examples:
+                default:
+                  $ref: '#/components/examples/graphNodeCreate201'
         '400':
           description: Bad Request (validation error).
           content:
@@ -435,6 +438,9 @@ paths:
                 type: array
                 items:
                   $ref: ../schemas/graph-node.json
+              examples:
+                default:
+                  $ref: '#/components/examples/graphNodeList200'
         '401':
           description: Not authenticated.
           content:
@@ -561,6 +567,9 @@ paths:
                 properties:
                   id:
                     type: string
+              examples:
+                default:
+                  $ref: '#/components/examples/graphEdgeCreate201'
         '400':
           description: Bad Request.
           content:
@@ -584,6 +593,9 @@ paths:
                 type: array
                 items:
                   $ref: ../schemas/graph-edge.json
+              examples:
+                default:
+                  $ref: '#/components/examples/graphEdgeList200'
         '401':
           description: Not authenticated.
           content:
@@ -624,6 +636,9 @@ paths:
             application/json:
               schema:
                 $ref: ../schemas/graph-cluster.json
+              examples:
+                default:
+                  $ref: '#/components/examples/graphClusterCreate201'
         '400':
           description: Bad Request.
           content:
@@ -647,6 +662,9 @@ paths:
                 type: array
                 items:
                   $ref: ../schemas/graph-cluster.json
+              examples:
+                default:
+                  $ref: '#/components/examples/graphClusterList200'
         '401':
           description: Not authenticated.
           content:
@@ -726,6 +744,9 @@ paths:
             application/json:
               schema:
                 $ref: ../schemas/graph-stats.json
+              examples:
+                default:
+                  $ref: '#/components/examples/graphStats200'
         '401':
           description: Not authenticated.
           content:
@@ -742,6 +763,9 @@ paths:
             application/json:
               schema:
                 $ref: ../schemas/graph-snapshot.json
+              examples:
+                default:
+                  $ref: '#/components/examples/graphSnapshot200'
         '401':
           description: Not authenticated.
           content:
@@ -776,6 +800,296 @@ paths:
             application/problem+json:
               schema:
                 $ref: ../schemas/problem.json
+  /v1/notes:
+    post:
+      summary: Create a note
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                content: { type: string }
+                folderId: { type: string, format: uuid }
+              required: [title, content]
+      responses:
+        '201':
+          description: Note created
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/note.json
+              examples:
+                default:
+                  $ref: '#/components/examples/noteCreate201'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+    get:
+      summary: List notes
+      parameters:
+        - in: query
+          name: folderId
+          schema: { type: string, format: uuid }
+          description: Filter by folder ID
+      responses:
+        '200':
+          description: List of notes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: ../schemas/note.json
+              examples:
+                default:
+                  $ref: '#/components/examples/noteList200'
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/notes/{id}:
+    get:
+      summary: Get a note
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Note details
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/note.json
+        '404':
+          description: Note not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+    patch:
+      summary: Update a note
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                content: { type: string }
+                folderId: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Note updated
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/note.json
+        '404':
+          description: Note not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+    delete:
+      summary: Delete a note
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Note deleted
+        '404':
+          description: Note not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/folders:
+    post:
+      summary: Create a folder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                parentId: { type: string, format: uuid }
+              required: [name]
+      responses:
+        '201':
+          description: Folder created
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/folder.json
+              examples:
+                default:
+                  $ref: '#/components/examples/folderCreate201'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+    get:
+      summary: List folders
+      parameters:
+        - in: query
+          name: parentId
+          schema: { type: string, format: uuid }
+          description: Filter by parent folder ID
+      responses:
+        '200':
+          description: List of folders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: ../schemas/folder.json
+              examples:
+                default:
+                  $ref: '#/components/examples/folderList200'
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/folders/{id}:
+    get:
+      summary: Get a folder
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Folder details
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/folder.json
+        '404':
+          description: Folder not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+    patch:
+      summary: Update a folder
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                parentId: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Folder updated
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/folder.json
+        '404':
+          description: Folder not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+    delete:
+      summary: Delete a folder
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Folder deleted
+        '404':
+          description: Folder not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
 components:
   schemas:
     Problem:
@@ -794,6 +1108,10 @@ components:
       $ref: ../schemas/graph-stats.json
     GraphSnapshot:
       $ref: ../schemas/graph-snapshot.json
+    Note:
+      $ref: ../schemas/note.json
+    Folder:
+      $ref: ../schemas/folder.json
   examples:
     meGet200:
       externalValue: ./examples/me-get-200.json
@@ -809,3 +1127,27 @@ components:
       externalValue: ./examples/problem-502.json
     me401:
       externalValue: ./examples/me-get-401.json
+    graphNodeCreate201:
+      externalValue: ./examples/graph-node-create-201.json
+    graphNodeList200:
+      externalValue: ./examples/graph-node-list-200.json
+    graphEdgeCreate201:
+      externalValue: ./examples/graph-edge-create-201.json
+    graphEdgeList200:
+      externalValue: ./examples/graph-edge-list-200.json
+    graphClusterCreate201:
+      externalValue: ./examples/graph-cluster-create-201.json
+    graphClusterList200:
+      externalValue: ./examples/graph-cluster-list-200.json
+    graphStats200:
+      externalValue: ./examples/graph-stats-200.json
+    graphSnapshot200:
+      externalValue: ./examples/graph-snapshot-200.json
+    noteCreate201:
+      externalValue: ./examples/note-create-201.json
+    noteList200:
+      externalValue: ./examples/note-list-200.json
+    folderCreate201:
+      externalValue: ./examples/folder-create-201.json
+    folderList200:
+      externalValue: ./examples/folder-list-200.json
