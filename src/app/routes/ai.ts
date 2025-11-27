@@ -10,13 +10,19 @@ import { AiController } from '../controllers/ai';
 import { asyncHandler } from '../utils/asyncHandler';
 import { bindSessionUser } from '../middlewares/session';
 import { requireLogin } from '../middlewares/auth';
+import { AIChatService } from '../../core/services/AIChatService';
 
 export function createAiRouter(deps: {
   conversationService: ConversationService;
   messageService: MessageService;
+  aiChatService: AIChatService;
 }) {
   const router = Router();
-  const aiController = new AiController(deps.conversationService, deps.messageService);
+  const aiController = new AiController(
+    deps.conversationService, 
+    deps.messageService,
+    deps.aiChatService
+  );
 
   // 보호 구역(세션 바인딩 + 인증)
   router.use(bindSessionUser, requireLogin);

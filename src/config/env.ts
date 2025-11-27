@@ -2,31 +2,44 @@ import { z } from 'zod';
 import 'dotenv/config';
 
 /**
- * 환경변수 스키마 및 로더 모듈
- * 책임: 앱 부팅 전에 필요한 ENV를 모두 검증한다.
- * 정책: 누락/형식 오류 시 즉시 종료(안전 실패).
+ * 모듈: 환경 변수 설정 및 검증 (Environment Configuration)
+ * 
+ * 책임:
+ * - 애플리케이션 실행에 필요한 환경 변수(Environment Variables)를 로드합니다.
+ * - Zod 라이브러리를 사용하여 환경 변수의 타입과 유효성을 검증합니다.
+ * - 필수 환경 변수가 누락되거나 형식이 잘못된 경우, 애플리케이션 시작을 중단하여 안전성을 보장합니다.
+ * 
+ * 이 모듈은 'Fail Fast' 원칙을 따릅니다. 설정 오류가 있다면 서버가 켜지기 전에 즉시 알려줍니다.
  */
+
+// 환경 변수 스키마 정의 (Zod)
 const EnvSchema = z.object({
+  // 실행 환경 (개발, 테스트, 운영)
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  
+  // 서버 포트 (기본값 3000)
   PORT: z.coerce.number().int().positive().default(3000),
+  
+  // 데이터베이스 연결 URL
   MYSQL_URL: z.string().min(1, 'MYSQL_URL required'),
   MONGODB_URL: z.string().min(1, 'MONGODB_URL required'),
-  // OAuth (Google)
+  
+  // OAuth (Google 로그인) 설정
   OAUTH_GOOGLE_CLIENT_ID: z.string().min(1, 'OAUTH_GOOGLE_CLIENT_ID required'),
   OAUTH_GOOGLE_CLIENT_SECRET: z.string().min(1, 'OAUTH_GOOGLE_CLIENT_SECRET required'),
   OAUTH_GOOGLE_REDIRECT_URI: z.string().url('OAUTH_GOOGLE_REDIRECT_URI must be URL'),
   
-  // Qdrant(VectorDB)
+  // Qdrant (벡터 데이터베이스) 설정 - AI 검색용
   QDRANT_URL: z.string().min(1, 'QDRANT_URL must be URL'),
   QDRANT_API_KEY: z.string().min(1, 'QDRANT_API_KEY required'),
   QDRANT_COLLECTION_NAME: z.string().min(1, 'QDRANT_COLLECTION_NAME required'),
-  QDRANT_VECTOR_SIZE: z.coerce.number().int().positive().default(1536),
-  QDRANT_DISTANCE_METRIC: z.enum(['Cosine', 'Euclidean']).default('Cosine'),
+  QDRANT_VECTOR_SIZE: z.coerce.number().int().positive().default(1536), // OpenAI 임베딩 차원 수
+  QDRANT_DISTANCE_METRIC: z.enum(['Cosine', 'Euclidean']).default('Cosine'), // 거리 측정 방식
 
-  // Redis
+  // Redis (캐시 및 세션 저장소) 설정
   REDIS_URL: z.string().min(1, 'REDIS_URL required'),
 
-  // Cookies
+  // 쿠키 보안 설정 (개발 환경에서 HTTPS가 아닐 때 사용)
   DEV_INSECURE_COOKIES: z
     .string()
     .optional()
@@ -34,36 +47,40 @@ const EnvSchema = z.object({
 });
 
 /**
- * ENV 타입(검증 후 파싱된 환경변수 집합)
- * @property NODE_ENV 실행 환경
- * @property PORT 리스닝 포트
- * @property MYSQL_URL MySQL 연결 DSN
- * @property MONGODB_URL MongoDB 연결 DSN
- * @property OAUTH_GOOGLE_CLIENT_ID Google OAuth 클라이언트 ID
- * @property OAUTH_GOOGLE_CLIENT_SECRET Google OAuth 클라이언트 시크릿(민감정보)
- * @property OAUTH_GOOGLE_REDIRECT_URI Google OAuth 리디렉션 URI
- * @property REDIS_URL Redis 연결 DSN
- * @property DEV_INSECURE_COOKIES 개발용 Secure 쿠키 비활성화 토글(true/false)
+ * Env 타입 정의
+ * 
+ * 검증이 완료된 환경 변수 객체의 타입입니다.
+ * 코드 내에서 process.env 대신 이 타입을 사용하여 자동 완성과 타입 안전성을 얻을 수 있습니다.
  */
 export type Env = z.infer<typeof EnvSchema>;
 
 /**
- * ENV를 로드/검증하여 반환한다.
- * @returns 유효한 환경 변수 모음(파싱/기본값 반영)
- * @throws 프로세스 종료(누락/형식 오류 시). 요약은 stderr에 출력.
- * @example
- * const env = loadEnv();
- * console.log(env.PORT);
+ * 환경 변수 로드 및 검증 함수
+ * 
+ * 역할:
+ * 1. process.env에서 환경 변수를 읽어옵니다.
+ * 2. EnvSchema를 사용하여 유효성을 검사합니다.
+ * 3. 검증에 실패하면 에러 로그를 출력하고 프로세스를 종료합니다 (exit code 1).
+ * 4. 성공하면 파싱된 환경 변수 객체를 반환합니다.
+ * 
+ * @returns 검증된 환경 변수 객체 (Env)
  */
 export function loadEnv(): Env {
   const parsed = EnvSchema.safeParse(process.env);
+  
   if (!parsed.success) {
+    // 검증 실패 시 에러 메시지 구성
     const issues = parsed.error.issues
       .map(i => `${String(i.path.join('.'))}: ${i.message}`)
       .join(', ');
+      
+    // 에러 로그 출력 (console.error 사용)
     // eslint-disable-next-line no-console
     console.error('ENV_VALIDATION_FAILED:', issues);
+    
+    // 치명적인 오류이므로 프로세스 종료
     process.exit(1);
   }
+  
   return parsed.data;
 }
