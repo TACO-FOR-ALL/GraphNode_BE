@@ -10,12 +10,13 @@ import cors from 'cors';
 // import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { RedisStore } from 'connect-redis';
-import { createClient } from "redis"
+import { createClient } from 'redis';
 // import { AddressInfo } from 'net';
 
 import healthRouter from '../app/routes/health';
 import { loadEnv } from '../config/env';
 import authGoogleRouter from '../app/routes/auth.google';
+import authAppleRouter from '../app/routes/auth.apple';
 import meRouter from '../app/routes/me';
 import authSessionRouter from '../app/routes/auth.session';
 import { requestContext } from '../app/middlewares/request-context';
@@ -26,9 +27,8 @@ import { NotFoundError } from '../shared/errors/domain';
 // AI 라우터 import
 import { initDatabases } from '../infra/db';
 import { makeAiRouter } from './modules/ai.module'; // <-- 조립 모듈 사용
-import { makeGraphRouter } from "./modules/graph.module"; // Graph 모듈 임포트
+import { makeGraphRouter } from './modules/graph.module'; // Graph 모듈 임포트
 import { makeNoteRouter } from './modules/note.module'; // Note 모듈 임포트
-
 
 /**
  * Express 앱 부트스트랩.
@@ -58,7 +58,7 @@ export function createApp() {
   const redisClient = createClient({
     url: env.REDIS_URL,
   });
-  redisClient.connect().catch(err => {
+  redisClient.connect().catch((err) => {
     throw new Error('Failed to connect to Redis: ' + err.message);
   });
 
@@ -71,20 +71,22 @@ export function createApp() {
   const devInsecure = !!env.DEV_INSECURE_COOKIES;
   const isProd = env.NODE_ENV === 'production';
   const cookieName = isProd && !devInsecure ? '__Host-session' : 'sid';
-  app.use(session({
-    store: redisStore,
-    name: cookieName,
-    secret: process.env.SESSION_SECRET || 'dev-secret-change-me',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      sameSite: 'none',
-      secure: isProd && !devInsecure,
-      path: '/',
-      maxAge: 1000 * 60 * 60 * 24 * 365 // ~1 year
-    }
-  }));
+  app.use(
+    session({
+      store: redisStore,
+      name: cookieName,
+      secret: process.env.SESSION_SECRET || 'dev-secret-change-me',
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        httpOnly: true,
+        sameSite: 'none',
+        secure: isProd && !devInsecure,
+        path: '/',
+        maxAge: 1000 * 60 * 60 * 24 * 365, // ~1 year
+      },
+    })
+  );
 
   // Health endpoints: available at /healthz and /v1/healthz
   app.use('/', healthRouter);
@@ -100,11 +102,10 @@ export function createApp() {
 
   // Auth routes
   app.use('/auth/google', authGoogleRouter);
+  app.use('/auth/apple', authAppleRouter);
   app.use('/v1/me', meRouter);
   app.use('/auth', authSessionRouter);
 
-
-  
   // 404 fall-through → Problem Details 형식으로 응답
   app.use((req, _res, next) => {
     next(new NotFoundError('Not Found'));
@@ -123,28 +124,22 @@ export async function bootstrap() {
   return { app, database };
 }
 
-
-
-
-
-
-
 // console.log('[TRACE] Main: calling bootstrap...');
 
 // bootstrap()
 //   .then(({ app }) => {
 //     console.log('[TRACE] Main: bootstrap resolved!');
-    
+
 //     const port = process.env.PORT || 3000;
 //     console.log(`[TRACE] Main: about to call app.listen on port ${port}`);
-    
+
 //     const server = app.listen(port, () => {
 //       console.log('[TRACE] Main: app.listen callback fired!');
 //       logger.info({ event: 'server.started', port, url: `http://localhost:${port}` }, 'Server is running');
 //     });
-    
+
 //     console.log('[TRACE] Main: app.listen returned server instance');
-    
+
 //     // 핸들 누수 확인
 //     setTimeout(() => {
 //       console.log('[TRACE] Active handles:', (process as any)._getActiveHandles?.()?.length);
@@ -158,4 +153,3 @@ export async function bootstrap() {
 //   });
 
 // console.log('[TRACE] Main: bootstrap() called (async)');
-

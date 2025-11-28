@@ -15,7 +15,14 @@ const EnvSchema = z.object({
   OAUTH_GOOGLE_CLIENT_ID: z.string().min(1, 'OAUTH_GOOGLE_CLIENT_ID required'),
   OAUTH_GOOGLE_CLIENT_SECRET: z.string().min(1, 'OAUTH_GOOGLE_CLIENT_SECRET required'),
   OAUTH_GOOGLE_REDIRECT_URI: z.string().url('OAUTH_GOOGLE_REDIRECT_URI must be URL'),
-  
+
+  // OAuth (Apple)
+  OAUTH_APPLE_CLIENT_ID: z.string().min(1, 'OAUTH_APPLE_CLIENT_ID required'),
+  OAUTH_APPLE_TEAM_ID: z.string().min(1, 'OAUTH_APPLE_TEAM_ID required'),
+  OAUTH_APPLE_KEY_ID: z.string().min(1, 'OAUTH_APPLE_KEY_ID required'),
+  OAUTH_APPLE_PRIVATE_KEY: z.string().min(1, 'OAUTH_APPLE_PRIVATE_KEY required'),
+  OAUTH_APPLE_REDIRECT_URI: z.string().url('OAUTH_APPLE_REDIRECT_URI must be URL'),
+
   // Qdrant(VectorDB)
   QDRANT_URL: z.string().min(1, 'QDRANT_URL must be URL'),
   QDRANT_API_KEY: z.string().min(1, 'QDRANT_API_KEY required'),
@@ -30,7 +37,7 @@ const EnvSchema = z.object({
   DEV_INSECURE_COOKIES: z
     .string()
     .optional()
-    .transform(v => v === 'true')
+    .transform((v) => v === 'true'),
 });
 
 /**
@@ -59,7 +66,7 @@ export function loadEnv(): Env {
   const parsed = EnvSchema.safeParse(process.env);
   if (!parsed.success) {
     const issues = parsed.error.issues
-      .map(i => `${String(i.path.join('.'))}: ${i.message}`)
+      .map((i) => `${String(i.path.join('.'))}: ${i.message}`)
       .join(', ');
     // eslint-disable-next-line no-console
     console.error('ENV_VALIDATION_FAILED:', issues);
