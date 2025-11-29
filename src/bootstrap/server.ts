@@ -38,6 +38,8 @@ import { makeNoteRouter } from './modules/note.module'; // Note 모듈 임포트
  */
 export function createApp() {
   const app = express();
+
+  app.set('trust proxy', 1);
   // app.use(helmet());
   app.use(cors({ origin: true, credentials: true }));
   app.use(express.json());
@@ -71,6 +73,19 @@ export function createApp() {
   const devInsecure = !!env.DEV_INSECURE_COOKIES;
   const isProd = env.NODE_ENV === 'production';
   const cookieName = isProd && !devInsecure ? '__Host-session' : 'sid';
+
+  const cookieConfig = isProd
+    ? {
+        httpOnly: true,
+        sameSite: 'none' as const,
+        secure: true,
+      }
+    : {
+        httpOnly: true,
+        sameSite: 'lax' as const,
+        secure: false,
+      };
+
   app.use(
     session({
       store: redisStore,
@@ -79,9 +94,7 @@ export function createApp() {
       resave: false,
       saveUninitialized: false,
       cookie: {
-        httpOnly: true,
-        sameSite: 'none',
-        secure: isProd && !devInsecure,
+        ...cookieConfig,
         path: '/',
         maxAge: 1000 * 60 * 60 * 24 * 365, // ~1 year
       },
