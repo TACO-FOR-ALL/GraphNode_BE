@@ -1,6 +1,5 @@
 
 import type { Request } from 'express';
-import type { SessionData } from 'express-session';
 
 /**
  * 요청 req의 Session을 express-session.d.ts의 SessionData 타입으로 간주하고,
@@ -9,7 +8,7 @@ import type { SessionData } from 'express-session';
  * @param userId 저장할 사용자 ID
  */
 export function bindUserIdToSession(req: Request, userId: string): void {
-  (req.session as SessionData).userId = userId;
+  (req.session as any).userId = userId;
 }
 
 

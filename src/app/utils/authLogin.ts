@@ -7,7 +7,7 @@ import type { Request, Response } from 'express';
 
 import { UserRepositoryMySQL } from '../../infra/repositories/UserRepositoryMySQL';
 import { setHelperLoginCookies } from './sessionCookies';
-import type { Provider } from '../../core/types/persistence/UserPersistence';
+import type { Provider, User } from '../../core/types/persistence/UserPersistence';
 import {bindUserIdToSession} from "./request";
 
 export interface ProviderUserInput {
@@ -31,7 +31,7 @@ export interface LoginResult {
  */
 export async function completeLogin(req: Request, res: Response, input: ProviderUserInput): Promise<LoginResult> {
   const repo = new UserRepositoryMySQL();
-  const user = await repo.findOrCreateFromProvider({
+  const user : User = await repo.findOrCreateFromProvider({
     provider: input.provider,
     providerUserId: input.providerUserId,
     email: input.email,
@@ -39,18 +39,26 @@ export async function completeLogin(req: Request, res: Response, input: Provider
     avatarUrl: input.avatarUrl
   });
 
+
+
   // 세션에 사용자 ID 바인딩
   bindUserIdToSession(req, user.id);
+
 
   //세션을 외부 redis session store에 저장
   await new Promise<void>((resolve, reject) => {
     req.session!.save((err) => {
       if (err) {
         reject(err);
+
+        return;
       }
+
       resolve();
     })
   })
+
+
 
   // 표시용 보조 쿠키 설정
   setHelperLoginCookies(res, {
