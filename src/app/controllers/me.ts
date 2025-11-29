@@ -6,13 +6,14 @@ import type { Request, Response, NextFunction } from 'express';
 
 import type { MeResponseDto, UserProfileDto } from '../../shared/dtos/me';
 import { AuthError } from '../../shared/errors/domain';
+import { getUserIdFromRequest } from '../utils/request';
 
 /**
  * GET /v1/me — 세션 기반으로 인증 상태 반환
  */
 export function getMe(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).userId;
+    const userId = getUserIdFromRequest(req)!;
     if (userId) {
       const body: MeResponseDto = { userId };
       const profCookie = (req as any).cookies?.['gn-profile'];

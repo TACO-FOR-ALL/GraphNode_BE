@@ -42,11 +42,22 @@ export async function completeLogin(req: Request, res: Response, input: Provider
   // 세션에 사용자 ID 바인딩
   bindUserIdToSession(req, user.id);
 
+  //세션을 외부 redis session store에 저장
+  await new Promise<void>((resolve, reject) => {
+    req.session!.save((err) => {
+      if (err) {
+        reject(err);
+      }
+      resolve();
+    })
+  })
+
   // 표시용 보조 쿠키 설정
   setHelperLoginCookies(res, {
     id: user.id,
     displayName: user.displayName ?? null,
-    avatarUrl: user.avatarUrl ?? null
+    avatarUrl: user.avatarUrl ?? null,
+    email: user.email ?? null,
   });
 
   return { userId: user.id };

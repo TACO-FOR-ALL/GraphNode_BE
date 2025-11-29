@@ -38,12 +38,15 @@ import { makeNoteRouter } from './modules/note.module'; // Note 모듈 임포트
  */
 export function createApp() {
   const app = express();
+  const env = loadEnv();
+
+  const sessionSecert = process.env.SESSION_SECRET || 'dev-secret-change-me';
 
   app.set('trust proxy', 1);
   // app.use(helmet());
   app.use(cors({ origin: true, credentials: true }));
   app.use(express.json());
-  app.use(cookieParser());
+  app.use(cookieParser(sessionSecert));
   app.use(requestContext);
   app.use(httpLogger);
 
@@ -54,7 +57,7 @@ export function createApp() {
    * - 운영: name="__Host-session", secure=true, Path=/, HttpOnly, SameSite=Strict
    * - maxAge: 사실상 무기한 UX를 위해 1년(정책상 롤링 가능)
    */
-  const env = loadEnv();
+   
 
   // Initialize client.
   const redisClient = createClient({
@@ -90,7 +93,7 @@ export function createApp() {
     session({
       store: redisStore,
       name: cookieName,
-      secret: process.env.SESSION_SECRET || 'dev-secret-change-me',
+      secret: sessionSecert,
       resave: false,
       saveUninitialized: false,
       cookie: {
