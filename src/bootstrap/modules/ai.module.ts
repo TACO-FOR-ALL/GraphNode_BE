@@ -10,6 +10,7 @@ import { ConversationService } from '../../core/services/ConversationService';
 import { MessageService } from '../../core/services/MessageService';
 import { createAuditProxy } from '../../shared/audit/auditProxy';
 import { createAiRouter } from '../../app/routes/ai';
+import { AIChatService } from '../../core/services/AIChatService';
 
 export function makeAiRouter(): Router {
   // Repositories
@@ -22,6 +23,14 @@ export function makeAiRouter(): Router {
   const conversationService = createAuditProxy(rawConversationService, 'ConversationService');
   const messageService = createAuditProxy(rawMessageService, 'MessageService');
 
+
+  const rawAIChatService = new AIChatService(conversationService, messageService);
+  const aiChatService = createAuditProxy(rawAIChatService, 'AIChatService');
+
+
   // Router(factory)
-  return createAiRouter({ conversationService, messageService });
+  return createAiRouter({ 
+    conversationService, 
+    messageService,
+    aiChatService });
 }

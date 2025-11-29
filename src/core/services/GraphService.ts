@@ -19,22 +19,30 @@ import {
 } from '../../shared/mappers/graph';
 
 /**
- * GraphService: graph persistence and basic graph queries.
- * - Delegates to GraphStore (port) for DB operations.
- * - **Rule 1**: Service handles DTOs/Domain objects and uses Mappers to talk to Repo (which uses Docs).
+ * 모듈: GraphService (그래프 서비스)
+ * 
+ * 책임:
+ * - 그래프 데이터(노드, 엣지, 클러스터)의 비즈니스 로직을 처리합니다.
+ * - DTO(Data Transfer Object)를 사용하여 데이터를 주고받습니다.
+ * - GraphStore(Port)를 통해 DB 작업을 수행하며, 이 과정에서 Mapper를 사용해 DTO <-> Doc 변환을 수행합니다.
  */
 export class GraphService {
   constructor(private readonly repo: GraphStore) {}
 
   /**
-   * 노드를 생성 또는 갱신한다.
+   * 노드 생성 또는 업데이트 (Upsert)
+   * 
    * @param node 저장할 노드 DTO
-   * @throws {ValidationError | UpstreamError}
+   * @param options (선택) 트랜잭션 옵션
+   * @throws {ValidationError} 유효하지 않은 데이터일 경우
+   * @throws {UpstreamError} DB 작업 실패 시
    */
   async upsertNode(node: GraphNodeDto, options?: RepoOptions): Promise<void> {
     try {
       this.assertUser(node.userId);
       if (typeof node.id !== 'number') throw new ValidationError('node.id must be a number');
+      
+      // DTO -> Doc 변환 후 저장
       const doc = toGraphNodeDoc(node);
       await this.repo.upsertNode(doc, options);
     } catch (err: unknown) {
@@ -44,21 +52,19 @@ export class GraphService {
   }
 
   /**
-   * 노드 일부 속성을 갱신한다.
+   * 노드 정보 부분 업데이트
+   * 
    * @param userId 사용자 ID
    * @param nodeId 노드 ID
-   * @param patch 갱신할 필드 (DTO Partial)
-   * @throws {ValidationError | UpstreamError}
+   * @param patch 업데이트할 필드들
+   * @param options (선택) 트랜잭션 옵션
    */
   async updateNode(userId: string, nodeId: number, patch: Partial<GraphNodeDto>, options?: RepoOptions): Promise<void> {
     try {
       this.assertUser(userId);
       this.assertNodeId(nodeId);
-      // Partial DTO -> Partial Doc mapping is tricky.
-      // For now, we assume simple field mapping or we might need a specific mapper for partials.
-      // Since our mapper is simple, we can just cast or map manually for now.
-      // Ideally, we should have `toGraphNodeDocPartial`.
-      // Let's do a manual map for now as it's safer.
+      
+      // 부분 업데이트를 위한 간단한 매핑
       const patchDoc: any = { ...patch };
       if (patch.updatedAt) patchDoc.updatedAt = patch.updatedAt;
       
@@ -70,7 +76,8 @@ export class GraphService {
   }
 
   /**
-   * 노드와 관련 엣지를 삭제한다.
+   * 노드 삭제
+   * 
    * @param userId 사용자 ID
    * @param nodeId 노드 ID
    */
@@ -86,10 +93,10 @@ export class GraphService {
   }
 
   /**
-   * 여러 노드를 삭제한다.
+   * 여러 노드 일괄 삭제
+   * 
    * @param userId 사용자 ID
-   * @param nodeIds 노드 ID 배열
-   * @param options 트랜잭션 옵션
+   * @param nodeIds 삭제할 노드 ID 배열
    */
   async deleteNodes(userId: string, nodeIds: number[], options?: RepoOptions): Promise<void> {
     try {
@@ -102,10 +109,11 @@ export class GraphService {
   }
 
   /**
-   * 단일 노드를 조회한다.
+   * 노드 단건 조회
+   * 
    * @param userId 사용자 ID
    * @param nodeId 노드 ID
-   * @returns GraphNodeDto or null
+   * @returns GraphNodeDto 또는 null
    */
   async findNode(userId: string, nodeId: number): Promise<GraphNodeDto | null> {
     try {
@@ -120,9 +128,10 @@ export class GraphService {
   }
 
   /**
-   * 사용자 노드 목록을 반환한다.
+   * 전체 노드 목록 조회
+   * 
    * @param userId 사용자 ID
-   * @returns GraphNodeDto[]
+   * @returns GraphNodeDto 배열
    */
   async listNodes(userId: string): Promise<GraphNodeDto[]> {
     try {
@@ -136,10 +145,11 @@ export class GraphService {
   }
 
   /**
-   * 특정 클러스터의 노드 목록을 반환한다.
+   * 특정 클러스터의 노드 목록 조회
+   * 
    * @param userId 사용자 ID
    * @param clusterId 클러스터 ID
-   * @returns GraphNodeDto[]
+   * @returns GraphNodeDto 배열
    */
   async listNodesByCluster(userId: string, clusterId: string): Promise<GraphNodeDto[]> {
     try {
@@ -153,9 +163,10 @@ export class GraphService {
   }
 
   /**
-   * 엣지를 생성 또는 갱신한다.
+   * 엣지 생성 또는 업데이트 (Upsert)
+   * 
    * @param edge 저장할 엣지 DTO
-   * @returns MongoDB 문서 ID
+   * @returns 생성된 엣지의 ID
    */
   async upsertEdge(edge: GraphEdgeDto, options?: RepoOptions): Promise<string> {
     try {
@@ -163,6 +174,7 @@ export class GraphService {
       this.assertNodeId(edge.source);
       this.assertNodeId(edge.target);
       if (!['hard', 'insight'].includes(edge.type)) throw new ValidationError('edge.type must be hard or insight');
+      
       const doc = toGraphEdgeDoc(edge);
       return await this.repo.upsertEdge(doc, options);
     } catch (err: unknown) {
@@ -172,9 +184,10 @@ export class GraphService {
   }
 
   /**
-   * 엣지를 삭제한다.
+   * 엣지 삭제
+   * 
    * @param userId 사용자 ID
-   * @param edgeId 엣지 문서 ID
+   * @param edgeId 엣지 ID
    */
   async deleteEdge(userId: string, edgeId: string, options?: RepoOptions): Promise<void> {
     try {
@@ -188,7 +201,8 @@ export class GraphService {
   }
 
   /**
-   * 두 노드 사이의 엣지를 삭제한다.
+   * 두 노드 사이의 엣지 삭제
+   * 
    * @param userId 사용자 ID
    * @param source 출발 노드 ID
    * @param target 도착 노드 ID
@@ -206,10 +220,10 @@ export class GraphService {
   }
 
   /**
-   * 여러 노드에 연결된 엣지를 삭제한다.
+   * 특정 노드들과 연결된 엣지 일괄 삭제
+   * 
    * @param userId 사용자 ID
    * @param nodeIds 노드 ID 배열
-   * @param options 트랜잭션 옵션
    */
   async deleteEdgesByNodeIds(userId: string, nodeIds: number[], options?: RepoOptions): Promise<void> {
     try {
@@ -222,9 +236,10 @@ export class GraphService {
   }
 
   /**
-   * 사용자 엣지 목록을 반환한다.
+   * 전체 엣지 목록 조회
+   * 
    * @param userId 사용자 ID
-   * @returns GraphEdgeDto[]
+   * @returns GraphEdgeDto 배열
    */
   async listEdges(userId: string): Promise<GraphEdgeDto[]> {
     try {
@@ -238,7 +253,8 @@ export class GraphService {
   }
 
   /**
-   * 클러스터를 생성 또는 갱신한다.
+   * 클러스터 생성 또는 업데이트
+   * 
    * @param cluster 클러스터 DTO
    */
   async upsertCluster(cluster: GraphClusterDto, options?: RepoOptions): Promise<void> {
@@ -254,7 +270,8 @@ export class GraphService {
   }
 
   /**
-   * 클러스터를 삭제한다.
+   * 클러스터 삭제
+   * 
    * @param userId 사용자 ID
    * @param clusterId 클러스터 ID
    */
@@ -270,10 +287,11 @@ export class GraphService {
   }
 
   /**
-   * 클러스터 단건을 조회한다.
+   * 클러스터 단건 조회
+   * 
    * @param userId 사용자 ID
    * @param clusterId 클러스터 ID
-   * @returns GraphClusterDto or null
+   * @returns GraphClusterDto 또는 null
    */
   async findCluster(userId: string, clusterId: string): Promise<GraphClusterDto | null> {
     try {
@@ -288,9 +306,10 @@ export class GraphService {
   }
 
   /**
-   * 사용자 클러스터 목록을 반환한다.
+   * 전체 클러스터 목록 조회
+   * 
    * @param userId 사용자 ID
-   * @returns GraphClusterDto[]
+   * @returns GraphClusterDto 배열
    */
   async listClusters(userId: string): Promise<GraphClusterDto[]> {
     try {
@@ -304,7 +323,8 @@ export class GraphService {
   }
 
   /**
-   * 그래프 통계를 저장한다.
+   * 그래프 통계 저장
+   * 
    * @param stats 통계 DTO
    */
   async saveStats(stats: GraphStatsDto, options?: RepoOptions): Promise<void> {
@@ -319,9 +339,10 @@ export class GraphService {
   }
 
   /**
-   * 그래프 통계를 조회한다.
+   * 그래프 통계 조회
+   * 
    * @param userId 사용자 ID
-   * @returns GraphStatsDto or null
+   * @returns GraphStatsDto 또는 null
    */
   async getStats(userId: string): Promise<GraphStatsDto | null> {
     try {
@@ -335,7 +356,8 @@ export class GraphService {
   }
 
   /**
-   * 통계를 삭제한다.
+   * 그래프 통계 삭제
+   * 
    * @param userId 사용자 ID
    */
   async deleteStats(userId: string, options?: RepoOptions): Promise<void> {
@@ -347,6 +369,8 @@ export class GraphService {
       throw new UpstreamError('GraphService.deleteStats failed', { cause: String(err) });
     }
   }
+
+  // --- 내부 헬퍼 메서드 ---
 
   private assertUser(userId: string | undefined): asserts userId is string {
     if (!userId) throw new ValidationError('userId required');

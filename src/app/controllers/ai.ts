@@ -1,10 +1,16 @@
 /**
  * 모듈: AI Controller
- * 책임: AI 대화 및 메시지 관련 HTTP 요청을 처리하고, 서비스 레이어를 호출하여 응답을 반환한다.
+ * 
+ * 책임: 
+ * - 클라이언트(프론트엔드)로부터 들어오는 AI 관련 HTTP 요청을 받습니다.
+ * - 요청 데이터(Body, Params, Query)를 검증하고 파싱합니다.
+ * - 비즈니스 로직을 담당하는 Service 레이어(ConversationService, MessageService, AIChatService)를 호출합니다.
+ * - 처리 결과를 적절한 HTTP 상태 코드와 함께 JSON 형태로 응답합니다.
+ * 
  * 외부 의존:
- * - express: Request, Response 타입
- * - ConversationService: 대화 비즈니스 로직
- * - MessageService: 메시지 비즈니스 로직
+ * - express: Request, Response 객체 사용
+ * - Services: 실제 로직 수행
+ * - DTO Schemas: 요청 데이터 검증 (Zod 사용)
  */
 import type { Request, Response } from 'express';
 
@@ -19,123 +25,262 @@ import {
   updateMessageSchema as _updateMessageSchema,
   bulkCreateConversationsSchema as _bulkCreateConversationsSchema,
 } from '../../shared/dtos/ai.schemas';
+import { AIChatService } from '../../core/services/AIChatService';
 
 // Removed duplicate imports
 
 /**
- * AiController uses shared zod schemas from src/shared/dtos/ai.schemas.ts.
- * Methods intentionally do not catch errors — route definitions should use asyncHandler
- * so that any thrown error (including ZodError) is routed to the central error middleware.
+ * AiController 클래스
+ * 
+ * AI 기능과 관련된 모든 API 엔드포인트를 처리하는 컨트롤러입니다.
+ * 생성자 주입(Constructor Injection)을 통해 필요한 서비스들을 의존성으로 받습니다.
+ * 
+ * 참고: 메서드 내부에서 try-catch를 사용하지 않는 이유는, 
+ * 라우터 정의 시 `asyncHandler`를 사용하여 에러 발생 시 자동으로 전역 에러 핸들러로 넘기기 때문입니다.
  */
 export class AiController {
   constructor(
-    private readonly conversationService: ConversationService,
-    private readonly messageService: MessageService
+    private readonly conversationService: ConversationService, // 대화 관리 서비스
+    private readonly messageService: MessageService,           // 메시지 관리 서비스
+    private readonly aiChatService: AIChatService              // AI 채팅 로직 서비스
   ) {}
 
   /**
-   * 대량의 대화 및 메시지를 한 번에 생성하는 컨트롤러 메서드
+   * AI 실제 대화를 처리하는 Controller 메서드
+   * 
+   * [POST] /v1/ai/chat (예상 경로)
+   * 
+   * 역할:
+   * 1. 사용자의 채팅 메시지를 받습니다.
+   * 2. AI 서비스(AIChatService)를 호출하여 AI의 응답을 생성합니다.
+   * 3. 생성된 응답을 클라이언트에게 반환합니다.
    */
-  async bulkCreateConversations(req: Request, res: Response) {
-    const { conversations } = _bulkCreateConversationsSchema.parse(req.body);
+  async handleAIChat(req: Request, res: Response) {
+    // Implementation will go here
+    // TODO : Implement AI chat handling logic
+
+    // 요청 객체(req)에서 현재 로그인한 사용자의 ID를 추출합니다.
     const ownerUserId = getUserIdFromRequest(req)!;
 
-    const createdConversations = await Promise.all(
-      conversations.map(conv => {
-        const { id, title, messages } = conv;
-        return this.conversationService.create(
-          ownerUserId,
-          id,
-          title,
-          messages
-        );
-      })
-    );
+    // TODO : handleAIChat method implementation
+    // AI 서비스의 handleAIChat 메서드를 호출하여 실제 대화 로직을 수행합니다.
+    await this.aiChatService.handleAIChat();
 
+  }
+
+  /**
+   * 대량의 대화 및 메시지를 한 번에 생성하는 컨트롤러 메서드
+   * 
+   * [POST] /v1/ai/conversations/bulk
+   * 
+   * 역할:
+   * - 여러 개의 대화방과 그 안의 메시지들을 한 번의 요청으로 생성합니다.
+   * - 주로 초기 데이터 마이그레이션이나 백업 복구 등에 사용될 수 있습니다.
+   * 
+   * 요청 Body: { conversations: [...] }
+   * 응답: 201 Created, { conversations: [생성된 대화 목록] }
+   */
+  async bulkCreateConversations(req: Request, res: Response) {
+    // 1. 요청 Body 검증 및 파싱 (Zod 스키마 사용)
+    const { conversations } = _bulkCreateConversationsSchema.parse(req.body);
+    
+    // 2. 사용자 ID 추출
+    const ownerUserId = getUserIdFromRequest(req)!;
+
+    // 3. 서비스 호출 (대량 생성 로직 위임)
+    const createdConversations = await this.conversationService.bulkCreate(ownerUserId, conversations);
+
+    // 4. 응답 반환 (201 Created)
     res.status(201).json({ conversations: createdConversations });
   }
 
   /**
-   * Conversation 생성 Controller 메서드 
+   * Conversation(대화방) 생성 Controller 메서드 
+   * 
+   * [POST] /v1/ai/conversations
+   * 
+   * 역할:
+   * - 새로운 대화방을 하나 생성합니다.
+   * - 선택적으로 초기 메시지들을 포함할 수 있습니다.
+   * 
+   * 요청 Body: { id, title, messages? }
+   * 응답: 201 Created, 생성된 대화방 객체
    */
   async createConversation(req: Request, res: Response) {
+    // 1. 요청 데이터 검증 및 파싱
     const { id: threadId, title, messages } = _createConversationSchema.parse(req.body);
+    
+    // 2. 사용자 ID 추출
     const ownerUserId = getUserIdFromRequest(req)!;
+    
+    // 3. 서비스 호출 (대화방 생성)
     const newThread = await this.conversationService.create(ownerUserId, threadId, title, messages);
+    
+    // 4. 응답 반환 (Location 헤더에 생성된 리소스 위치 포함)
     res.status(201).location(`/v1/ai/conversations/${newThread.id}`).json(newThread);
   }
 
   /**
    * Conversation List 획득 Controller 메서드
+   * 
+   * [GET] /v1/ai/conversations
+   * 
+   * 역할:
+   * - 사용자의 대화방 목록을 조회합니다.
+   * - 페이지네이션(Pagination)을 지원합니다 (limit, cursor).
+   * 
+   * 쿼리 파라미터:
+   * - limit: 한 번에 가져올 개수 (기본값 50)
+   * - cursor: 다음 페이지를 가져오기 위한 기준점 (마지막 아이템의 ID 또는 시간)
+   * 
+   * 응답: 200 OK, { items: [...], nextCursor: ... }
    */
   async listConversations(req: Request, res: Response) {
     const ownerUserId = getUserIdFromRequest(req)!;
+    
+    // 쿼리 파라미터 파싱 (문자열을 숫자로 변환)
     const limit = parseInt(req.query.limit as string || '50', 10);
     const cursor = req.query.cursor as string | undefined;
+    
+    // 서비스 호출 (목록 조회)
     const result = await this.conversationService.listByOwner(ownerUserId, limit, cursor);
+    
     res.status(200).json(result);
   }
 
   /**
    * 단일 Conversation 획득 Controller 메서드
+   * 
+   * [GET] /v1/ai/conversations/:conversationId
+   * 
+   * 역할:
+   * - 특정 ID를 가진 대화방의 상세 정보를 조회합니다.
+   * - 대화방에 포함된 메시지 목록도 함께 반환합니다.
+   * 
+   * 경로 파라미터: conversationId
+   * 응답: 200 OK, 대화방 객체 (메시지 포함)
    */
   async getConversation(req: Request, res: Response) {
     const { conversationId } = req.params;
     const ownerUserId = getUserIdFromRequest(req)!;
+    
+    // 서비스 호출 (단일 조회)
     const thread = await this.conversationService.getById(conversationId, ownerUserId);
+    
     res.status(200).json(thread);
   }
 
   /**
    * Conversation Update Controller 메서드
+   * 
+   * [PATCH] /v1/ai/conversations/:conversationId
+   * 
+   * 역할:
+   * - 대화방의 정보를 수정합니다 (현재는 제목 수정만 지원).
+   * 
+   * 요청 Body: { title? }
+   * 응답: 200 OK, 수정된 대화방 객체
    */
   async updateConversation(req: Request, res: Response) {
     const { conversationId } = req.params;
+    
+    // 요청 데이터 검증 (수정할 내용)
     const updates = _updateConversationSchema.parse(req.body);
     const ownerUserId = getUserIdFromRequest(req)!;
+    
+    // 서비스 호출 (업데이트)
     const updatedThread = await this.conversationService.update(conversationId, ownerUserId, updates);
+    
     res.status(200).json(updatedThread);
   }
 
   /**
    * Conversation Delete Controller 메서드
+   * 
+   * [DELETE] /v1/ai/conversations/:conversationId
+   * 
+   * 역할:
+   * - 대화방을 삭제합니다.
+   * - 대화방에 속한 모든 메시지도 함께 삭제됩니다 (Cascade Delete).
+   * 
+   * 응답: 204 No Content (성공했지만 본문 없음)
    */
   async deleteConversation(req: Request, res: Response) {
     const { conversationId } = req.params;
     const ownerUserId = getUserIdFromRequest(req)!;
+    
+    // 서비스 호출 (삭제)
     await this.conversationService.delete(conversationId, ownerUserId);
+    
+    // 204 상태 코드는 "성공적으로 처리했으나 돌려줄 데이터가 없음"을 의미합니다.
     res.status(204).send();
   }
 
   /**
    * Message Create Controller 메서드
+   * 
+   * [POST] /v1/ai/conversations/:conversationId/messages
+   * 
+   * 역할:
+   * - 특정 대화방에 새로운 메시지를 추가합니다.
+   * 
+   * 요청 Body: { content, role, ... }
+   * 응답: 201 Created, 생성된 메시지 객체
    */
   async createMessage(req: Request, res: Response) {
     const { conversationId } = req.params;
+    
+    // 요청 데이터 검증
     const messageData = _createMessageSchema.parse(req.body);
     const ownerUserId = getUserIdFromRequest(req)!;
+    
+    // 서비스 호출 (메시지 생성)
     const newMessage = await this.messageService.create(ownerUserId, conversationId, messageData);
+    
     res.status(201).json(newMessage);
   }
 
   /**
    * Message Update Controller 메서드
+   * 
+   * [PATCH] /v1/ai/conversations/:conversationId/messages/:messageId
+   * 
+   * 역할:
+   * - 특정 메시지의 내용을 수정합니다.
+   * 
+   * 요청 Body: { content? }
+   * 응답: 200 OK, 수정된 메시지 객체
    */
   async updateMessage(req: Request, res: Response) {
     const { conversationId, messageId } = req.params;
+    
+    // 요청 데이터 검증
     const updates = _updateMessageSchema.parse(req.body);
     const ownerUserId = getUserIdFromRequest(req)!;
+    
+    // 서비스 호출 (메시지 수정)
     const updatedMessage = await this.messageService.update(ownerUserId, conversationId, messageId, updates);
+    
     res.status(200).json(updatedMessage);
   }
 
   /**
    * Message Delete Controller 메서드
+   * 
+   * [DELETE] /v1/ai/conversations/:conversationId/messages/:messageId
+   * 
+   * 역할:
+   * - 특정 메시지를 삭제합니다.
+   * 
+   * 응답: 204 No Content
    */
   async deleteMessage(req: Request, res: Response) {
     const { conversationId, messageId } = req.params;
     const ownerUserId = getUserIdFromRequest(req)!;
+    
+    // 서비스 호출 (메시지 삭제)
     await this.messageService.delete(ownerUserId, conversationId, messageId);
+    
     res.status(204).send();
   }
 }

@@ -9,41 +9,46 @@ import { NotFoundError } from '../../shared/errors/domain';
 import { toNoteDto, toFolderDto } from '../../shared/mappers/note';
 
 /**
- * 모듈: NoteService
- * 책임: 노트 및 폴더 관련 비즈니스 로직을 담당한다.
+ * 모듈: NoteService (노트 서비스)
  * 
- * - 노트/폴더 생성, 조회, 수정, 삭제
- * - 폴더 삭제 시 하위 폴더 및 노트 일괄 삭제 (Cascade Delete)
- * - DTO <-> Persistence Doc 변환
+ * 책임:
+ * - 노트 및 폴더 관리의 핵심 비즈니스 로직을 담당합니다.
+ * - 노트/폴더의 생성, 조회, 수정, 삭제 기능을 제공합니다.
+ * - 폴더 삭제 시 하위 항목들을 함께 삭제하는 Cascade Delete 로직을 포함합니다.
+ * - DTO(Data Transfer Object)와 DB 문서(Doc) 간의 변환을 수행합니다.
  */
 export class NoteService {
   constructor(private noteRepo: NoteRepository) {}
 
-  // --- Note Services ---
+  // --- 노트(Note) 관련 서비스 ---
 
   /**
-   * 새 노트를 생성한다.
+   * 새 노트를 생성합니다.
+   * 
    * @param userId 소유자 ID
-   * @param dto 노트 생성 요청 DTO
+   * @param dto 노트 생성 요청 데이터 (제목, 내용, 폴더ID 등)
    * @returns 생성된 노트 DTO
    */
   async createNote(userId: string, dto: CreateNoteRequest): Promise<Note> {
     const now = new Date();
+    // DB 문서 생성
     const doc: NoteDoc = {
       _id: uuidv4(),
       ownerUserId: userId,
-      title: dto.title || 'Untitled', // 제목이 없으면 기본값
+      title: dto.title || 'Untitled', // 제목이 없으면 기본값 설정
       content: dto.content,
       folderId: dto.folderId || null,
       createdAt: now,
       updatedAt: now,
     };
+    
     const created = await this.noteRepo.createNote(doc);
     return toNoteDto(created);
   }
 
   /**
-   * ID로 노트를 조회한다.
+   * ID로 노트를 조회합니다.
+   * 
    * @param userId 소유자 ID
    * @param noteId 노트 ID
    * @returns 노트 DTO
@@ -56,9 +61,10 @@ export class NoteService {
   }
 
   /**
-   * 노트 목록을 조회한다.
+   * 노트 목록을 조회합니다.
+   * 
    * @param userId 소유자 ID
-   * @param folderId 폴더 ID (null이면 루트)
+   * @param folderId 폴더 ID (null이면 루트 폴더의 노트 조회)
    * @returns 노트 DTO 목록
    */
   async listNotes(userId: string, folderId: string | null): Promise<Note[]> {
@@ -67,10 +73,11 @@ export class NoteService {
   }
 
   /**
-   * 노트를 수정한다.
+   * 노트를 수정합니다.
+   * 
    * @param userId 소유자 ID
    * @param noteId 노트 ID
-   * @param dto 노트 수정 요청 DTO
+   * @param dto 노트 수정 요청 데이터
    * @returns 수정된 노트 DTO
    * @throws {NotFoundError} 노트가 존재하지 않을 경우
    */
@@ -79,7 +86,7 @@ export class NoteService {
       ...dto,
       updatedAt: new Date(),
     };
-    // undefined 필드 제거
+    // undefined 필드는 업데이트에서 제외
     Object.keys(updates).forEach(key => (updates as any)[key] === undefined && delete (updates as any)[key]);
 
     const updated = await this.noteRepo.updateNote(noteId, userId, updates);
@@ -88,7 +95,8 @@ export class NoteService {
   }
 
   /**
-   * 노트를 삭제한다.
+   * 노트를 삭제합니다.
+   * 
    * @param userId 소유자 ID
    * @param noteId 노트 ID
    * @throws {NotFoundError} 노트가 존재하지 않을 경우
@@ -98,12 +106,13 @@ export class NoteService {
     if (!deleted) throw new NotFoundError(`Note not found: ${noteId}`);
   }
 
-  // --- Folder Services ---
+  // --- 폴더(Folder) 관련 서비스 ---
 
   /**
-   * 새 폴더를 생성한다.
+   * 새 폴더를 생성합니다.
+   * 
    * @param userId 소유자 ID
-   * @param dto 폴더 생성 요청 DTO
+   * @param dto 폴더 생성 요청 데이터
    * @returns 생성된 폴더 DTO
    */
   async createFolder(userId: string, dto: CreateFolderRequest): Promise<Folder> {
@@ -121,7 +130,8 @@ export class NoteService {
   }
 
   /**
-   * ID로 폴더를 조회한다.
+   * ID로 폴더를 조회합니다.
+   * 
    * @param userId 소유자 ID
    * @param folderId 폴더 ID
    * @returns 폴더 DTO
@@ -134,9 +144,10 @@ export class NoteService {
   }
 
   /**
-   * 폴더 목록을 조회한다.
+   * 폴더 목록을 조회합니다.
+   * 
    * @param userId 소유자 ID
-   * @param parentId 상위 폴더 ID (null이면 루트)
+   * @param parentId 상위 폴더 ID (null이면 루트 폴더의 하위 폴더 조회)
    * @returns 폴더 DTO 목록
    */
   async listFolders(userId: string, parentId: string | null): Promise<Folder[]> {
@@ -145,10 +156,11 @@ export class NoteService {
   }
 
   /**
-   * 폴더를 수정한다.
+   * 폴더를 수정합니다.
+   * 
    * @param userId 소유자 ID
    * @param folderId 폴더 ID
-   * @param dto 폴더 수정 요청 DTO
+   * @param dto 폴더 수정 요청 데이터
    * @returns 수정된 폴더 DTO
    * @throws {NotFoundError} 폴더가 존재하지 않을 경우
    */
@@ -166,10 +178,12 @@ export class NoteService {
 
   /**
    * 폴더 삭제 (Cascade Delete)
-   * - 해당 폴더와 모든 하위 폴더, 그리고 그 안에 포함된 모든 노트를 삭제한다.
-   * - 트랜잭션을 사용하여 원자성을 보장한다.
+   * 
+   * - 해당 폴더뿐만 아니라, 그 안에 포함된 모든 하위 폴더와 노트들을 재귀적으로 삭제합니다.
+   * - 데이터 무결성을 위해 트랜잭션을 사용하여 원자적으로 처리합니다.
+   * 
    * @param userId 소유자 ID
-   * @param folderId 폴더 ID
+   * @param folderId 삭제할 폴더 ID
    * @throws {NotFoundError} 폴더가 존재하지 않을 경우
    */
   async deleteFolder(userId: string, folderId: string): Promise<void> {
@@ -181,20 +195,20 @@ export class NoteService {
         // 1. 삭제 대상 폴더 존재 확인
         const targetFolder = await this.noteRepo.getFolder(folderId, userId);
         if (!targetFolder) {
-            // 트랜잭션 내에서 에러를 던지면 abortTransaction이 호출됨
+            // 트랜잭션 내에서 에러를 던지면 자동으로 롤백됩니다.
             throw new NotFoundError(`Folder not found: ${folderId}`);
         }
 
-        // 2. 모든 하위 폴더 ID 조회 (재귀)
+        // 2. 모든 하위 폴더 ID 조회 (재귀적 탐색)
         const descendantIds = await this.noteRepo.findDescendantFolderIds(folderId, userId);
         
-        // 3. 삭제할 모든 폴더 ID 목록 (타겟 포함)
+        // 3. 삭제할 모든 폴더 ID 목록 구성 (타겟 폴더 포함)
         const allFolderIdsToDelete = [folderId, ...descendantIds];
 
-        // 4. 해당 폴더들에 속한 노트 일괄 삭제
+        // 4. 해당 폴더들에 속한 모든 노트 일괄 삭제
         await this.noteRepo.deleteNotesByFolderIds(allFolderIdsToDelete, userId, session);
 
-        // 5. 폴더 일괄 삭제
+        // 5. 폴더들 일괄 삭제
         await this.noteRepo.deleteFolders(allFolderIdsToDelete, userId, session);
       });
     } finally {

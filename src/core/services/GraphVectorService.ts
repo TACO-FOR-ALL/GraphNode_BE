@@ -1,10 +1,14 @@
 /**
- * GraphVectorService — orchestration utilities for Graph <-> Vector interactions
- *
- * 이 서비스는 실제 도메인 로직(검증/영속성)을 직접 수행하지 않습니다. 대신
- * GraphService와 VectorService 간의 조정, 배치 적용, 동기화/정합성 유틸리티
- * 를 제공합니다. 이렇게 레이어를 분리하면 즉시 적용, 배치 처리, 또는 아웃박스
- * 기반의 eventual consistency 중 원하는 전략을 선택하여 사용할 수 있습니다.
+ * 모듈: GraphVectorService (그래프-벡터 통합 서비스)
+ * 
+ * 책임:
+ * - GraphService와 VectorService 간의 조율(Orchestration)을 담당합니다.
+ * - 그래프 데이터 변경 시 벡터 데이터도 함께 변경하거나, 정합성을 맞추는 역할을 합니다.
+ * - 현재는 벡터 기능이 비활성화되어 있어 대부분의 메서드가 에러를 발생시키거나 비어있습니다.
+ * 
+ * 설계 의도:
+ * - 도메인 로직(GraphService)과 벡터 동기화 로직을 분리하여,
+ * - 필요에 따라 동기화 전략(실시간, 배치, 이벤트 기반 등)을 유연하게 변경할 수 있도록 합니다.
  */
 
 import type { GraphService } from './GraphService';
@@ -64,11 +68,13 @@ export class GraphVectorService {
 
   /**
    * 그래프 노드를 생성하거나 갱신합니다.
+   * 
+   * 단순히 GraphService의 메서드를 호출하여 위임합니다.
+   * (추후 벡터 동기화 로직이 추가될 수 있는 지점입니다)
+   * 
    * @param node - 저장할 노드 데이터. `userId`와 `id`는 필수입니다.
    * @returns Promise<void>
    * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
-   * @example
-   * await service.upsertNode({ userId: 'u-123', id: 1, origId: 'conv-abc', ... });
    */
   upsertNode(node: GraphNodeDto) {
     return this.graphService.upsertNode(node);
@@ -76,13 +82,12 @@ export class GraphVectorService {
 
   /**
    * 기존 그래프 노드의 일부 속성을 갱신합니다.
+   * 
    * @param userId - 작업을 요청한 사용자 ID
    * @param nodeId - 갱신할 노드의 ID
    * @param patch - 갱신할 속성 객체
    * @returns Promise<void>
    * @throws {NotFoundError | UpstreamError} - 노드가 없거나 DB 오류 발생 시
-   * @example
-   * await service.updateNode('u-123', 1, { clusterName: '새 클러스터' });
    */
   updateNode(userId: string, nodeId: number, patch: Partial<GraphNodeDto>) {
     return this.graphService.updateNode(userId, nodeId, patch);
@@ -90,7 +95,9 @@ export class GraphVectorService {
 
   /**
    * 특정 노드를 삭제합니다.
+   * 
    * 이 메서드는 단일 노드만 삭제하며, 연결된 엣지는 `GraphService` 또는 `GraphRepository` 레벨에서 처리됩니다.
+   * 
    * @param userId - 작업을 요청한 사용자 ID
    * @param nodeId - 삭제할 노드의 ID
    * @returns Promise<void>
@@ -167,7 +174,9 @@ export class GraphVectorService {
 
   /**
    * 그래프 클러스터를 생성하거나 갱신합니다.
+   * 
    * 이 작업은 트랜잭션 내에서 실행되어 원자성을 보장합니다.
+   * 
    * @param cluster - 저장할 클러스터 데이터. `userId`와 `id`는 필수입니다.
    * @returns Promise<void>
    * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
@@ -263,8 +272,10 @@ export class GraphVectorService {
 
   /**
    * 특정 노드와 연결된 모든 엣지를 함께 삭제합니다. (Cascade)
+   * 
    * 이 메서드는 `GraphService.deleteNode`를 호출하며, 해당 서비스의 레포지토리 구현체에서
    * 노드와 엣지를 트랜잭션처럼 처리하는 로직에 의존합니다.
+   * 
    * @param userId - 작업을 요청한 사용자 ID
    * @param nodeId - 삭제할 노드의 ID
    * @returns Promise<void>
@@ -280,14 +291,14 @@ export class GraphVectorService {
 
   /**
    * 특정 클러스터와 그에 속한 모든 노드 및 관련 엣지를 삭제합니다. (Cascade)
+   * 
    * 이 작업은 여러 단계로 이루어지며, 부분적으로만 성공할 수 있는 위험이 있습니다.
+   * 따라서 MongoDB 트랜잭션을 사용하여 원자적으로 처리됩니다.
+   * 
    * @param userId - 작업을 요청한 사용자 ID
    * @param clusterId - 삭제할 클러스터의 ID
    * @returns Promise<void>
    * @throws {UpstreamError} - DB 작업 중 오류 발생 시
-   * @remarks
-   * 이 작업은 MongoDB 트랜잭션을 사용하여 원자적으로 처리됩니다.
-   * 작업이 중간에 실패하면 모든 변경 사항이 롤백됩니다.
    */
   async removeClusterCascade(userId: string, clusterId: string): Promise<void> {
     const mongoClient = getMongo();
@@ -314,6 +325,7 @@ export class GraphVectorService {
 
   /**
    * 특정 사용자의 전체 그래프 데이터를 스냅샷 형태로 조회합니다.
+   * 
    * @param userId - 조회할 사용자 ID
    * @returns 그래프 스냅샷 DTO. 데이터가 없으면 각 배열은 비어있고, stats는 null일 수 있습니다.
    * @throws {UpstreamError} - DB 조회 중 오류 발생 시
@@ -336,12 +348,13 @@ export class GraphVectorService {
 
   /**
    * 그래프 스냅샷 데이터를 DB에 일괄적으로 저장(upsert)합니다.
+   * 
+   * 이 메서드는 여러 데이터를 병렬로 처리하며, 전체 작업의 원자성을 보장하기 위해
+   * MongoDB 트랜잭션을 사용합니다.
+   * 
    * @param payload - 사용자 ID와 그래프 스냅샷 데이터
    * @returns Promise<void>
    * @throws {UpstreamError} - DB 저장 중 오류 발생 시
-   * @remarks
-   * 이 메서드는 여러 데이터를 병렬로 처리하며, 전체 작업의 원자성을 보장하기 위해
-   * MongoDB 트랜잭션을 사용합니다.
    */
   async persistSnapshot(payload: PersistGraphPayloadDto): Promise<void> {
     const mongoClient = getMongo();
