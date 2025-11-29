@@ -10,6 +10,7 @@ export { ConversationsApi } from './endpoints/conversations.js';
 export { GoogleAuthApi } from './endpoints/auth.google.js';
 export { GraphApi } from './endpoints/graph.js';
 export { NoteApi } from './endpoints/note.js';
+export { AppleAuthApi } from './endpoints/auth.apple.js';
 
 // Types
 export type { ProblemDetails } from './types/problem.js';

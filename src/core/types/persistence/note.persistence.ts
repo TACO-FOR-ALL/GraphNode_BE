@@ -10,6 +10,13 @@
 /**
  * MongoDB 'notes' 컬렉션 문서 타입
  * @internal
+ * @property _id 문서 고유 ID (UUID)
+ * @property ownerUserId 소유자 사용자 ID
+ * @property title 노트 제목
+ * @property content 노트 내용 (Markdown)
+ * @property folderId 소속 폴더 ID (null이면 최상위)
+ * @property createdAt 생성 일시
+ * @property updatedAt 수정 일시
  */
 export interface NoteDoc {
   /** 문서 고유 ID (UUID) */
@@ -31,6 +38,12 @@ export interface NoteDoc {
 /**
  * MongoDB 'folders' 컬렉션 문서 타입
  * @internal
+ * @property _id 문서 고유 ID (UUID)
+ * @property ownerUserId 소유자 사용자 ID
+ * @property name 폴더 이름
+ * @property parentId 상위 폴더 ID (null이면 최상위)
+ * @property createdAt 생성 일시
+ * @property updatedAt 수정 일시
  */
 export interface FolderDoc {
   /** 문서 고유 ID (UUID) */
