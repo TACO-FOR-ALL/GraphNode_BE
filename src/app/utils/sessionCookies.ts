@@ -13,7 +13,22 @@ function cookieOpts() {
   const secure = isProd && !insecure;
   const maxAgeEnv = process.env.COOKIE_HELPER_MAX_AGE;
   const maxAge = maxAgeEnv ? Number(maxAgeEnv) * 1000 : undefined; // millis, undefined=세션쿠키
-  return { httpOnly: false as const, sameSite: 'strict' as const, secure, path: '/', ...(maxAge ? { maxAge } : {}) };
+
+  const cookieConfig = isProd
+  ? {
+      httpOnly: false,
+      sameSite: 'none' as const,
+      secure: true,
+    }
+  : {
+      httpOnly: false,
+      sameSite: 'lax' as const,
+      secure: false,
+    };
+  
+
+
+  return { ...cookieConfig, path: '/', ...(maxAge ? { maxAge } : {}) };
 }
 
 /**

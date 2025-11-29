@@ -64,7 +64,16 @@ export class UserRepositoryMySQL implements UserRepository {
     const existing = await this.findByProvider(input.provider, input.providerUserId);
     if (existing) {
       await getMySql().query('UPDATE users SET last_login_at=CURRENT_TIMESTAMP WHERE id=?', [existing.id]);
-      return { ...existing, lastLoginAt: new Date() } as unknown as User; // keep type simple
+        return new User({
+          id: existing.id,
+          provider: existing.provider,
+          providerUserId: existing.providerUserId,
+          email: existing.email,
+          displayName: existing.displayName,
+          avatarUrl: existing.avatarUrl,
+          createdAt: existing.createdAt,
+          lastLoginAt: new Date()
+        });
     }
     return this.create(input);
   }
