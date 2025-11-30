@@ -45,6 +45,10 @@ export async function start(req: Request, res: Response, _next: NextFunction) {
  */
 export async function callback(req: Request, res: Response, next: NextFunction) {
   try {
+    if (!req.body) {
+      throw new ValidationError('Missing request body');
+    }
+
     const { code, state, user } = req.body as {
       code?: string;
       state?: string;
