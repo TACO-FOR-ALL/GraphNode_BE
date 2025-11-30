@@ -45,6 +45,10 @@ export async function start(req: Request, res: Response, _next: NextFunction) {
  */
 export async function callback(req: Request, res: Response, next: NextFunction) {
   try {
+    if (!req.body) {
+      throw new ValidationError('Missing request body');
+    }
+
     const { code, state, user } = req.body as {
       code?: string;
       state?: string;
@@ -71,7 +75,35 @@ export async function callback(req: Request, res: Response, next: NextFunction) 
       displayName: info.name ?? null,
       avatarUrl: null,
     });
-    res.status(200).json({ ok: true });
+
+    return res.status(200).send(`
+      <!doctype html>
+      <html>
+        <body>
+          <script>
+            (function () {
+              try {
+                if (window.opener && !window.opener.closed) {
+                  window.opener.postMessage(
+                    { type: 'oauth-success', provider: 'apple' },
+                    '*'
+                  );
+                }
+              } catch (e) {
+                try {
+                  window.opener && window.opener.postMessage(
+                    { type: 'oauth-error', provider: 'apple', message: e && e.message || 'unknown' },
+                    '*'
+                  );
+                } catch (_) {}
+              } finally {
+                window.close();
+              }
+            })();
+          </script>
+        </body>
+      </html>
+    `);
   } catch (err) {
     next(err);
   }

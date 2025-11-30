@@ -46,6 +46,7 @@ export function createApp() {
   // app.use(helmet());
   app.use(cors({ origin: true, credentials: true }));
   app.use(express.json());
+  app.use(express.urlencoded({ extended: true })); // Apple OAuth post request body 파싱
   app.use(cookieParser(sessionSecert));
   app.use(requestContext);
   app.use(httpLogger);
@@ -57,7 +58,6 @@ export function createApp() {
    * - 운영: name="__Host-session", secure=true, Path=/, HttpOnly, SameSite=Strict
    * - maxAge: 사실상 무기한 UX를 위해 1년(정책상 롤링 가능)
    */
-   
 
   // Initialize client.
   const redisClient = createClient({
