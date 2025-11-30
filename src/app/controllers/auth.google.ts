@@ -20,7 +20,7 @@ function getService() {
   return new GoogleOAuthService({
     clientId: env.OAUTH_GOOGLE_CLIENT_ID,
     clientSecret: env.OAUTH_GOOGLE_CLIENT_SECRET,
-    redirectUri: env.OAUTH_GOOGLE_REDIRECT_URI
+    redirectUri: env.OAUTH_GOOGLE_REDIRECT_URI,
   });
 }
 
@@ -66,9 +66,36 @@ export async function callback(req: Request, res: Response, next: NextFunction) 
       providerUserId: info.sub,
       email: info.email ?? null,
       displayName: info.name ?? null,
-      avatarUrl: info.picture ?? null
+      avatarUrl: info.picture ?? null,
     });
-    res.status(200).json({ ok: true });
+    return res.status(200).send(`
+      <!doctype html>
+      <html>
+        <body>
+          <script>
+            (function () {
+              try {
+                if (window.opener && !window.opener.closed) {
+                  window.opener.postMessage(
+                    { type: 'oauth-success', provider: 'google' },
+                    '*'
+                  );
+                }
+              } catch (e) {
+                try {
+                  window.opener && window.opener.postMessage(
+                    { type: 'oauth-error', provider: 'google', message: e && e.message || 'unknown' },
+                    '*'
+                  );
+                } catch (_) {}
+              } finally {
+                window.close();
+              }
+            })();
+          </script>
+        </body>
+      </html>
+    `);
   } catch (err) {
     next(err);
   }
