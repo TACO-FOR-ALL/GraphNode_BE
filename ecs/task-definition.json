@@ -1,0 +1,175 @@
+{
+    "compatibilities": [
+        "EC2"
+    ],
+    "containerDefinitions": [
+        {
+            "cpu": 0,
+            "environment": [
+                {
+                    "name": "SESSION_SECRET",
+                    "value": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:SESSION_SECRET::"
+                },
+                {
+                    "name": "HOST",
+                    "value": "0.0.0.0"
+                },
+                {
+                    "name": "NODE_ENV",
+                    "value": "production"
+                }
+            ],
+            "essential": true,
+            "image": "954976324655.dkr.ecr.ap-northeast-2.amazonaws.com/taco4/graphnode:latest_10",
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/taco-4-graphnode-task",
+                    "awslogs-create-group": "true",
+                    "awslogs-region": "ap-northeast-2",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            },
+            "memory": 850,
+            "memoryReservation": 512,
+            "mountPoints": [],
+            "name": "taco4_graphnode_container",
+            "portMappings": [
+                {
+                    "appProtocol": "http",
+                    "containerPort": 3000,
+                    "hostPort": 80,
+                    "name": "taco4_graphnode_port",
+                    "protocol": "tcp"
+                }
+            ],
+            "secrets": [
+                {
+                    "name": "MYSQL_URL",
+                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:MYSQL_URL::"
+                },
+                {
+                    "name": "MONGODB_URL",
+                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:MONGODB_URL::"
+                },
+                {
+                    "name": "DEV_INSECURE_COOKIES",
+                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:DEV_INSECURE_COOKIES::"
+                },
+                {
+                    "name": "OAUTH_GOOGLE_CLIENT_ID",
+                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:OAUTH_GOOGLE_CLIENT_ID::"
+                },
+                {
+                    "name": "OAUTH_GOOGLE_CLIENT_SECRET",
+                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:OAUTH_GOOGLE_CLIENT_SECRET::"
+                },
+                {
+                    "name": "OAUTH_GOOGLE_REDIRECT_URI",
+                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:OAUTH_GOOGLE_REDIRECT_URI::"
+                },
+                {
+                    "name": "PORT",
+                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:PORT::"
+                },
+                {
+                    "name": "QDRANT_URL",
+                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:QDRANT_URL::"
+                },
+                {
+                    "name": "QDRANT_API_KEY",
+                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:QDRANT_API_KEY::"
+                },
+                {
+                    "name": "QDRANT_COLLECTION_NAME",
+                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:QDRANT_COLLECTION_NAME::"
+                },
+                {
+                    "name": "QDRANT_VECTOR_SIZE",
+                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:QDRANT_VECTOR_SIZE::"
+                },
+                {
+                    "name": "QDRANT_DISTANCE_METRIC",
+                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:QDRANT_DISTANCE_METRIC::"
+                },
+                {
+                    "name": "REDIS_URL",
+                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:REDIS_URL::"
+                },
+                {
+                    "name": "OAUTH_APPLE_TEAM_ID",
+                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:OAUTH_APPLE_TEAM_ID::"
+                },
+                {
+                    "name": "OAUTH_APPLE_KEY_ID",
+                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:OAUTH_APPLE_KEY_ID::"
+                },
+                {
+                    "name": "OAUTH_APPLE_CLIENT_ID",
+                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:OAUTH_APPLE_CLIENT_ID::"
+                },
+                {
+                    "name": "OAUTH_APPLE_PRIVATE_KEY",
+                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:OAUTH_APPLE_PRIVATE_KEY::"
+                },
+                {
+                    "name": "OAUTH_APPLE_REDIRECT_URI",
+                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:OAUTH_APPLE_REDIRECT_URI::"
+                }
+            ],
+            "systemControls": [],
+            "volumesFrom": []
+        }
+    ],
+    "cpu": "900",
+    "enableFaultInjection": false,
+    "executionRoleArn": "arn:aws:iam::954976324655:role/ecsTaskExecutionRole",
+    "family": "taco-4-graphnode-task",
+    "memory": "900",
+    "networkMode": "bridge",
+    "placementConstraints": [],
+    "registeredAt": "2025-11-29T12:49:46.213Z",
+    "registeredBy": "arn:aws:iam::954976324655:root",
+    "requiresAttributes": [
+        {
+            "name": "com.amazonaws.ecs.capability.logging-driver.awslogs"
+        },
+        {
+            "name": "ecs.capability.execution-role-awslogs"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.ecr-auth"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
+        },
+        {
+            "name": "ecs.capability.secrets.asm.environment-variables"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.21"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.task-iam-role"
+        },
+        {
+            "name": "ecs.capability.execution-role-ecr-pull"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.29"
+        }
+    ],
+    "requiresCompatibilities": [
+        "EC2"
+    ],
+    "revision": 15,
+    "runtimePlatform": {
+        "cpuArchitecture": "X86_64",
+        "operatingSystemFamily": "LINUX"
+    },
+    "status": "ACTIVE",
+    "taskDefinitionArn": "arn:aws:ecs:ap-northeast-2:954976324655:task-definition/taco-4-graphnode-task:15",
+    "taskRoleArn": "arn:aws:iam::954976324655:role/ecsTaskExecutionRole",
+    "volumes": [],
+    "tags": []
+}
