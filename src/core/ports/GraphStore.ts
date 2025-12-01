@@ -28,7 +28,11 @@ export interface RepoOptions {
 export interface GraphStore {
   // --- 노드(Node) 관련 메서드 ---
   
-  /** 노드 생성 또는 업데이트 (Upsert) */
+  /** 노드 생성 또는 업데이트 (Upsert) 
+   * @param node
+   * @param options
+   * 
+  */
   upsertNode(node: GraphNodeDoc, options?: RepoOptions): Promise<void>;
   
   /** 노드 정보 부분 업데이트 */

@@ -7,6 +7,7 @@ import { GoogleAuthApi } from './endpoints/auth.google.js';
 import { GraphApi } from './endpoints/graph.js';
 import { NoteApi } from './endpoints/note.js';
 import { AppleAuthApi } from './endpoints/auth.apple.js';
+import { SyncApi } from './endpoints/sync.js';
 
 // FE에서는 baseUrl을 전달할 수 없도록, 옵션에서 baseUrl 제거
 export interface GraphNodeClientOptions extends Omit<BuilderOptions, 'baseUrl'> {}
@@ -19,6 +20,7 @@ export class GraphNodeClient {
   readonly graph: GraphApi;
   readonly note: NoteApi;
   readonly appleAuth: AppleAuthApi;
+  readonly sync: SyncApi;
   private readonly rb: RequestBuilder;
 
   constructor(opts: GraphNodeClientOptions = {}) {
@@ -48,6 +50,7 @@ export class GraphNodeClient {
     this.graph = new GraphApi(this.rb);
     this.note = new NoteApi(this.rb);
     this.appleAuth = new AppleAuthApi(GRAPHNODE_BASE_URL);
+    this.sync = new SyncApi(this.rb);
   }
 }
 

@@ -29,6 +29,7 @@ export function createNoteRouter(deps: { noteService: NoteService }) {
   router.get('/notes/:id', asyncHandler(controller.getNote.bind(controller)));
   router.patch('/notes/:id', asyncHandler(controller.updateNote.bind(controller)));
   router.delete('/notes/:id', asyncHandler(controller.deleteNote.bind(controller)));
+  router.post('/notes/:id/restore', asyncHandler(controller.restoreNote.bind(controller)));
 
   // --- Folders ---
   router.post('/folders', asyncHandler(controller.createFolder.bind(controller)));
@@ -36,6 +37,7 @@ export function createNoteRouter(deps: { noteService: NoteService }) {
   router.get('/folders/:id', asyncHandler(controller.getFolder.bind(controller)));
   router.patch('/folders/:id', asyncHandler(controller.updateFolder.bind(controller)));
   router.delete('/folders/:id', asyncHandler(controller.deleteFolder.bind(controller)));
+  router.post('/folders/:id/restore', asyncHandler(controller.restoreFolder.bind(controller)));
 
   return router;
 }

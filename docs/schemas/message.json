@@ -3,12 +3,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "ChatMessage",
   "type": "object",
-  "required": ["id", "role", "content", "ts"],
+  "required": ["id", "role", "content", "createdAt", "updatedAt"],
   "properties": {
     "id": { "type": "string", "description": "FE가 생성한 메시지 ID(UUID/ULID)" },
     "role": { "type": "string", "enum": ["user", "assistant", "system"] },
     "content": { "type": "string" },
-    "ts": { "type": "string", "format": "date-time" }
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "deletedAt": { "type": ["string", "null"], "format": "date-time" }
   },
   "additionalProperties": false
 }

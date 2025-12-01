@@ -301,9 +301,36 @@ paths:
           name: conversationId
           required: true
           schema: { type: string }
+        - in: query
+          name: permanent
+          schema: { type: boolean, default: false }
+          description: If true, performs a hard delete. Otherwise, soft delete.
       responses:
         '204':
           description: No Content
+  /v1/ai/conversations/{conversationId}/restore:
+    post:
+      summary: Restore a deleted conversation
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Conversation restored
+        '404':
+          description: Conversation not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
   /v1/ai/conversations/{conversationId}/messages:
     post:
       summary: Create message
@@ -374,9 +401,40 @@ paths:
           name: messageId
           required: true
           schema: { type: string }
+        - in: query
+          name: permanent
+          schema: { type: boolean, default: false }
+          description: If true, performs a hard delete. Otherwise, soft delete.
       responses:
         '204':
           description: No Content
+  /v1/ai/conversations/{conversationId}/messages/{messageId}/restore:
+    post:
+      summary: Restore a deleted message
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: messageId
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Message restored
+        '404':
+          description: Message not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
   /auth/logout:
     post:
       summary: Logout and destroy session
@@ -800,6 +858,84 @@ paths:
             application/problem+json:
               schema:
                 $ref: ../schemas/problem.json
+  /v1/sync/pull:
+    get:
+      summary: Pull changes from server
+      description: Retrieves changes (conversations, messages, notes, folders) that occurred after the specified `since` timestamp.
+      parameters:
+        - in: query
+          name: since
+          schema: { type: string, format: date-time }
+          description: ISO 8601 timestamp. If omitted, returns all data.
+      responses:
+        '200':
+          description: Sync data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversations:
+                    type: array
+                    items: { $ref: '../schemas/conversation.json' }
+                  messages:
+                    type: array
+                    items: { $ref: '../schemas/message.json' }
+                  notes:
+                    type: array
+                    items: { $ref: '../schemas/note.json' }
+                  folders:
+                    type: array
+                    items: { $ref: '../schemas/folder.json' }
+                  serverTime:
+                    type: string
+                    format: date-time
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+  /v1/sync/push:
+    post:
+      summary: Push changes to server
+      description: Applies client-side changes (creates/updates/deletes) to the server. Uses Last-Write-Wins (LWW) based on `updatedAt`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                conversations:
+                  type: array
+                  items: { $ref: '../schemas/conversation.json' }
+                messages:
+                  type: array
+                  items: { $ref: '../schemas/message.json' }
+                notes:
+                  type: array
+                  items: { $ref: '../schemas/note.json' }
+                folders:
+                  type: array
+                  items: { $ref: '../schemas/folder.json' }
+      responses:
+        '200':
+          description: Push successful
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
   /v1/notes:
     post:
       summary: Create a note
@@ -810,6 +946,7 @@ paths:
             schema:
               type: object
               properties:
+                id: { type: string, format: uuid }
                 title: { type: string }
                 content: { type: string }
                 folderId: { type: string, format: uuid }
@@ -931,9 +1068,30 @@ paths:
           name: id
           required: true
           schema: { type: string, format: uuid }
+        - in: query
+          name: permanent
+          schema: { type: boolean, default: false }
+          description: If true, performs a hard delete. Otherwise, soft delete.
       responses:
         '204':
           description: Note deleted
+        '404':
+          description: Note not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/notes/{id}/restore:
+    post:
+      summary: Restore a deleted note
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Note restored
         '404':
           description: Note not found
           content:
@@ -956,6 +1114,7 @@ paths:
             schema:
               type: object
               properties:
+                id: { type: string, format: uuid }
                 name: { type: string }
                 parentId: { type: string, format: uuid }
               required: [name]
@@ -1064,10 +1223,6 @@ paths:
                 $ref: ../schemas/problem.json
         '401':
           description: Not authenticated
-          content:
-            application/problem+json:
-              schema:
-                $ref: ../schemas/problem.json
     delete:
       summary: Delete a folder
       parameters:
@@ -1075,9 +1230,36 @@ paths:
           name: id
           required: true
           schema: { type: string, format: uuid }
+        - in: query
+          name: permanent
+          schema: { type: boolean, default: false }
+          description: If true, performs a hard delete. Otherwise, soft delete.
       responses:
         '204':
           description: Folder deleted
+        '404':
+          description: Folder not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/folders/{id}/restore:
+    post:
+      summary: Restore a deleted folder
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Folder restored
         '404':
           description: Folder not found
           content:

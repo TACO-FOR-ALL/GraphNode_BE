@@ -3,7 +3,6 @@
  */
 export interface NoteDto {
   id: string;
-  ownerUserId: string;
   title: string;
   content: string;
   folderId: string | null;
@@ -16,7 +15,6 @@ export interface NoteDto {
  */
 export interface FolderDto {
   id: string;
-  ownerUserId: string;
   name: string;
   parentId: string | null;
   createdAt: string;

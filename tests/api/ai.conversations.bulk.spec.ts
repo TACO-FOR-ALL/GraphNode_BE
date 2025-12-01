@@ -29,6 +29,19 @@ jest.mock('../../src/core/services/ConversationService', () => ({
       store.conversations.set(id, newConv);
       return newConv;
     }
+    async bulkCreate(ownerUserId: string, threads: any[]) {
+      return threads.map(t => {
+        const newConv = { 
+          id: t.id || 'mock-id', 
+          title: t.title, 
+          messages: t.messages || [], 
+          ownerUserId, 
+          updatedAt: new Date().toISOString() 
+        };
+        store.conversations.set(newConv.id, newConv);
+        return newConv;
+      });
+    }
     async getById(id: string, ownerUserId: string) {
       const conv = store.conversations.get(id);
       if (conv && conv.ownerUserId === ownerUserId) return conv;

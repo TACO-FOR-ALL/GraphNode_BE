@@ -17,6 +17,7 @@
  * @property folderId 소속 폴더 ID (null이면 최상위)
  * @property createdAt 생성 일시
  * @property updatedAt 수정 일시
+ * @property deletedAt 삭제 일시
  */
 export interface NoteDoc {
   /** 문서 고유 ID (UUID) */
@@ -33,6 +34,8 @@ export interface NoteDoc {
   createdAt: Date;
   /** 수정 일시 */
   updatedAt: Date;
+  /** 삭제 일시 (null이면 활성) */
+  deletedAt?: Date | null;
 }
 
 /**
@@ -44,6 +47,7 @@ export interface NoteDoc {
  * @property parentId 상위 폴더 ID (null이면 최상위)
  * @property createdAt 생성 일시
  * @property updatedAt 수정 일시
+ * @property deletedAt 삭제 일시
  */
 export interface FolderDoc {
   /** 문서 고유 ID (UUID) */
@@ -58,4 +62,6 @@ export interface FolderDoc {
   createdAt: Date;
   /** 수정 일시 */
   updatedAt: Date;
+  /** 삭제 일시 */
+  deletedAt?: Date | null;
 }

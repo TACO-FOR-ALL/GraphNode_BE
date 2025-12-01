@@ -1,4 +1,5 @@
-import { v4 as uuidv4 } from 'uuid';
+import { ulid } from 'ulid';
+import { MongoClient, ClientSession } from 'mongodb';
 
 import { NoteRepository } from '../ports/NoteRepository';
 import { CreateNoteRequest, UpdateNoteRequest, CreateFolderRequest, UpdateFolderRequest } from '../../shared/dtos/note.schemas';
@@ -30,19 +31,20 @@ export class NoteService {
    * @returns 생성된 노트 DTO
    */
   async createNote(userId: string, dto: CreateNoteRequest): Promise<Note> {
-    const now = new Date();
+    const now: Date = new Date();
     // DB 문서 생성
     const doc: NoteDoc = {
-      _id: uuidv4(),
+      _id: dto.id || ulid(), // 클라이언트 제공 ID 우선, 없으면 ULID 생성
       ownerUserId: userId,
       title: dto.title || 'Untitled', // 제목이 없으면 기본값 설정
       content: dto.content,
       folderId: dto.folderId || null,
       createdAt: now,
       updatedAt: now,
+      deletedAt: null, // 초기값 null
     };
     
-    const created = await this.noteRepo.createNote(doc);
+    const created: NoteDoc = await this.noteRepo.createNote(doc);
     return toNoteDto(created);
   }
 
@@ -55,7 +57,7 @@ export class NoteService {
    * @throws {NotFoundError} 노트가 존재하지 않을 경우
    */
   async getNote(userId: string, noteId: string): Promise<Note> {
-    const note = await this.noteRepo.getNote(noteId, userId);
+    const note: NoteDoc | null = await this.noteRepo.getNote(noteId, userId);
     if (!note) throw new NotFoundError(`Note not found: ${noteId}`);
     return toNoteDto(note);
   }
@@ -68,7 +70,7 @@ export class NoteService {
    * @returns 노트 DTO 목록
    */
   async listNotes(userId: string, folderId: string | null): Promise<Note[]> {
-    const docs = await this.noteRepo.listNotes(userId, folderId);
+    const docs: NoteDoc[] = await this.noteRepo.listNotes(userId, folderId);
     return docs.map(doc => toNoteDto(doc));
   }
 
@@ -89,7 +91,7 @@ export class NoteService {
     // undefined 필드는 업데이트에서 제외
     Object.keys(updates).forEach(key => (updates as any)[key] === undefined && delete (updates as any)[key]);
 
-    const updated = await this.noteRepo.updateNote(noteId, userId, updates);
+    const updated: NoteDoc | null = await this.noteRepo.updateNote(noteId, userId, updates);
     if (!updated) throw new NotFoundError(`Note not found: ${noteId}`);
     return toNoteDto(updated);
   }
@@ -99,11 +101,33 @@ export class NoteService {
    * 
    * @param userId 소유자 ID
    * @param noteId 노트 ID
+   * @param permanent 영구 삭제 여부 (true: Hard Delete, false: Soft Delete)
    * @throws {NotFoundError} 노트가 존재하지 않을 경우
    */
-  async deleteNote(userId: string, noteId: string): Promise<void> {
-    const deleted = await this.noteRepo.deleteNote(noteId, userId);
+  async deleteNote(userId: string, noteId: string, permanent: boolean = false): Promise<void> {
+    let deleted: boolean = false;
+    
+    if (permanent) {
+      deleted = await this.noteRepo.hardDeleteNote(noteId, userId);
+    }
+    
+    if (!permanent) {
+      deleted = await this.noteRepo.softDeleteNote(noteId, userId);
+    }
+    
     if (!deleted) throw new NotFoundError(`Note not found: ${noteId}`);
+  }
+
+  /**
+   * 노트를 복구합니다.
+   * 
+   * @param userId 소유자 ID
+   * @param noteId 노트 ID
+   * @throws {NotFoundError} 노트가 존재하지 않을 경우
+   */
+  async restoreNote(userId: string, noteId: string): Promise<void> {
+    const restored = await this.noteRepo.restoreNote(noteId, userId);
+    if (!restored) throw new NotFoundError(`Note not found: ${noteId}`);
   }
 
   // --- 폴더(Folder) 관련 서비스 ---
@@ -116,16 +140,17 @@ export class NoteService {
    * @returns 생성된 폴더 DTO
    */
   async createFolder(userId: string, dto: CreateFolderRequest): Promise<Folder> {
-    const now = new Date();
+    const now: Date = new Date();
     const doc: FolderDoc = {
-      _id: uuidv4(),
+      _id: dto.id || ulid(), // 클라이언트 제공 ID 우선
       ownerUserId: userId,
       name: dto.name,
       parentId: dto.parentId || null,
       createdAt: now,
       updatedAt: now,
+      deletedAt: null,
     };
-    const created = await this.noteRepo.createFolder(doc);
+    const created: FolderDoc = await this.noteRepo.createFolder(doc);
     return toFolderDto(created);
   }
 
@@ -138,7 +163,7 @@ export class NoteService {
    * @throws {NotFoundError} 폴더가 존재하지 않을 경우
    */
   async getFolder(userId: string, folderId: string): Promise<Folder> {
-    const folder = await this.noteRepo.getFolder(folderId, userId);
+    const folder: FolderDoc | null = await this.noteRepo.getFolder(folderId, userId);
     if (!folder) throw new NotFoundError(`Folder not found: ${folderId}`);
     return toFolderDto(folder);
   }
@@ -151,7 +176,7 @@ export class NoteService {
    * @returns 폴더 DTO 목록
    */
   async listFolders(userId: string, parentId: string | null): Promise<Folder[]> {
-    const docs = await this.noteRepo.listFolders(userId, parentId);
+    const docs: FolderDoc[] = await this.noteRepo.listFolders(userId, parentId);
     return docs.map(doc => toFolderDto(doc));
   }
 
@@ -171,7 +196,7 @@ export class NoteService {
     };
     Object.keys(updates).forEach(key => (updates as any)[key] === undefined && delete (updates as any)[key]);
 
-    const updated = await this.noteRepo.updateFolder(folderId, userId, updates);
+    const updated: FolderDoc | null = await this.noteRepo.updateFolder(folderId, userId, updates);
     if (!updated) throw new NotFoundError(`Folder not found: ${folderId}`);
     return toFolderDto(updated);
   }
@@ -184,32 +209,80 @@ export class NoteService {
    * 
    * @param userId 소유자 ID
    * @param folderId 삭제할 폴더 ID
+   * @param permanent 영구 삭제 여부 (true: Hard Delete, false: Soft Delete)
    * @throws {NotFoundError} 폴더가 존재하지 않을 경우
    */
-  async deleteFolder(userId: string, folderId: string): Promise<void> {
-    const client = getMongo();
-    const session = client.startSession();
+  async deleteFolder(userId: string, folderId: string, permanent: boolean = false): Promise<void> {
+    const client: MongoClient = getMongo();
+    const session: ClientSession = client.startSession();
 
     try {
       await session.withTransaction(async () => {
         // 1. 삭제 대상 폴더 존재 확인
-        const targetFolder = await this.noteRepo.getFolder(folderId, userId);
+        const targetFolder: FolderDoc | null = await this.noteRepo.getFolder(folderId, userId);
         if (!targetFolder) {
             // 트랜잭션 내에서 에러를 던지면 자동으로 롤백됩니다.
             throw new NotFoundError(`Folder not found: ${folderId}`);
         }
 
         // 2. 모든 하위 폴더 ID 조회 (재귀적 탐색)
-        const descendantIds = await this.noteRepo.findDescendantFolderIds(folderId, userId);
+        const descendantIds: string[] = await this.noteRepo.findDescendantFolderIds(folderId, userId);
         
         // 3. 삭제할 모든 폴더 ID 목록 구성 (타겟 폴더 포함)
-        const allFolderIdsToDelete = [folderId, ...descendantIds];
+        const allFolderIdsToDelete: string[] = [folderId, ...descendantIds];
 
-        // 4. 해당 폴더들에 속한 모든 노트 일괄 삭제
-        await this.noteRepo.deleteNotesByFolderIds(allFolderIdsToDelete, userId, session);
+        if (permanent) {
+          // 4. 해당 폴더들에 속한 모든 노트 일괄 삭제 (Hard)
+          await this.noteRepo.hardDeleteNotesByFolderIds(allFolderIdsToDelete, userId, session);
 
-        // 5. 폴더들 일괄 삭제
-        await this.noteRepo.deleteFolders(allFolderIdsToDelete, userId, session);
+          // 5. 폴더들 일괄 삭제 (Hard)
+          await this.noteRepo.hardDeleteFolders(allFolderIdsToDelete, userId, session);
+          return;
+        }
+
+        // 4. 해당 폴더들에 속한 모든 노트 일괄 삭제 (Soft)
+        await this.noteRepo.softDeleteNotesByFolderIds(allFolderIdsToDelete, userId, session);
+
+        // 5. 폴더들 일괄 삭제 (Soft)
+        await this.noteRepo.softDeleteFolders(allFolderIdsToDelete, userId, session);
+      });
+    } finally {
+      await session.endSession();
+    }
+  }
+
+  /**
+   * 폴더 복구 (Cascade Restore)
+   * 
+   * - 해당 폴더와 하위 폴더, 노트들을 모두 복구합니다.
+   * 
+   * @param userId 소유자 ID
+   * @param folderId 복구할 폴더 ID
+   * @throws {NotFoundError} 폴더가 존재하지 않을 경우
+   */
+  async restoreFolder(userId: string, folderId: string): Promise<void> {
+    const client: MongoClient = getMongo();
+    const session: ClientSession = client.startSession();
+
+    try {
+      await session.withTransaction(async () => {
+        // 1. 복구 대상 폴더 존재 확인 (삭제된 상태라도 조회됨)
+        const targetFolder: FolderDoc | null = await this.noteRepo.getFolder(folderId, userId);
+        if (!targetFolder) {
+            throw new NotFoundError(`Folder not found: ${folderId}`);
+        }
+
+        // 2. 모든 하위 폴더 ID 조회
+        const descendantIds: string[] = await this.noteRepo.findDescendantFolderIds(folderId, userId);
+        
+        // 3. 복구할 모든 폴더 ID 목록 구성 (타겟 폴더 포함)
+        const allFolderIdsToRestore: string[] = [folderId, ...descendantIds];
+
+        // 4. 해당 폴더들에 속한 모든 노트 일괄 복구
+        await this.noteRepo.restoreNotesByFolderIds(allFolderIdsToRestore, userId, session);
+
+        // 5. 폴더들 일괄 복구
+        await this.noteRepo.restoreFolders(allFolderIdsToRestore, userId, session);
       });
     } finally {
       await session.endSession();

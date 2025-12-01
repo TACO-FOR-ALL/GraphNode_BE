@@ -50,17 +50,67 @@ class InMemoryNoteRepo implements NoteRepository {
   }
 
   async deleteNote(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
+    return this.hardDeleteNote(id, ownerUserId, session);
+  }
+
+  async softDeleteNote(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
+    const doc = this.notes.get(id);
+    if (!doc || doc.ownerUserId !== ownerUserId) return false;
+    doc.deletedAt = new Date();
+    return true;
+  }
+
+  async hardDeleteNote(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
     const doc = this.notes.get(id);
     if (!doc || doc.ownerUserId !== ownerUserId) return false;
     this.notes.delete(id);
     return true;
   }
 
+  async restoreNote(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
+    const doc = this.notes.get(id);
+    if (!doc || doc.ownerUserId !== ownerUserId) return false;
+    doc.deletedAt = null;
+    return true;
+  }
+
+  async findNotesModifiedSince(ownerUserId: string, since: Date): Promise<NoteDoc[]> {
+    return Array.from(this.notes.values()).filter(
+      n => n.ownerUserId === ownerUserId && n.updatedAt >= since
+    );
+  }
+
   async deleteNotesByFolderIds(folderIds: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+    return this.hardDeleteNotesByFolderIds(folderIds, ownerUserId, session);
+  }
+
+  async softDeleteNotesByFolderIds(folderIds: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const [id, note] of Array.from(this.notes.entries())) {
+      if (note.ownerUserId === ownerUserId && note.folderId && folderIds.includes(note.folderId)) {
+        note.deletedAt = new Date();
+        count++;
+      }
+    }
+    return count;
+  }
+
+  async hardDeleteNotesByFolderIds(folderIds: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
     let count = 0;
     for (const [id, note] of Array.from(this.notes.entries())) {
       if (note.ownerUserId === ownerUserId && note.folderId && folderIds.includes(note.folderId)) {
         this.notes.delete(id);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  async restoreNotesByFolderIds(folderIds: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const [id, note] of Array.from(this.notes.entries())) {
+      if (note.ownerUserId === ownerUserId && note.folderId && folderIds.includes(note.folderId)) {
+        note.deletedAt = null;
         count++;
       }
     }
@@ -94,10 +144,12 @@ class InMemoryNoteRepo implements NoteRepository {
   }
 
   async deleteFolder(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
-    const doc = this.folders.get(id);
-    if (!doc || doc.ownerUserId !== ownerUserId) return false;
-    this.folders.delete(id);
-    return true;
+    return (await this.hardDeleteFolders([id], ownerUserId, session)) > 0;
+  }
+
+  async restoreFolder(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
+    const restored = await this.restoreFolders([id], ownerUserId, session);
+    return restored > 0;
   }
 
   async findDescendantFolderIds(rootFolderId: string, ownerUserId: string): Promise<string[]> {
@@ -115,6 +167,22 @@ class InMemoryNoteRepo implements NoteRepository {
   }
 
   async deleteFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+    return this.hardDeleteFolders(ids, ownerUserId, session);
+  }
+
+  async softDeleteFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const id of ids) {
+      const doc = this.folders.get(id);
+      if (doc && doc.ownerUserId === ownerUserId) {
+        doc.deletedAt = new Date();
+        count++;
+      }
+    }
+    return count;
+  }
+
+  async hardDeleteFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
     let count = 0;
     for (const id of ids) {
       const doc = this.folders.get(id);
@@ -124,6 +192,24 @@ class InMemoryNoteRepo implements NoteRepository {
       }
     }
     return count;
+  }
+
+  async restoreFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const id of ids) {
+      const doc = this.folders.get(id);
+      if (doc && doc.ownerUserId === ownerUserId) {
+        doc.deletedAt = null;
+        count++;
+      }
+    }
+    return count;
+  }
+
+  async findFoldersModifiedSince(ownerUserId: string, since: Date): Promise<FolderDoc[]> {
+    return Array.from(this.folders.values()).filter(
+      f => f.ownerUserId === ownerUserId && f.updatedAt >= since
+    );
   }
 }
 
@@ -140,7 +226,7 @@ describe('NoteService', () => {
     const note = await service.createNote('u1', { title: 'My Note', content: '# Hello' });
     expect(note.title).toBe('My Note');
     expect(note.content).toBe('# Hello');
-    expect(note.ownerUserId).toBe('u1');
+
     expect(note.id).toBeDefined();
   });
 
@@ -176,14 +262,31 @@ describe('NoteService', () => {
 
   test('deleteNote removes note', async () => {
     const created = await service.createNote('u1', { content: 'To delete' });
-    await service.deleteNote('u1', created.id);
+    await service.deleteNote('u1', created.id, true); // Hard delete
     await expect(service.getNote('u1', created.id)).rejects.toThrow(NotFoundError);
+  });
+
+  test('soft delete and restore note', async () => {
+    const created = await service.createNote('u1', { content: 'To restore' });
+    
+    // Soft Delete
+    await service.deleteNote('u1', created.id, false);
+    const doc = await repo.getNote(created.id, 'u1');
+    expect(doc?.deletedAt).not.toBeNull();
+
+    // Restore
+    await service.restoreNote('u1', created.id);
+    const restoredDoc = await repo.getNote(created.id, 'u1');
+    expect(restoredDoc?.deletedAt).toBeNull();
   });
 
   test('createFolder creates folder', async () => {
     const folder = await service.createFolder('u1', { name: 'My Folder' });
     expect(folder.name).toBe('My Folder');
     expect(folder.parentId).toBeNull();
+    
+    const doc = await repo.getFolder(folder.id, 'u1');
+    expect(doc?.ownerUserId).toBe('u1');
   });
 
   test('deleteFolder performs cascade delete', async () => {
@@ -199,14 +302,44 @@ describe('NoteService', () => {
     const noteInRoot = await service.createNote('u1', { content: 'n1', folderId: rootFolder.id });
     const noteInChild = await service.createNote('u1', { content: 'n2', folderId: childFolder.id });
 
-    // Delete root folder
-    await service.deleteFolder('u1', rootFolder.id);
+    // Delete root folder (Hard delete)
+    await service.deleteFolder('u1', rootFolder.id, true);
 
     // Verify everything is gone
-    await expect(service.getFolder('u1', rootFolder.id)).rejects.toThrow(NotFoundError);
-    await expect(service.getFolder('u1', childFolder.id)).rejects.toThrow(NotFoundError);
-    await expect(service.getNote('u1', noteInRoot.id)).rejects.toThrow(NotFoundError);
-    await expect(service.getNote('u1', noteInChild.id)).rejects.toThrow(NotFoundError);
+    await expect(repo.getFolder(rootFolder.id, 'u1')).resolves.toBeNull();
+    await expect(repo.getFolder(childFolder.id, 'u1')).resolves.toBeNull();
+    await expect(repo.getNote(noteInRoot.id, 'u1')).resolves.toBeNull();
+    await expect(repo.getNote(noteInChild.id, 'u1')).resolves.toBeNull();
+  });
+
+  test('restoreFolder performs cascade restore', async () => {
+    const rootFolder = await service.createFolder('u1', { name: 'Root' });
+    const childFolder = await service.createFolder('u1', { name: 'Child', parentId: rootFolder.id });
+    const noteInChild = await service.createNote('u1', { content: 'n2', folderId: childFolder.id });
+
+    // Soft Delete
+    await service.deleteFolder('u1', rootFolder.id, false);
+    
+    const rootDoc = await repo.getFolder(rootFolder.id, 'u1');
+    expect(rootDoc?.deletedAt).not.toBeNull();
+    
+    const childDoc = await repo.getFolder(childFolder.id, 'u1');
+    expect(childDoc?.deletedAt).not.toBeNull();
+
+    const noteDoc = await repo.getNote(noteInChild.id, 'u1');
+    expect(noteDoc?.deletedAt).not.toBeNull();
+
+    // Restore
+    await service.restoreFolder('u1', rootFolder.id);
+
+    const restoredRoot = await repo.getFolder(rootFolder.id, 'u1');
+    expect(restoredRoot?.deletedAt).toBeNull();
+
+    const restoredChild = await repo.getFolder(childFolder.id, 'u1');
+    expect(restoredChild?.deletedAt).toBeNull();
+
+    const restoredNote = await repo.getNote(noteInChild.id, 'u1');
+    expect(restoredNote?.deletedAt).toBeNull();
   });
 
   test('deleteFolder handles transaction error', async () => {
@@ -223,7 +356,7 @@ describe('NoteService', () => {
     });
 
     const folder = await service.createFolder('u1', { name: 'F' });
-    await expect(service.deleteFolder('u1', folder.id)).rejects.toThrow('Tx Failed');
+    await expect(service.deleteFolder('u1', folder.id, true)).rejects.toThrow('Tx Failed');
 
     // Restore mock
     require('../../src/infra/db/mongodb').getMongo = () => originalGetMongo;

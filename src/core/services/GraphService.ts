@@ -17,6 +17,7 @@ import {
   toGraphStatsDoc,
   toGraphStatsDto,
 } from '../../shared/mappers/graph';
+import { GraphClusterDoc, GraphEdgeDoc, GraphNodeDoc, GraphStatsDoc } from '../types/persistence/graph.persistence';
 
 /**
  * 모듈: GraphService (그래프 서비스)
@@ -43,7 +44,7 @@ export class GraphService {
       if (typeof node.id !== 'number') throw new ValidationError('node.id must be a number');
       
       // DTO -> Doc 변환 후 저장
-      const doc = toGraphNodeDoc(node);
+      const doc : GraphNodeDoc = toGraphNodeDoc(node);
       await this.repo.upsertNode(doc, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
@@ -119,7 +120,7 @@ export class GraphService {
     try {
       this.assertUser(userId);
       this.assertNodeId(nodeId);
-      const doc = await this.repo.findNode(userId, nodeId);
+      const doc : GraphNodeDoc | null = await this.repo.findNode(userId, nodeId);
       return doc ? toGraphNodeDto(doc) : null;
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
@@ -136,7 +137,7 @@ export class GraphService {
   async listNodes(userId: string): Promise<GraphNodeDto[]> {
     try {
       this.assertUser(userId);
-      const docs = await this.repo.listNodes(userId);
+      const docs: GraphNodeDoc[] = await this.repo.listNodes(userId);
       return docs.map(toGraphNodeDto);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
@@ -154,7 +155,7 @@ export class GraphService {
   async listNodesByCluster(userId: string, clusterId: string): Promise<GraphNodeDto[]> {
     try {
       this.assertUser(userId);
-      const docs = await this.repo.listNodesByCluster(userId, clusterId);
+      const docs: GraphNodeDoc[] = await this.repo.listNodesByCluster(userId, clusterId);
       return docs.map(toGraphNodeDto);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
@@ -175,7 +176,7 @@ export class GraphService {
       this.assertNodeId(edge.target);
       if (!['hard', 'insight'].includes(edge.type)) throw new ValidationError('edge.type must be hard or insight');
       
-      const doc = toGraphEdgeDoc(edge);
+      const doc: GraphEdgeDoc = toGraphEdgeDoc(edge);
       return await this.repo.upsertEdge(doc, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
@@ -244,7 +245,7 @@ export class GraphService {
   async listEdges(userId: string): Promise<GraphEdgeDto[]> {
     try {
       this.assertUser(userId);
-      const docs = await this.repo.listEdges(userId);
+      const docs : GraphEdgeDoc[] = await this.repo.listEdges(userId);
       return docs.map(toGraphEdgeDto);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
@@ -261,7 +262,7 @@ export class GraphService {
     try {
       this.assertUser(cluster.userId);
       if (!cluster.id) throw new ValidationError('cluster.id required');
-      const doc = toGraphClusterDoc(cluster);
+      const doc : GraphClusterDoc = toGraphClusterDoc(cluster);
       await this.repo.upsertCluster(doc, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
@@ -297,7 +298,7 @@ export class GraphService {
     try {
       this.assertUser(userId);
       if (!clusterId) throw new ValidationError('clusterId required');
-      const doc = await this.repo.findCluster(userId, clusterId);
+      const doc : GraphClusterDoc | null = await this.repo.findCluster(userId, clusterId);
       return doc ? toGraphClusterDto(doc) : null;
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
@@ -314,7 +315,7 @@ export class GraphService {
   async listClusters(userId: string): Promise<GraphClusterDto[]> {
     try {
       this.assertUser(userId);
-      const docs = await this.repo.listClusters(userId);
+      const docs : GraphClusterDoc[] = await this.repo.listClusters(userId);
       return docs.map(toGraphClusterDto);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
@@ -330,7 +331,7 @@ export class GraphService {
   async saveStats(stats: GraphStatsDto, options?: RepoOptions): Promise<void> {
     try {
       this.assertUser(stats.userId);
-      const doc = toGraphStatsDoc(stats);
+      const doc : GraphStatsDoc = toGraphStatsDoc(stats);
       await this.repo.saveStats(doc, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
@@ -347,7 +348,7 @@ export class GraphService {
   async getStats(userId: string): Promise<GraphStatsDto | null> {
     try {
       this.assertUser(userId);
-      const doc = await this.repo.getStats(userId);
+      const doc : GraphStatsDoc | null = await this.repo.getStats(userId);
       return doc ? toGraphStatsDto(doc) : null;
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;

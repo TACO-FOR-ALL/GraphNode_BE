@@ -40,11 +40,13 @@ export function createAiRouter(deps: {
   router.get('/conversations/:conversationId', asyncHandler(aiController.getConversation.bind(aiController)));
   router.patch('/conversations/:conversationId', asyncHandler(aiController.updateConversation.bind(aiController)));
   router.delete('/conversations/:conversationId', asyncHandler(aiController.deleteConversation.bind(aiController)));
+  router.post('/conversations/:conversationId/restore', asyncHandler(aiController.restoreConversation.bind(aiController)));
 
   // Messages
   router.post('/conversations/:conversationId/messages', asyncHandler(aiController.createMessage.bind(aiController)));
   router.patch('/conversations/:conversationId/messages/:messageId', asyncHandler(aiController.updateMessage.bind(aiController)));
   router.delete('/conversations/:conversationId/messages/:messageId', asyncHandler(aiController.deleteMessage.bind(aiController)));
+  router.post('/conversations/:conversationId/messages/:messageId/restore', asyncHandler(aiController.restoreMessage.bind(aiController)));
 
   return router;
 }

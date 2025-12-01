@@ -18,15 +18,15 @@ import { z } from 'zod';
  * 선택: messages (초기 메시지 목록)
  */
 export const createConversationSchema = z.object({
-  id: z.string().min(1, "ID는 필수입니다"), // 빈 문자열 불가
+  id: z.string().min(1, "ID는 필수입니다").optional(), // 서버 생성 지원
   title: z.string().min(1, "제목은 필수입니다").max(200, "제목은 200자를 넘을 수 없습니다"),
   messages: z
     .array(
       z.object({
-        id: z.string().min(1),
+        id: z.string().min(1).optional(), // 서버 생성 지원
         role: z.enum(['user', 'assistant', 'system']), // 허용된 역할만 가능
         content: z.string().min(1, "메시지 내용은 필수입니다"),
-        ts: z.string().datetime().optional(), // ISO 8601 날짜 문자열
+        // ts 제거, createdAt/updatedAt은 서버에서 처리
       })
     )
     .optional(),
@@ -56,10 +56,10 @@ export const updateConversationSchema = z.object({
  * 필수: id, role, content
  */
 export const createMessageSchema = z.object({
-  id: z.string().min(1),
+  id: z.string().min(1).optional(), // 서버 생성 지원
   role: z.enum(['user', 'assistant', 'system']),
   content: z.string().min(1),
-  ts: z.string().datetime().optional(),
+  // ts 제거
 });
 
 /**

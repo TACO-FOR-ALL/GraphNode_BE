@@ -9,6 +9,8 @@ import { z } from 'zod';
  * 노트 생성 요청 스키마
  */
 export const createNoteSchema = z.object({
+  /** 노트 ID (선택). 생략 시 서버 생성 */
+  id: z.uuid().optional(),
   /** 노트 제목 (선택). 생략 시 내용의 첫 줄이나 기본값 사용 */
   title: z.string().min(1).optional(),
   /** 노트 내용 (필수). Markdown 형식 */
@@ -33,6 +35,8 @@ export const updateNoteSchema = z.object({
  * 폴더 생성 요청 스키마
  */
 export const createFolderSchema = z.object({
+  /** 폴더 ID (선택). 생략 시 서버 생성 */
+  id: z.uuid().optional(),
   /** 폴더 이름 (필수) */
   name: z.string().min(1, "Folder name is required"),
   /** 상위 폴더 ID (선택). 생략 또는 null 시 최상위 */

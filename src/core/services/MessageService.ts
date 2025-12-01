@@ -19,6 +19,7 @@ import { ConversationRepository } from '../ports/ConversationRepository';
 import { NotFoundError, ValidationError, UpstreamError } from '../../shared/errors/domain';
 import { AppError } from '../../shared/errors/base';
 import { toMessageDoc, toChatMessageDto } from '../../shared/mappers/ai';
+import { MessageDoc, ConversationDoc } from '../types/persistence/ai.persistence';
 
 export class MessageService {
   constructor(
@@ -42,7 +43,7 @@ export class MessageService {
       await this.validateConversationOwner(conversationId, ownerUserId);
 
       // 2. 메시지 ID 생성 (없으면 자동 생성)
-      const finalMessageId = message.id?.trim() ? message.id : ulid();
+      const finalMessageId: string = message.id?.trim() ? message.id : ulid();
       
       // 3. 내용 유효성 검사
       if (!message.content || message.content.trim().length === 0) {
@@ -50,19 +51,22 @@ export class MessageService {
       }
 
       // 4. DTO 생성
+      const now: string = new Date().toISOString();
       const msgDto: ChatMessage = {
         id: finalMessageId,
         role: message.role,
         content: message.content,
-        ts: message.ts ?? new Date().toISOString(),
+        createdAt: now,
+        updatedAt: now,
       };
 
       // 5. DB 저장 (DTO -> Doc 변환)
-      const msgDoc = toMessageDoc(msgDto, conversationId);
-      const createdDoc = await this.messageRepo.create(msgDoc);
+      // ownerUserId 추가 전달
+      const msgDoc: MessageDoc = toMessageDoc(msgDto, conversationId, ownerUserId);
+      const createdDoc: MessageDoc = await this.messageRepo.create(msgDoc);
       
       // 6. 대화방의 '마지막 업데이트 시간' 갱신
-      await this.conversationRepo.update(conversationId, ownerUserId, { updatedAt: createdDoc.ts });
+      await this.conversationRepo.update(conversationId, ownerUserId, { updatedAt: createdDoc.updatedAt });
       
       // 7. 결과 반환
       return toChatMessageDto(createdDoc);
@@ -92,10 +96,10 @@ export class MessageService {
       await this.validateConversationOwner(conversationId, ownerUserId);
 
       // 업데이트 페이로드 준비
-      const updatePayload: any = { ...updates };
+      const updatePayload: any = { ...updates, updatedAt: Date.now() };
       
       // DB 업데이트 수행
-      const updatedDoc = await this.messageRepo.update(messageId, conversationId, updatePayload);
+      const updatedDoc: MessageDoc | null = await this.messageRepo.update(messageId, conversationId, updatePayload);
       if (!updatedDoc) {
         throw new NotFoundError(`Message with id ${messageId} not found`);
       }
@@ -116,9 +120,10 @@ export class MessageService {
    * @param ownerUserId 요청자 ID
    * @param conversationId 대화방 ID
    * @param messageId 삭제할 메시지 ID
+   * @param permanent 영구 삭제 여부 (true: Hard Delete, false: Soft Delete)
    * @returns 삭제 성공 여부 (true)
    */
-  async delete(ownerUserId: string, conversationId: string, messageId: string): Promise<boolean> {
+  async delete(ownerUserId: string, conversationId: string, messageId: string, permanent: boolean = false): Promise<boolean> {
     try {
       if (!messageId || messageId.trim().length === 0) {
         throw new ValidationError('Message id is required');
@@ -126,8 +131,18 @@ export class MessageService {
       // 소유권 확인
       await this.validateConversationOwner(conversationId, ownerUserId);
 
-      // DB 삭제 수행
-      const success = await this.messageRepo.delete(messageId, conversationId);
+      let success: boolean = false;
+      
+      if (permanent) {
+        // Hard Delete
+        success = await this.messageRepo.hardDelete(messageId, conversationId);
+      }
+      
+      if (!permanent) {
+        // Soft Delete
+        success = await this.messageRepo.softDelete(messageId, conversationId);
+      }
+
       if (!success) {
         throw new NotFoundError(`Message with id ${messageId} not found`);
       }
@@ -143,6 +158,37 @@ export class MessageService {
   }
 
   /**
+   * 메시지를 복구합니다.
+   * 
+   * @param ownerUserId 요청자 ID
+   * @param conversationId 대화방 ID
+   * @param messageId 복구할 메시지 ID
+   * @returns 복구 성공 여부 (true)
+   */
+  async restore(ownerUserId: string, conversationId: string, messageId: string): Promise<boolean> {
+    try {
+      if (!messageId || messageId.trim().length === 0) {
+        throw new ValidationError('Message id is required');
+      }
+      // 소유권 확인
+      await this.validateConversationOwner(conversationId, ownerUserId);
+
+      const success = await this.messageRepo.restore(messageId, conversationId);
+      if (!success) {
+        throw new NotFoundError(`Message with id ${messageId} not found`);
+      }
+
+      // 대화방 시간 갱신
+      await this.conversationRepo.update(conversationId, ownerUserId, { updatedAt: Date.now() });
+
+      return true;
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('MessageService.restore failed', { cause: String(err) });
+    }
+  }
+
+  /**
    * 대화방 소유권을 확인하는 내부 헬퍼 메서드.
    * 
    * 사용자가 해당 대화방에 접근할 권한이 있는지 확인합니다.
@@ -153,7 +199,7 @@ export class MessageService {
    * @throws {NotFoundError} 대화방이 없거나 소유자가 아님
    */
   private async validateConversationOwner(conversationId: string, ownerUserId: string): Promise<void> {
-    const conversation = await this.conversationRepo.findById(conversationId, ownerUserId);
+    const conversation: ConversationDoc | null = await this.conversationRepo.findById(conversationId, ownerUserId);
     if (!conversation) {
       // 보안을 위해 '권한 없음'과 '찾을 수 없음'을 구분하지 않고 NotFoundError를 반환합니다.
       // 이는 악의적인 사용자가 ID 스캐닝을 통해 대화방 존재 여부를 파악하는 것을 방지합니다.

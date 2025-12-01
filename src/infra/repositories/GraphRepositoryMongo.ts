@@ -1,3 +1,5 @@
+import { FindCursor, UpdateResult, WithId } from 'mongodb';
+
 import { getMongo } from '../db/mongodb';
 import type {
   GraphClusterDoc,
@@ -98,9 +100,9 @@ export class GraphRepositoryMongo implements GraphStore {
    */
   async updateNode(userId: string, nodeId: number, patch: Partial<GraphNodeDoc>, options?: RepoOptions): Promise<void> {
     try {
-      const docId = this.nodeKey(userId, nodeId);
-      const update = { ...patch, updatedAt: patch.updatedAt ?? new Date().toISOString() };
-      const res = await this.graphNodes_col().updateOne({ _id: docId } as any, { $set: update }, options);
+      const docId: string = this.nodeKey(userId, nodeId);
+      const update: Partial<GraphNodeDoc> = { ...patch, updatedAt: patch.updatedAt ?? new Date().toISOString() };
+      const res: UpdateResult<GraphNodeDoc> = await this.graphNodes_col().updateOne({ _id: docId } as any, { $set: update }, options);
       if (res.matchedCount === 0) throw new NotFoundError('Graph node not found');
     } catch (err: unknown) {
       if (err instanceof NotFoundError) throw err;
@@ -116,7 +118,7 @@ export class GraphRepositoryMongo implements GraphStore {
    */
   async deleteNode(userId: string, nodeId: number, options?: RepoOptions): Promise<void> {
     try {
-      const docId = this.nodeKey(userId, nodeId);
+      const docId: string = this.nodeKey(userId, nodeId);
       await this.graphNodes_col().deleteOne({ _id: docId } as any, options);
       await this.graphEdges_col().deleteMany({ userId, $or: [{ source: nodeId }, { target: nodeId }] } as any, options);
     } catch (err: unknown) {
@@ -133,7 +135,7 @@ export class GraphRepositoryMongo implements GraphStore {
    */
   async deleteNodes(userId: string, nodeIds: number[], options?: RepoOptions): Promise<void> {
     try {
-      const docIds = nodeIds.map(id => this.nodeKey(userId, id));
+      const docIds: string[] = nodeIds.map(id => this.nodeKey(userId, id));
       await this.graphNodes_col().deleteMany({ _id: { $in: docIds } } as any, options);
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.deleteNodes failed', { cause: String(err) });
@@ -149,8 +151,8 @@ export class GraphRepositoryMongo implements GraphStore {
    */
   async findNode(userId: string, nodeId: number): Promise<GraphNodeDoc | null> {
     try {
-      const docId = this.nodeKey(userId, nodeId);
-      const doc = await this.graphNodes_col().findOne({ _id: docId } as any);
+      const docId: string = this.nodeKey(userId, nodeId);
+      const doc: GraphNodeDoc | null = await this.graphNodes_col().findOne({ _id: docId } as any);
       return doc;
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.findNode failed', { cause: String(err) });
@@ -165,7 +167,7 @@ export class GraphRepositoryMongo implements GraphStore {
    */
   async listNodes(userId: string): Promise<GraphNodeDoc[]> {
     try {
-      const cursor = this.graphNodes_col().find({ userId } as any);
+      const cursor : FindCursor<WithId<GraphNodeDoc>> = this.graphNodes_col().find({ userId } as any);
       return await cursor.toArray();
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.listNodes failed', { cause: String(err) });
@@ -181,7 +183,7 @@ export class GraphRepositoryMongo implements GraphStore {
    */
   async listNodesByCluster(userId: string, clusterId: string): Promise<GraphNodeDoc[]> {
     try {
-      const cursor = this.graphNodes_col().find({ userId, clusterId } as any);
+      const cursor : FindCursor<WithId<GraphNodeDoc>> = this.graphNodes_col().find({ userId, clusterId } as any);
       return await cursor.toArray();
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.listNodesByCluster failed', { cause: String(err) });
@@ -317,7 +319,7 @@ export class GraphRepositoryMongo implements GraphStore {
    */
   async findCluster(userId: string, clusterId: string): Promise<GraphClusterDoc | null> {
     try {
-      const docId = this.clusterKey(userId, clusterId);
+      const docId: string = this.clusterKey(userId, clusterId);
       return await this.graphClusters_col().findOne({ _id: docId } as any);
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.findCluster failed', { cause: String(err) });

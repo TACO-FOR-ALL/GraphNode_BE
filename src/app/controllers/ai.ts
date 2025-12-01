@@ -26,6 +26,7 @@ import {
   bulkCreateConversationsSchema as _bulkCreateConversationsSchema,
 } from '../../shared/dtos/ai.schemas';
 import { AIChatService } from '../../core/services/AIChatService';
+import { ChatThread, ChatMessage } from '../../shared/dtos/ai';
 
 // Removed duplicate imports
 
@@ -56,16 +57,14 @@ export class AiController {
    * 3. 생성된 응답을 클라이언트에게 반환합니다.
    */
   async handleAIChat(req: Request, res: Response) {
-    // Implementation will go here
-    // TODO : Implement AI chat handling logic
-
     // 요청 객체(req)에서 현재 로그인한 사용자의 ID를 추출합니다.
-    const ownerUserId = getUserIdFromRequest(req)!;
+    const ownerUserId: string = getUserIdFromRequest(req)!;
 
-    // TODO : handleAIChat method implementation
     // AI 서비스의 handleAIChat 메서드를 호출하여 실제 대화 로직을 수행합니다.
+    // TODO: Request Body에서 메시지 내용 등을 파싱하여 전달해야 합니다.
     await this.aiChatService.handleAIChat();
-
+    
+    res.status(200).send(); // 임시 응답
   }
 
   /**
@@ -82,13 +81,16 @@ export class AiController {
    */
   async bulkCreateConversations(req: Request, res: Response) {
     // 1. 요청 Body 검증 및 파싱 (Zod 스키마 사용)
-    const { conversations } = _bulkCreateConversationsSchema.parse(req.body);
+    // 명시적 타입 선언: Zod infer를 사용하거나 직접 타입을 지정할 수 있습니다.
+    // 여기서는 구조 분해 할당 시 타입을 명시하기 위해 별도 변수로 받습니다.
+    const body = _bulkCreateConversationsSchema.parse(req.body);
+    const conversations = body.conversations;
     
     // 2. 사용자 ID 추출
-    const ownerUserId = getUserIdFromRequest(req)!;
+    const ownerUserId: string = getUserIdFromRequest(req)!;
 
     // 3. 서비스 호출 (대량 생성 로직 위임)
-    const createdConversations = await this.conversationService.bulkCreate(ownerUserId, conversations);
+    const createdConversations: ChatThread[] = await this.conversationService.bulkCreate(ownerUserId, conversations);
 
     // 4. 응답 반환 (201 Created)
     res.status(201).json({ conversations: createdConversations });
@@ -111,10 +113,10 @@ export class AiController {
     const { id: threadId, title, messages } = _createConversationSchema.parse(req.body);
     
     // 2. 사용자 ID 추출
-    const ownerUserId = getUserIdFromRequest(req)!;
+    const ownerUserId: string = getUserIdFromRequest(req)!;
     
     // 3. 서비스 호출 (대화방 생성)
-    const newThread = await this.conversationService.create(ownerUserId, threadId, title, messages);
+    const newThread: ChatThread = await this.conversationService.create(ownerUserId, threadId, title, messages);
     
     // 4. 응답 반환 (Location 헤더에 생성된 리소스 위치 포함)
     res.status(201).location(`/v1/ai/conversations/${newThread.id}`).json(newThread);
@@ -136,14 +138,14 @@ export class AiController {
    * 응답: 200 OK, { items: [...], nextCursor: ... }
    */
   async listConversations(req: Request, res: Response) {
-    const ownerUserId = getUserIdFromRequest(req)!;
+    const ownerUserId: string = getUserIdFromRequest(req)!;
     
     // 쿼리 파라미터 파싱 (문자열을 숫자로 변환)
-    const limit = parseInt(req.query.limit as string || '50', 10);
-    const cursor = req.query.cursor as string | undefined;
+    const limit: number = parseInt(req.query.limit as string || '50', 10);
+    const cursor: string | undefined = req.query.cursor as string | undefined;
     
     // 서비스 호출 (목록 조회)
-    const result = await this.conversationService.listByOwner(ownerUserId, limit, cursor);
+    const result: { items: ChatThread[]; nextCursor?: string | null } = await this.conversationService.listByOwner(ownerUserId, limit, cursor);
     
     res.status(200).json(result);
   }
@@ -162,10 +164,10 @@ export class AiController {
    */
   async getConversation(req: Request, res: Response) {
     const { conversationId } = req.params;
-    const ownerUserId = getUserIdFromRequest(req)!;
+    const ownerUserId: string = getUserIdFromRequest(req)!;
     
     // 서비스 호출 (단일 조회)
-    const thread = await this.conversationService.getById(conversationId, ownerUserId);
+    const thread: ChatThread = await this.conversationService.getById(conversationId, ownerUserId);
     
     res.status(200).json(thread);
   }
@@ -186,10 +188,10 @@ export class AiController {
     
     // 요청 데이터 검증 (수정할 내용)
     const updates = _updateConversationSchema.parse(req.body);
-    const ownerUserId = getUserIdFromRequest(req)!;
+    const ownerUserId: string = getUserIdFromRequest(req)!;
     
     // 서비스 호출 (업데이트)
-    const updatedThread = await this.conversationService.update(conversationId, ownerUserId, updates);
+    const updatedThread: ChatThread = await this.conversationService.update(conversationId, ownerUserId, updates);
     
     res.status(200).json(updatedThread);
   }
@@ -203,16 +205,40 @@ export class AiController {
    * - 대화방을 삭제합니다.
    * - 대화방에 속한 모든 메시지도 함께 삭제됩니다 (Cascade Delete).
    * 
+   * Query Params:
+   * - permanent: 'true'이면 영구 삭제 (Hard Delete), 그 외에는 Soft Delete
+   * 
    * 응답: 204 No Content (성공했지만 본문 없음)
    */
   async deleteConversation(req: Request, res: Response) {
     const { conversationId } = req.params;
-    const ownerUserId = getUserIdFromRequest(req)!;
+    const ownerUserId: string = getUserIdFromRequest(req)!;
+    const permanent: boolean = req.query.permanent === 'true';
     
     // 서비스 호출 (삭제)
-    await this.conversationService.delete(conversationId, ownerUserId);
+    await this.conversationService.delete(conversationId, ownerUserId, permanent);
     
     // 204 상태 코드는 "성공적으로 처리했으나 돌려줄 데이터가 없음"을 의미합니다.
+    res.status(204).send();
+  }
+
+  /**
+   * Conversation Restore Controller 메서드
+   * 
+   * [POST] /v1/ai/conversations/:conversationId/restore
+   * 
+   * 역할:
+   * - 삭제된 대화방을 복구합니다.
+   * - 대화방에 속한 모든 메시지도 함께 복구됩니다.
+   * 
+   * 응답: 204 No Content
+   */
+  async restoreConversation(req: Request, res: Response) {
+    const { conversationId } = req.params;
+    const ownerUserId: string = getUserIdFromRequest(req)!;
+    
+    await this.conversationService.restore(conversationId, ownerUserId);
+    
     res.status(204).send();
   }
 
@@ -232,10 +258,10 @@ export class AiController {
     
     // 요청 데이터 검증
     const messageData = _createMessageSchema.parse(req.body);
-    const ownerUserId = getUserIdFromRequest(req)!;
+    const ownerUserId: string = getUserIdFromRequest(req)!;
     
     // 서비스 호출 (메시지 생성)
-    const newMessage = await this.messageService.create(ownerUserId, conversationId, messageData);
+    const newMessage: ChatMessage = await this.messageService.create(ownerUserId, conversationId, messageData);
     
     res.status(201).json(newMessage);
   }
@@ -256,10 +282,10 @@ export class AiController {
     
     // 요청 데이터 검증
     const updates = _updateMessageSchema.parse(req.body);
-    const ownerUserId = getUserIdFromRequest(req)!;
+    const ownerUserId: string = getUserIdFromRequest(req)!;
     
     // 서비스 호출 (메시지 수정)
-    const updatedMessage = await this.messageService.update(ownerUserId, conversationId, messageId, updates);
+    const updatedMessage: ChatMessage = await this.messageService.update(ownerUserId, conversationId, messageId, updates);
     
     res.status(200).json(updatedMessage);
   }
@@ -272,14 +298,37 @@ export class AiController {
    * 역할:
    * - 특정 메시지를 삭제합니다.
    * 
+   * Query Params:
+   * - permanent: 'true'이면 영구 삭제 (Hard Delete), 그 외에는 Soft Delete
+   * 
    * 응답: 204 No Content
    */
   async deleteMessage(req: Request, res: Response) {
     const { conversationId, messageId } = req.params;
-    const ownerUserId = getUserIdFromRequest(req)!;
+    const ownerUserId: string = getUserIdFromRequest(req)!;
+    const permanent: boolean = req.query.permanent === 'true';
     
     // 서비스 호출 (메시지 삭제)
-    await this.messageService.delete(ownerUserId, conversationId, messageId);
+    await this.messageService.delete(ownerUserId, conversationId, messageId, permanent);
+    
+    res.status(204).send();
+  }
+
+  /**
+   * Message Restore Controller 메서드
+   * 
+   * [POST] /v1/ai/conversations/:conversationId/messages/:messageId/restore
+   * 
+   * 역할:
+   * - 삭제된 메시지를 복구합니다.
+   * 
+   * 응답: 204 No Content
+   */
+  async restoreMessage(req: Request, res: Response) {
+    const { conversationId, messageId } = req.params;
+    const ownerUserId: string = getUserIdFromRequest(req)!;
+    
+    await this.messageService.restore(ownerUserId, conversationId, messageId);
     
     res.status(204).send();
   }

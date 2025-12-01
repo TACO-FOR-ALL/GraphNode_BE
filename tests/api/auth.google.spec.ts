@@ -124,9 +124,10 @@ describe('Auth Google', () => {
       .get('/auth/google/callback')
       .set('Cookie', cookie)
       .query({ code: 'valid-code', state });
-    // 기대: 200 { ok: true } + 세션 쿠키 유지/갱신
+    // 기대: 200 OK + HTML 응답 (팝업 닫기 스크립트 포함)
     expect(res.status).toBe(200);
-  expect(res.body).toEqual({ ok: true });
+    expect(res.text).toContain('window.opener.postMessage');
+    expect(res.text).toContain('oauth-success');
   // session cookie should be present among Set-Cookie headers
   const raw = res.headers['set-cookie'];
   const setCookies: string[] = Array.isArray(raw) ? raw : (raw ? [raw] : []);

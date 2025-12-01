@@ -71,4 +71,37 @@ export interface ConversationRepository {
    * @returns 삭제 성공 여부 (true: 삭제됨, false: 대상 없음)
    */
   delete(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean>;
+
+  /**
+   * Soft Delete: deletedAt 필드를 현재 시각으로 설정합니다.
+   * @param id 대화 ID
+   * @param ownerUserId 소유자 ID
+   * @param session MongoDB 세션
+   */
+  softDelete(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean>;
+
+  /**
+   * Hard Delete: 문서를 DB에서 완전히 삭제합니다.
+   * @param id 대화 ID
+   * @param ownerUserId 소유자 ID
+   * @param session MongoDB 세션
+   */
+  hardDelete(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean>;
+
+  /**
+   * Restore: Soft Delete된 대화를 복구합니다. (deletedAt = null)
+   * 
+   * @param id 대화 ID
+   * @param ownerUserId 소유자 ID
+   * @param session MongoDB 세션
+   * @returns 복구 성공 여부
+   */
+  restore(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean>;
+
+  /**
+   * 동기화용: 특정 시점 이후 변경된(삭제 포함) 대화를 조회합니다.
+   * @param ownerUserId 소유자 ID
+   * @param since 기준 시각
+   */
+  findModifiedSince(ownerUserId: string, since: Date): Promise<ConversationDoc[]>;
 }
