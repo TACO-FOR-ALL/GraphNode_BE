@@ -81,6 +81,7 @@
     "jwks-rsa": "^3.2.0",
     "mongodb": "^6.20.0",
     "mysql2": "^3.15.2",
+    "openai": "^6.9.1",
     "redis": "^5.9.0",
     "reflect-metadata": "^0.2.2",
     "tsyringe": "^4.10.0",

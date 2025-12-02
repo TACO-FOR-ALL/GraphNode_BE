@@ -1,7 +1,7 @@
 // services/openai.ts
 import OpenAI from "openai";
-import type { ChatMessageRequest } from "@/types/Chat"; //
 
+import { ChatMessageRequest } from "./ChatMessageRequest";
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 
 function normalizeError(e: any): string {
