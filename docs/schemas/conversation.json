@@ -8,6 +8,7 @@
     "id": { "type": "string", "description": "FE가 생성한 UUID/ULID" },
     "title": { "type": "string", "minLength": 1, "maxLength": 200 },
     "updatedAt": { "type": "string", "format": "date-time" },
+    "deletedAt": { "type": ["string", "null"], "format": "date-time" },
     "messages": {
       "type": "array",
       "items": { "$ref": "./message.json" }

@@ -49,17 +49,20 @@ jest.mock('../../src/core/services/ConversationService', () => {
       }
       async getById(id: string, ownerUserId: string) {
         const v = store.conversations.get(id);
-        if (!v || v.ownerUserId !== ownerUserId) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
-        return { id: v.id, title: v.title, updatedAt: v.updatedAt, messages: v.messages };
+        if (!v || v.ownerUserId !== ownerUserId || (v as any).deletedAt) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+        const messages = v.messages.filter((m: any) => !m.deletedAt);
+        return { id: v.id, title: v.title, updatedAt: v.updatedAt, messages };
       }
       async listByOwner(ownerUserId: string, limit: number) {
-        const items = Array.from(store.conversations.values()).filter(v => v.ownerUserId === ownerUserId).slice(0, limit)
+        const items = Array.from(store.conversations.values())
+          .filter(v => v.ownerUserId === ownerUserId && !(v as any).deletedAt)
+          .slice(0, limit)
           .map(v => ({ id: v.id, title: v.title, updatedAt: v.updatedAt, messages: [] }));
         return { items, nextCursor: null };
       }
       async update(id: string, ownerUserId: string, updates: any) {
         const v = store.conversations.get(id);
-        if (!v || v.ownerUserId !== ownerUserId) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+        if (!v || v.ownerUserId !== ownerUserId || (v as any).deletedAt) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
         v.title = updates.title ?? v.title;
         v.updatedAt = new Date().toISOString();
         return { id: v.id, title: v.title, updatedAt: v.updatedAt, messages: v.messages };
@@ -67,8 +70,14 @@ jest.mock('../../src/core/services/ConversationService', () => {
       async delete(id: string, ownerUserId: string) {
         const v = store.conversations.get(id);
         if (!v || v.ownerUserId !== ownerUserId) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
-        store.conversations.delete(id);
+        // Soft delete
+        (v as any).deletedAt = new Date().toISOString();
         return true;
+      }
+      async restore(id: string, ownerUserId: string) {
+        const v = store.conversations.get(id);
+        if (!v || v.ownerUserId !== ownerUserId) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+        (v as any).deletedAt = null;
       }
     }
   };
@@ -97,9 +106,23 @@ jest.mock('../../src/core/services/MessageService', () => {
       async delete(ownerUserId: string, conversationId: string, messageId: string) {
         const v = store.conversations.get(conversationId);
         if (!v || v.ownerUserId !== ownerUserId) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
-        const before = v.messages.length;
-        v.messages = v.messages.filter(x => x.id !== messageId);
-        return before !== v.messages.length;
+        
+        const m = v.messages.find(x => x.id === messageId);
+        if (!m) return false;
+        
+        // Soft delete
+        m.deletedAt = new Date().toISOString();
+        return true;
+      }
+      async restore(ownerUserId: string, conversationId: string, messageId: string) {
+        const v = store.conversations.get(conversationId);
+        if (!v || v.ownerUserId !== ownerUserId) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+        
+        const m = v.messages.find(x => x.id === messageId);
+        if (!m) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+        
+        m.deletedAt = null;
+        return true;
       }
     }
   };
@@ -169,8 +192,16 @@ describe('AI Conversations API', () => {
     const mDel = await request(app).delete('/v1/ai/conversations/c_test_1/messages/m2').set('Cookie', cookie);
     expect(mDel.status).toBe(204);
 
+    // 메시지 복구
+    const mRestore = await request(app).post('/v1/ai/conversations/c_test_1/messages/m2/restore').set('Cookie', cookie);
+    expect(mRestore.status).toBe(204);
+
     // 대화 삭제
     const del = await request(app).delete('/v1/ai/conversations/c_test_1').set('Cookie', cookie);
     expect(del.status).toBe(204);
+
+    // 대화 복구
+    const cRestore = await request(app).post('/v1/ai/conversations/c_test_1/restore').set('Cookie', cookie);
+    expect(cRestore.status).toBe(204);
   });
 });

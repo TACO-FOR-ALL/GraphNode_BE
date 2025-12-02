@@ -1,4 +1,5 @@
-import { Collection, ClientSession } from 'mongodb';
+import { Collection, ClientSession, WithId, DeleteResult, UpdateResult } from 'mongodb';
+
 import { NoteRepository } from '../../core/ports/NoteRepository';
 import { NoteDoc, FolderDoc } from '../../core/types/persistence/note.persistence';
 import { getMongo } from '../db/mongodb';
@@ -29,6 +30,9 @@ export class NoteRepositoryMongo implements NoteRepository {
 
   /**
    * 노트를 생성한다.
+   * @param doc 생성할 노트 문서
+   * @param session (선택) 트랜잭션 세션
+   * @returns 생성된 노트 문서
    */
   async createNote(doc: NoteDoc, session?: ClientSession): Promise<NoteDoc> {
     await this.notesCol().insertOne(doc, { session });
@@ -37,6 +41,9 @@ export class NoteRepositoryMongo implements NoteRepository {
 
   /**
    * ID로 노트를 조회한다.
+   * @param id 노트 ID
+   * @param ownerUserId 소유자 사용자 ID
+   * @returns 노트 문서 또는 null
    */
   async getNote(id: string, ownerUserId: string): Promise<NoteDoc | null> {
     return this.notesCol().findOne({ _id: id, ownerUserId });
@@ -44,6 +51,9 @@ export class NoteRepositoryMongo implements NoteRepository {
 
   /**
    * 특정 폴더(또는 루트)의 노트 목록을 조회한다.
+   * @param ownerUserId 소유자 사용자 ID
+   * @param folderId 폴더 ID (null이면 루트 폴더)
+   * @returns 노트 문서 배열
    */
   async listNotes(ownerUserId: string, folderId: string | null): Promise<NoteDoc[]> {
     return this.notesCol().find({ ownerUserId, folderId }).toArray();
@@ -51,6 +61,11 @@ export class NoteRepositoryMongo implements NoteRepository {
 
   /**
    * 노트를 수정한다.
+   * @param id 노트 ID
+   * @param ownerUserId 소유자 사용자 ID
+   * @param updates 수정할 필드들
+   * @param session (선택) 트랜잭션 세션
+   * @returns 수정된 노트 문서 또는 null
    */
   async updateNote(id: string, ownerUserId: string, updates: Partial<NoteDoc>, session?: ClientSession): Promise<NoteDoc | null> {
     const result = await this.notesCol().findOneAndUpdate(
@@ -63,6 +78,10 @@ export class NoteRepositoryMongo implements NoteRepository {
 
   /**
    * 노트를 삭제한다.
+   * @param id 노트 ID
+   * @param ownerUserId 소유자 사용자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @return 삭제 성공 여부
    */
   async deleteNote(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
     const result = await this.notesCol().deleteOne({ _id: id, ownerUserId }, { session });
@@ -70,15 +89,139 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
+   * 노트를 soft delete 한다
+   * @param id 노트 id
+   * @param ownerUserId 소유자 사용자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제 성공 여부
+   */
+  async softDeleteNote(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
+    const result : UpdateResult<NoteDoc> = await this.notesCol().updateOne(
+      { _id: id, ownerUserId },
+      { $set: { deletedAt: new Date(), updatedAt: new Date() } },
+      { session }
+    );
+    return result.modifiedCount > 0;
+  }
+
+  /**
+   * 노트를 영구 삭제(Hard Delete)한다.
+   * @param id 노트 ID
+   * @param ownerUserId 소유자 사용자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제 성공 여부
+   */
+  async hardDeleteNote(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
+    const result = await this.notesCol().deleteOne({ _id: id, ownerUserId }, { session });
+    return result.deletedCount > 0;
+  }
+
+  /**
+   * 삭제된 노트를 복구한다.
+   * @param id 노트 ID
+   * @param ownerUserId 소유자 사용자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 복구 성공 여부
+   */
+  async restoreNote(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
+    const result = await this.notesCol().updateOne(
+      { _id: id, ownerUserId },
+      { $set: { deletedAt: null, updatedAt: new Date() } },
+      { session }
+    );
+    return result.modifiedCount > 0;
+  }
+
+  /**
+   * 특정 시점 이후에 수정된 노트 목록을 조회한다. (동기화용)
+   * @param ownerUserId 소유자 사용자 ID
+   * @param since 기준 시각
+   * @returns 변경된 노트 문서 배열
+   */
+  async findNotesModifiedSince(ownerUserId: string, since: Date): Promise<NoteDoc[]> {
+    return this.notesCol().find({
+      ownerUserId,
+      updatedAt: { $gte: since }
+    }).toArray();
+  }
+
+  /**
+   * 특정 시점 이후에 수정된 폴더 목록을 조회한다. (동기화용)
+   * @param ownerUserId 소유자 사용자 ID
+   * @param since 기준 시각
+   * @returns 변경된 폴더 문서 배열
+   */
+  async findFoldersModifiedSince(ownerUserId: string, since: Date): Promise<FolderDoc[]> {
+    return this.foldersCol().find({
+      ownerUserId,
+      updatedAt: { $gte: since }
+    }).toArray();
+  }
+
+  /**
    * 여러 폴더에 속한 노트들을 일괄 삭제한다.
+   * @param folderIds 폴더 ID 배열
+   * @param ownerUserId 소유자 사용자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제된 노트 수
    */
   async deleteNotesByFolderIds(folderIds: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
     if (folderIds.length === 0) return 0;
-    const result = await this.notesCol().deleteMany(
+    const result : DeleteResult = await this.notesCol().deleteMany(
       { folderId: { $in: folderIds }, ownerUserId },
       { session }
     );
     return result.deletedCount;
+  }
+
+  /**
+   * 여러 폴더에 속한 노트들을 일괄 Soft Delete 한다.
+   * @param folderIds 폴더 ID 배열
+   * @param ownerUserId 소유자 사용자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 업데이트된 노트 수
+   */
+  async softDeleteNotesByFolderIds(folderIds: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+    if (folderIds.length === 0) return 0;
+    const result : UpdateResult<NoteDoc> = await this.notesCol().updateMany(
+      { folderId: { $in: folderIds }, ownerUserId },
+      { $set: { deletedAt: new Date(), updatedAt: new Date() } },
+      { session }
+    );
+    return result.modifiedCount;
+  }
+
+  /**
+   * 여러 폴더에 속한 노트들을 일괄 Hard Delete 한다.
+   * @param folderIds 폴더 ID 배열
+   * @param ownerUserId 소유자 사용자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제된 노트 수
+   */
+  async hardDeleteNotesByFolderIds(folderIds: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+    if (folderIds.length === 0) return 0;
+    const result : DeleteResult = await this.notesCol().deleteMany(
+      { folderId: { $in: folderIds }, ownerUserId },
+      { session }
+    );
+    return result.deletedCount;
+  }
+
+  /**
+   * 여러 폴더에 속한 노트들을 일괄 복구한다.
+   * @param folderIds 폴더 ID 배열
+   * @param ownerUserId 소유자 사용자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 복구된 노트 수
+   */
+  async restoreNotesByFolderIds(folderIds: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+    if (folderIds.length === 0) return 0;
+    const result : UpdateResult<NoteDoc> = await this.notesCol().updateMany(
+      { folderId: { $in: folderIds }, ownerUserId },
+      { $set: { deletedAt: null, updatedAt: new Date() } },
+      { session }
+    );
+    return result.modifiedCount;
   }
 
   // --- Folder Operations ---
@@ -109,7 +252,8 @@ export class NoteRepositoryMongo implements NoteRepository {
    * 폴더를 수정한다.
    */
   async updateFolder(id: string, ownerUserId: string, updates: Partial<FolderDoc>, session?: ClientSession): Promise<FolderDoc | null> {
-    const result = await this.foldersCol().findOneAndUpdate(
+
+    const result : WithId<FolderDoc> | null = await this.foldersCol().findOneAndUpdate(
       { _id: id, ownerUserId },
       { $set: updates },
       { returnDocument: 'after', session }
@@ -131,7 +275,7 @@ export class NoteRepositoryMongo implements NoteRepository {
    */
   async findDescendantFolderIds(rootFolderId: string, ownerUserId: string): Promise<string[]> {
     // $graphLookup을 사용하여 모든 하위 폴더를 재귀적으로 검색
-    const pipeline = [
+    const pipeline: any[] = [
       { $match: { _id: rootFolderId, ownerUserId } },
       {
         $graphLookup: {
@@ -150,7 +294,7 @@ export class NoteRepositoryMongo implements NoteRepository {
       }
     ];
 
-    const result = await this.foldersCol().aggregate(pipeline).toArray();
+    const result: any[] = await this.foldersCol().aggregate(pipeline).toArray();
     if (result.length === 0) {
       return [];
     }
@@ -159,13 +303,83 @@ export class NoteRepositoryMongo implements NoteRepository {
 
   /**
    * 여러 폴더를 일괄 삭제한다.
+   * @param ids 삭제할 폴더 ID 배열
+   * @param ownerUserId 소유자 사용자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제된 폴더 수
    */
   async deleteFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
     if (ids.length === 0) return 0;
-    const result = await this.foldersCol().deleteMany(
+    const result : DeleteResult = await this.foldersCol().deleteMany(
       { _id: { $in: ids }, ownerUserId },
       { session }
     );
     return result.deletedCount;
+  }
+
+  /**
+   * 여러 폴더를 일괄 Soft Delete 한다.
+   * @param ids 삭제할 폴더 ID 배열
+   * @param ownerUserId 소유자 사용자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 업데이트된 폴더 수
+   */
+  async softDeleteFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+    if (ids.length === 0) return 0;
+    const result : UpdateResult<FolderDoc> = await this.foldersCol().updateMany(
+      { _id: { $in: ids }, ownerUserId },
+      { $set: { deletedAt: new Date(), updatedAt: new Date() } },
+      { session }
+    );
+    return result.modifiedCount;
+  }
+
+  /**
+   * 여러 폴더를 일괄 Hard Delete 한다.
+   * @param ids 삭제할 폴더 ID 배열
+   * @param ownerUserId 소유자 사용자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제된 폴더 수
+   */
+  async hardDeleteFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+    if (ids.length === 0) return 0;
+    const result : DeleteResult = await this.foldersCol().deleteMany(
+      { _id: { $in: ids }, ownerUserId },
+      { session }
+    );
+    return result.deletedCount;
+  }
+
+  /**
+   * 삭제된 폴더를 복구한다.
+   * @param id 폴더 ID
+   * @param ownerUserId 소유자 사용자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 복구 성공 여부
+   */
+  async restoreFolder(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
+    const result = await this.foldersCol().updateOne(
+      { _id: id, ownerUserId },
+      { $set: { deletedAt: null, updatedAt: new Date() } },
+      { session }
+    );
+    return result.modifiedCount > 0;
+  }
+
+  /**
+   * 여러 폴더를 일괄 복구한다.
+   * @param ids 복구할 폴더 ID 배열
+   * @param ownerUserId 소유자 사용자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 복구된 폴더 수
+   */
+  async restoreFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+    if (ids.length === 0) return 0;
+    const result : UpdateResult<FolderDoc> = await this.foldersCol().updateMany(
+      { _id: { $in: ids }, ownerUserId },
+      { $set: { deletedAt: null, updatedAt: new Date() } },
+      { session }
+    );
+    return result.modifiedCount;
   }
 }

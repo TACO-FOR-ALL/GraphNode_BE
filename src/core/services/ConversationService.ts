@@ -17,8 +17,9 @@
  */
 
 import { ulid } from 'ulid';
+import { MongoClient, ClientSession } from 'mongodb';
 
-import { ChatThread, ChatMessage } from '../../shared/dtos/ai';
+import { ChatThread, ChatMessage, ChatRole } from '../../shared/dtos/ai';
 import { ConversationRepository } from '../ports/ConversationRepository';
 import { MessageRepository } from '../ports/MessageRepository';
 import { NotFoundError, ValidationError, UpstreamError } from '../../shared/errors/domain';
@@ -28,6 +29,7 @@ import {
   toMessageDoc,
 } from '../../shared/mappers/ai';
 import { getMongo } from '../../infra/db/mongodb';
+import { ConversationDoc, MessageDoc } from '../types/persistence/ai.persistence';
 
 export class ConversationService {
   // 생성자 주입을 통해 Repository 의존성을 받습니다.
@@ -48,8 +50,8 @@ export class ConversationService {
    */
   async bulkCreate(ownerUserId: string, threads: { id?: string; title: string; messages?: Partial<ChatMessage>[] }[]): Promise<ChatThread[]> {
     // MongoDB 클라이언트와 세션을 가져옵니다.
-    const mongoClient = getMongo();
-    const session = mongoClient.startSession();
+    const mongoClient: MongoClient = getMongo();
+    const session: ClientSession = mongoClient.startSession();
 
     try {
       // 트랜잭션 시작
@@ -65,7 +67,7 @@ export class ConversationService {
         }
         
         // ID가 없으면 새로 생성 (ULID 사용)
-        const threadId = thread.id?.trim() ? thread.id : ulid();
+        const threadId: string = thread.id?.trim() ? thread.id : ulid();
 
         // 대화방 DTO 생성
         const newThreadDto: Omit<ChatThread, 'messages'> = {
@@ -75,39 +77,40 @@ export class ConversationService {
         };
 
         // DTO -> DB 문서(Doc) 변환 후 저장 (세션 전달)
-        const convDoc = toConversationDoc(newThreadDto, ownerUserId);
+        const convDoc: ConversationDoc = toConversationDoc(newThreadDto, ownerUserId);
         await this.conversationRepo.create(convDoc, session);
 
         // 메시지 처리
-        let createdMessageDocs: any[] = [];
+        let createdMessageDocs: MessageDoc[] = [];
         if (thread.messages && thread.messages.length > 0) {
-          const messageDocs = thread.messages.map(m => {
-            const msgId = m.id?.trim() ? m.id : ulid();
+          const messageDocs: MessageDoc[] = thread.messages.map(m => {
+            const msgId: string = m.id?.trim() ? m.id : ulid();
 
             if (!m.content || m.content.trim().length === 0) {
               throw new ValidationError('Message content cannot be empty');
             }
             // 역할(role)이 없으면 기본값 'user' 설정
-            const role = m.role || 'user'; 
+            const role: ChatRole = m.role || 'user'; 
 
             const msgDto: ChatMessage = { 
               id: msgId,
               role: role,
               content: m.content,
-              ts: m.ts ?? new Date().toISOString() 
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
             };
-            return toMessageDoc(msgDto, threadId);
+            return toMessageDoc(msgDto, threadId, ownerUserId);
           });
 
           // 메시지 일괄 저장 (세션 전달)
           createdMessageDocs = await this.messageRepo.createMany(messageDocs, session);
 
           // 대화방의 updatedAt을 가장 최근 메시지 시간으로 갱신
-          const timestamps = [
-            ...createdMessageDocs.map(d => d.ts),
+          const timestamps: number[] = [
+            ...createdMessageDocs.map(d => d.updatedAt),
             convDoc.updatedAt,
           ];
-          const latestTs = Math.max(...timestamps);
+          const latestTs: number = Math.max(...timestamps);
           
           convDoc.updatedAt = latestTs;
           await this.conversationRepo.update(threadId, ownerUserId, { updatedAt: latestTs }, session);
@@ -153,48 +156,50 @@ export class ConversationService {
       }
       
       // ID 결정
-      const finalThreadId = threadId?.trim() ? threadId : ulid();
+      const finalThreadId: string = threadId?.trim() ? threadId : ulid();
 
       // 대화방 정보 구성
       const newThreadDto: Omit<ChatThread, 'messages'> = {
         id: finalThreadId,
         title,
+        createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
 
       // DB 저장
-      const convDoc = toConversationDoc(newThreadDto, ownerUserId);
+      const convDoc: ConversationDoc = toConversationDoc(newThreadDto, ownerUserId);
       await this.conversationRepo.create(convDoc);
 
       // 초기 메시지가 있다면 저장
-      let createdMessageDocs: any[] = [];
+      let createdMessageDocs: MessageDoc[] = [];
       if (messages && messages.length > 0) {
-        const messageDocs = messages.map(m => {
-          const msgId = m.id?.trim() ? m.id : ulid();
+        const messageDocs: MessageDoc[] = messages.map(m => {
+          const msgId: string = m.id?.trim() ? m.id : ulid();
           
           if (!m.content || m.content.trim().length === 0) {
             throw new ValidationError('Message content cannot be empty');
           }
           
-          const role = m.role || 'user';
+          const role: ChatRole = m.role || 'user';
 
           const msgDto: ChatMessage = { 
             id: msgId,
             role: role,
             content: m.content,
-            ts: m.ts ?? new Date().toISOString() 
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           };
-          return toMessageDoc(msgDto, finalThreadId);
+          return toMessageDoc(msgDto, finalThreadId, ownerUserId);
         });
 
         createdMessageDocs = await this.messageRepo.createMany(messageDocs);
 
         // 대화방 시간 갱신
-        const timestamps = [
-          ...createdMessageDocs.map(d => d.ts),
+        const timestamps: number[] = [
+          ...createdMessageDocs.map(d => d.updatedAt),
           convDoc.updatedAt,
         ];
-        const latestTs = Math.max(...timestamps);
+        const latestTs: number = Math.max(...timestamps);
         
         convDoc.updatedAt = latestTs;
         await this.conversationRepo.update(finalThreadId, ownerUserId, { updatedAt: latestTs });
@@ -222,12 +227,12 @@ export class ConversationService {
         throw new ValidationError('Conversation id is required');
       }
       // 대화방 조회
-      const convDoc = await this.conversationRepo.findById(id, ownerUserId);
+      const convDoc: ConversationDoc | null = await this.conversationRepo.findById(id, ownerUserId);
       if (!convDoc) {
         throw new NotFoundError(`Conversation with id ${id} not found`);
       }
       // 해당 대화방의 메시지 목록 조회
-      const messageDocs = await this.messageRepo.findAllByConversationId(id);
+      const messageDocs: MessageDoc[] = await this.messageRepo.findAllByConversationId(id);
       
       // DTO로 변환하여 반환
       return toChatThreadDto(convDoc, messageDocs);
@@ -248,9 +253,9 @@ export class ConversationService {
    */
   async listByOwner(ownerUserId: string, limit: number, cursor?: string): Promise<{ items: ChatThread[]; nextCursor?: string | null }> {
     try {
-      const { items: docs, nextCursor } = await this.conversationRepo.listByOwner(ownerUserId, limit, cursor);
+      const { items: docs, nextCursor }: { items: ConversationDoc[], nextCursor?: string | null } = await this.conversationRepo.listByOwner(ownerUserId, limit, cursor);
       // 목록 조회 시에는 성능을 위해 메시지 내용은 포함하지 않습니다 (빈 배열 전달).
-      const items = docs.map(doc => toChatThreadDto(doc, []));
+      const items: ChatThread[] = docs.map(doc => toChatThreadDto(doc, []));
       return { items, nextCursor };
     } catch (err: unknown) {
       const e: any = err;
@@ -279,13 +284,13 @@ export class ConversationService {
       const updatePayload: any = { ...updates, updatedAt: Date.now() }; // Partial Doc
       
       // DB 업데이트 수행
-      const updatedDoc = await this.conversationRepo.update(id, ownerUserId, updatePayload);
+      const updatedDoc: ConversationDoc | null = await this.conversationRepo.update(id, ownerUserId, updatePayload);
       if (!updatedDoc) {
         throw new NotFoundError(`Conversation with id ${id} not found`);
       }
       
       // 메시지 목록 조회 후 반환
-      const messageDocs = await this.messageRepo.findAllByConversationId(id);
+      const messageDocs: MessageDoc[] = await this.messageRepo.findAllByConversationId(id);
       return toChatThreadDto(updatedDoc, messageDocs);
     } catch (err: unknown) {
       const e: any = err;
@@ -301,9 +306,10 @@ export class ConversationService {
    * 
    * @param id 대화 ID
    * @param ownerUserId 소유자 ID
+   * @param permanent 영구 삭제 여부 (true: Hard Delete, false: Soft Delete)
    * @returns 삭제 성공 여부 (true)
    */
-  async delete(id: string, ownerUserId: string): Promise<boolean> {
+  async delete(id: string, ownerUserId: string, permanent: boolean = false): Promise<boolean> {
     const mongoClient = getMongo();
     const session = mongoClient.startSession();
 
@@ -313,13 +319,25 @@ export class ConversationService {
       }
       session.startTransaction();
 
-      // 1. 대화방 삭제
-      const success = await this.conversationRepo.delete(id, ownerUserId, session);
+      if (permanent) {
+        // 1. 대화방 삭제 (Hard)
+        const success = await this.conversationRepo.hardDelete(id, ownerUserId, session);
+        if (!success) {
+          throw new NotFoundError(`Conversation with id ${id} not found`);
+        }
+        // 2. 해당 대화방의 모든 메시지 삭제 (Hard)
+        await this.messageRepo.deleteAllByConversationId(id, session);
+        await session.commitTransaction();
+        return true;
+      }
+
+      // 1. 대화방 삭제 (Soft)
+      const success = await this.conversationRepo.softDelete(id, ownerUserId, session);
       if (!success) {
         throw new NotFoundError(`Conversation with id ${id} not found`);
       }
-      // 2. 해당 대화방의 모든 메시지 삭제
-      await this.messageRepo.deleteAllByConversationId(id, session);
+      // 2. 메시지 삭제 (Soft)
+      await this.messageRepo.softDeleteAllByConversationId(id, session);
 
       await session.commitTransaction();
       return true;
@@ -328,6 +346,46 @@ export class ConversationService {
       const e: any = err;
       if (e && typeof e.code === 'string') throw err;
       throw new UpstreamError('Failed to delete conversation', { cause: err as any });
+    } finally {
+      await session.endSession();
+    }
+  }
+
+  /**
+   * 대화를 복구합니다.
+   * 
+   * 트랜잭션을 사용하여 대화방과 그 안의 메시지들이 모두 함께 복구되도록 보장합니다.
+   * 
+   * @param id 대화 ID
+   * @param ownerUserId 소유자 ID
+   * @returns 복구 성공 여부 (true)
+   */
+  async restore(id: string, ownerUserId: string): Promise<boolean> {
+    const mongoClient = getMongo();
+    const session = mongoClient.startSession();
+
+    try {
+      if (!id || id.trim().length === 0) {
+        throw new ValidationError('Conversation id is required');
+      }
+      session.startTransaction();
+
+      // 1. 대화방 복구
+      const success = await this.conversationRepo.restore(id, ownerUserId, session);
+      if (!success) {
+        throw new NotFoundError(`Conversation with id ${id} not found`);
+      }
+      
+      // 2. 해당 대화방의 모든 메시지 복구
+      await this.messageRepo.restoreAllByConversationId(id, session);
+
+      await session.commitTransaction();
+      return true;
+    } catch (err: unknown) {
+      await session.abortTransaction();
+      const e: any = err;
+      if (e && typeof e.code === 'string') throw err;
+      throw new UpstreamError('Failed to restore conversation', { cause: err as any });
     } finally {
       await session.endSession();
     }

@@ -138,6 +138,27 @@ describe('Graph API', () => {
       expect(res.body).toEqual(node);
     });
 
+    it('should list all nodes for a user', async () => {
+      const nodes: GraphNodeDto[] = [
+        {
+          id: 1,
+          userId: 'user-test-id',
+          origId: 'conv-1',
+          clusterId: 'cluster-1',
+          clusterName: 'Test Cluster',
+          timestamp: '2025-01-01T00:00:00.000Z',
+          numMessages: 1,
+        },
+      ];
+      mockGraphVectorService.listNodes.mockResolvedValue(nodes);
+
+      const res = await agent.get('/v1/graph/nodes');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual(nodes);
+      expect(mockGraphVectorService.listNodes).toHaveBeenCalledWith('user-test-id');
+    });
+
     it('should update a node', async () => {
       const patch: Partial<GraphNodeDto> = {
         clusterName: 'Updated Cluster',

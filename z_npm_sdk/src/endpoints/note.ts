@@ -58,11 +58,21 @@ export class NoteApi {
   }
 
   /**
-   * 특정 노드를 삭제합니다.
+   * 특정 노트를 삭제합니다.
    * @param id - 삭제할 노트의 ID
+   * @param permanent - 영구 삭제 여부 (true: 영구 삭제, false/undefined: 휴지통)
    */
-  deleteNote(id: string): Promise<void> {
-    return this.rb.path(`/notes/${id}`).delete<void>();
+  deleteNote(id: string, permanent?: boolean): Promise<void> {
+    return this.rb.path(`/notes/${id}`).query({ permanent }).delete<void>();
+  }
+
+  /**
+   * 특정 노트를 복구합니다.
+   * @param id - 복구할 노트의 ID
+   * @returns 복구된 노트
+   */
+  restoreNote(id: string): Promise<NoteDto> {
+    return this.rb.path(`/notes/${id}/restore`).post<NoteDto>({});
   }
 
   // --- Folders ---
@@ -106,8 +116,18 @@ export class NoteApi {
   /**
    * 특정 폴더를 삭제합니다.
    * @param id - 삭제할 폴더의 ID
+   * @param permanent - 영구 삭제 여부 (true: 영구 삭제, false/undefined: 휴지통)
    */
-  deleteFolder(id: string): Promise<void> {
-    return this.rb.path(`/folders/${id}`).delete<void>();
+  deleteFolder(id: string, permanent?: boolean): Promise<void> {
+    return this.rb.path(`/folders/${id}`).query({ permanent }).delete<void>();
+  }
+
+  /**
+   * 특정 폴더를 복구합니다.
+   * @param id - 복구할 폴더의 ID
+   * @returns 복구된 폴더
+   */
+  restoreFolder(id: string): Promise<FolderDto> {
+    return this.rb.path(`/folders/${id}/restore`).post<FolderDto>({});
   }
 }

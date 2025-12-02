@@ -2,14 +2,15 @@ export interface MessageDto {
   id: string; // FE generated UUID/ULID
   role: 'user' | 'assistant' | 'system';
   content: string;
-  ts: string; // RFC3339
+  createdAt?: string; // ISO 8601
+  updatedAt?: string; // ISO 8601
+  deletedAt?: string | null; // ISO 8601
 }
 
 export interface MessageCreateDto {
-  id: string;
+  id?: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
-  ts: string;
 }
 
 export interface MessageUpdateDto {

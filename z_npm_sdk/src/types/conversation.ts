@@ -1,14 +1,16 @@
 import type { MessageDto } from './message.js';
 
 export interface ConversationDto {
-  id: string; // FE generated UUID/ULID
+  id: string;
   title: string;
-  updatedAt: string; // RFC3339
+  createdAt?: string; // ISO 8601
+  updatedAt?: string; // ISO 8601
+  deletedAt?: string | null; // ISO 8601
   messages: MessageDto[];
 }
 
 export interface ConversationCreateDto {
-  id: string;
+  id?: string;
   title: string;
   messages?: MessageDto[];
 }

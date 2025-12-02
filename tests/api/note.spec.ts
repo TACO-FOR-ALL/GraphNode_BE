@@ -54,83 +54,107 @@ jest.mock('../../src/core/services/NoteService', () => {
   return {
     NoteService: class {
       async createNote(userId: string, dto: any) {
-        const id = 'n_' + Date.now();
+        const id = dto.id || 'n_' + Date.now();
         const note = {
           id,
-          ownerUserId: userId,
           title: dto.title || 'Untitled',
           content: dto.content,
           folderId: dto.folderId || null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
-        store.notes.set(id, note);
+        store.notes.set(id, { ...note, ownerUserId: userId });
         return note;
       }
 
       async getNote(userId: string, noteId: string) {
         const note = store.notes.get(noteId);
-        if (!note || note.ownerUserId !== userId) throw new NotFoundError('Note not found');
-        return note;
+        if (!note || note.ownerUserId !== userId || note.deletedAt) throw new NotFoundError('Note not found');
+        const { ownerUserId, ...rest } = note;
+        return rest;
       }
 
       async listNotes(userId: string, folderId: string | null) {
         return Array.from(store.notes.values())
-          .filter(n => n.ownerUserId === userId && n.folderId === folderId);
+          .filter(n => n.ownerUserId === userId && n.folderId === folderId && !n.deletedAt)
+          .map(n => {
+            const { ownerUserId, ...rest } = n;
+            return rest;
+          });
       }
 
       async updateNote(userId: string, noteId: string, dto: any) {
         const note = store.notes.get(noteId);
         if (!note || note.ownerUserId !== userId) throw new NotFoundError('Note not found');
         Object.assign(note, dto, { updatedAt: new Date().toISOString() });
-        return note;
+        const { ownerUserId, ...rest } = note;
+        return rest;
       }
 
       async deleteNote(userId: string, noteId: string) {
         const note = store.notes.get(noteId);
         if (!note || note.ownerUserId !== userId) throw new NotFoundError('Note not found');
-        store.notes.delete(noteId);
+        note.deletedAt = new Date().toISOString();
+      }
+
+      async restoreNote(userId: string, noteId: string) {
+        const note = store.notes.get(noteId);
+        if (!note || note.ownerUserId !== userId) throw new NotFoundError('Note not found');
+        note.deletedAt = null;
       }
 
       async createFolder(userId: string, dto: any) {
-        const id = 'f_' + Date.now();
+        const id = dto.id || 'f_' + Date.now();
         const folder = {
           id,
-          ownerUserId: userId,
           name: dto.name,
           parentId: dto.parentId || null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
-        store.folders.set(id, folder);
+        store.folders.set(id, { ...folder, ownerUserId: userId });
         return folder;
       }
 
       async getFolder(userId: string, folderId: string) {
         const folder = store.folders.get(folderId);
-        if (!folder || folder.ownerUserId !== userId) throw new NotFoundError('Folder not found');
-        return folder;
+        if (!folder || folder.ownerUserId !== userId || folder.deletedAt) throw new NotFoundError('Folder not found');
+        const { ownerUserId, ...rest } = folder;
+        return rest;
       }
 
       async listFolders(userId: string, parentId: string | null) {
         return Array.from(store.folders.values())
-          .filter(f => f.ownerUserId === userId && f.parentId === parentId);
+          .filter(f => f.ownerUserId === userId && f.parentId === parentId && !f.deletedAt)
+          .map(f => {
+            const { ownerUserId, ...rest } = f;
+            return rest;
+          });
       }
 
       async updateFolder(userId: string, folderId: string, dto: any) {
         const folder = store.folders.get(folderId);
         if (!folder || folder.ownerUserId !== userId) throw new NotFoundError('Folder not found');
         Object.assign(folder, dto, { updatedAt: new Date().toISOString() });
-        return folder;
+        const { ownerUserId, ...rest } = folder;
+        return rest;
       }
 
       async deleteFolder(userId: string, folderId: string) {
         const folder = store.folders.get(folderId);
         if (!folder || folder.ownerUserId !== userId) throw new NotFoundError('Folder not found');
-        store.folders.delete(folderId);
-        // Simple cascade mock
+        folder.deletedAt = new Date().toISOString();
         for (const [nid, n] of store.notes.entries()) {
-          if (n.folderId === folderId) store.notes.delete(nid);
+          if (n.folderId === folderId) n.deletedAt = new Date().toISOString();
+        }
+      }
+
+      async restoreFolder(userId: string, folderId: string) {
+        const folder = store.folders.get(folderId);
+        if (!folder || folder.ownerUserId !== userId) throw new NotFoundError('Folder not found');
+        folder.deletedAt = null;
+        for (const [nid, n] of store.notes.entries()) {
+          if (n.folderId === folderId) n.deletedAt = null;
         }
       }
     }
@@ -299,5 +323,38 @@ describe('Note API', () => {
     // Get 404
     const res5 = await request(app).get(`/v1/notes/${n1.id}`).set('Cookie', cookie);
     expect(res5.status).toBe(404);
+
+    // Restore
+    const resRestore = await request(app).post(`/v1/notes/${n1.id}/restore`).set('Cookie', cookie);
+    expect(resRestore.status).toBe(204);
+
+    // Get 200
+    const res6 = await request(app).get(`/v1/notes/${n1.id}`).set('Cookie', cookie);
+    expect(res6.status).toBe(200);
+  });
+
+  test('Folder Restore (Cascade)', async () => {
+    // Create Folder
+    const resF = await request(app).post('/v1/folders').set('Cookie', cookie).send({ name: 'RestoreFolder' });
+    const fId = resF.body.id;
+
+    // Create Note in Folder
+    const resN = await request(app).post('/v1/notes').set('Cookie', cookie).send({ title: 'ChildNote', content: 'Content', folderId: fId });
+    if (resN.status !== 201) console.log('Create Note Failed:', JSON.stringify(resN.body, null, 2));
+    const nId = resN.body.id;
+
+    // Delete Folder
+    await request(app).delete(`/v1/folders/${fId}`).set('Cookie', cookie).expect(204);
+
+    // Verify both are gone (404)
+    await request(app).get(`/v1/folders/${fId}`).set('Cookie', cookie).expect(404);
+    await request(app).get(`/v1/notes/${nId}`).set('Cookie', cookie).expect(404);
+
+    // Restore Folder
+    await request(app).post(`/v1/folders/${fId}/restore`).set('Cookie', cookie).expect(204);
+
+    // Verify both are back
+    await request(app).get(`/v1/folders/${fId}`).set('Cookie', cookie).expect(200);
+    await request(app).get(`/v1/notes/${nId}`).set('Cookie', cookie).expect(200);
   });
 });

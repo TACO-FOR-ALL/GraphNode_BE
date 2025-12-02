@@ -36,6 +36,11 @@ export interface MessageRepository {
   createMany(docs: MessageDoc[], session?: ClientSession): Promise<MessageDoc[]>;
 
   /**
+   * 메시지 ID로 조회합니다.
+   */
+  findById(id: string): Promise<MessageDoc | null>;
+
+  /**
    * 특정 대화방에 속한 모든 메시지를 조회합니다.
    * 
    * @param conversationId 대화방 ID
@@ -63,6 +68,72 @@ export interface MessageRepository {
    * @returns 삭제 성공 여부
    */
   delete(id: string, conversationId: string, session?: ClientSession): Promise<boolean>;
+
+  /**
+   * Soft Delete: deletedAt 필드를 현재 시각으로 설정합니다.
+   * 
+   * @param id 삭제할 메시지 ID
+   * @param conversationId 메시지가 속한 대화방 ID
+   * @param session (선택) MongoDB 트랜잭션 세션
+   * @returns 삭제(업데이트) 성공 여부
+   */
+  softDelete(id: string, conversationId: string, session?: ClientSession): Promise<boolean>;
+
+  /**
+   * Hard Delete: 문서를 DB에서 완전히 삭제합니다.
+   * 
+   * @param id 삭제할 메시지 ID
+   * @param conversationId 메시지가 속한 대화방 ID
+   * @param session (선택) MongoDB 트랜잭션 세션
+   * @returns 삭제 성공 여부
+   */
+  hardDelete(id: string, conversationId: string, session?: ClientSession): Promise<boolean>;
+
+  /**
+   * Restore: Soft Delete된 메시지를 복구합니다. (deletedAt = null)
+   * 
+   * @param id 메시지 ID
+   * @param conversationId 메시지가 속한 대화방 ID
+   * @param session (선택) MongoDB 트랜잭션 세션
+   * @returns 복구 성공 여부
+   */
+  restore(id: string, conversationId: string, session?: ClientSession): Promise<boolean>;
+
+  /**
+   * Restore: 특정 대화방의 모든 메시지를 복구합니다.
+   * 
+   * @param conversationId 대화방 ID
+   * @param session (선택) MongoDB 트랜잭션 세션
+   * @returns 복구된 메시지 개수
+   */
+  restoreAllByConversationId(conversationId: string, session?: ClientSession): Promise<number>;
+
+  /**
+   * 동기화용: 특정 시점 이후 변경된(삭제 포함) 메시지를 조회합니다.
+   * 
+   * @param ownerUserId 소유자 ID
+   * @param since 기준 시각
+   * @returns 변경된 메시지 문서 목록
+   */
+  findModifiedSince(ownerUserId: string, since: Date): Promise<MessageDoc[]>;
+
+  /**
+   * 특정 대화방의 모든 메시지를 Soft Delete합니다.
+   * 
+   * @param conversationId 대화방 ID
+   * @param session (선택) MongoDB 트랜잭션 세션
+   * @returns 삭제(업데이트)된 메시지 개수
+   */
+  softDeleteAllByConversationId(conversationId: string, session?: ClientSession): Promise<number>;
+
+  /**
+   * 특정 대화방의 모든 메시지를 Hard Delete합니다.
+   * 
+   * @param conversationId 대화방 ID
+   * @param session (선택) MongoDB 트랜잭션 세션
+   * @returns 삭제된 메시지 개수
+   */
+  hardDeleteAllByConversationId(conversationId: string, session?: ClientSession): Promise<number>;
 
   /**
    * 특정 대화방에 속한 모든 메시지를 삭제합니다.

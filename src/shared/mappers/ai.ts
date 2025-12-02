@@ -29,6 +29,7 @@ export function toConversationDoc(dto: Omit<ChatThread, 'messages'>, ownerUserId
     // 날짜 문자열을 타임스탬프(숫자)로 변환
     updatedAt: dto.updatedAt ? new Date(dto.updatedAt).getTime() : now,
     createdAt: now,
+    deletedAt: dto.deletedAt ? new Date(dto.deletedAt).getTime() : null,
   };
   return doc;
 }
@@ -45,7 +46,9 @@ export function toChatThreadDto(convDoc: ConversationDoc, messageDocs: MessageDo
     id: convDoc._id, // DB의 _id를 DTO의 id로 매핑
     title: convDoc.title,
     // 타임스탬프를 ISO 8601 문자열로 변환
+    createdAt: new Date(convDoc.createdAt).toISOString(),
     updatedAt: new Date(convDoc.updatedAt).toISOString(),
+    deletedAt: convDoc.deletedAt ? new Date(convDoc.deletedAt).toISOString() : null,
     // 메시지 목록도 각각 DTO로 변환
     messages: messageDocs.map(toChatMessageDto),
   };
@@ -56,18 +59,20 @@ export function toChatThreadDto(convDoc: ConversationDoc, messageDocs: MessageDo
  * 
  * @param dto 클라이언트로부터 받은 메시지 정보 DTO
  * @param conversationId 메시지가 속한 대화방 ID
+ * @param ownerUserId 소유자 ID (역정규화)
  * @returns 저장 가능한 MessageDoc 객체
  */
-export function toMessageDoc(dto: ChatMessage, conversationId: string): MessageDoc {
+export function toMessageDoc(dto: ChatMessage, conversationId: string, ownerUserId: string): MessageDoc {
   const now = Date.now();
   return {
     _id: dto.id,
     conversationId,
+    ownerUserId,
     role: dto.role,
     content: dto.content,
-    ts: dto.ts ? new Date(dto.ts).getTime() : now,
-    createdAt: now,
-    updatedAt: now,
+    createdAt: dto.createdAt ? new Date(dto.createdAt).getTime() : now,
+    updatedAt: dto.updatedAt ? new Date(dto.updatedAt).getTime() : now,
+    deletedAt: dto.deletedAt ? new Date(dto.deletedAt).getTime() : null,
   };
 }
 
@@ -82,6 +87,8 @@ export function toChatMessageDto(doc: MessageDoc): ChatMessage {
     id: doc._id,
     role: doc.role,
     content: doc.content,
-    ts: new Date(doc.ts).toISOString(),
+    createdAt: new Date(doc.createdAt).toISOString(),
+    updatedAt: new Date(doc.updatedAt).toISOString(),
+    deletedAt: doc.deletedAt ? new Date(doc.deletedAt).toISOString() : null,
   };
 }

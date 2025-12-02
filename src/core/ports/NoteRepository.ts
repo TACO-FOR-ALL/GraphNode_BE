@@ -60,13 +60,91 @@ export interface NoteRepository {
   deleteNote(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean>;
 
   /**
-   * 여러 폴더에 속한 노트들을 일괄 삭제합니다. (폴더 삭제 시 사용)
+   * Soft Delete: deletedAt 필드를 현재 시각으로 설정합니다.
+   * 
+   * @param id 노트 ID
+   * @param ownerUserId 소유자 ID
+   * @param session MongoDB 세션
+   * @returns 삭제(업데이트) 성공 여부
+   */
+  softDeleteNote(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean>;
+
+  /**
+   * Hard Delete: 문서를 DB에서 완전히 삭제합니다.
+   * 
+   * @param id 노트 ID
+   * @param ownerUserId 소유자 ID
+   * @param session MongoDB 세션
+   * @returns 삭제 성공 여부
+   */
+  hardDeleteNote(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean>;
+
+  /**
+   * Restore: Soft Delete된 노트를 복구합니다. (deletedAt = null)
+   * 
+   * @param id 노트 ID
+   * @param ownerUserId 소유자 ID
+   * @param session MongoDB 세션
+   * @returns 복구 성공 여부
+   */
+  restoreNote(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean>;
+
+  /**
+   * 동기화용: 특정 시점 이후 변경된(삭제 포함) 노트를 조회합니다.
+   * 
+   * @param ownerUserId 소유자 ID
+   * @param since 기준 시각
+   * @returns 변경된 노트 문서 목록
+   */
+  findNotesModifiedSince(ownerUserId: string, since: Date): Promise<NoteDoc[]>;
+
+  /**
+   * 동기화용: 특정 시점 이후 변경된(삭제 포함) 폴더를 조회합니다.
+   * 
+   * @param ownerUserId 소유자 ID
+   * @param since 기준 시각
+   * @returns 변경된 폴더 문서 목록
+   */
+  findFoldersModifiedSince(ownerUserId: string, since: Date): Promise<FolderDoc[]>;
+
+  /**
+   * 여러 폴더에 속한 노트들을 일괄 삭제합니다. (폴더 삭제 시 사용) - Deprecated: Use soft/hard variants
    * @param folderIds 삭제할 폴더 ID 목록
    * @param ownerUserId 소유자 ID
    * @param session MongoDB 세션
    * @returns 삭제된 노트 수
    */
   deleteNotesByFolderIds(folderIds: string[], ownerUserId: string, session?: ClientSession): Promise<number>;
+
+  /**
+   * 여러 폴더에 속한 노트들을 일괄 소프트 삭제합니다.
+   * 
+   * @param folderIds 삭제할 폴더 ID 목록
+   * @param ownerUserId 소유자 ID
+   * @param session MongoDB 세션
+   * @returns 삭제(업데이트)된 노트 수
+   */
+  softDeleteNotesByFolderIds(folderIds: string[], ownerUserId: string, session?: ClientSession): Promise<number>;
+
+  /**
+   * 여러 폴더에 속한 노트들을 일괄 영구 삭제합니다.
+   * 
+   * @param folderIds 삭제할 폴더 ID 목록
+   * @param ownerUserId 소유자 ID
+   * @param session MongoDB 세션
+   * @returns 삭제된 노트 수
+   */
+  hardDeleteNotesByFolderIds(folderIds: string[], ownerUserId: string, session?: ClientSession): Promise<number>;
+
+  /**
+   * Restore: 여러 폴더에 속한 노트들을 일괄 복구합니다.
+   * 
+   * @param folderIds 복구할 폴더 ID 목록
+   * @param ownerUserId 소유자 ID
+   * @param session MongoDB 세션
+   * @returns 복구된 노트 수
+   */
+  restoreNotesByFolderIds(folderIds: string[], ownerUserId: string, session?: ClientSession): Promise<number>;
 
   // --- 폴더(Folder) 관련 작업 ---
 
@@ -130,4 +208,27 @@ export interface NoteRepository {
    * @returns 삭제된 폴더 수
    */
   deleteFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number>;
+
+  softDeleteFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number>;
+  hardDeleteFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number>;
+
+  /**
+   * Restore: Soft Delete된 폴더를 복구합니다. (deletedAt = null)
+   * 
+   * @param id 폴더 ID
+   * @param ownerUserId 소유자 ID
+   * @param session MongoDB 세션
+   * @returns 복구 성공 여부
+   */
+  restoreFolder(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean>;
+
+  /**
+   * Restore: 여러 폴더를 일괄 복구합니다.
+   * 
+   * @param ids 복구할 폴더 ID 목록
+   * @param ownerUserId 소유자 ID
+   * @param session MongoDB 세션
+   * @returns 복구된 폴더 수
+   */
+  restoreFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number>;
 }

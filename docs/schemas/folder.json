@@ -5,11 +5,10 @@
   "type": "object",
   "properties": {
     "id": { "type": "string", "format": "uuid" },
-    "ownerUserId": { "type": "string" },
     "name": { "type": "string" },
     "parentId": { "type": ["string", "null"], "format": "uuid" },
     "createdAt": { "type": "string", "format": "date-time" },
     "updatedAt": { "type": "string", "format": "date-time" }
   },
-  "required": ["id", "ownerUserId", "name", "createdAt", "updatedAt"]
+  "required": ["id", "name", "createdAt", "updatedAt"]
 }

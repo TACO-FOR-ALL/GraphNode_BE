@@ -7,7 +7,7 @@
  * 
  * 이 클래스는 데이터베이스와 직접 통신하는 'Adapter'입니다.
  */
-import { Collection, ClientSession } from 'mongodb';
+import { Collection, ClientSession, UpdateResult, DeleteResult, ModifyResult } from 'mongodb';
 
 import { MessageRepository } from '../../core/ports/MessageRepository';
 import { getMongo } from '../db/mongodb';
@@ -58,6 +58,16 @@ export class MessageRepositoryMongo implements MessageRepository {
   }
 
   /**
+   * ID로 메시지를 조회합니다.
+   * 
+   * @param id 조회할 메시지 ID
+   * @returns 조회된 메시지 문서 또는 null
+   */
+  async findById(id: string): Promise<MessageDoc | null> {
+    return this.col().findOne({ _id: id });
+  }
+
+  /**
    * 특정 대화방에 속한 모든 메시지를 조회합니다.
    * 
    * @param conversationId 대화방 ID
@@ -82,7 +92,7 @@ export class MessageRepositoryMongo implements MessageRepository {
     // 업데이트 시 updatedAt 필드도 현재 시간으로 갱신합니다.
     const partialDoc: Partial<MessageDoc> = { ...updates, updatedAt: Date.now() };
 
-    const result = await this.col().findOneAndUpdate(
+    const result : ModifyResult<MessageDoc> = await this.col().findOneAndUpdate(
       { _id: id, conversationId },
       { $set: partialDoc },
       { returnDocument: 'after', includeResultMetadata: true, session }
@@ -103,9 +113,102 @@ export class MessageRepositoryMongo implements MessageRepository {
    * @returns 삭제 성공 여부
    */
   async delete(id: string, conversationId: string, session?: ClientSession): Promise<boolean> {
-    const result = await this.col().deleteOne({ _id: id, conversationId }, { session });
+    const result : DeleteResult = await this.col().deleteOne({ _id: id, conversationId }, { session });
     // deletedCount가 1이면 성공적으로 삭제된 것입니다.
     return result.deletedCount === 1;
+  }
+
+  /**
+   * 메시지를 소프트 삭제(Soft Delete)합니다.
+   * 실제 데이터를 삭제하지 않고, deletedAt 필드에 현재 시간을 기록합니다.
+   * 
+   * @param id 삭제할 메시지 ID
+   * @param conversationId 메시지가 속한 대화방 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제(업데이트) 성공 여부
+   */
+  async softDelete(id: string, conversationId: string, session?: ClientSession): Promise<boolean> {
+    const result : UpdateResult<MessageDoc> = await this.col().updateOne(
+      { _id: id, conversationId },
+      { $set: { deletedAt: Date.now(), updatedAt: Date.now() } },
+      { session }
+    );
+    return result.modifiedCount > 0;
+  }
+
+  /**
+   * 메시지를 영구 삭제(Hard Delete)합니다.
+   * DB에서 데이터를 완전히 제거합니다.
+   * 
+   * @param id 삭제할 메시지 ID
+   * @param conversationId 메시지가 속한 대화방 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제 성공 여부
+   */
+  async hardDelete(id: string, conversationId: string, session?: ClientSession): Promise<boolean> {
+    const result : DeleteResult = await this.col().deleteOne({ _id: id, conversationId }, { session });
+    return result.deletedCount > 0;
+  }
+
+  /**
+   * 삭제된 메시지를 복구합니다.
+   * 
+   * @param id 메시지 ID
+   * @param conversationId 대화방 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 복구 성공 여부
+   */
+  async restore(id: string, conversationId: string, session?: ClientSession): Promise<boolean> {
+    const result = await this.col().updateOne(
+      { _id: id, conversationId },
+      { $set: { deletedAt: null, updatedAt: Date.now() } },
+      { session }
+    );
+    return result.modifiedCount > 0;
+  }
+
+  /**
+   * 특정 사용자의 변경된 메시지 목록을 조회합니다.
+   * 동기화(Sync) 로직에서 사용됩니다.
+   * 
+   * @param ownerUserId 사용자 ID
+   * @param since 기준 시각 (이 시간 이후에 수정된 데이터만 조회)
+   * @returns 변경된 메시지 문서 목록
+   */
+  async findModifiedSince(ownerUserId: string, since: Date): Promise<MessageDoc[]> {
+    return this.col().find({
+      ownerUserId,
+      updatedAt: { $gte: since.getTime() }
+    }).toArray();
+  }
+
+  /**
+   * 특정 대화방의 모든 메시지를 소프트 삭제합니다.
+   * 대화방 삭제 시 해당 대화방의 메시지들도 함께 삭제 처리할 때 사용합니다.
+   * 
+   * @param conversationId 대화방 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제(업데이트)된 메시지 개수
+   */
+  async softDeleteAllByConversationId(conversationId: string, session?: ClientSession): Promise<number> {
+    const result : UpdateResult<MessageDoc> = await this.col().updateMany(
+      { conversationId },
+      { $set: { deletedAt: Date.now(), updatedAt: Date.now() } },
+      { session }
+    );
+    return result.modifiedCount;
+  }
+
+  /**
+   * 특정 대화방의 모든 메시지를 영구 삭제합니다.
+   * 
+   * @param conversationId 대화방 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제된 메시지 개수
+   */
+  async hardDeleteAllByConversationId(conversationId: string, session?: ClientSession): Promise<number> {
+    const result : DeleteResult = await this.col().deleteMany({ conversationId }, { session });
+    return result.deletedCount;
   }
 
   /**
@@ -117,7 +220,23 @@ export class MessageRepositoryMongo implements MessageRepository {
    */
   async deleteAllByConversationId(conversationId: string, session?: ClientSession): Promise<number> {
     // deleteMany: 조건에 맞는 모든 문서를 삭제합니다.
-    const result = await this.col().deleteMany({ conversationId }, { session });
+    const result : DeleteResult = await this.col().deleteMany({ conversationId }, { session });
     return result.deletedCount;
+  }
+
+  /**
+   * 특정 대화방의 모든 메시지를 복구합니다.
+   * 
+   * @param conversationId 대화방 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 복구된 메시지 개수
+   */
+  async restoreAllByConversationId(conversationId: string, session?: ClientSession): Promise<number> {
+    const result = await this.col().updateMany(
+      { conversationId },
+      { $set: { deletedAt: null, updatedAt: Date.now() } },
+      { session }
+    );
+    return result.modifiedCount;
   }
 }

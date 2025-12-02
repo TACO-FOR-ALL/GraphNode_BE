@@ -1,9 +1,10 @@
 import { Request, Response } from 'express';
+import { z } from 'zod';
 
 import { NoteService } from '../../core/services/NoteService';
 import { createNoteSchema, updateNoteSchema, createFolderSchema, updateFolderSchema } from '../../shared/dtos/note.schemas';
-import { ValidationError } from '../../shared/errors/domain';
 import { getUserIdFromRequest } from '../utils/request';
+import { Note, Folder } from '../../shared/dtos/note';
 
 /**
  * 모듈: NoteController
@@ -23,12 +24,10 @@ export class NoteController {
    * POST /v1/notes
    */
   async createNote(req: Request, res: Response) {
-    const userId = getUserIdFromRequest(req)!;
-    const validation = createNoteSchema.safeParse(req.body);
-    if (!validation.success) {
-      throw new ValidationError(validation.error.message);
-    }
-    const note = await this.noteService.createNote(userId, validation.data);
+    const userId: string = getUserIdFromRequest(req)!;
+    // Zod 스키마 검증 (실패 시 자동 throw)
+    const data: z.infer<typeof createNoteSchema> = createNoteSchema.parse(req.body);
+    const note: Note = await this.noteService.createNote(userId, data);
     res.status(201).json(note);
   }
 
@@ -37,9 +36,9 @@ export class NoteController {
    * GET /v1/notes/:id
    */
   async getNote(req: Request, res: Response) {
-    const userId = getUserIdFromRequest(req)!;
+    const userId: string = getUserIdFromRequest(req)!;
     const { id } = req.params;
-    const note = await this.noteService.getNote(userId, id);
+    const note: Note = await this.noteService.getNote(userId, id);
     res.json(note);
   }
 
@@ -48,9 +47,9 @@ export class NoteController {
    * GET /v1/notes?folderId=...
    */
   async listNotes(req: Request, res: Response) {
-    const userId = getUserIdFromRequest(req)!;
-    const folderId = typeof req.query.folderId === 'string' ? req.query.folderId : null;
-    const notes = await this.noteService.listNotes(userId, folderId);
+    const userId: string = getUserIdFromRequest(req)!;
+    const folderId: string | null = typeof req.query.folderId === 'string' ? req.query.folderId : null;
+    const notes: Note[] = await this.noteService.listNotes(userId, folderId);
     res.json(notes);
   }
 
@@ -59,24 +58,37 @@ export class NoteController {
    * PATCH /v1/notes/:id
    */
   async updateNote(req: Request, res: Response) {
-    const userId = getUserIdFromRequest(req)!;
+    const userId: string = getUserIdFromRequest(req)!;
     const { id } = req.params;
-    const validation = updateNoteSchema.safeParse(req.body);
-    if (!validation.success) {
-      throw new ValidationError(validation.error.message);
-    }
-    const note = await this.noteService.updateNote(userId, id, validation.data);
+    const data: z.infer<typeof updateNoteSchema> = updateNoteSchema.parse(req.body);
+    const note: Note = await this.noteService.updateNote(userId, id, data);
     res.json(note);
   }
 
   /**
    * 노트 삭제 핸들러
    * DELETE /v1/notes/:id
+   * 
+   * Query Params:
+   * - permanent: 'true'이면 영구 삭제 (Hard Delete), 그 외에는 Soft Delete
    */
   async deleteNote(req: Request, res: Response) {
-    const userId = getUserIdFromRequest(req)!;
+    const userId: string = getUserIdFromRequest(req)!;
     const { id } = req.params;
-    await this.noteService.deleteNote(userId, id);
+    const permanent: boolean = req.query.permanent === 'true';
+    
+    await this.noteService.deleteNote(userId, id, permanent);
+    res.status(204).send();
+  }
+
+  /**
+   * 노트 복구 핸들러
+   * POST /v1/notes/:id/restore
+   */
+  async restoreNote(req: Request, res: Response) {
+    const userId: string = getUserIdFromRequest(req)!;
+    const { id } = req.params;
+    await this.noteService.restoreNote(userId, id);
     res.status(204).send();
   }
 
@@ -87,12 +99,9 @@ export class NoteController {
    * POST /v1/folders
    */
   async createFolder(req: Request, res: Response) {
-    const userId = getUserIdFromRequest(req)!;
-    const validation = createFolderSchema.safeParse(req.body);
-    if (!validation.success) {
-      throw new ValidationError(validation.error.message);
-    }
-    const folder = await this.noteService.createFolder(userId, validation.data);
+    const userId: string = getUserIdFromRequest(req)!;
+    const data: z.infer<typeof createFolderSchema> = createFolderSchema.parse(req.body);
+    const folder: Folder = await this.noteService.createFolder(userId, data);
     res.status(201).json(folder);
   }
 
@@ -101,9 +110,9 @@ export class NoteController {
    * GET /v1/folders/:id
    */
   async getFolder(req: Request, res: Response) {
-    const userId = getUserIdFromRequest(req)!;
+    const userId: string = getUserIdFromRequest(req)!;
     const { id } = req.params;
-    const folder = await this.noteService.getFolder(userId, id);
+    const folder: Folder = await this.noteService.getFolder(userId, id);
     res.json(folder);
   }
 
@@ -112,9 +121,9 @@ export class NoteController {
    * GET /v1/folders?parentId=...
    */
   async listFolders(req: Request, res: Response) {
-    const userId = getUserIdFromRequest(req)!;
-    const parentId = typeof req.query.parentId === 'string' ? req.query.parentId : null;
-    const folders = await this.noteService.listFolders(userId, parentId);
+    const userId: string = getUserIdFromRequest(req)!;
+    const parentId: string | null = typeof req.query.parentId === 'string' ? req.query.parentId : null;
+    const folders: Folder[] = await this.noteService.listFolders(userId, parentId);
     res.json(folders);
   }
 
@@ -123,24 +132,37 @@ export class NoteController {
    * PATCH /v1/folders/:id
    */
   async updateFolder(req: Request, res: Response) {
-    const userId = getUserIdFromRequest(req)!;
+    const userId: string = getUserIdFromRequest(req)!;
     const { id } = req.params;
-    const validation = updateFolderSchema.safeParse(req.body);
-    if (!validation.success) {
-      throw new ValidationError(validation.error.message);
-    }
-    const folder = await this.noteService.updateFolder(userId, id, validation.data);
+    const data: z.infer<typeof updateFolderSchema> = updateFolderSchema.parse(req.body);
+    const folder: Folder = await this.noteService.updateFolder(userId, id, data);
     res.json(folder);
   }
 
   /**
    * 폴더 삭제 핸들러
    * DELETE /v1/folders/:id
+   * 
+   * Query Params:
+   * - permanent: 'true'이면 영구 삭제 (Hard Delete), 그 외에는 Soft Delete
    */
   async deleteFolder(req: Request, res: Response) {
-    const userId = getUserIdFromRequest(req)!;
+    const userId: string = getUserIdFromRequest(req)!;
     const { id } = req.params;
-    await this.noteService.deleteFolder(userId, id);
+    const permanent: boolean = req.query.permanent === 'true';
+    
+    await this.noteService.deleteFolder(userId, id, permanent);
+    res.status(204).send();
+  }
+
+  /**
+   * 폴더 복구 핸들러
+   * POST /v1/folders/:id/restore
+   */
+  async restoreFolder(req: Request, res: Response) {
+    const userId: string = getUserIdFromRequest(req)!;
+    const { id } = req.params;
+    await this.noteService.restoreFolder(userId, id);
     res.status(204).send();
   }
 }

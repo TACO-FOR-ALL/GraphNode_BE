@@ -24,7 +24,9 @@ export interface ChatMessage {
   id: string;
   role: ChatRole;
   content: string;
-  ts?: string; // ISO 8601
+  createdAt?: string; // ISO 8601
+  updatedAt?: string; // ISO 8601
+  deletedAt?: string | null; // ISO 8601
 }
 
 /**
@@ -32,12 +34,15 @@ export interface ChatMessage {
  * @param id 대화 ID
  * @param title 대화 제목
  * @param updatedAt 마지막 업데이트 시각 (ISO 8601)
+ * @param deletedAt 삭제 시각 (ISO 8601)
  * @param messages 메시지 목록
  */
 export interface ChatThread {
   id: string;
   title: string;
+  createdAt?: string; // ISO 8601
   updatedAt?: string; // ISO 8601
+  deletedAt?: string | null; // ISO 8601
   messages: ChatMessage[];
 }
 

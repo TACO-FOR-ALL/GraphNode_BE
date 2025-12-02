@@ -29,8 +29,15 @@ export class ConversationsApi {
     return this.rb.path(`/v1/ai/conversations/${conversationId}`).patch<ConversationDto>(patch);
   }
 
-  delete(conversationId: string): Promise<{ ok: true }> {
-    return this.rb.path(`/v1/ai/conversations/${conversationId}`).delete<{ ok: true }>();
+  delete(conversationId: string, permanent?: boolean): Promise<{ ok: true }> {
+    return this.rb
+      .path(`/v1/ai/conversations/${conversationId}`)
+      .query({ permanent })
+      .delete<{ ok: true }>();
+  }
+
+  restore(conversationId: string): Promise<ConversationDto> {
+    return this.rb.path(`/v1/ai/conversations/${conversationId}/restore`).post<ConversationDto>({});
   }
 
   // Messages nested under conversation
@@ -42,7 +49,14 @@ export class ConversationsApi {
     return this.rb.path(`/v1/ai/conversations/${conversationId}/messages/${messageId}`).patch<MessageDto>(patch);
   }
 
-  deleteMessage(conversationId: string, messageId: string): Promise<{ ok: true }> {
-    return this.rb.path(`/v1/ai/conversations/${conversationId}/messages/${messageId}`).delete<{ ok: true }>();
+  deleteMessage(conversationId: string, messageId: string, permanent?: boolean): Promise<{ ok: true }> {
+    return this.rb
+      .path(`/v1/ai/conversations/${conversationId}/messages/${messageId}`)
+      .query({ permanent })
+      .delete<{ ok: true }>();
+  }
+
+  restoreMessage(conversationId: string, messageId: string): Promise<MessageDto> {
+    return this.rb.path(`/v1/ai/conversations/${conversationId}/messages/${messageId}/restore`).post<MessageDto>({});
   }
 }

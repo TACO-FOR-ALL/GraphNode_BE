@@ -8,7 +8,7 @@
  * 
  * 이 클래스는 'Adapter' 역할을 하며, 비즈니스 로직이 DB 세부 사항을 알 필요가 없도록 감싸줍니다.
  */
-import { Collection, FindOptions, ClientSession } from 'mongodb';
+import { Collection, FindOptions, ClientSession, ModifyResult, DeleteResult, UpdateResult } from 'mongodb';
 
 import { ConversationRepository } from '../../core/ports/ConversationRepository';
 import { getMongo } from '../db/mongodb';
@@ -52,11 +52,12 @@ export class ConversationRepositoryMongo implements ConversationRepository {
    * 
    * @param id 대화 ID (_id 필드와 매핑)
    * @param ownerUserId 소유자 ID (보안을 위해 함께 확인)
+   * @param session (선택) 트랜잭션 세션
    * @returns 대화 문서 또는 null
    */
-  async findById(id: string, ownerUserId: string): Promise<ConversationDoc | null> {
+  async findById(id: string, ownerUserId: string, session?: ClientSession): Promise<ConversationDoc | null> {
     // findOne: 조건에 맞는 문서 하나를 찾습니다.
-    return await this.col().findOne({ _id: id, ownerUserId });
+    return await this.col().findOne({ _id: id, ownerUserId }, { session });
   }
 
   /**
@@ -83,11 +84,11 @@ export class ConversationRepositoryMongo implements ConversationRepository {
     };
 
     // 쿼리 실행 및 배열로 변환
-    const items = await this.col().find(query, options).toArray();
+    const items: ConversationDoc[] = await this.col().find(query, options).toArray();
     
     // 다음 커서 계산 (마지막 아이템의 updatedAt)
-    const last = items[items.length - 1];
-    const nextCursor = items.length === limit && last?.updatedAt ? String(last.updatedAt) : null;
+    const last: ConversationDoc | undefined = items[items.length - 1];
+    const nextCursor: string | null = items.length === limit && last?.updatedAt ? String(last.updatedAt) : null;
 
     return { items, nextCursor };
   }
@@ -103,7 +104,7 @@ export class ConversationRepositoryMongo implements ConversationRepository {
    */
   async update(id: string, ownerUserId: string, updates: Partial<ConversationDoc>, session?: ClientSession): Promise<ConversationDoc | null> {
     // findOneAndUpdate: 찾아서 수정하고 결과를 반환합니다.
-    const result = await this.col().findOneAndUpdate(
+    const result : ModifyResult<ConversationDoc> = await this.col().findOneAndUpdate(
       { _id: id, ownerUserId }, // 조건
       { $set: { ...updates, updatedAt: Date.now() } }, // 수정 내용 ($set 연산자 사용)
       { returnDocument: 'after', includeResultMetadata: true, session } // 옵션: 수정 후 문서 반환
@@ -127,12 +128,42 @@ export class ConversationRepositoryMongo implements ConversationRepository {
    */
   async delete(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
     // deleteOne: 조건에 맞는 문서 하나를 삭제합니다.
-    const result = await this.col().deleteOne({ _id: id, ownerUserId }, { session });
+    const result : DeleteResult = await this.col().deleteOne({ _id: id, ownerUserId }, { session });
     
     // 삭제된 문서가 없으면 에러 발생
     if (result.deletedCount === 0) {
       throw new NotFoundError(`Conversation with id ${id} not found for user ${ownerUserId}`);
     }
     return true;
+  }
+
+  async softDelete(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
+    const result : UpdateResult<ConversationDoc> = await this.col().updateOne(
+      { _id: id, ownerUserId },
+      { $set: { deletedAt: Date.now(), updatedAt: Date.now() } },
+      { session }
+    );
+    return result.modifiedCount > 0;
+  }
+
+  async hardDelete(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
+    const result : DeleteResult = await this.col().deleteOne({ _id: id, ownerUserId }, { session });
+    return result.deletedCount > 0;
+  }
+
+  async restore(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
+    const result = await this.col().updateOne(
+      { _id: id, ownerUserId },
+      { $set: { deletedAt: null, updatedAt: Date.now() } },
+      { session }
+    );
+    return result.modifiedCount > 0;
+  }
+
+  async findModifiedSince(ownerUserId: string, since: Date): Promise<ConversationDoc[]> {
+    return this.col().find({
+      ownerUserId,
+      updatedAt: { $gte: since.getTime() }
+    }).toArray();
   }
 }

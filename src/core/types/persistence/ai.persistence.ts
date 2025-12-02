@@ -36,7 +36,8 @@ export interface ConversationDoc {
   ownerUserId: string;
   title: string;
   updatedAt: number;
-  createdAt?: number;
+  createdAt: number;
+  deletedAt?: number | null; // Timestamp (ms)
   provider?: Provider;
   model?: string;
   source?: Source;
@@ -48,18 +49,20 @@ export interface ConversationDoc {
  * Collection: messages
  * @property _id 문서 고유 ID (UUID/ULID)
  * @property conversationId 소속 대화 ID
+ * @property ownerUserId 소유자 사용자 ID (역정규화, 동기화 쿼리용)
  * @property role 메시지 역할
  * @property content 메시지 내용
- * @property ts 메시지 타임스탬프
  * @property createdAt 생성 시각 (타임스탬프)
  * @property updatedAt 수정 시각 (타임스탬프)
+ * @property deletedAt 삭제 시각 (타임스탬프)
  */
 export interface MessageDoc {
   _id: string; // UUID/ULID
   conversationId: string;
+  ownerUserId: string; // Added for sync query efficiency
   role: ChatRole;
   content: string;
-  ts: number;
   createdAt: number;
   updatedAt: number;
+  deletedAt?: number | null;
 }
