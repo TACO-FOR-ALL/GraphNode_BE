@@ -2,3 +2,6 @@ node_modules/
 dist/
 coverage/
 .env
+
+# Load test configuration
+loadtest/common/config.js

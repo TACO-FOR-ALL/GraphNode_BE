@@ -17,11 +17,18 @@ function cookieOpts() {
   // SameSite=None requires Secure. If not secure, fallback to Lax.
   const sameSite = secure ? 'none' : 'lax';
 
-  const cookieConfig = {
+  const cookieConfig = isProd
+  ? {
       httpOnly: false,
-      sameSite: sameSite as 'none' | 'lax',
-      secure: secure,
-  };
+      sameSite: 'none' as const,
+      secure: true,
+    }
+  : {
+      httpOnly: false,
+      sameSite: 'lax' as const,
+      secure: false,
+    };
+  
   
 
 
