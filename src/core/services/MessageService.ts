@@ -12,6 +12,7 @@
  */
 
 import { ulid } from 'ulid';
+import { ClientSession } from 'mongodb';
 
 import { ChatMessage, ChatRole } from '../../shared/dtos/ai';
 import { MessageRepository } from '../ports/MessageRepository';
@@ -21,7 +22,6 @@ import { AppError } from '../../shared/errors/base';
 import { toMessageDoc, toChatMessageDto } from '../../shared/mappers/ai';
 import { MessageDoc, ConversationDoc } from '../types/persistence/ai.persistence';
 import { getMongo } from '../../infra/db/mongodb';
-import { ClientSession } from 'mongodb';
 
 export class MessageService {
   constructor(

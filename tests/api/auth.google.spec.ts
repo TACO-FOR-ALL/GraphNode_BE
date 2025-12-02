@@ -134,4 +134,31 @@ describe('Auth Google', () => {
   const hasSession = setCookies.some((c: string) => /(?:^|;\s)(sid=|__Host-session=)/.test(c));
   expect(hasSession).toBe(true);
   });
+
+  test('GET /auth/google/callback with missing user info binds session and returns ok', async () => {
+    const app = appWithTestEnv();
+    
+    // Override the mock for this specific test
+    const GoogleOAuthService = require('../../src/core/services/GoogleOAuthService').GoogleOAuthService;
+    const originalFetchUserInfo = GoogleOAuthService.prototype.fetchUserInfo;
+    GoogleOAuthService.prototype.fetchUserInfo = async () => ({ sub: 'google-uid-2' }); // Missing email, name, picture
+
+    try {
+      const start = await request(app).get('/auth/google/start');
+      const cookie = start.headers['set-cookie'];
+      const location = start.headers['location'] as string;
+      const state = new URL(location).searchParams.get('state') || 'unknown';
+
+      const res = await request(app)
+        .get('/auth/google/callback')
+        .set('Cookie', cookie)
+        .query({ code: 'valid-code', state });
+
+      expect(res.status).toBe(200);
+      expect(res.text).toContain('oauth-success');
+    } finally {
+      // Restore original mock
+      GoogleOAuthService.prototype.fetchUserInfo = originalFetchUserInfo;
+    }
+  });
 });

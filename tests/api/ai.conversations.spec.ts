@@ -106,9 +106,23 @@ jest.mock('../../src/core/services/MessageService', () => {
       async delete(ownerUserId: string, conversationId: string, messageId: string) {
         const v = store.conversations.get(conversationId);
         if (!v || v.ownerUserId !== ownerUserId) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
-        const before = v.messages.length;
-        v.messages = v.messages.filter(x => x.id !== messageId);
-        return before !== v.messages.length;
+        
+        const m = v.messages.find(x => x.id === messageId);
+        if (!m) return false;
+        
+        // Soft delete
+        m.deletedAt = new Date().toISOString();
+        return true;
+      }
+      async restore(ownerUserId: string, conversationId: string, messageId: string) {
+        const v = store.conversations.get(conversationId);
+        if (!v || v.ownerUserId !== ownerUserId) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+        
+        const m = v.messages.find(x => x.id === messageId);
+        if (!m) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+        
+        m.deletedAt = null;
+        return true;
       }
     }
   };

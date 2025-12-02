@@ -12,7 +12,9 @@ import { clearHelperLoginCookies } from '../utils/sessionCookies';
 export function logout(req: Request, res: Response, next: NextFunction) {
   try {
     req.session.destroy(err => {
-      if (err) return next(err);
+      if (err) {
+        return next(err);
+      }
       res.clearCookie('sid', { path: '/' });
       res.clearCookie('__Host-session', { path: '/' });
       clearHelperLoginCookies(res);

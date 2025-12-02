@@ -14,17 +14,14 @@ function cookieOpts() {
   const maxAgeEnv = process.env.COOKIE_HELPER_MAX_AGE;
   const maxAge = maxAgeEnv ? Number(maxAgeEnv) * 1000 : undefined; // millis, undefined=세션쿠키
 
-  const cookieConfig = isProd
-  ? {
+  // SameSite=None requires Secure. If not secure, fallback to Lax.
+  const sameSite = secure ? 'none' : 'lax';
+
+  const cookieConfig = {
       httpOnly: false,
-      sameSite: 'none' as const,
-      secure: true,
-    }
-  : {
-      httpOnly: false,
-      sameSite: 'lax' as const,
-      secure: false,
-    };
+      sameSite: sameSite as 'none' | 'lax',
+      secure: secure,
+  };
   
 
 
