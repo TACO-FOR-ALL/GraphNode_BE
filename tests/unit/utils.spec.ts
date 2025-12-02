@@ -1,8 +1,8 @@
-
 import { Response } from 'express';
 
 import { getUserIdFromRequest, bindUserIdToSession } from '../../src/app/utils/request';
 import { setHelperLoginCookies, clearHelperLoginCookies } from '../../src/app/utils/sessionCookies';
+import { AuthError } from '../../src/shared/errors/domain';
 
 describe('Utils Unit Tests', () => {
   describe('request.ts', () => {
@@ -17,14 +17,14 @@ describe('Utils Unit Tests', () => {
         expect(getUserIdFromRequest(req)).toBe('u_2');
       });
 
-      it('should return undefined if neither is present', () => {
+      it('should throw AuthError if neither is present', () => {
         const req = { session: {} } as any;
-        expect(getUserIdFromRequest(req)).toBeUndefined();
+        expect(() => getUserIdFromRequest(req)).toThrow(AuthError);
       });
 
-      it('should return undefined if session is missing', () => {
+      it('should throw AuthError if session is missing', () => {
         const req = {} as any;
-        expect(getUserIdFromRequest(req)).toBeUndefined();
+        expect(() => getUserIdFromRequest(req)).toThrow(AuthError);
       });
     });
 
