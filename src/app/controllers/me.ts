@@ -1,34 +1,34 @@
-/**
- * 모듈: /v1/me 컨트롤러
- * 책임: 현재 로그인 상태 확인 응답.
- */
 import type { Request, Response, NextFunction } from 'express';
 
-import type { MeResponseDto, UserProfileDto } from '../../shared/dtos/me';
-import { AuthError } from '../../shared/errors/domain';
 import { getUserIdFromRequest } from '../utils/request';
+import { UserService } from '../../core/services/UserService';
+import { MeResponseDto } from '../../shared/dtos/me';
 
 /**
- * GET /v1/me — 세션 기반으로 인증 상태 반환
+ * /v1/me 엔드포인트의 컨트롤러 클래스.
  */
-export function getMe(req: Request, res: Response, next: NextFunction) {
-  try {
-    const userId = getUserIdFromRequest(req)!;
-    if (userId) {
-      const body: MeResponseDto = { userId };
-      const profCookie = (req as any).cookies?.['gn-profile'];
-      if (profCookie) {
-        try {
-          const decoded = JSON.parse(Buffer.from(profCookie, 'base64url').toString('utf8')) as UserProfileDto;
-          body.profile = decoded;
-        } catch {
-          // ignore parse errors
-        }
-      }
-      return res.status(200).json(body);
+export class MeController {
+  /**
+   * @param userService 사용자 관련 비즈니스 로직을 처리하는 서비스
+   */
+  constructor(private readonly userService: UserService) {}
+
+  /**
+   * GET /v1/me - 현재 로그인된 사용자의 정보를 반환합니다.
+   */
+  async getMe(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = getUserIdFromRequest(req)!;
+      const userProfile = await this.userService.getUserProfile(userId);
+
+      const body: MeResponseDto = {
+        userId: userProfile.id,
+        profile: userProfile,
+      };
+
+      res.status(200).json(body);
+    } catch (e) {
+      next(e);
     }
-    throw new AuthError('Authentication required');
-  } catch (e) {
-    next(e);
   }
 }
