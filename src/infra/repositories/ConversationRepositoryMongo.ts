@@ -52,11 +52,12 @@ export class ConversationRepositoryMongo implements ConversationRepository {
    * 
    * @param id 대화 ID (_id 필드와 매핑)
    * @param ownerUserId 소유자 ID (보안을 위해 함께 확인)
+   * @param session (선택) 트랜잭션 세션
    * @returns 대화 문서 또는 null
    */
-  async findById(id: string, ownerUserId: string): Promise<ConversationDoc | null> {
+  async findById(id: string, ownerUserId: string, session?: ClientSession): Promise<ConversationDoc | null> {
     // findOne: 조건에 맞는 문서 하나를 찾습니다.
-    return await this.col().findOne({ _id: id, ownerUserId });
+    return await this.col().findOne({ _id: id, ownerUserId }, { session });
   }
 
   /**

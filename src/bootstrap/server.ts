@@ -26,10 +26,10 @@ import { NotFoundError } from '../shared/errors/domain';
 // import { logger } from '../shared/utils/logger';
 // AI 라우터 import
 import { initDatabases } from '../infra/db';
-import { makeAiRouter } from './modules/ai.module'; // <-- 조립 모듈 사용
-import { makeGraphRouter } from './modules/graph.module'; // Graph 모듈 임포트
-import { makeNoteRouter } from './modules/note.module'; // Note 모듈 임포트
-import syncRouter from '../app/routes/sync'; // Sync 라우터 임포트
+import { makeAiRouter } from './modules/ai.module';
+import { makeGraphRouter } from './modules/graph.module';
+import { makeNoteRouter } from './modules/note.module';
+import { makeSyncRouter } from './modules/sync.module';
 
 /**
  * Express 앱 부트스트랩.
@@ -118,7 +118,7 @@ export function createApp() {
   app.use('/v1', makeNoteRouter());
 
   // Sync Router
-  app.use('/v1/sync', syncRouter);
+  app.use('/v1/sync', makeSyncRouter());
 
   // Auth routes
   app.use('/auth/google', authGoogleRouter);

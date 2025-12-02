@@ -8,6 +8,7 @@ export interface NoteDto {
   folderId: string | null;
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string | null;
 }
 
 /**
@@ -19,6 +20,7 @@ export interface FolderDto {
   parentId: string | null;
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string | null;
 }
 
 /**

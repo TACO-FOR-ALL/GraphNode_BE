@@ -39,7 +39,7 @@ export interface ConversationRepository {
    * @param ownerUserId 소유자 ID (본인 확인용)
    * @returns 대화 문서 또는 null (없을 경우)
    */
-  findById(id: string, ownerUserId: string): Promise<ConversationDoc | null>;
+  findById(id: string, ownerUserId: string, session?: ClientSession): Promise<ConversationDoc | null>;
 
   /**
    * 특정 사용자의 대화 목록을 조회합니다 (페이징 지원).

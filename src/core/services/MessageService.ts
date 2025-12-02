@@ -20,6 +20,8 @@ import { NotFoundError, ValidationError, UpstreamError } from '../../shared/erro
 import { AppError } from '../../shared/errors/base';
 import { toMessageDoc, toChatMessageDto } from '../../shared/mappers/ai';
 import { MessageDoc, ConversationDoc } from '../types/persistence/ai.persistence';
+import { getMongo } from '../../infra/db/mongodb';
+import { ClientSession } from 'mongodb';
 
 export class MessageService {
   constructor(
@@ -124,23 +126,25 @@ export class MessageService {
    * @returns 삭제 성공 여부 (true)
    */
   async delete(ownerUserId: string, conversationId: string, messageId: string, permanent: boolean = false): Promise<boolean> {
+    const mongoClient = getMongo();
+    const session = mongoClient.startSession();
+
     try {
       if (!messageId || messageId.trim().length === 0) {
         throw new ValidationError('Message id is required');
       }
+      session.startTransaction();
       // 소유권 확인
-      await this.validateConversationOwner(conversationId, ownerUserId);
+      await this.validateConversationOwner(conversationId, ownerUserId, session);
 
       let success: boolean = false;
       
       if (permanent) {
         // Hard Delete
-        success = await this.messageRepo.hardDelete(messageId, conversationId);
-      }
-      
-      if (!permanent) {
+        success = await this.messageRepo.hardDelete(messageId, conversationId, session);
+      } else {
         // Soft Delete
-        success = await this.messageRepo.softDelete(messageId, conversationId);
+        success = await this.messageRepo.softDelete(messageId, conversationId, session);
       }
 
       if (!success) {
@@ -148,12 +152,16 @@ export class MessageService {
       }
 
       // 대화방 시간 갱신
-      await this.conversationRepo.update(conversationId, ownerUserId, { updatedAt: Date.now() });
+      await this.conversationRepo.update(conversationId, ownerUserId, { updatedAt: Date.now() }, session);
 
+      await session.commitTransaction();
       return true;
     } catch (err: unknown) {
+      await session.abortTransaction();
       if (err instanceof AppError) throw err;
       throw new UpstreamError('MessageService.delete failed', { cause: String(err) });
+    } finally {
+      await session.endSession();
     }
   }
 
@@ -166,25 +174,33 @@ export class MessageService {
    * @returns 복구 성공 여부 (true)
    */
   async restore(ownerUserId: string, conversationId: string, messageId: string): Promise<boolean> {
+    const mongoClient = getMongo();
+    const session = mongoClient.startSession();
+
     try {
       if (!messageId || messageId.trim().length === 0) {
         throw new ValidationError('Message id is required');
       }
+      session.startTransaction();
       // 소유권 확인
-      await this.validateConversationOwner(conversationId, ownerUserId);
+      await this.validateConversationOwner(conversationId, ownerUserId, session);
 
-      const success = await this.messageRepo.restore(messageId, conversationId);
+      const success = await this.messageRepo.restore(messageId, conversationId, session);
       if (!success) {
         throw new NotFoundError(`Message with id ${messageId} not found`);
       }
 
       // 대화방 시간 갱신
-      await this.conversationRepo.update(conversationId, ownerUserId, { updatedAt: Date.now() });
+      await this.conversationRepo.update(conversationId, ownerUserId, { updatedAt: Date.now() }, session);
 
+      await session.commitTransaction();
       return true;
     } catch (err: unknown) {
+      await session.abortTransaction();
       if (err instanceof AppError) throw err;
       throw new UpstreamError('MessageService.restore failed', { cause: String(err) });
+    } finally {
+      await session.endSession();
     }
   }
 
@@ -198,12 +214,11 @@ export class MessageService {
    * @param ownerUserId 확인할 사용자 ID
    * @throws {NotFoundError} 대화방이 없거나 소유자가 아님
    */
-  private async validateConversationOwner(conversationId: string, ownerUserId: string): Promise<void> {
-    const conversation: ConversationDoc | null = await this.conversationRepo.findById(conversationId, ownerUserId);
-    if (!conversation) {
-      // 보안을 위해 '권한 없음'과 '찾을 수 없음'을 구분하지 않고 NotFoundError를 반환합니다.
-      // 이는 악의적인 사용자가 ID 스캐닝을 통해 대화방 존재 여부를 파악하는 것을 방지합니다.
-      throw new NotFoundError(`Conversation with id ${conversationId} not found`);
+  private async validateConversationOwner(conversationId: string, ownerUserId: string, session?: ClientSession): Promise<ConversationDoc> {
+    const convDoc = await this.conversationRepo.findById(conversationId, ownerUserId, session);
+    if (!convDoc) {
+      throw new NotFoundError(`Conversation with id ${conversationId} not found or you don't have permission.`);
     }
+    return convDoc;
   }
 }
