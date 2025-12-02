@@ -17,7 +17,7 @@ import healthRouter from '../app/routes/health';
 import { loadEnv } from '../config/env';
 import authGoogleRouter from '../app/routes/auth.google';
 import authAppleRouter from '../app/routes/auth.apple';
-import meRouter from '../app/routes/me';
+import { makeMeRouter } from './modules/user.module';
 import authSessionRouter from '../app/routes/auth.session';
 import { requestContext } from '../app/middlewares/request-context';
 import { httpLogger } from '../shared/utils/logger';
@@ -123,7 +123,7 @@ export function createApp() {
   // Auth routes
   app.use('/auth/google', authGoogleRouter);
   app.use('/auth/apple', authAppleRouter);
-  app.use('/v1/me', meRouter);
+  app.use('/v1/me', makeMeRouter());
   app.use('/auth', authSessionRouter);
 
   // 404 fall-through → Problem Details 형식으로 응답
