@@ -1,40 +1,35 @@
 // services/openai.ts
-import OpenAI from "openai";
+import OpenAI from 'openai';
 
-import { ChatMessageRequest } from "./ChatMessageRequest";
+import { ChatMessageRequest } from './ChatMessageRequest';
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 
 function normalizeError(e: any): string {
   const status = e?.status ?? e?.response?.status;
-  if (status === 401) return "unauthorized_key";
-  if (status === 429) return "rate_limited";
-  if (status === 404) return "not_found";
-  if (status === 400) return "bad_request";
-  if (status === 500) return "server_error";
-  if (e?.name === "AbortError") return "aborted";
-  if (e?.name === "TimeoutError") return "timeout";
-  if (e?.message === "key_not_found") return "key_not_found";
-  if (e?.message === "invalid_key_format") return "invalid_key_format";
-  return "unknown_error";
+  if (status === 401) return 'unauthorized_key';
+  if (status === 429) return 'rate_limited';
+  if (status === 404) return 'not_found';
+  if (status === 400) return 'bad_request';
+  if (status === 500) return 'server_error';
+  if (e?.name === 'AbortError') return 'aborted';
+  if (e?.name === 'TimeoutError') return 'timeout';
+  if (e?.message === 'key_not_found') return 'key_not_found';
+  if (e?.message === 'invalid_key_format') return 'invalid_key_format';
+  return 'unknown_error';
 } // 오류 검출 코드
 
 export const openAI = {
   async checkAPIKeyValid(apiKey: string): Promise<Result<true>> {
     const client = new OpenAI({ apiKey });
     try {
-      await client.models.retrieve("gpt-4o-mini", { timeout: 5000 });
+      await client.models.retrieve('gpt-4o-mini', { timeout: 5000 });
       return { ok: true, data: true };
     } catch (e) {
       return { ok: false, error: normalizeError(e) };
     }
   }, //api 키 검사 있으면 정상적으로 통과 api 키에 오류가 있으면 오류 함수로 이동, async는 시간이 걸리는 작업
 
-  async request(
-    apiKey: string,
-    stream: boolean,
-    model: string,
-    messages: ChatMessageRequest[]
-  ) {
+  async request(apiKey: string, stream: boolean, model: string, messages: ChatMessageRequest[]) {
     try {
       const client = new OpenAI({ apiKey: apiKey });
       const p = await client.chat.completions.create({
@@ -42,7 +37,7 @@ export const openAI = {
         messages,
         stream,
       });
-      console.log("request", p);
+      console.log('request', p);
       return { ok: true, data: p } as Result<typeof p>;
     } catch (e) {
       return { ok: false, error: normalizeError(e) } as Result<never>;
@@ -57,15 +52,15 @@ export const openAI = {
     try {
       const client = new OpenAI({ apiKey: apiKey });
       const p = await client.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: 'gpt-4o-mini',
         messages: [
           {
-            role: "system",
+            role: 'system',
             content:
-              "You are a helpful assistant that generates thread titles based on the first user message in 20 letters or less.",
+              'You are a helpful assistant that generates thread titles based on the first user message in 20 letters or less.',
           },
           {
-            role: "user",
+            role: 'user',
             content:
               `아래 메시지에 어울리는 채팅방 제목을 만들어.\n` +
               `메시지: """${firstUserMessage}"""\n` +
@@ -73,7 +68,7 @@ export const openAI = {
           },
         ],
       });
-      const text = p.choices?.[0]?.message?.content ?? "{}";
+      const text = p.choices?.[0]?.message?.content ?? '{}';
       try {
         const { title } = JSON.parse(text);
         const t = (title as string)?.trim();
@@ -81,9 +76,7 @@ export const openAI = {
       } catch {
         /* fallback */
       }
-      const fallback =
-        firstUserMessage.slice(0, 15) +
-        (firstUserMessage.length > 15 ? "…" : "");
+      const fallback = firstUserMessage.slice(0, 15) + (firstUserMessage.length > 15 ? '…' : '');
       return { ok: true, data: fallback };
     } catch (e) {
       return { ok: false, error: normalizeError(e) };

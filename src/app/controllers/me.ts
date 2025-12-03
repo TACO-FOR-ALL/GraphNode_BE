@@ -5,6 +5,7 @@ import { getUserIdFromRequest } from '../utils/request';
 import { UserService } from '../../core/services/UserService';
 import { MeResponseDto, ApiKeyModel } from '../../shared/dtos/me';
 import { ValidationError } from '../../shared/errors/domain';
+import { openAI } from '../utils/openai';
 
 /**
  * /v1/me 엔드포인트의 컨트롤러 클래스.
@@ -72,6 +73,15 @@ export class MeController {
         apiKey: z.string().min(1, 'API Key is required'),
       });
       const data = schema.parse(req.body);
+
+      // API Key 유효성 검증
+      if (model === 'openai') {
+        const result = await openAI.checkAPIKeyValid(data.apiKey);
+        if (!result.ok) {
+          throw new ValidationError(result.error);
+        }
+      }
+      // TODO: DeepSeek API Key 검증 추가
 
       await this.userService.updateApiKey(userId, model as ApiKeyModel, data.apiKey);
       res.status(204).send();
