@@ -19,6 +19,12 @@ export { AppError };
 export class ValidationError extends AppError { code = 'VALIDATION_FAILED'; httpStatus = 400; }
 
 /**
+ * API 키 유효성 검사 실패 (400 Bad Request)
+ * - 클라이언트가 제공한 API 키가 유효하지 않을 때 사용합니다.
+ */
+export class InvalidApiKeyError extends AppError { code = 'INVALID_API_KEY'; httpStatus = 400; }
+
+/**
  * 인증 필요 (401 Unauthorized)
  * - 로그인이 필요한 기능에 비로그인 상태로 접근했을 때 사용합니다.
  * - 로그인 후 재시도하면 성공할 수 있습니다.

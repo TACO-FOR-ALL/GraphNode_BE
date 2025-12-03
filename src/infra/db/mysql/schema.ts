@@ -19,16 +19,9 @@ CREATE TABLE IF NOT EXISTS users (
   UNIQUE KEY uniq_provider_user (provider, provider_user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- sessions mapping (opaque session id hash → user id)
-CREATE TABLE IF NOT EXISTS sessions (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  session_hash CHAR(64) NOT NULL,
-  user_id BIGINT UNSIGNED NOT NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  revoked_at TIMESTAMP NULL DEFAULT NULL,
-  PRIMARY KEY (id),
-  UNIQUE KEY uniq_session_hash (session_hash),
-  KEY idx_user_id (user_id),
-  CONSTRAINT fk_sessions_user FOREIGN KEY (user_id) REFERENCES users(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- APIKEY Column 추가, 2025/12/03
+ALTER TABLE users
+  ADD COLUMN api_key_openai VARCHAR(191) NULL,
+  ADD COLUMN api_key_deepseek VARCHAR(191) NULL;
+
 `;

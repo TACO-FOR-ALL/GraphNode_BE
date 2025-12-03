@@ -4,6 +4,11 @@ import OpenAI from 'openai';
 import { ChatMessageRequest } from './ChatMessageRequest';
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 
+/**
+ * 오류 객체를 정규화하여 문자열로 반환합니다.
+ * @param e 오류 객체
+ * @returns 정규화된 오류 문자열
+ */
 function normalizeError(e: any): string {
   const status = e?.status ?? e?.response?.status;
   if (status === 401) return 'unauthorized_key';
@@ -19,6 +24,12 @@ function normalizeError(e: any): string {
 } // 오류 검출 코드
 
 export const openAI = {
+
+  /**
+   * OPENAI API Key 유효성 검사
+   * @param apiKey  검사할 API Key
+   * @returns 검사 결과 (성공 시 true, 실패 시 오류 메시지)
+   */
   async checkAPIKeyValid(apiKey: string): Promise<Result<true>> {
     const client = new OpenAI({ apiKey });
     try {
@@ -29,6 +40,14 @@ export const openAI = {
     }
   }, //api 키 검사 있으면 정상적으로 통과 api 키에 오류가 있으면 오류 함수로 이동, async는 시간이 걸리는 작업
 
+  /**
+   * OPENAI API 요청
+   * @param apiKey  API Key
+   * @param stream  스트리밍 여부
+   * @param model  모델 이름
+   * @param messages  메시지 배열
+   * @returns 요청 결과
+   */
   async request(apiKey: string, stream: boolean, model: string, messages: ChatMessageRequest[]) {
     try {
       const client = new OpenAI({ apiKey: apiKey });
@@ -37,13 +56,20 @@ export const openAI = {
         messages,
         stream,
       });
-      console.log('request', p);
+      //console.log('request', p);
       return { ok: true, data: p } as Result<typeof p>;
     } catch (e) {
       return { ok: false, error: normalizeError(e) } as Result<never>;
     }
   },
 
+  /**
+   * OPENAI API를 사용하여 채팅방 제목을 생성합니다.
+   * @param apiKey  API Key
+   * @param firstUserMessage  첫 번째 사용자 메시지
+   * @param opts  옵션 (예: 타임아웃)
+   * @returns 생성된 채팅방 제목 또는 오류 메시지
+   */
   async requestGenerateThreadTitle(
     apiKey: string,
     firstUserMessage: string,

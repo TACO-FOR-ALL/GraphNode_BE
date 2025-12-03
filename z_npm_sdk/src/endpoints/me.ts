@@ -8,20 +8,20 @@ export class MeApi {
     return this.rb.path('/v1/me').get<MeResponseDto>();
   }
 
-  async logout(): Promise<void> {
+  logout(): Promise<void> {
     // 204 No Content 예상
-    await this.rb.path('/auth/logout').post<void>();
+    return this.rb.path('/auth/logout').post<void>();
   }
 
   getApiKeys(model: ApiKeyModel): Promise<ApiKeysResponseDto> {
     return this.rb.path(`/v1/me/api-keys/${model}`).get<ApiKeysResponseDto>();
   }
 
-  async updateApiKey(model: ApiKeyModel, apiKey: string): Promise<void> {
-    await this.rb.path(`/v1/me/api-keys/${model}`).patch<void>({ apiKey });
+  updateApiKey(model: ApiKeyModel, apiKey: string): Promise<void> {
+    return this.rb.path(`/v1/me/api-keys/${model}`).patch<void>({ apiKey });
   }
 
-  async deleteApiKey(model: ApiKeyModel): Promise<void> {
-    await this.rb.path(`/v1/me/api-keys/${model}`).delete<void>();
+  deleteApiKey(model: ApiKeyModel): Promise<void> {
+    return this.rb.path(`/v1/me/api-keys/${model}`).delete<void>();
   }
 }

@@ -1,7 +1,8 @@
 import { UserRepository } from '../ports/UserRepository';
 import { UserProfileDto, ApiKeysResponseDto, ApiKeyModel } from '../../shared/dtos/me';
-import { NotFoundError, ValidationError, UpstreamError } from '../../shared/errors/domain';
+import { NotFoundError, ValidationError, UpstreamError, InvalidApiKeyError } from '../../shared/errors/domain';
 import { User } from '../types/persistence/UserPersistence';
+import { openAI } from '../../shared/openai/index';
 
 /**
  * 사용자 관련 비즈니스 로직을 처리하는 서비스 클래스.
@@ -98,15 +99,31 @@ export class UserService {
    */
   async updateApiKey(userId: string, model: ApiKeyModel, apiKey: string): Promise<void> {
     try {
+      // 입력 검증
       if (!userId || !/^\d+$/.test(userId)) {
         throw new ValidationError('User ID must be a valid number string.');
       }
+
+      // 모델 검증
       if (model !== 'openai' && model !== 'deepseek') {
         throw new ValidationError('Model must be either "openai" or "deepseek".');
       }
+
+      // API Key 검증
       if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
         throw new ValidationError('API Key is required and must be a non-empty string.');
       }
+
+      // API Key 유효성 검증
+      if (model === 'openai') {
+        const result = await openAI.checkAPIKeyValid(apiKey);
+        if (!result.ok) {
+          throw new InvalidApiKeyError(result.error);
+        }
+      }
+
+      // TODO : DeepSeek API Key 검증 추가
+
 
       const numericUserId = parseInt(userId, 10);
 
