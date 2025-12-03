@@ -71,12 +71,14 @@ export function unknownToAppError(err: unknown): AppError {
       ConflictError,
       RateLimitError,
       UpstreamError,
-      UpstreamTimeout
+      UpstreamTimeout,
+      InvalidApiKeyError,
     } = require('./domain');
 
     const message = e.message || String(e.code).replace(/_/g, ' ');
     switch (e.code) {
       case 'VALIDATION_FAILED': return new ValidationError(message, e.details);
+      case 'INVALID_API_KEY':   return new InvalidApiKeyError(message, e.details);
       case 'AUTH_REQUIRED':     return new AuthError(message, e.details);
       case 'FORBIDDEN':         return new ForbiddenError(message, e.details);
       case 'NOT_FOUND':         return new NotFoundError(message, e.details);

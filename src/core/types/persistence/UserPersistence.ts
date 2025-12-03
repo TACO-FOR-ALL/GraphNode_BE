@@ -16,6 +16,8 @@ export type Provider = 'google' | 'apple';
  * @property avatarUrl 아바타 이미지 절대 URL(선택)
  * @property createdAt 계정 생성 시각(Date, UTC)
  * @property lastLoginAt 마지막 로그인 시각(Date, UTC, null 가능)
+ * @property apiKeyOpenai OpenAI API Key(선택)
+ * @property apiKeyDeepseek DeepSeek API Key(선택)
  */
 export interface UserProps {
   /** 내부 사용자 식별자(AUTO_INCREMENT 정수) */
@@ -34,6 +36,10 @@ export interface UserProps {
   createdAt: Date;
   /** 마지막 로그인 시각(Date, UTC, null 가능) */
   lastLoginAt?: Date | null;
+  /** OpenAI API Key(선택) */
+  apiKeyOpenai?: string | null;
+  /** DeepSeek API Key(선택) */
+  apiKeyDeepseek?: string | null;
 }
 
 /**
@@ -42,21 +48,45 @@ export interface UserProps {
 export class User {
   constructor(private props: UserProps) {}
   /** 사용자 ID */
-  get id() { return this.props.id; }
+  get id() {
+    return this.props.id;
+  }
   /** 제공자 */
-  get provider() { return this.props.provider; }
+  get provider() {
+    return this.props.provider;
+  }
   /** 제공자 측 사용자 ID */
-  get providerUserId() { return this.props.providerUserId; }
+  get providerUserId() {
+    return this.props.providerUserId;
+  }
   /** 이메일(없으면 undefined) */
-  get email() { return this.props.email ?? undefined; }
+  get email() {
+    return this.props.email ?? undefined;
+  }
   /** 표시명(없으면 undefined) */
-  get displayName() { return this.props.displayName ?? undefined; }
+  get displayName() {
+    return this.props.displayName ?? undefined;
+  }
   /** 아바타 URL(없으면 undefined) */
-  get avatarUrl() { return this.props.avatarUrl ?? undefined; }
+  get avatarUrl() {
+    return this.props.avatarUrl ?? undefined;
+  }
   /** 생성 시각 */
-  get createdAt() { return this.props.createdAt; }
+  get createdAt() {
+    return this.props.createdAt;
+  }
   /** 마지막 로그인 시각(null 가능) */
-  get lastLoginAt() { return this.props.lastLoginAt ?? null; }
+  get lastLoginAt() {
+    return this.props.lastLoginAt ?? null;
+  }
+  /** OpenAI API Key(없으면 undefined) */
+  get apiKeyOpenai() {
+    return this.props.apiKeyOpenai ?? undefined;
+  }
+  /** DeepSeek API Key(없으면 undefined) */
+  get apiKeyDeepseek() {
+    return this.props.apiKeyDeepseek ?? undefined;
+  }
   /**
    * 사용자 프로필 뷰로 매핑
    * @returns 사용자 프로필(컨트롤러/프레젠터에서 직렬화 용)
@@ -69,7 +99,7 @@ export class User {
     return {
       userId: this.props.id,
       displayName: this.props.displayName ?? undefined,
-      avatarUrl: this.props.avatarUrl ?? undefined
+      avatarUrl: this.props.avatarUrl ?? undefined,
     };
   }
 }

@@ -20,5 +20,10 @@ export function createMeRouter(deps: { userService: UserService }): Router {
 
   router.get('/', asyncHandler(meController.getMe.bind(meController)));
 
+  // API Keys
+  router.get('/api-keys/:model', asyncHandler(meController.getApiKeys.bind(meController)));
+  router.patch('/api-keys/:model', asyncHandler(meController.updateApiKey.bind(meController)));
+  router.delete('/api-keys/:model', asyncHandler(meController.deleteApiKey.bind(meController)));
+
   return router;
 }

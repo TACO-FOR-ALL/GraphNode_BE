@@ -36,7 +36,10 @@ export class AppleOAuthService {
     this.clientId = config.clientId;
     this.teamId = config.teamId;
     this.keyId = config.keyId;
-    this.privateKey = config.privateKey;
+    this.privateKey = config.privateKey
+      .replace(/\\n/g, '\n')
+      .replace(/^"+|"+$/g, '')
+      .trim();
     this.redirectUri = config.redirectUri;
   }
 

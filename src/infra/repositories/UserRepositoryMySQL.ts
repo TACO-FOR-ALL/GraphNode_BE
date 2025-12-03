@@ -7,7 +7,7 @@ import { getMySql } from '../db/mysql';
 /**
  * UserRepository (MySQL 구현)
  * @remarks
- * - 테이블: users(id, provider, provider_user_id, email, display_name, avatar_url, created_at, last_login_at)
+ * - 테이블: users(id, provider, provider_user_id, email, display_name, avatar_url, api_key_openai, api_key_deepseek, created_at, last_login_at)
  * - 제약: UNIQUE(provider, provider_user_id)
  */
 export class UserRepositoryMySQL implements UserRepository {
@@ -20,6 +20,61 @@ export class UserRepositoryMySQL implements UserRepository {
     const [rows] = await getMySql().query<RowDataPacket[]>('SELECT * FROM users WHERE id=?', [id]);
     if (rows.length === 0) return null;
     return mapUser(rows[0]);
+  }
+
+  /**
+   * 내부 사용자 식별자로 API Key 조회
+   * @param id 내부 사용자 식별자
+   * @param model 'openai' 또는 'deepseek'
+   * @returns API Key 또는 null
+   */
+  async findApiKeyById(id: number, model: 'openai' | 'deepseek'): Promise<string | null> {
+    const [rows] = await getMySql().query<RowDataPacket[]>(
+      'SELECT api_key_openai, api_key_deepseek FROM users WHERE id=?',
+      [id]
+    );
+    if (rows.length === 0) return null;
+    switch (model) {
+      case 'openai':
+        return rows[0].api_key_openai ?? null;
+      case 'deepseek':
+        return rows[0].api_key_deepseek ?? null;
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * 내부 사용자 식별자로 API Key 업데이트
+   * @param id 내부 사용자 식별자
+   * @param model 'openai' 또는 'deepseek'
+   * @param apiKey API Key
+   */
+  async updateApiKeyById(id: number, model: 'openai' | 'deepseek', apiKey: string): Promise<void> {
+    switch (model) {
+      case 'openai':
+        await getMySql().query('UPDATE users SET api_key_openai=? WHERE id=?', [apiKey, id]);
+        break;
+      case 'deepseek':
+        await getMySql().query('UPDATE users SET api_key_deepseek=? WHERE id=?', [apiKey, id]);
+        break;
+    }
+  }
+
+  /**
+   * 내부 사용자 식별자로 API Key 삭제
+   * @param id 내부 사용자 식별자
+   * @param model 'openai' 또는 'deepseek'
+   */
+  async deleteApiKeyById(id: number, model: 'openai' | 'deepseek'): Promise<void> {
+    switch (model) {
+      case 'openai':
+        await getMySql().query('UPDATE users SET api_key_openai=NULL WHERE id=?', [id]);
+        break;
+      case 'deepseek':
+        await getMySql().query('UPDATE users SET api_key_deepseek=NULL WHERE id=?', [id]);
+        break;
+    }
   }
 
   /**
@@ -42,12 +97,26 @@ export class UserRepositoryMySQL implements UserRepository {
    * @param input provider/providerUserId/프로필 필드
    * @returns 생성된 User 엔티티
    */
-  async create(input: { provider: Provider; providerUserId: string; email?: string | null; displayName?: string | null; avatarUrl?: string | null; }): Promise<User> {
+  async create(input: {
+    provider: Provider;
+    providerUserId: string;
+    email?: string | null;
+    displayName?: string | null;
+    avatarUrl?: string | null;
+  }): Promise<User> {
     const [res] = await getMySql().query<ResultSetHeader>(
       'INSERT INTO users(provider, provider_user_id, email, display_name, avatar_url) VALUES (?,?,?,?,?)',
-      [input.provider, input.providerUserId, input.email ?? null, input.displayName ?? null, input.avatarUrl ?? null]
+      [
+        input.provider,
+        input.providerUserId,
+        input.email ?? null,
+        input.displayName ?? null,
+        input.avatarUrl ?? null,
+      ]
     );
-    const [rows] = await getMySql().query<RowDataPacket[]>('SELECT * FROM users WHERE id=?', [res.insertId]);
+    const [rows] = await getMySql().query<RowDataPacket[]>('SELECT * FROM users WHERE id=?', [
+      res.insertId,
+    ]);
     return mapUser(rows[0]);
   }
 
@@ -60,20 +129,30 @@ export class UserRepositoryMySQL implements UserRepository {
    * @param input.avatarUrl 아바타 URL(선택)
    * @returns User 엔티티
    */
-  async findOrCreateFromProvider(input: { provider: Provider; providerUserId: string; email?: string | null; displayName?: string | null; avatarUrl?: string | null; }): Promise<User> {
+  async findOrCreateFromProvider(input: {
+    provider: Provider;
+    providerUserId: string;
+    email?: string | null;
+    displayName?: string | null;
+    avatarUrl?: string | null;
+  }): Promise<User> {
     const existing = await this.findByProvider(input.provider, input.providerUserId);
     if (existing) {
-      await getMySql().query('UPDATE users SET last_login_at=CURRENT_TIMESTAMP WHERE id=?', [existing.id]);
-        return new User({
-          id: existing.id,
-          provider: existing.provider,
-          providerUserId: existing.providerUserId,
-          email: existing.email,
-          displayName: existing.displayName,
-          avatarUrl: existing.avatarUrl,
-          createdAt: existing.createdAt,
-          lastLoginAt: new Date()
-        });
+      await getMySql().query('UPDATE users SET last_login_at=CURRENT_TIMESTAMP WHERE id=?', [
+        existing.id,
+      ]);
+      return new User({
+        id: existing.id,
+        provider: existing.provider,
+        providerUserId: existing.providerUserId,
+        email: existing.email,
+        displayName: existing.displayName,
+        avatarUrl: existing.avatarUrl,
+        createdAt: existing.createdAt,
+        lastLoginAt: new Date(),
+        apiKeyOpenai: existing.apiKeyOpenai,
+        apiKeyDeepseek: existing.apiKeyDeepseek,
+      });
     }
     return this.create(input);
   }
@@ -93,6 +172,8 @@ function mapUser(r: RowDataPacket): User {
     displayName: r.display_name ?? null,
     avatarUrl: r.avatar_url ?? null,
     createdAt: new Date(r.created_at),
-    lastLoginAt: r.last_login_at ? new Date(r.last_login_at) : null
+    lastLoginAt: r.last_login_at ? new Date(r.last_login_at) : null,
+    apiKeyOpenai: r.api_key_openai ?? null,
+    apiKeyDeepseek: r.api_key_deepseek ?? null,
   });
 }
