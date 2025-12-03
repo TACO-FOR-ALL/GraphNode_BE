@@ -43,21 +43,39 @@ export class RequestBuilder {
 
   /**
    * 경로 조각을 추가한다. '/v1/me' 같은 절대 경로도 허용한다.
-  * @internal SDK 내부에서만 사용된다. FE에서는 직접 호출하지 말 것.
+   * @internal SDK 내부에서만 사용된다. FE에서는 직접 호출하지 말 것.
    */
   path(p: string): RequestBuilder {
     if (!p) return this;
     if (p.startsWith('http://') || p.startsWith('https://')) {
       // 절대 URL을 넣으면 baseUrl을 무시하고 해당 URL 전체를 하나의 세그먼트로 취급
-      return new RequestBuilder({ baseUrl: p, fetch: this.fetchImpl, defaultHeaders: this.headers, credentials: this.credentials }, [], new URLSearchParams(this.queryParams));
+      return new RequestBuilder(
+        {
+          baseUrl: p,
+          fetch: this.fetchImpl,
+          defaultHeaders: this.headers,
+          credentials: this.credentials,
+        },
+        [],
+        new URLSearchParams(this.queryParams)
+      );
     }
     const segs = p.split('/').filter(Boolean);
-    return new RequestBuilder({ baseUrl: this.baseUrl, fetch: this.fetchImpl, defaultHeaders: this.headers, credentials: this.credentials }, [...this.segments, ...segs], new URLSearchParams(this.queryParams));
+    return new RequestBuilder(
+      {
+        baseUrl: this.baseUrl,
+        fetch: this.fetchImpl,
+        defaultHeaders: this.headers,
+        credentials: this.credentials,
+      },
+      [...this.segments, ...segs],
+      new URLSearchParams(this.queryParams)
+    );
   }
 
   /**
    * 쿼리 파라미터를 추가한다.
-  * @internal SDK 내부에서만 사용된다. FE에서는 직접 호출하지 말 것.
+   * @internal SDK 내부에서만 사용된다. FE에서는 직접 호출하지 말 것.
    */
   query(params?: Record<string, unknown>): RequestBuilder {
     if (!params) return this;
@@ -66,7 +84,16 @@ export class RequestBuilder {
       if (v === undefined || v === null) continue;
       q.set(k, String(v));
     }
-    return new RequestBuilder({ baseUrl: this.baseUrl, fetch: this.fetchImpl, defaultHeaders: this.headers, credentials: this.credentials }, [...this.segments], q);
+    return new RequestBuilder(
+      {
+        baseUrl: this.baseUrl,
+        fetch: this.fetchImpl,
+        defaultHeaders: this.headers,
+        credentials: this.credentials,
+      },
+      [...this.segments],
+      q
+    );
   }
 
   async get<T>(): Promise<T> {

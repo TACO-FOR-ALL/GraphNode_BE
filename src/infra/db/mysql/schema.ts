@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS users (
   email VARCHAR(191) NULL,
   display_name VARCHAR(191) NULL,
   avatar_url VARCHAR(512) NULL,
+  api_key_openai VARCHAR(191) NULL,
+  api_key_deepseek VARCHAR(191) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_login_at TIMESTAMP NULL DEFAULT NULL,
   PRIMARY KEY (id),

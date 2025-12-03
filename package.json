@@ -17,7 +17,8 @@
     "docs:build": "npm run docs:openapi:build && npm run docs:typedoc && npm run docs:copy:changelog",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down -v",
-    "db:logs": "docker compose logs -f"
+    "db:logs": "docker compose logs -f",
+    "test:users": "tsx tests/scripts/test-users-crud.ts"
   },
   "repository": {
     "type": "git",
