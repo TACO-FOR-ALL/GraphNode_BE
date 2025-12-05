@@ -12,10 +12,16 @@
  * - (추후 추가 예정) OpenAI SDK: 실제 AI 모델 호출
  */
 
-import { AppError } from '../../shared/errors/base';
+import { AppError } from '../../shared/errors/base'; 
 import { UpstreamError } from '../../shared/errors/domain';
+import { AIchatType } from '../../shared/openai/AIchatType';
 import { ConversationService } from './ConversationService';
 import { MessageService } from './MessageService';
+import { ChatRole, ChatMessage } from '../../shared/dtos/ai';
+import { openAI } from '../../shared/openai/index';
+
+
+
 
 export class AIChatService {
     // 생성자 주입을 통해 필요한 하위 서비스들을 의존성으로 받습니다.
@@ -35,11 +41,24 @@ export class AIChatService {
      * 
      * @throws {UpstreamError} AI 서비스 호출 실패 시
      */
-    async handleAIChat() {
+    async handleAIChat(ownerUserId:string,chatbody: AIchatType, conversationId: string){
         try {
+
+            const content : string = chatbody.chatContent;
+            const role : ChatRole = "user";
+            const message : {
+                content: string;
+                role: ChatRole;
+            } = {
+                content: content,
+                role: role
+            }
             // TODO: 1. 사용자 메시지 저장 (MessageService.create)
+            await this.messageService.create(ownerUserId,conversationId, message);
             // TODO: 2. 대화 컨텍스트 조회 (MessageRepository.findAllByConversationId)
+            const MesaageSearch = await this.messageService.db_search(ownerUserId,conversationId);
             // TODO: 3. AI 모델 호출 (OpenAI API)
+            
             // TODO: 4. AI 응답 메시지 저장 (MessageService.create)
             // TODO: 5. 응답 반환
 

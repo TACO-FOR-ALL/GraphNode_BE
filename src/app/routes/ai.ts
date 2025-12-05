@@ -47,6 +47,7 @@ export function createAiRouter(deps: {
   router.patch('/conversations/:conversationId/messages/:messageId', asyncHandler(aiController.updateMessage.bind(aiController)));
   router.delete('/conversations/:conversationId/messages/:messageId', asyncHandler(aiController.deleteMessage.bind(aiController)));
   router.post('/conversations/:conversationId/messages/:messageId/restore', asyncHandler(aiController.restoreMessage.bind(aiController)));
-
+  //api
+  router.post('/ai/api/:conversationId', asyncHandler(aiController.handleAIChat.bind(aiController)));
   return router;
 }
