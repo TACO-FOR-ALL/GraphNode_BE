@@ -244,20 +244,89 @@ await client.note.deleteFolder('folder-id');
 
 ### Error Handling
 
-The SDK uses a custom `HttpError` for API-related errors. You can check the `problem` property for RFC 9457 Problem Details.
+The SDK uses a unified `HttpResponse` object for all API responses, eliminating the need for `try...catch` blocks for handling HTTP errors. Each API method returns a `Promise<HttpResponse<T>>`, which is a discriminated union type. You can check the `isSuccess` property to determine if the call was successful.
 
 ```typescript
-import { HttpError } from '@taco_tsinghua/graphnode-sdk';
+import { createGraphNodeClient, HttpResponse } from '@taco_tsinghua/graphnode-sdk';
 
-try {
-  await client.conversations.get('non-existent-id');
-} catch (error) {
-  if (error instanceof HttpError) {
-    console.error('API Error:', error.problem.title);
-    console.error('Status:', error.problem.status);
-    console.error('Detail:', error.problem.detail);
+const client = createGraphNodeClient();
+
+async function fetchConversation() {
+  const response = await client.conversations.get('non-existent-id');
+
+  if (response.isSuccess) {
+    // Type-safe access to `data` and `statusCode`
+    console.log('Success:', response.data);
   } else {
-    console.error('Unknown error:', error);
+    // Type-safe access to `error`
+    console.error('API Error:', response.error.message);
+    console.error('Status:', response.error.statusCode);
+    
+    // The error body might contain RFC 9457 Problem Details
+    const problem = response.error.body as { title: string; detail: string };
+    if (problem) {
+      console.error('Problem Title:', problem.title);
+      console.error('Problem Detail:', problem.detail);
+    }
   }
 }
 ```
+
+### HTTP 상태 코드 가이드 (HTTP Status Codes Guide)
+
+API는 표준 HTTP 상태 코드를 사용하여 요청의 성공 또는 실패를 나타냅니다.
+
+#### 성공 코드 (General Success Codes)
+- **`200 OK`**: 요청이 성공적으로 처리되었습니다. 응답 본문에 요청한 데이터가 포함됩니다. (예: `GET`, `PATCH`, `PUT`)
+- **`201 Created`**: 리소스가 성공적으로 생성되었습니다. `Location` 헤더에 새 리소스의 URL이 포함되며, 본문에 생성된 리소스가 포함됩니다. (예: `POST`)
+- **`204 No Content`**: 요청은 성공했으나 반환할 본문이 없습니다. (예: `DELETE`, 본문 없는 `PATCH`)
+
+#### 에러 코드 (General Error Codes)
+모든 에러 응답은 **RFC 9457 Problem Details** 형식(`application/problem+json`)을 따릅니다.
+- **`400 Bad Request`**: 클라이언트 오류로 인해 서버가 요청을 처리할 수 없습니다(예: 잘못된 구문, 유효성 검사 실패). 응답 본문에 유효성 검사 실패에 대한 세부 정보가 포함됩니다.
+- **`401 Unauthorized`**: 요청된 응답을 받으려면 인증이 필요합니다. 세션이 유효하지 않거나 만료된 경우 발생합니다.
+- **`403 Forbidden`**: 클라이언트가 콘텐츠에 대한 접근 권한이 없습니다. 401과 달리 서버가 클라이언트의 신원을 알고 있습니다.
+- **`404 Not Found`**: 서버가 요청한 리소스를 찾을 수 없습니다.
+- **`409 Conflict`**: 요청이 서버의 현재 상태와 충돌할 때 전송됩니다(예: 이미 존재하는 리소스 생성).
+- **`429 Too Many Requests`**: 사용자가 일정 시간 동안 너무 많은 요청을 보냈습니다("속도 제한").
+- **`500 Internal Server Error`**: 서버가 처리 방법을 모르는 상황에 직면했습니다.
+- **`502 Bad Gateway`**: 업스트림 오류. 외부 서비스(예: OpenAI, DB)가 유효하지 않은 응답을 반환했습니다.
+- **`503 Service Unavailable`**: 서비스 불가. DB 연결 실패 등 일시적으로 서비스를 이용할 수 없습니다.
+- **`504 Gateway Timeout`**: 업스트림 타임아웃. 외부 서비스의 응답이 지연되어 타임아웃이 발생했습니다.
+
+#### 엔드포인트별 상태 코드 (Endpoint-Specific Status Codes)
+
+| Endpoint | Method | Success Codes | Error Codes | Description |
+|---|---|---|---|---|
+| **/healthz** | `GET` | `200` | `503` | API 상태를 확인합니다. DB 등 의존성이 다운되면 503을 반환합니다. |
+| **/auth/logout** | `POST` | `204` | `401` | 사용자를 로그아웃하고 세션을 무효화합니다. |
+| **/v1/me** | `GET` | `200` | `401` | 현재 사용자의 프로필을 조회합니다. |
+| **/v1/me/api-keys/{model}** | `GET` | `200` | `401`, `404` | 특정 모델의 API 키를 조회합니다. |
+| | `PATCH` | `204` | `400`, `401` | API 키를 업데이트합니다. |
+| | `DELETE` | `204` | `401` | API 키를 삭제합니다. |
+| **/v1/ai/conversations** | `POST` | `201` | `400`, `401`, `409` | 새 대화를 생성합니다. ID 충돌 시 409. |
+| | `GET` | `200` | `401` | 모든 대화를 조회합니다. |
+| **/v1/ai/conversations/bulk** | `POST` | `201` | `400`, `401` | 대화를 일괄 생성합니다. |
+| **/v1/ai/conversations/{id}** | `GET` | `200` | `401`, `404` | 단일 대화를 조회합니다. |
+| | `PATCH` | `200` | `400`, `401`, `404` | 대화를 업데이트합니다. |
+| | `DELETE` | `204` | `401`, `404` | 대화를 삭제합니다. |
+| **/v1/ai/conversations/{id}/restore** | `POST` | `200` | `401`, `404` | 삭제된 대화를 복원합니다. |
+| **/v1/ai/conversations/{id}/messages** | `POST` | `201` | `400`, `401`, `404` | 대화에 메시지를 추가합니다. |
+| **/v1/graph/nodes** | `POST` | `201` | `400`, `401`, `409` | 그래프 노드를 생성합니다. |
+| | `GET` | `200` | `401` | 모든 그래프 노드를 조회합니다. |
+| **/v1/graph/nodes/{id}** | `GET` | `200` | `401`, `404` | 단일 노드를 조회합니다. |
+| | `PATCH` | `204` | `400`, `401`, `404` | 노드를 업데이트합니다. |
+| | `DELETE` | `204` | `401`, `404` | 노드를 삭제합니다. |
+| **/v1/graph/edges** | `POST` | `201` | `400`, `401` | 그래프 엣지를 생성합니다. |
+| | `GET` | `200` | `401` | 모든 그래프 엣지를 조회합니다. |
+| | `DELETE` | `204` | `401`, `404` | 엣지를 삭제합니다. |
+| **/v1/notes** | `POST` | `201` | `400`, `401` | 노트를 생성합니다. |
+| | `GET` | `200` | `401` | 모든 노트를 조회합니다. |
+| **/v1/notes/{id}** | `GET` | `200` | `401`, `404` | 단일 노트를 조회합니다. |
+| | `PATCH` | `200` | `400`, `401`, `404` | 노트를 업데이트합니다. |
+| | `DELETE` | `204` | `401`, `404` | 노트를 삭제합니다. |
+| **/v1/folders** | `POST` | `201` | `400`, `401` | 폴더를 생성합니다. |
+| | `GET` | `200` | `401` | 모든 폴더를 조회합니다. |
+| **/v1/sync/pull** | `GET` | `200` | `400`, `401` | 주어진 타임스탬프 이후의 데이터 변경 사항을 가져옵니다. |
+| **/v1/sync/push** | `POST` | `204` | `400`, `401`, `409` | 데이터 변경 사항을 서버로 푸시합니다. 버전 충돌 시 409. |
+

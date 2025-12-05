@@ -10,24 +10,36 @@ export interface BuilderOptions {
   baseUrl: string; // e.g., https://api.example.com
   fetch?: FetchLike; // Node<18 환경 등에서 주입 가능
   defaultHeaders?: Record<string, string>;
-  credentials?: RequestCredentials; // default 'include'
+  credentials?: RequestCredentials; // default 'include'HttpError
 }
 
-export class HttpError<TBody = unknown> extends Error {
-  status: number;
-  body?: TBody;
-  constructor(message: string, status: number, body?: TBody) {
-    super(message);
-    this.name = 'HttpError';
-    this.status = status;
-    this.body = body;
-  }
-}
+// export class HttpError<TBody = unknown> extends Error {
+//   status: number;
+//   body?: TBody;
+//   constructor(message: string, status: number, body?: TBody) {
+//     super(message);
+//     this.name = 'HttpError';
+//     this.status = status;
+//     this.body = body;
+//   }
+// }
 
-export interface HttpResponse<T> {
-  statusCode: number;
+export type HttpResponseSuccess<T> = {
+  isSuccess: true;
   data: T;
-}
+  statusCode: number;
+};
+
+export type HttpResponseError = {
+  isSuccess: false;
+  error: {
+    statusCode: number;
+    message: string;
+    body?: unknown;
+  };
+};
+
+export type HttpResponse<T> = HttpResponseSuccess<T> | HttpResponseError;
 
 export class RequestBuilder {
   private readonly baseUrl: string;
@@ -130,30 +142,50 @@ export class RequestBuilder {
       headers['Content-Type'] = 'application/json';
       init.body = JSON.stringify(body);
     }
-    const res = await this.fetchImpl(this.url(), init);
-    const ct = res.headers.get('content-type') || '';
-    const isJson = ct.includes('application/json') || ct.includes('application/problem+json');
 
-    const isNoContent =
-      res.status === 204 || res.status === 205 || res.headers.get('content-length') === '0';
+    try {
+      const res = await this.fetchImpl(this.url(), init);
+      const ct = res.headers.get('content-type') || '';
+      const isJson = ct.includes('application/json') || ct.includes('application/problem+json');
 
-    let payload: unknown = undefined;
+      const isNoContent =
+        res.status === 204 || res.status === 205 || res.headers.get('content-length') === '0';
 
-    if (!isNoContent) {
-      if (isJson) {
-        payload = await res.json();
-      } else {
-        payload = await res.text();
+      let payload: unknown = undefined;
+
+      if (!isNoContent) {
+        if (isJson) {
+          payload = await res.json();
+        } else {
+          payload = await res.text();
+        }
       }
-    }
 
-    if (!res.ok) {
-      throw new HttpError(`HTTP ${res.status}: ${res.statusText}`, res.status, payload);
+      if (!res.ok) {
+        return {
+          isSuccess: false,
+          error: {
+            statusCode: res.status,
+            message: `HTTP ${res.status}: ${res.statusText}`,
+            body: payload,
+          },
+        };
+      }
+      return {
+        isSuccess: true,
+        statusCode: res.status,
+        data: payload as T,
+      };
+    } catch (e) {
+      const err = e as Error;
+      return {
+        isSuccess: false,
+        error: {
+          statusCode: 0, // Network error or other fetch-related error
+          message: err.message,
+        },
+      };
     }
-    return {
-      statusCode: res.status,
-      data: payload as T,
-    };
   }
 }
 
