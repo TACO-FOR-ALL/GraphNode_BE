@@ -24,6 +24,11 @@ export class HttpError<TBody = unknown> extends Error {
   }
 }
 
+export interface HttpResponse<T> {
+  statusCode: number;
+  data: T;
+}
+
 export class RequestBuilder {
   private readonly baseUrl: string;
   private readonly fetchImpl: FetchLike;
@@ -96,19 +101,19 @@ export class RequestBuilder {
     );
   }
 
-  async get<T>(): Promise<T> {
+  async get<T>(): Promise<HttpResponse<T>> {
     return this.send<T>('GET');
   }
 
-  async post<T>(body?: unknown): Promise<T> {
+  async post<T>(body?: unknown): Promise<HttpResponse<T>> {
     return this.send<T>('POST', body);
   }
 
-  async patch<T>(body?: unknown): Promise<T> {
+  async patch<T>(body?: unknown): Promise<HttpResponse<T>> {
     return this.send<T>('PATCH', body);
   }
 
-  async delete<T>(body?: unknown): Promise<T> {
+  async delete<T>(body?: unknown): Promise<HttpResponse<T>> {
     return this.send<T>('DELETE', body);
   }
 
@@ -118,7 +123,7 @@ export class RequestBuilder {
     return this.baseUrl + path + (qs ? `?${qs}` : '');
   }
 
-  private async send<T>(method: string, body?: unknown): Promise<T> {
+  private async send<T>(method: string, body?: unknown): Promise<HttpResponse<T>> {
     const headers = { ...this.headers } as Record<string, string>;
     const init: RequestInit = { method, headers, credentials: this.credentials };
     if (body !== undefined) {
@@ -128,11 +133,27 @@ export class RequestBuilder {
     const res = await this.fetchImpl(this.url(), init);
     const ct = res.headers.get('content-type') || '';
     const isJson = ct.includes('application/json') || ct.includes('application/problem+json');
-    const payload = isJson ? await res.json() : await res.text();
-    if (!res.ok) {
-      throw new HttpError('HTTP_ERROR', res.status, payload);
+
+    const isNoContent =
+      res.status === 204 || res.status === 205 || res.headers.get('content-length') === '0';
+
+    let payload: unknown = undefined;
+
+    if (!isNoContent) {
+      if (isJson) {
+        payload = await res.json();
+      } else {
+        payload = await res.text();
+      }
     }
-    return payload as T;
+
+    if (!res.ok) {
+      throw new HttpError(`HTTP ${res.status}: ${res.statusText}`, res.status, payload);
+    }
+    return {
+      statusCode: res.status,
+      data: payload as T,
+    };
   }
 }
 

@@ -1,10 +1,12 @@
-import { RequestBuilder } from '../http-builder.js';
+import { RequestBuilder, type HttpResponse } from '../http-builder.js';
 
-export interface HealthResponse { ok: boolean }
+export interface HealthResponse {
+  ok: boolean;
+}
 
 export class HealthApi {
   constructor(private rb: RequestBuilder) {}
-  get(): Promise<HealthResponse> {
+  get(): Promise<HttpResponse<HealthResponse>> {
     return this.rb.path('/healthz').get<HealthResponse>();
   }
 }
