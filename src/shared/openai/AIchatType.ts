@@ -1,10 +1,12 @@
+import { ApiKeyModel } from '../dtos/me';
+
 /**
- * \chatTitle: AI 챗 대화 제목
+ * \model: AI 모델 (openai | deepseek)
  * \chatContent: AI 챗 대화 내용
- * @prop chatTitle AI 챗 대화 제목
+ * @prop model AI 모델
  * @prop chatContent AI 챗 대화 내용
  */
 export interface AIchatType {
-    chatTitle: string;
+    model: ApiKeyModel;
     chatContent: string;
 }

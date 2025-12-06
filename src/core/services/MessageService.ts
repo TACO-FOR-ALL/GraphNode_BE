@@ -22,7 +22,6 @@ import { AppError } from '../../shared/errors/base';
 import { toMessageDoc, toChatMessageDto } from '../../shared/mappers/ai';
 import { MessageDoc, ConversationDoc } from '../types/persistence/ai.persistence';
 import { getMongo } from '../../infra/db/mongodb';
-import { search } from 'superagent';
 
 export class MessageService {
   constructor(
@@ -30,20 +29,20 @@ export class MessageService {
     private readonly conversationRepo: ConversationRepository
   ) {}
 
-  async db_search(ownerUserId:string,conversationId:string){
-    try{
-      await this.validateConversationOwner(conversationId, ownerUserId);
-      const serach = await this.messageRepo.findAllByConversationId(conversationId);
-      if(search.length ==0){
-        throw new UpstreamError('MessageService.search failed');
-      }  
-      return serach;
-    } 
-    catch (err: unknown){ 
-      if (err instanceof AppError) throw err;
-      throw new UpstreamError('MessageService.update failed', { cause: String(err) });
-    }
-  }
+  // async db_search(ownerUserId:string,conversationId:string){
+  //   try{
+  //     await this.validateConversationOwner(conversationId, ownerUserId);
+  //     const serach = await this.messageRepo.findAllByConversationId(conversationId);
+  //     if(search.length ==0){
+  //       throw new UpstreamError('MessageService.search failed');
+  //     }  
+  //     return serach;
+  //   } 
+  //   catch (err: unknown){ 
+  //     if (err instanceof AppError) throw err;
+  //     throw new UpstreamError('MessageService.update failed', { cause: String(err) });
+  //   }
+  // }
 
   /**
    * 대화방에 새로운 메시지를 추가합니다.
