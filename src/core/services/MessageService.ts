@@ -29,6 +29,21 @@ export class MessageService {
     private readonly conversationRepo: ConversationRepository
   ) {}
 
+  // async db_search(ownerUserId:string,conversationId:string){
+  //   try{
+  //     await this.validateConversationOwner(conversationId, ownerUserId);
+  //     const serach = await this.messageRepo.findAllByConversationId(conversationId);
+  //     if(search.length ==0){
+  //       throw new UpstreamError('MessageService.search failed');
+  //     }  
+  //     return serach;
+  //   } 
+  //   catch (err: unknown){ 
+  //     if (err instanceof AppError) throw err;
+  //     throw new UpstreamError('MessageService.update failed', { cause: String(err) });
+  //   }
+  // }
+
   /**
    * 대화방에 새로운 메시지를 추가합니다.
    * 

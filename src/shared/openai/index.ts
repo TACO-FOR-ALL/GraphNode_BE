@@ -40,6 +40,31 @@ export const openAI = {
     }
   }, //api 키 검사 있으면 정상적으로 통과 api 키에 오류가 있으면 오류 함수로 이동, async는 시간이 걸리는 작업
 
+
+  /**
+   * OPENAI API 요청
+   * @param apiKey  API Key
+   * @param stream  스트리밍 여부
+   * @param model  모델 이름
+   * @param messages  메시지 배열
+   * @returns 요청 결과
+   */
+  async requestWithoutStream(apiKey: string, model: string, messages: ChatMessageRequest[]) {
+    try {
+      const client = new OpenAI({ apiKey: apiKey });
+      const p = await client.chat.completions.create({
+        model,
+        messages
+      });
+      //console.log('request', p);
+      return { ok: true, data: p } as Result<typeof p>;
+    } catch (e) {
+      return { ok: false, error: normalizeError(e) } as Result<never>;
+    }
+  },
+
+
+
   /**
    * OPENAI API 요청
    * @param apiKey  API Key
