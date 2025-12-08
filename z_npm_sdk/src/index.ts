@@ -12,6 +12,7 @@ export { GraphApi } from './endpoints/graph.js';
 export { NoteApi } from './endpoints/note.js';
 export { AppleAuthApi } from './endpoints/auth.apple.js';
 export { SyncApi } from './endpoints/sync.js';
+export { AiApi } from './endpoints/ai.js';
 
 // Types
 export type { ProblemDetails } from './types/problem.js';
@@ -32,3 +33,4 @@ export type {
   FolderUpdateDto,
 } from './types/note.js';
 export type { SyncPushRequest, SyncPullResponse } from './types/sync.js';
+export type { AIChatRequestDto, AIChatResponseDto } from './endpoints/ai.js';

@@ -46,7 +46,10 @@ export function createAiRouter(deps: {
   router.post('/conversations/:conversationId/messages', asyncHandler(aiController.createMessage.bind(aiController)));
   router.patch('/conversations/:conversationId/messages/:messageId', asyncHandler(aiController.updateMessage.bind(aiController)));
   router.delete('/conversations/:conversationId/messages/:messageId', asyncHandler(aiController.deleteMessage.bind(aiController)));
-  router.post('/conversations/:conversationId/messages/:messageId/restore', asyncHandler(aiController.restoreMessage.bind(aiController)));
+    router.post('/conversations/:conversationId/messages/:messageId/restore', asyncHandler(aiController.restoreMessage.bind(aiController)));
+  
+  // Chat
+  router.post('/conversations/:conversationId/chat', asyncHandler(aiController.handleAIChat.bind(aiController)));
 
   return router;
 }

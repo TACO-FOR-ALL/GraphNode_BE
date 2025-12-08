@@ -27,7 +27,8 @@ import {
 } from '../../shared/dtos/ai.schemas';
 import { AIChatService } from '../../core/services/AIChatService';
 import { ChatThread, ChatMessage } from '../../shared/dtos/ai';
-
+import { AIchatType } from '../../shared/openai/AIchatType';
+import { ValidationError } from '../../shared/errors/domain';
 // Removed duplicate imports
 
 /**
@@ -59,12 +60,15 @@ export class AiController {
   async handleAIChat(req: Request, res: Response) {
     // 요청 객체(req)에서 현재 로그인한 사용자의 ID를 추출합니다.
     const ownerUserId: string = getUserIdFromRequest(req)!;
+    const conversationId: string = req.params.conversationId;
+    if (!conversationId) throw new ValidationError('conversationId is required');
 
-    // AI 서비스의 handleAIChat 메서드를 호출하여 실제 대화 로직을 수행합니다.
-    // TODO: Request Body에서 메시지 내용 등을 파싱하여 전달해야 합니다.
-    await this.aiChatService.handleAIChat();
+    const chatbody = req.body as AIchatType;
     
-    res.status(200).send(); // 임시 응답
+    // AI 서비스의 handleAIChat 메서드를 호출하여 실제 대화 로직을 수행합니다.
+    const messages = await this.aiChatService.handleAIChat(ownerUserId, chatbody, conversationId);
+    
+    res.status(201).json({ messages }); 
   }
 
   /**
