@@ -1,3 +1,8 @@
+/**
+ * GraphNode SDK Entry Point
+ * @packageDocumentation
+ */
+
 // Barrel exports: 공개 API만 노출
 export { createGraphNodeClient, GraphNodeClient } from './client.js';
 // 내부 전송 레이어는 노출 최소화: HttpError만 공개 (RequestBuilder는 @internal)
@@ -16,7 +21,7 @@ export { AiApi } from './endpoints/ai.js';
 
 // Types
 export type { ProblemDetails } from './types/problem.js';
-export type { MeResponseDto, MeProfileDto } from './types/me.js';
+export type { MeResponseDto, UserProfileDto } from './types/me.js';
 export type {
   ConversationDto,
   ConversationCreateDto,

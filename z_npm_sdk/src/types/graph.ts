@@ -2,6 +2,19 @@
  * Graph API에 사용되는 타입 정의
  */
 
+/**
+ * 그래프 노드 DTO
+ * @public
+ * @property id 노드 ID (정수)
+ * @property userId 사용자 ID
+ * @property origId 원본 데이터 ID (예: conversationId)
+ * @property clusterId 클러스터 ID
+ * @property clusterName 클러스터 이름
+ * @property timestamp 타임스탬프 (ISO 8601, null 가능)
+ * @property numMessages 메시지 수
+ * @property createdAt 생성 일시 (ISO 8601)
+ * @property updatedAt 수정 일시 (ISO 8601)
+ */
 export interface GraphNodeDto {
   id: number;
   userId: string;
@@ -14,8 +27,25 @@ export interface GraphNodeDto {
   updatedAt?: string;
 }
 
+/**
+ * 그래프 엣지 타입 ('hard' | 'insight')
+ * @public
+ */
 export type GraphEdgeType = 'hard' | 'insight';
 
+/**
+ * 그래프 엣지 DTO
+ * @public
+ * @property userId 사용자 ID
+ * @property id 엣지 ID (선택)
+ * @property source 출발 노드 ID
+ * @property target 도착 노드 ID
+ * @property weight 가중치
+ * @property type 엣지 타입
+ * @property intraCluster 클러스터 내부 연결 여부
+ * @property createdAt 생성 일시 (ISO 8601)
+ * @property updatedAt 수정 일시 (ISO 8601)
+ */
 export interface GraphEdgeDto {
   userId: string;
   id?: string;
@@ -28,6 +58,18 @@ export interface GraphEdgeDto {
   updatedAt?: string;
 }
 
+/**
+ * 그래프 클러스터 DTO
+ * @public
+ * @property id 클러스터 ID
+ * @property userId 사용자 ID
+ * @property name 클러스터 이름
+ * @property description 클러스터 설명
+ * @property size 클러스터 크기 (노드 수)
+ * @property themes 주요 테마 목록
+ * @property createdAt 생성 일시 (ISO 8601)
+ * @property updatedAt 수정 일시 (ISO 8601)
+ */
 export interface GraphClusterDto {
   id: string;
   userId: string;
@@ -39,6 +81,16 @@ export interface GraphClusterDto {
   updatedAt?: string;
 }
 
+/**
+ * 그래프 통계 DTO
+ * @public
+ * @property userId 사용자 ID
+ * @property nodes 노드 수
+ * @property edges 엣지 수
+ * @property clusters 클러스터 수
+ * @property generatedAt 생성 일시 (ISO 8601)
+ * @property metadata 추가 메타데이터
+ */
 export interface GraphStatsDto {
   userId: string;
   nodes: number;
@@ -48,6 +100,14 @@ export interface GraphStatsDto {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * 그래프 스냅샷 DTO (전체 그래프 데이터)
+ * @public
+ * @property nodes 노드 목록
+ * @property edges 엣지 목록
+ * @property clusters 클러스터 목록
+ * @property stats 그래프 통계 (userId 제외)
+ */
 export interface GraphSnapshotDto {
   nodes: GraphNodeDto[];
   edges: GraphEdgeDto[];
@@ -55,8 +115,19 @@ export interface GraphSnapshotDto {
   stats: Omit<GraphStatsDto, 'userId'>;
 }
 
+/**
+ * 엣지 생성 응답 DTO
+ * @public
+ * @property id 생성된 엣지 ID
+ */
 export interface CreateEdgeResponse {
   id: string;
 }
 
+/**
+ * 노드 업데이트 페이로드
+ * @public
+ * @property clusterId 클러스터 ID (선택)
+ * @property clusterName 클러스터 이름 (선택)
+ */
 export type UpdateNodePayload = Partial<Pick<GraphNodeDto, 'clusterId' | 'clusterName'>>;
