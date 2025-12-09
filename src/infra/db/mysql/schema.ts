@@ -20,8 +20,5 @@ CREATE TABLE IF NOT EXISTS users (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- APIKEY Column 추가, 2025/12/03
-ALTER TABLE users
-  ADD COLUMN api_key_openai VARCHAR(191) NULL,
-  ADD COLUMN api_key_deepseek VARCHAR(191) NULL;
 
 `;
