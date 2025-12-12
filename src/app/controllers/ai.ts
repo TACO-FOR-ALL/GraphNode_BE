@@ -51,7 +51,7 @@ export class AiController {
    * 
    * 역할:
    * 1. 사용자의 채팅 메시지를 받습니다.
-   * 2. AI 서비스(AIChatService)를 호출하여 AI의 응답을 생성합니다.
+   * 2. AI 서비스를 호출하여 AI의 응답을 생성합니다.
    * 3. 생성된 응답을 클라이언트에게 반환합니다.
    */
   async handleAIChat(req: Request, res: Response) {

@@ -125,10 +125,10 @@ export class GraphGenerationService {
     // 사용자를 활성 상태로 표시
     this.activeUserTasks.add(userId);
 
-    // 3. 폴링 시작 (요청 컨텍스트에서 실행 후 잊음(Fire and Forget), 백그라운드에서 실행됨)
+    // 3. 폴링 시작 
     // 참고: 여러 인스턴스가 있는 프로덕션 환경에서는 이 폴링을 별도의 워커가 처리하거나
     // 결과가 웹훅/큐를 통해 푸시되어야 합니다.
-    // 이 데모에서는 인메모리 폴링으로 충분합니다.
+    // 이 데모에서는 인메모리 폴링.
     this.pollAndSave(taskId, userId).catch(err => {
       logger.error({ err, taskId, userId }, 'Failed to poll and save graph data');
       this.activeUserTasks.delete(userId);
@@ -145,8 +145,8 @@ export class GraphGenerationService {
    * @param userId 작업을 요청한 사용자 ID. 작업 완료 후 상태 해제 및 로깅에 사용됩니다.
    */
   private async pollAndSave(taskId: string, userId: string) {
-    const POLLING_INTERVAL = 5000; // 5초
-    const MAX_ATTEMPTS = 360; // 30분 (360 * 5초 = 1800초)
+    const POLLING_INTERVAL = 60000; // 60초
+    const MAX_ATTEMPTS = 60; // 60분 (60 * 60초 = 3600초)
     
     let attempts = 0;
     

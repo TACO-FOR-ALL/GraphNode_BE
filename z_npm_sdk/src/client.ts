@@ -5,6 +5,7 @@ import { MeApi } from './endpoints/me.js';
 import { ConversationsApi } from './endpoints/conversations.js';
 import { GoogleAuthApi } from './endpoints/auth.google.js';
 import { GraphApi } from './endpoints/graph.js';
+import { GraphAiApi } from './endpoints/graphAi.js';
 import { NoteApi } from './endpoints/note.js';
 import { AppleAuthApi } from './endpoints/auth.apple.js';
 import { SyncApi } from './endpoints/sync.js';
@@ -27,6 +28,7 @@ export interface GraphNodeClientOptions extends Omit<BuilderOptions, 'baseUrl'> 
  * @property conversations 대화 관리 API
  * @property googleAuth 구글 인증 API
  * @property graph 그래프 관리 API
+ * @property graphAi 그래프 AI 생성 API
  * @property note 노트/폴더 관리 API
  * @property appleAuth 애플 인증 API
  * @property sync 데이터 동기화 API
@@ -38,6 +40,7 @@ export class GraphNodeClient {
   readonly conversations: ConversationsApi;
   readonly googleAuth: GoogleAuthApi;
   readonly graph: GraphApi;
+  readonly graphAi: GraphAiApi;
   readonly note: NoteApi;
   readonly appleAuth: AppleAuthApi;
   readonly sync: SyncApi;
@@ -69,6 +72,7 @@ export class GraphNodeClient {
     this.conversations = new ConversationsApi(this.rb);
     this.googleAuth = new GoogleAuthApi(GRAPHNODE_BASE_URL);
     this.graph = new GraphApi(this.rb);
+    this.graphAi = new GraphAiApi(this.rb);
     this.note = new NoteApi(this.rb);
     this.appleAuth = new AppleAuthApi(GRAPHNODE_BASE_URL);
     this.sync = new SyncApi(this.rb);
