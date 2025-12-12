@@ -1,13 +1,13 @@
 /**
- * 모듈: AIChatService (AI 채팅 서비스)
+ * 모듈: AiInteractionService (AI 채팅 서비스)
  * 
  * 책임: 
  * - AI 모델(OpenAI 등)과의 대화 로직을 조율합니다.
  * - 사용자의 메시지를 받아 AI에게 전달하고, 응답을 받아 저장합니다.
- * - ChatService를 사용하여 대화 내용과 메시지를 관리합니다.
+ * - ChatManagementService를 사용하여 대화 내용과 메시지를 관리합니다.
  * 
  * 외부 의존:
- * - ChatService: 대화방 및 메시지 관리 (트랜잭션 포함)
+ * - ChatManagementService: 대화방 및 메시지 관리 (트랜잭션 포함)
  * - UserService: API Key 조회
  * - OpenAI SDK: 실제 AI 모델 호출
  */
@@ -17,16 +17,16 @@ import OpenAI from 'openai';
 import { AppError } from '../../shared/errors/base'; 
 import { UpstreamError, ValidationError } from '../../shared/errors/domain';
 import { AIchatType } from '../../shared/openai/AIchatType';
-import { ChatService } from './ChatService';
+import { ChatManagementService } from './ChatManagementService';
 import { UserService } from './UserService';
 import { ChatMessage } from '../../shared/dtos/ai';
 import { openAI } from '../../shared/openai/index';
 import { ChatMessageRequest } from '../../shared/openai/ChatMessageRequest';
 
-export class AIChatService {
+export class AiInteractionService {
     // 생성자 주입을 통해 필요한 하위 서비스들을 의존성으로 받습니다.
     constructor(
-        private readonly chatService: ChatService,
+        private readonly chatManagementService: ChatManagementService,
         private readonly userService: UserService
     ) {}    
 
@@ -62,8 +62,8 @@ export class AIChatService {
             }
 
             // 3. 이전 대화 내역 조회
-            // ChatService를 통해 대화방과 메시지 목록을 함께 가져옵니다.
-            const conversation = await this.chatService.getConversation(conversationId, ownerUserId);
+            // ChatManagementService를 통해 대화방과 메시지 목록을 함께 가져옵니다.
+            const conversation = await this.chatManagementService.getConversation(conversationId, ownerUserId);
             const history: ChatMessage[] = conversation.messages || [];
 
             // 4. 메시지 변환 (History + User New Message)
@@ -92,13 +92,13 @@ export class AIChatService {
             }
 
             // 7. 메시지 저장 (User & AI)
-            // ChatService를 사용하여 메시지를 저장하고 대화방의 updatedAt을 갱신합니다.
-            const userMessage: ChatMessage = await this.chatService.createMessage(ownerUserId, conversationId, {
+            // ChatManagementService를 사용하여 메시지를 저장하고 대화방의 updatedAt을 갱신합니다.
+            const userMessage: ChatMessage = await this.chatManagementService.createMessage(ownerUserId, conversationId, {
                 role: 'user',
                 content: chatbody.chatContent
             });
 
-            const aiMessage: ChatMessage = await this.chatService.createMessage(ownerUserId, conversationId, {
+            const aiMessage: ChatMessage = await this.chatManagementService.createMessage(ownerUserId, conversationId, {
                 role: 'assistant',
                 content: aiContent
             });
@@ -110,7 +110,7 @@ export class AIChatService {
             // 이미 정의된 AppError라면 그대로 던짐
             if (err instanceof AppError) throw err;
             // 알 수 없는 에러는 UpstreamError로 감싸서 던짐
-            throw new UpstreamError('AIChatService.handleAIChat failed', { cause: String(err) });
+            throw new UpstreamError('AiInteractionService.handleAIChat failed', { cause: String(err) });
         }
     }
 

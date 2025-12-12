@@ -5,7 +5,7 @@
 
 import { Router } from 'express'
 
-import type { GraphVectorService } from '../../core/services/GraphVectorService'
+import type { GraphEmbeddingService } from '../../core/services/GraphEmbeddingService'
 import { bindSessionUser } from '../middlewares/session';
 import { requireLogin } from '../middlewares/auth';
 import { asyncHandler } from '../utils/asyncHandler';
@@ -13,13 +13,13 @@ import { GraphController } from '../controllers/graph';
 
 /**
  * 라우터 팩토리 함수
- * @param graphVectorService - 그래프 관련 서비스 인스턴스
+ * @param graphEmbeddingService - 그래프 관련 서비스 인스턴스
  * @returns 라우터 객체
  */
-export function createGraphRouter(graphVectorService: GraphVectorService) {
+export function createGraphRouter(graphEmbeddingService: GraphEmbeddingService) {
 
     const router = Router();
-    const graphController = new GraphController(graphVectorService);
+    const graphController = new GraphController(graphEmbeddingService);
 
     // 공통 미들웨어 적용: 세션 사용자 바인딩 및 로그인 요구
     router.use(bindSessionUser, requireLogin);

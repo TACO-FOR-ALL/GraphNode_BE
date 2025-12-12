@@ -28,6 +28,7 @@ import { NotFoundError } from '../shared/errors/domain';
 import { initDatabases } from '../infra/db';
 import { makeAiRouter } from './modules/ai.module';
 import { makeGraphRouter } from './modules/graph.module';
+import { makeGraphAiRouter } from './modules/graphAi.module';
 import { makeNoteRouter } from './modules/note.module';
 import { makeSyncRouter } from './modules/sync.module';
 
@@ -114,6 +115,9 @@ export function createApp() {
   // Graph Router(조립된 Router 장착)
   app.use('/v1/graph', makeGraphRouter());
 
+  // Graph AI Router (전용 AI 처리 라우터)
+  app.use('/v1/graph-ai', makeGraphAiRouter());
+
   // Note Router (조립된 Router 장착)
   app.use('/v1', makeNoteRouter());
 
@@ -144,32 +148,3 @@ export async function bootstrap() {
   return { app, database };
 }
 
-// console.log('[TRACE] Main: calling bootstrap...');
-
-// bootstrap()
-//   .then(({ app }) => {
-//     console.log('[TRACE] Main: bootstrap resolved!');
-
-//     const port = process.env.PORT || 3000;
-//     console.log(`[TRACE] Main: about to call app.listen on port ${port}`);
-
-//     const server = app.listen(port, () => {
-//       console.log('[TRACE] Main: app.listen callback fired!');
-//       logger.info({ event: 'server.started', port, url: `http://localhost:${port}` }, 'Server is running');
-//     });
-
-//     console.log('[TRACE] Main: app.listen returned server instance');
-
-//     // 핸들 누수 확인
-//     setTimeout(() => {
-//       console.log('[TRACE] Active handles:', (process as any)._getActiveHandles?.()?.length);
-//       console.log('[TRACE] Active requests:', (process as any)._getActiveRequests?.()?.length);
-//     }, 1000);
-//   })
-//   .catch(err => {
-//     console.error('[TRACE] Main: bootstrap rejected!', err);
-//     logger.fatal('Failed to bootstrap server', err);
-//     process.exit(1);
-//   });
-
-// console.log('[TRACE] Main: bootstrap() called (async)');

@@ -5,20 +5,12 @@
 import type { Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
 
-import { AppleOAuthService } from '../../core/services/AppleOAuthService';
-import { loadEnv } from '../../config/env';
+import { container } from '../../bootstrap/container';
 import { completeLogin } from '../utils/authLogin';
 import { ValidationError } from '../../shared/errors/domain';
 
 function getService() {
-  const env = loadEnv();
-  return new AppleOAuthService({
-    clientId: env.OAUTH_APPLE_CLIENT_ID,
-    teamId: env.OAUTH_APPLE_TEAM_ID,
-    keyId: env.OAUTH_APPLE_KEY_ID,
-    privateKey: env.OAUTH_APPLE_PRIVATE_KEY,
-    redirectUri: env.OAUTH_APPLE_REDIRECT_URI,
-  });
+  return container.getAppleOAuthService();
 }
 
 /**
