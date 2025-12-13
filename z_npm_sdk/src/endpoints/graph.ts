@@ -11,7 +11,17 @@ import type {
 
 /**
  * Graph API
- * - 서버의 /v1/graph 경로의 API들을 호출합니다.
+ * 
+ * 지식 그래프(Knowledge Graph)의 노드, 엣지, 클러스터를 관리하는 API 클래스입니다.
+ * `/v1/graph` 엔드포인트 하위의 API들을 호출합니다.
+ * 
+ * 주요 기능:
+ * - 노드 관리 (생성, 조회, 수정, 삭제) (`createNode`, `listNodes`, `getNode`, `updateNode`, `deleteNode`)
+ * - 엣지 관리 (생성, 조회, 삭제) (`createEdge`, `listEdges`, `deleteEdge`)
+ * - 클러스터 관리 (생성, 조회, 삭제) (`createCluster`, `listClusters`, `getCluster`, `deleteCluster`)
+ * - 그래프 통계 및 스냅샷 (`getStats`, `getSnapshot`, `saveSnapshot`)
+ * 
+ * @public
  */
 export class GraphApi {
   private readonly rb: RequestBuilder;

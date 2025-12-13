@@ -10,7 +10,15 @@ import type {
 
 /**
  * Note API
- * - 서버의 /v1/notes 및 /v1/folders 경로의 API들을 호출합니다.
+ * 
+ * 노트(Note)와 폴더(Folder)를 관리하는 API 클래스입니다.
+ * `/v1/notes` 및 `/v1/folders` 엔드포인트 하위의 API들을 호출합니다.
+ * 
+ * 주요 기능:
+ * - 노트 관리 (생성, 조회, 수정, 삭제) (`createNote`, `listNotes`, `getNote`, `updateNote`, `deleteNote`)
+ * - 폴더 관리 (생성, 조회, 수정, 삭제) (`createFolder`, `listFolders`, `getFolder`, `updateFolder`, `deleteFolder`)
+ * 
+ * @public
  */
 export class NoteApi {
   private readonly rb: RequestBuilder;

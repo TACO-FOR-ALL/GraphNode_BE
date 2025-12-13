@@ -2,7 +2,15 @@ import { RequestBuilder, type HttpResponse } from '../http-builder.js';
 import type { SyncPushRequest, SyncPullResponse } from '../types/sync.js';
 
 /**
- * 데이터 동기화 API
+ * Sync API
+ * 
+ * 클라이언트와 서버 간의 데이터 동기화를 처리하는 API 클래스입니다.
+ * `/v1/sync` 엔드포인트 하위의 API들을 호출합니다.
+ * 
+ * 주요 기능:
+ * - 변경 사항 가져오기 (Pull) (`pull`)
+ * - 변경 사항 보내기 (Push) (`push`)
+ * 
  * @public
  */
 export class SyncApi {

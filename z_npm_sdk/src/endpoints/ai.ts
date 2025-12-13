@@ -23,7 +23,14 @@ export interface AIChatResponseDto {
 }
 
 /**
- * AI API 클라이언트
+ * AI Chat API
+ * 
+ * AI 모델과의 실시간 채팅 기능을 제공하는 API 클래스입니다.
+ * `/v1/ai` 엔드포인트 하위의 API들을 호출합니다.
+ * 
+ * 주요 기능:
+ * - AI 채팅 메시지 전송 및 응답 수신 (`chat`)
+ * 
  * @public
  */
 export class AiApi {
