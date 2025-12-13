@@ -4,7 +4,7 @@
  * 책임: 
  * - 클라이언트(프론트엔드)로부터 들어오는 AI 관련 HTTP 요청을 받습니다.
  * - 요청 데이터(Body, Params, Query)를 검증하고 파싱합니다.
- * - 비즈니스 로직을 담당하는 Service 레이어(ConversationService, MessageService, AIChatService)를 호출합니다.
+ * - 비즈니스 로직을 담당하는 Service 레이어(ChatService, AIChatService)를 호출합니다.
  * - 처리 결과를 적절한 HTTP 상태 코드와 함께 JSON 형태로 응답합니다.
  * 
  * 외부 의존:
@@ -14,8 +14,7 @@
  */
 import type { Request, Response } from 'express';
 
-import { ConversationService } from '../../core/services/ConversationService';
-import { MessageService } from '../../core/services/MessageService';
+import { ChatManagementService } from '../../core/services/ChatManagementService';
 import { getUserIdFromRequest } from '../utils/request';
 // Zod schemas imported from shared DTOs
 import {
@@ -25,11 +24,10 @@ import {
   updateMessageSchema as _updateMessageSchema,
   bulkCreateConversationsSchema as _bulkCreateConversationsSchema,
 } from '../../shared/dtos/ai.schemas';
-import { AIChatService } from '../../core/services/AIChatService';
+import { AiInteractionService } from '../../core/services/AiInteractionService';
 import { ChatThread, ChatMessage } from '../../shared/dtos/ai';
 import { AIchatType } from '../../shared/openai/AIchatType';
 import { ValidationError } from '../../shared/errors/domain';
-// Removed duplicate imports
 
 /**
  * AiController 클래스
@@ -42,9 +40,8 @@ import { ValidationError } from '../../shared/errors/domain';
  */
 export class AiController {
   constructor(
-    private readonly conversationService: ConversationService, // 대화 관리 서비스
-    private readonly messageService: MessageService,           // 메시지 관리 서비스
-    private readonly aiChatService: AIChatService              // AI 채팅 로직 서비스
+    private readonly chatManagementService: ChatManagementService,           // 채팅 통합 서비스
+    private readonly aiInteractionService: AiInteractionService              // AI 채팅 로직 서비스
   ) {}
 
   /**
@@ -54,7 +51,7 @@ export class AiController {
    * 
    * 역할:
    * 1. 사용자의 채팅 메시지를 받습니다.
-   * 2. AI 서비스(AIChatService)를 호출하여 AI의 응답을 생성합니다.
+   * 2. AI 서비스를 호출하여 AI의 응답을 생성합니다.
    * 3. 생성된 응답을 클라이언트에게 반환합니다.
    */
   async handleAIChat(req: Request, res: Response) {
@@ -66,7 +63,7 @@ export class AiController {
     const chatbody = req.body as AIchatType;
     
     // AI 서비스의 handleAIChat 메서드를 호출하여 실제 대화 로직을 수행합니다.
-    const messages = await this.aiChatService.handleAIChat(ownerUserId, chatbody, conversationId);
+    const messages = await this.aiInteractionService.handleAIChat(ownerUserId, chatbody, conversationId);
     
     res.status(201).json({ messages }); 
   }
@@ -85,8 +82,6 @@ export class AiController {
    */
   async bulkCreateConversations(req: Request, res: Response) {
     // 1. 요청 Body 검증 및 파싱 (Zod 스키마 사용)
-    // 명시적 타입 선언: Zod infer를 사용하거나 직접 타입을 지정할 수 있습니다.
-    // 여기서는 구조 분해 할당 시 타입을 명시하기 위해 별도 변수로 받습니다.
     const body = _bulkCreateConversationsSchema.parse(req.body);
     const conversations = body.conversations;
     
@@ -94,7 +89,7 @@ export class AiController {
     const ownerUserId: string = getUserIdFromRequest(req)!;
 
     // 3. 서비스 호출 (대량 생성 로직 위임)
-    const createdConversations: ChatThread[] = await this.conversationService.bulkCreate(ownerUserId, conversations);
+    const createdConversations: ChatThread[] = await this.chatManagementService.bulkCreateConversations(ownerUserId, conversations);
 
     // 4. 응답 반환 (201 Created)
     res.status(201).json({ conversations: createdConversations });
@@ -120,7 +115,7 @@ export class AiController {
     const ownerUserId: string = getUserIdFromRequest(req)!;
     
     // 3. 서비스 호출 (대화방 생성)
-    const newThread: ChatThread = await this.conversationService.create(ownerUserId, threadId, title, messages);
+    const newThread: ChatThread = await this.chatManagementService.createConversation(ownerUserId, threadId, title, messages);
     
     // 4. 응답 반환 (Location 헤더에 생성된 리소스 위치 포함)
     res.status(201).location(`/v1/ai/conversations/${newThread.id}`).json(newThread);
@@ -149,7 +144,7 @@ export class AiController {
     const cursor: string | undefined = req.query.cursor as string | undefined;
     
     // 서비스 호출 (목록 조회)
-    const result: { items: ChatThread[]; nextCursor?: string | null } = await this.conversationService.listByOwner(ownerUserId, limit, cursor);
+    const result: { items: ChatThread[]; nextCursor?: string | null } = await this.chatManagementService.listConversations(ownerUserId, limit, cursor);
     
     res.status(200).json(result);
   }
@@ -171,7 +166,7 @@ export class AiController {
     const ownerUserId: string = getUserIdFromRequest(req)!;
     
     // 서비스 호출 (단일 조회)
-    const thread: ChatThread = await this.conversationService.getById(conversationId, ownerUserId);
+    const thread: ChatThread = await this.chatManagementService.getConversation(conversationId, ownerUserId);
     
     res.status(200).json(thread);
   }
@@ -195,7 +190,7 @@ export class AiController {
     const ownerUserId: string = getUserIdFromRequest(req)!;
     
     // 서비스 호출 (업데이트)
-    const updatedThread: ChatThread = await this.conversationService.update(conversationId, ownerUserId, updates);
+    const updatedThread: ChatThread = await this.chatManagementService.updateConversation(conversationId, ownerUserId, updates);
     
     res.status(200).json(updatedThread);
   }
@@ -220,7 +215,7 @@ export class AiController {
     const permanent: boolean = req.query.permanent === 'true';
     
     // 서비스 호출 (삭제)
-    await this.conversationService.delete(conversationId, ownerUserId, permanent);
+    await this.chatManagementService.deleteConversation(conversationId, ownerUserId, permanent);
     
     // 204 상태 코드는 "성공적으로 처리했으나 돌려줄 데이터가 없음"을 의미합니다.
     res.status(204).send();
@@ -241,7 +236,7 @@ export class AiController {
     const { conversationId } = req.params;
     const ownerUserId: string = getUserIdFromRequest(req)!;
     
-    await this.conversationService.restore(conversationId, ownerUserId);
+    await this.chatManagementService.restoreConversation(conversationId, ownerUserId);
     
     res.status(204).send();
   }
@@ -265,7 +260,7 @@ export class AiController {
     const ownerUserId: string = getUserIdFromRequest(req)!;
     
     // 서비스 호출 (메시지 생성)
-    const newMessage: ChatMessage = await this.messageService.create(ownerUserId, conversationId, messageData);
+    const newMessage: ChatMessage = await this.chatManagementService.createMessage(ownerUserId, conversationId, messageData);
     
     res.status(201).json(newMessage);
   }
@@ -289,7 +284,7 @@ export class AiController {
     const ownerUserId: string = getUserIdFromRequest(req)!;
     
     // 서비스 호출 (메시지 수정)
-    const updatedMessage: ChatMessage = await this.messageService.update(ownerUserId, conversationId, messageId, updates);
+    const updatedMessage: ChatMessage = await this.chatManagementService.updateMessage(ownerUserId, conversationId, messageId, updates);
     
     res.status(200).json(updatedMessage);
   }
@@ -313,7 +308,7 @@ export class AiController {
     const permanent: boolean = req.query.permanent === 'true';
     
     // 서비스 호출 (메시지 삭제)
-    await this.messageService.delete(ownerUserId, conversationId, messageId, permanent);
+    await this.chatManagementService.deleteMessage(ownerUserId, conversationId, messageId, permanent);
     
     res.status(204).send();
   }
@@ -332,7 +327,7 @@ export class AiController {
     const { conversationId, messageId } = req.params;
     const ownerUserId: string = getUserIdFromRequest(req)!;
     
-    await this.messageService.restore(ownerUserId, conversationId, messageId);
+    await this.chatManagementService.restoreMessage(ownerUserId, conversationId, messageId);
     
     res.status(204).send();
   }

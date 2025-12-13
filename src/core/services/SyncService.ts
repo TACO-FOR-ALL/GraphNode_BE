@@ -1,8 +1,8 @@
 import { MongoClient, ClientSession } from 'mongodb';
 
-import { ConversationRepository } from '../ports/ConversationRepository';
-import { MessageRepository } from '../ports/MessageRepository';
-import { NoteRepository } from '../ports/NoteRepository';
+import { ConversationService } from './ConversationService';
+import { MessageService } from './MessageService';
+import { NoteService } from './NoteService';
 import { SyncPushRequest, SyncPullResponse } from '../../shared/dtos/sync';
 import { toChatThreadDto, toChatMessageDto, toConversationDoc, toMessageDoc } from '../../shared/mappers/ai';
 import { toNoteDto, toFolderDto } from '../../shared/mappers/note';
@@ -23,9 +23,9 @@ import { ValidationError } from '../../shared/errors/domain';
  */
 export class SyncService {
   constructor(
-    private readonly conversationRepo: ConversationRepository,
-    private readonly messageRepo: MessageRepository,
-    private readonly noteRepo: NoteRepository
+    private readonly conversationService: ConversationService,
+    private readonly messageService: MessageService,
+    private readonly noteService: NoteService
   ) {}
 
   /**
@@ -53,10 +53,10 @@ export class SyncService {
     }
 
     const [convDocs, msgDocs, noteDocs, folderDocs]: [ConversationDoc[], MessageDoc[], NoteDoc[], FolderDoc[]] = await Promise.all([
-      this.conversationRepo.findModifiedSince(ownerUserId, since),
-      this.messageRepo.findModifiedSince(ownerUserId, since),
-      this.noteRepo.findNotesModifiedSince(ownerUserId, since),
-      this.noteRepo.findFoldersModifiedSince(ownerUserId, since),
+      this.conversationService.findModifiedSince(ownerUserId, since),
+      this.messageService.findModifiedSince(ownerUserId, since),
+      this.noteService.findNotesModifiedSince(ownerUserId, since),
+      this.noteService.findFoldersModifiedSince(ownerUserId, since),
     ]);
 
     return {
@@ -88,19 +88,24 @@ export class SyncService {
         if (changes.conversations) {
           for (const dto of changes.conversations) {
             const doc: ConversationDoc = toConversationDoc(dto, ownerUserId);
-            const existing: ConversationDoc | null = await this.conversationRepo.findById(doc._id, ownerUserId);
+            const existing: ConversationDoc | null = await this.conversationService.findDocById(doc._id, ownerUserId);
             
+            // 소유권 확인 (다른 사용자의 데이터를 덮어쓰지 않도록)
+            if (existing && existing.ownerUserId !== ownerUserId) {
+              continue; // 또는 에러 처리
+            }
+
             // LWW: 서버 데이터가 더 최신이면 건너뜀
             if (existing && existing.updatedAt >= doc.updatedAt) {
               continue;
             }
 
             if (existing) {
-              await this.conversationRepo.update(doc._id, ownerUserId, doc, session);
+              await this.conversationService.updateDoc(doc._id, ownerUserId, { ...doc, updatedAt: doc.updatedAt }, session);
               continue;
             }
             
-            await this.conversationRepo.create(doc, session);
+            await this.conversationService.createDoc(doc, session);
           }
         }
 
@@ -108,18 +113,23 @@ export class SyncService {
         if (changes.messages) {
           for (const dto of changes.messages) {
             const doc: MessageDoc = toMessageDoc(dto, dto.conversationId, ownerUserId);
-            const existing: MessageDoc | null = await this.messageRepo.findById(doc._id);
+            const existing: MessageDoc | null = await this.messageService.findDocById(doc._id);
             
+            // 소유권 확인
+            if (existing && existing.ownerUserId !== ownerUserId) {
+              continue;
+            }
+
             if (existing && existing.updatedAt >= doc.updatedAt) {
               continue;
             }
 
             if (existing) {
-              await this.messageRepo.update(doc._id, doc.conversationId, doc, session);
+              await this.messageService.updateDoc(doc._id, doc.conversationId, doc, session);
               continue;
             }
             
-            await this.messageRepo.create(doc, session);
+            await this.messageService.createDoc(doc, session);
           }
         }
 
@@ -137,18 +147,18 @@ export class SyncService {
               deletedAt: dto.deletedAt ? new Date(dto.deletedAt) : null,
             };
 
-            const existing: NoteDoc | null = await this.noteRepo.getNote(doc._id, ownerUserId);
+            const existing: NoteDoc | null = await this.noteService.getNoteDoc(doc._id, ownerUserId);
             
             if (existing && existing.updatedAt >= doc.updatedAt) {
               continue;
             }
 
             if (existing) {
-              await this.noteRepo.updateNote(doc._id, ownerUserId, doc, session);
+              await this.noteService.updateNoteDoc(doc._id, ownerUserId, doc, session);
               continue;
             }
             
-            await this.noteRepo.createNote(doc, session);
+            await this.noteService.createNoteDoc(doc, session);
           }
         }
 
@@ -165,18 +175,18 @@ export class SyncService {
               deletedAt: dto.deletedAt ? new Date(dto.deletedAt) : null,
             };
 
-            const existing: FolderDoc | null = await this.noteRepo.getFolder(doc._id, ownerUserId);
+            const existing: FolderDoc | null = await this.noteService.getFolderDoc(doc._id, ownerUserId);
             
             if (existing && existing.updatedAt >= doc.updatedAt) {
               continue;
             }
 
             if (existing) {
-              await this.noteRepo.updateFolder(doc._id, ownerUserId, doc, session);
+              await this.noteService.updateFolderDoc(doc._id, ownerUserId, doc, session);
               continue;
             }
             
-            await this.noteRepo.createFolder(doc, session);
+            await this.noteService.createFolderDoc(doc, session);
           }
         }
       });

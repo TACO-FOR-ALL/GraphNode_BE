@@ -4,32 +4,14 @@
  */
 import type { Router } from 'express';
 
-import { GraphVectorService } from '../../core/services/GraphVectorService';
-import { createAuditProxy } from '../../shared/audit/auditProxy';
 import { createGraphRouter } from '../../app/routes/graph';
-import { GraphRepositoryMongo } from '../../infra/repositories/GraphRepositoryMongo';
-import { GraphService } from '../../core/services/GraphService';
+import { container } from '../container';
 
 
 export function makeGraphRouter() : Router {
-
-
-    //Repositories(Adapter)
-    const graphRepo = new GraphRepositoryMongo();
-
-    // Services
-    const rawGraphService = new GraphService(graphRepo);
-
-    // wrap with audit proxies so service method calls are audited
-    const graphService = createAuditProxy(rawGraphService, 'GraphService');
-
-    // Composite service (graph + vector)
-    const rawGraphVector = new GraphVectorService(graphService);
-    const graphVectorService = createAuditProxy(rawGraphVector, 'GraphVectorService');
-
-    
+    const graphEmbeddingService = container.getGraphEmbeddingService();
 
     //Router(Factory) - expose composite (or graphService) to router as appropriate
-    return createGraphRouter(graphVectorService);
+    return createGraphRouter(graphEmbeddingService);
 
 }

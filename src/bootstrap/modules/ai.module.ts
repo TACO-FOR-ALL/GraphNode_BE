@@ -4,38 +4,15 @@
  */
 import type { Router } from 'express';
 
-import { ConversationRepositoryMongo } from '../../infra/repositories/ConversationRepositoryMongo';
-import { MessageRepositoryMongo } from '../../infra/repositories/MessageRepositoryMongo';
-import { UserRepositoryMySQL } from '../../infra/repositories/UserRepositoryMySQL';
-import { ConversationService } from '../../core/services/ConversationService';
-import { MessageService } from '../../core/services/MessageService';
-import { UserService } from '../../core/services/UserService';
-import { createAuditProxy } from '../../shared/audit/auditProxy';
 import { createAiRouter } from '../../app/routes/ai';
-import { AIChatService } from '../../core/services/AIChatService';
+import { container } from '../container';
 
 export function makeAiRouter(): Router {
-  // Repositories
-  const messageRepo = new MessageRepositoryMongo();
-  const conversationRepo = new ConversationRepositoryMongo();
-  const userRepository = new UserRepositoryMySQL();
-
-  // Services
-  const rawConversationService = new ConversationService(conversationRepo, messageRepo);
-  const rawMessageService = new MessageService(messageRepo, conversationRepo);
-  const userService = new UserService(userRepository);
-
-  const conversationService = createAuditProxy(rawConversationService, 'ConversationService');
-  const messageService = createAuditProxy(rawMessageService, 'MessageService');
-
-
-  const rawAIChatService = new AIChatService(conversationService, messageService, userService);
-  const aiChatService = createAuditProxy(rawAIChatService, 'AIChatService');
-
+  const chatManagementService = container.getChatManagementService();
+  const aiInteractionService = container.getAiInteractionService();
 
   // Router(factory)
   return createAiRouter({ 
-    conversationService, 
-    messageService,
-    aiChatService });
+    chatManagementService, 
+    aiInteractionService });
 }

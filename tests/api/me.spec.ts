@@ -106,30 +106,31 @@ describe('MeController', () => {
   // API Keys Tests
   // ==========================================
 
-  describe('GET /v1/me/api-keys', () => {
-    it('should return 200 with API keys when authenticated', async () => {
+  describe('GET /v1/me/api-keys/:model', () => {
+    it('should return 200 with API key for openai', async () => {
       const userId = '1';
-      const apiKeys = { openai: 'sk-test-openai-key', deepseek: null };
+      const apiKeyResponse = { apiKey: 'sk-test-openai-key' };
       mockGetUserId.mockReturnValue(userId);
-      mockUserService.getApiKeys.mockResolvedValue(apiKeys);
+      mockUserService.getApiKeys.mockResolvedValue(apiKeyResponse);
 
-      const res = await request(app).get('/v1/me/api-keys');
+      const res = await request(app).get('/v1/me/api-keys/openai');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(apiKeys);
-      expect(mockUserService.getApiKeys).toHaveBeenCalledWith(userId);
+      expect(res.body).toEqual(apiKeyResponse);
+      expect(mockUserService.getApiKeys).toHaveBeenCalledWith(userId, 'openai');
     });
 
-    it('should return null for missing API keys', async () => {
+    it('should return null apiKey if not set', async () => {
       const userId = '1';
-      const apiKeys = { openai: null, deepseek: null };
+      const apiKeyResponse = { apiKey: null };
       mockGetUserId.mockReturnValue(userId);
-      mockUserService.getApiKeys.mockResolvedValue(apiKeys);
+      mockUserService.getApiKeys.mockResolvedValue(apiKeyResponse);
 
-      const res = await request(app).get('/v1/me/api-keys');
+      const res = await request(app).get('/v1/me/api-keys/deepseek');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ openai: null, deepseek: null });
+      expect(res.body).toEqual(apiKeyResponse);
+      expect(mockUserService.getApiKeys).toHaveBeenCalledWith(userId, 'deepseek');
     });
 
     it('should return 401 when not authenticated', async () => {

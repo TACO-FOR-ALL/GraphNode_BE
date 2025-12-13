@@ -4,20 +4,15 @@
  */
 import type { Router } from 'express';
 
-import { UserRepositoryMySQL } from '../../infra/repositories/UserRepositoryMySQL';
-import { UserService } from '../../core/services/UserService';
 import { createMeRouter } from '../../app/routes/me';
+import { container } from '../container';
 
 /**
  * /v1/me 라우터와 그 의존성을 생성하여 반환합니다.
  * @returns Express 라우터
  */
 export function makeMeRouter(): Router {
-  // Repositories
-  const userRepository = new UserRepositoryMySQL();
-
-  // Services
-  const userService = new UserService(userRepository);
+  const userService = container.getUserService();
 
   // Router (factory)
   return createMeRouter({

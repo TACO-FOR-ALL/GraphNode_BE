@@ -14,6 +14,7 @@ export { MeApi } from './endpoints/me.js';
 export { ConversationsApi } from './endpoints/conversations.js';
 export { GoogleAuthApi } from './endpoints/auth.google.js';
 export { GraphApi } from './endpoints/graph.js';
+export { GraphAiApi } from './endpoints/graphAi.js';
 export { NoteApi } from './endpoints/note.js';
 export { AppleAuthApi } from './endpoints/auth.apple.js';
 export { SyncApi } from './endpoints/sync.js';
@@ -39,3 +40,11 @@ export type {
 } from './types/note.js';
 export type { SyncPushRequest, SyncPullResponse } from './types/sync.js';
 export type { AIChatRequestDto, AIChatResponseDto } from './endpoints/ai.js';
+export type { GraphGenerationResponseDto } from './types/graphAi.js';
+export type {
+  AiInputData,
+  AiInputMappingNode,
+  AiInputMessage,
+  AiInputMessageAuthor,
+  AiInputMessageContent,
+} from './types/aiInput.js';

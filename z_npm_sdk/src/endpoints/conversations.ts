@@ -8,7 +8,17 @@ import type {
 import type { MessageCreateDto, MessageUpdateDto, MessageDto } from '../types/message.js';
 
 /**
- * 대화(Conversation) 관리 API
+ * Conversations API
+ * 
+ * AI와의 대화(Conversation) 및 메시지(Message)를 관리하는 API 클래스입니다.
+ * `/v1/ai/conversations` 엔드포인트 하위의 API들을 호출합니다.
+ * 
+ * 주요 기능:
+ * - 대화 생성, 조회, 수정, 삭제 (`create`, `get`, `list`, `update`, `delete`)
+ * - 대화 일괄 생성 (`bulkCreate`)
+ * - 삭제된 대화 복원 (`restore`)
+ * - 메시지 추가 (`createMessage`)
+ * 
  * @public
  */
 export class ConversationsApi {

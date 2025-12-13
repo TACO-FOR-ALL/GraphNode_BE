@@ -6,8 +6,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
 
-import { GoogleOAuthService } from '../../core/services/GoogleOAuthService';
-import { loadEnv } from '../../config/env';
+import { container } from '../../bootstrap/container';
 import { completeLogin } from '../utils/authLogin';
 import { ValidationError } from '../../shared/errors/domain';
 
@@ -16,12 +15,7 @@ import { ValidationError } from '../../shared/errors/domain';
  * @returns GoogleOAuthService 인스턴스(클라이언트 설정 바인딩)
  */
 function getService() {
-  const env = loadEnv();
-  return new GoogleOAuthService({
-    clientId: env.OAUTH_GOOGLE_CLIENT_ID,
-    clientSecret: env.OAUTH_GOOGLE_CLIENT_SECRET,
-    redirectUri: env.OAUTH_GOOGLE_REDIRECT_URI,
-  });
+  return container.getGoogleOAuthService();
 }
 
 /**

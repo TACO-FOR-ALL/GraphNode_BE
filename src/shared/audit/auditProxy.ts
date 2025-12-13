@@ -93,7 +93,7 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
       if (typeof orig !== 'function') return orig;
 
       // 메서드 호출을 감싸는 래퍼 함수
-      return async function auditWrapper(this: any, ...args: any[]) {
+      return function auditWrapper(this: any, ...args: any[]) {
         const start = Date.now();
         // 현재 요청 컨텍스트(사용자 정보 등) 가져오기
         const ctx: RequestContext | undefined = requestStore.getStore();
@@ -112,9 +112,39 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
 
         try {
           // 2. 실제 메서드 실행
-          const result = await orig.apply(this, args);
+          const result = orig.apply(this, args);
+
+          // 결과가 Promise인 경우 (비동기)
+          if (result && typeof result.then === 'function') {
+            return result.then((res: any) => {
+              const durationMs = Date.now() - start;
+              // 3. 성공 로그
+              try {
+                logger.info({
+                  event: 'audit.success',
+                  ...meta,
+                  durationMs,
+                  result: summarizeResult(res),
+                }, 'audit.success');
+              } catch (_) {}
+              return res;
+            }).catch((err: any) => {
+              const durationMs = Date.now() - start;
+              // 4. 에러 로그
+              try {
+                logger.error({
+                  event: 'audit.error',
+                  ...meta,
+                  durationMs,
+                  error: err?.message ?? String(err),
+                }, 'audit.error');
+              } catch (_) {}
+              throw err;
+            });
+          }
+
+          // 결과가 Promise가 아닌 경우 (동기)
           const durationMs = Date.now() - start;
-          
           // 3. 성공 로그
           try {
             logger.info({
@@ -125,6 +155,7 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
             }, 'audit.success');
           } catch (_) {}
           return result;
+
         } catch (err: any) {
           const durationMs = Date.now() - start;
           

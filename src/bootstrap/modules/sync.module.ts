@@ -4,22 +4,11 @@
  */
 import type { Router } from 'express';
 
-import { ConversationRepositoryMongo } from '../../infra/repositories/ConversationRepositoryMongo';
-import { MessageRepositoryMongo } from '../../infra/repositories/MessageRepositoryMongo';
-import { NoteRepositoryMongo } from '../../infra/repositories/NoteRepositoryMongo';
-import { SyncService } from '../../core/services/SyncService';
-import { createAuditProxy } from '../../shared/audit/auditProxy';
 import { createSyncRouter } from '../../app/routes/sync';
+import { container } from '../container';
 
 export function makeSyncRouter(): Router {
-  // Repositories
-  const convRepo = new ConversationRepositoryMongo();
-  const msgRepo = new MessageRepositoryMongo();
-  const noteRepo = new NoteRepositoryMongo();
-
-  // Services
-  const rawSyncService = new SyncService(convRepo, msgRepo, noteRepo);
-  const syncService = createAuditProxy(rawSyncService, 'SyncService');
+  const syncService = container.getSyncService();
 
   // Router(factory)
   return createSyncRouter({ syncService });
