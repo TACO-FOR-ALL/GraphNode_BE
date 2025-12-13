@@ -5,7 +5,7 @@ import { AiInputData, AiInputMappingNode } from '../../shared/dtos/ai_input';
 import { logger } from '../../shared/utils/logger';
 import { PersistGraphPayloadDto } from '../../shared/dtos/graph';
 import { ConflictError } from '../../shared/errors/domain';
-import { ChatThread } from '../../shared/dtos/ai';
+import { ChatMessage, ChatThread } from '../../shared/dtos/ai';
 
 // TODO: 이 설정은 설정 파일이나 환경 변수로 이동해야 합니다.
 // 데모를 위해 AI 서버 URI를 하드코딩.
@@ -65,7 +65,7 @@ export class GraphGenerationService {
 
     for (const conv of conversations) {
       // ChatManagementService를 통해 메시지 목록 조회
-      const messages = await this.chatManagementService.getMessages(conv.id);
+      const messages: ChatMessage[] = conv.messages;
       
       // AI 입력 형식으로 변환
       const mapping: Record<string, AiInputMappingNode> = {};
@@ -116,7 +116,7 @@ export class GraphGenerationService {
       const response = await this.httpClient.post<{ task_id: string; status: string }>('/analysis', { data: aiInputData });
       taskId = response.task_id;
     } catch (error) {
-      // 전송에 실패하면 사용자가 재시도하는 것을 막지 않아야 합니다.
+      logger.error({ err: error, userId }, 'Failed to start AI analysis task');
       throw error;
     }
 
@@ -205,5 +205,49 @@ export class GraphGenerationService {
 
     // 폴링 시작
     setTimeout(checkStatus, POLLING_INTERVAL);
+  }
+
+  /**
+   * [테스트용] JSON 데이터를 직접 입력받아 그래프 생성을 요청합니다.
+   * DB 조회 과정을 생략하고, 클라이언트가 제공한 데이터를 그대로 AI 서버로 전송합니다.
+   * 
+   * @param userId 사용자 ID (결과 저장용)
+   * @param inputData AI 입력 데이터 (AiInputData 형식)
+   * @returns AI 서버가 할당한 작업 ID
+   */
+  async generateGraphFromJson(inputData: AiInputData): Promise<string> {
+    
+    const userId = "test-user"; // 테스트용 고정 사용자 ID
+    
+    if (this.activeUserTasks.has(userId)) {
+      logger.warn({ userId }, 'Graph generation already in progress for user');
+      throw new ConflictError('Graph generation is already in progress for this user.', { status: 'processing' });
+    }
+
+    logger.info({ userId }, 'Starting test graph generation from JSON');
+
+    // 2. AI 서버로 전송 (데이터 변환 과정 생략)
+    logger.info({ userId }, 'Sending provided JSON data to AI server');
+    let taskId: string;
+    try {
+      const response = await this.httpClient.post<{ task_id: string; status: string }>('/analysis', { data: inputData });
+      taskId = response.task_id;
+    } catch (error) {
+      logger.error({ err: error, userId }, 'Failed to start AI analysis task');
+      throw error;
+    }
+
+    logger.info({ userId, taskId }, 'AI task started (Test Mode)');
+
+    // 사용자를 활성 상태로 표시
+    this.activeUserTasks.add(userId);
+
+    // 3. 폴링 시작
+    this.pollAndSave(taskId, userId).catch(err => {
+      logger.error({ err, taskId, userId }, 'Failed to poll and save graph data');
+      this.activeUserTasks.delete(userId);
+    });
+
+    return taskId;
   }
 }

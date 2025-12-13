@@ -26,4 +26,27 @@ export class GraphAiController {
         status: 'queued'
         });
     };
+
+    /**
+     * [테스트용] POST /v1/graph-ai/test/generate-json
+     * 클라이언트로부터 직접 JSON 데이터를 받아 그래프 생성을 요청합니다.
+     */
+    generateGraphTest = async (req: Request, res: Response) => {
+        // const userId = getUserIdFromRequest(req);
+        const inputData = req.body; // Body 자체가 AiInputData 형식이라고 가정
+
+        // 유효성 검사 (간단하게)
+        if (!Array.isArray(inputData)) {
+             res.status(400).json({ message: 'Invalid input format. Expected an array of conversation objects.' });
+             return;
+        }
+
+        const taskId = await this.graphGenerationService.generateGraphFromJson(inputData);
+
+        res.status(202).json({
+            message: 'Test graph generation started',
+            taskId: taskId,
+            status: 'queued'
+        });
+    };
 }

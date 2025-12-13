@@ -1,5 +1,6 @@
 import { RequestBuilder, type HttpResponse } from '../http-builder.js';
 import type { GraphGenerationResponseDto } from '../types/graphAi.js';
+import type { AiInputData } from '../types/aiInput.js';
 
 /**
  * Graph AI API
@@ -31,5 +32,13 @@ export class GraphAiApi {
    */
   async generateGraph(): Promise<HttpResponse<GraphGenerationResponseDto>> {
     return this.rb.path('/generate').post();
+  }
+
+  /**
+   * [테스트용] 직접 JSON 데이터를 입력하여 그래프 생성을 요청합니다.
+   * @param data ChatGPT Export 포맷의 JSON 데이터 (AiInputData 배열)
+   */
+  async generateGraphTest(data: AiInputData[]): Promise<HttpResponse<GraphGenerationResponseDto>> {
+    return this.rb.path('/test/generate-json').post(data);
   }
 }

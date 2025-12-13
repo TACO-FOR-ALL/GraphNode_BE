@@ -41,3 +41,10 @@ export type {
 export type { SyncPushRequest, SyncPullResponse } from './types/sync.js';
 export type { AIChatRequestDto, AIChatResponseDto } from './endpoints/ai.js';
 export type { GraphGenerationResponseDto } from './types/graphAi.js';
+export type {
+  AiInputData,
+  AiInputMappingNode,
+  AiInputMessage,
+  AiInputMessageAuthor,
+  AiInputMessageContent,
+} from './types/aiInput.js';
