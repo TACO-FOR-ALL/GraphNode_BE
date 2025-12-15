@@ -35,6 +35,18 @@ export class MessageService {
   ) {}
 
   /**
+   * 여러 메시지 문서를 한 번에 생성합니다. (Internal/Bulk Use)
+   * 
+   * @param docs 저장할 메시지 문서 배열
+   * @param session (선택) 트랜잭션 세션
+   * @returns 저장된 메시지 문서 배열
+   */
+  async createDocs(docs: MessageDoc[], session?: ClientSession): Promise<MessageDoc[]> {
+    if (docs.length === 0) return [];
+    return await this.messageRepo.createMany(docs, session);
+  }
+
+  /**
    * 대화방에 새로운 메시지를 추가합니다. (External Use - Returns DTO)
    * 
    * @param ownerUserId 요청자(사용자) ID

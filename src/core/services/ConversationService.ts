@@ -39,6 +39,18 @@ export class ConversationService {
   ) {}
 
   /**
+   * 여러 대화 문서를 한 번에 생성합니다. (Internal/Bulk Use)
+   * 
+   * @param docs 저장할 대화 문서 배열
+   * @param session (선택) 트랜잭션 세션
+   * @returns 저장된 대화 문서 배열
+   */
+  async createDocs(docs: ConversationDoc[], session?: ClientSession): Promise<ConversationDoc[]> {
+    if (docs.length === 0) return [];
+    return await this.conversationRepo.createMany(docs, session);
+  }
+
+  /**
    * 새 대화를 생성합니다. (External Use - Returns DTO)
    * 
    * @param ownerUserId 소유자 ID
