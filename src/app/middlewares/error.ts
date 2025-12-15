@@ -39,6 +39,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   // 3. 로깅: 에러 코드, 상태, 경로 등을 구조화된 로그로 남김
   logger.child({ correlationId: (req as any).id }).error({
     msg: 'http.error', 
+    err: e, 
     code: e.code, 
     status: e.httpStatus, 
     path: req.originalUrl

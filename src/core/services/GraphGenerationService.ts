@@ -1,3 +1,5 @@
+import { Readable } from 'stream';
+
 import { ChatManagementService } from './ChatManagementService';
 import { GraphEmbeddingService } from './GraphEmbeddingService';
 import { HttpClient } from '../../infra/http/httpClient';
@@ -5,7 +7,7 @@ import { AiInputData, AiInputMappingNode } from '../../shared/dtos/ai_input';
 import { logger } from '../../shared/utils/logger';
 import { PersistGraphPayloadDto } from '../../shared/dtos/graph';
 import { ConflictError } from '../../shared/errors/domain';
-import { ChatMessage, ChatThread } from '../../shared/dtos/ai';
+import { ChatMessage } from '../../shared/dtos/ai';
 
 // TODO: 이 설정은 설정 파일이나 환경 변수로 이동해야 합니다.
 // 데모를 위해 AI 서버 URI를 하드코딩.
@@ -21,7 +23,11 @@ export class GraphGenerationService {
     private readonly chatManagementService: ChatManagementService,
     private readonly graphEmbeddingService: GraphEmbeddingService
   ) {
-    this.httpClient = new HttpClient('GraphAI', { baseURL: AI_SERVER_URI });
+    // 타임아웃 5분(300초)으로 설정
+    this.httpClient = new HttpClient('GraphAI', { 
+      baseURL: AI_SERVER_URI,
+      timeout: 300000 
+    });
   }
 
   /**
@@ -41,79 +47,21 @@ export class GraphGenerationService {
       throw new ConflictError('Graph generation is already in progress for this user.', { status: 'processing' });
     }
 
-    logger.info({ userId }, 'Starting graph generation for user');
+    logger.info({ userId }, 'Starting graph generation for user (Streaming Mode)');
 
-    // 1. 데이터 가져오기
-    // ChatManagementService를 사용하여 모든 대화 목록을 페이지네이션으로 가져옵니다.
-    const conversations: ChatThread[] = [];
-    let cursor: string | undefined = undefined;
-    const BATCH_SIZE = 50; // 한 번에 가져올 개수
-
-    while (true) {
-      const result = await this.chatManagementService.listConversations(userId, BATCH_SIZE, cursor);
-      conversations.push(...result.items);
-      
-      if (!result.nextCursor) {
-        break;
-      }
-      cursor = result.nextCursor;
-    }
-    
-    const aiInputData: AiInputData = [];
-
-    logger.info({ userId, count: conversations.length }, 'Fetched conversations');
-
-    for (const conv of conversations) {
-      // ChatManagementService를 통해 메시지 목록 조회
-      const messages: ChatMessage[] = conv.messages;
-      
-      // AI 입력 형식으로 변환
-      const mapping: Record<string, AiInputMappingNode> = {};
-      
-      // 현재 MessageDoc에는 parentId가 없으므로 선형 대화로 가정합니다.
-      // DB 구조가 트리를 지원하도록 변경되면 이 로직을 업데이트해야 합니다.
-      let prevMsgId: string | null = null;
-      
-      // 만약을 대비해 createdAt으로 메시지를 정렬합니다.
-      messages.sort((a, b) => {
-        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return timeA - timeB;
-      });
-
-      for (const msg of messages) {
-        const nodeId = msg.id; // ChatMessage DTO uses 'id'
-        mapping[nodeId] = {
-          id: nodeId,
-          message: {
-            id: nodeId,
-            author: { role: msg.role },
-            content: { content_type: 'text', parts: [msg.content] }
-          },
-          parent: prevMsgId,
-          children: []
-        };
-        
-        if (prevMsgId && mapping[prevMsgId]) {
-          mapping[prevMsgId].children.push(nodeId);
-        }
-        
-        prevMsgId = nodeId;
-      }
-
-      aiInputData.push({
-        title: conv.title,
-        create_time: conv.createdAt ? new Date(conv.createdAt).getTime() / 1000 : 0, // ms to sec
-        update_time: conv.updatedAt ? new Date(conv.updatedAt).getTime() / 1000 : 0,
-        mapping: mapping
-      });
-    }
+    // 1. 데이터 스트림 생성 (메모리 최적화: 제너레이터를 통해 필요할 때만 데이터 생성)
+    // [개념 설명: Node.js Readable Stream]
+    // - Readable.from()은 Async Iterable(여기서는 제너레이터)을 Node.js의 읽기 가능한 스트림으로 변환합니다.
+    // - 스트림은 데이터를 한 번에 메모리에 올리지 않고, 소비되는 속도에 맞춰 조금씩 데이터를 '흘려보내는' 방식입니다.
+    // - 이를 통해 100MB가 넘는 데이터도 수십 MB 수준의 낮은 메모리로 처리할 수 있습니다.
+    const dataStream = Readable.from(this.streamUserData(userId));
 
     // 2. AI 서버로 전송
-    logger.info({ userId }, 'Sending data to AI server');
+    logger.info({ userId }, 'Sending data stream to AI server');
     let taskId: string;
     try {
-      const response = await this.httpClient.post<{ task_id: string; status: string }>('/analysis', { data: aiInputData });
+      // Axios는 Readable Stream을 요청 바디로 지원합니다.
+      const response = await this.httpClient.post<{ task_id: string; status: string }>('/analysis', dataStream);
       taskId = response.task_id;
     } catch (error) {
       logger.error({ err: error, userId }, 'Failed to start AI analysis task');
@@ -135,6 +83,89 @@ export class GraphGenerationService {
     });
 
     return taskId;
+  }
+
+  /**
+   * 사용자 대화 데이터를 AI 입력 형식으로 변환하여 스트리밍하는 제너레이터
+   * JSON 구조: { "data": [ ... ] }
+   * 
+   * [개념 설명: Async Generator (async function*)]
+   * - 제너레이터는 함수 실행을 중간에 멈췄다가 재개할 수 있는 함수입니다.
+   * - 'yield' 키워드를 만나면 값을 반환하고 실행을 일시 정지합니다.
+   * - 스트림이 데이터를 요청하면 다시 깨어나서 다음 로직을 수행합니다.
+   * - 이 패턴을 사용하면 DB에서 전체 데이터를 다 가져오지 않고도(Lazy Loading),
+   *   필요한 만큼만 조금씩 가져와서 처리할 수 있어 메모리 효율이 극대화됩니다.
+   */
+  private async *streamUserData(userId: string): AsyncGenerator<string> {
+    // [개념 설명: JSON Streaming]
+    // 거대한 객체를 한 번에 JSON.stringify() 하면 메모리 부족(OOM)이 발생할 수 있습니다.
+    // 따라서 JSON의 문자열 구조(괄호, 콤마 등)를 수동으로 쪼개서 스트림으로 보냅니다.
+    yield '{"data":[';
+    
+    let isFirst = true;
+    let cursor: string | undefined = undefined;
+    const BATCH_SIZE = 50; // 한 번에 메모리에 올릴 대화 개수
+
+    while (true) {
+      // [Batch Processing] DB에서 데이터를 조금씩(Pagination) 가져옵니다.
+      const result = await this.chatManagementService.listConversations(userId, BATCH_SIZE, cursor);
+      const batchConversations = result.items;
+
+      for (const conv of batchConversations) {
+        const messages: ChatMessage[] = conv.messages;
+        const mapping: Record<string, AiInputMappingNode> = {};
+        
+        let prevMsgId: string | null = null;
+        
+        // 메시지 정렬 (createdAt 기준)
+        messages.sort((a, b) => {
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return timeA - timeB;
+        });
+
+        for (const msg of messages) {
+          const nodeId = msg.id;
+          mapping[nodeId] = {
+            id: nodeId,
+            message: {
+              id: nodeId,
+              author: { role: msg.role },
+              content: { content_type: 'text', parts: [msg.content] }
+            },
+            parent: prevMsgId,
+            children: []
+          };
+          
+          if (prevMsgId && mapping[prevMsgId]) {
+            mapping[prevMsgId].children.push(nodeId);
+          }
+          
+          prevMsgId = nodeId;
+        }
+
+        const aiItem = {
+          title: conv.title,
+          create_time: conv.createdAt ? new Date(conv.createdAt).getTime() / 1000 : 0,
+          update_time: conv.updatedAt ? new Date(conv.updatedAt).getTime() / 1000 : 0,
+          mapping: mapping
+        };
+
+        if (!isFirst) {
+          yield ','; // 아이템 사이의 구분자
+        }
+        // 개별 아이템만 문자열로 변환하여 전송 (메모리 절약)
+        yield JSON.stringify(aiItem);
+        isFirst = false;
+      }
+
+      if (!result.nextCursor) {
+        break;
+      }
+      cursor = result.nextCursor;
+    }
+
+    yield ']}'; // JSON 종료
   }
 
   /**

@@ -33,6 +33,15 @@ export interface ConversationRepository {
   create(doc: ConversationDoc, session?: ClientSession): Promise<ConversationDoc>;
 
   /**
+   * 여러 대화를 한 번에 생성합니다 (Bulk Insert).
+   * 
+   * @param docs 저장할 대화 문서 배열
+   * @param session (선택) MongoDB 트랜잭션 세션
+   * @returns 저장된 대화 문서 배열
+   */
+  createMany(docs: ConversationDoc[], session?: ClientSession): Promise<ConversationDoc[]>;
+
+  /**
    * ID로 대화를 조회합니다.
    * 
    * @param id 대화 ID

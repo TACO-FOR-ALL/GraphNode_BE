@@ -99,61 +99,98 @@ export class ChatManagementService {
 
   /**
    * 여러 대화를 한 번에 생성합니다 (Bulk Create).
+   * 
+   * 성능과 안정성을 위해 데이터를 청크(Chunk) 단위로 나누어 처리합니다.
+   * 
+   * @param ownerUserId 소유자 ID
+   * @param threads 생성할 대화 목록
+   * @returns 생성된 대화 목록 (성공한 것만)
    */
   async bulkCreateConversations(ownerUserId: string, threads: { id?: string; title: string; messages?: Partial<ChatMessage>[] }[]): Promise<ChatThread[]> {
+    // TODO: [Refactor] 현재는 생성된 모든 대화/메시지 객체를 반환하고 있어 대용량(100MB+) 처리 시 OOM 및 이벤트 루프 차단 위험이 있음.
+    // 추후 생성된 리소스의 ID 배열만 반환하거나 요약 정보만 반환하도록 변경 필요.
+    // 주의: 이 변경 시 클라이언트 SDK의 응답 처리 로직도 함께 수정되어야 함.
     const client: MongoClient = getMongo();
-    const session: ClientSession = client.startSession();
+    const CHUNK_SIZE = 20; // 한 번의 트랜잭션에서 처리할 대화 개수 (메시지 수에 따라 조절 필요)
+    const results: ChatThread[] = [];
 
-    try {
-      const results: ChatThread[] = [];
-      await session.withTransaction(async () => {
-        for (const thread of threads) {
-          if (!thread.title || thread.title.trim().length === 0) continue; // Skip invalid
+    // 전체 데이터를 Chunk 단위로 순회
+    for (let i = 0; i < threads.length; i += CHUNK_SIZE) {
+      const chunk = threads.slice(i, i + CHUNK_SIZE);
+      const session: ClientSession = client.startSession();
 
-          const finalThreadId: string = thread.id?.trim() ? thread.id : ulid();
+      try {
+        await session.withTransaction(async () => {
+          const convDocs: ConversationDoc[] = [];
+          const allMsgDocs: MessageDoc[] = [];
+          const chunkResults: ChatThread[] = [];
           const now = new Date();
 
-          const convDoc: ConversationDoc = {
-            _id: finalThreadId,
-            ownerUserId,
-            title: thread.title,
-            createdAt: now.getTime(),
-            updatedAt: now.getTime(),
-            deletedAt: null
-          };
+          // 1. 문서 객체 준비 (메모리 상에서 변환)
+          for (const thread of chunk) {
+            if (!thread.title || thread.title.trim().length === 0) continue;
 
-          await this.conversationService.createDoc(convDoc, session);
+            const finalThreadId: string = thread.id?.trim() ? thread.id : ulid();
+            
+            // Conversation Doc 준비
+            const convDoc: ConversationDoc = {
+              _id: finalThreadId,
+              ownerUserId,
+              title: thread.title,
+              createdAt: now.getTime(),
+              updatedAt: now.getTime(),
+              deletedAt: null
+            };
+            convDocs.push(convDoc);
 
-          const createdMessageDocs: MessageDoc[] = [];
-          if (thread.messages && thread.messages.length > 0) {
-            for (const m of thread.messages) {
-              if (!m.content || m.content.trim().length === 0) continue;
-              
-              const msgDoc: MessageDoc = {
-                _id: m.id?.trim() ? m.id : ulid(),
-                ownerUserId : ownerUserId,
-                conversationId: finalThreadId,
-                role: m.role || 'user',
-                content: m.content,
-                createdAt: now.getTime(),
-                updatedAt: now.getTime(),
-                deletedAt: null
-              };
-              
-              const createdMsg = await this.messageService.createDoc(msgDoc, session);
-              createdMessageDocs.push(createdMsg);
+            // Message Docs 준비
+            const threadMsgDocs: MessageDoc[] = [];
+            if (thread.messages && thread.messages.length > 0) {
+              for (const m of thread.messages) {
+                if (!m.content || m.content.trim().length === 0) continue;
+                
+                const msgDoc: MessageDoc = {
+                  _id: m.id?.trim() ? m.id : ulid(),
+                  ownerUserId : ownerUserId,
+                  conversationId: finalThreadId,
+                  role: m.role || 'user',
+                  content: m.content,
+                  createdAt: now.getTime(),
+                  updatedAt: now.getTime(),
+                  deletedAt: null
+                };
+                allMsgDocs.push(msgDoc);
+                threadMsgDocs.push(msgDoc);
+              }
             }
+            
+            // 결과 DTO 생성
+            chunkResults.push(toChatThreadDto(convDoc, threadMsgDocs));
           }
-          results.push(toChatThreadDto(convDoc, createdMessageDocs));
-        }
-      });
-      return results;
-    } catch (err: unknown) {
-      if (err instanceof AppError) throw err;
-      throw new UpstreamError('ChatService.bulkCreateConversations failed', { cause: String(err) });
-    } finally {
-      await session.endSession();
+
+          // 2. DB 일괄 저장 (Bulk Insert)
+          // 빈 배열일 경우 createDocs 내부에서 처리됨
+          if (convDocs.length > 0) {
+            await this.conversationService.createDocs(convDocs, session);
+          }
+          if (allMsgDocs.length > 0) {
+            await this.messageService.createDocs(allMsgDocs, session);
+          }
+
+          // 트랜잭션 성공 시 결과 수집
+          results.push(...chunkResults);
+        });
+      } catch (err: unknown) {
+        // 청크 처리 중 에러 발생 시, 해당 청크는 롤백되지만 이전 청크들은 이미 커밋됨.
+        // 여기서는 에러를 다시 던져서 클라이언트에게 알림 (Partial Success 상태가 됨)
+        if (err instanceof AppError) throw err;
+        throw new UpstreamError('ChatService.bulkCreateConversations failed during chunk processing', { cause: String(err) });
+      } finally {
+        await session.endSession();
+      }
     }
+
+    return results;
   }
 
   /**

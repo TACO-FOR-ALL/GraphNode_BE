@@ -47,8 +47,8 @@ export function createApp() {
   app.set('trust proxy', 1);
   // app.use(helmet());
   app.use(cors({ origin: true, credentials: true }));
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true })); // Apple OAuth post request body 파싱
+  app.use(express.json({ limit: '100mb' }));
+  app.use(express.urlencoded({ limit: '100mb', extended: true })); // Apple OAuth post request body 파싱
   app.use(cookieParser(sessionSecert));
   app.use(requestContext);
   app.use(httpLogger);

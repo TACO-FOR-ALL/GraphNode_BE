@@ -42,6 +42,8 @@ export class HttpClient {
     this.client = axios.create({
       baseURL: config.baseURL,
       timeout: config.timeout || 10000, // 기본 10초 타임아웃
+      maxBodyLength: Infinity, // 용량 제한 해제
+      maxContentLength: Infinity, // 용량 제한 해제
       headers: {
         'Content-Type': 'application/json',
         ...config.headers,
