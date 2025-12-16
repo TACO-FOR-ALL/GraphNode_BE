@@ -6,7 +6,7 @@ import { HttpClient } from '../../infra/http/httpClient';
 import { AiInputData, AiInputMappingNode } from '../../shared/dtos/ai_input';
 import { logger } from '../../shared/utils/logger';
 import { PersistGraphPayloadDto } from '../../shared/dtos/graph';
-import { ConflictError } from '../../shared/errors/domain';
+import { AppError, ConflictError, UpstreamError } from '../../shared/errors/domain';
 import { ChatMessage } from '../../shared/dtos/ai';
 import { AiGraphOutputDto } from '../../shared/dtos/ai_graph_output';
 import { mapAiOutputToSnapshot } from '../../shared/mappers/ai_graph_output.mapper';
@@ -44,47 +44,59 @@ export class GraphGenerationService {
    * @returns AI 서버가 할당한 작업 ID.
    */
   async generateGraphForUser(userId: string): Promise<string> {
-    if (this.activeUserTasks.has(userId)) {
-      logger.warn({ userId }, 'Graph generation already in progress for user');
-      throw new ConflictError('Graph generation is already in progress for this user.', { status: 'processing' });
-    }
 
-    logger.info({ userId }, 'Starting graph generation for user (Streaming Mode)');
-
-    // 1. 데이터 스트림 생성 (메모리 최적화: 제너레이터를 통해 필요할 때만 데이터 생성)
-    // [개념 설명: Node.js Readable Stream]
-    // - Readable.from()은 Async Iterable(여기서는 제너레이터)을 Node.js의 읽기 가능한 스트림으로 변환합니다.
-    // - 스트림은 데이터를 한 번에 메모리에 올리지 않고, 소비되는 속도에 맞춰 조금씩 데이터를 '흘려보내는' 방식입니다.
-    // - 이를 통해 100MB가 넘는 데이터도 수십 MB 수준의 낮은 메모리로 처리할 수 있습니다.
-    const dataStream = Readable.from(this.streamUserData(userId));
-
-    // 2. AI 서버로 전송
-    logger.info({ userId }, 'Sending data stream to AI server');
-    let taskId: string;
     try {
+
+      // 중복 요청 방지
+      if (this.activeUserTasks.has(userId)) {
+        logger.warn({ userId }, 'Graph generation already in progress for user');
+        throw new ConflictError('Graph generation is already in progress for this user.', { status: 'processing' });
+      }
+
+      // 사용자를 활성 상태로 표시
+      this.activeUserTasks.add(userId);
+      logger.info({ userId }, 'Starting graph generation for user (Streaming Mode)');
+
+      // 1. 데이터 스트림 생성 (메모리 최적화: 제너레이터를 통해 필요할 때만 데이터 생성)
+      // [개념 설명: Node.js Readable Stream]
+      // - Readable.from()은 Async Iterable(여기서는 제너레이터)을 Node.js의 읽기 가능한 스트림으로 변환합니다.
+      // - 스트림은 데이터를 한 번에 메모리에 올리지 않고, 소비되는 속도에 맞춰 조금씩 데이터를 '흘려보내는' 방식입니다.
+      // - 이를 통해 100MB가 넘는 데이터도 수십 MB 수준의 낮은 메모리로 처리할 수 있습니다.
+      const dataStream = Readable.from(this.streamUserData(userId));
+
+      // 2. AI 서버로 전송
+      logger.info({ userId }, 'Sending data stream to AI server');
+      let taskId: string;
+
       // Axios는 Readable Stream을 요청 바디로 지원합니다.
       const response = await this.httpClient.post<{ task_id: string; status: string }>('/analysis', dataStream);
       taskId = response.task_id;
-    } catch (error) {
-      logger.error({ err: error, userId }, 'Failed to start AI analysis task');
-      throw error;
-    }
+   
 
-    logger.info({ userId, taskId }, 'AI task started');
+      logger.info({ userId, taskId }, 'AI task started');
 
-    // 사용자를 활성 상태로 표시
-    this.activeUserTasks.add(userId);
+      // // 사용자를 활성 상태로 표시
+      // this.activeUserTasks.add(userId);
 
-    // 3. 폴링 시작 
-    // 참고: 여러 인스턴스가 있는 프로덕션 환경에서는 이 폴링을 별도의 워커가 처리하거나
-    // 결과가 웹훅/큐를 통해 푸시되어야 합니다.
-    // 이 데모에서는 인메모리 폴링.
-    this.pollAndSave(taskId, userId).catch(err => {
-      logger.error({ err, taskId, userId }, 'Failed to poll and save graph data');
+      // 3. 폴링 시작 
+      // 참고: 여러 인스턴스가 있는 프로덕션 환경에서는 이 폴링을 별도의 워커가 처리하거나
+      // 결과가 웹훅/큐를 통해 푸시되어야 합니다.
+      // 이 데모에서는 인메모리 폴링.
+      this.pollAndSave(taskId, userId).catch(err => {
+        logger.error({ err, taskId, userId }, 'Failed to poll and save graph data');
+        this.activeUserTasks.delete(userId);
+      });
+
+      return taskId;
+
+    } catch (err: unknown) {
       this.activeUserTasks.delete(userId);
-    });
+      logger.error({ err, userId }, 'Error in generateGraphForUser');
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('ChatService.getConversation failed', { cause: String(err) });
+    } 
 
-    return taskId;
+ 
   }
 
   /**

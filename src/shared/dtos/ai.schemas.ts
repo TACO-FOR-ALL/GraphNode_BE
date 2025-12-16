@@ -18,7 +18,7 @@ import { z } from 'zod';
  * 선택: messages (초기 메시지 목록)
  */
 export const createConversationSchema = z.object({
-  id: z.string().min(1, "ID는 필수입니다").optional(), // 서버 생성 지원
+  id: z.string().min(1, "ID는 필수입니다"), // 서버 생성 지원
   title: z.string().min(1, "제목은 필수입니다").max(200, "제목은 200자를 넘을 수 없습니다"),
   messages: z
     .array(
