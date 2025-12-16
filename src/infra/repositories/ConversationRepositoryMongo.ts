@@ -176,6 +176,11 @@ export class ConversationRepositoryMongo implements ConversationRepository {
     return result.modifiedCount > 0;
   }
 
+  async deleteAll(ownerUserId: string, session?: ClientSession): Promise<number> {
+    const result = await this.col().deleteMany({ ownerUserId }, { session });
+    return result.deletedCount;
+  }
+
   async findModifiedSince(ownerUserId: string, since: Date): Promise<ConversationDoc[]> {
     return this.col().find({
       ownerUserId,

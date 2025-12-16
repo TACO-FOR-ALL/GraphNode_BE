@@ -377,4 +377,37 @@ export class NoteService {
   async updateFolderDoc(folderId: string, userId: string, updates: Partial<FolderDoc>, session?: ClientSession): Promise<FolderDoc | null> {
     return this.noteRepo.updateFolder(folderId, userId, updates, session);
   }
+
+  /**
+   * 사용자의 모든 노트를 삭제합니다.
+   * @param userId 소유자 ID
+   * @returns 삭제된 노트 수
+   */
+  async deleteAllNotes(userId: string): Promise<number> {
+    return this.noteRepo.deleteAllNotes(userId);
+  }
+
+  /**
+   * 사용자의 모든 폴더와 그 안의 노트를 삭제합니다.
+   * @param userId 소유자 ID
+   * @returns 삭제된 폴더 수
+   */
+  async deleteAllFolders(userId: string): Promise<number> {
+    const client: MongoClient = getMongo();
+    const session: ClientSession = client.startSession();
+
+    try {
+      let deletedFolders = 0;
+      await session.withTransaction(async () => {
+        // 1. 폴더 내의 모든 노트 삭제
+        await this.noteRepo.deleteAllNotesInFolders(userId, session);
+
+        // 2. 모든 폴더 삭제
+        deletedFolders = await this.noteRepo.deleteAllFolders(userId, session);
+      });
+      return deletedFolders;
+    } finally {
+      await session.endSession();
+    }
+  }
 }

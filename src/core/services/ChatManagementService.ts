@@ -519,4 +519,32 @@ export class ChatManagementService {
     }
     return conv;
   }
+
+  /**
+   * 사용자의 모든 대화와 메시지를 삭제합니다.
+   * 
+   * @param ownerUserId 소유자 ID
+   * @returns 삭제된 대화 수
+   */
+  async deleteAllConversations(ownerUserId: string): Promise<number> {
+    const client: MongoClient = getMongo();
+    const session: ClientSession = client.startSession();
+
+    try {
+      let deletedCount = 0;
+      await session.withTransaction(async () => {
+        // 1. 모든 메시지 삭제
+        await this.messageService.deleteAllDocsByUserId(ownerUserId, session);
+
+        // 2. 모든 대화 삭제
+        deletedCount = await this.conversationService.deleteAllDocs(ownerUserId, session);
+      });
+      return deletedCount;
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('ChatService.deleteAllConversations failed', { cause: String(err) });
+    } finally {
+      await session.endSession();
+    }
+  }
 }

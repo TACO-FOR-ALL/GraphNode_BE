@@ -246,4 +246,14 @@ export class MessageService {
   async findDocById(id: string): Promise<MessageDoc | null> {
     return this.messageRepo.findById(id);
   }
+
+  /**
+   * 특정 사용자의 모든 메시지를 삭제합니다. (Internal Use)
+   * @param ownerUserId 소유자 ID
+   * @param session MongoDB 클라이언트 세션 (선택 사항)
+   * @returns 삭제된 메시지 수
+   */
+  async deleteAllDocsByUserId(ownerUserId: string, session?: ClientSession): Promise<number> {
+    return this.messageRepo.deleteAllByUserId(ownerUserId, session);
+  }
 }

@@ -340,7 +340,7 @@ describe('Note API', () => {
 
     // Create Note in Folder
     const resN = await request(app).post('/v1/notes').set('Cookie', cookie).send({ title: 'ChildNote', content: 'Content', folderId: fId });
-    if (resN.status !== 201) console.log('Create Note Failed:', JSON.stringify(resN.body, null, 2));
+    // if (resN.status !== 201) console.log('Create Note Failed:', JSON.stringify(resN.body, null, 2));
     const nId = resN.body.id;
 
     // Delete Folder
