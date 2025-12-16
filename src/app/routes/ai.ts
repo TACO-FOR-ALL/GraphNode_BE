@@ -34,6 +34,7 @@ export function createAiRouter(deps: {
     asyncHandler(aiController.createConversation.bind(aiController))
   );
   router.get('/conversations', asyncHandler(aiController.listConversations.bind(aiController)));
+  router.delete('/conversations', asyncHandler(aiController.deleteAllConversations.bind(aiController)));
   router.get('/conversations/:conversationId', asyncHandler(aiController.getConversation.bind(aiController)));
   router.patch('/conversations/:conversationId', asyncHandler(aiController.updateConversation.bind(aiController)));
   router.delete('/conversations/:conversationId', asyncHandler(aiController.deleteConversation.bind(aiController)));

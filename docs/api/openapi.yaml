@@ -245,6 +245,19 @@ paths:
               examples:
                 default:
                   externalValue: ./examples/ai-conversation-list-200.json
+    delete:
+      summary: Delete all conversations
+      description: Deletes all conversations and messages for the authenticated user.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deletedCount:
+                    type: integer
   /v1/ai/conversations/{conversationId}:
     get:
       summary: Get conversation
@@ -998,6 +1011,19 @@ paths:
             application/problem+json:
               schema:
                 $ref: ../schemas/problem.json
+    delete:
+      summary: Delete all notes
+      description: Deletes all notes for the authenticated user.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deletedCount:
+                    type: integer
   /v1/notes/{id}:
     get:
       summary: Get a note
@@ -1165,6 +1191,19 @@ paths:
             application/problem+json:
               schema:
                 $ref: ../schemas/problem.json
+    delete:
+      summary: Delete all folders
+      description: Deletes all folders and their contents (notes) for the authenticated user.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deletedCount:
+                    type: integer
   /v1/folders/{id}:
     get:
       summary: Get a folder

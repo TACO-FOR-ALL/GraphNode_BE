@@ -174,6 +174,17 @@ export class NoteApi {
   }
 
   /**
+   * 모든 노트를 삭제합니다.
+   * @returns 삭제된 노트 수
+   * @example
+   * const response = await client.note.deleteAllNotes();
+   * console.log(response.data.deletedCount); // 10
+   */
+  async deleteAllNotes(): Promise<HttpResponse<{ deletedCount: number }>> {
+    return this.rb.path('/notes').delete<{ deletedCount: number }>();
+  }
+
+  /**
    * 특정 노트를 복구합니다.
    * @param id - 복구할 노트의 ID
    * @returns 복구된 노트 정보
@@ -313,6 +324,17 @@ export class NoteApi {
    */
   deleteFolder(id: string, permanent?: boolean): Promise<HttpResponse<void>> {
     return this.rb.path(`/folders/${id}`).query({ permanent }).delete<void>();
+  }
+
+  /**
+   * 모든 폴더를 삭제합니다.
+   * @returns 삭제된 폴더 수
+   * @example
+   * const response = await client.note.deleteAllFolders();
+   * console.log(response.data.deletedCount); // 3
+   */
+  async deleteAllFolders(): Promise<HttpResponse<{ deletedCount: number }>> {
+    return this.rb.path('/folders').delete<{ deletedCount: number }>();
   }
 
   /**

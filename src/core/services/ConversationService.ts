@@ -248,4 +248,14 @@ export class ConversationService {
   async findDocById(id: string, ownerUserId: string): Promise<ConversationDoc | null> {
     return this.conversationRepo.findById(id, ownerUserId);
   }
+
+  /**
+   * 특정 사용자의 모든 대화를 삭제합니다. (Internal Use)
+   * @param ownerUserId 소유자 ID
+   * @param session MongoDB 클라이언트 세션 (선택 사항)
+   * @returns 삭제된 대화 수
+   */
+  async deleteAllDocs(ownerUserId: string, session?: ClientSession): Promise<number> {
+    return this.conversationRepo.deleteAll(ownerUserId, session);
+  }
 }

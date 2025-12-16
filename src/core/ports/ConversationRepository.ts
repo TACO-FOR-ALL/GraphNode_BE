@@ -51,6 +51,15 @@ export interface ConversationRepository {
   findById(id: string, ownerUserId: string, session?: ClientSession): Promise<ConversationDoc | null>;
 
   /**
+   * 특정 사용자의 모든 대화를 삭제합니다.
+   * 
+   * @param ownerUserId 소유자 ID
+   * @param session (선택) MongoDB 트랜잭션 세션
+   * @returns 삭제된 대화 수
+   */
+  deleteAll(ownerUserId: string, session?: ClientSession): Promise<number>;
+
+  /**
    * 특정 사용자의 대화 목록을 조회합니다 (페이징 지원).
    * 
    * @param ownerUserId 소유자 ID

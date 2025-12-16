@@ -216,6 +216,17 @@ export class ConversationsApi {
   }
 
   /**
+   * 모든 대화를 삭제합니다.
+   * @returns 삭제된 대화 수
+   * @example
+   * const response = await client.conversations.deleteAll();
+   * console.log(response.data.deletedCount); // 5
+   */
+  async deleteAll(): Promise<HttpResponse<{ deletedCount: number }>> {
+    return this.rb.path('/v1/ai/conversations').delete<{ deletedCount: number }>();
+  }
+
+  /**
    * 삭제된 대화를 복구합니다.
    * @param conversationId 대화 ID
    * @returns 복구된 대화 정보

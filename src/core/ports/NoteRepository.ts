@@ -60,6 +60,22 @@ export interface NoteRepository {
   deleteNote(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean>;
 
   /**
+   * 특정 사용자의 모든 노트를 삭제합니다.
+   * @param ownerUserId 소유자 ID
+   * @param session MongoDB 세션
+   * @returns 삭제된 노트 수
+   */
+  deleteAllNotes(ownerUserId: string, session?: ClientSession): Promise<number>;
+
+  /**
+   * 폴더에 속한 모든 노트를 삭제합니다. (루트 노트 제외)
+   * @param ownerUserId 소유자 ID
+   * @param session MongoDB 세션
+   * @returns 삭제된 노트 수
+   */
+  deleteAllNotesInFolders(ownerUserId: string, session?: ClientSession): Promise<number>;
+
+  /**
    * Soft Delete: deletedAt 필드를 현재 시각으로 설정합니다.
    * 
    * @param id 노트 ID
@@ -231,4 +247,12 @@ export interface NoteRepository {
    * @returns 복구된 폴더 수
    */
   restoreFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number>;
+
+  /**
+   * 특정 사용자의 모든 폴더를 삭제합니다.
+   * @param ownerUserId 소유자 ID
+   * @param session MongoDB 세션
+   * @returns 삭제된 폴더 수
+   */
+  deleteAllFolders(ownerUserId: string, session?: ClientSession): Promise<number>;
 }

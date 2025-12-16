@@ -331,4 +331,21 @@ export class AiController {
     
     res.status(204).send();
   }
+
+  /**
+   * 모든 대화 삭제 Controller 메서드
+   * 
+   * [DELETE] /v1/ai/conversations
+   * 
+   * 역할:
+   * - 사용자의 모든 대화방과 메시지를 삭제합니다.
+   * - 트랜잭션을 사용하여 원자적으로 처리됩니다.
+   * 
+   * 응답: 200 OK, { deletedCount: number }
+   */
+  async deleteAllConversations(req: Request, res: Response) {
+    const userId = getUserIdFromRequest(req)!;
+    const count = await this.chatManagementService.deleteAllConversations(userId);
+    res.status(200).json({ deletedCount: count });
+  }
 }
