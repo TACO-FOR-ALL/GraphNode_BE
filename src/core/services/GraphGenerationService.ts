@@ -15,7 +15,7 @@ import { mapAiOutputToSnapshot } from '../../shared/mappers/ai_graph_output.mapp
 // 데모를 위해 AI 서버 URI를 하드코딩.
 // 향후 개선 사항: 서비스 디스커버리 또는 로드 밸런서 사용.
 // 또한 확장성과 신뢰성을 높이기 위해 메시지 큐(SQS) 사용을 고려.
-const AI_SERVER_URI = process.env.AI_SERVER_URI || 'http://localhost:8000';
+const AI_SERVER_URI = process.env.AI_SERVER_URI || 'https://aaejmqgtjczzbxcq.tunnel.elice.io';
 
 export class GraphGenerationService {
   private readonly httpClient: HttpClient;
