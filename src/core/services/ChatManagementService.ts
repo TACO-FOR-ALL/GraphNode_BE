@@ -29,12 +29,12 @@ export class ChatManagementService {
    * 새 대화를 생성합니다.
    * 
    * @param ownerUserId 소유자 ID
-   * @param threadId 대화 ID (Optional - 없으면 자동 생성)
+   * @param threadId 대화 ID 
    * @param title 대화 제목
    * @param messages 초기 메시지 목록 (Optional)
    * @returns 생성된 ChatThread 객체
    */
-  async createConversation(ownerUserId: string, threadId: string | undefined, title: string, messages?: Partial<ChatMessage>[]): Promise<ChatThread> {
+  async createConversation(ownerUserId: string, threadId: string, title: string, messages?: Partial<ChatMessage>[]): Promise<ChatThread> {
     const client: MongoClient = getMongo();
     const session: ClientSession = client.startSession();
 
@@ -46,7 +46,7 @@ export class ChatManagementService {
           throw new ValidationError('Title cannot be empty');
         }
 
-        const finalThreadId: string = threadId?.trim() ? threadId : ulid();
+        const finalThreadId: string = threadId.trim();
         const now = new Date();
 
         const convDoc: ConversationDoc = {
@@ -106,7 +106,7 @@ export class ChatManagementService {
    * @param threads 생성할 대화 목록
    * @returns 생성된 대화 목록 (성공한 것만)
    */
-  async bulkCreateConversations(ownerUserId: string, threads: { id?: string; title: string; messages?: Partial<ChatMessage>[] }[]): Promise<ChatThread[]> {
+  async bulkCreateConversations(ownerUserId: string, threads: { id: string; title: string; messages?: Partial<ChatMessage>[] }[]): Promise<ChatThread[]> {
     // TODO: [Refactor] 현재는 생성된 모든 대화/메시지 객체를 반환하고 있어 대용량(100MB+) 처리 시 OOM 및 이벤트 루프 차단 위험이 있음.
     // 추후 생성된 리소스의 ID 배열만 반환하거나 요약 정보만 반환하도록 변경 필요.
     // 주의: 이 변경 시 클라이언트 SDK의 응답 처리 로직도 함께 수정되어야 함.
@@ -120,7 +120,7 @@ export class ChatManagementService {
       const session: ClientSession = client.startSession();
 
       try {
-        await session.withTransaction(async () => {
+        const transactionResult =  await session.withTransaction(async () => {
           const convDocs: ConversationDoc[] = [];
           const allMsgDocs: MessageDoc[] = [];
           const chunkResults: ChatThread[] = [];
@@ -130,8 +130,9 @@ export class ChatManagementService {
           for (const thread of chunk) {
             if (!thread.title || thread.title.trim().length === 0) continue;
 
-            const finalThreadId: string = thread.id?.trim() ? thread.id : ulid();
-            
+            // const finalThreadId: string = thread.id?.trim() ? thread.id : ulid();
+            const finalThreadId : string = thread.id;
+
             // Conversation Doc 준비
             const convDoc: ConversationDoc = {
               _id: finalThreadId,
@@ -177,9 +178,11 @@ export class ChatManagementService {
             await this.messageService.createDocs(allMsgDocs, session);
           }
 
-          // 트랜잭션 성공 시 결과 수집
-          results.push(...chunkResults);
+          return chunkResults;
         });
+
+        results.push(...transactionResult);
+
       } catch (err: unknown) {
         // 청크 처리 중 에러 발생 시, 해당 청크는 롤백되지만 이전 청크들은 이미 커밋됨.
         // 여기서는 에러를 다시 던져서 클라이언트에게 알림 (Partial Success 상태가 됨)

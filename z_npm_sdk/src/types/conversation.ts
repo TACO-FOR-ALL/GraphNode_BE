@@ -27,7 +27,7 @@ export interface ConversationDto {
  * @property messages 초기 메시지 목록 (선택)
  */
 export interface ConversationCreateDto {
-  id?: string;
+  id: string;
   title: string;
   messages?: MessageDto[];
 }
