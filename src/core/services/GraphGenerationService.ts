@@ -8,6 +8,8 @@ import { logger } from '../../shared/utils/logger';
 import { PersistGraphPayloadDto } from '../../shared/dtos/graph';
 import { ConflictError } from '../../shared/errors/domain';
 import { ChatMessage } from '../../shared/dtos/ai';
+import { AiGraphOutputDto } from '../../shared/dtos/ai_graph_output';
+import { mapAiOutputToSnapshot } from '../../shared/mappers/ai_graph_output.mapper';
 
 // TODO: 이 설정은 설정 파일이나 환경 변수로 이동해야 합니다.
 // 데모를 위해 AI 서버 URI를 하드코딩.
@@ -200,13 +202,16 @@ export class GraphGenerationService {
           logger.info({ taskId, userId }, 'AI task completed. Fetching result...');
           
           // 결과 데이터 조회 요청 (GET /result/:taskId)
-          const result = await this.httpClient.get<any>(`/result/${taskId}`);
+          // AI 서버의 원시 출력 포맷(AiGraphOutputDto)으로 수신
+          const rawResult = await this.httpClient.get<AiGraphOutputDto>(`/result/${taskId}`);
+          
+          // 원시 출력을 내부 표준 GraphSnapshotDto로 변환 (Mapper 사용)
+          const snapshot = mapAiOutputToSnapshot(rawResult, userId);
           
           // DB 저장을 위한 페이로드 구성
-          // 결과 구조는 GraphSnapshotDto와 일치한다고 가정
           const payload: PersistGraphPayloadDto = {
             userId: userId,
-            snapshot: result
+            snapshot: snapshot
           };
           
           // GraphEmbeddingService를 통해 스냅샷 데이터를 DB에 저장 (트랜잭션 처리됨)
