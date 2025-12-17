@@ -20,10 +20,9 @@ import authAppleRouter from '../app/routes/auth.apple';
 import { makeMeRouter } from './modules/user.module';
 import authSessionRouter from '../app/routes/auth.session';
 import { requestContext } from '../app/middlewares/request-context';
-import { httpLogger } from '../shared/utils/logger';
+import { httpLogger, logger } from '../shared/utils/logger';
 import { errorHandler } from '../app/middlewares/error';
 import { NotFoundError } from '../shared/errors/domain';
-// import { logger } from '../shared/utils/logger';
 // AI 라우터 import
 import { initDatabases } from '../infra/db';
 import { makeAiRouter } from './modules/ai.module';
@@ -31,6 +30,8 @@ import { makeGraphRouter } from './modules/graph.module';
 import { makeGraphAiRouter } from './modules/graphAi.module';
 import { makeNoteRouter } from './modules/note.module';
 import { makeSyncRouter } from './modules/sync.module';
+import { makeAgentRouter } from './modules/agent.module';
+// import { createTestAgentRouter } from '../app/routes/agent.test';
 
 /**
  * Express 앱 부트스트랩.
@@ -61,12 +62,43 @@ export function createApp() {
    * - maxAge: 사실상 무기한 UX를 위해 1년(정책상 롤링 가능)
    */
 
-  // Initialize client.
   const redisClient = createClient({
     url: env.REDIS_URL,
+    socket: {
+      reconnectStrategy: (retries) => {
+        if (retries > 10) {
+          logger.error({ retries }, 'Redis reconnection failed after 10 attempts');
+          return new Error('Redis reconnection limit exceeded');
+        }
+        return Math.min(retries * 50, 3000);
+      },
+    },
   });
+
+  // TODO: SSE 처리 후 Redis 오류 발생해서 나중에 처리해야함 (상태 디버깅용)
+  // redisClient.on('error', (err) => {
+  //   logger.warn({ err: err.message }, 'Redis client error');
+  // });
+
+  // redisClient.on('connect', () => {
+  //   logger.info('Redis client connected');
+  // });
+
+  // redisClient.on('reconnecting', () => {
+  //   logger.info('Redis client reconnecting');
+  // });
+
+  // redisClient.on('ready', () => {
+  //   logger.info('Redis client ready');
+  // });
+
+  // redisClient.on('end', () => {
+  //   logger.warn('Redis client connection ended');
+  // });
+
   redisClient.connect().catch((err) => {
-    throw new Error('Failed to connect to Redis: ' + err.message);
+    // throw new Error('Failed to connect to Redis: ' + err.message); Redis 오류 나도 서버 가능하게 주석 처리 => reconnectStrategy로 처리
+    logger.error({ err: err.message }, 'Failed to connect to Redis');
   });
 
   // Initialize store.
@@ -118,6 +150,9 @@ export function createApp() {
   // Graph AI Router (전용 AI 처리 라우터)
   app.use('/v1/graph-ai', makeGraphAiRouter());
 
+  // Agent Router (조립된 Router 장착)
+  app.use('/v1/agent', makeAgentRouter());
+
   // Note Router (조립된 Router 장착)
   app.use('/v1', makeNoteRouter());
 
@@ -147,4 +182,3 @@ export async function bootstrap() {
 
   return { app, database };
 }
-

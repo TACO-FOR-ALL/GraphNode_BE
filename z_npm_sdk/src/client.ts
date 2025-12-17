@@ -62,10 +62,10 @@ export class GraphNodeClient {
     }
 
     // 내부 고정 baseUrl 사용, FE는 fetch/headers/credentials 정도만 선택 주입 가능
-    this.rb = createRequestBuilder({ 
-      baseUrl: GRAPHNODE_BASE_URL, 
+    this.rb = createRequestBuilder({
+      baseUrl: GRAPHNODE_BASE_URL,
       ...opts,
-      fetch: fetchFn // 바인딩된 fetch 주입
+      fetch: fetchFn, // 바인딩된 fetch 주입
     });
     this.health = new HealthApi(this.rb);
     this.me = new MeApi(this.rb);
@@ -88,4 +88,3 @@ export class GraphNodeClient {
 export function createGraphNodeClient(opts?: GraphNodeClientOptions): GraphNodeClient {
   return new GraphNodeClient(opts);
 }
-
