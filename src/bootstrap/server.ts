@@ -29,7 +29,8 @@ import { makeAiRouter } from './modules/ai.module';
 import { makeGraphRouter } from './modules/graph.module';
 import { makeNoteRouter } from './modules/note.module';
 import { makeSyncRouter } from './modules/sync.module';
-import { createTestAgentRouter } from '../app/routes/agent.test';
+import { makeAgentRouter } from './modules/agent.module';
+// import { createTestAgentRouter } from '../app/routes/agent.test';
 
 /**
  * Express 앱 부트스트랩.
@@ -144,8 +145,8 @@ export function createApp() {
   // Graph Router(조립된 Router 장착)
   app.use('/v1/graph', makeGraphRouter());
 
-  // AI Agent Router
-  app.use('/v1/agent', createTestAgentRouter());
+  // Agent Router (조립된 Router 장착)
+  app.use('/v1/agent', makeAgentRouter());
 
   // Note Router (조립된 Router 장착)
   app.use('/v1', makeNoteRouter());

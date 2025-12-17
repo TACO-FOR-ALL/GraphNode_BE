@@ -1,7 +1,13 @@
 import type { Router } from 'express';
 
-import { createTestAgentRouter } from '../../app/routes/agent.test';
+import { createAgentRouter } from '../../app/routes/agent';
+import { UserRepositoryMySQL } from '../../infra/repositories/UserRepositoryMySQL';
 
+/**
+ * /v1/agent 라우터를 생성하여 반환합니다.
+ * @returns Express 라우터
+ */
 export function makeAgentRouter(): Router {
-  return createTestAgentRouter();
+  const userRepository = new UserRepositoryMySQL();
+  return createAgentRouter(userRepository);
 }

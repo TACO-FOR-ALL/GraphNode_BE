@@ -32,3 +32,12 @@ export type {
   FolderUpdateDto,
 } from './types/note.js';
 export type { SyncPushRequest, SyncPullResponse } from './types/sync.js';
+export type {
+  AgentChatMode,
+  AgentChatModeHint,
+  AgentChatStreamEvent,
+  AgentChatStreamParams,
+  AgentChatStreamOptions,
+  AgentChatStreamHandler,
+} from './endpoints/agent.js';
+export { openAgentChatStream } from './endpoints/agent.js';
