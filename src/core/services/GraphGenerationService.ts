@@ -114,7 +114,7 @@ export class GraphGenerationService {
     // [개념 설명: JSON Streaming]
     // 거대한 객체를 한 번에 JSON.stringify() 하면 메모리 부족(OOM)이 발생할 수 있습니다.
     // 따라서 JSON의 문자열 구조(괄호, 콤마 등)를 수동으로 쪼개서 스트림으로 보냅니다.
-    yield '{"data":[';
+    yield '[';
     
     let isFirst = true;
     let cursor: string | undefined = undefined;
@@ -179,7 +179,7 @@ export class GraphGenerationService {
       cursor = result.nextCursor;
     }
 
-    yield ']}'; // JSON 종료
+    yield ']'; // JSON 종료
   }
 
   /**
