@@ -3,9 +3,9 @@ import { Readable } from 'stream';
 import { ChatManagementService } from './ChatManagementService';
 import { GraphEmbeddingService } from './GraphEmbeddingService';
 import { HttpClient } from '../../infra/http/httpClient';
-import { AiInputData, AiInputMappingNode } from '../../shared/dtos/ai_input';
+import { AiInputConversation, AiInputData, AiInputMappingNode } from '../../shared/dtos/ai_input';
 import { logger } from '../../shared/utils/logger';
-import { PersistGraphPayloadDto } from '../../shared/dtos/graph';
+import { GraphSnapshotDto, PersistGraphPayloadDto } from '../../shared/dtos/graph';
 import { AppError, ConflictError, UpstreamError } from '../../shared/errors/domain';
 import { ChatMessage } from '../../shared/dtos/ai';
 import { AiGraphOutputDto } from '../../shared/dtos/ai_graph_output';
@@ -158,7 +158,8 @@ export class GraphGenerationService {
           prevMsgId = nodeId;
         }
 
-        const aiItem = {
+        const aiItem : AiInputConversation = {
+          conv_id : conv.id,
           title: conv.title,
           create_time: conv.createdAt ? new Date(conv.createdAt).getTime() / 1000 : 0,
           update_time: conv.updatedAt ? new Date(conv.updatedAt).getTime() / 1000 : 0,
@@ -218,7 +219,7 @@ export class GraphGenerationService {
           const rawResult = await this.httpClient.get<AiGraphOutputDto>(`/result/${taskId}`);
           
           // 원시 출력을 내부 표준 GraphSnapshotDto로 변환 (Mapper 사용)
-          const snapshot = mapAiOutputToSnapshot(rawResult, userId);
+          const snapshot : GraphSnapshotDto = mapAiOutputToSnapshot(rawResult, userId);
           
           // DB 저장을 위한 페이로드 구성
           const payload: PersistGraphPayloadDto = {

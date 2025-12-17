@@ -136,7 +136,7 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
                   event: 'audit.error',
                   ...meta,
                   durationMs,
-                  error: err?.message ?? String(err),
+                  err, // 에러 객체 전체를 포함하여 상세 정보(stack, details 등) 기록
                 }, 'audit.error');
               } catch (_) {}
               throw err;
@@ -165,7 +165,7 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
               event: 'audit.error',
               ...meta,
               durationMs,
-              error: err?.message ?? String(err),
+              err, // 에러 객체 전체를 포함하여 상세 정보(stack, details 등) 기록
             }, 'audit.error');
           } catch (_) {}
           throw err; // 에러를 다시 던져서 상위에서 처리하게 함

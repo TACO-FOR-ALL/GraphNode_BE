@@ -13,7 +13,7 @@
  * @property updatedAt 수정 일시
  */
 export interface GraphNodeDoc {
-  /** Composite Key: userId::nodeId */
+
   _id: string;
   userId: string;
   nodeId: number;
@@ -40,7 +40,7 @@ export interface GraphNodeDoc {
  * @property updatedAt 수정 일시
  */
 export interface GraphEdgeDoc {
-  /** Composite Key: userId::source->target */
+
   _id: string;
   userId: string;
   source: number;
@@ -66,7 +66,7 @@ export interface GraphEdgeDoc {
  * @property updatedAt 수정 일시
  */
 export interface GraphClusterDoc {
-  /** Composite Key: userId::clusterId */
+
   _id: string;
   userId: string;
   clusterId: string;
@@ -90,7 +90,7 @@ export interface GraphClusterDoc {
  * @property metadata 메타데이터
  */
 export interface GraphStatsDoc {
-  /** Key: userId */
+
   _id: string;
   userId: string;
   nodes: number;

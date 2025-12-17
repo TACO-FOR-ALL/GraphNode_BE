@@ -64,6 +64,7 @@ export interface AiInputMappingNode {
  * - mapping: 메시지 매핑 정보 (노드 ID를 키로 하는 매핑 노드 객체)
  */
 export interface AiInputConversation {
+  conv_id : string;
   title: string;
   create_time: number;
   update_time: number;
