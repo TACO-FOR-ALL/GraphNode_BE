@@ -48,6 +48,22 @@ export class ConversationRepositoryMongo implements ConversationRepository {
   }
 
   /**
+   * 여러 대화를 한 번에 생성합니다 (Bulk Insert).
+   * 
+   * @param docs 저장할 대화 문서 배열
+   * @param session (선택) 트랜잭션 세션
+   * @returns 저장된 대화 문서 배열
+   */
+  async createMany(docs: ConversationDoc[], session?: ClientSession): Promise<ConversationDoc[]> {
+    if (docs.length === 0) {
+      return [];
+    }
+    // insertMany: 여러 문서를 한 번에 추가합니다.
+    await this.col().insertMany(docs, { session });
+    return docs;
+  }
+
+  /**
    * ID로 대화를 조회합니다.
    * 
    * @param id 대화 ID (_id 필드와 매핑)
@@ -158,6 +174,11 @@ export class ConversationRepositoryMongo implements ConversationRepository {
       { session }
     );
     return result.modifiedCount > 0;
+  }
+
+  async deleteAll(ownerUserId: string, session?: ClientSession): Promise<number> {
+    const result = await this.col().deleteMany({ ownerUserId }, { session });
+    return result.deletedCount;
   }
 
   async findModifiedSince(ownerUserId: string, since: Date): Promise<ConversationDoc[]> {

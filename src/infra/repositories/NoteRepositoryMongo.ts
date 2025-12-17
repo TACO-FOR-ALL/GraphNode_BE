@@ -103,7 +103,30 @@ export class NoteRepositoryMongo implements NoteRepository {
     );
     return result.modifiedCount > 0;
   }
+  /**
+   * 사용자의 모든 노트를 삭제합니다.
+   * @param ownerUserId 소유자 사용자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제된 노트 수
+   */
+  async deleteAllNotes(ownerUserId: string, session?: ClientSession): Promise<number> {
+    const result = await this.notesCol().deleteMany({ ownerUserId }, { session });
+    return result.deletedCount;
+  }
 
+  /**
+   * 폴더에 속한 모든 노트를 삭제합니다. (루트 노트 제외)
+   * @param ownerUserId 소유자 사용자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제된 노트 수
+   */
+  async deleteAllNotesInFolders(ownerUserId: string, session?: ClientSession): Promise<number> {
+    const result = await this.notesCol().deleteMany(
+      { ownerUserId, folderId: { $ne: null } },
+      { session }
+    );
+    return result.deletedCount;
+  }
   /**
    * 노트를 영구 삭제(Hard Delete)한다.
    * @param id 노트 ID
@@ -267,6 +290,11 @@ export class NoteRepositoryMongo implements NoteRepository {
   async deleteFolder(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
     const result = await this.foldersCol().deleteOne({ _id: id, ownerUserId }, { session });
     return result.deletedCount === 1;
+  }
+
+  async deleteAllFolders(ownerUserId: string, session?: ClientSession): Promise<number> {
+    const result = await this.foldersCol().deleteMany({ ownerUserId }, { session });
+    return result.deletedCount;
   }
 
   /**

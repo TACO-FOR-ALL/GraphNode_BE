@@ -17,6 +17,10 @@
                 {
                     "name": "NODE_ENV",
                     "value": "production"
+                },
+                {
+                    "name": "AI_SERVER_URI",
+                    "value": "https://aaejmqgtjczzbxcq.tunnel.elice.io"
                 }
             ],
             "essential": true,

@@ -80,6 +80,17 @@ export class MessageRepositoryMongo implements MessageRepository {
   }
 
   /**
+   * 특정 사용자의 모든 메시지를 삭제합니다.
+   * @param ownerUserId 소유자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제된 메시지 수
+   */
+  async deleteAllByUserId(ownerUserId: string, session?: ClientSession): Promise<number> {
+    const result = await this.col().deleteMany({ ownerUserId }, { session });
+    return result.deletedCount;
+  }
+
+  /**
    * 메시지 정보를 업데이트합니다.
    * 
    * @param id 업데이트할 메시지 ID

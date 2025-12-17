@@ -14,13 +14,13 @@
 
 import { Request, Response } from "express";
 
-import { GraphVectorService } from "../../core/services/GraphVectorService";
+import { GraphEmbeddingService } from "../../core/services/GraphEmbeddingService";
 import { persistGraphPayloadSchema } from "../../shared/dtos/graph.schemas";
 import { getUserIdFromRequest } from "../utils/request";
 
 export class GraphController {
     constructor(
-        private readonly graphService: GraphVectorService
+        private readonly graphEmbeddingService: GraphEmbeddingService
     ) {}
 
     // --- Node (노드) 관련 핸들러 ---
@@ -38,7 +38,7 @@ export class GraphController {
         const userId = getUserIdFromRequest(req)!;
         
         // 서비스 호출 (노드 저장)
-        await this.graphService.upsertNode({ ...node, userId });
+        await this.graphEmbeddingService.upsertNode({ ...node, userId });
         
         res.status(201).json(node);
     }
@@ -52,7 +52,7 @@ export class GraphController {
         const nodeId = parseInt(req.params.nodeId, 10);
         
         // 서비스 호출 (노드 조회)
-        const node = await this.graphService.findNode(userId, nodeId);
+        const node = await this.graphEmbeddingService.findNode(userId, nodeId);
         
         res.status(200).json(node);
     }
@@ -65,7 +65,7 @@ export class GraphController {
         const userId = getUserIdFromRequest(req)!;
         
         // 서비스 호출 (전체 노드 목록)
-        const nodes = await this.graphService.listNodes(userId);
+        const nodes = await this.graphEmbeddingService.listNodes(userId);
         
         res.status(200).json(nodes);
     }
@@ -80,7 +80,7 @@ export class GraphController {
         const patch = req.body;
         
         // 서비스 호출 (노드 수정)
-        await this.graphService.updateNode(userId, nodeId, patch);
+        await this.graphEmbeddingService.updateNode(userId, nodeId, patch);
         
         res.status(204).send();
     }
@@ -96,7 +96,7 @@ export class GraphController {
         const nodeId = parseInt(req.params.nodeId, 10);
         
         // 서비스 호출 (노드 삭제)
-        await this.graphService.deleteNode(userId, nodeId);
+        await this.graphEmbeddingService.deleteNode(userId, nodeId);
         
         res.status(204).send();
     }
@@ -113,7 +113,7 @@ export class GraphController {
         const nodeId = parseInt(req.params.nodeId, 10);
         
         // 서비스 호출 (Cascade 삭제)
-        await this.graphService.removeNodeCascade(userId, nodeId);
+        await this.graphEmbeddingService.removeNodeCascade(userId, nodeId);
         
         res.status(204).send();
     }
@@ -129,7 +129,7 @@ export class GraphController {
         const userId = getUserIdFromRequest(req)!;
         
         // 서비스 호출 (엣지 저장)
-        const edgeId = await this.graphService.upsertEdge({ ...edge, userId });
+        const edgeId = await this.graphEmbeddingService.upsertEdge({ ...edge, userId });
         
         res.status(201).json({ id: edgeId });
     }
@@ -142,7 +142,7 @@ export class GraphController {
         const userId = getUserIdFromRequest(req)!;
         
         // 서비스 호출 (전체 엣지 목록)
-        const edges = await this.graphService.listEdges(userId);
+        const edges = await this.graphEmbeddingService.listEdges(userId);
         
         res.status(200).json(edges);
     }
@@ -156,7 +156,7 @@ export class GraphController {
         const edgeId = req.params.edgeId;
         
         // 서비스 호출 (엣지 삭제)
-        await this.graphService.deleteEdge(userId, edgeId);
+        await this.graphEmbeddingService.deleteEdge(userId, edgeId);
         
         res.status(204).send();
     }
@@ -172,7 +172,7 @@ export class GraphController {
         const userId = getUserIdFromRequest(req)!;
         
         // 서비스 호출 (클러스터 저장)
-        await this.graphService.upsertCluster({ ...cluster, userId });
+        await this.graphEmbeddingService.upsertCluster({ ...cluster, userId });
         
         res.status(201).json(cluster);
     }
@@ -186,7 +186,7 @@ export class GraphController {
         const clusterId = req.params.clusterId;
         
         // 서비스 호출 (클러스터 조회)
-        const cluster = await this.graphService.findCluster(userId, clusterId);
+        const cluster = await this.graphEmbeddingService.findCluster(userId, clusterId);
         
         res.status(200).json(cluster);
     }
@@ -199,7 +199,7 @@ export class GraphController {
         const userId = getUserIdFromRequest(req)!;
         
         // 서비스 호출 (전체 클러스터 목록)
-        const clusters = await this.graphService.listClusters(userId);
+        const clusters = await this.graphEmbeddingService.listClusters(userId);
         
         res.status(200).json(clusters);
     }
@@ -215,7 +215,7 @@ export class GraphController {
         const clusterId = req.params.clusterId;
         
         // 서비스 호출 (클러스터 삭제)
-        await this.graphService.deleteCluster(userId, clusterId);
+        await this.graphEmbeddingService.deleteCluster(userId, clusterId);
         
         res.status(204).send();
     }
@@ -233,7 +233,7 @@ export class GraphController {
         const clusterId = req.params.clusterId;
         
         // 서비스 호출 (Cascade 삭제)
-        await this.graphService.removeClusterCascade(userId, clusterId);
+        await this.graphEmbeddingService.removeClusterCascade(userId, clusterId);
         
         res.status(204).send();
     }
@@ -248,7 +248,7 @@ export class GraphController {
         const userId = getUserIdFromRequest(req)!;
         
         // 서비스 호출 (통계 조회)
-        const stats = await this.graphService.getStats(userId);
+        const stats = await this.graphEmbeddingService.getStats(userId);
         
         res.status(200).json(stats);
     }
@@ -267,7 +267,7 @@ export class GraphController {
         const userId = getUserIdFromRequest(req)!;
         
         // 서비스 호출 (스냅샷 조회)
-        const snapshot = await this.graphService.getSnapshotForUser(userId);
+        const snapshot = await this.graphEmbeddingService.getSnapshotForUser(userId);
         
         res.status(200).json(snapshot);
     }
@@ -291,7 +291,7 @@ export class GraphController {
         const { snapshot } = persistGraphPayloadSchema.parse(payloadToValidate);
         
         // 2. 서비스 호출 (스냅샷 저장)
-        await this.graphService.persistSnapshot({ userId, snapshot });
+        await this.graphEmbeddingService.persistSnapshot({ userId, snapshot });
         
         res.status(204).send();
     }

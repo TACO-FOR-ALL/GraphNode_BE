@@ -41,7 +41,7 @@ export interface MeResponseDto {
   /**
    * 로그인된 사용자 식별자.
    */
-  userId: string | number;
+  userId: string;
   /**
    * 표시용 프로필(가능한 경우 동봉). 세션 스냅샷 또는 보조 쿠키에서 획득한다.
    */

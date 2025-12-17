@@ -1,3 +1,8 @@
+/**
+ * GraphNode SDK Entry Point
+ * @packageDocumentation
+ */
+
 // Barrel exports: 공개 API만 노출
 export { createGraphNodeClient, GraphNodeClient } from './client.js';
 // 내부 전송 레이어는 노출 최소화: HttpError만 공개 (RequestBuilder는 @internal)
@@ -9,13 +14,15 @@ export { MeApi } from './endpoints/me.js';
 export { ConversationsApi } from './endpoints/conversations.js';
 export { GoogleAuthApi } from './endpoints/auth.google.js';
 export { GraphApi } from './endpoints/graph.js';
+export { GraphAiApi } from './endpoints/graphAi.js';
 export { NoteApi } from './endpoints/note.js';
 export { AppleAuthApi } from './endpoints/auth.apple.js';
 export { SyncApi } from './endpoints/sync.js';
+export { AiApi } from './endpoints/ai.js';
 
 // Types
 export type { ProblemDetails } from './types/problem.js';
-export type { MeResponseDto, MeProfileDto } from './types/me.js';
+export type { MeResponseDto, UserProfileDto } from './types/me.js';
 export type {
   ConversationDto,
   ConversationCreateDto,
@@ -41,3 +48,12 @@ export type {
   AgentChatStreamHandler,
 } from './endpoints/agent.js';
 export { openAgentChatStream } from './endpoints/agent.js';
+export type { AIChatRequestDto, AIChatResponseDto } from './endpoints/ai.js';
+export type { GraphGenerationResponseDto } from './types/graphAi.js';
+export type {
+  AiInputData,
+  AiInputMappingNode,
+  AiInputMessage,
+  AiInputMessageAuthor,
+  AiInputMessageContent,
+} from './types/aiInput.js';

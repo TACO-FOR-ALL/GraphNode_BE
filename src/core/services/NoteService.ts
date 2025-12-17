@@ -288,4 +288,126 @@ export class NoteService {
       await session.endSession();
     }
   }
+
+  // --- SyncService 지원 메서드 ---
+
+  /**
+   * 특정 시점 이후에 변경된 노트 목록을 조회합니다. (동기화용)
+   * 
+   * @param userId 소유자 ID
+   * @param since 기준 시각
+   * @returns 변경된 노트 문서 목록
+   */
+  async findNotesModifiedSince(userId: string, since: Date): Promise<NoteDoc[]> {
+    return this.noteRepo.findNotesModifiedSince(userId, since);
+  }
+
+  /**
+   * 특정 시점 이후에 변경된 폴더 목록을 조회합니다. (동기화용)
+   * 
+   * @param userId 소유자 ID
+   * @param since 기준 시각
+   * @returns 변경된 폴더 문서 목록
+   */
+  async findFoldersModifiedSince(userId: string, since: Date): Promise<FolderDoc[]> {
+    return this.noteRepo.findFoldersModifiedSince(userId, since);
+  }
+
+  /**
+   * 특정 노트를 ID로 조회합니다. (동기화용)
+   * 
+   * @param noteId 노트 ID
+   * @param userId 소유자 ID
+   * @returns 노트 문서 또는 null
+   */
+  async getNoteDoc(noteId: string, userId: string): Promise<NoteDoc | null> {
+    return this.noteRepo.getNote(noteId, userId);
+  }
+
+  /**
+   * 특정 폴더를 ID로 조회합니다. (동기화용)
+   * @param folderId 폴더 ID
+   * @param userId 소유자 ID
+   * @returns 폴더 문서 또는 null
+   */
+  async getFolderDoc(folderId: string, userId: string): Promise<FolderDoc | null> {
+    return this.noteRepo.getFolder(folderId, userId);
+  }
+
+  /**
+   * 특정 노트를 생성합니다. (동기화용)
+   * @param doc 생성할 노트 문서
+   * @param session MongoDB 클라이언트 세션 (선택 사항)
+   * @returns 생성된 노트 문서
+   */
+  async createNoteDoc(doc: NoteDoc, session?: ClientSession): Promise<NoteDoc> {
+    return this.noteRepo.createNote(doc, session);
+  }
+
+  /**
+   * 특정 노트를 업데이트합니다. (동기화용)
+   * @param noteId 노트 ID
+   * @param userId 소유자 ID
+   * @param updates 업데이트할 필드들
+   * @param session MongoDB 클라이언트 세션 (선택 사항)
+   * @returns 업데이트된 노트 문서 또는 null
+   */
+  async updateNoteDoc(noteId: string, userId: string, updates: Partial<NoteDoc>, session?: ClientSession): Promise<NoteDoc | null> {
+    return this.noteRepo.updateNote(noteId, userId, updates, session);
+  }
+
+  /**|
+   * 특정 폴더를 생성합니다. (동기화용)
+   * @param doc 생성할 폴더 문서
+   * @param session MongoDB 클라이언트 세션 (선택 사항)
+   * @returns 생성된 폴더 문서
+   */
+  async createFolderDoc(doc: FolderDoc, session?: ClientSession): Promise<FolderDoc> {
+    return this.noteRepo.createFolder(doc, session);
+  }
+
+  /**
+   * 특정 폴더를 업데이트합니다. (동기화용)
+   * @param folderId 폴더 ID
+   * @param userId 소유자 ID
+   * @param updates 업데이트할 필드들
+   * @param session MongoDB 클라이언트 세션 (선택 사항)
+   * @returns 업데이트된 폴더 문서 또는 null
+   */
+  async updateFolderDoc(folderId: string, userId: string, updates: Partial<FolderDoc>, session?: ClientSession): Promise<FolderDoc | null> {
+    return this.noteRepo.updateFolder(folderId, userId, updates, session);
+  }
+
+  /**
+   * 사용자의 모든 노트를 삭제합니다.
+   * @param userId 소유자 ID
+   * @returns 삭제된 노트 수
+   */
+  async deleteAllNotes(userId: string): Promise<number> {
+    return this.noteRepo.deleteAllNotes(userId);
+  }
+
+  /**
+   * 사용자의 모든 폴더와 그 안의 노트를 삭제합니다.
+   * @param userId 소유자 ID
+   * @returns 삭제된 폴더 수
+   */
+  async deleteAllFolders(userId: string): Promise<number> {
+    const client: MongoClient = getMongo();
+    const session: ClientSession = client.startSession();
+
+    try {
+      let deletedFolders = 0;
+      await session.withTransaction(async () => {
+        // 1. 폴더 내의 모든 노트 삭제
+        await this.noteRepo.deleteAllNotesInFolders(userId, session);
+
+        // 2. 모든 폴더 삭제
+        deletedFolders = await this.noteRepo.deleteAllFolders(userId, session);
+      });
+      return deletedFolders;
+    } finally {
+      await session.endSession();
+    }
+  }
 }

@@ -1,17 +1,17 @@
 /**
- * 모듈: GraphVectorService (그래프-벡터 통합 서비스)
+ * 모듈: GraphEmbeddingService (그래프-벡터 통합 서비스)
  * 
  * 책임:
- * - GraphService와 VectorService 간의 조율(Orchestration)을 담당합니다.
+ * - GraphManagementService와 VectorService 간의 조율(Orchestration)을 담당합니다.
  * - 그래프 데이터 변경 시 벡터 데이터도 함께 변경하거나, 정합성을 맞추는 역할을 합니다.
  * - 현재는 벡터 기능이 비활성화되어 있어 대부분의 메서드가 에러를 발생시키거나 비어있습니다.
  * 
  * 설계 의도:
- * - 도메인 로직(GraphService)과 벡터 동기화 로직을 분리하여,
+ * - 도메인 로직(GraphManagementService)과 벡터 동기화 로직을 분리하여,
  * - 필요에 따라 동기화 전략(실시간, 배치, 이벤트 기반 등)을 유연하게 변경할 수 있도록 합니다.
  */
 
-import type { GraphService } from './GraphService';
+import type { GraphManagementService } from './GraphManagementService';
 import type { VectorService } from './VectorService';
 import type {
   GraphClusterDto,
@@ -23,8 +23,8 @@ import type {
 } from '../../shared/dtos/graph';
 import { getMongo } from '../../infra/db/mongodb';
 
-export class GraphVectorService {
-  constructor(public readonly graphService: GraphService, private readonly vectorService?: VectorService) {}
+export class GraphEmbeddingService {
+  constructor(public readonly graphManagementService: GraphManagementService, private readonly vectorService?: VectorService) {}
 
   /**
    * 벡터 관련 기능이 비활성화되었음을 알리는 예외를 발생시킵니다.
@@ -77,7 +77,7 @@ export class GraphVectorService {
    * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
    */
   upsertNode(node: GraphNodeDto) {
-    return this.graphService.upsertNode(node);
+    return this.graphManagementService.upsertNode(node);
   }
 
   /**
@@ -90,7 +90,7 @@ export class GraphVectorService {
    * @throws {NotFoundError | UpstreamError} - 노드가 없거나 DB 오류 발생 시
    */
   updateNode(userId: string, nodeId: number, patch: Partial<GraphNodeDto>) {
-    return this.graphService.updateNode(userId, nodeId, patch);
+    return this.graphManagementService.updateNode(userId, nodeId, patch);
   }
 
   /**
@@ -105,7 +105,7 @@ export class GraphVectorService {
    * @see removeNodeCascade - 노드와 연결된 모든 엣지를 함께 삭제하려면 이 메서드를 사용하세요.
    */
   deleteNode(userId: string, nodeId: number) {
-    return this.graphService.deleteNode(userId, nodeId);
+    return this.graphManagementService.deleteNode(userId, nodeId);
   }
 
   /**
@@ -116,7 +116,7 @@ export class GraphVectorService {
    * @throws {UpstreamError} - DB 오류 발생 시
    */
   findNode(userId: string, nodeId: number) {
-    return this.graphService.findNode(userId, nodeId);
+    return this.graphManagementService.findNode(userId, nodeId);
   }
 
   /**
@@ -126,7 +126,7 @@ export class GraphVectorService {
    * @throws {UpstreamError} - DB 오류 발생 시
    */
   listNodes(userId: string) {
-    return this.graphService.listNodes(userId);
+    return this.graphManagementService.listNodes(userId);
   }
 
   /**
@@ -136,7 +136,7 @@ export class GraphVectorService {
    * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
    */
   upsertEdge(edge: GraphEdgeDto) {
-    return this.graphService.upsertEdge(edge);
+    return this.graphManagementService.upsertEdge(edge);
   }
 
   /**
@@ -147,7 +147,7 @@ export class GraphVectorService {
    * @throws {UpstreamError} - DB 오류 발생 시
    */
   deleteEdge(userId: string, edgeId: string) {
-    return this.graphService.deleteEdge(userId, edgeId);
+    return this.graphManagementService.deleteEdge(userId, edgeId);
   }
 
   /**
@@ -159,7 +159,7 @@ export class GraphVectorService {
    * @throws {UpstreamError} - DB 오류 발생 시
    */
   deleteEdgeBetween(userId: string, source: number, target: number) {
-    return this.graphService.deleteEdgeBetween(userId, source, target);
+    return this.graphManagementService.deleteEdgeBetween(userId, source, target);
   }
 
   /**
@@ -169,7 +169,7 @@ export class GraphVectorService {
    * @throws {UpstreamError} - DB 오류 발생 시
    */
   listEdges(userId: string) {
-    return this.graphService.listEdges(userId);
+    return this.graphManagementService.listEdges(userId);
   }
 
   /**
@@ -189,7 +189,7 @@ export class GraphVectorService {
     const session = mongoClient.startSession();
     try {
       await session.withTransaction(async () => {
-        await this.graphService.upsertCluster(cluster, { session });
+        await this.graphManagementService.upsertCluster(cluster, { session });
       });
     } finally {
       await session.endSession();
@@ -212,7 +212,7 @@ export class GraphVectorService {
     const session = mongoClient.startSession();
     try {
       await session.withTransaction(async () => {
-        await this.graphService.deleteCluster(userId, clusterId, { session });
+        await this.graphManagementService.deleteCluster(userId, clusterId, { session });
       });
     } finally {
       await session.endSession();
@@ -227,7 +227,7 @@ export class GraphVectorService {
    * @throws {UpstreamError} - DB 오류 발생 시
    */
   findCluster(userId: string, clusterId: string) {
-    return this.graphService.findCluster(userId, clusterId);
+    return this.graphManagementService.findCluster(userId, clusterId);
   }
 
   /**
@@ -237,7 +237,7 @@ export class GraphVectorService {
    * @throws {UpstreamError} - DB 오류 발생 시
    */
   listClusters(userId: string) {
-    return this.graphService.listClusters(userId);
+    return this.graphManagementService.listClusters(userId);
   }
 
   /**
@@ -247,7 +247,7 @@ export class GraphVectorService {
    * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
    */
   saveStats(stats: GraphStatsDto) {
-    return this.graphService.saveStats(stats);
+    return this.graphManagementService.saveStats(stats);
   }
 
   /**
@@ -257,7 +257,7 @@ export class GraphVectorService {
    * @throws {UpstreamError} - DB 오류 발생 시
    */
   getStats(userId: string) {
-    return this.graphService.getStats(userId);
+    return this.graphManagementService.getStats(userId);
   }
 
   /**
@@ -267,7 +267,7 @@ export class GraphVectorService {
    * @throws {UpstreamError} - DB 오류 발생 시
    */
   deleteStats(userId: string) {
-    return this.graphService.deleteStats(userId);
+    return this.graphManagementService.deleteStats(userId);
   }
 
   /**
@@ -286,7 +286,7 @@ export class GraphVectorService {
    */
   async removeNodeCascade(userId: string, nodeId: number): Promise<void> {
     // GraphRepositoryMongo.deleteNode 에 이미 관련 엣지 삭제 로직이 포함되어 있음
-    await this.graphService.deleteNode(userId, nodeId);
+    await this.graphManagementService.deleteNode(userId, nodeId);
   }
 
   /**
@@ -308,15 +308,15 @@ export class GraphVectorService {
     const session = mongoClient.startSession();
     try {
       await session.withTransaction(async () => {
-        const nodesInCluster = await this.graphService.listNodesByCluster(userId, clusterId);
+        const nodesInCluster = await this.graphManagementService.listNodesByCluster(userId, clusterId);
         if (nodesInCluster.length > 0) {
           const nodeIds = nodesInCluster.map(n => n.id);
           // 1. 클러스터에 속한 모든 노드와 관련 엣지 삭제
-          await this.graphService.deleteEdgesByNodeIds(userId, nodeIds, { session });
-          await this.graphService.deleteNodes(userId, nodeIds, { session });
+          await this.graphManagementService.deleteEdgesByNodeIds(userId, nodeIds, { session });
+          await this.graphManagementService.deleteNodes(userId, nodeIds, { session });
         }
         // 2. 클러스터 자체 삭제
-        await this.graphService.deleteCluster(userId, clusterId, { session });
+        await this.graphManagementService.deleteCluster(userId, clusterId, { session });
       });
     } finally {
       await session.endSession();
@@ -332,10 +332,10 @@ export class GraphVectorService {
    */
   async getSnapshotForUser(userId: string): Promise<GraphSnapshotDto> {
     const [nodes, edges, clusters, stats] = await Promise.all([
-      this.graphService.listNodes(userId),
-      this.graphService.listEdges(userId),
-      this.graphService.listClusters(userId),
-      this.graphService.getStats(userId),
+      this.graphManagementService.listNodes(userId),
+      this.graphManagementService.listEdges(userId),
+      this.graphManagementService.listClusters(userId),
+      this.graphManagementService.getStats(userId),
     ]);
 
     return {
@@ -367,10 +367,10 @@ export class GraphVectorService {
         const { userId, snapshot } = payload;
 
         const upsertPromises = [
-          ...snapshot.nodes.map(node => this.graphService.upsertNode({ ...node, userId }, { session })),
-          ...snapshot.edges.map(edge => this.graphService.upsertEdge({ ...edge, userId }, { session })),
-          ...snapshot.clusters.map(cluster => this.graphService.upsertCluster({ ...cluster, userId }, { session })),
-          this.graphService.saveStats({ ...snapshot.stats, userId }, { session }),
+          ...snapshot.nodes.map(node => this.graphManagementService.upsertNode({ ...node, userId }, { session })),
+          ...snapshot.edges.map(edge => this.graphManagementService.upsertEdge({ ...edge, userId }, { session })),
+          ...snapshot.clusters.map(cluster => this.graphManagementService.upsertCluster({ ...cluster, userId }, { session })),
+          this.graphManagementService.saveStats({ ...snapshot.stats, userId }, { session }),
         ];
 
         await Promise.all(upsertPromises);

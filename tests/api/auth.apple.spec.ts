@@ -7,6 +7,7 @@ import * as appleController from '../../src/app/controllers/auth.apple';
 import { AppleOAuthService } from '../../src/core/services/AppleOAuthService';
 import * as authLogin from '../../src/app/utils/authLogin';
 import { errorHandler } from '../../src/app/middlewares/error';
+import { container } from '../../src/bootstrap/container';
 
 // Mock dependencies
 jest.mock('../../src/core/services/AppleOAuthService');
@@ -45,6 +46,9 @@ describe('Apple Auth Controller', () => {
 
     // Reset mocks
     jest.clearAllMocks();
+    
+    // Reset container cache to ensure new mock is used
+    (container as any).appleOAuthService = null;
     
     // Setup AppleOAuthService mock instance
     appleServiceMock = {

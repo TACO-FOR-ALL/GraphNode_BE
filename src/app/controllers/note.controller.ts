@@ -165,4 +165,35 @@ export class NoteController {
     await this.noteService.restoreFolder(userId, id);
     res.status(204).send();
   }
+
+  /**
+   * 모든 노트 삭제 핸들러
+   * DELETE /v1/notes
+   * 
+   * 역할:
+   * - 사용자의 모든 노트를 삭제합니다.
+   * 
+   * 응답: 200 OK, { deletedCount: number }
+   */
+  async deleteAllNotes(req: Request, res: Response) {
+    const userId: string = getUserIdFromRequest(req)!;
+    const count = await this.noteService.deleteAllNotes(userId);
+    res.status(200).json({ deletedCount: count });
+  }
+
+  /**
+   * 모든 폴더 삭제 핸들러
+   * DELETE /v1/folders
+   * 
+   * 역할:
+   * - 사용자의 모든 폴더와 그 안의 노트를 삭제합니다.
+   * - 트랜잭션을 사용하여 원자적으로 처리됩니다.
+   * 
+   * 응답: 200 OK, { deletedCount: number }
+   */
+  async deleteAllFolders(req: Request, res: Response) {
+    const userId: string = getUserIdFromRequest(req)!;
+    const count = await this.noteService.deleteAllFolders(userId);
+    res.status(200).json({ deletedCount: count });
+  }
 }

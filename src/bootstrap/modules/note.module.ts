@@ -9,9 +9,8 @@
 
 import { Router } from 'express';
 
-import { NoteRepositoryMongo } from '../../infra/repositories/NoteRepositoryMongo';
-import { NoteService } from '../../core/services/NoteService';
 import { createNoteRouter } from '../../app/routes/note.routes';
+import { container } from '../container';
 
 /**
  * Note 라우터 생성 팩토리 함수
@@ -19,11 +18,7 @@ import { createNoteRouter } from '../../app/routes/note.routes';
  * @returns 조립이 완료된 Express Router 객체
  */
 export function makeNoteRouter(): Router {
-  // 1. Repository 인스턴스 생성 (MongoDB 구현체)
-  const noteRepo = new NoteRepositoryMongo();
-  
-  // 2. Service 인스턴스 생성 (Repository 주입)
-  const noteService = new NoteService(noteRepo);
+  const noteService = container.getNoteService();
 
   // 3. Router 생성 (Service 주입) 및 반환
   return createNoteRouter({ noteService });

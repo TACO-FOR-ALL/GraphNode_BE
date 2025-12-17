@@ -33,6 +33,15 @@ export interface ConversationRepository {
   create(doc: ConversationDoc, session?: ClientSession): Promise<ConversationDoc>;
 
   /**
+   * 여러 대화를 한 번에 생성합니다 (Bulk Insert).
+   * 
+   * @param docs 저장할 대화 문서 배열
+   * @param session (선택) MongoDB 트랜잭션 세션
+   * @returns 저장된 대화 문서 배열
+   */
+  createMany(docs: ConversationDoc[], session?: ClientSession): Promise<ConversationDoc[]>;
+
+  /**
    * ID로 대화를 조회합니다.
    * 
    * @param id 대화 ID
@@ -40,6 +49,15 @@ export interface ConversationRepository {
    * @returns 대화 문서 또는 null (없을 경우)
    */
   findById(id: string, ownerUserId: string, session?: ClientSession): Promise<ConversationDoc | null>;
+
+  /**
+   * 특정 사용자의 모든 대화를 삭제합니다.
+   * 
+   * @param ownerUserId 소유자 ID
+   * @param session (선택) MongoDB 트랜잭션 세션
+   * @returns 삭제된 대화 수
+   */
+  deleteAll(ownerUserId: string, session?: ClientSession): Promise<number>;
 
   /**
    * 특정 사용자의 대화 목록을 조회합니다 (페이징 지원).

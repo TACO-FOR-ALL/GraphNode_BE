@@ -20,14 +20,14 @@ import {
 import { GraphClusterDoc, GraphEdgeDoc, GraphNodeDoc, GraphStatsDoc } from '../types/persistence/graph.persistence';
 
 /**
- * 모듈: GraphService (그래프 서비스)
+ * 모듈: GraphManagementService (그래프 서비스)
  * 
  * 책임:
  * - 그래프 데이터(노드, 엣지, 클러스터)의 비즈니스 로직을 처리합니다.
  * - DTO(Data Transfer Object)를 사용하여 데이터를 주고받습니다.
  * - GraphStore(Port)를 통해 DB 작업을 수행하며, 이 과정에서 Mapper를 사용해 DTO <-> Doc 변환을 수행합니다.
  */
-export class GraphService {
+export class GraphManagementService {
   constructor(private readonly repo: GraphStore) {}
 
   /**
