@@ -75,25 +75,26 @@ export function createApp() {
     },
   });
 
-  redisClient.on('error', (err) => {
-    logger.warn({ err: err.message }, 'Redis client error');
-  });
+  // TODO: SSE 처리 후 Redis 오류 발생해서 나중에 처리해야함 (상태 디버깅용)
+  // redisClient.on('error', (err) => {
+  //   logger.warn({ err: err.message }, 'Redis client error');
+  // });
 
-  redisClient.on('connect', () => {
-    logger.info('Redis client connected');
-  });
+  // redisClient.on('connect', () => {
+  //   logger.info('Redis client connected');
+  // });
 
-  redisClient.on('reconnecting', () => {
-    logger.info('Redis client reconnecting');
-  });
+  // redisClient.on('reconnecting', () => {
+  //   logger.info('Redis client reconnecting');
+  // });
 
-  redisClient.on('ready', () => {
-    logger.info('Redis client ready');
-  });
+  // redisClient.on('ready', () => {
+  //   logger.info('Redis client ready');
+  // });
 
-  redisClient.on('end', () => {
-    logger.warn('Redis client connection ended');
-  });
+  // redisClient.on('end', () => {
+  //   logger.warn('Redis client connection ended');
+  // });
 
   redisClient.connect().catch((err) => {
     // throw new Error('Failed to connect to Redis: ' + err.message); Redis 오류 나도 서버 가능하게 주석 처리
