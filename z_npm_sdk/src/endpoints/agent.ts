@@ -2,15 +2,31 @@
 import { type FetchLike } from '../http-builder.js';
 import { GRAPHNODE_BASE_URL } from '../config.js';
 
+/**
+ * 에이전트 채팅 모드 및 스트림 이벤트 타입들
+ */
 export type AgentChatMode = 'chat' | 'summary' | 'note';
+
+/**
+ * 사용자에게 제안할 에이전트 채팅 모드 힌트 타입
+ */
 export type AgentChatModeHint = 'summary' | 'note' | 'auto';
 
+/**
+ * 에이전트 채팅 스트림 이벤트 타입들
+ */
 export type AgentChatStreamEvent =
   | { event: 'status'; data: { phase: string; message: string } }
   | { event: 'chunk'; data: { text: string } }
   | { event: 'result'; data: { mode: AgentChatMode; answer: string; noteContent: string | null } }
   | { event: 'error'; data: { message: string } };
 
+/**
+ * 에이전트 채팅 스트림 API 요청 파라미터
+ * @property userMessage 사용자 메시지
+ * @property contextText (선택) 컨텍스트 텍스트
+ * @property modeHint (선택) 에이전트 채팅 모드 힌트
+ */
 export interface AgentChatStreamParams {
   userMessage: string;
   contextText?: string;

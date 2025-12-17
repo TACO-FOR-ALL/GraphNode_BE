@@ -47,7 +47,6 @@ export class AiController {
   /**
    * AI 실제 대화를 처리하는 Controller 메서드
    * 
-   * [POST] /v1/ai/chat (예상 경로)
    * 
    * 역할:
    * 1. 사용자의 채팅 메시지를 받습니다.
