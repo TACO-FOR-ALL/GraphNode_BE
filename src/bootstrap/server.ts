@@ -97,7 +97,7 @@ export function createApp() {
   // });
 
   redisClient.connect().catch((err) => {
-    // throw new Error('Failed to connect to Redis: ' + err.message); Redis 오류 나도 서버 가능하게 주석 처리
+    // throw new Error('Failed to connect to Redis: ' + err.message); Redis 오류 나도 서버 가능하게 주석 처리 => reconnectStrategy로 처리
     logger.error({ err: err.message }, 'Failed to connect to Redis');
   });
 
