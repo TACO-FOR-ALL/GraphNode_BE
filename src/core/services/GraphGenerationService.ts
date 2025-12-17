@@ -191,10 +191,12 @@ export class GraphGenerationService {
    * @param userId 작업을 요청한 사용자 ID. 작업 완료 후 상태 해제 및 로깅에 사용됩니다.
    */
   private async pollAndSave(taskId: string, userId: string) {
-    const POLLING_INTERVAL = 60000; // 60초
-    const MAX_ATTEMPTS = 60; // 60분 (60 * 60초 = 3600초)
+    const POLLING_INTERVAL = 30000; // 30초
+    const MAX_ATTEMPTS = 120; // 60분 (120 * 30초 = 3600초)
+    const MAX_CONSECUTIVE_ERRORS = 5; // 연속 에러 허용 횟수 (5번 연속 실패 시 중단)
     
     let attempts = 0;
+    let consecutiveErrors = 0;
     
     const checkStatus = async () => {
       // 최대 시도 횟수 초과 시 폴링 중단
@@ -210,6 +212,9 @@ export class GraphGenerationService {
       try {
         // AI 서버에 현재 작업 상태 조회 요청 (GET /status/:taskId)
         const statusRes = await this.httpClient.get<{ task_id: string; status: string }>(`/status/${taskId}`);
+        
+        // 성공 시 연속 에러 카운트 초기화
+        consecutiveErrors = 0;
         
         if (statusRes.status === 'completed') {
           logger.info({ taskId, userId }, 'AI task completed. Fetching result...');
@@ -246,7 +251,28 @@ export class GraphGenerationService {
         }
       } catch (err) {
         // 폴링 중 에러 발생 시 (네트워크 오류 등)
-        logger.error({ err, taskId }, 'Error during polling');
+        consecutiveErrors++;
+        logger.error({ err, taskId, consecutiveErrors }, 'Error during polling');
+
+        // 1. 명확한 클라이언트 에러 (404, 4xx) -> 즉시 중단
+        // 404: 작업이 사라짐 (서버 재시작으로 인한 메모리 초기화 등)
+        if (err instanceof UpstreamError && err.details?.status) {
+          const status = err.details.status;
+          if (status === 404 || (status >= 400 && status < 500)) {
+             logger.error({ taskId, userId, status }, 'Polling stopped due to client error (e.g. Task Not Found)');
+             this.activeUserTasks.delete(userId);
+             return;
+          }
+        }
+
+        // 2. 연속된 서버 에러 (5xx, 네트워크 등) -> 일정 횟수 이상이면 중단
+        // 일시적인 네트워크/서버 장애는 재시도하지만, 계속되면 포기
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          logger.error({ taskId, userId, consecutiveErrors }, 'Polling stopped due to too many consecutive errors');
+          this.activeUserTasks.delete(userId);
+          return;
+        }
+
         // 에러가 발생해도 계속 재시도 (일시적 오류일 수 있음)
         setTimeout(checkStatus, POLLING_INTERVAL);
       }
