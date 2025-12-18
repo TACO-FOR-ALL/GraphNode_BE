@@ -57,21 +57,49 @@ export class GraphGenerationService {
       this.activeUserTasks.add(userId);
       logger.info({ userId }, 'Starting graph generation for user (Streaming Mode)');
 
-      // 1. 데이터 스트림 생성 (메모리 최적화: 제너레이터를 통해 필요할 때만 데이터 생성)
-      // [개념 설명: Node.js Readable Stream]
-      // - Readable.from()은 Async Iterable(여기서는 제너레이터)을 Node.js의 읽기 가능한 스트림으로 변환합니다.
-      // - 스트림은 데이터를 한 번에 메모리에 올리지 않고, 소비되는 속도에 맞춰 조금씩 데이터를 '흘려보내는' 방식입니다.
-      // - 이를 통해 100MB가 넘는 데이터도 수십 MB 수준의 낮은 메모리로 처리할 수 있습니다.
-      const dataStream = Readable.from(this.streamUserData(userId));
-
-      // 2. AI 서버로 전송
+      // 2. AI 서버로 전송 (재시도 로직 적용)
       logger.info({ userId }, 'Sending data stream to AI server');
-      let taskId: string;
+      let taskId: string | undefined;
+      
+      const MAX_RETRIES = 5;
 
-      // Axios는 Readable Stream을 요청 바디로 지원합니다.
-      const response = await this.httpClient.post<{ task_id: string; status: string }>('/analysis', dataStream);
-      taskId = response.task_id;
-   
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          // [중요] 스트림은 한 번 소비되면 재사용할 수 없으므로, 재시도 시마다 새로 생성해야 합니다.
+          // [개념 설명: Node.js Readable Stream]
+          // - Readable.from()은 Async Iterable(여기서는 제너레이터)을 Node.js의 읽기 가능한 스트림으로 변환합니다.
+          // - 스트림은 데이터를 한 번에 메모리에 올리지 않고, 소비되는 속도에 맞춰 조금씩 데이터를 '흘려보내는' 방식입니다.
+          const dataStream = Readable.from(this.streamUserData(userId));
+          
+          // Axios는 Readable Stream을 요청 바디로 지원합니다.
+          const response = await this.httpClient.post<{ task_id: string; status: string }>('/analysis', dataStream);
+          taskId = response.task_id;
+          break; // 성공 시 루프 탈출
+
+        } catch (err) {
+          // 재시도 불가능한 에러인지 확인 (4xx 클라이언트 에러 등)
+          let isRetryable = true;
+          if (err instanceof UpstreamError && err.details?.status) {
+            const status = err.details.status;
+            // 400번대 에러는 재시도하지 않음
+            if (status >= 400 && status < 500) {
+              isRetryable = false;
+            }
+          }
+
+          // 마지막 시도이거나 재시도 불가능한 에러인 경우
+          if (!isRetryable || attempt === MAX_RETRIES) {
+            logger.error({ err, userId, attempt }, 'Failed to send data to AI server (Final attempt)');
+            throw err;
+          }
+
+          logger.warn({ err, userId, attempt }, `Failed to send data to AI server. Retrying in ${attempt * 1000}ms...`);
+          // 지수 백오프: 1초, 2초... 대기
+          await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+        }
+      }
+
+      if (!taskId) throw new Error('Task ID not received from AI server');
 
       logger.info({ userId, taskId }, 'AI task started');
 
