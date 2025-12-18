@@ -131,6 +131,7 @@ export class AiInteractionService {
             // 7. 메시지 저장 (User & AI)
             // ChatManagementService를 사용하여 메시지를 저장하고 대화방의 updatedAt을 갱신합니다.
             const userMessage: ChatMessage = await this.chatManagementService.createMessage(ownerUserId, conversationId, {
+                id : chatbody.id,
                 role: 'user',
                 content: chatbody.chatContent
             });

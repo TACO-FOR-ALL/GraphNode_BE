@@ -5,10 +5,12 @@ import type { MessageDto } from '../types/message.js';
 /**
  * AI 채팅 요청 DTO
  * @public
+ * @property id FE가 만들어줄 message 용 uuid
  * @property model 사용할 AI 모델 (openai | deepseek)
  * @property chatContent 사용자 입력 메시지
  */
 export interface AIChatRequestDto {
+  id : string;
   model: ApiKeyModel;
   chatContent: string;
 }

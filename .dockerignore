@@ -12,3 +12,7 @@ coverage
 .gitignore
 Dockerfile
 z_npm_sdk
+.vscode
+.idea
+coverage
+dist

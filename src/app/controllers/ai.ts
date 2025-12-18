@@ -59,7 +59,7 @@ export class AiController {
     const conversationId: string = req.params.conversationId;
     if (!conversationId) throw new ValidationError('conversationId is required');
 
-    const chatbody = req.body as AIchatType;
+    const chatbody : AIchatType = req.body as AIchatType;
     
     // AI 서비스의 handleAIChat 메서드를 호출하여 실제 대화 로직을 수행합니다.
     const result : AIChatResponseDto = await this.aiInteractionService.handleAIChat(ownerUserId, chatbody, conversationId);
