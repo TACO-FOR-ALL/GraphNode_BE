@@ -186,8 +186,10 @@ export class GraphGenerationService {
           prevMsgId = nodeId;
         }
 
+        //FIXED: id 필드 추가
         const aiItem : AiInputConversation = {
-          conv_id : conv.id,
+          id : conv.id,
+          conversation_id : conv.id,
           title: conv.title,
           create_time: conv.createdAt ? new Date(conv.createdAt).getTime() / 1000 : 0,
           update_time: conv.updatedAt ? new Date(conv.updatedAt).getTime() / 1000 : 0,

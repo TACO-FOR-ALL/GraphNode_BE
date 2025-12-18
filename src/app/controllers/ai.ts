@@ -25,7 +25,7 @@ import {
   bulkCreateConversationsSchema as _bulkCreateConversationsSchema,
 } from '../../shared/dtos/ai.schemas';
 import { AiInteractionService } from '../../core/services/AiInteractionService';
-import { ChatThread, ChatMessage } from '../../shared/dtos/ai';
+import { ChatThread, ChatMessage, AIChatResponseDto } from '../../shared/dtos/ai';
 import { AIchatType } from '../../shared/openai/AIchatType';
 import { ValidationError } from '../../shared/errors/domain';
 
@@ -62,9 +62,9 @@ export class AiController {
     const chatbody = req.body as AIchatType;
     
     // AI 서비스의 handleAIChat 메서드를 호출하여 실제 대화 로직을 수행합니다.
-    const messages = await this.aiInteractionService.handleAIChat(ownerUserId, chatbody, conversationId);
+    const result : AIChatResponseDto = await this.aiInteractionService.handleAIChat(ownerUserId, chatbody, conversationId);
     
-    res.status(201).json({ messages }); 
+    res.status(201).json(result); 
   }
 
   /**

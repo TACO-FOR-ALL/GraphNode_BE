@@ -2,7 +2,7 @@
 import OpenAI from 'openai';
 
 import { ChatMessageRequest } from './ChatMessageRequest';
-type Result<T> = { ok: true; data: T } | { ok: false; error: string };
+export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 
 /**
  * 오류 객체를 정규화하여 문자열로 반환합니다.

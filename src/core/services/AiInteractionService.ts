@@ -15,12 +15,12 @@
 import OpenAI from 'openai';
 
 import { AppError } from '../../shared/errors/base'; 
-import { UpstreamError, ValidationError } from '../../shared/errors/domain';
+import { NotFoundError, UpstreamError, ValidationError } from '../../shared/errors/domain';
 import { AIchatType } from '../../shared/openai/AIchatType';
 import { ChatManagementService } from './ChatManagementService';
 import { UserService } from './UserService';
-import { ChatMessage } from '../../shared/dtos/ai';
-import { openAI } from '../../shared/openai/index';
+import { AIChatResponseDto, ChatMessage, ChatThread } from '../../shared/dtos/ai';
+import { openAI, Result } from '../../shared/openai/index';
 import { ChatMessageRequest } from '../../shared/openai/ChatMessageRequest';
 
 export class AiInteractionService {
@@ -41,7 +41,7 @@ export class AiInteractionService {
      * 
      * @throws {UpstreamError} AI 서비스 호출 실패 시
      */
-    async handleAIChat(ownerUserId: string, chatbody: AIchatType, conversationId: string): Promise<ChatMessage[]> {
+    async handleAIChat(ownerUserId: string, chatbody: AIchatType, conversationId: string): Promise<AIChatResponseDto> {
         try {
             // 1. API Key 조회
             const apiKeyResponse: { apiKey: string | null } = await this.userService.getApiKeys(ownerUserId, chatbody.model);
@@ -63,7 +63,42 @@ export class AiInteractionService {
 
             // 3. 이전 대화 내역 조회
             // ChatManagementService를 통해 대화방과 메시지 목록을 함께 가져옵니다.
-            const conversation = await this.chatManagementService.getConversation(conversationId, ownerUserId);
+            // 임시로 try catch로 처리
+
+            let conversation : ChatThread; // 대화방 정보
+            let isNewConversation : boolean = false; // 신규 대화방 생성 여부
+            let newTitle : string | null = null; // 신규 대화방 제목
+            
+            try {
+                conversation  = await this.chatManagementService.getConversation(conversationId, ownerUserId);
+            } catch (err) {
+                // NotFoundError 인 경우에만 신규 채팅방 생성 로직 수행
+                if (err instanceof NotFoundError) {
+                    isNewConversation = true; 
+                
+                    // 신규 대화방 제목 우선 생성
+                    const titleRequest: Result<string>  = await openAI.requestGenerateThreadTitle(apiKey, chatbody.chatContent);
+
+                    // 우선 제목 생성에 실패하면, 임시 제목 할당
+                    if (!titleRequest.ok) {
+                        newTitle = "New Conversation";
+                    }
+
+                    if (titleRequest.ok) {
+                        newTitle = titleRequest.data;
+                    }
+
+                    // 신규 대화방 생성
+                    conversation = await this.chatManagementService.createConversation(ownerUserId, conversationId, newTitle!);
+                
+                }
+                else {
+                    throw err; // 다른 에러는 그대로 던짐
+                }
+
+            }
+
+            // 대화 내역 가져오기
             const history: ChatMessage[] = conversation.messages || [];
 
             // 4. 메시지 변환 (History + User New Message)
@@ -77,15 +112,17 @@ export class AiInteractionService {
             // TODO: model selection logic based on chatbody.model or specific model name (e.g. gpt-4o-mini)
             const modelName: string = chatbody.model === 'openai' ? 'gpt-4o-mini' : 'deepseek-chat'; 
             
+            // OpenAI 요청
             const aiResponse = await openAI.requestWithoutStream(apiKey, modelName, messagesToSend);
 
+            // AI 응답 실패 시 예외 처리
             if (!aiResponse.ok) {
                 throw new UpstreamError(`AI Request failed: ${aiResponse.error}`);
             }
 
+            // 6. AI 응답 추출
             const aiResponseData: OpenAI.Chat.Completions.ChatCompletion = aiResponse.data;
 
-            // 6. AI 응답 추출
             const aiContent: string | null | undefined = aiResponseData.choices?.[0]?.message?.content;
             if (!aiContent) {
                 throw new UpstreamError('AI response content is empty.');
@@ -104,7 +141,10 @@ export class AiInteractionService {
             });
 
             // 8. 결과 반환
-            return [userMessage, aiMessage];
+            return {
+                title: isNewConversation ? (newTitle || conversation.title) : undefined,
+                messages: [userMessage, aiMessage]
+            }
 
         } catch (err: unknown) {
             // 이미 정의된 AppError라면 그대로 던짐

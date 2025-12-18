@@ -16,9 +16,11 @@ export interface AIChatRequestDto {
 /**
  * AI 채팅 응답 DTO
  * @public
+ * @property title 대화 제목 (선택적, 첫 대화 메시지에서 설정될 수 있음)
  * @property messages 생성된 메시지 목록 (사용자 메시지 + AI 응답 메시지)
  */
 export interface AIChatResponseDto {
+  title? : string;
   messages: MessageDto[];
 }
 
