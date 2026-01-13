@@ -6,22 +6,27 @@
         {
             "cpu": 0,
             "environment": [
-                {
-                    "name": "SESSION_SECRET",
-                    "value": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:SESSION_SECRET::"
-                },
-                {
-                    "name": "HOST",
-                    "value": "0.0.0.0"
-                },
-                {
-                    "name": "NODE_ENV",
-                    "value": "production"
-                },
-                {
-                    "name": "AI_SERVER_URI",
-                    "value": "https://rhyekjbhngptrjnt.tunnel.elice.io"
-                }
+                { "name": "NODE_ENV", "value": "development" },
+                { "name": "PORT", "value": "3000" },
+                { "name": "MYSQL_URL", "value": "mysql://admin:taco4graphnode@taco4graphnode.c32yswk8iz9c.ap-northeast-2.rds.amazonaws.com:3306/taco4graphnode" },
+                { "name": "MONGODB_URL", "value": "mongodb+srv://tacoprogrammers_db_user:TACO4GraphNode@taco4graphnode.rour0fu.mongodb.net/?appName=TACO4GraphNode" },
+                { "name": "REDIS_URL", "value": "redis://default:IUp5xGGPnQs0OZlHdWLBrZZqREzSVFlD@redis-12298.c340.ap-northeast-2-1.ec2.cloud.redislabs.com:12298" },
+                { "name": "DEV_INSECURE_COOKIES", "value": "true" },
+                { "name": "SESSION_SECRET", "value": "TACOGRAPHNODESECRET" },
+                { "name": "OAUTH_GOOGLE_CLIENT_ID", "value": "817875185345-9c12n94ghp3hbhc9u9ed05hr79pr05a6.apps.googleusercontent.com" },
+                { "name": "OAUTH_GOOGLE_CLIENT_SECRET", "value": "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" },
+                { "name": "OAUTH_GOOGLE_REDIRECT_URI", "value": "https://taco4graphnode.online/auth/google/callback" },
+                { "name": "OAUTH_APPLE_TEAM_ID", "value": "GQM6B63P8T" },
+                { "name": "OAUTH_APPLE_KEY_ID", "value": "U947C84Q4P" },
+                { "name": "OAUTH_APPLE_CLIENT_ID", "value": "com.taco.graphnode.oauth" },
+                { "name": "OAUTH_APPLE_PRIVATE_KEY", "value": "-----BEGIN PRIVATE KEY-----\nMIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgpMIc3Ax8+W0kw+RJ\nXgNa26qF0a+yNZyp1lBYoa5RhfOgCgYIKoZIzj0DAQehRANCAATn1GTyqR8eRyyD\nEsv7HVMarKepo4QsKHm4THZH7UVPNEm95HST+lVtLxR0vEQwOyQXEK8K9AKV0KaC\nSMX7NxKL\n-----END PRIVATE KEY-----" },
+                { "name": "OAUTH_APPLE_REDIRECT_URI", "value": "https://taco4graphnode.online/auth/apple/callback" },
+                { "name": "QDRANT_URL", "value": "https://eaf265d6-375e-4cf7-8331-8e088b9ce01c.us-west-1-0.aws.cloud.qdrant.io" },
+                { "name": "QDRANT_API_KEY", "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.LcEFyeZ7toZRWXprrz2RqUHVQv33ngrerEoRTAc65ag" },
+                { "name": "QDRANT_COLLECTION_NAME", "value": "graphnode_vectors" },
+                { "name": "QDRANT_VECTOR_SIZE", "value": "1536" },
+                { "name": "QDRANT_DISTANCE_METRIC", "value": "Cosine" },
+                { "name": "AI_SERVER_URI", "value": "https://qsekjgdnqjhchshh.tunnel.elice.io" }
             ],
             "essential": true,
             "image": "954976324655.dkr.ecr.ap-northeast-2.amazonaws.com/taco4/graphnode:latest_10",
@@ -47,80 +52,7 @@
                     "protocol": "tcp"
                 }
             ],
-            "secrets": [
-                {
-                    "name": "MYSQL_URL",
-                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:MYSQL_URL::"
-                },
-                {
-                    "name": "MONGODB_URL",
-                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:MONGODB_URL::"
-                },
-                {
-                    "name": "DEV_INSECURE_COOKIES",
-                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:DEV_INSECURE_COOKIES::"
-                },
-                {
-                    "name": "OAUTH_GOOGLE_CLIENT_ID",
-                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:OAUTH_GOOGLE_CLIENT_ID::"
-                },
-                {
-                    "name": "OAUTH_GOOGLE_CLIENT_SECRET",
-                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:OAUTH_GOOGLE_CLIENT_SECRET::"
-                },
-                {
-                    "name": "OAUTH_GOOGLE_REDIRECT_URI",
-                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:OAUTH_GOOGLE_REDIRECT_URI::"
-                },
-                {
-                    "name": "PORT",
-                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:PORT::"
-                },
-                {
-                    "name": "QDRANT_URL",
-                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:QDRANT_URL::"
-                },
-                {
-                    "name": "QDRANT_API_KEY",
-                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:QDRANT_API_KEY::"
-                },
-                {
-                    "name": "QDRANT_COLLECTION_NAME",
-                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:QDRANT_COLLECTION_NAME::"
-                },
-                {
-                    "name": "QDRANT_VECTOR_SIZE",
-                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:QDRANT_VECTOR_SIZE::"
-                },
-                {
-                    "name": "QDRANT_DISTANCE_METRIC",
-                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:QDRANT_DISTANCE_METRIC::"
-                },
-                {
-                    "name": "REDIS_URL",
-                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:REDIS_URL::"
-                },
-                {
-                    "name": "OAUTH_APPLE_TEAM_ID",
-                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:OAUTH_APPLE_TEAM_ID::"
-                },
-                {
-                    "name": "OAUTH_APPLE_KEY_ID",
-                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:OAUTH_APPLE_KEY_ID::"
-                },
-                {
-                    "name": "OAUTH_APPLE_CLIENT_ID",
-                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:OAUTH_APPLE_CLIENT_ID::"
-                },
-                {
-                    "name": "OAUTH_APPLE_PRIVATE_KEY",
-                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:OAUTH_APPLE_PRIVATE_KEY::"
-                },
-                {
-                    "name": "OAUTH_APPLE_REDIRECT_URI",
-                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-tEzX7m:OAUTH_APPLE_REDIRECT_URI::"
-                }
-            ],
+
             "systemControls": [],
             "volumesFrom": []
         }
