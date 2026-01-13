@@ -1,7 +1,7 @@
 import { initMySql } from './mysql';
 import { initMongo } from './mongodb';
 import { loadEnv } from '../../config/env';
-import { initQdrant } from './qdrantClient';
+// import { initQdrant } from './qdrantClient';
 
 /**
  * MySQL/MongoDB를 순차 초기화한다. ENV 유효성 검증 포함.
@@ -13,6 +13,6 @@ export async function initDatabases() {
   await initMySql(env.MYSQL_URL);
   await initMongo(env.MONGODB_URL);
 
-  // Qdrant 초기화 (스켈레톤)
-  await initQdrant(env.QDRANT_URL, env.QDRANT_API_KEY);
+  // Qdrant 초기화 (스켈레톤), 현재는 사용 안하기에 우선 주석
+  // await initQdrant(env.QDRANT_URL, env.QDRANT_API_KEY);
 }
