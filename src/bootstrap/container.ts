@@ -23,6 +23,11 @@ import { MessageRepository } from '../core/ports/MessageRepository';
 import { UserRepository } from '../core/ports/UserRepository';
 import { NoteRepository } from '../core/ports/NoteRepository';
 import { GraphStore } from '../core/ports/GraphStore';
+import { QueuePort } from '../core/ports/QueuePort';
+import { StoragePort } from '../core/ports/StoragePort';
+// Infra Adapters
+import { AwsSqsAdapter } from '../infra/aws/AwsSqsAdapter';
+import { AwsS3Adapter } from '../infra/aws/AwsS3Adapter';
 
 /**
  * 애플리케이션의 의존성 주입(Dependency Injection)을 관리하는 싱글톤 컨테이너입니다.
@@ -42,6 +47,10 @@ export class Container {
   private userRepo: UserRepository | null = null;
   private noteRepo: NoteRepository | null = null;
   private graphRepo: GraphStore | null = null;
+
+  // Infra Adapters
+  private queueAdapter: QueuePort | null = null;
+  private storageAdapter: StoragePort | null = null;
 
   // Services
   private conversationService: ConversationService | null = null;
@@ -69,6 +78,30 @@ export class Container {
       Container.instance = new Container();
     }
     return Container.instance;
+  }
+
+
+  // --- Infra Adapters ---
+  /**
+   * AwsSqsAdapter 인스턴스를 반환합니다.
+   * @returns AwsSqsAdapter 인스턴스
+   */
+  getAwsSqsAdapter(): QueuePort {
+    if (!this.queueAdapter) {
+      this.queueAdapter = new AwsSqsAdapter();
+    }
+    return this.queueAdapter;
+  }
+
+  /**
+   * AwsS3Adapter 인스턴스를 반환합니다.
+   * @returns AwsS3Adapter 인스턴스
+   */
+  getAwsS3Adapter(): StoragePort {
+    if (!this.storageAdapter) {
+      this.storageAdapter = new AwsS3Adapter();
+    }
+    return this.storageAdapter;
   }
 
   // --- Repositories ---

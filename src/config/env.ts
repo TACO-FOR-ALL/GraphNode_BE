@@ -46,6 +46,18 @@ const EnvSchema = z.object({
   // Redis (캐시 및 세션 저장소) 설정
   REDIS_URL: z.string().min(1, 'REDIS_URL required'),
 
+  // AWS 공통 설정
+  AWS_REGION: z.string().default('ap-northeast-2'),
+  AWS_ACCESS_KEY_ID: z.string().optional(),     // 로컬 개발/테스트용
+  AWS_SECRET_ACCESS_KEY: z.string().optional(), // 로컬 개발/테스트용
+
+  // AWS SQS 설정
+  SQS_REQUEST_QUEUE_URL: z.string().url('SQS_REQUEST_QUEUE_URL must be a valid URL'),
+  SQS_RESULT_QUEUE_URL: z.string().url('SQS_RESULT_QUEUE_URL must be a valid URL'),
+
+  // AWS S3 설정
+  S3_PAYLOAD_BUCKET: z.string().min(1, 'S3_PAYLOAD_BUCKET required'),
+
   // 쿠키 보안 설정 (개발 환경에서 HTTPS가 아닐 때 사용)
   DEV_INSECURE_COOKIES: z
     .string()

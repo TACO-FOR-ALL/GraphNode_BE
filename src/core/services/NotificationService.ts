@@ -1,0 +1,4 @@
+
+export class NotificationService {
+  constructor() {}
+}
