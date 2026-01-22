@@ -31,6 +31,7 @@ import { makeGraphAiRouter } from './modules/graphAi.module';
 import { makeNoteRouter } from './modules/note.module';
 import { makeSyncRouter } from './modules/sync.module';
 import { makeAgentRouter } from './modules/agent.module';
+import { makeNotificationRouter } from './modules/notification.module';
 // import { createTestAgentRouter } from '../app/routes/agent.test';
 
 /**
@@ -158,6 +159,9 @@ export function createApp() {
 
   // Sync Router
   app.use('/v1/sync', makeSyncRouter());
+
+  // Notification Router (SSE)
+  app.use('/v1/notifications', makeNotificationRouter());
 
   // Auth routes
   app.use('/auth/google', authGoogleRouter);

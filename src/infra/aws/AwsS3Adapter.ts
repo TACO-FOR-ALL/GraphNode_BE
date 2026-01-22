@@ -4,6 +4,7 @@ import { Readable } from 'stream';
 import { StoragePort } from '../../core/ports/StoragePort';
 import { loadEnv } from '../../config/env';
 import { logger } from '../../shared/utils/logger';
+import { UpstreamError } from '../../shared/errors/domain';
 
 /**
  * AWS S3 어댑터
@@ -51,7 +52,7 @@ export class AwsS3Adapter implements StoragePort {
         await this.client.send(command);
     } catch (error) {
       logger.error({ err: error, key, bucket: this.bucket }, 'Failed to upload to S3');
-      throw error;
+      throw new UpstreamError('Failed to upload to S3', { originalError: error });
     }
   }
 
@@ -91,7 +92,7 @@ export class AwsS3Adapter implements StoragePort {
       return response.Body as Readable;
     } catch (error) {
       logger.error({ err: error, key, bucket: this.bucket }, 'Failed to download stream from S3');
-      throw error;
+      throw new UpstreamError('Failed to download stream from S3', { originalError: error });
     }
   }
 
@@ -103,7 +104,7 @@ export class AwsS3Adapter implements StoragePort {
   async downloadJson<T>(key: string): Promise<T> {
 
     // 스트림 다운로드
-    const stream = await this.downloadStream(key);
+    const stream : Readable= await this.downloadStream(key);
     
     // 스트림을 버퍼로 변환 후 JSON 파싱
     return new Promise((resolve, reject) => {
@@ -139,7 +140,7 @@ export class AwsS3Adapter implements StoragePort {
       await this.client.send(command);
     } catch (error) {
       logger.error({ err: error, key, bucket: this.bucket }, 'Failed to delete from S3');
-      throw error;
+      throw new UpstreamError('Failed to delete from S3', { originalError: error });
     }
   }
 }

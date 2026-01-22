@@ -12,6 +12,7 @@ import { GraphManagementService } from '../core/services/GraphManagementService'
 import { GraphEmbeddingService } from '../core/services/GraphEmbeddingService';
 import { GraphGenerationService } from '../core/services/GraphGenerationService';
 import { SyncService } from '../core/services/SyncService';
+import { NotificationService } from '../core/services/NotificationService';
 import { AiInteractionService } from '../core/services/AiInteractionService';
 import { GoogleOAuthService } from '../core/services/GoogleOAuthService';
 import { AppleOAuthService } from '../core/services/AppleOAuthService';
@@ -25,9 +26,11 @@ import { NoteRepository } from '../core/ports/NoteRepository';
 import { GraphStore } from '../core/ports/GraphStore';
 import { QueuePort } from '../core/ports/QueuePort';
 import { StoragePort } from '../core/ports/StoragePort';
+import { EventBusPort } from '../core/ports/EventBusPort';
 // Infra Adapters
 import { AwsSqsAdapter } from '../infra/aws/AwsSqsAdapter';
 import { AwsS3Adapter } from '../infra/aws/AwsS3Adapter';
+import { RedisEventBusAdapter } from '../infra/redis/RedisEventBusAdapter';
 
 /**
  * 애플리케이션의 의존성 주입(Dependency Injection)을 관리하는 싱글톤 컨테이너입니다.
@@ -51,6 +54,7 @@ export class Container {
   // Infra Adapters
   private queueAdapter: QueuePort | null = null;
   private storageAdapter: StoragePort | null = null;
+  private eventBusAdapter: EventBusPort | null = null;
 
   // Services
   private conversationService: ConversationService | null = null;
@@ -62,6 +66,7 @@ export class Container {
   private graphEmbeddingService: GraphEmbeddingService | null = null;
   private graphGenerationService: GraphGenerationService | null = null;
   private syncService: SyncService | null = null;
+  private notificationService: NotificationService | null = null;
   private aiInteractionService: AiInteractionService | null = null;
   private googleOAuthService: GoogleOAuthService | null = null;
   private appleOAuthService: AppleOAuthService | null = null;
@@ -102,6 +107,17 @@ export class Container {
       this.storageAdapter = new AwsS3Adapter();
     }
     return this.storageAdapter;
+  }
+
+  /**
+   * RedisEventBusAdapter 인스턴스를 반환합니다.
+   * @returns RedisEventBusAdapter 인스턴스
+   */
+  getRedisEventBusAdapter(): EventBusPort {
+    if (!this.eventBusAdapter) {
+      this.eventBusAdapter = new RedisEventBusAdapter();
+    }
+    return this.eventBusAdapter;
   }
 
   // --- Repositories ---
@@ -256,7 +272,9 @@ export class Container {
     if (!this.graphGenerationService) {
       const raw = new GraphGenerationService(
         this.getChatManagementService(),
-        this.getGraphEmbeddingService()
+        this.getGraphEmbeddingService(),
+        this.getAwsSqsAdapter(),
+        this.getAwsS3Adapter()
       );
       this.graphGenerationService = createAuditProxy(raw, 'GraphGenerationService');
     }
@@ -278,7 +296,20 @@ export class Container {
     return this.syncService;
   }
 
+  /**NotificationService 인스턴스를 반환합니다.
+   */
+  getNotificationService(): NotificationService {
+    if (!this.notificationService) {
+      const raw = new NotificationService(
+        this.getRedisEventBusAdapter()
+      );
+      this.notificationService = createAuditProxy(raw, 'NotificationService');
+    }
+    return this.notificationService;
+  }
+
   /**
+   * 
    * AiInteractionService 인스턴스를 반환합니다.
    */
   getAiInteractionService(): AiInteractionService {

@@ -1,4 +1,5 @@
 import { Readable } from 'stream';
+import { ulid } from 'ulid';
 
 import { ChatManagementService } from './ChatManagementService';
 import { GraphEmbeddingService } from './GraphEmbeddingService';
@@ -10,6 +11,11 @@ import { AppError, ConflictError, UpstreamError } from '../../shared/errors/doma
 import { ChatMessage } from '../../shared/dtos/ai';
 import { AiGraphOutputDto } from '../../shared/dtos/ai_graph_output';
 import { mapAiOutputToSnapshot } from '../../shared/mappers/ai_graph_output.mapper';
+import { GraphGenRequestPayload, TaskType } from '../../shared/dtos/queue';
+// Interfaces
+import { QueuePort } from '../ports/QueuePort';
+import { StoragePort } from '../ports/StoragePort';
+import { loadEnv } from '../../config/env';
 
 // TODO: 이 설정은 설정 파일이나 환경 변수로 이동해야 합니다.
 // 데모를 위해 AI 서버 URI를 하드코딩.
@@ -20,19 +26,87 @@ const AI_SERVER_URI = process.env.AI_SERVER_URI || 'https://aaejmqgtjczzbxcq.tun
 export class GraphGenerationService {
   private readonly httpClient: HttpClient;
   private readonly activeUserTasks = new Set<string>();
+  private readonly jobQueueUrl: string;
 
   constructor(
     private readonly chatManagementService: ChatManagementService,
-    private readonly graphEmbeddingService: GraphEmbeddingService
+    private readonly graphEmbeddingService: GraphEmbeddingService,
+    private readonly queuePort: QueuePort,
+    private readonly storagePort: StoragePort
   ) {
+    const env = loadEnv();
     // 타임아웃 5분(300초)으로 설정
     this.httpClient = new HttpClient('GraphAI', { 
-      baseURL: AI_SERVER_URI,
+      baseURL: AI_SERVER_URI || 'https://aaejmqgtjczzbxcq.tunnel.elice.io',
       timeout: 300000 
     });
+    // TODO: 환경변수 SQS_QUEUE_URL 추가 필요
+    this.jobQueueUrl = process.env.SQS_QUEUE_URL || 'TO_BE_CONFIGURED'; 
   }
 
   /**
+   * [New] SQS 기반 그래프 생성 요청
+   * 사용자의 대화 데이터를 S3에 업로드하고, 작업 요청 메시지를 SQS에 발행합니다.
+   * 
+   * @param userId 사용자 ID
+   * @returns 발행된 작업의 연관 ID (TaskId) - 실제 AI TaskId는 아닐 수 있음
+   */
+  async requestGraphGenerationViaQueue(userId: string): Promise<string> {
+    try {
+      // 1. 중복 요청 방지 확인(SQS 방식 + ALB 스케일링 때문에 판별 불가)
+      // if (this.activeUserTasks.has(userId)) {
+      //   logger.warn({ userId }, 'Graph generation already in progress for user');
+      //   throw new ConflictError('Graph generation is already in progress for this user.', { status: 'processing' });
+      // }
+
+      // 2.TaskId 생성 (UUID 등 사용 권장, 여기서는 간단히 timestamp 기반)
+      const taskId = `task_${userId}_${ulid()}`;
+      const s3Key = `graph-generation/${taskId}/input.json`;
+
+      //logger.info({ userId, taskId }, 'Preparing graph generation request (S3 + SQS)');
+
+      // 3. 데이터 수집 및 S3 업로드
+      // 기존 스트리밍 방식을 활용하되, 여기서는 S3에 저장해야 함.
+      // streamUserData는 Generator이므로 Readable Stream으로 변환하여 업로드
+      const dataStream = Readable.from(this.streamUserData(userId));
+      
+      // S3 업로드
+      //logger.info({ userId, s3Key }, 'Uploading input data to S3');
+      await this.storagePort.upload(s3Key, dataStream, 'application/json');
+
+      // 4. SQS 메시지 전송(추후 메세지 type 확정 필요)
+      const messageBody: GraphGenRequestPayload = {
+        taskId,
+        taskType: TaskType.GRAPH_GENERATION_REQUEST, // 워커가 구분할 작업 타입
+        payload: {
+          userId,
+          s3Key,
+          bucket: process.env.S3_PAYLOAD_BUCKET // 수신측 편의를 위해 버킷명 명시 가능
+        },
+        timestamp: new Date().toISOString()
+      };
+
+      logger.info({ userId, queueUrl: this.jobQueueUrl }, 'Sending job to SQS');
+      await this.queuePort.sendMessage(this.jobQueueUrl, messageBody);
+
+      // 5. 상태 관리 (선택 사항: 워커가 완료 알림을 줄 때까지 활성 상태 유지할지 정책 결정 필요)
+      // 비동기 처리이므로 여기서는 activeUserTasks에 영원히 잡아두면 안됨(서버 재시작 시 꼬임).
+      // 정확한 상태 관리를 위해서는 Redis나 DB에 'JobStatus' 테이블을 두는 것이 좋음.
+      // 우선 데모 수준 호환성을 위해 잠시 추가했다가, 실제로는 워커 알림으로 해제해야 함.
+      // 여기서는 큐에 넣는 성공 여부만 확인하므로 별도 Lock을 오래 걸지 않음.
+      // FIXME > taskId를 꼭 반환해야 하나?
+
+      return taskId;
+
+    } catch (err) {
+      logger.error({ err, userId }, 'Failed to enqueue graph generation request');
+       if (err instanceof AppError) throw err;
+      throw new UpstreamError('Failed to request graph generation via queue', { cause: String(err) });
+    }
+  }
+
+  /**
+   * @deprecated 사용 금지 - SQS 도입 전 구 방식 (HTTP Streaming 직접 전송)
    * 사용자에 대한 그래프 생성 프로세스를 시작합니다.
    * 1. 사용자의 모든 대화와 메시지를 가져옵니다.
    * 2. 데이터를 AI 모듈이 예상하는 형식으로 변환합니다.
@@ -128,6 +202,7 @@ export class GraphGenerationService {
   }
 
   /**
+   * 
    * 사용자 대화 데이터를 AI 입력 형식으로 변환하여 스트리밍하는 제너레이터
    * JSON 구조: { "data": [ ... ] }
    * 
@@ -214,6 +289,7 @@ export class GraphGenerationService {
   }
 
   /**
+   * @deprecated SQS 도입 전 구 방식 (사용 금지)
    * AI 서버에 작업 상태를 주기적으로 폴링합니다.
    * 작업이 완료되면 결과를 가져와 데이터베이스에 저장합니다.
    * 
@@ -313,6 +389,7 @@ export class GraphGenerationService {
   }
 
   /**
+   * @deprecated 사용 금지 - SQS 도입 전 구 방식
    * [테스트용] JSON 데이터를 직접 입력받아 그래프 생성을 요청합니다.
    * DB 조회 과정을 생략하고, 클라이언트가 제공한 데이터를 그대로 AI 서버로 전송합니다.
    * 

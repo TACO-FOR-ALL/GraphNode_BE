@@ -3,6 +3,7 @@ import { SQSClient, SendMessageCommand, ReceiveMessageCommand, DeleteMessageComm
 import { QueuePort, QueueMessage } from '../../core/ports/QueuePort';
 import { loadEnv } from '../../config/env';
 import { logger } from '../../shared/utils/logger';
+import { UpstreamError } from '../../shared/errors/domain';
 
 /**
  * AWS SQS 어댑터
@@ -51,7 +52,7 @@ export class AwsSqsAdapter implements QueuePort {
         await this.client.send(command);
     } catch (error) {
         logger.error({ err: error, queueUrl }, 'Failed to send SQS message');
-        throw error;
+        throw new UpstreamError('Failed to send SQS message', { originalError: error });
     }
   }
 
@@ -88,7 +89,7 @@ export class AwsSqsAdapter implements QueuePort {
       }));
     } catch (error) {
       logger.error({ err: error, queueUrl }, 'Failed to receive SQS messages');
-      throw error;
+      throw new UpstreamError('Failed to receive SQS messages', { originalError: error });
     }
   }
 
@@ -110,7 +111,7 @@ export class AwsSqsAdapter implements QueuePort {
       await this.client.send(command);
     } catch (error) {
       logger.error({ err: error, queueUrl }, 'Failed to delete SQS message');
-      throw error;
+      throw new UpstreamError('Failed to delete SQS message', { originalError: error });
     }
   }
 }

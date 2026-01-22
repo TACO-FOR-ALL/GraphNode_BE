@@ -129,7 +129,7 @@ export class RequestBuilder {
     return this.send<T>('DELETE', body);
   }
 
-  private url(): string {
+  public url(): string {
     const path = this.segments.length ? '/' + this.segments.map(encodeURIComponent).join('/') : '';
     const qs = this.queryParams.toString();
     return this.baseUrl + path + (qs ? `?${qs}` : '');

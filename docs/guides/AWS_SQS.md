@@ -1,73 +1,118 @@
-# AWS SQS 기반 비동기 그래프 생성 아키텍처 마이그레이션 가이드
+# AWS SQS 기반 비동기 그래프 생성 아키텍처 가이드
 
-## 1. 개요 및 요구사항
+## 1. 아키텍처 개요 및 도입 배경
 
-### 1.1 배경
-현재 `GraphGenerationService`는 AI 서버에 HTTP 요청을 보낸 후 결과를 폴링(Polling)하는 동기식 구조입니다. 이는 사용자 경험(긴 대기 시간)과 서버 리소스 효율성(폴링 오버헤드) 측면에서 비효율적입니다. 이를 개선하기 위해 **AWS SQS(Simple Queue Service)**를 도입하여 완전한 비동기 이벤트 기반 아키텍처로 전환합니다.
+### 1.1 도입 배경 (Why SQS?)
+기존의 HTTP 요청/응답 방식(Synchronous)은 AI 생성 시간이 길어질수록 HTTP Connection 타임아웃 위험이 있고, 사용자가 급증할 때 백엔드/AI 서버가 요청을 모두 받아내지 못해 서버가 다운될 위험이 있었습니다.
 
-### 1.2 목표 아키텍처 (To-Be)
-대용량 대화 데이터(Payload)는 SQS 메시지 크기 제한(256KB)을 초과할 수 있으므로, **S3 + SQS 하이브리드 패턴**을 사용합니다.
+이를 해결하기 위해 **완전한 비동기 이벤트 기반 아키텍처**를 도입했습니다.
+- **버퍼링**: 트래픽 폭주 시 SQS가 요청을 받아두고(Buffer), 처리가능한 만큼만 가져가므로 서버가 죽지 않습니다.
+- **오토 스케일링**: 대기열에 쌓인 작업 수(Queue Depth)에 따라 AI 서버를 자동으로 증설합니다.
+- **느슨한 결합**: BE 서버와 AI 서버가 서로의 존재를 알 필요가 없습니다(Decoupling).
 
-1.  **Job Submission (Producer)**:
-    *   BE 서버는 대화 데이터를 JSON으로 변환하여 **AWS S3**에 업로드합니다.
-    *   BE 서버는 업로드된 S3 키와 메타데이터가 담긴 메시지를 **SQS Request Queue**에 발행(Publish)합니다.
-2.  **Scaling & Processing**:
-    *   AWS Auto Scaling Group이 SQS의 대기열 깊이(ApproximateNumberOfMessagesVisible)를 모니터링하여 AI 서버 인스턴스를 자동으로 증설/감소시킵니다.
-    *   AI 서버는 SQS에서 작업을 꺼내(Pull) S3 데이터를 다운로드 후 처리합니다.
-3.  **Job Completion (Result)**:
-    *   AI 서버는 처리 결과를 S3에 업로드합니다.
-    *   AI 서버는 완료 메시지를 **SQS Result Queue**에 발행합니다.
-4.  **Result Handling (Consumer)**:
-    *   BE 서버(Worker)는 **SQS Result Queue**를 폴링하다가 완료 메시지를 수신합니다.
-    *   결과 데이터를 DB에 저장(Persist)하고, **SSE(Server-Sent Events)**를 통해 클라이언트에게 "완료 팝업" 알림을 전송합니다.
+### 1.2 전체 아키텍처 다이어그램
+
+```mermaid
+flowchart TD
+    Client(User Client) -->|1. POST /gen (HTTP)| API[BE API Server]
+    
+    subgraph "Producer (Node.js)"
+        API -->|2. Upload JSON| S3[(S3 Bucket)]
+        API -->|3. Send Task Msg| SQS_REQ[AWS SQS\nRequest Queue]
+    end
+    
+    subgraph "Consumer (Python/FastAPI Cluster)"
+        SQS_REQ -->|4. Poll based Auto Scaling| AI_WORKER[AI GPU Server\n(ECS Service)]
+        AI_WORKER -->|5. Download Payload| S3
+        AI_WORKER -->|6. Upload Result| S3
+    end
+
+    subgraph "Result Handler (Node.js Worker)"
+        AI_WORKER -->|7. Send Done Msg| SQS_RES[AWS SQS\nResult Queue]
+        SQS_RES -->|8. Poll Msg| BE_WORKER[BE Worker Process]
+        BE_WORKER -->|9. Persist Graph| DB[(MySQL/Mongo)]
+        BE_WORKER -->|10. Pub Event| REDIS[Redis]
+    end
+
+    REDIS -->|11. SSE Push| Client
+```
 
 ---
 
-## 2. 작업 내역 및 파일 구조
+## 2. 핵심 파일 및 구현 위치
 
-### 2.1 수정 대상 파일
-| 파일 경로 | 변경 내용 |
-| --- | --- |
-| `src/core/services/GraphGenerationService.ts` | 기존 HTTP/Polling 로직 **삭제**. S3 업로드 및 Producer 호출 로직으로 대체. |
-| `src/app/controllers/GraphAiController.ts` | 응답 코드를 202 Accepted로 명확화, 응답 메시지 변경 ("작업 예약됨"). |
-| `src/config/env.ts` | AWS 자격 증명, SQS URL, S3 버킷명 등 환경 변수 스키마 추가. |
-| `src/bootstrap/server.ts` | 서버 시작 시 SQS Consumer(Worker)를 백그라운드에서 실행하는 로직 추가. |
+SQS 기능을 유지보수하거나 확장할 때 다음 파일들을 참고해야 합니다.
 
-### 2.2 신규 생성 파일 (권장)
-| 구분 | 파일 경로 | 역할 |
+### 2.1 Backend (Node.js)
+| 역할 | 파일 경로 | 설명 |
 | --- | --- | --- |
-| **Infra** | `src/infra/aws/SqsClient.ts` | AWS SDK v3 wrapper. Send/Receive/Delete Message. |
-| **Infra** | `src/infra/aws/S3Storage.ts` | AWS SDK v3 wrapper. Upload/Download large JSON payloads. |
-| **Core** | `src/core/services/GraphQueueProducer.ts` | 작업 요청 비즈니스 로직. (GraphService -> Producer -> SqsClient) |
-| **Core** | `src/core/services/GraphQueueConsumer.ts` | 결과 수신 워커 로직. (SqsClient -> GraphManagementService -> NotificationService) |
-| **Core** | `src/core/services/NotificationService.ts` | SSE 연결 관리 및 실시간 알림 전송 (Redis Pub/Sub 고려). |
+| **Worker Entry** | `src/workers/index.ts` | **워커 프로세스의 시작점**. API 서버와 별도로 실행되며 SQS 폴링 루프를 돕니다. |
+| **Strategy** | `src/workers/handlers/*.ts` | 메시지 타입(`taskType`)별 처리 로직. (예: `GraphGenerationResultHandler.ts`) |
+| **DI Setup** | `src/bootstrap/container.ts` | 워커도 API 서버와 동일한 DB/Redis 연결을 쓰므로, 이 컨테이너를 재사용합니다. |
+| **Infra** | `src/infra/aws/AwsSqsAdapter.ts` | AWS SDK를 이용해 메시지를 보내고 삭제하는 저수준 구현체. |
+| **Infra** | `src/infra/aws/AwsS3Adapter.ts` | 대용량 JSON 페이로드를 S3에 스트림으로 업로드/다운로드하는 구현체. |
+
+### 2.2 Shared Types (Payload Contract)
+Producer(API)와 Consumer(Worker)가 주고받는 메시지 형식이 정의되어 있습니다.
+- 파일: `src/shared/dtos/queue.ts`
+- **Claim Check Pattern**: SQS 메시지 크기 제한(256KB) 때문에 실제 데이터는 S3에 넣고, SQS에는 `s3Key`만 담아 보냅니다.
 
 ---
 
-## 3. 단계별 작업 순서 (Workflow)
+## 3. AWS 인프라 구성 및 스케일링 전략
 
-### Step 1: AWS 리소스 및 권한 설정 (Console)
-1.  **SQS 대기열 생성**: `graph-req-queue`(BE→AI), `graph-res-queue`(AI→BE)
-2.  **S3 버킷 생성**: `graph-payloads-bucket` (Lifecycle: 1일 후 만료 설정)
-3.  **IAM 설정**: ECS Task Role 및 로컬 개발용 User에 SQS/S3 접근 권한 부여.
+AWS Console에서 설정된 주요 항목과 개발자가 건드려야 할 부분입니다.
 
-### Step 2: 환경 구성 (Environment)
-1.  필요한 패키지 설치 (`@aws-sdk/client-sqs`, `@aws-sdk/client-s3`).
-2.  `.env` 및 `task-definition.json`에 환경 변수 추가.
+### 3.1 SQS Queues
+- **Request Queue (`graph-req-queue`)**: 백엔드가 작업을 넣는 곳. AI 서버가 리스닝합니다.
+- **Result Queue (`graph-res-queue`)**: AI가 결과를 넣는 곳. 백엔드 Worker가 리스닝합니다.
+- **설정**: `VisibilityTimeout`은 AI 작업 예상 시간보다 길게 설정(예: 5분)해야 중복 처리를 막을 수 있습니다.
 
-### Step 3: 인프라 레이어 구현 (Infra/Core Ports)
-1.  `S3Storage` 구현 (Stream Upload 지원).
-2.  `SqsClient` 구현.
-3.  `NotificationService` (SSE) 기본 틀 구현.
+### 3.2 Auto Scaling (AI 서버 인스턴스 자동 증설)
+이 부분은 코드가 아니라 **AWS CloudWatch & ECS 설정**으로 작동합니다.
 
-### Step 4: 생산자(Producer) 구현
-1.  `GraphQueueProducer` 작성.
-2.  `GraphGenerationService` 리팩토링 (HTTP 호출 제거, Producer 연결).
+1.  **Metric**: CloudWatch에서 `AWS/SQS` > `ApproximateNumberOfMessagesVisible` (대기 중 메시지 수)를 모니터링합니다.
+2.  **Alarm (CloudWatch)**:
+    - *Scale Out Alarm*: 메시지 수 >= 1 이면 경보.
+    - *Scale In Alarm*: 메시지 수 == 0 이면 경보.
+3.  **Scaling Policy (ECS Service)**:
+    - Alarm이 울리면 ECS Service의 `Desired Count`를 조정합니다.
+    - 예: 메시지 100개 -> Task 5개로 증가.
 
-### Step 5: 소비자(Consumer) 구현
-1.  `GraphQueueConsumer` 작성 (Result Queue 폴링 및 결과 처리).
-2.  `bootstrap/server.ts`에 컨슈머 구동 로직 연결.
+> **수정 포인트**: 스케일링 민감도를 조절하려면 AWS Console의 ECS Service > Auto Scaling 탭에서 정책을 수정하세요.
 
-### Step 6: 테스트 및 배포
-1.  통합 테스트 (LocalStack 또는 실제 AWS 리소스 활용).
-2.  ECS Task Definition 업데이트 및 배포.
+---
+
+## 4. Worker 프로세스 배포 가이드 (DevOps)
+
+백엔드 Worker는 API 서버와 **동일한 코드베이스(Docker Image)**를 사용하지만, **실행 명령(CMD)**이 다릅니다.
+
+### ECS Service 구성
+API 서버와 Worker를 각각 독립된 ECS Service로 띄워야 합니다.
+
+| 설정 항목 | API Service (기존) | Worker Service (신규) |
+| :--- | :--- | :--- |
+| **Cluster** | `graph-node-cluster` | `graph-node-cluster` (공유) |
+| **Docker Image** | `graph-node-backend:latest` | `graph-node-backend:latest` (동일) |
+| **Command (Override)** | (기본값) `npm start` | **`node dist/workers/index.js`** |
+| **CPU/Memory** | 트래픽에 따라 설정 | 메시지 처리 부하에 따라 설정 |
+| **Load Balancer** | 연결됨 (Port 80/3000) | **필요 없음** (외부 통신 안함) |
+| **Auto Scaling** | CPU/Memory 기반 | **Result Queue 깊이** 기반 (권장) |
+
+### 로컬 개발 시 실행
+로컬에서는 터미널을 하나 더 열고 다음 명령어를 실행하면 됩니다.
+```bash
+# 개발 모드 (ts-node)
+npx tsx src/workers/index.ts
+```
+
+---
+
+## 5. 트러블슈팅 Checklist
+
+기능 수정 시 다음을 확인하세요.
+
+1.  **메시지가 안 줄어듬**: Worker가 에러를 뱉고 `throw err`를 하는지 확인하세요(재시도 중일 수 있음). 로그에 `Error handling message`가 찍히는지 봅니다.
+2.  **중복 알림**: SQS의 `VisibilityTimeout`이 너무 짧아서, 처리가 안 끝났는데 다른 워커가 또 가져가는 경우입니다. 시간을 늘리세요.
+3.  **데이터 누락**: S3 키가 올바른지, `AwsS3Adapter` 권한이 있는지 확인하세요.
+

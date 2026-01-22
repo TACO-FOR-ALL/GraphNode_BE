@@ -19,6 +19,7 @@ export { NoteApi } from './endpoints/note.js';
 export { AppleAuthApi } from './endpoints/auth.apple.js';
 export { SyncApi } from './endpoints/sync.js';
 export { AiApi } from './endpoints/ai.js';
+export { NotificationApi } from './endpoints/notification.js';
 
 // Types
 export type { ProblemDetails } from './types/problem.js';
