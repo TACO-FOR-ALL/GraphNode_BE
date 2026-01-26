@@ -4,11 +4,16 @@
  */
 import type { Request, Response } from 'express';
 
-
 import { UserRepositoryMySQL } from '../../infra/repositories/UserRepositoryMySQL';
 import { setHelperLoginCookies } from './sessionCookies';
 import type { Provider, User } from '../../core/types/persistence/UserPersistence';
-import {bindUserIdToSession} from "./request";
+import { bindUserIdToRequest } from './request';
+import {
+  generateAccessToken,
+  generateRefreshToken,
+  JWT_ACCESS_EXPIRY_MS,
+  JWT_REFRESH_EXPIRY_MS,
+} from './jwt';
 
 export interface ProviderUserInput {
   provider: Provider;
@@ -23,42 +28,58 @@ export interface LoginResult {
 }
 
 /**
- * 공용 로그인 처리: 사용자 upsert/find → 세션 userId 저장 → 표시용 쿠키 설정.
- * @param req Express Request (세션 저장을 위해 필요)
- * @param res Express Response (표시용 보조 쿠키 설정을 위해 필요)
+ * 공용 로그인 처리: 사용자 upsert/find → JWT 토큰 발급 및 쿠키 저장 → 표시용 쿠키 설정.
+ * @param req Express Request
+ * @param res Express Response (쿠키 설정을 위해 필요)
  * @param input provider, providerUserId, email, displayName, avatarUrl
  * @returns {LoginResult} userId
  */
-export async function completeLogin(req: Request, res: Response, input: ProviderUserInput): Promise<LoginResult> {
+export async function completeLogin(
+  req: Request,
+  res: Response,
+  input: ProviderUserInput
+): Promise<LoginResult> {
   const repo = new UserRepositoryMySQL();
-  const user : User = await repo.findOrCreateFromProvider({
+  const user: User = await repo.findOrCreateFromProvider({
     provider: input.provider,
     providerUserId: input.providerUserId,
     email: input.email,
     displayName: input.displayName,
-    avatarUrl: input.avatarUrl
+    avatarUrl: input.avatarUrl,
   });
 
+  // JWT 토큰 생성
+  const accessToken = generateAccessToken({ userId: user.id });
+  const refreshToken = generateRefreshToken({ userId: user.id });
 
+  // 쿠키 옵션 설정
+  const isProd = process.env.NODE_ENV === 'production';
+  const insecure = process.env.DEV_INSECURE_COOKIES === 'true';
+  const secure = isProd && !insecure;
+  const sameSite = secure ? 'none' : 'lax';
 
-  // 세션에 사용자 ID 바인딩
-  bindUserIdToSession(req, user.id);
+  const commonCookieOpts = {
+    httpOnly: true,
+    secure,
+    sameSite: sameSite as 'none' | 'lax',
+    signed: true,
+    path: '/',
+  };
 
+  // Access Token 쿠키 (1시간)
+  res.cookie('access_token', accessToken, {
+    ...commonCookieOpts,
+    maxAge: JWT_ACCESS_EXPIRY_MS,
+  });
 
-  //세션을 외부 redis session store에 저장
-  await new Promise<void>((resolve, reject) => {
-    req.session!.save((err) => {
-      if (err) {
-        reject(err);
+  // Refresh Token 쿠키 (7일)
+  res.cookie('refresh_token', refreshToken, {
+    ...commonCookieOpts,
+    maxAge: JWT_REFRESH_EXPIRY_MS,
+  });
 
-        return;
-      }
-
-      resolve();
-    })
-  })
-
-
+  // Request 객체에 사용자 ID 바인딩 (동일 요청 내 사용 가능하도록)
+  bindUserIdToRequest(req, user.id);
 
   // 표시용 보조 쿠키 설정
   setHelperLoginCookies(res, {

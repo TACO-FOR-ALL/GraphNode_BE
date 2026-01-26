@@ -1,12 +1,12 @@
 import { GraphManagementService } from '../../src/core/services/GraphManagementService';
-import { GraphStore } from '../../src/core/ports/GraphStore';
+import { GraphDocumentStore } from '../../src/core/ports/GraphDocumentStore';
 import { GraphNodeDto } from '../../src/shared/dtos/graph';
 import { ValidationError, UpstreamError } from '../../src/shared/errors/domain';
 import { GraphNodeDoc } from '../../src/core/types/persistence/graph.persistence';
 
 describe('GraphManagementService', () => {
   let service: GraphManagementService;
-  let mockRepo: jest.Mocked<GraphStore>;
+  let mockRepo: jest.Mocked<GraphDocumentStore>;
 
   beforeEach(() => {
     mockRepo = {
@@ -16,20 +16,20 @@ describe('GraphManagementService', () => {
       deleteNodes: jest.fn(),
       findNode: jest.fn(),
       listNodes: jest.fn(),
+      listNodesByCluster: jest.fn(),
       upsertEdge: jest.fn(),
       deleteEdge: jest.fn(),
-      deleteEdges: jest.fn(),
-      findEdge: jest.fn(),
+      deleteEdgeBetween: jest.fn(),
+      deleteEdgesByNodeIds: jest.fn(),
       listEdges: jest.fn(),
       upsertCluster: jest.fn(),
       deleteCluster: jest.fn(),
       findCluster: jest.fn(),
       listClusters: jest.fn(),
-      upsertStats: jest.fn(),
+      saveStats: jest.fn(),
       getStats: jest.fn(),
       deleteStats: jest.fn(),
-      deleteEdgesByNodeId: jest.fn(),
-    } as unknown as jest.Mocked<GraphStore>;
+    } as unknown as jest.Mocked<GraphDocumentStore>;
 
     service = new GraphManagementService(mockRepo);
   });
@@ -80,7 +80,12 @@ describe('GraphManagementService', () => {
       const patch = { clusterName: 'Updated Cluster' };
       await service.updateNode('user-1', 1, patch);
 
-      expect(mockRepo.updateNode).toHaveBeenCalledWith('user-1', 1, expect.objectContaining(patch), undefined);
+      expect(mockRepo.updateNode).toHaveBeenCalledWith(
+        'user-1',
+        1,
+        expect.objectContaining(patch),
+        undefined
+      );
     });
 
     it('should throw ValidationError if userId is missing', async () => {

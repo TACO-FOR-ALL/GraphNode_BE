@@ -36,18 +36,18 @@ export class GraphGenerationService {
   ) {
     const env = loadEnv();
     // 타임아웃 5분(300초)으로 설정
-    this.httpClient = new HttpClient('GraphAI', { 
+    this.httpClient = new HttpClient('GraphAI', {
       baseURL: AI_SERVER_URI || 'https://aaejmqgtjczzbxcq.tunnel.elice.io',
-      timeout: 300000 
+      timeout: 300000,
     });
     // TODO: 환경변수 SQS_QUEUE_URL 추가 필요
-    this.jobQueueUrl = process.env.SQS_QUEUE_URL || 'TO_BE_CONFIGURED'; 
+    this.jobQueueUrl = process.env.SQS_QUEUE_URL || 'TO_BE_CONFIGURED';
   }
 
   /**
    * [New] SQS 기반 그래프 생성 요청
    * 사용자의 대화 데이터를 S3에 업로드하고, 작업 요청 메시지를 SQS에 발행합니다.
-   * 
+   *
    * @param userId 사용자 ID
    * @returns 발행된 작업의 연관 ID (TaskId) - 실제 AI TaskId는 아닐 수 있음
    */
@@ -69,7 +69,7 @@ export class GraphGenerationService {
       // 기존 스트리밍 방식을 활용하되, 여기서는 S3에 저장해야 함.
       // streamUserData는 Generator이므로 Readable Stream으로 변환하여 업로드
       const dataStream = Readable.from(this.streamUserData(userId));
-      
+
       // S3 업로드
       //logger.info({ userId, s3Key }, 'Uploading input data to S3');
       await this.storagePort.upload(s3Key, dataStream, 'application/json');
@@ -81,9 +81,9 @@ export class GraphGenerationService {
         payload: {
           userId,
           s3Key,
-          bucket: process.env.S3_PAYLOAD_BUCKET // 수신측 편의를 위해 버킷명 명시 가능
+          bucket: process.env.S3_PAYLOAD_BUCKET, // 수신측 편의를 위해 버킷명 명시 가능
         },
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
 
       logger.info({ userId, queueUrl: this.jobQueueUrl }, 'Sending job to SQS');
@@ -97,11 +97,12 @@ export class GraphGenerationService {
       // FIXME > taskId를 꼭 반환해야 하나?
 
       return taskId;
-
     } catch (err) {
       logger.error({ err, userId }, 'Failed to enqueue graph generation request');
-       if (err instanceof AppError) throw err;
-      throw new UpstreamError('Failed to request graph generation via queue', { cause: String(err) });
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('Failed to request graph generation via queue', {
+        cause: String(err),
+      });
     }
   }
 
@@ -113,18 +114,18 @@ export class GraphGenerationService {
    * 3. 데이터를 AI 서버로 전송하여 분석 파이프라인을 시작합니다.
    * 4. 작업 ID를 즉시 반환합니다.
    * 5. 백그라운드 폴링 프로세스를 시작하여 결과를 기다리고 저장합니다.
-   * 
+   *
    * @param userId 사용자 ID.
    * @returns AI 서버가 할당한 작업 ID.
    */
   async generateGraphForUser(userId: string): Promise<string> {
-
     try {
-
       // 중복 요청 방지
       if (this.activeUserTasks.has(userId)) {
         logger.warn({ userId }, 'Graph generation already in progress for user');
-        throw new ConflictError('Graph generation is already in progress for this user.', { status: 'processing' });
+        throw new ConflictError('Graph generation is already in progress for this user.', {
+          status: 'processing',
+        });
       }
 
       // 사용자를 활성 상태로 표시
@@ -134,7 +135,7 @@ export class GraphGenerationService {
       // 2. AI 서버로 전송 (재시도 로직 적용)
       logger.info({ userId }, 'Sending data stream to AI server');
       let taskId: string | undefined;
-      
+
       const MAX_RETRIES = 5;
 
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -144,12 +145,14 @@ export class GraphGenerationService {
           // - Readable.from()은 Async Iterable(여기서는 제너레이터)을 Node.js의 읽기 가능한 스트림으로 변환합니다.
           // - 스트림은 데이터를 한 번에 메모리에 올리지 않고, 소비되는 속도에 맞춰 조금씩 데이터를 '흘려보내는' 방식입니다.
           const dataStream = Readable.from(this.streamUserData(userId));
-          
+
           // Axios는 Readable Stream을 요청 바디로 지원합니다.
-          const response = await this.httpClient.post<{ task_id: string; status: string }>('/analysis', dataStream);
+          const response = await this.httpClient.post<{ task_id: string; status: string }>(
+            '/analysis',
+            dataStream
+          );
           taskId = response.task_id;
           break; // 성공 시 루프 탈출
-
         } catch (err) {
           // 재시도 불가능한 에러인지 확인 (4xx 클라이언트 에러 등)
           let isRetryable = true;
@@ -163,13 +166,19 @@ export class GraphGenerationService {
 
           // 마지막 시도이거나 재시도 불가능한 에러인 경우
           if (!isRetryable || attempt === MAX_RETRIES) {
-            logger.error({ err, userId, attempt }, 'Failed to send data to AI server (Final attempt)');
+            logger.error(
+              { err, userId, attempt },
+              'Failed to send data to AI server (Final attempt)'
+            );
             throw err;
           }
 
-          logger.warn({ err, userId, attempt }, `Failed to send data to AI server. Retrying in ${attempt * 1000}ms...`);
+          logger.warn(
+            { err, userId, attempt },
+            `Failed to send data to AI server. Retrying in ${attempt * 1000}ms...`
+          );
           // 지수 백오프: 1초, 2초... 대기
-          await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+          await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
         }
       }
 
@@ -180,32 +189,29 @@ export class GraphGenerationService {
       // // 사용자를 활성 상태로 표시
       // this.activeUserTasks.add(userId);
 
-      // 3. 폴링 시작 
+      // 3. 폴링 시작
       // 참고: 여러 인스턴스가 있는 프로덕션 환경에서는 이 폴링을 별도의 워커가 처리하거나
       // 결과가 웹훅/큐를 통해 푸시되어야 합니다.
       // 이 데모에서는 인메모리 폴링.
-      this.pollAndSave(taskId, userId).catch(err => {
+      this.pollAndSave(taskId, userId).catch((err) => {
         logger.error({ err, taskId, userId }, 'Failed to poll and save graph data');
         this.activeUserTasks.delete(userId);
       });
 
       return taskId;
-
     } catch (err: unknown) {
       this.activeUserTasks.delete(userId);
       logger.error({ err, userId }, 'Error in generateGraphForUser');
       if (err instanceof AppError) throw err;
       throw new UpstreamError('ChatService.getConversation failed', { cause: String(err) });
-    } 
-
- 
+    }
   }
 
   /**
-   * 
+   *
    * 사용자 대화 데이터를 AI 입력 형식으로 변환하여 스트리밍하는 제너레이터
    * JSON 구조: { "data": [ ... ] }
-   * 
+   *
    * [개념 설명: Async Generator (async function*)]
    * - 제너레이터는 함수 실행을 중간에 멈췄다가 재개할 수 있는 함수입니다.
    * - 'yield' 키워드를 만나면 값을 반환하고 실행을 일시 정지합니다.
@@ -218,7 +224,7 @@ export class GraphGenerationService {
     // 거대한 객체를 한 번에 JSON.stringify() 하면 메모리 부족(OOM)이 발생할 수 있습니다.
     // 따라서 JSON의 문자열 구조(괄호, 콤마 등)를 수동으로 쪼개서 스트림으로 보냅니다.
     yield '[';
-    
+
     let isFirst = true;
     let cursor: string | undefined = undefined;
     const BATCH_SIZE = 50; // 한 번에 메모리에 올릴 대화 개수
@@ -231,9 +237,9 @@ export class GraphGenerationService {
       for (const conv of batchConversations) {
         const messages: ChatMessage[] = conv.messages;
         const mapping: Record<string, AiInputMappingNode> = {};
-        
+
         let prevMsgId: string | null = null;
-        
+
         // 메시지 정렬 (createdAt 기준)
         messages.sort((a, b) => {
           const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -248,27 +254,27 @@ export class GraphGenerationService {
             message: {
               id: nodeId,
               author: { role: msg.role },
-              content: { content_type: 'text', parts: [msg.content] }
+              content: { content_type: 'text', parts: [msg.content] },
             },
             parent: prevMsgId,
-            children: []
+            children: [],
           };
-          
+
           if (prevMsgId && mapping[prevMsgId]) {
             mapping[prevMsgId].children.push(nodeId);
           }
-          
+
           prevMsgId = nodeId;
         }
 
         //FIXED: id 필드 추가
-        const aiItem : AiInputConversation = {
-          id : conv.id,
-          conversation_id : conv.id,
+        const aiItem: AiInputConversation = {
+          id: conv.id,
+          conversation_id: conv.id,
           title: conv.title,
           create_time: conv.createdAt ? new Date(conv.createdAt).getTime() / 1000 : 0,
           update_time: conv.updatedAt ? new Date(conv.updatedAt).getTime() / 1000 : 0,
-          mapping: mapping
+          mapping: mapping,
         };
 
         if (!isFirst) {
@@ -292,7 +298,7 @@ export class GraphGenerationService {
    * @deprecated SQS 도입 전 구 방식 (사용 금지)
    * AI 서버에 작업 상태를 주기적으로 폴링합니다.
    * 작업이 완료되면 결과를 가져와 데이터베이스에 저장합니다.
-   * 
+   *
    * @param taskId AI 서버에서 발급받은 작업 고유 ID. 상태 조회 및 결과 수령에 사용됩니다.
    * @param userId 작업을 요청한 사용자 ID. 작업 완료 후 상태 해제 및 로깅에 사용됩니다.
    */
@@ -300,10 +306,10 @@ export class GraphGenerationService {
     const POLLING_INTERVAL = 30000; // 30초
     const MAX_ATTEMPTS = 120; // 60분 (120 * 30초 = 3600초)
     const MAX_CONSECUTIVE_ERRORS = 5; // 연속 에러 허용 횟수 (5번 연속 실패 시 중단)
-    
+
     let attempts = 0;
     let consecutiveErrors = 0;
-    
+
     const checkStatus = async () => {
       // 최대 시도 횟수 초과 시 폴링 중단
       if (attempts >= MAX_ATTEMPTS) {
@@ -312,39 +318,40 @@ export class GraphGenerationService {
         this.activeUserTasks.delete(userId);
         return;
       }
-      
+
       attempts++;
-      
+
       try {
         // AI 서버에 현재 작업 상태 조회 요청 (GET /status/:taskId)
-        const statusRes = await this.httpClient.get<{ task_id: string; status: string }>(`/status/${taskId}`);
-        
+        const statusRes = await this.httpClient.get<{ task_id: string; status: string }>(
+          `/status/${taskId}`
+        );
+
         // 성공 시 연속 에러 카운트 초기화
         consecutiveErrors = 0;
-        
+
         if (statusRes.status === 'completed') {
           logger.info({ taskId, userId }, 'AI task completed. Fetching result...');
-          
+
           // 결과 데이터 조회 요청 (GET /result/:taskId)
           // AI 서버의 원시 출력 포맷(AiGraphOutputDto)으로 수신
           const rawResult = await this.httpClient.get<AiGraphOutputDto>(`/result/${taskId}`);
-          
+
           // 원시 출력을 내부 표준 GraphSnapshotDto로 변환 (Mapper 사용)
-          const snapshot : GraphSnapshotDto = mapAiOutputToSnapshot(rawResult, userId);
-          
+          const snapshot: GraphSnapshotDto = mapAiOutputToSnapshot(rawResult, userId);
+
           // DB 저장을 위한 페이로드 구성
           const payload: PersistGraphPayloadDto = {
             userId: userId,
-            snapshot: snapshot
+            snapshot: snapshot,
           };
-          
+
           // GraphEmbeddingService를 통해 스냅샷 데이터를 DB에 저장 (트랜잭션 처리됨)
           await this.graphEmbeddingService.persistSnapshot(payload);
           logger.info({ taskId, userId }, 'Graph data successfully saved to DB');
-          
+
           // 사용자 작업 상태 해제 (재요청 가능하도록)
           this.activeUserTasks.delete(userId);
-          
         } else if (statusRes.status === 'failed') {
           // 상태가 'failed' (실패)인 경우
           logger.error({ taskId, userId }, 'AI Task failed on server side');
@@ -365,16 +372,22 @@ export class GraphGenerationService {
         if (err instanceof UpstreamError && err.details?.status) {
           const status = err.details.status;
           if (status === 404 || (status >= 400 && status < 500)) {
-             logger.error({ taskId, userId, status }, 'Polling stopped due to client error (e.g. Task Not Found)');
-             this.activeUserTasks.delete(userId);
-             return;
+            logger.error(
+              { taskId, userId, status },
+              'Polling stopped due to client error (e.g. Task Not Found)'
+            );
+            this.activeUserTasks.delete(userId);
+            return;
           }
         }
 
         // 2. 연속된 서버 에러 (5xx, 네트워크 등) -> 일정 횟수 이상이면 중단
         // 일시적인 네트워크/서버 장애는 재시도하지만, 계속되면 포기
         if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-          logger.error({ taskId, userId, consecutiveErrors }, 'Polling stopped due to too many consecutive errors');
+          logger.error(
+            { taskId, userId, consecutiveErrors },
+            'Polling stopped due to too many consecutive errors'
+          );
           this.activeUserTasks.delete(userId);
           return;
         }
@@ -392,18 +405,19 @@ export class GraphGenerationService {
    * @deprecated 사용 금지 - SQS 도입 전 구 방식
    * [테스트용] JSON 데이터를 직접 입력받아 그래프 생성을 요청합니다.
    * DB 조회 과정을 생략하고, 클라이언트가 제공한 데이터를 그대로 AI 서버로 전송합니다.
-   * 
+   *
    * @param userId 사용자 ID (결과 저장용)
    * @param inputData AI 입력 데이터 (AiInputData 형식)
    * @returns AI 서버가 할당한 작업 ID
    */
   async generateGraphFromJson(inputData: AiInputData): Promise<string> {
-    
-    const userId = "test-user"; // 테스트용 고정 사용자 ID
-    
+    const userId = 'test-user'; // 테스트용 고정 사용자 ID
+
     if (this.activeUserTasks.has(userId)) {
       logger.warn({ userId }, 'Graph generation already in progress for user');
-      throw new ConflictError('Graph generation is already in progress for this user.', { status: 'processing' });
+      throw new ConflictError('Graph generation is already in progress for this user.', {
+        status: 'processing',
+      });
     }
 
     logger.info({ userId }, 'Starting test graph generation from JSON');
@@ -412,7 +426,10 @@ export class GraphGenerationService {
     logger.info({ userId }, 'Sending provided JSON data to AI server');
     let taskId: string;
     try {
-      const response = await this.httpClient.post<{ task_id: string; status: string }>('/analysis', { data: inputData });
+      const response = await this.httpClient.post<{ task_id: string; status: string }>(
+        '/analysis',
+        { data: inputData }
+      );
       taskId = response.task_id;
     } catch (error) {
       logger.error({ err: error, userId }, 'Failed to start AI analysis task');
@@ -425,7 +442,7 @@ export class GraphGenerationService {
     this.activeUserTasks.add(userId);
 
     // 3. 폴링 시작
-    this.pollAndSave(taskId, userId).catch(err => {
+    this.pollAndSave(taskId, userId).catch((err) => {
       logger.error({ err, taskId, userId }, 'Failed to poll and save graph data');
       this.activeUserTasks.delete(userId);
     });

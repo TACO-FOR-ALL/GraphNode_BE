@@ -9,7 +9,7 @@ module.exports = {
     'plugin:@typescript-eslint/recommended',
     'plugin:import/recommended',
     'plugin:import/typescript',
-    'prettier'
+    'prettier',
   ],
   rules: {
     'no-console': 'warn',
@@ -18,9 +18,9 @@ module.exports = {
       'warn',
       {
         groups: [['builtin', 'external'], 'internal', ['parent', 'sibling', 'index']],
-        'newlines-between': 'always'
-      }
-    ]
+        'newlines-between': 'always',
+      },
+    ],
   },
-  ignorePatterns: ['dist', 'node_modules']
+  ignorePatterns: ['dist', 'node_modules'],
 };

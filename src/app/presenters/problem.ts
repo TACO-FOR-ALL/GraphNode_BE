@@ -27,6 +27,7 @@ export function toProblem(e: AppError, req: Request): ProblemDetails {
     detail: e.message,
     instance: req.originalUrl,
     correlationId: (req as any).id,
-    retryable: !!e.retryable
+    retryable: !!e.retryable,
+    errors: e.details?.issues || e.details,
   };
 }

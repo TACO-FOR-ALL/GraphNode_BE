@@ -10,7 +10,7 @@ const config: Config = {
   collectCoverageFrom: ['src/app/**/*.{ts,js}'],
   setupFilesAfterEnv: ['<rootDir>/tests/jest.setup.ts'],
   moduleFileExtensions: ['ts', 'js', 'json'],
-  testMatch: ['**/tests/**/*.spec.ts']
+  testMatch: ['**/tests/**/*.spec.ts'],
 };
 
 export default config;

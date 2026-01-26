@@ -1,8 +1,7 @@
-
 /**
  * 모듈: 노트/폴더 Persistence Types
  * 책임: MongoDB에 저장되는 문서(Document)의 구조를 정의한다.
- * 
+ *
  * - 이 타입들은 Repository 계층 내부에서만 사용되어야 하며,
  *   Service 계층 밖으로 노출될 때는 DTO로 변환되어야 한다.
  */

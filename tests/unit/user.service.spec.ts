@@ -63,29 +63,29 @@ class InMemoryUserRepo implements UserRepository {
   async updateApiKeyById(id: number, model: 'openai' | 'deepseek', apiKey: string): Promise<void> {
     const user = this.users.get(id);
     if (user) {
-        // User is immutable in this mock, so we need to replace it or hack it.
-        // Since User class has getters, we can't set properties.
-        // But for test, we can cast to any.
-        if (model === 'openai') (user as any).props.apiKeyOpenai = apiKey;
-        if (model === 'deepseek') (user as any).props.apiKeyDeepseek = apiKey;
+      // User is immutable in this mock, so we need to replace it or hack it.
+      // Since User class has getters, we can't set properties.
+      // But for test, we can cast to any.
+      if (model === 'openai') (user as any).props.apiKeyOpenai = apiKey;
+      if (model === 'deepseek') (user as any).props.apiKeyDeepseek = apiKey;
     }
   }
 
   async deleteApiKeyById(id: number, model: 'openai' | 'deepseek'): Promise<void> {
     const user = this.users.get(id);
     if (user) {
-        if (model === 'openai') (user as any).props.apiKeyOpenai = null;
-        if (model === 'deepseek') (user as any).props.apiKeyDeepseek = null;
+      if (model === 'openai') (user as any).props.apiKeyOpenai = null;
+      if (model === 'deepseek') (user as any).props.apiKeyDeepseek = null;
     }
   }
 
   // Helper
   async seed(data: Partial<Parameters<typeof this.create>[0]>) {
-      return this.create({
-          provider: 'google',
-          providerUserId: `pid-${this.nextId}`,
-          ...data
-      });
+    return this.create({
+      provider: 'google',
+      providerUserId: `pid-${this.nextId}`,
+      ...data,
+    });
   }
 }
 
@@ -109,21 +109,21 @@ describe('UserService', () => {
     });
 
     it('should throw ValidationError for invalid ID format', async () => {
-        await expect(userService.getUserProfile("abc")).rejects.toThrow(ValidationError);
+      await expect(userService.getUserProfile('abc')).rejects.toThrow(ValidationError);
     });
 
     it('should throw NotFoundError for non-existent ID', async () => {
-      await expect(userService.getUserProfile("999")).rejects.toThrow(NotFoundError);
+      await expect(userService.getUserProfile('999')).rejects.toThrow(NotFoundError);
     });
   });
 
   describe('getApiKeys', () => {
-      it('should return api key', async () => {
-          const user = await userRepo.seed({});
-          await userRepo.updateApiKeyById(Number(user.id), 'openai', 'sk-test');
-          
-          const result = await userService.getApiKeys(user.id, 'openai');
-          expect(result.apiKey).toBe('sk-test');
-      });
+    it('should return api key', async () => {
+      const user = await userRepo.seed({});
+      await userRepo.updateApiKeyById(Number(user.id), 'openai', 'sk-test');
+
+      const result = await userService.getApiKeys(user.id, 'openai');
+      expect(result.apiKey).toBe('sk-test');
+    });
   });
 });

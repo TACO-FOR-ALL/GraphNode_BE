@@ -11,7 +11,7 @@ export class NotificationController {
   /**
    * SSE(Server-Sent Events) 스트림 연결
    * GET /v1/notifications/stream
-   * 
+   *
    * 클라이언트가 이 엔드포인트에 접속하면 SSE 연결이 수립되고,
    * 서버는 해당 사용자에 대한 알림이 발생할 때마다 이벤트를 전송합니다.
    */
@@ -26,12 +26,14 @@ export class NotificationController {
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
+      Connection: 'keep-alive',
       'X-Accel-Buffering': 'no', // Nginx 등 프록시 버퍼링 방지
     });
 
     // 연결 확인용 초기 메시지 전송
-    res.write(`data: ${JSON.stringify({ type: 'CONNECTED', message: 'SSE Connection established' })}\n\n`);
+    res.write(
+      `data: ${JSON.stringify({ type: 'CONNECTED', message: 'SSE Connection established' })}\n\n`
+    );
 
     const handleNotification = (message: any) => {
       // 메시지 포맷: data: {json}\n\n
@@ -48,11 +50,10 @@ export class NotificationController {
         await this.notificationService.unsubscribeFromUserNotifications(userId);
         res.end();
       });
-
     } catch (err) {
       logger.error({ err, userId }, 'Error in SSE stream');
       // 이미 헤더가 전송되었으므로 JSON 에러 응답은 불가능. 스트림 종료.
-      res.end(); 
+      res.end();
     }
   }
 }

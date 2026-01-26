@@ -10,14 +10,14 @@ import type {
 
 /**
  * Note API
- * 
+ *
  * 노트(Note)와 폴더(Folder)를 관리하는 API 클래스입니다.
  * `/v1/notes` 및 `/v1/folders` 엔드포인트 하위의 API들을 호출합니다.
- * 
+ *
  * 주요 기능:
  * - 노트 관리 (생성, 조회, 수정, 삭제) (`createNote`, `listNotes`, `getNote`, `updateNote`, `deleteNote`)
  * - 폴더 관리 (생성, 조회, 수정, 삭제) (`createFolder`, `listFolders`, `getFolder`, `updateFolder`, `deleteFolder`)
- * 
+ *
  * @public
  */
 export class NoteApi {
@@ -51,7 +51,7 @@ export class NoteApi {
    *   content: '# Weekly Sync\n- Discussed Q3 goals\n- Reviewed metrics',
    *   folderId: null
    * });
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {
@@ -73,7 +73,7 @@ export class NoteApi {
    * @returns 노트 목록 (NoteDto 배열)
    * @example
    * const response = await client.note.listNotes();
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * [
@@ -107,7 +107,7 @@ export class NoteApi {
    * @returns 요청한 노트 상세 정보
    * @example
    * const response = await client.note.getNote('550e8400-e29b-41d4-a716-446655440000');
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {
@@ -137,7 +137,7 @@ export class NoteApi {
    *   title: 'Q3 Review Meeting',
    *   content: '# Q3 Review\n- Goals achieved'
    * });
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {
@@ -162,7 +162,7 @@ export class NoteApi {
    * @example
    * // 휴지통으로 이동 (Soft Delete)
    * const response = await client.note.deleteNote('550e8400-e29b-41d4-a716-446655440000');
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {
@@ -190,7 +190,7 @@ export class NoteApi {
    * @returns 복구된 노트 정보
    * @example
    * const response = await client.note.restoreNote('550e8400-e29b-41d4-a716-446655440000');
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {
@@ -226,7 +226,7 @@ export class NoteApi {
    *   name: 'Work Projects',
    *   parentId: null
    * });
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {
@@ -247,7 +247,7 @@ export class NoteApi {
    * @returns 폴더 목록 (FolderDto 배열)
    * @example
    * const response = await client.note.listFolders();
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * [
@@ -279,7 +279,7 @@ export class NoteApi {
    * @returns 요청한 폴더 상세 정보
    * @example
    * const response = await client.note.getFolder('folder-123');
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {

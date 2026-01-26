@@ -11,7 +11,7 @@
  * 메시지 역할.
  * @public
  */
-export type ChatRole = "user" | "assistant" | "system";
+export type ChatRole = 'user' | 'assistant' | 'system';
 
 /**
  * FE-BE간 채팅 메시지 DTO
@@ -55,7 +55,6 @@ export interface ChatThread {
 //   text: string;
 // };
 
-
 /**
  * AI 채팅 응답 DTO
  * @public
@@ -63,7 +62,6 @@ export interface ChatThread {
  * @property messages 생성된 메시지 목록 (사용자 메시지 + AI 응답 메시지)
  */
 export interface AIChatResponseDto {
-  title? : string;
+  title?: string;
   messages: ChatMessage[];
 }
-

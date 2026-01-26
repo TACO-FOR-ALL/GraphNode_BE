@@ -1,29 +1,19 @@
-import { FindCursor, UpdateResult, WithId } from 'mongodb';
-
-import { getMongo } from '../db/mongodb';
-import type {
+import { FindCursor, UpdateResult, WithId, UpdateOptions, DeleteOptions, Sort } from 'mongodb';
+import { GraphDocumentStore, RepoOptions } from '../../core/ports/GraphDocumentStore';
+import {
   GraphClusterDoc,
   GraphEdgeDoc,
   GraphNodeDoc,
   GraphStatsDoc,
 } from '../../core/types/persistence/graph.persistence';
-import type { GraphStore, RepoOptions } from '../../core/ports/GraphStore';
+import { getMongo } from '../db/mongodb';
 import { UpstreamError, ValidationError, NotFoundError } from '../../shared/errors/domain';
 
-/**
- * MongoDB 기반 GraphStore 구현체.
- * - 노드: `graph_nodes` 컬렉션
- * - 엣지: `graph_edges` 컬렉션
- * - 클러스터: `graph_clusters` 컬렉션
- * - 통계: `graph_stats` 컬렉션
- * @remarks
- * - 모든 메서드는 userId를 기준으로 데이터를 격리합니다.
- * - 복합 키는 `userId::objectId` 형식의 문자열로 관리하여 MongoDB 문서 ID로 사용합니다.
- * - 실패 시 `UpstreamError` 또는 `ValidationError`를 발생시킵니다.
- */
-export class GraphRepositoryMongo implements GraphStore {
+export class GraphRepositoryMongo implements GraphDocumentStore {
   private db() {
-    return getMongo().db();
+    const mongo = getMongo();
+    if (!mongo) throw new Error('Mongo client not initialized');
+    return mongo.db();
   }
 
   private graphNodes_col() {
@@ -84,7 +74,11 @@ export class GraphRepositoryMongo implements GraphStore {
     try {
       // _id는 이미 Mapper에서 생성되어 전달됨을 가정하거나, 여기서 검증할 수 있음.
       // 하지만 Rule 1에 따라 Repo는 DB Type을 그대로 받으므로, _id가 포함되어 있어야 함.
-      await this.graphNodes_col().updateOne({ _id: node._id } as any, { $set: node }, { upsert: true, ...options });
+      await this.graphNodes_col().updateOne(
+        { _id: node._id } as any,
+        { $set: node },
+        { upsert: true, ...options, session: options?.session as any }
+      );
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.upsertNode failed', { cause: String(err) });
     }
@@ -98,11 +92,23 @@ export class GraphRepositoryMongo implements GraphStore {
    * @throws {NotFoundError} 해당 노드가 없을 경우
    * @throws {UpstreamError} MongoDB 작업 실패 시
    */
-  async updateNode(userId: string, nodeId: number, patch: Partial<GraphNodeDoc>, options?: RepoOptions): Promise<void> {
+  async updateNode(
+    userId: string,
+    nodeId: number,
+    patch: Partial<GraphNodeDoc>,
+    options?: RepoOptions
+  ): Promise<void> {
     try {
       const docId: string = this.nodeKey(userId, nodeId);
-      const update: Partial<GraphNodeDoc> = { ...patch, updatedAt: patch.updatedAt ?? new Date().toISOString() };
-      const res: UpdateResult<GraphNodeDoc> = await this.graphNodes_col().updateOne({ _id: docId } as any, { $set: update }, options);
+      const update: Partial<GraphNodeDoc> = {
+        ...patch,
+        updatedAt: patch.updatedAt ?? new Date().toISOString(),
+      };
+      const res: UpdateResult<GraphNodeDoc> = await this.graphNodes_col().updateOne(
+        { _id: docId } as any,
+        { $set: update },
+        { ...options, session: options?.session as any }
+      );
       if (res.matchedCount === 0) throw new NotFoundError('Graph node not found');
     } catch (err: unknown) {
       if (err instanceof NotFoundError) throw err;
@@ -119,8 +125,14 @@ export class GraphRepositoryMongo implements GraphStore {
   async deleteNode(userId: string, nodeId: number, options?: RepoOptions): Promise<void> {
     try {
       const docId: string = this.nodeKey(userId, nodeId);
-      await this.graphNodes_col().deleteOne({ _id: docId } as any, options);
-      await this.graphEdges_col().deleteMany({ userId, $or: [{ source: nodeId }, { target: nodeId }] } as any, options);
+      await this.graphNodes_col().deleteOne({ _id: docId } as any, {
+        ...options,
+        session: options?.session as any,
+      });
+      await this.graphEdges_col().deleteMany(
+        { userId, $or: [{ source: nodeId }, { target: nodeId }] } as any,
+        { ...options, session: options?.session as any }
+      );
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.deleteNode failed', { cause: String(err) });
     }
@@ -135,8 +147,11 @@ export class GraphRepositoryMongo implements GraphStore {
    */
   async deleteNodes(userId: string, nodeIds: number[], options?: RepoOptions): Promise<void> {
     try {
-      const docIds: string[] = nodeIds.map(id => this.nodeKey(userId, id));
-      await this.graphNodes_col().deleteMany({ _id: { $in: docIds } } as any, options);
+      const docIds: string[] = nodeIds.map((id) => this.nodeKey(userId, id));
+      await this.graphNodes_col().deleteMany({ _id: { $in: docIds } } as any, {
+        ...options,
+        session: options?.session as any,
+      });
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.deleteNodes failed', { cause: String(err) });
     }
@@ -167,7 +182,9 @@ export class GraphRepositoryMongo implements GraphStore {
    */
   async listNodes(userId: string): Promise<GraphNodeDoc[]> {
     try {
-      const cursor : FindCursor<WithId<GraphNodeDoc>> = this.graphNodes_col().find({ userId } as any);
+      const cursor: FindCursor<WithId<GraphNodeDoc>> = this.graphNodes_col().find({
+        userId,
+      } as any);
       return await cursor.toArray();
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.listNodes failed', { cause: String(err) });
@@ -183,10 +200,15 @@ export class GraphRepositoryMongo implements GraphStore {
    */
   async listNodesByCluster(userId: string, clusterId: string): Promise<GraphNodeDoc[]> {
     try {
-      const cursor : FindCursor<WithId<GraphNodeDoc>> = this.graphNodes_col().find({ userId, clusterId } as any);
+      const cursor: FindCursor<WithId<GraphNodeDoc>> = this.graphNodes_col().find({
+        userId,
+        clusterId,
+      } as any);
       return await cursor.toArray();
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.listNodesByCluster failed', { cause: String(err) });
+      throw new UpstreamError('GraphRepositoryMongo.listNodesByCluster failed', {
+        cause: String(err),
+      });
     }
   }
 
@@ -199,10 +221,15 @@ export class GraphRepositoryMongo implements GraphStore {
    */
   async upsertEdge(edge: GraphEdgeDoc, options?: RepoOptions): Promise<string> {
     try {
-      if (edge.source === edge.target) throw new ValidationError('edge source and target must differ');
+      if (edge.source === edge.target)
+        throw new ValidationError('edge source and target must differ');
       // _id는 Mapper에서 생성되어야 함.
-      await this.graphEdges_col().updateOne({ _id: edge._id } as any, { $set: edge }, { upsert: true, ...options });
-      return edge._id;
+      await this.graphEdges_col().updateOne(
+        { _id: edge._id } as any,
+        { $set: edge },
+        { upsert: true, ...options, session: options?.session as any }
+      );
+      return edge._id as string;
     } catch (err: unknown) {
       if (err instanceof ValidationError) throw err;
       throw new UpstreamError('GraphRepositoryMongo.upsertEdge failed', { cause: String(err) });
@@ -217,7 +244,10 @@ export class GraphRepositoryMongo implements GraphStore {
    */
   async deleteEdge(userId: string, edgeId: string, options?: RepoOptions): Promise<void> {
     try {
-      await this.graphEdges_col().deleteOne({ _id: edgeId, userId } as any, options);
+      await this.graphEdges_col().deleteOne({ _id: edgeId, userId } as any, {
+        ...options,
+        session: options?.session as any,
+      });
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.deleteEdge failed', { cause: String(err) });
     }
@@ -230,7 +260,12 @@ export class GraphRepositoryMongo implements GraphStore {
    * @param target 도착 노드 ID
    * @throws {UpstreamError} MongoDB 작업 실패 시
    */
-  async deleteEdgeBetween(userId: string, source: number, target: number, options?: RepoOptions): Promise<void> {
+  async deleteEdgeBetween(
+    userId: string,
+    source: number,
+    target: number,
+    options?: RepoOptions
+  ): Promise<void> {
     try {
       await this.graphEdges_col().deleteMany(
         {
@@ -240,10 +275,12 @@ export class GraphRepositoryMongo implements GraphStore {
             { source: target, target: source },
           ],
         } as any,
-        options
+        { ...options, session: options?.session as any }
       );
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.deleteEdgeBetween failed', { cause: String(err) });
+      throw new UpstreamError('GraphRepositoryMongo.deleteEdgeBetween failed', {
+        cause: String(err),
+      });
     }
   }
 
@@ -254,17 +291,23 @@ export class GraphRepositoryMongo implements GraphStore {
    * @param options 트랜잭션 세션 등 추가 옵션
    * @throws {UpstreamError} MongoDB 작업 실패 시
    */
-  async deleteEdgesByNodeIds(userId: string, nodeIds: number[], options?: RepoOptions): Promise<void> {
+  async deleteEdgesByNodeIds(
+    userId: string,
+    nodeIds: number[],
+    options?: RepoOptions
+  ): Promise<void> {
     try {
       await this.graphEdges_col().deleteMany(
         {
           userId,
           $or: [{ source: { $in: nodeIds } }, { target: { $in: nodeIds } }],
         } as any,
-        options
+        { ...options, session: options?.session as any }
       );
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.deleteEdgesByNodeIds failed', { cause: String(err) });
+      throw new UpstreamError('GraphRepositoryMongo.deleteEdgesByNodeIds failed', {
+        cause: String(err),
+      });
     }
   }
 
@@ -276,7 +319,9 @@ export class GraphRepositoryMongo implements GraphStore {
    */
   async listEdges(userId: string): Promise<GraphEdgeDoc[]> {
     try {
-      return await this.graphEdges_col().find({ userId } as any).toArray();
+      return await this.graphEdges_col()
+        .find({ userId } as any)
+        .toArray();
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.listEdges failed', { cause: String(err) });
     }
@@ -289,7 +334,11 @@ export class GraphRepositoryMongo implements GraphStore {
    */
   async upsertCluster(cluster: GraphClusterDoc, options?: RepoOptions): Promise<void> {
     try {
-      await this.graphClusters_col().updateOne({ _id: cluster._id } as any, { $set: cluster }, { upsert: true, ...options });
+      await this.graphClusters_col().updateOne(
+        { _id: cluster._id } as any,
+        { $set: cluster },
+        { upsert: true, ...options, session: options?.session as any }
+      );
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.upsertCluster failed', { cause: String(err) });
     }
@@ -304,7 +353,10 @@ export class GraphRepositoryMongo implements GraphStore {
   async deleteCluster(userId: string, clusterId: string, options?: RepoOptions): Promise<void> {
     try {
       const docId = this.clusterKey(userId, clusterId);
-      await this.graphClusters_col().deleteOne({ _id: docId } as any, options);
+      await this.graphClusters_col().deleteOne({ _id: docId } as any, {
+        ...options,
+        session: options?.session as any,
+      });
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.deleteCluster failed', { cause: String(err) });
     }
@@ -334,7 +386,9 @@ export class GraphRepositoryMongo implements GraphStore {
    */
   async listClusters(userId: string): Promise<GraphClusterDoc[]> {
     try {
-      return await this.graphClusters_col().find({ userId } as any).toArray();
+      return await this.graphClusters_col()
+        .find({ userId } as any)
+        .toArray();
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.listClusters failed', { cause: String(err) });
     }
@@ -347,7 +401,11 @@ export class GraphRepositoryMongo implements GraphStore {
    */
   async saveStats(stats: GraphStatsDoc, options?: RepoOptions): Promise<void> {
     try {
-      await this.graphStats_col().updateOne({ _id: stats.userId } as any, { $set: stats }, { upsert: true, ...options });
+      await this.graphStats_col().updateOne(
+        { _id: stats.userId } as any,
+        { $set: stats },
+        { upsert: true, ...options, session: options?.session as any }
+      );
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.saveStats failed', { cause: String(err) });
     }
@@ -374,7 +432,10 @@ export class GraphRepositoryMongo implements GraphStore {
    */
   async deleteStats(userId: string, options?: RepoOptions): Promise<void> {
     try {
-      await this.graphStats_col().deleteOne({ _id: userId } as any, options);
+      await this.graphStats_col().deleteOne({ _id: userId } as any, {
+        ...options,
+        session: options?.session as any,
+      });
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.deleteStats failed', { cause: String(err) });
     }

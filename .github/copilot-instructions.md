@@ -3,6 +3,7 @@
 Purpose: Help AI coding agents work effectively in this repo from day one.
 
 ## Architecture (big picture)
+
 - Stack: TypeScript + Node.js (Express). Entry: `src/index.ts` → `src/bootstrap/server.ts`.
 - Layering follows MVC + Service/Ports (see `/.github/instructions/MVS.instructions.md`):
   - app: HTTP layer only (`src/app/{routes,controllers,middlewares}`)
@@ -13,24 +14,28 @@ Purpose: Help AI coding agents work effectively in this repo from day one.
 - Auth: BFF owns OAuth2. Desktop app never handles provider tokens. See `/.github/instructions/Account.instructions.md` and `OAuth2.instructions.md`.
 
 ## Conventions that matter
+
 - REST rules: Resource-first, POST=201 + Location, `application/problem+json` for errors. See `/.github/instructions/RestfulAPI.instructions.md`.
 - Session: long-lived opaque tokens stored hashed server-side. Do not expose provider tokens to clients.
-- Logging: use centralized logger (no console.* in production code). Include correlationId from `traceparent`.
+- Logging: use centralized logger (no console.\* in production code). Include correlationId from `traceparent`.
 - Docs: OpenAPI 3.1 in `/docs/api/openapi.yaml`; JSON Schema 2020-12 in `/docs/schemas/*` (Problem Details included). Maintain examples and Spectral lint.
 - Tests: Use Jest (+ Supertest/Testcontainers per `Testcode.instructions.md`). All error responses must validate against Problem Details schema.
 
 ## Project layout (created/expected)
+
 - `src/bootstrap/server.ts` creates Express app, mounts routers (ex: `src/app/routes/health.ts`).
 - `src/app/routes/health.ts` exposes `GET /healthz` (also available under `/v1/healthz`).
 - Future endpoints: place controllers in `src/app/controllers`, call services from `src/core/services` only; services depend on `src/core/ports` interfaces; infra implements ports.
 
 ## How to run (local)
+
 - Dev: `npm run dev` (uses tsx). Server listens on `http://localhost:3000`.
 - Build: `npm run build`; Start compiled: `npm start`.
 - Lint/Format: `npm run lint` / `npm run format` (ESLint v9 flat config in `eslint.config.js`).
 - Docs lint/build: `npm run docs:lint` / `npm run docs:build`.
 
 ## Patterns and gotchas
+
 - Keep imports framework-free in `core/**`. Don’t import Express types beyond `app/**`.
 - Map all thrown service errors (`shared/errors`) via central error middleware to Problem Details.
 - For OAuth providers (Google/Apple), perform code exchange on server only; encrypt refresh tokens at rest; client only receives our opaque session token.
@@ -38,11 +43,13 @@ Purpose: Help AI coding agents work effectively in this repo from day one.
 - Secrets: from environment/secret manager only; never log secrets; store session tokens as hashes. See `/.github/instructions/secretKey.instructions.md`.
 
 ## Example slices
+
 - Health route: `src/app/routes/health.ts`
 - App bootstrap: `src/bootstrap/server.ts`
 - Graph API: `src/app/routes/graph.ts` and `src/app/controllers/graph.ts`
 
 ## When adding features
+
 - Start with OpenAPI under `/docs/api/openapi.yaml`, then implement controller → service → repository.
 - Return 201 + Location for creates; use `application/problem+json` for any error path.
 - Add JSDoc to public APIs; prefer mappers/presenters to keep layers clean.

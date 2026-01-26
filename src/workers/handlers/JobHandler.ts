@@ -1,4 +1,3 @@
-
 import { Container } from '../../bootstrap/container';
 import { QueueMessage } from '../../shared/dtos/queue';
 

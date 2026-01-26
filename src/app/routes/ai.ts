@@ -16,10 +16,7 @@ export function createAiRouter(deps: {
   aiInteractionService: AiInteractionService;
 }) {
   const router = Router();
-  const aiController = new AiController(
-    deps.chatManagementService,
-    deps.aiInteractionService
-  );
+  const aiController = new AiController(deps.chatManagementService, deps.aiInteractionService);
 
   // 보호 구역(세션 바인딩 + 인증)
   router.use(bindSessionUser, requireLogin);
@@ -29,25 +26,52 @@ export function createAiRouter(deps: {
     '/conversations/bulk',
     asyncHandler(aiController.bulkCreateConversations.bind(aiController))
   );
-  router.post(
-    '/conversations',
-    asyncHandler(aiController.createConversation.bind(aiController))
-  );
+  router.post('/conversations', asyncHandler(aiController.createConversation.bind(aiController)));
   router.get('/conversations', asyncHandler(aiController.listConversations.bind(aiController)));
-  router.delete('/conversations', asyncHandler(aiController.deleteAllConversations.bind(aiController)));
-  router.get('/conversations/:conversationId', asyncHandler(aiController.getConversation.bind(aiController)));
-  router.patch('/conversations/:conversationId', asyncHandler(aiController.updateConversation.bind(aiController)));
-  router.delete('/conversations/:conversationId', asyncHandler(aiController.deleteConversation.bind(aiController)));
-  router.post('/conversations/:conversationId/restore', asyncHandler(aiController.restoreConversation.bind(aiController)));
+  router.delete(
+    '/conversations',
+    asyncHandler(aiController.deleteAllConversations.bind(aiController))
+  );
+  router.get(
+    '/conversations/:conversationId',
+    asyncHandler(aiController.getConversation.bind(aiController))
+  );
+  router.patch(
+    '/conversations/:conversationId',
+    asyncHandler(aiController.updateConversation.bind(aiController))
+  );
+  router.delete(
+    '/conversations/:conversationId',
+    asyncHandler(aiController.deleteConversation.bind(aiController))
+  );
+  router.post(
+    '/conversations/:conversationId/restore',
+    asyncHandler(aiController.restoreConversation.bind(aiController))
+  );
 
   // Messages
-  router.post('/conversations/:conversationId/messages', asyncHandler(aiController.createMessage.bind(aiController)));
-  router.patch('/conversations/:conversationId/messages/:messageId', asyncHandler(aiController.updateMessage.bind(aiController)));
-  router.delete('/conversations/:conversationId/messages/:messageId', asyncHandler(aiController.deleteMessage.bind(aiController)));
-  router.post('/conversations/:conversationId/messages/:messageId/restore', asyncHandler(aiController.restoreMessage.bind(aiController)));
-  
+  router.post(
+    '/conversations/:conversationId/messages',
+    asyncHandler(aiController.createMessage.bind(aiController))
+  );
+  router.patch(
+    '/conversations/:conversationId/messages/:messageId',
+    asyncHandler(aiController.updateMessage.bind(aiController))
+  );
+  router.delete(
+    '/conversations/:conversationId/messages/:messageId',
+    asyncHandler(aiController.deleteMessage.bind(aiController))
+  );
+  router.post(
+    '/conversations/:conversationId/messages/:messageId/restore',
+    asyncHandler(aiController.restoreMessage.bind(aiController))
+  );
+
   // Chat
-  router.post('/conversations/:conversationId/chat', asyncHandler(aiController.handleAIChat.bind(aiController)));
+  router.post(
+    '/conversations/:conversationId/chat',
+    asyncHandler(aiController.handleAIChat.bind(aiController))
+  );
 
   return router;
 }

@@ -24,7 +24,6 @@ function normalizeError(e: any): string {
 } // 오류 검출 코드
 
 export const openAI = {
-
   /**
    * OPENAI API Key 유효성 검사
    * @param apiKey  검사할 API Key
@@ -40,7 +39,6 @@ export const openAI = {
     }
   }, //api 키 검사 있으면 정상적으로 통과 api 키에 오류가 있으면 오류 함수로 이동, async는 시간이 걸리는 작업
 
-
   /**
    * OPENAI API 요청
    * @param apiKey  API Key
@@ -54,7 +52,7 @@ export const openAI = {
       const client = new OpenAI({ apiKey: apiKey });
       const p = await client.chat.completions.create({
         model,
-        messages
+        messages,
       });
       //console.log('request', p);
       return { ok: true, data: p } as Result<typeof p>;
@@ -62,8 +60,6 @@ export const openAI = {
       return { ok: false, error: normalizeError(e) } as Result<never>;
     }
   },
-
-
 
   /**
    * OPENAI API 요청

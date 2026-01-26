@@ -2,14 +2,19 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 
 import { NoteService } from '../../core/services/NoteService';
-import { createNoteSchema, updateNoteSchema, createFolderSchema, updateFolderSchema } from '../../shared/dtos/note.schemas';
+import {
+  createNoteSchema,
+  updateNoteSchema,
+  createFolderSchema,
+  updateFolderSchema,
+} from '../../shared/dtos/note.schemas';
 import { getUserIdFromRequest } from '../utils/request';
 import { Note, Folder } from '../../shared/dtos/note';
 
 /**
  * 모듈: NoteController
  * 책임: 노트 및 폴더 관련 HTTP 요청을 처리한다.
- * 
+ *
  * - 요청 데이터 검증 (Zod Schema)
  * - Service 계층 호출
  * - HTTP 응답 반환
@@ -48,7 +53,8 @@ export class NoteController {
    */
   async listNotes(req: Request, res: Response) {
     const userId: string = getUserIdFromRequest(req)!;
-    const folderId: string | null = typeof req.query.folderId === 'string' ? req.query.folderId : null;
+    const folderId: string | null =
+      typeof req.query.folderId === 'string' ? req.query.folderId : null;
     const notes: Note[] = await this.noteService.listNotes(userId, folderId);
     res.json(notes);
   }
@@ -68,7 +74,7 @@ export class NoteController {
   /**
    * 노트 삭제 핸들러
    * DELETE /v1/notes/:id
-   * 
+   *
    * Query Params:
    * - permanent: 'true'이면 영구 삭제 (Hard Delete), 그 외에는 Soft Delete
    */
@@ -76,7 +82,7 @@ export class NoteController {
     const userId: string = getUserIdFromRequest(req)!;
     const { id } = req.params;
     const permanent: boolean = req.query.permanent === 'true';
-    
+
     await this.noteService.deleteNote(userId, id, permanent);
     res.status(204).send();
   }
@@ -122,7 +128,8 @@ export class NoteController {
    */
   async listFolders(req: Request, res: Response) {
     const userId: string = getUserIdFromRequest(req)!;
-    const parentId: string | null = typeof req.query.parentId === 'string' ? req.query.parentId : null;
+    const parentId: string | null =
+      typeof req.query.parentId === 'string' ? req.query.parentId : null;
     const folders: Folder[] = await this.noteService.listFolders(userId, parentId);
     res.json(folders);
   }
@@ -142,7 +149,7 @@ export class NoteController {
   /**
    * 폴더 삭제 핸들러
    * DELETE /v1/folders/:id
-   * 
+   *
    * Query Params:
    * - permanent: 'true'이면 영구 삭제 (Hard Delete), 그 외에는 Soft Delete
    */
@@ -150,7 +157,7 @@ export class NoteController {
     const userId: string = getUserIdFromRequest(req)!;
     const { id } = req.params;
     const permanent: boolean = req.query.permanent === 'true';
-    
+
     await this.noteService.deleteFolder(userId, id, permanent);
     res.status(204).send();
   }
@@ -169,10 +176,10 @@ export class NoteController {
   /**
    * 모든 노트 삭제 핸들러
    * DELETE /v1/notes
-   * 
+   *
    * 역할:
    * - 사용자의 모든 노트를 삭제합니다.
-   * 
+   *
    * 응답: 200 OK, { deletedCount: number }
    */
   async deleteAllNotes(req: Request, res: Response) {
@@ -184,11 +191,11 @@ export class NoteController {
   /**
    * 모든 폴더 삭제 핸들러
    * DELETE /v1/folders
-   * 
+   *
    * 역할:
    * - 사용자의 모든 폴더와 그 안의 노트를 삭제합니다.
    * - 트랜잭션을 사용하여 원자적으로 처리됩니다.
-   * 
+   *
    * 응답: 200 OK, { deletedCount: number }
    */
   async deleteAllFolders(req: Request, res: Response) {

@@ -1,4 +1,9 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+} from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
 
 import { StoragePort } from '../../core/ports/StoragePort';
@@ -8,7 +13,7 @@ import { UpstreamError } from '../../shared/errors/domain';
 
 /**
  * AWS S3 어댑터
- * 
+ *
  */
 export class AwsS3Adapter implements StoragePort {
   private readonly client: S3Client;
@@ -18,16 +23,17 @@ export class AwsS3Adapter implements StoragePort {
   constructor() {
     const env = loadEnv();
     this.bucket = env.S3_PAYLOAD_BUCKET;
-    
+
     // S3 클라이언트 초기화
     this.client = new S3Client({
       region: env.AWS_REGION,
-      credentials: (env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY)
-        ? {
-            accessKeyId: env.AWS_ACCESS_KEY_ID,
-            secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
-          }
-        : undefined,
+      credentials:
+        env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY
+          ? {
+              accessKeyId: env.AWS_ACCESS_KEY_ID,
+              secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+            }
+          : undefined,
     });
   }
 
@@ -37,19 +43,22 @@ export class AwsS3Adapter implements StoragePort {
    * @param body 객체 본문
    * @param contentType 콘텐츠 타입
    */
-  async upload(key: string, body: string | Buffer | Readable, contentType = 'application/json'): Promise<void> {
+  async upload(
+    key: string,
+    body: string | Buffer | Readable,
+    contentType = 'application/json'
+  ): Promise<void> {
     try {
+      // PutObjectCommand 생성
+      const command = new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+      });
 
-        // PutObjectCommand 생성
-        const command = new PutObjectCommand({
-            Bucket: this.bucket,
-            Key: key,
-            Body: body,
-            ContentType: contentType,
-        });
-
-        // S3 클라이언트를 사용하여 명령 실행
-        await this.client.send(command);
+      // S3 클라이언트를 사용하여 명령 실행
+      await this.client.send(command);
     } catch (error) {
       logger.error({ err: error, key, bucket: this.bucket }, 'Failed to upload to S3');
       throw new UpstreamError('Failed to upload to S3', { originalError: error });
@@ -73,19 +82,18 @@ export class AwsS3Adapter implements StoragePort {
    */
   async downloadStream(key: string): Promise<Readable> {
     try {
+      // GetObjectCommand 생성
+      const command = new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      });
 
-        // GetObjectCommand 생성
-        const command = new GetObjectCommand({
-            Bucket: this.bucket,
-            Key: key,
-        });
+      // S3 클라이언트를 사용하여 명령 실행
+      const response = await this.client.send(command);
 
-        // S3 클라이언트를 사용하여 명령 실행
-        const response = await this.client.send(command);
-      
-        if (!response.Body) {
-            throw new Error(`Empty body received from S3 for key: ${key}`);
-        }
+      if (!response.Body) {
+        throw new Error(`Empty body received from S3 for key: ${key}`);
+      }
 
       // AWS SDK v3의 Body는 IncomingMessage가 아닐 수 있으므로 변환 필요
       // Node.js 환경에서 Body는 sdk-stream-mixin이 적용된 Readable 호환 객체임
@@ -102,26 +110,25 @@ export class AwsS3Adapter implements StoragePort {
    * @returns JSON 객체
    */
   async downloadJson<T>(key: string): Promise<T> {
-
     // 스트림 다운로드
-    const stream : Readable= await this.downloadStream(key);
-    
+    const stream: Readable = await this.downloadStream(key);
+
     // 스트림을 버퍼로 변환 후 JSON 파싱
     return new Promise((resolve, reject) => {
       const chunks: Buffer[] = []; // 버퍼 청크 배열
 
-        // 스트림 이벤트 처리
-        stream.on('data', (chunk) => chunks.push(Buffer.from(chunk))); // 데이터 청크 수집
-        stream.on('error', (err) => reject(err)); // 에러 처리
-        stream.on('end', () => { // 스트림 종료 시
+      // 스트림 이벤트 처리
+      stream.on('data', (chunk) => chunks.push(Buffer.from(chunk))); // 데이터 청크 수집
+      stream.on('error', (err) => reject(err)); // 에러 처리
+      stream.on('end', () => {
+        // 스트림 종료 시
         try {
-
-            // 청크들을 하나의 버퍼로 결합
-            const buffer = Buffer.concat(chunks);
-            const json = JSON.parse(buffer.toString('utf-8'));
-            resolve(json as T);
+          // 청크들을 하나의 버퍼로 결합
+          const buffer = Buffer.concat(chunks);
+          const json = JSON.parse(buffer.toString('utf-8'));
+          resolve(json as T);
         } catch (err) {
-            reject(err);
+          reject(err);
         }
       });
     });

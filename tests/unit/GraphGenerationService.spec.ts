@@ -39,7 +39,7 @@ describe('GraphGenerationService', () => {
     (HttpClient as jest.Mock).mockImplementation(() => mockHttpClient);
 
     service = new GraphGenerationService(mockChatSvc, mockGraphEmbSvc);
-    
+
     // Use fake timers to control polling
     jest.useFakeTimers();
   });
@@ -55,13 +55,13 @@ describe('GraphGenerationService', () => {
       // Arrange
       mockChatSvc.listConversations.mockResolvedValueOnce({
         items: [{ id: 'c1', title: 'T1', createdAt: Date.now(), updatedAt: Date.now() } as any],
-        nextCursor: null
+        nextCursor: null,
       });
       mockChatSvc.getMessages.mockResolvedValueOnce([
-        { id: 'm1', role: 'user', content: 'hi', createdAt: Date.now() } as any
+        { id: 'm1', role: 'user', content: 'hi', createdAt: Date.now() } as any,
       ]);
       mockHttpClient.post.mockResolvedValueOnce({ task_id: 'task1', status: 'processing' });
-      
+
       // Mock get for polling to stop it immediately
       mockHttpClient.get.mockResolvedValueOnce({ task_id: 'task1', status: 'completed' });
       mockHttpClient.get.mockResolvedValueOnce({}); // Result
@@ -73,24 +73,27 @@ describe('GraphGenerationService', () => {
       expect(taskId).toBe('task1');
       expect(mockChatSvc.listConversations).toHaveBeenCalledWith(userId, 50, undefined);
       expect(mockChatSvc.getMessages).toHaveBeenCalledWith('c1');
-      expect(mockHttpClient.post).toHaveBeenCalledWith('/analysis', expect.objectContaining({
-        data: expect.arrayContaining([
-          expect.objectContaining({
-            title: 'T1',
-            mapping: expect.objectContaining({
-              'm1': expect.objectContaining({
-                message: expect.objectContaining({
-                  content: expect.objectContaining({ parts: ['hi'] })
-                })
-              })
-            })
-          })
-        ])
-      }));
-      
+      expect(mockHttpClient.post).toHaveBeenCalledWith(
+        '/analysis',
+        expect.objectContaining({
+          data: expect.arrayContaining([
+            expect.objectContaining({
+              title: 'T1',
+              mapping: expect.objectContaining({
+                m1: expect.objectContaining({
+                  message: expect.objectContaining({
+                    content: expect.objectContaining({ parts: ['hi'] }),
+                  }),
+                }),
+              }),
+            }),
+          ]),
+        })
+      );
+
       // Fast-forward time to trigger polling
       jest.runOnlyPendingTimers();
-      
+
       // Verify polling happened (optional but good)
       expect(mockHttpClient.get).toHaveBeenCalledWith('/status/task1');
     });

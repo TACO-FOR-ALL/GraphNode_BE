@@ -1,6 +1,6 @@
 /**
  * 모듈: Audit Proxy (감사 로그 프록시)
- * 
+ *
  * 책임:
  * - 서비스 객체의 메서드 호출을 가로채서(Intercept) 감사 로그(Audit Log)를 남깁니다.
  * - 누가(User), 언제(Time), 무엇을(Method), 어떤 값으로(Args) 호출했는지 기록합니다.
@@ -13,7 +13,7 @@ import { requestStore, RequestContext } from '../context/requestStore';
 
 /**
  * 민감한 정보를 마스킹하는 함수
- * 
+ *
  * 역할:
  * - 객체나 배열을 순회하며 특정 키워드(password, token 등)가 포함된 필드의 값을 가립니다.
  * - 로그에 개인정보나 보안 정보가 노출되는 것을 방지합니다.
@@ -38,7 +38,7 @@ function maskValue(v: any): any {
 
 /**
  * 인자 값을 요약하는 함수
- * 
+ *
  * 역할:
  * - 로그 용량을 줄이기 위해 거대한 객체나 배열을 요약 정보로 변환합니다.
  * - 배열은 길이만, 객체는 키 목록(최대 10개)만 남깁니다.
@@ -55,7 +55,7 @@ function summarizeArg(arg: any) {
  */
 function summarizeArgs(args: any[]): any[] {
   try {
-    return args.map(a => (typeof a === 'object' ? summarizeArg(a) : a));
+    return args.map((a) => (typeof a === 'object' ? summarizeArg(a) : a));
   } catch {
     return ['<unserializable>'];
   }
@@ -73,11 +73,11 @@ function summarizeResult(res: any) {
 
 /**
  * 서비스 객체를 감싸는 감사 로그 프록시 생성 함수
- * 
+ *
  * @param instance 감쌀 대상 서비스 객체
  * @param serviceName 서비스 이름 (로그에 기록됨)
  * @returns 프록시로 감싸진 서비스 객체
- * 
+ *
  * 동작 방식:
  * 1. 대상 객체의 메서드 호출을 가로챕니다 (Proxy get trap).
  * 2. 호출 전: 호출 정보(메서드명, 인자 요약, 사용자 정보 등)를 로그에 남깁니다 (audit.call).
@@ -116,57 +116,70 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
 
           // 결과가 Promise인 경우 (비동기)
           if (result && typeof result.then === 'function') {
-            return result.then((res: any) => {
-              const durationMs = Date.now() - start;
-              // 3. 성공 로그
-              try {
-                logger.info({
-                  event: 'audit.success',
-                  ...meta,
-                  durationMs,
-                  result: summarizeResult(res),
-                }, 'audit.success');
-              } catch (_) {}
-              return res;
-            }).catch((err: any) => {
-              const durationMs = Date.now() - start;
-              // 4. 에러 로그
-              try {
-                logger.error({
-                  event: 'audit.error',
-                  ...meta,
-                  durationMs,
-                  err, // 에러 객체 전체를 포함하여 상세 정보(stack, details 등) 기록
-                }, 'audit.error');
-              } catch (_) {}
-              throw err;
-            });
+            return result
+              .then((res: any) => {
+                const durationMs = Date.now() - start;
+                // 3. 성공 로그
+                try {
+                  logger.info(
+                    {
+                      event: 'audit.success',
+                      ...meta,
+                      durationMs,
+                      result: summarizeResult(res),
+                    },
+                    'audit.success'
+                  );
+                } catch (_) {}
+                return res;
+              })
+              .catch((err: any) => {
+                const durationMs = Date.now() - start;
+                // 4. 에러 로그
+                try {
+                  logger.error(
+                    {
+                      event: 'audit.error',
+                      ...meta,
+                      durationMs,
+                      err, // 에러 객체 전체를 포함하여 상세 정보(stack, details 등) 기록
+                    },
+                    'audit.error'
+                  );
+                } catch (_) {}
+                throw err;
+              });
           }
 
           // 결과가 Promise가 아닌 경우 (동기)
           const durationMs = Date.now() - start;
           // 3. 성공 로그
           try {
-            logger.info({
-              event: 'audit.success',
-              ...meta,
-              durationMs,
-              result: summarizeResult(result),
-            }, 'audit.success');
+            logger.info(
+              {
+                event: 'audit.success',
+                ...meta,
+                durationMs,
+                result: summarizeResult(result),
+              },
+              'audit.success'
+            );
           } catch (_) {}
           return result;
-
         } catch (err: any) {
           const durationMs = Date.now() - start;
-          
+
           // 4. 에러 로그
           try {
-            logger.error({
-              event: 'audit.error',
-              ...meta,
-              durationMs,
-              err, // 에러 객체 전체를 포함하여 상세 정보(stack, details 등) 기록
-            }, 'audit.error');
+            logger.error(
+              {
+                event: 'audit.error',
+                ...meta,
+                durationMs,
+                err, // 에러 객체 전체를 포함하여 상세 정보(stack, details 등) 기록
+              },
+              'audit.error'
+            );
           } catch (_) {}
           throw err; // 에러를 다시 던져서 상위에서 처리하게 함
         }

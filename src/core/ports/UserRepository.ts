@@ -1,4 +1,5 @@
 import { User } from '../types/persistence/UserPersistence';
+import { ApiKeyModel } from '../../shared/dtos/me';
 
 /**
  * 모듈: UserRepository Port (사용자 저장소 인터페이스)
@@ -67,28 +68,33 @@ export interface UserRepository {
   }): Promise<User>;
 
   /**
+import { ApiKeyModel } from '../../shared/dtos/me';
+
+// ... (interface methods) ...
+
+  /**
    * 내부 사용자 식별자로 API Key 조회
    *
    * @param id 내부 사용자 식별자
-   * @param model 'openai' 또는 'deepseek'
+   * @param model ApiKeyModel
    * @returns API Key 또는 null
    */
-  findApiKeyById(id: number, model: 'openai' | 'deepseek'): Promise<string | null>;
+  findApiKeyById(id: number, model: ApiKeyModel): Promise<string | null>;
 
   /**
    * 내부 사용자 식별자로 API Key 업데이트
    *
    * @param id 내부 사용자 식별자
-   * @param model 'openai' 또는 'deepseek'
+   * @param model ApiKeyModel
    * @param apiKey API Key
    */
-  updateApiKeyById(id: number, model: 'openai' | 'deepseek', apiKey: string): Promise<void>;
+  updateApiKeyById(id: number, model: ApiKeyModel, apiKey: string): Promise<void>;
 
   /**
    * 내부 사용자 식별자로 API Key 삭제
    *
    * @param id 내부 사용자 식별자
-   * @param model 'openai' 또는 'deepseek'
+   * @param model ApiKeyModel
    */
-  deleteApiKeyById(id: number, model: 'openai' | 'deepseek'): Promise<void>;
+  deleteApiKeyById(id: number, model: ApiKeyModel): Promise<void>;
 }

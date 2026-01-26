@@ -5,6 +5,7 @@
 ---
 
 ## 1. 전환 배경 및 목표
+
 - 기존: RedisStore를 이용한 서버 세션(쿠키) 기반 인증
 - 목표: 서버 상태와 무관한 JWT(Access/Refresh) 기반 인증으로 전환, Electron FE에서 토큰 직접 관리
 
@@ -13,6 +14,7 @@
 ## 2. 반드시 확인/수정해야 할 주요 파일 및 경로
 
 ### 인증/세션 관련 핵심 파일
+
 - `src/bootstrap/server.ts` : 세션 미들웨어, RedisStore, 쿠키 설정
 - `src/app/middlewares/session.ts` : 세션 userId → req.userId 바인딩
 - `src/app/utils/authLogin.ts` : 로그인 완료 시 세션 저장/쿠키 발급
@@ -22,6 +24,7 @@
 - `src/shared/errors/domain.ts` : 인증 관련 에러 정의
 
 ### 기타 참고/수정 필요 파일
+
 - `src/bootstrap/container.ts` : DI/서비스 인스턴스 관리
 - `src/core/services/UserService.ts` (또는 유사 서비스) : 사용자 인증/토큰 발급 로직 위치
 - FE와의 연동 규약 문서(토큰 저장/전달 방식 등)
@@ -31,27 +34,32 @@
 ## 3. 단계별 전환 작업 순서
 
 ### 1) 기존 세션/Redis 의존성 파악 및 제거
+
 - `server.ts`에서 express-session, connect-redis, RedisStore, redisClient 관련 코드 제거
 - 세션 미들웨어(app.use(session(...))) 제거 및 쿠키 설정 코드 삭제
 - `middlewares/session.ts` 및 세션 userId 바인딩/추출 util 제거
 
 ### 2) JWT 발급/검증 로직 추가
+
 - JWT 서명용 secret/env 설정 추가
 - `authLogin.ts`에서 세션 저장 대신 JWT(Access/Refresh) 발급 및 응답에 포함
 - 로그인/회원가입/토큰 갱신 API 설계 및 구현 (ex: /auth/login, /auth/refresh)
 - 로그아웃 시 FE에서 토큰 삭제(서버 상태 없음)
 
 ### 3) 인증 미들웨어 교체
+
 - 기존 세션 기반 인증 미들웨어를 JWT 검증 미들웨어로 교체
 - 모든 보호 API에서 req.userId를 JWT에서 추출하도록 변경
 - 인증 실패 시 401 Problem Details 반환
 
 ### 4) FE 연동 및 테스트
+
 - Electron FE에서 JWT 저장/전달 방식(localStorage, memory 등) 확정
 - 모든 API 요청에 Authorization: Bearer <token> 헤더 적용
 - 토큰 만료/갱신 시나리오 테스트
 
 ### 5) 문서/예시/테스트 코드 갱신
+
 - `/docs/api/openapi.yaml`에 JWT 기반 인증 명세 반영
 - `/docs/guides/`에 전환 가이드, 예시 요청/응답 추가
 - 기존 세션 기반 테스트 → JWT 기반으로 수정
@@ -59,6 +67,7 @@
 ---
 
 ## 4. 참고/권장 구현 패턴
+
 - Access/Refresh 토큰 분리(만료/갱신 정책)
 - JWT 서명/검증은 서버에서만, 비밀키 노출 금지
 - 토큰 내 userId, provider 등 최소 정보만 포함
@@ -68,6 +77,7 @@
 ---
 
 ## 5. 마이그레이션 체크리스트
+
 - [ ] 모든 세션/Redis 의존 코드 제거
 - [ ] JWT 발급/검증 로직 구현 및 적용
 - [ ] 인증 미들웨어 전환 및 API 보호
@@ -77,6 +87,7 @@
 ---
 
 ## 6. 추가 참고
+
 - JWT 공식: https://jwt.io/
 - Express JWT 미들웨어: https://github.com/auth0/express-jwt
 - RFC 9457 Problem Details: https://www.rfc-editor.org/rfc/rfc9457.html

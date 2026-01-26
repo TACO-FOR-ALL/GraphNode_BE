@@ -50,12 +50,5 @@
       "format": "date-time"
     }
   },
-  "required": [
-    "id",
-    "userId",
-    "name",
-    "description",
-    "size",
-    "themes"
-  ]
+  "required": ["id", "userId", "name", "description", "size", "themes"]
 }

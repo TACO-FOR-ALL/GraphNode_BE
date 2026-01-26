@@ -1,4 +1,3 @@
-
 /**
  * 큐 메시지 인터페이스
  * @interface QueueMessage
@@ -26,7 +25,11 @@ export interface QueuePort {
    * @param maxMessages 최대 수신 메시지 수 (기본 1)
    * @param waitTimeSeconds 롱 폴링 대기 시간 (초, 기본 20)
    */
-  receiveMessages(queueUrl: string, maxMessages?: number, waitTimeSeconds?: number): Promise<QueueMessage[]>;
+  receiveMessages(
+    queueUrl: string,
+    maxMessages?: number,
+    waitTimeSeconds?: number
+  ): Promise<QueueMessage[]>;
 
   /**
    * 처리 완료된 메시지를 큐에서 삭제합니다.

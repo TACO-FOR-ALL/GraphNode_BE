@@ -9,10 +9,10 @@ import { requireLogin } from '../middlewares/auth';
 /**
  * 모듈: Note 라우터 팩토리
  * 책임: NoteService를 주입받아 NoteController를 생성하고, 라우팅을 설정한다.
- * 
+ *
  * - 모든 라우트에 인증 미들웨어(bindSessionUser, requireLogin)가 적용된다.
  * - 비동기 핸들러는 asyncHandler로 래핑하여 에러를 중앙 처리한다.
- * 
+ *
  * @param deps 의존성 객체 (NoteService)
  * @returns Express Router
  */

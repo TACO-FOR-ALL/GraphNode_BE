@@ -1,6 +1,6 @@
 import { Response } from 'express';
 
-import { getUserIdFromRequest, bindUserIdToSession } from '../../src/app/utils/request';
+import { getUserIdFromRequest, bindUserIdToRequest } from '../../src/app/utils/request';
 import { setHelperLoginCookies, clearHelperLoginCookies } from '../../src/app/utils/sessionCookies';
 import { AuthError } from '../../src/shared/errors/domain';
 
@@ -12,27 +12,19 @@ describe('Utils Unit Tests', () => {
         expect(getUserIdFromRequest(req)).toBe('u_1');
       });
 
-      it('should return session.userId if req.userId is missing', () => {
-        const req = { session: { userId: 'u_2' } } as any;
-        expect(getUserIdFromRequest(req)).toBe('u_2');
-      });
+      /* Session-based ID retrieval is no longer supported in request.ts */
 
-      it('should throw AuthError if neither is present', () => {
-        const req = { session: {} } as any;
-        expect(() => getUserIdFromRequest(req)).toThrow(AuthError);
-      });
-
-      it('should throw AuthError if session is missing', () => {
+      it('should throw AuthError if not present', () => {
         const req = {} as any;
         expect(() => getUserIdFromRequest(req)).toThrow(AuthError);
       });
     });
 
-    describe('bindUserIdToSession', () => {
-      it('should set userId on session', () => {
-        const req = { session: {} } as any;
-        bindUserIdToSession(req, 'u_3');
-        expect(req.session.userId).toBe('u_3');
+    describe('bindUserIdToRequest', () => {
+      it('should set userId on request object', () => {
+        const req = {} as any;
+        bindUserIdToRequest(req, 'u_3');
+        expect(req.userId).toBe('u_3');
       });
     });
   });
@@ -61,12 +53,16 @@ describe('Utils Unit Tests', () => {
     describe('setHelperLoginCookies', () => {
       it('should set gn-logged-in cookie', () => {
         setHelperLoginCookies(res);
-        expect(cookieSpy).toHaveBeenCalledWith('gn-logged-in', '1', expect.objectContaining({
-          path: '/',
-          httpOnly: false,
-          sameSite: 'lax',
-          secure: false,
-        }));
+        expect(cookieSpy).toHaveBeenCalledWith(
+          'gn-logged-in',
+          '1',
+          expect.objectContaining({
+            path: '/',
+            httpOnly: false,
+            sameSite: 'lax',
+            secure: false,
+          })
+        );
       });
 
       it('should set gn-profile cookie if profile provided', () => {
@@ -78,28 +74,40 @@ describe('Utils Unit Tests', () => {
       it('should use secure cookies in production', () => {
         process.env.NODE_ENV = 'production';
         setHelperLoginCookies(res);
-        expect(cookieSpy).toHaveBeenCalledWith('gn-logged-in', '1', expect.objectContaining({
-          secure: true,
-          sameSite: 'none',
-        }));
+        expect(cookieSpy).toHaveBeenCalledWith(
+          'gn-logged-in',
+          '1',
+          expect.objectContaining({
+            secure: true,
+            sameSite: 'none',
+          })
+        );
       });
 
       it('should allow insecure cookies in production if DEV_INSECURE_COOKIES is true', () => {
         process.env.NODE_ENV = 'production';
         process.env.DEV_INSECURE_COOKIES = 'true';
         setHelperLoginCookies(res);
-        expect(cookieSpy).toHaveBeenCalledWith('gn-logged-in', '1', expect.objectContaining({
-          secure: false,
-          sameSite: 'lax',
-        }));
+        expect(cookieSpy).toHaveBeenCalledWith(
+          'gn-logged-in',
+          '1',
+          expect.objectContaining({
+            secure: false,
+            sameSite: 'lax',
+          })
+        );
       });
 
       it('should set maxAge if COOKIE_HELPER_MAX_AGE is set', () => {
         process.env.COOKIE_HELPER_MAX_AGE = '3600';
         setHelperLoginCookies(res);
-        expect(cookieSpy).toHaveBeenCalledWith('gn-logged-in', '1', expect.objectContaining({
-          maxAge: 3600000,
-        }));
+        expect(cookieSpy).toHaveBeenCalledWith(
+          'gn-logged-in',
+          '1',
+          expect.objectContaining({
+            maxAge: 3600000,
+          })
+        );
       });
     });
 

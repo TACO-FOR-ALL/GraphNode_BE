@@ -32,14 +32,24 @@ jest.mock('../../src/core/services/GoogleOAuthService', () => {
         u.searchParams.set('prompt', 'consent');
         return u.toString();
       }
-      async exchangeCode(_code: string) { return { access_token: 'at', expires_in: 3600, token_type: 'Bearer' }; }
-      async fetchUserInfo(_token: any) { return { sub: 'google-uid-1', email: 'u@example.com', name: 'U', picture: 'https://img' }; }
-    }
+      async exchangeCode(_code: string) {
+        return { access_token: 'at', expires_in: 3600, token_type: 'Bearer' };
+      }
+      async fetchUserInfo(_token: any) {
+        return { sub: 'google-uid-1', email: 'u@example.com', name: 'U', picture: 'https://img' };
+      }
+    },
   };
 });
 
 jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => {
-  return { UserRepositoryMySQL: class { async findOrCreateFromProvider() { return { id: 'u_1' } as any; } } };
+  return {
+    UserRepositoryMySQL: class {
+      async findOrCreateFromProvider() {
+        return { id: 'u_1' } as any;
+      }
+    },
+  };
 });
 
 // Service 레이어 간단 목: 존재하지 않는 리소스 접근 시 404 유도
@@ -52,20 +62,32 @@ jest.mock('../../src/core/services/ConversationService', () => {
       async listByOwner(_ownerUserId: string, _limit: number) {
         return { items: [], nextCursor: null };
       }
-      async create() { return { id: 'never', title: 'x', updatedAt: new Date().toISOString(), messages: [] }; }
-      async update() { throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' }); }
-      async delete() { throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' }); }
-    }
+      async create() {
+        return { id: 'never', title: 'x', updatedAt: new Date().toISOString(), messages: [] };
+      }
+      async update() {
+        throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+      }
+      async delete() {
+        throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+      }
+    },
   };
 });
 
 jest.mock('../../src/core/services/MessageService', () => {
   return {
     MessageService: class {
-      async create() { return { id: 'm_x', role: 'user', content: 'x', ts: new Date().toISOString() }; }
-      async update() { throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' }); }
-      async delete() { throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' }); }
-    }
+      async create() {
+        return { id: 'm_x', role: 'user', content: 'x', ts: new Date().toISOString() };
+      }
+      async update() {
+        throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+      }
+      async delete() {
+        throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+      }
+    },
   };
 });
 
@@ -84,6 +106,15 @@ function appWithTestEnv() {
   return createApp();
 }
 
+async function getLoggedInAgent(app: any) {
+  const agent = request.agent(app);
+  const start = await agent.get('/auth/google/start');
+  const location = start.headers['location'] as string;
+  const state = new URL(location).searchParams.get('state') || '';
+  await agent.get('/auth/google/callback').query({ code: 'ok', state });
+  return agent;
+}
+
 describe('AI Conversations API - negative cases', () => {
   test('401 when not authenticated', async () => {
     const app = appWithTestEnv();
@@ -95,15 +126,9 @@ describe('AI Conversations API - negative cases', () => {
 
   test('400 on invalid conversation create payload', async () => {
     const app = appWithTestEnv();
-    // 로그인 세션 생성
-    const start = await request(app).get('/auth/google/start');
-    const cookie = start.headers['set-cookie'];
-    const location = start.headers['location'] as string;
-    const state = new URL(location).searchParams.get('state') || '';
-    await request(app).get('/auth/google/callback').set('Cookie', cookie).query({ code: 'ok', state });
+    const agent = await getLoggedInAgent(app);
 
-    // id/title 누락 → 400
-    const res = await request(app).post('/v1/ai/conversations').set('Cookie', cookie).send({});
+    const res = await agent.post('/v1/ai/conversations').send({});
     expect(res.status).toBe(400);
     expect(res.headers['content-type']).toContain('application/problem+json');
     expect(validateProblem(res.body)).toBe(true);
@@ -111,33 +136,20 @@ describe('AI Conversations API - negative cases', () => {
 
   test('404 on non-existing conversation', async () => {
     const app = appWithTestEnv();
-    // 로그인 세션 생성
-    const start = await request(app).get('/auth/google/start');
-    const cookie = start.headers['set-cookie'];
-    const location = start.headers['location'] as string;
-    const state = new URL(location).searchParams.get('state') || '';
-    await request(app).get('/auth/google/callback').set('Cookie', cookie).query({ code: 'ok', state });
+    const agent = await getLoggedInAgent(app);
 
-    const res = await request(app).get('/v1/ai/conversations/does-not-exist').set('Cookie', cookie);
+    const res = await agent.get('/v1/ai/conversations/does-not-exist');
     expect(res.status).toBe(404);
     expect(res.headers['content-type']).toContain('application/problem+json');
     expect(validateProblem(res.body)).toBe(true);
+    expect(res.body.type).toContain('not-found');
   });
 
   test('400 on invalid message create payload', async () => {
     const app = appWithTestEnv();
-    // 로그인 세션 생성
-    const start = await request(app).get('/auth/google/start');
-    const cookie = start.headers['set-cookie'];
-    const location = start.headers['location'] as string;
-    const state = new URL(location).searchParams.get('state') || '';
-    await request(app).get('/auth/google/callback').set('Cookie', cookie).query({ code: 'ok', state });
+    const agent = await getLoggedInAgent(app);
 
-    // 필수 필드 누락(id/role/content) → 400
-    const res = await request(app)
-      .post('/v1/ai/conversations/c_x/messages')
-      .set('Cookie', cookie)
-      .send({ id: 'm1' });
+    const res = await agent.post('/v1/ai/conversations/c_x/messages').send({ id: 'm1' });
     expect(res.status).toBe(400);
     expect(res.headers['content-type']).toContain('application/problem+json');
     expect(validateProblem(res.body)).toBe(true);
@@ -145,19 +157,12 @@ describe('AI Conversations API - negative cases', () => {
 
   test('404 on message update for non-existing conversation/message', async () => {
     const app = appWithTestEnv();
-    // 로그인 세션 생성
-    const start = await request(app).get('/auth/google/start');
-    const cookie = start.headers['set-cookie'];
-    const location = start.headers['location'] as string;
-    const state = new URL(location).searchParams.get('state') || '';
-    await request(app).get('/auth/google/callback').set('Cookie', cookie).query({ code: 'ok', state });
+    const agent = await getLoggedInAgent(app);
 
-    const res = await request(app)
-      .patch('/v1/ai/conversations/none/messages/none')
-      .set('Cookie', cookie)
-      .send({ content: 'x' });
+    const res = await agent.patch('/v1/ai/conversations/none/messages/none').send({ content: 'x' });
     expect(res.status).toBe(404);
     expect(res.headers['content-type']).toContain('application/problem+json');
     expect(validateProblem(res.body)).toBe(true);
+    expect(res.body.type).toContain('not-found');
   });
 });

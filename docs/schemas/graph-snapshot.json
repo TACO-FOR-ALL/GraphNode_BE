@@ -54,10 +54,5 @@
       "required": ["nodes", "edges", "clusters"]
     }
   },
-  "required": [
-    "nodes",
-    "edges",
-    "clusters",
-    "stats"
-  ]
+  "required": ["nodes", "edges", "clusters", "stats"]
 }

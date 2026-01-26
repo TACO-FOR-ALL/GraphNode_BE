@@ -100,9 +100,7 @@ describe('SyncController', () => {
     it('should process push data successfully', async () => {
       mockSyncService.push.mockResolvedValue(undefined);
 
-      const res = await request(app)
-        .post('/v1/sync/push')
-        .send(validPushData);
+      const res = await request(app).post('/v1/sync/push').send(validPushData);
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ success: true });
@@ -114,9 +112,7 @@ describe('SyncController', () => {
         conversations: 'invalid-type', // Should be array
       };
 
-      const res = await request(app)
-        .post('/v1/sync/push')
-        .send(invalidData);
+      const res = await request(app).post('/v1/sync/push').send(invalidData);
 
       expect(res.status).toBe(400);
       expect(res.body).toHaveProperty('type', 'https://graphnode.dev/problems/validation-failed');
@@ -126,9 +122,7 @@ describe('SyncController', () => {
     it('should handle errors from service', async () => {
       mockSyncService.push.mockRejectedValue(new Error('Service error'));
 
-      const res = await request(app)
-        .post('/v1/sync/push')
-        .send(validPushData);
+      const res = await request(app).post('/v1/sync/push').send(validPushData);
 
       expect(res.status).toBe(500);
     });

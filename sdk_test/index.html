@@ -1,120 +1,196 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GraphNode SDK Test Console</title>
     <style>
-        body { font-family: sans-serif; margin: 0; display: flex; height: 100vh; }
-        #sidebar { width: 350px; background: #f4f4f4; padding: 20px; overflow-y: auto; border-right: 1px solid #ddd; }
-        #main { flex: 1; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; }
-        h2 { margin-top: 0; border-bottom: 2px solid #333; padding-bottom: 10px; }
-        h3 { margin-top: 20px; margin-bottom: 10px; color: #555; }
-        .control-group { margin-bottom: 15px; padding: 10px; background: #fff; border: 1px solid #ddd; border-radius: 4px; }
-        button { cursor: pointer; padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 3px; }
-        button:hover { background: #0056b3; }
-        button.secondary { background: #6c757d; }
-        button.danger { background: #dc3545; }
-        input, textarea { width: 100%; margin-bottom: 5px; padding: 5px; box-sizing: border-box; }
-        textarea { height: 60px; font-family: monospace; }
-        #output-area { flex: 1; background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 5px; overflow: auto; font-family: monospace; white-space: pre-wrap; }
-        .error-msg { color: #ff6b6b; font-weight: bold; }
-        .success-msg { color: #51cf66; font-weight: bold; }
-        label { font-size: 0.85em; color: #666; display: block; margin-bottom: 2px; }
+      body {
+        font-family: sans-serif;
+        margin: 0;
+        display: flex;
+        height: 100vh;
+      }
+      #sidebar {
+        width: 350px;
+        background: #f4f4f4;
+        padding: 20px;
+        overflow-y: auto;
+        border-right: 1px solid #ddd;
+      }
+      #main {
+        flex: 1;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+      }
+      h2 {
+        margin-top: 0;
+        border-bottom: 2px solid #333;
+        padding-bottom: 10px;
+      }
+      h3 {
+        margin-top: 20px;
+        margin-bottom: 10px;
+        color: #555;
+      }
+      .control-group {
+        margin-bottom: 15px;
+        padding: 10px;
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+      button {
+        cursor: pointer;
+        padding: 5px 10px;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 3px;
+      }
+      button:hover {
+        background: #0056b3;
+      }
+      button.secondary {
+        background: #6c757d;
+      }
+      button.danger {
+        background: #dc3545;
+      }
+      input,
+      textarea {
+        width: 100%;
+        margin-bottom: 5px;
+        padding: 5px;
+        box-sizing: border-box;
+      }
+      textarea {
+        height: 60px;
+        font-family: monospace;
+      }
+      #output-area {
+        flex: 1;
+        background: #1e1e1e;
+        color: #d4d4d4;
+        padding: 15px;
+        border-radius: 5px;
+        overflow: auto;
+        font-family: monospace;
+        white-space: pre-wrap;
+      }
+      .error-msg {
+        color: #ff6b6b;
+        font-weight: bold;
+      }
+      .success-msg {
+        color: #51cf66;
+        font-weight: bold;
+      }
+      label {
+        font-size: 0.85em;
+        color: #666;
+        display: block;
+        margin-bottom: 2px;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
+    <div id="sidebar">
+      <h2>SDK Controls</h2>
 
-<div id="sidebar">
-    <h2>SDK Controls</h2>
-
-    <!-- Auth -->
-    <div class="control-group">
+      <!-- Auth -->
+      <div class="control-group">
         <h3>Authentication</h3>
         <button id="btn-login-google">Login with Google</button>
         <button id="btn-me" class="secondary">Get Me (Session Check)</button>
         <button id="btn-logout" class="danger">Logout</button>
-    </div>
+      </div>
 
-    <!-- Health -->
-    <div class="control-group">
+      <!-- Health -->
+      <div class="control-group">
         <h3>System</h3>
         <button id="btn-health">Health Check</button>
-    </div>
+      </div>
 
-    <!-- Conversations -->
-    <div class="control-group">
+      <!-- Conversations -->
+      <div class="control-group">
         <h3>Conversations</h3>
         <button id="btn-list-conv">List Conversations</button>
-        
-        <div style="margin-top:10px;">
-            <label>New Conversation Title</label>
-            <input type="text" id="inp-conv-title" placeholder="My Chat">
-            <button id="btn-create-conv">Create Conversation</button>
+
+        <div style="margin-top: 10px">
+          <label>New Conversation Title</label>
+          <input type="text" id="inp-conv-title" placeholder="My Chat" />
+          <button id="btn-create-conv">Create Conversation</button>
         </div>
 
-        <div style="margin-top:10px;">
-            <label>Conversation ID</label>
-            <input type="text" id="inp-conv-id" placeholder="c_...">
-            <button id="btn-get-conv" class="secondary">Get</button>
-            <button id="btn-del-conv" class="danger">Delete</button>
+        <div style="margin-top: 10px">
+          <label>Conversation ID</label>
+          <input type="text" id="inp-conv-id" placeholder="c_..." />
+          <button id="btn-get-conv" class="secondary">Get</button>
+          <button id="btn-del-conv" class="danger">Delete</button>
         </div>
 
-        <div style="margin-top:10px;">
-            <label>Message Content</label>
-            <textarea id="inp-msg-content" placeholder="Hello AI!"></textarea>
-            <button id="btn-create-msg">Send Message (to above ID)</button>
+        <div style="margin-top: 10px">
+          <label>Message Content</label>
+          <textarea id="inp-msg-content" placeholder="Hello AI!"></textarea>
+          <button id="btn-create-msg">Send Message (to above ID)</button>
         </div>
-    </div>
+      </div>
 
-    <!-- Graph -->
-    <div class="control-group">
+      <!-- Graph -->
+      <div class="control-group">
         <h3>Graph</h3>
         <button id="btn-graph-stats">Get Stats</button>
         <button id="btn-list-nodes">List Nodes</button>
         <button id="btn-list-edges">List Edges</button>
         <button id="btn-list-clusters">List Clusters</button>
 
-        <div style="margin-top:10px;">
-            <label>Node Payload (JSON)</label>
-            <textarea id="inp-node-json">{
+        <div style="margin-top: 10px">
+          <label>Node Payload (JSON)</label>
+          <textarea id="inp-node-json">
+{
   "id": 1,
   "origId": "msg_1",
   "clusterId": "cl_1",
   "clusterName": "General",
   "timestamp": "2024-01-01T00:00:00Z",
   "numMessages": 1
-}</textarea>
-            <button id="btn-create-node">Create/Upsert Node</button>
+}</textarea
+          >
+          <button id="btn-create-node">Create/Upsert Node</button>
         </div>
 
-        <div style="margin-top:10px;">
-            <label>Node ID (Number)</label>
-            <input type="number" id="inp-node-id" placeholder="1">
-            <button id="btn-get-node" class="secondary">Get Node</button>
-            <button id="btn-del-node" class="danger">Delete Node</button>
+        <div style="margin-top: 10px">
+          <label>Node ID (Number)</label>
+          <input type="number" id="inp-node-id" placeholder="1" />
+          <button id="btn-get-node" class="secondary">Get Node</button>
+          <button id="btn-del-node" class="danger">Delete Node</button>
         </div>
 
-        <div style="margin-top:10px;">
-            <label>Edge Payload (JSON)</label>
-            <textarea id="inp-edge-json">{
+        <div style="margin-top: 10px">
+          <label>Edge Payload (JSON)</label>
+          <textarea id="inp-edge-json">
+{
   "source": 1,
   "target": 2,
   "relation": "related_to",
   "weight": 1,
   "type": "insight",
   "intraCluster": true
-}</textarea>
-            <button id="btn-create-edge">Create Edge</button>
+}</textarea
+          >
+          <button id="btn-create-edge">Create Edge</button>
         </div>
+      </div>
     </div>
-</div>
 
-<div id="main">
-    <h2>Output Console</h2>
-    <div id="output-area">Waiting for action...</div>
-</div>
+    <div id="main">
+      <h2>Output Console</h2>
+      <div id="output-area">Waiting for action...</div>
+    </div>
 
-<script type="module" src="./app.js"></script>
-</body>
+    <script type="module" src="./app.js"></script>
+  </body>
 </html>

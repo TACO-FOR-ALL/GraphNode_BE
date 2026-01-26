@@ -13,7 +13,6 @@
  * @property updatedAt 수정 일시
  */
 export interface GraphNodeDoc {
-
   _id: string;
   userId: string;
   nodeId: number;
@@ -31,7 +30,7 @@ export interface GraphNodeDoc {
  * Collection: graph_edges
  * @property _id Composite Key: userId::source->target
  * @property userId 사용자 ID
- * @property source 출발 노드 ID  
+ * @property source 출발 노드 ID
  * @property target 도착 노드 ID
  * @property weight 엣지 가중치
  * @property type 엣지 유형 ('hard' | 'insight')
@@ -40,7 +39,6 @@ export interface GraphNodeDoc {
  * @property updatedAt 수정 일시
  */
 export interface GraphEdgeDoc {
-
   _id: string;
   userId: string;
   source: number;
@@ -66,7 +64,6 @@ export interface GraphEdgeDoc {
  * @property updatedAt 수정 일시
  */
 export interface GraphClusterDoc {
-
   _id: string;
   userId: string;
   clusterId: string;
@@ -90,7 +87,6 @@ export interface GraphClusterDoc {
  * @property metadata 메타데이터
  */
 export interface GraphStatsDoc {
-
   _id: string;
   userId: string;
   nodes: number;

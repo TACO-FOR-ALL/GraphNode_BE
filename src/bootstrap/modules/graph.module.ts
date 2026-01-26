@@ -7,11 +7,9 @@ import type { Router } from 'express';
 import { createGraphRouter } from '../../app/routes/graph';
 import { container } from '../container';
 
+export function makeGraphRouter(): Router {
+  const graphEmbeddingService = container.getGraphEmbeddingService();
 
-export function makeGraphRouter() : Router {
-    const graphEmbeddingService = container.getGraphEmbeddingService();
-
-    //Router(Factory) - expose composite (or graphService) to router as appropriate
-    return createGraphRouter(graphEmbeddingService);
-
+  //Router(Factory) - expose composite (or graphService) to router as appropriate
+  return createGraphRouter(graphEmbeddingService);
 }

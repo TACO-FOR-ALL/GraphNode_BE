@@ -1,9 +1,8 @@
 name: Deploy to Amazon ECS
 
-
 #트리거 조건
 on:
-    #Push 시 기동
+  #Push 시 기동
   push:
     branches:
       - main
@@ -12,14 +11,13 @@ on:
       - 'ecs/**'
       - 'src/**'
 
-
 # 권한 설정
 permissions:
   id-token: write # This is required for requesting the JWT
-  contents: read  # This is required for actions/checkout
+  contents: read # This is required for actions/checkout
 
 env:
-    #필요한 시크릿 환경변수 설정
+  #필요한 시크릿 환경변수 설정
   AWS_REGION: ${{ secrets.AWS_REGION }}
   ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
   ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
@@ -32,11 +30,10 @@ jobs:
     name: Deploy # job 이 름
     runs-on: ubuntu-latest # 실행 환경(가상 머신 환경)
 
-
     steps:
-        # 각 스텝 정의
+      # 각 스텝 정의
 
-        #코드 체크아웃, 현재 리포지토리의 코드를 가져옴
+      #코드 체크아웃, 현재 리포지토리의 코드를 가져옴
       - name: Checkout
         uses: actions/checkout@v4
 

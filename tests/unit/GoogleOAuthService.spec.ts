@@ -10,7 +10,7 @@ describe('GoogleOAuthService', () => {
     service = new GoogleOAuthService({
       clientId: 'test-client-id',
       clientSecret: 'test-client-secret',
-      redirectUri: 'http://localhost/callback'
+      redirectUri: 'http://localhost/callback',
     });
   });
 

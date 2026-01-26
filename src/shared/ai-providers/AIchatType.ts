@@ -8,7 +8,7 @@ import { ApiKeyModel } from '../dtos/me';
  * @prop chatContent AI 챗 대화 내용
  */
 export interface AIchatType {
-    id : string;
-    model: ApiKeyModel;
-    chatContent: string;
+  id: string;
+  model: ApiKeyModel;
+  chatContent: string;
 }

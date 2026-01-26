@@ -1,4 +1,3 @@
-
 import { Request, Response, NextFunction } from 'express';
 
 import { requestContext } from '../../src/app/middlewares/request-context';
@@ -33,7 +32,7 @@ describe('Middlewares', () => {
   describe('requestContext', () => {
     it('should generate correlationId if not present', () => {
       (req.header as jest.Mock).mockReturnValue(undefined);
-      
+
       requestContext(req as Request, res as Response, next);
 
       expect(requestStore.run).toHaveBeenCalledWith(
@@ -47,7 +46,7 @@ describe('Middlewares', () => {
 
     it('should use existing correlationId from traceparent', () => {
       (req.header as jest.Mock).mockReturnValue('00-1234567890abcdef-00');
-      
+
       requestContext(req as Request, res as Response, next);
 
       expect(requestStore.run).toHaveBeenCalledWith(
@@ -61,7 +60,7 @@ describe('Middlewares', () => {
 
     it('should extract userId from session', () => {
       (req.session as any).userId = 'u_123';
-      
+
       requestContext(req as Request, res as Response, next);
 
       expect(requestStore.run).toHaveBeenCalledWith(
@@ -76,7 +75,7 @@ describe('Middlewares', () => {
   describe('requireLogin', () => {
     it('should call next if userId is present', () => {
       (req as any).userId = 'u_1';
-      
+
       requireLogin(req as Request, res as Response, next);
 
       expect(next).toHaveBeenCalledWith();
@@ -84,7 +83,7 @@ describe('Middlewares', () => {
 
     it('should call next with AuthError if userId is missing', () => {
       (req as any).userId = undefined;
-      
+
       requireLogin(req as Request, res as Response, next);
 
       expect(next).toHaveBeenCalledWith(expect.any(AuthError));
@@ -94,7 +93,7 @@ describe('Middlewares', () => {
   describe('bindSessionUser', () => {
     it('should bind userId from session to req', () => {
       (req.session as any).userId = 'u_1';
-      
+
       bindSessionUser(req as Request, res as Response, next);
 
       expect((req as any).userId).toBe('u_1');
@@ -103,7 +102,7 @@ describe('Middlewares', () => {
 
     it('should do nothing if session userId is missing', () => {
       (req.session as any).userId = undefined;
-      
+
       bindSessionUser(req as Request, res as Response, next);
 
       expect((req as any).userId).toBeUndefined();

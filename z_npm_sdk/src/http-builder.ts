@@ -11,6 +11,7 @@ export interface BuilderOptions {
   fetch?: FetchLike; // Node<18 환경 등에서 주입 가능
   defaultHeaders?: Record<string, string>;
   credentials?: RequestCredentials; // default 'include'HttpError
+  accessToken?: string | (() => string | null);
 }
 
 // export class HttpError<TBody = unknown> extends Error {
@@ -46,6 +47,7 @@ export class RequestBuilder {
   private readonly fetchImpl: FetchLike;
   private readonly headers: Record<string, string>;
   private readonly credentials: RequestCredentials;
+  private readonly accessToken?: string | (() => string | null);
   private readonly segments: string[];
   private readonly queryParams: URLSearchParams;
 
@@ -54,6 +56,7 @@ export class RequestBuilder {
     this.fetchImpl = opts.fetch ?? (globalThis.fetch as FetchLike);
     this.headers = { Accept: 'application/json', ...(opts.defaultHeaders ?? {}) };
     this.credentials = opts.credentials ?? 'include';
+    this.accessToken = opts.accessToken;
     this.segments = segments;
     this.queryParams = query ?? new URLSearchParams();
   }
@@ -72,6 +75,7 @@ export class RequestBuilder {
           fetch: this.fetchImpl,
           defaultHeaders: this.headers,
           credentials: this.credentials,
+          accessToken: this.accessToken,
         },
         [],
         new URLSearchParams(this.queryParams)
@@ -137,6 +141,15 @@ export class RequestBuilder {
 
   private async send<T>(method: string, body?: unknown): Promise<HttpResponse<T>> {
     const headers = { ...this.headers } as Record<string, string>;
+
+    // Access Token 주입
+    if (this.accessToken) {
+      const token = typeof this.accessToken === 'function' ? this.accessToken() : this.accessToken;
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    }
+
     const init: RequestInit = { method, headers, credentials: this.credentials };
     if (body !== undefined) {
       headers['Content-Type'] = 'application/json';

@@ -1,66 +1,132 @@
 <!doctype html>
 <html lang="ko">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>GraphNode 문서 포털</title>
-  <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; margin: 2rem; line-height: 1.6; }
-    h1 { margin-bottom: 0.25rem; }
-    .muted { color: #666; margin-top: 0; }
-    ul { margin-top: 1rem; }
-    code { background: #f6f8fa; padding: 0.1rem 0.3rem; border-radius: 4px; }
-  </style>
-</head>
-<body>
-  <h1>GraphNode 문서 포털</h1>
-  <p class="muted">레포 내 문서를 한 곳에서 탐색하세요. 이 페이지 URL을 Notion에 임베드하면 항상 최신 문서가 노출됩니다.</p>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GraphNode 문서 포털</title>
+    <style>
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          Helvetica,
+          Arial;
+        margin: 2rem;
+        line-height: 1.6;
+      }
+      h1 {
+        margin-bottom: 0.25rem;
+      }
+      .muted {
+        color: #666;
+        margin-top: 0;
+      }
+      ul {
+        margin-top: 1rem;
+      }
+      code {
+        background: #f6f8fa;
+        padding: 0.1rem 0.3rem;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>GraphNode 문서 포털</h1>
+    <p class="muted">
+      레포 내 문서를 한 곳에서 탐색하세요. 이 페이지 URL을 Notion에 임베드하면 항상 최신 문서가
+      노출됩니다.
+    </p>
 
-  <h2>API 문서</h2>
-  <ul>
-    <li><a href="./api/openapi.html">OpenAPI (Redoc)</a></li>
-    <li><a href="./reference/api/index.html">TypeDoc (코드 참조)</a></li>
-  </ul>
+    <h2>API 문서</h2>
+    <ul>
+      <li><a href="./api/openapi.html">OpenAPI (Redoc)</a></li>
+      <li><a href="./reference/api/index.html">TypeDoc (코드 참조)</a></li>
+    </ul>
 
-  <h2>가이드</h2>
-  <ul>
-    <li><a href="./md-viewer.html?file=./guides/README.md">Guides 인덱스</a></li>
-    <li><a href="./md-viewer.html?file=./guides/DAY1.md">Day1 — 레포 셋업 & 헬스체크</a></li>
-    <li><a href="./md-viewer.html?file=./guides/DAY2-logging-and-errors.md">Day2 — 로깅 & 에러 표준화</a></li>
-    <li><a href="./md-viewer.html?file=./guides/DAY3.md">Day3 — DB 연결 & Docker</a></li>
-    <li><a href="./md-viewer.html?file=./guides/DAY4-domain-ports-services.md">Day4 — 도메인/포트/서비스</a></li>
-    <li><a href="./md-viewer.html?file=./guides/DAY5-oauth-google.md">Day5 — Google OAuth</a></li>
-    <li><a href="./md-viewer.html?file=./guides/DAY8-ai-conversations-api.md">Day8 — AI Conversations API</a></li>
-    <li><a href="./md-viewer.html?file=./guides/DAY7-docs-automation-and-portal.md">Day7 — 문서 자동화 & 포털</a></li>
-    <li><a href="./md-viewer.html?file=./guides/TESTING.md">테스트 가이드(Jest/Supertest)</a></li>
-    <li><a href="./md-viewer.html?file=./guides/DAY9-vector-refactor.md">Day9 - VectorDB 사용 기반 구축</a></li>
-    <li><a href="./md-viewer.html?file=./guides/DAY10-graph-vector-refactor.md">Day10 — Graph Vector Refactor</a></li>
-    <li><a href="./md-viewer.html?file=./guides/DAY11-note-api-docs.md">Day11 — Note & Folder API 문서화</a></li>
-    <li><a href="./md-viewer.html?file=./guides/DAY12-restore-api.md">Day12 — Restore API Implementation</a></li>
-        <li><a href="./md-viewer.html?file=./guides/DAY12-sync-refactor-report.md">Day12 —sync Refactor Implementation</a></li>
-    <li><a href="./md-viewer.html?file=./guides/DAY13-ai-chat-implementation.md">Day13 — AI Chat Implementation</a></li>
-  </ul>
+    <h2>가이드</h2>
+    <ul>
+      <li><a href="./md-viewer.html?file=./guides/README.md">Guides 인덱스</a></li>
+      <li><a href="./md-viewer.html?file=./guides/DAY1.md">Day1 — 레포 셋업 & 헬스체크</a></li>
+      <li>
+        <a href="./md-viewer.html?file=./guides/DAY2-logging-and-errors.md"
+          >Day2 — 로깅 & 에러 표준화</a
+        >
+      </li>
+      <li><a href="./md-viewer.html?file=./guides/DAY3.md">Day3 — DB 연결 & Docker</a></li>
+      <li>
+        <a href="./md-viewer.html?file=./guides/DAY4-domain-ports-services.md"
+          >Day4 — 도메인/포트/서비스</a
+        >
+      </li>
+      <li><a href="./md-viewer.html?file=./guides/DAY5-oauth-google.md">Day5 — Google OAuth</a></li>
+      <li>
+        <a href="./md-viewer.html?file=./guides/DAY8-ai-conversations-api.md"
+          >Day8 — AI Conversations API</a
+        >
+      </li>
+      <li>
+        <a href="./md-viewer.html?file=./guides/DAY7-docs-automation-and-portal.md"
+          >Day7 — 문서 자동화 & 포털</a
+        >
+      </li>
+      <li><a href="./md-viewer.html?file=./guides/TESTING.md">테스트 가이드(Jest/Supertest)</a></li>
+      <li>
+        <a href="./md-viewer.html?file=./guides/DAY9-vector-refactor.md"
+          >Day9 - VectorDB 사용 기반 구축</a
+        >
+      </li>
+      <li>
+        <a href="./md-viewer.html?file=./guides/DAY10-graph-vector-refactor.md"
+          >Day10 — Graph Vector Refactor</a
+        >
+      </li>
+      <li>
+        <a href="./md-viewer.html?file=./guides/DAY11-note-api-docs.md"
+          >Day11 — Note & Folder API 문서화</a
+        >
+      </li>
+      <li>
+        <a href="./md-viewer.html?file=./guides/DAY12-restore-api.md"
+          >Day12 — Restore API Implementation</a
+        >
+      </li>
+      <li>
+        <a href="./md-viewer.html?file=./guides/DAY12-sync-refactor-report.md"
+          >Day12 —sync Refactor Implementation</a
+        >
+      </li>
+      <li>
+        <a href="./md-viewer.html?file=./guides/DAY13-ai-chat-implementation.md"
+          >Day13 — AI Chat Implementation</a
+        >
+      </li>
+    </ul>
 
-  <h2>스타일 가이드</h2>
-  <ul>
-    <li><a href="./md-viewer.html?file=./api/style/auth-google.md">Auth — Google OAuth 스타일</a></li>
-  </ul>
+    <h2>스타일 가이드</h2>
+    <ul>
+      <li>
+        <a href="./md-viewer.html?file=./api/style/auth-google.md">Auth — Google OAuth 스타일</a>
+      </li>
+    </ul>
 
-  <h2>스키마</h2>
-  <ul>
-    <li><a href="./schemas/problem.json">Problem Details</a></li>
-    <li><a href="./schemas/conversation.json">conversation.json</a></li>
-    <li><a href="./schemas/message.json">message.json</a></li>
-    <li><a href="./schemas/me-response.json">me-response.json</a></li>
-    <li><a href="./schemas/note.json">note.json</a></li>
-    <li><a href="./schemas/folder.json">folder.json</a></li>
-  </ul>
+    <h2>스키마</h2>
+    <ul>
+      <li><a href="./schemas/problem.json">Problem Details</a></li>
+      <li><a href="./schemas/conversation.json">conversation.json</a></li>
+      <li><a href="./schemas/message.json">message.json</a></li>
+      <li><a href="./schemas/me-response.json">me-response.json</a></li>
+      <li><a href="./schemas/note.json">note.json</a></li>
+      <li><a href="./schemas/folder.json">folder.json</a></li>
+    </ul>
 
-  <h2>레퍼런스 & 변경 이력</h2>
-  <ul>
-    <li><a href="./md-viewer.html?file=./PROJECT_STRUCTURE.md">프로젝트 구조</a></li>
-    <li><a href="./md-viewer.html?file=./BRANCHING.md">브랜칭 전략</a></li>
-    <li><a href="./md-viewer.html?file=./CHANGELOG.md">CHANGELOG</a></li>
-  </ul>
-</body>
+    <h2>레퍼런스 & 변경 이력</h2>
+    <ul>
+      <li><a href="./md-viewer.html?file=./PROJECT_STRUCTURE.md">프로젝트 구조</a></li>
+      <li><a href="./md-viewer.html?file=./BRANCHING.md">브랜칭 전략</a></li>
+      <li><a href="./md-viewer.html?file=./CHANGELOG.md">CHANGELOG</a></li>
+    </ul>
+  </body>
 </html>

@@ -20,9 +20,13 @@ jest.mock('../../src/core/services/GoogleOAuthService', () => {
       buildAuthUrl(state: string) {
         return `http://mock-auth?state=${state}`;
       }
-      async exchangeCode(_code: string) { return { access_token: 'at', expires_in: 3600, token_type: 'Bearer' }; }
-      async fetchUserInfo(_token: any) { return { sub: 'google-uid-1', email: 'u@example.com', name: 'U', picture: 'https://img' }; }
-    }
+      async exchangeCode(_code: string) {
+        return { access_token: 'at', expires_in: 3600, token_type: 'Bearer' };
+      }
+      async fetchUserInfo(_token: any) {
+        return { sub: 'google-uid-1', email: 'u@example.com', name: 'U', picture: 'https://img' };
+      }
+    },
   };
 });
 
@@ -39,18 +43,24 @@ jest.mock('../../src/app/utils/authLogin', () => {
         res.cookie('gn-logged-in', '1');
       }
       return { userId };
-    }
+    },
   };
 });
 
 jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => {
-  return { UserRepositoryMySQL: class { async findOrCreateFromProvider() { return { id: 'u_1' } as any; } } };
+  return {
+    UserRepositoryMySQL: class {
+      async findOrCreateFromProvider() {
+        return { id: 'u_1' } as any;
+      }
+    },
+  };
 });
 
 // NoteService 목
 jest.mock('../../src/core/services/NoteService', () => {
   const { NotFoundError } = require('../../src/shared/errors/domain');
-  
+
   return {
     NoteService: class {
       async createNote(userId: string, dto: any) {
@@ -69,15 +79,16 @@ jest.mock('../../src/core/services/NoteService', () => {
 
       async getNote(userId: string, noteId: string) {
         const note = store.notes.get(noteId);
-        if (!note || note.ownerUserId !== userId || note.deletedAt) throw new NotFoundError('Note not found');
+        if (!note || note.ownerUserId !== userId || note.deletedAt)
+          throw new NotFoundError('Note not found');
         const { ownerUserId, ...rest } = note;
         return rest;
       }
 
       async listNotes(userId: string, folderId: string | null) {
         return Array.from(store.notes.values())
-          .filter(n => n.ownerUserId === userId && n.folderId === folderId && !n.deletedAt)
-          .map(n => {
+          .filter((n) => n.ownerUserId === userId && n.folderId === folderId && !n.deletedAt)
+          .map((n) => {
             const { ownerUserId, ...rest } = n;
             return rest;
           });
@@ -118,15 +129,16 @@ jest.mock('../../src/core/services/NoteService', () => {
 
       async getFolder(userId: string, folderId: string) {
         const folder = store.folders.get(folderId);
-        if (!folder || folder.ownerUserId !== userId || folder.deletedAt) throw new NotFoundError('Folder not found');
+        if (!folder || folder.ownerUserId !== userId || folder.deletedAt)
+          throw new NotFoundError('Folder not found');
         const { ownerUserId, ...rest } = folder;
         return rest;
       }
 
       async listFolders(userId: string, parentId: string | null) {
         return Array.from(store.folders.values())
-          .filter(f => f.ownerUserId === userId && f.parentId === parentId && !f.deletedAt)
-          .map(f => {
+          .filter((f) => f.ownerUserId === userId && f.parentId === parentId && !f.deletedAt)
+          .map((f) => {
             const { ownerUserId, ...rest } = f;
             return rest;
           });
@@ -157,7 +169,7 @@ jest.mock('../../src/core/services/NoteService', () => {
           if (n.folderId === folderId) n.deletedAt = null;
         }
       }
-    }
+    },
   };
 });
 
@@ -167,7 +179,7 @@ function appWithTestEnv() {
   process.env.OAUTH_GOOGLE_CLIENT_ID = 'test-client';
   process.env.OAUTH_GOOGLE_CLIENT_SECRET = 'test-secret';
   process.env.OAUTH_GOOGLE_REDIRECT_URI = 'http://localhost:3000/auth/google/callback';
-  process.env.REDIS_URL = 'redis://localhost:6379'; // Mocked by redis-memory-server usually or just ignored if session store mock isn't perfect, but here we rely on app setup. 
+  process.env.REDIS_URL = 'redis://localhost:6379'; // Mocked by redis-memory-server usually or just ignored if session store mock isn't perfect, but here we rely on app setup.
   // Note: In real test env, we might need to mock RedisStore or use a memory store for session.
   // However, existing tests seem to rely on `connect-redis` working or being mocked?
   // Looking at `server.ts`, it connects to Redis. In `ai.conversations.spec.ts`, it sets REDIS_URL.
@@ -190,20 +202,24 @@ jest.mock('connect-redis', () => {
   const store = new Map();
   return {
     RedisStore: class extends Store {
-      constructor() { super(); }
-      get(sid: string, cb: any) { 
-        cb(null, store.get(sid)); 
+      constructor() {
+        super();
       }
-      set(sid: string, sess: any, cb: any) { 
-        store.set(sid, sess); 
-        cb(null); 
+      get(sid: string, cb: any) {
+        cb(null, store.get(sid));
       }
-      destroy(sid: string, cb: any) { store.delete(sid); cb(null); }
-      on(event: string, cb: any) { } // Mock event emitter
-    }
+      set(sid: string, sess: any, cb: any) {
+        store.set(sid, sess);
+        cb(null);
+      }
+      destroy(sid: string, cb: any) {
+        store.delete(sid);
+        cb(null);
+      }
+      on(event: string, cb: any) {} // Mock event emitter
+    },
   };
 });
-
 
 describe('Note API', () => {
   let app: any;
@@ -214,27 +230,33 @@ describe('Note API', () => {
     // Login flow to get cookie
     const start = await request(app).get('/auth/google/start');
     const startCookie = start.headers['set-cookie']; // Capture session cookie from start
-    
+
     const loc = start.headers['location'];
     const state = new URL(loc).searchParams.get('state') || '';
-    
+
     const cb = await request(app)
       .get('/auth/google/callback')
       .set('Cookie', startCookie) // Send session cookie
       .query({ code: 'ok', state });
-      
+
     cookie = cb.headers['set-cookie']; // Capture authenticated session cookie
   });
 
   test('Folder CRUD', async () => {
     // Create
-    const res1 = await request(app).post('/v1/folders').set('Cookie', cookie).send({ name: 'Folder1' });
+    const res1 = await request(app)
+      .post('/v1/folders')
+      .set('Cookie', cookie)
+      .send({ name: 'Folder1' });
     expect(res1.status).toBe(201);
     const f1 = res1.body;
     expect(f1.name).toBe('Folder1');
 
     // Validation Error (Create)
-    const res1Fail = await request(app).post('/v1/folders').set('Cookie', cookie).send({ name: '' }); // Empty name
+    const res1Fail = await request(app)
+      .post('/v1/folders')
+      .set('Cookie', cookie)
+      .send({ name: '' }); // Empty name
     expect(res1Fail.status).toBe(400);
 
     // List
@@ -250,21 +272,33 @@ describe('Note API', () => {
 
     // List with parentId (Cover query param branch)
     // Create a folder with parentId
-    const resSub = await request(app).post('/v1/folders').set('Cookie', cookie).send({ name: 'SubFolder', parentId: 'root' });
+    const resSub = await request(app)
+      .post('/v1/folders')
+      .set('Cookie', cookie)
+      .send({ name: 'SubFolder', parentId: 'root' });
     expect(resSub.status).toBe(201);
-    
-    const res2Query = await request(app).get('/v1/folders').query({ parentId: 'root' }).set('Cookie', cookie);
+
+    const res2Query = await request(app)
+      .get('/v1/folders')
+      .query({ parentId: 'root' })
+      .set('Cookie', cookie);
     expect(res2Query.status).toBe(200);
     expect(res2Query.body).toHaveLength(1);
     expect(res2Query.body[0].id).toBe(resSub.body.id);
 
     // Update
-    const res3 = await request(app).patch(`/v1/folders/${f1.id}`).set('Cookie', cookie).send({ name: 'Folder1_Renamed' });
+    const res3 = await request(app)
+      .patch(`/v1/folders/${f1.id}`)
+      .set('Cookie', cookie)
+      .send({ name: 'Folder1_Renamed' });
     expect(res3.status).toBe(200);
     expect(res3.body.name).toBe('Folder1_Renamed');
 
     // Validation Error (Update)
-    const res3Fail = await request(app).patch(`/v1/folders/${f1.id}`).set('Cookie', cookie).send({ name: '' });
+    const res3Fail = await request(app)
+      .patch(`/v1/folders/${f1.id}`)
+      .set('Cookie', cookie)
+      .send({ name: '' });
     expect(res3Fail.status).toBe(400);
 
     // Delete
@@ -278,7 +312,10 @@ describe('Note API', () => {
 
   test('Note CRUD', async () => {
     // Create
-    const res1 = await request(app).post('/v1/notes').set('Cookie', cookie).send({ title: 'Note1', content: 'Content1' });
+    const res1 = await request(app)
+      .post('/v1/notes')
+      .set('Cookie', cookie)
+      .send({ title: 'Note1', content: 'Content1' });
     expect(res1.status).toBe(201);
     const n1 = res1.body;
     expect(n1.title).toBe('Note1');
@@ -294,10 +331,16 @@ describe('Note API', () => {
 
     // List with folderId (Cover query param branch)
     // Create a note in a folder
-    const resNoteInFolder = await request(app).post('/v1/notes').set('Cookie', cookie).send({ title: 'NoteInFolder', content: 'C', folderId: 'f_1' });
+    const resNoteInFolder = await request(app)
+      .post('/v1/notes')
+      .set('Cookie', cookie)
+      .send({ title: 'NoteInFolder', content: 'C', folderId: 'f_1' });
     expect(resNoteInFolder.status).toBe(201);
 
-    const res2Query = await request(app).get('/v1/notes').query({ folderId: 'f_1' }).set('Cookie', cookie);
+    const res2Query = await request(app)
+      .get('/v1/notes')
+      .query({ folderId: 'f_1' })
+      .set('Cookie', cookie);
     expect(res2Query.status).toBe(200);
     expect(res2Query.body).toHaveLength(1);
     expect(res2Query.body[0].id).toBe(resNoteInFolder.body.id);
@@ -308,18 +351,24 @@ describe('Note API', () => {
     expect(resGet.body.id).toBe(n1.id);
 
     // Update
-    const res3 = await request(app).patch(`/v1/notes/${n1.id}`).set('Cookie', cookie).send({ content: 'Content_Updated' });
+    const res3 = await request(app)
+      .patch(`/v1/notes/${n1.id}`)
+      .set('Cookie', cookie)
+      .send({ content: 'Content_Updated' });
     expect(res3.status).toBe(200);
     expect(res3.body.content).toBe('Content_Updated');
 
     // Validation Error (Update)
-    const res3Fail = await request(app).patch(`/v1/notes/${n1.id}`).set('Cookie', cookie).send({ title: '' });
+    const res3Fail = await request(app)
+      .patch(`/v1/notes/${n1.id}`)
+      .set('Cookie', cookie)
+      .send({ title: '' });
     expect(res3Fail.status).toBe(400);
 
     // Delete
     const res4 = await request(app).delete(`/v1/notes/${n1.id}`).set('Cookie', cookie);
     expect(res4.status).toBe(204);
-    
+
     // Get 404
     const res5 = await request(app).get(`/v1/notes/${n1.id}`).set('Cookie', cookie);
     expect(res5.status).toBe(404);
@@ -335,11 +384,17 @@ describe('Note API', () => {
 
   test('Folder Restore (Cascade)', async () => {
     // Create Folder
-    const resF = await request(app).post('/v1/folders').set('Cookie', cookie).send({ name: 'RestoreFolder' });
+    const resF = await request(app)
+      .post('/v1/folders')
+      .set('Cookie', cookie)
+      .send({ name: 'RestoreFolder' });
     const fId = resF.body.id;
 
     // Create Note in Folder
-    const resN = await request(app).post('/v1/notes').set('Cookie', cookie).send({ title: 'ChildNote', content: 'Content', folderId: fId });
+    const resN = await request(app)
+      .post('/v1/notes')
+      .set('Cookie', cookie)
+      .send({ title: 'ChildNote', content: 'Content', folderId: fId });
     // if (resN.status !== 201) console.log('Create Note Failed:', JSON.stringify(resN.body, null, 2));
     const nId = resN.body.id;
 

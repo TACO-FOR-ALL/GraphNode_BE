@@ -1,6 +1,6 @@
 /**
  * 모듈: Base Error (기본 에러 클래스)
- * 
+ *
  * 책임:
  * - 애플리케이션에서 발생하는 모든 커스텀 에러의 부모 클래스를 정의합니다.
  * - 에러 처리의 일관성을 유지하기 위해 사용됩니다.
@@ -9,20 +9,20 @@
 
 /**
  * AppError 추상 클래스
- * 
+ *
  * 모든 비즈니스 로직 에러는 이 클래스를 상속받아야 합니다.
  * 이를 통해 에러 핸들러가 에러의 종류(code)와 HTTP 상태 코드(httpStatus)를 일관되게 처리할 수 있습니다.
  */
 export abstract class AppError extends Error {
   /** 기계가 읽기 쉬운 에러 코드 (예: VALIDATION_FAILED, NOT_FOUND) */
   abstract code: string;
-  
+
   /** 클라이언트에게 반환할 HTTP 상태 코드 (예: 400, 404) */
   abstract httpStatus: number;
-  
+
   /** 일시적인 오류여서 재시도가 가능한지 여부 */
   retryable = false;
-  
+
   /** 에러와 관련된 추가 정보 (디버깅용) */
   details?: Record<string, any>;
 
@@ -39,12 +39,12 @@ export abstract class AppError extends Error {
 
 /**
  * 에러 정규화 함수 (unknownToAppError)
- * 
+ *
  * 역할:
  * - try-catch 블록에서 잡힌 에러(unknown 타입)를 AppError 타입으로 변환합니다.
  * - Zod 라이브러리의 유효성 검사 에러를 ValidationError로 변환합니다.
  * - 일반적인 Error 객체나 알 수 없는 객체를 UNKNOWN_ERROR로 포장합니다.
- * 
+ *
  * @param err 발생한 에러 객체
  * @returns 정규화된 AppError 객체
  */
@@ -77,21 +77,35 @@ export function unknownToAppError(err: unknown): AppError {
 
     const message = e.message || String(e.code).replace(/_/g, ' ');
     switch (e.code) {
-      case 'VALIDATION_FAILED': return new ValidationError(message, e.details);
-      case 'INVALID_API_KEY':   return new InvalidApiKeyError(message, e.details);
-      case 'AUTH_REQUIRED':     return new AuthError(message, e.details);
-      case 'FORBIDDEN':         return new ForbiddenError(message, e.details);
-      case 'NOT_FOUND':         return new NotFoundError(message, e.details);
-      case 'CONFLICT':          return new ConflictError(message, e.details);
-      case 'RATE_LIMITED':      return new RateLimitError(message, e.details);
-      case 'UPSTREAM_ERROR':    return new UpstreamError(message, e.details);
-      case 'UPSTREAM_TIMEOUT':  return new UpstreamTimeout(message, e.details);
-      default: break;
+      case 'VALIDATION_FAILED':
+        return new ValidationError(message, e.details);
+      case 'INVALID_API_KEY':
+        return new InvalidApiKeyError(message, e.details);
+      case 'AUTH_REQUIRED':
+        return new AuthError(message, e.details);
+      case 'FORBIDDEN':
+        return new ForbiddenError(message, e.details);
+      case 'NOT_FOUND':
+        return new NotFoundError(message, e.details);
+      case 'CONFLICT':
+        return new ConflictError(message, e.details);
+      case 'RATE_LIMITED':
+        return new RateLimitError(message, e.details);
+      case 'UPSTREAM_ERROR':
+        return new UpstreamError(message, e.details);
+      case 'UPSTREAM_TIMEOUT':
+        return new UpstreamTimeout(message, e.details);
+      default:
+        break;
     }
   }
 
   // 3. 그 외 알 수 없는 에러 처리
-  // 500 Internal Server Error로 취급합니다.
   const message = e?.message || 'Unknown error';
-  return new (class extends AppError { code = 'UNKNOWN_ERROR'; httpStatus = 500; })(message);
+  const out = new (class extends AppError {
+    code = 'UNKNOWN_ERROR';
+    httpStatus = 500;
+  })(message);
+  console.log('DEBUG_ERR_standardized:', out.code, out.httpStatus);
+  return out;
 }

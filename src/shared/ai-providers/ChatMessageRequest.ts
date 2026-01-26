@@ -1,5 +1,4 @@
-
-export type ChatRole = "user" | "assistant" | "system";
+export type ChatRole = 'user' | 'assistant' | 'system';
 
 /**
  * FE-BE간 채팅 메시지 DTO
@@ -7,6 +6,6 @@ export type ChatRole = "user" | "assistant" | "system";
  * @param content 메시지 내용
  */
 export interface ChatMessageRequest {
-    role: ChatRole;
-    content: string;
+  role: ChatRole;
+  content: string;
 }

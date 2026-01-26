@@ -1,6 +1,6 @@
 /**
  * Worker Entry Point
- * 
+ *
  * 책임:
  * - 백그라운드 작업 처리를 위한 워커 프로세스를 시작합니다.
  * - SQS 메시지를 폴링하고, 각 메시지 타입에 맞는 핸들러(프로세서)를 호출합니다.
@@ -25,7 +25,7 @@ async function startWorker() {
   // 1. Initialize Dependency Container
   // API 서버와 동일한 설정을 사용하여 DB, Redis, S3 등의 연결을 맺습니다.
   const container = Container.getInstance();
-  
+
   // 중요: DB 연결 등 비동기 초기화가 필요할 수 있음
   // Container 클래스에 initializeAsync 같은게 없다면, 서비스들이 Lazy loading되거나
   // 생성자에서 초기화되는지 확인 필요.
@@ -38,7 +38,7 @@ async function startWorker() {
     // 추후 추가: [TaskType.OTHER_TASK]: new OtherTaskHandler(),
   };
 
-  const queueUrl = env.SQS_RESULT_QUEUE_URL || ''; 
+  const queueUrl = env.SQS_RESULT_QUEUE_URL || '';
   if (!queueUrl) {
     logger.error('SQS_RESULT_QUEUE_URL is not defined in environment variables');
     process.exit(1);
@@ -53,10 +53,10 @@ async function startWorker() {
       credentials: {
         accessKeyId: env.AWS_ACCESS_KEY_ID || '',
         secretAccessKey: env.AWS_SECRET_ACCESS_KEY || '',
-      }
+      },
     }),
     /**
-     * 메시지 처리 메인 로직 Override? 
+     * 메시지 처리 메인 로직 Override?
      */
     handleMessage: async (message) => {
       try {
@@ -82,7 +82,6 @@ async function startWorker() {
 
         // 정상 처리 완료 시 메시지 반환 -> SQS Consumer가 삭제(ACK) 수행
         return message;
-
       } catch (err) {
         logger.error({ err, messageId: message.MessageId }, 'Error handling message');
         throw err; // 에러를 던져야 SQS Consumer가 재시도 로직을 수행함 (ACK 안함)
@@ -108,8 +107,7 @@ async function startWorker() {
 }
 
 // 5. Run
-startWorker().catch(err => {
+startWorker().catch((err) => {
   logger.error({ err }, 'Fatal error in worker process');
   process.exit(1);
 });
-

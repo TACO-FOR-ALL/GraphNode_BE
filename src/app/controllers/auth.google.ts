@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto';
 import { container } from '../../bootstrap/container';
 import { completeLogin } from '../utils/authLogin';
 import { ValidationError } from '../../shared/errors/domain';
+import { getOauthStateCookieOpts } from '../utils/sessionCookies';
 
 /**
  * GoogleOAuthService 인스턴스를 생성한다.
@@ -28,8 +29,8 @@ function getService() {
  */
 export async function start(req: Request, res: Response, _next: NextFunction) {
   const state = randomUUID();
-  // 간단 상태 저장: 세션 사용 (MVP)
-  (req.session as any).oauth_state = state;
+  // 간단 상태 저장: 서명된 쿠키 사용
+  res.cookie('oauth_state', state, getOauthStateCookieOpts());
   const svc = getService();
   const url = svc.buildAuthUrl(state);
   res.redirect(302, url);
@@ -48,8 +49,13 @@ export async function callback(req: Request, res: Response, next: NextFunction) 
   try {
     const { code, state } = req.query as { code?: string; state?: string };
     if (!code || !state) throw new ValidationError('Missing code or state');
-    const expected = (req.session as any).oauth_state;
+
+    // 서명된 쿠키에서 state 검증
+    const expected = req.signedCookies['oauth_state'];
     if (!expected || expected !== state) throw new ValidationError('Invalid state');
+
+    // 검증 완료 후 쿠키 제거
+    res.clearCookie('oauth_state', { path: '/' });
 
     const svc = getService();
     const token = await svc.exchangeCode(code);

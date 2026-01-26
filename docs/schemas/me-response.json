@@ -6,16 +6,13 @@
   "required": ["userId"],
   "properties": {
     "userId": {
-      "oneOf": [
-        { "type": "string" },
-        { "type": "integer" }
-      ]
+      "oneOf": [{ "type": "string" }, { "type": "integer" }]
     },
     "profile": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "id": { "oneOf": [ { "type": "string" }, { "type": "integer" } ] },
+        "id": { "oneOf": [{ "type": "string" }, { "type": "integer" }] },
         "displayName": { "type": ["string", "null"] },
         "avatarUrl": { "type": ["string", "null"], "format": "uri" },
         "email": { "type": ["string", "null"], "format": "email" }

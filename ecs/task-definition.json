@@ -1,111 +1,139 @@
 {
-    "compatibilities": [
-        "EC2"
-    ],
-    "containerDefinitions": [
+  "compatibilities": ["EC2"],
+  "containerDefinitions": [
+    {
+      "cpu": 0,
+      "environment": [
+        { "name": "NODE_ENV", "value": "development" },
+        { "name": "PORT", "value": "3000" },
         {
-            "cpu": 0,
-            "environment": [
-                { "name": "NODE_ENV", "value": "development" },
-                { "name": "PORT", "value": "3000" },
-                { "name": "MYSQL_URL", "value": "mysql://admin:taco4graphnode@taco4graphnode.c32yswk8iz9c.ap-northeast-2.rds.amazonaws.com:3306/taco4graphnode" },
-                { "name": "MONGODB_URL", "value": "mongodb+srv://tacoprogrammers_db_user:TACO4GraphNode@taco4graphnode.rour0fu.mongodb.net/?appName=TACO4GraphNode" },
-                { "name": "REDIS_URL", "value": "redis://default:IUp5xGGPnQs0OZlHdWLBrZZqREzSVFlD@redis-12298.c340.ap-northeast-2-1.ec2.cloud.redislabs.com:12298" },
-                { "name": "DEV_INSECURE_COOKIES", "value": "true" },
-                { "name": "SESSION_SECRET", "value": "TACOGRAPHNODESECRET" },
-                { "name": "OAUTH_GOOGLE_CLIENT_ID", "value": "817875185345-9c12n94ghp3hbhc9u9ed05hr79pr05a6.apps.googleusercontent.com" },
-                { "name": "OAUTH_GOOGLE_CLIENT_SECRET", "value": "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" },
-                { "name": "OAUTH_GOOGLE_REDIRECT_URI", "value": "https://taco4graphnode.online/auth/google/callback" },
-                { "name": "OAUTH_APPLE_TEAM_ID", "value": "GQM6B63P8T" },
-                { "name": "OAUTH_APPLE_KEY_ID", "value": "U947C84Q4P" },
-                { "name": "OAUTH_APPLE_CLIENT_ID", "value": "com.taco.graphnode.oauth" },
-                { "name": "OAUTH_APPLE_PRIVATE_KEY", "value": "-----BEGIN PRIVATE KEY-----\nMIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgpMIc3Ax8+W0kw+RJ\nXgNa26qF0a+yNZyp1lBYoa5RhfOgCgYIKoZIzj0DAQehRANCAATn1GTyqR8eRyyD\nEsv7HVMarKepo4QsKHm4THZH7UVPNEm95HST+lVtLxR0vEQwOyQXEK8K9AKV0KaC\nSMX7NxKL\n-----END PRIVATE KEY-----" },
-                { "name": "OAUTH_APPLE_REDIRECT_URI", "value": "https://taco4graphnode.online/auth/apple/callback" },
-                { "name": "QDRANT_URL", "value": "https://eaf265d6-375e-4cf7-8331-8e088b9ce01c.us-west-1-0.aws.cloud.qdrant.io" },
-                { "name": "QDRANT_API_KEY", "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.LcEFyeZ7toZRWXprrz2RqUHVQv33ngrerEoRTAc65ag" },
-                { "name": "QDRANT_COLLECTION_NAME", "value": "graphnode_vectors" },
-                { "name": "QDRANT_VECTOR_SIZE", "value": "1536" },
-                { "name": "QDRANT_DISTANCE_METRIC", "value": "Cosine" },
-                { "name": "AI_SERVER_URI", "value": "https://qsekjgdnqjhchshh.tunnel.elice.io" }
-            ],
-            "essential": true,
-            "image": "954976324655.dkr.ecr.ap-northeast-2.amazonaws.com/taco4/graphnode:latest_10",
-            "logConfiguration": {
-                "logDriver": "awslogs",
-                "options": {
-                    "awslogs-group": "/ecs/taco-4-graphnode-task",
-                    "awslogs-create-group": "true",
-                    "awslogs-region": "ap-northeast-2",
-                    "awslogs-stream-prefix": "ecs"
-                }
-            },
-            "memory": 850,
-            "memoryReservation": 512,
-            "mountPoints": [],
-            "name": "taco4_graphnode_container",
-            "portMappings": [
-                {
-                    "appProtocol": "http",
-                    "containerPort": 3000,
-                    "hostPort": 80,
-                    "name": "taco4_graphnode_port",
-                    "protocol": "tcp"
-                }
-            ],
+          "name": "MYSQL_URL",
+          "value": "mysql://avnadmin:AVNS_GKatfYBFBzIo4yKgRuD@taco-graphnode-taco4-graphnode.d.aivencloud.com:22991/defaultdb?ssl-mode=REQUIRED"
+        },
+        {
+          "name": "MONGODB_URL",
+          "value": "mongodb+srv://tacoprogrammers_db_user:TACO4GraphNode@taco4graphnode.rour0fu.mongodb.net/?appName=TACO4GraphNode"
+        },
+        {
+          "name": "REDIS_URL",
+          "value": "redis://default:XsXGPyTHzVZZYC0Gazyi5L5mv1wb1McO@redis-14530.c340.ap-northeast-2-1.ec2.cloud.redislabs.com:14530"
+        },
+        { "name": "DEV_INSECURE_COOKIES", "value": "true" },
+        { "name": "SESSION_SECRET", "value": "TACOGRAPHNODESECRET" },
+        {
+          "name": "OAUTH_GOOGLE_CLIENT_ID",
+          "value": "817875185345-9c12n94ghp3hbhc9u9ed05hr79pr05a6.apps.googleusercontent.com"
+        },
+        { "name": "OAUTH_GOOGLE_CLIENT_SECRET", "value": "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" },
+        {
+          "name": "OAUTH_GOOGLE_REDIRECT_URI",
+          "value": "https://taco4graphnode.online/auth/google/callback"
+        },
+        { "name": "OAUTH_APPLE_TEAM_ID", "value": "GQM6B63P8T" },
+        { "name": "OAUTH_APPLE_KEY_ID", "value": "U947C84Q4P" },
+        { "name": "OAUTH_APPLE_CLIENT_ID", "value": "com.taco.graphnode.oauth" },
+        {
+          "name": "OAUTH_APPLE_PRIVATE_KEY",
+          "value": "-----BEGIN PRIVATE KEY-----\nMIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgpMIc3Ax8+W0kw+RJ\nXgNa26qF0a+yNZyp1lBYoa5RhfOgCgYIKoZIzj0DAQehRANCAATn1GTyqR8eRyyD\nEsv7HVMarKepo4QsKHm4THZH7UVPNEm95HST+lVtLxR0vEQwOyQXEK8K9AKV0KaC\nSMX7NxKL\n-----END PRIVATE KEY-----"
+        },
+        {
+          "name": "OAUTH_APPLE_REDIRECT_URI",
+          "value": "https://taco4graphnode.online/auth/apple/callback"
+        },
+        {
+          "name": "QDRANT_URL",
+          "value": "https://eaf265d6-375e-4cf7-8331-8e088b9ce01c.us-west-1-0.aws.cloud.qdrant.io"
+        },
+        { "name": "OPENAI_API_KEY", "value": "sk-placeholder" },
+        { "name": "NEO4J_URI", "value": "bolt://localhost:7687" },
+        { "name": "NEO4J_USERNAME", "value": "neo4j" },
+        { "name": "NEO4J_PASSWORD", "value": "password" },
+        { "name": "CHROMA_API_URL", "value": "http://localhost:8000" },
+        {
+          "name": "QDRANT_API_KEY",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.LcEFyeZ7toZRWXprrz2RqUHVQv33ngrerEoRTAc65ag"
+        },
+        { "name": "QDRANT_COLLECTION_NAME", "value": "graphnode_vectors" },
+        { "name": "QDRANT_VECTOR_SIZE", "value": "1536" },
+        { "name": "QDRANT_DISTANCE_METRIC", "value": "Cosine" },
+        { "name": "AI_SERVER_URI", "value": "https://qsekjgdnqjhchshh.tunnel.elice.io" }
+      ],
+      "essential": true,
+      "image": "954976324655.dkr.ecr.ap-northeast-2.amazonaws.com/taco4/graphnode:latest_10",
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/taco-4-graphnode-task",
+          "awslogs-create-group": "true",
+          "awslogs-region": "ap-northeast-2",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "memory": 850,
+      "memoryReservation": 512,
+      "mountPoints": [],
+      "name": "taco4_graphnode_container",
+      "portMappings": [
+        {
+          "appProtocol": "http",
+          "containerPort": 3000,
+          "hostPort": 80,
+          "name": "taco4_graphnode_port",
+          "protocol": "tcp"
+        }
+      ],
 
-            "systemControls": [],
-            "volumesFrom": []
-        }
-    ],
-    "cpu": "900",
-    "enableFaultInjection": false,
-    "executionRoleArn": "arn:aws:iam::954976324655:role/ecsTaskExecutionRole",
-    "family": "taco-4-graphnode-task",
-    "memory": "900",
-    "networkMode": "bridge",
-    "placementConstraints": [],
-    "registeredAt": "2025-11-29T12:49:46.213Z",
-    "registeredBy": "arn:aws:iam::954976324655:root",
-    "requiresAttributes": [
-        {
-            "name": "com.amazonaws.ecs.capability.logging-driver.awslogs"
-        },
-        {
-            "name": "ecs.capability.execution-role-awslogs"
-        },
-        {
-            "name": "com.amazonaws.ecs.capability.ecr-auth"
-        },
-        {
-            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
-        },
-        {
-            "name": "ecs.capability.secrets.asm.environment-variables"
-        },
-        {
-            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.21"
-        },
-        {
-            "name": "com.amazonaws.ecs.capability.task-iam-role"
-        },
-        {
-            "name": "ecs.capability.execution-role-ecr-pull"
-        },
-        {
-            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.29"
-        }
-    ],
-    "requiresCompatibilities": [
-        "EC2"
-    ],
-    "revision": 15,
-    "runtimePlatform": {
-        "cpuArchitecture": "X86_64",
-        "operatingSystemFamily": "LINUX"
+      "systemControls": [],
+      "volumesFrom": []
+    }
+  ],
+  "cpu": "900",
+  "enableFaultInjection": false,
+  "executionRoleArn": "arn:aws:iam::954976324655:role/ecsTaskExecutionRole",
+  "family": "taco-4-graphnode-task",
+  "memory": "900",
+  "networkMode": "bridge",
+  "placementConstraints": [],
+  "registeredAt": "2025-11-29T12:49:46.213Z",
+  "registeredBy": "arn:aws:iam::954976324655:root",
+  "requiresAttributes": [
+    {
+      "name": "com.amazonaws.ecs.capability.logging-driver.awslogs"
     },
-    "status": "ACTIVE",
-    "taskDefinitionArn": "arn:aws:ecs:ap-northeast-2:954976324655:task-definition/taco-4-graphnode-task:15",
-    "taskRoleArn": "arn:aws:iam::954976324655:role/ecsTaskExecutionRole",
-    "volumes": [],
-    "tags": []
+    {
+      "name": "ecs.capability.execution-role-awslogs"
+    },
+    {
+      "name": "com.amazonaws.ecs.capability.ecr-auth"
+    },
+    {
+      "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
+    },
+    {
+      "name": "ecs.capability.secrets.asm.environment-variables"
+    },
+    {
+      "name": "com.amazonaws.ecs.capability.docker-remote-api.1.21"
+    },
+    {
+      "name": "com.amazonaws.ecs.capability.task-iam-role"
+    },
+    {
+      "name": "ecs.capability.execution-role-ecr-pull"
+    },
+    {
+      "name": "com.amazonaws.ecs.capability.docker-remote-api.1.29"
+    }
+  ],
+  "requiresCompatibilities": ["EC2"],
+  "revision": 15,
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "status": "ACTIVE",
+  "taskDefinitionArn": "arn:aws:ecs:ap-northeast-2:954976324655:task-definition/taco-4-graphnode-task:15",
+  "taskRoleArn": "arn:aws:iam::954976324655:role/ecsTaskExecutionRole",
+  "volumes": [],
+  "tags": []
 }

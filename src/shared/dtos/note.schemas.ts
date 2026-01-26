@@ -14,7 +14,7 @@ export const createNoteSchema = z.object({
   /** 노트 제목 (선택). 생략 시 내용의 첫 줄이나 기본값 사용 */
   title: z.string().min(1).optional(),
   /** 노트 내용 (필수). Markdown 형식 */
-  content: z.string().min(1, "Content is required"),
+  content: z.string().min(1, 'Content is required'),
   /** 소속 폴더 ID (선택). 생략 또는 null 시 최상위 */
   folderId: z.string().nullable().optional(),
 });
@@ -38,7 +38,7 @@ export const createFolderSchema = z.object({
   /** 폴더 ID (선택). 생략 시 서버 생성 */
   id: z.uuid().optional(),
   /** 폴더 이름 (필수) */
-  name: z.string().min(1, "Folder name is required"),
+  name: z.string().min(1, 'Folder name is required'),
   /** 상위 폴더 ID (선택). 생략 또는 null 시 최상위 */
   parentId: z.string().nullable().optional(),
 });

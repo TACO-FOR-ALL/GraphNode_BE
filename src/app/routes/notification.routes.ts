@@ -12,7 +12,12 @@ export function createNotificationRouter(notificationService: NotificationServic
 
   // SSE 연결 엔드포인트
   // 인증된 사용자만 접근 가능
-  router.get('/stream', bindSessionUser, requireLogin, asyncHandler(controller.stream.bind(controller)));
+  router.get(
+    '/stream',
+    bindSessionUser,
+    requireLogin,
+    asyncHandler(controller.stream.bind(controller))
+  );
 
   return router;
 }

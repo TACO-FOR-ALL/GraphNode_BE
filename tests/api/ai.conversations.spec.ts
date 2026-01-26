@@ -9,7 +9,10 @@ import { createApp } from '../../src/bootstrap/server';
 
 // 인메모리 스토어
 const store = {
-  conversations: new Map<string, { id: string; title: string; updatedAt: string; messages: any[]; ownerUserId: string }>()
+  conversations: new Map<
+    string,
+    { id: string; title: string; updatedAt: string; messages: any[]; ownerUserId: string }
+  >(),
 };
 
 // Google OAuth/유저 레포 목(세션 생성을 위해 재사용)
@@ -28,14 +31,24 @@ jest.mock('../../src/core/services/GoogleOAuthService', () => {
         u.searchParams.set('prompt', 'consent');
         return u.toString();
       }
-      async exchangeCode(_code: string) { return { access_token: 'at', expires_in: 3600, token_type: 'Bearer' }; }
-      async fetchUserInfo(_token: any) { return { sub: 'google-uid-1', email: 'u@example.com', name: 'U', picture: 'https://img' }; }
-    }
+      async exchangeCode(_code: string) {
+        return { access_token: 'at', expires_in: 3600, token_type: 'Bearer' };
+      }
+      async fetchUserInfo(_token: any) {
+        return { sub: 'google-uid-1', email: 'u@example.com', name: 'U', picture: 'https://img' };
+      }
+    },
   };
 });
 
 jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => {
-  return { UserRepositoryMySQL: class { async findOrCreateFromProvider() { return { id: 'u_1' } as any; } } };
+  return {
+    UserRepositoryMySQL: class {
+      async findOrCreateFromProvider() {
+        return { id: 'u_1' } as any;
+      }
+    },
+  };
 });
 
 // Service 레이어 인메모리 목
@@ -44,42 +57,52 @@ jest.mock('../../src/core/services/ConversationService', () => {
     ConversationService: class {
       async create(ownerUserId: string, threadId: string, title: string, messages?: any[]) {
         const now = new Date().toISOString();
-        store.conversations.set(threadId, { id: threadId, title, updatedAt: now, messages: messages ?? [], ownerUserId });
+        store.conversations.set(threadId, {
+          id: threadId,
+          title,
+          updatedAt: now,
+          messages: messages ?? [],
+          ownerUserId,
+        });
         return { id: threadId, title, updatedAt: now, messages: messages ?? [] };
       }
       async getById(id: string, ownerUserId: string) {
         const v = store.conversations.get(id);
-        if (!v || v.ownerUserId !== ownerUserId || (v as any).deletedAt) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+        if (!v || v.ownerUserId !== ownerUserId || (v as any).deletedAt)
+          throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
         const messages = v.messages.filter((m: any) => !m.deletedAt);
         return { id: v.id, title: v.title, updatedAt: v.updatedAt, messages };
       }
       async listByOwner(ownerUserId: string, limit: number) {
         const items = Array.from(store.conversations.values())
-          .filter(v => v.ownerUserId === ownerUserId && !(v as any).deletedAt)
+          .filter((v) => v.ownerUserId === ownerUserId && !(v as any).deletedAt)
           .slice(0, limit)
-          .map(v => ({ id: v.id, title: v.title, updatedAt: v.updatedAt, messages: [] }));
+          .map((v) => ({ id: v.id, title: v.title, updatedAt: v.updatedAt, messages: [] }));
         return { items, nextCursor: null };
       }
       async update(id: string, ownerUserId: string, updates: any) {
         const v = store.conversations.get(id);
-        if (!v || v.ownerUserId !== ownerUserId || (v as any).deletedAt) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+        if (!v || v.ownerUserId !== ownerUserId || (v as any).deletedAt)
+          throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
         v.title = updates.title ?? v.title;
         v.updatedAt = new Date().toISOString();
         return { id: v.id, title: v.title, updatedAt: v.updatedAt, messages: v.messages };
       }
       async delete(id: string, ownerUserId: string) {
         const v = store.conversations.get(id);
-        if (!v || v.ownerUserId !== ownerUserId) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+        if (!v || v.ownerUserId !== ownerUserId)
+          throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
         // Soft delete
         (v as any).deletedAt = new Date().toISOString();
         return true;
       }
       async restore(id: string, ownerUserId: string) {
         const v = store.conversations.get(id);
-        if (!v || v.ownerUserId !== ownerUserId) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+        if (!v || v.ownerUserId !== ownerUserId)
+          throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
         (v as any).deletedAt = null;
       }
-    }
+    },
   };
 });
 
@@ -88,7 +111,8 @@ jest.mock('../../src/core/services/MessageService', () => {
     MessageService: class {
       async create(ownerUserId: string, conversationId: string, message: any) {
         const v = store.conversations.get(conversationId);
-        if (!v || v.ownerUserId !== ownerUserId) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+        if (!v || v.ownerUserId !== ownerUserId)
+          throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
         const msg = { ...message, ts: message.ts ?? new Date().toISOString() };
         v.messages.push(msg);
         v.updatedAt = msg.ts;
@@ -96,8 +120,9 @@ jest.mock('../../src/core/services/MessageService', () => {
       }
       async update(ownerUserId: string, conversationId: string, messageId: string, updates: any) {
         const v = store.conversations.get(conversationId);
-        if (!v || v.ownerUserId !== ownerUserId) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
-        const m = v.messages.find(x => x.id === messageId);
+        if (!v || v.ownerUserId !== ownerUserId)
+          throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+        const m = v.messages.find((x) => x.id === messageId);
         if (!m) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
         Object.assign(m, updates);
         v.updatedAt = new Date().toISOString();
@@ -105,26 +130,28 @@ jest.mock('../../src/core/services/MessageService', () => {
       }
       async delete(ownerUserId: string, conversationId: string, messageId: string) {
         const v = store.conversations.get(conversationId);
-        if (!v || v.ownerUserId !== ownerUserId) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
-        
-        const m = v.messages.find(x => x.id === messageId);
+        if (!v || v.ownerUserId !== ownerUserId)
+          throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+
+        const m = v.messages.find((x) => x.id === messageId);
         if (!m) return false;
-        
+
         // Soft delete
         m.deletedAt = new Date().toISOString();
         return true;
       }
       async restore(ownerUserId: string, conversationId: string, messageId: string) {
         const v = store.conversations.get(conversationId);
-        if (!v || v.ownerUserId !== ownerUserId) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
-        
-        const m = v.messages.find(x => x.id === messageId);
+        if (!v || v.ownerUserId !== ownerUserId)
+          throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+
+        const m = v.messages.find((x) => x.id === messageId);
         if (!m) throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
-        
+
         m.deletedAt = null;
         return true;
       }
-    }
+    },
   };
 });
 
@@ -152,12 +179,22 @@ describe('AI Conversations API', () => {
     const cookie = start.headers['set-cookie'];
     const location = start.headers['location'] as string;
     const state = new URL(location).searchParams.get('state') || '';
-    const cb = await request(app).get('/auth/google/callback').set('Cookie', cookie).query({ code: 'ok', state });
+    const cb = await request(app)
+      .get('/auth/google/callback')
+      .set('Cookie', cookie)
+      .query({ code: 'ok', state });
     expect(cb.status).toBe(200);
 
     // 대화 생성
-    const createBody = { id: 'c_test_1', title: 'First', messages: [{ id: 'm1', role: 'user', content: 'hi' }] };
-    const c1 = await request(app).post('/v1/ai/conversations').set('Cookie', cookie).send(createBody);
+    const createBody = {
+      id: 'c_test_1',
+      title: 'First',
+      messages: [{ id: 'm1', role: 'user', content: 'hi' }],
+    };
+    const c1 = await request(app)
+      .post('/v1/ai/conversations')
+      .set('Cookie', cookie)
+      .send(createBody);
     expect(c1.status).toBe(201);
     expect(c1.headers['location']).toBe('/v1/ai/conversations/c_test_1');
 
@@ -174,26 +211,39 @@ describe('AI Conversations API', () => {
     expect(get.body.messages.length).toBe(1);
 
     // 제목 업데이트
-    const up = await request(app).patch('/v1/ai/conversations/c_test_1').set('Cookie', cookie).send({ title: 'Renamed' });
+    const up = await request(app)
+      .patch('/v1/ai/conversations/c_test_1')
+      .set('Cookie', cookie)
+      .send({ title: 'Renamed' });
     expect(up.status).toBe(200);
     expect(up.body.title).toBe('Renamed');
 
     // 메시지 생성
-    const mCreate = await request(app).post('/v1/ai/conversations/c_test_1/messages').set('Cookie', cookie).send({ id: 'm2', role: 'assistant', content: 'hello' });
+    const mCreate = await request(app)
+      .post('/v1/ai/conversations/c_test_1/messages')
+      .set('Cookie', cookie)
+      .send({ id: 'm2', role: 'assistant', content: 'hello' });
     expect(mCreate.status).toBe(201);
     expect(mCreate.body.id).toBe('m2');
 
     // 메시지 업데이트
-    const mUpdate = await request(app).patch('/v1/ai/conversations/c_test_1/messages/m2').set('Cookie', cookie).send({ content: 'hello!!' });
+    const mUpdate = await request(app)
+      .patch('/v1/ai/conversations/c_test_1/messages/m2')
+      .set('Cookie', cookie)
+      .send({ content: 'hello!!' });
     expect(mUpdate.status).toBe(200);
     expect(mUpdate.body.content).toBe('hello!!');
 
     // 메시지 삭제
-    const mDel = await request(app).delete('/v1/ai/conversations/c_test_1/messages/m2').set('Cookie', cookie);
+    const mDel = await request(app)
+      .delete('/v1/ai/conversations/c_test_1/messages/m2')
+      .set('Cookie', cookie);
     expect(mDel.status).toBe(204);
 
     // 메시지 복구
-    const mRestore = await request(app).post('/v1/ai/conversations/c_test_1/messages/m2/restore').set('Cookie', cookie);
+    const mRestore = await request(app)
+      .post('/v1/ai/conversations/c_test_1/messages/m2/restore')
+      .set('Cookie', cookie);
     expect(mRestore.status).toBe(204);
 
     // 대화 삭제
@@ -201,7 +251,9 @@ describe('AI Conversations API', () => {
     expect(del.status).toBe(204);
 
     // 대화 복구
-    const cRestore = await request(app).post('/v1/ai/conversations/c_test_1/restore').set('Cookie', cookie);
+    const cRestore = await request(app)
+      .post('/v1/ai/conversations/c_test_1/restore')
+      .set('Cookie', cookie);
     expect(cRestore.status).toBe(204);
   });
 });

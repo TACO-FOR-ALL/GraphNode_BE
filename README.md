@@ -22,14 +22,14 @@ GraphNode는 대화형 AI 챗봇과 지식 그래프를 결합한 데스크톱 �
 
 ## 기술 스택
 
-| 영역 | 기술 |
-| --- | --- |
-| Runtime | Node.js 20+ |
-| Language | TypeScript 5 |
-| Web | Express 5 |
-| DB | MySQL, MongoDB (Docker 로컬) |
-| Docs | OpenAPI 3.1, JSON Schema 2020-12, TypeDoc |
-| Lint/Format | ESLint 9 (Flat), Prettier 3 |
+| 영역        | 기술                                      |
+| ----------- | ----------------------------------------- |
+| Runtime     | Node.js 20+                               |
+| Language    | TypeScript 5                              |
+| Web         | Express 5                                 |
+| DB          | MySQL, MongoDB (Docker 로컬)              |
+| Docs        | OpenAPI 3.1, JSON Schema 2020-12, TypeDoc |
+| Lint/Format | ESLint 9 (Flat), Prettier 3               |
 
 ## 빠른 시작(로컬)
 
@@ -46,8 +46,9 @@ GraphNode는 대화형 AI 챗봇과 지식 그래프를 결합한 데스크톱 �
 프로젝트의 모든 문서는 **[문서 포털 (docs/index.html)](docs/index.html)**에서 한눈에 확인할 수 있습니다.
 
 ### 주요 문서 바로가기
+
 - **API 명세 (OpenAPI)**: [`docs/api/openapi.yaml`](docs/api/openapi.yaml)
-  - HTML 빌드 및 보기: `npm run docs:openapi:build` 후 `docs/api/openapi.html` 확인  [`docs/api/openapi.html`](docs/api/openapi.html)
+  - HTML 빌드 및 보기: `npm run docs:openapi:build` 후 `docs/api/openapi.html` 확인 [`docs/api/openapi.html`](docs/api/openapi.html)
 - **코드 레퍼런스 (TypeDoc)**: [`docs/reference/api/index.html`](docs/reference/api/index.html) (생성: `npm run docs:typedoc`)
 - **프로젝트 구조**: [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md) - 폴더 구조 및 역할 상세
 - **브랜칭 전략**: [`docs/BRANCHING.md`](docs/BRANCHING.md) - GitHub Flow 가이드
@@ -59,26 +60,26 @@ API는 표준 HTTP 상태 코드를 사용하여 요청의 성공 또는 실패�
 
 ### 성공 (Success)
 
-| 코드 | 의미 | 설명 |
-| :--- | :--- | :--- |
-| **200** | **OK** | 요청이 성공적으로 처리되었습니다. (GET, PATCH, PUT) |
-| **201** | **Created** | 리소스가 성공적으로 생성되었습니다. (POST) |
+| 코드    | 의미           | 설명                                                           |
+| :------ | :------------- | :------------------------------------------------------------- |
+| **200** | **OK**         | 요청이 성공적으로 처리되었습니다. (GET, PATCH, PUT)            |
+| **201** | **Created**    | 리소스가 성공적으로 생성되었습니다. (POST)                     |
 | **204** | **No Content** | 요청은 성공했으나 반환할 본문이 없습니다. (DELETE, 일부 PATCH) |
 
 ### 에러 (Error)
 
-| 코드 | 의미 | 설명 및 발생 상황 |
-| :--- | :--- | :--- |
-| **400** | **Bad Request** | **잘못된 요청**. 필수 파라미터 누락, 유효성 검사 실패 등 클라이언트의 실수입니다. |
-| **401** | **Unauthorized** | **인증 실패**. 로그인하지 않았거나, 세션이 만료되었습니다. |
-| **403** | **Forbidden** | **권한 없음**. 인증은 되었으나 해당 리소스에 접근할 권한이 없습니다. (예: 타인의 데이터 수정) |
-| **404** | **Not Found** | **찾을 수 없음**. 요청한 리소스(ID)나 경로가 존재하지 않습니다. |
-| **409** | **Conflict** | **충돌**. 리소스 생성 시 중복된 데이터가 있거나 현재 상태와 충돌합니다. |
-| **429** | **Too Many Requests** | **요청 과다**. 단시간에 너무 많은 요청을 보냈습니다. (Rate Limiting) |
-| **500** | **Internal Server Error** | **서버 오류**. 서버 내부 로직에서 알 수 없는 에러가 발생했습니다. |
-| **502** | **Bad Gateway** | **업스트림 오류**. 외부 서비스(예: OpenAI, DB)가 유효하지 않은 응답을 반환했습니다. |
-| **503** | **Service Unavailable** | **서비스 불가**. DB 연결 실패 등 일시적으로 서비스를 이용할 수 없습니다. |
-| **504** | **Gateway Timeout** | **업스트림 타임아웃**. 외부 서비스의 응답이 지연되어 타임아웃이 발생했습니다. |
+| 코드    | 의미                      | 설명 및 발생 상황                                                                             |
+| :------ | :------------------------ | :-------------------------------------------------------------------------------------------- |
+| **400** | **Bad Request**           | **잘못된 요청**. 필수 파라미터 누락, 유효성 검사 실패 등 클라이언트의 실수입니다.             |
+| **401** | **Unauthorized**          | **인증 실패**. 로그인하지 않았거나, 세션이 만료되었습니다.                                    |
+| **403** | **Forbidden**             | **권한 없음**. 인증은 되었으나 해당 리소스에 접근할 권한이 없습니다. (예: 타인의 데이터 수정) |
+| **404** | **Not Found**             | **찾을 수 없음**. 요청한 리소스(ID)나 경로가 존재하지 않습니다.                               |
+| **409** | **Conflict**              | **충돌**. 리소스 생성 시 중복된 데이터가 있거나 현재 상태와 충돌합니다.                       |
+| **429** | **Too Many Requests**     | **요청 과다**. 단시간에 너무 많은 요청을 보냈습니다. (Rate Limiting)                          |
+| **500** | **Internal Server Error** | **서버 오류**. 서버 내부 로직에서 알 수 없는 에러가 발생했습니다.                             |
+| **502** | **Bad Gateway**           | **업스트림 오류**. 외부 서비스(예: OpenAI, DB)가 유효하지 않은 응답을 반환했습니다.           |
+| **503** | **Service Unavailable**   | **서비스 불가**. DB 연결 실패 등 일시적으로 서비스를 이용할 수 없습니다.                      |
+| **504** | **Gateway Timeout**       | **업스트림 타임아웃**. 외부 서비스의 응답이 지연되어 타임아웃이 발생했습니다.                 |
 
 ## 테스트
 
@@ -89,6 +90,7 @@ API 테스트는 Jest + Supertest를 사용하고, 오류 응답은 Ajv로 Probl
 - 커버리지: `src/app/**`(controllers/middlewares/presenters/routes) 대상 수집
 
 테스트에 사용된 주요 dev 의존성:
+
 - jest, ts-jest, @types/jest
 - supertest, @types/supertest
 - ajv, ajv-formats

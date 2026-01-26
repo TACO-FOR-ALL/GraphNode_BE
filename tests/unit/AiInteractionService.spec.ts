@@ -6,7 +6,7 @@ import { ChatManagementService } from '../../src/core/services/ChatManagementSer
 import { UserService } from '../../src/core/services/UserService';
 
 jest.mock('../../src/shared/openai/index', () => ({
-  openAI: jest.fn()
+  openAI: jest.fn(),
 }));
 
 describe('AiInteractionService', () => {
@@ -17,7 +17,7 @@ describe('AiInteractionService', () => {
   beforeEach(() => {
     mockChatSvc = {} as any;
     mockUserSvc = {
-      getApiKeys: jest.fn()
+      getApiKeys: jest.fn(),
     } as any;
 
     service = new AiInteractionService(mockChatSvc, mockUserSvc);

@@ -23,13 +23,15 @@ jest.mock('express-session', () => {
         // Intercept session.destroy if a specific header is present
         if (req.headers['x-test-error'] === 'true' && req.session) {
           req.session.destroy = (cb: any) => {
-             cb(new Error('Session destroy failed'));
+            cb(new Error('Session destroy failed'));
           };
         }
-        
+
         // Simulate sync error
         if (req.headers['x-test-throw'] === 'true') {
-           req.session.destroy = () => { throw new Error('Sync error'); };
+          req.session.destroy = () => {
+            throw new Error('Sync error');
+          };
         }
 
         next();
@@ -63,7 +65,7 @@ jest.mock('../../src/core/services/GoogleOAuthService', () => {
       async fetchUserInfo(_token: any) {
         return { sub: 'google-uid-1', email: 'u@example.com', name: 'U', picture: 'https://img' };
       }
-    }
+    },
   };
 });
 
@@ -74,7 +76,7 @@ jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => {
       async findOrCreateFromProvider() {
         return { id: 43 } as any;
       }
-    }
+    },
   };
 });
 
@@ -110,7 +112,10 @@ describe('Auth session (me/logout)', () => {
     const cookie = start.headers['set-cookie'];
     const location = start.headers['location'] as string;
     const state = new URL(location).searchParams.get('state') || '';
-    const cb = await request(app).get('/auth/google/callback').set('Cookie', cookie).query({ code: 'ok', state });
+    const cb = await request(app)
+      .get('/auth/google/callback')
+      .set('Cookie', cookie)
+      .query({ code: 'ok', state });
     expect(cb.status).toBe(200);
 
     // Update cookies with those set by callback (gn-logged-in, gn-profile)
@@ -134,13 +139,11 @@ describe('Auth session (me/logout)', () => {
 
   test('POST /auth/logout handles session destroy error', async () => {
     const app = appWithTestEnv();
-    
+
     // The mock express-session above will intercept this request
     // based on the x-test-error header
 
-    const res = await request(app)
-      .post('/auth/logout')
-      .set('x-test-error', 'true');
+    const res = await request(app).post('/auth/logout').set('x-test-error', 'true');
 
     expect(res.status).toBe(500);
     expect(res.body.type).toContain('unknown-error');
@@ -148,9 +151,7 @@ describe('Auth session (me/logout)', () => {
 
   test('POST /auth/logout handles synchronous error', async () => {
     const app = appWithTestEnv();
-    const res = await request(app)
-      .post('/auth/logout')
-      .set('x-test-throw', 'true');
+    const res = await request(app).post('/auth/logout').set('x-test-throw', 'true');
 
     expect(res.status).toBe(500);
     expect(res.body.type).toContain('unknown-error');
@@ -163,8 +164,11 @@ describe('Auth session (me/logout)', () => {
     const cookie = start.headers['set-cookie'];
     const location = start.headers['location'] as string;
     const state = new URL(location).searchParams.get('state') || '';
-    const cb = await request(app).get('/auth/google/callback').set('Cookie', cookie).query({ code: 'ok', state });
-    
+    const cb = await request(app)
+      .get('/auth/google/callback')
+      .set('Cookie', cookie)
+      .query({ code: 'ok', state });
+
     const cbCookies = cb.headers['set-cookie'] as unknown as string[];
     // We need to keep the session cookie (sid) valid
     const sessionCookie = cbCookies.find((c: string) => c.startsWith('sid'));
@@ -172,11 +176,11 @@ describe('Auth session (me/logout)', () => {
 
     // Add invalid gn-profile cookie (base64url 'ew' -> '{' which is invalid JSON)
     const invalidProfileCookie = 'gn-profile=ew; Path=/; HttpOnly';
-    
+
     const cookies = [sessionCookie, invalidProfileCookie];
 
     const res = await request(app).get('/v1/me').set('Cookie', cookies);
-    
+
     expect(res.status).toBe(200);
     expect(res.body.userId).toBeDefined();
     expect(res.body.profile).toBeUndefined(); // Profile parsing failed, so it should be undefined

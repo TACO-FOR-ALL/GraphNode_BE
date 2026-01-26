@@ -1,11 +1,11 @@
 /**
  * 모듈: AI Mapper (데이터 변환기)
- * 
- * 책임: 
+ *
+ * 책임:
  * - 서로 다른 계층 간의 데이터 모델을 변환합니다.
  * - 주로 DTO(Data Transfer Object)와 DB Document(Persistence Model) 사이의 변환을 담당합니다.
  * - 이를 통해 서비스 계층이 DB 구조에 직접 의존하지 않도록 분리합니다.
- * 
+ *
  * 변환 방향:
  * 1. DTO -> Doc (저장 시)
  * 2. Doc -> DTO (조회 시)
@@ -15,12 +15,15 @@ import type { ConversationDoc, MessageDoc } from '../../core/types/persistence/a
 
 /**
  * ChatThread DTO를 ConversationDoc(DB 문서)으로 변환합니다.
- * 
+ *
  * @param dto 클라이언트로부터 받은 대화방 정보 DTO
  * @param ownerUserId 대화방 소유자 ID (DTO에는 없으므로 별도 주입)
  * @returns 저장 가능한 ConversationDoc 객체
  */
-export function toConversationDoc(dto: Omit<ChatThread, 'messages'>, ownerUserId: string): ConversationDoc {
+export function toConversationDoc(
+  dto: Omit<ChatThread, 'messages'>,
+  ownerUserId: string
+): ConversationDoc {
   const now = Date.now();
   const doc: ConversationDoc = {
     _id: dto.id, // DTO의 id를 DB의 _id로 매핑
@@ -36,7 +39,7 @@ export function toConversationDoc(dto: Omit<ChatThread, 'messages'>, ownerUserId
 
 /**
  * ConversationDoc(DB 문서)과 MessageDoc 목록을 합쳐서 ChatThread DTO로 변환합니다.
- * 
+ *
  * @param convDoc 대화방 DB 문서
  * @param messageDocs 해당 대화방의 메시지 DB 문서 목록
  * @returns 클라이언트에게 전달할 ChatThread DTO
@@ -56,13 +59,17 @@ export function toChatThreadDto(convDoc: ConversationDoc, messageDocs: MessageDo
 
 /**
  * ChatMessage DTO를 MessageDoc(DB 문서)으로 변환합니다.
- * 
+ *
  * @param dto 클라이언트로부터 받은 메시지 정보 DTO
  * @param conversationId 메시지가 속한 대화방 ID
  * @param ownerUserId 소유자 ID (역정규화)
  * @returns 저장 가능한 MessageDoc 객체
  */
-export function toMessageDoc(dto: ChatMessage, conversationId: string, ownerUserId: string): MessageDoc {
+export function toMessageDoc(
+  dto: ChatMessage,
+  conversationId: string,
+  ownerUserId: string
+): MessageDoc {
   const now = Date.now();
   return {
     _id: dto.id,
@@ -78,7 +85,7 @@ export function toMessageDoc(dto: ChatMessage, conversationId: string, ownerUser
 
 /**
  * MessageDoc(DB 문서)을 ChatMessage DTO로 변환합니다.
- * 
+ *
  * @param doc 메시지 DB 문서
  * @returns 클라이언트에게 전달할 ChatMessage DTO
  */
