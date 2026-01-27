@@ -29,6 +29,11 @@ class InMemoryConvRepo implements ConversationRepository {
     return doc;
   }
 
+  async createMany(docs: ConversationDoc[], session?: ClientSession): Promise<ConversationDoc[]> {
+    docs.forEach((doc) => this.data.set(doc._id, doc));
+    return docs;
+  }
+
   async findById(
     id: string,
     ownerUserId: string,
@@ -49,6 +54,17 @@ class InMemoryConvRepo implements ConversationRepository {
       .filter((v) => v.ownerUserId === ownerUserId)
       .slice(0, limit);
     return { items, nextCursor: null };
+  }
+
+  async deleteAll(ownerUserId: string, session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const [key, value] of this.data.entries()) {
+      if (value.ownerUserId === ownerUserId) {
+        this.data.delete(key);
+        count++;
+      }
+    }
+    return count;
   }
 
   async update(

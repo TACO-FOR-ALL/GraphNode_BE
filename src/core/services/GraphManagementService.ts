@@ -46,7 +46,7 @@ export class GraphManagementService {
   async upsertNode(node: GraphNodeDto, options?: RepoOptions): Promise<void> {
     try {
       this.assertUser(node.userId);
-      this.parseNodeId(node.id); // Validate ID format
+      this.parseId(node.id); // Validate ID format
 
       // DTO -> Doc 변환 후 저장
       const doc: GraphNodeDoc = toGraphNodeDoc(node);
@@ -67,13 +67,13 @@ export class GraphManagementService {
    */
   async updateNode(
     userId: string,
-    nodeId: number | string,
+    id: number,
     patch: Partial<GraphNodeDto>,
     options?: RepoOptions
   ): Promise<void> {
     try {
       this.assertUser(userId);
-      const nId = this.parseNodeId(nodeId);
+      const nId = this.parseId(id);
 
       // 부분 업데이트를 위한 간단한 매핑
       const patchDoc: any = { ...patch };
@@ -90,12 +90,12 @@ export class GraphManagementService {
    * 노드 삭제
    *
    * @param userId 사용자 ID
-   * @param nodeId 노드 ID
+   * @param id 노드 ID
    */
-  async deleteNode(userId: string, nodeId: number | string, options?: RepoOptions): Promise<void> {
+  async deleteNode(userId: string, id: number, options?: RepoOptions): Promise<void> {
     try {
       this.assertUser(userId);
-      const nId = this.parseNodeId(nodeId);
+      const nId = this.parseId(id);
       await this.repo.deleteNode(userId, nId, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
@@ -107,16 +107,16 @@ export class GraphManagementService {
    * 여러 노드 일괄 삭제
    *
    * @param userId 사용자 ID
-   * @param nodeIds 삭제할 노드 ID 배열
+   * @param ids 삭제할 노드 ID 배열
    */
   async deleteNodes(
     userId: string,
-    nodeIds: (number | string)[],
+    ids: number[],
     options?: RepoOptions
   ): Promise<void> {
     try {
       this.assertUser(userId);
-      const nIds = nodeIds.map((id) => this.parseNodeId(id));
+      const nIds = ids.map((id) => this.parseId(id));
       await this.repo.deleteNodes(userId, nIds, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
@@ -128,13 +128,13 @@ export class GraphManagementService {
    * 노드 단건 조회
    *
    * @param userId 사용자 ID
-   * @param nodeId 노드 ID
+   * @param id 노드 ID
    * @returns GraphNodeDto 또는 null
    */
-  async findNode(userId: string, nodeId: number | string): Promise<GraphNodeDto | null> {
+  async findNode(userId: string, id: number): Promise<GraphNodeDto | null> {
     try {
       this.assertUser(userId);
-      const nId = this.parseNodeId(nodeId);
+      const nId = this.parseId(id);
       const doc: GraphNodeDoc | null = await this.repo.findNode(userId, nId);
       return doc ? toGraphNodeDto(doc) : null;
     } catch (err: unknown) {
@@ -225,14 +225,14 @@ export class GraphManagementService {
    */
   async deleteEdgeBetween(
     userId: string,
-    source: number | string,
-    target: number | string,
+    source: number,
+    target: number,
     options?: RepoOptions
   ): Promise<void> {
     try {
       this.assertUser(userId);
-      const sId = this.parseNodeId(source);
-      const tId = this.parseNodeId(target);
+      const sId = this.parseId(source);
+      const tId = this.parseId(target);
       await this.repo.deleteEdgeBetween(userId, sId, tId, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
@@ -248,12 +248,12 @@ export class GraphManagementService {
    */
   async deleteEdgesByNodeIds(
     userId: string,
-    nodeIds: (number | string)[],
+    ids: number[],
     options?: RepoOptions
   ): Promise<void> {
     try {
       this.assertUser(userId);
-      const nIds = nodeIds.map((id) => this.parseNodeId(id));
+      const nIds = ids.map((id) => this.parseId(id));
       await this.repo.deleteEdgesByNodeIds(userId, nIds, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
@@ -402,9 +402,9 @@ export class GraphManagementService {
     if (!userId) throw new ValidationError('userId required');
   }
 
-  private parseNodeId(nodeId: number | string): number {
-    const id = typeof nodeId === 'string' ? parseInt(nodeId, 10) : nodeId;
-    if (isNaN(id)) throw new ValidationError(`Invalid nodeId: ${nodeId}`);
-    return id;
+  private parseId(id: number | string): number {
+    const parsedId = typeof id === 'string' ? parseInt(id, 10) : id;
+    if (isNaN(parsedId)) throw new ValidationError(`Invalid id: ${id}`);
+    return parsedId;
   }
 }

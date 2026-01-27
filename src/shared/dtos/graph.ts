@@ -26,8 +26,8 @@
  * - `timestamp`는 ISO 8601(UTC) 문자열 또는 null이다.
  */
 export interface GraphNodeDto {
-  /** 외부 AI 모듈이 부여한 노드 정수 ID 또는 문자열 ID */
-  id: number | string;
+  /** 외부 AI 모듈이 부여한 노드 정수 ID */
+  id: number;
   /** 서버 내부 사용자 식별자 */
   userId: string;
 
@@ -70,9 +70,9 @@ export interface GraphEdgeDto {
   /** MongoDB 문서 ID(조합 키) */
   id?: string;
   /** 출발 노드 ID */
-  source: number | string;
+  source: number;
   /** 도착 노드 ID */
-  target: number | string;
+  target: number;
 
   // New fields
   relation?: string;

@@ -3,7 +3,6 @@ import OpenAI from 'openai';
 
 import { bindSessionUser } from '../middlewares/session';
 import { requireLogin } from '../middlewares/auth';
-import type { UserRepositoryMySQL } from '../../infra/repositories/UserRepositoryMySQL';
 import { getUserIdFromRequest } from '../utils/request';
 
 type Mode = 'chat' | 'summary' | 'note';

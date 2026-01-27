@@ -41,6 +41,39 @@ class InMemoryNoteRepo implements NoteRepository {
     );
   }
 
+  async deleteAllNotes(ownerUserId: string, session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const [id, doc] of this.notes) {
+      if (doc.ownerUserId === ownerUserId) {
+        this.notes.delete(id);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  async deleteAllNotesInFolders(ownerUserId: string, session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const [id, doc] of this.notes) {
+      if (doc.ownerUserId === ownerUserId && doc.folderId) {
+        this.notes.delete(id);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  async deleteAllFolders(ownerUserId: string, session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const [id, doc] of this.folders) {
+      if (doc.ownerUserId === ownerUserId) {
+        this.folders.delete(id);
+        count++;
+      }
+    }
+    return count;
+  }
+
   async updateNote(
     id: string,
     ownerUserId: string,

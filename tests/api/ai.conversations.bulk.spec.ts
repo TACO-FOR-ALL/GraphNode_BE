@@ -34,17 +34,21 @@ jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => ({
     async findOrCreateFromProvider() {
       return { id: 'user-test-id' } as any;
     }
+    async findById(id: any) {
+      if (id === 'user-test-id') return { id: 'user-test-id', email: 'test@example.com' };
+      return null;
+    }
   },
 }));
 
-jest.mock('../../src/core/services/ConversationService', () => ({
-  ConversationService: class {
-    async create(ownerUserId: string, id: string, title: string, messages: any[]) {
+jest.mock('../../src/core/services/ChatManagementService', () => ({
+  ChatManagementService: class {
+    async createConversation(ownerUserId: string, id: string, title: string, messages: any[]) {
       const newConv = { id, title, messages, ownerUserId, updatedAt: new Date().toISOString() };
       store.conversations.set(id, newConv);
       return newConv;
     }
-    async bulkCreate(ownerUserId: string, threads: any[]) {
+    async bulkCreateConversations(ownerUserId: string, threads: any[]) {
       return threads.map((t) => {
         const newConv = {
           id: t.id || 'mock-id',
@@ -57,7 +61,7 @@ jest.mock('../../src/core/services/ConversationService', () => ({
         return newConv;
       });
     }
-    async getById(id: string, ownerUserId: string) {
+    async getConversation(id: string, ownerUserId: string) {
       const conv = store.conversations.get(id);
       if (conv && conv.ownerUserId === ownerUserId) return conv;
       return null;
@@ -77,6 +81,7 @@ function appWithTestEnv() {
   process.env.QDRANT_API_KEY = 'test-key';
   process.env.QDRANT_COLLECTION_NAME = 'test-collection';
   process.env.REDIS_URL = 'redis://localhost:6379';
+  process.env.JWT_SECRET = 'test-jwt-secret';
   return createApp();
 }
 
@@ -121,7 +126,6 @@ describe('POST /v1/ai/conversations/bulk', () => {
     };
 
     const res = await agent.post('/v1/ai/conversations/bulk').send(bulkRequest);
-    console.log('DEBUG_BULK_RES:', res.status, JSON.stringify(res.body, null, 2));
     expect(res.status).toBe(201);
 
     expect(res.body.conversations).toHaveLength(2);

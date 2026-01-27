@@ -13,7 +13,6 @@ import { logger } from '../shared/utils/logger';
 import { loadEnv } from '../config/env';
 import { Container } from '../bootstrap/container'; // 기존 DI 컨테이너 재사용
 import { QueueMessage, TaskType } from '../shared/dtos/queue';
-
 // Handlers
 import { JobHandler } from './handlers/JobHandler';
 import { GraphGenerationResultHandler } from './handlers/GraphGenerationResultHandler';

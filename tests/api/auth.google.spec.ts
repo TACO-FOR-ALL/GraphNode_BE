@@ -83,11 +83,11 @@ describe('Auth Google', () => {
     expect(res.headers['location']).toMatch(
       /^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth\?/
     );
-    // 기대: 세션 쿠키가 설정됨(쿠키 이름은 환경/구현에 따라 다를 수 있어 정규식으로 검증)
+    // 기대: OAuth State 쿠키가 설정됨 (oauth_state)
     const raw = res.headers['set-cookie'];
     const setCookies: string[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
-    const hasSession = setCookies.some((c: string) => /(?:^|;\s)(__Host-session=|sid=)/.test(c));
-    expect(hasSession).toBe(true);
+    const hasStateCookie = setCookies.some((c: string) => /(?:^|;\s)oauth_state=/.test(c));
+    expect(hasStateCookie).toBe(true);
   });
 
   test('GET /auth/google/callback with missing query returns 400 Problem Details', async () => {
@@ -133,7 +133,7 @@ describe('Auth Google', () => {
     // session cookie should be present among Set-Cookie headers
     const raw = res.headers['set-cookie'];
     const setCookies: string[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
-    const hasSession = setCookies.some((c: string) => /(?:^|;\s)(sid=|__Host-session=)/.test(c));
+    const hasSession = setCookies.some((c: string) => /(?:^|;\s)(access_token=)/.test(c));
     expect(hasSession).toBe(true);
   });
 

@@ -20,7 +20,6 @@
 /* eslint-disable no-console */
 import { UserRepositoryMySQL } from '../../src/infra/repositories/UserRepositoryMySQL';
 import prisma from '../../src/infra/db/prisma';
-import { ApiKeyModel } from '../../src/shared/dtos/me';
 
 async function testUserRepository() {
   console.log('🔍 User Repository 종합 테스트 시작 (Prisma 기반)...\n');

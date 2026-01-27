@@ -1,8 +1,7 @@
-import { Collection, IncludeEnum } from 'chromadb';
 import { VectorStore, VectorItem } from '../../core/ports/VectorStore';
 import { getChromaClient } from '../db/chroma';
 import { logger } from '../../shared/utils/logger';
-import { AppError, UpstreamError } from '../../shared/errors/domain';
+import { UpstreamError } from '../../shared/errors/domain';
 
 export class ChromaVectorAdapter implements VectorStore {
   /**

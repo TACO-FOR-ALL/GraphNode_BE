@@ -1,12 +1,14 @@
 import request from 'supertest';
 import express from 'express';
-import session from 'express-session';
+
 
 import * as appleController from '../../src/app/controllers/auth.apple';
 import { AppleOAuthService } from '../../src/core/services/AppleOAuthService';
 import * as authLogin from '../../src/app/utils/authLogin';
 import { errorHandler } from '../../src/app/middlewares/error';
 import { container } from '../../src/bootstrap/container';
+
+const cookieParser = require('cookie-parser');
 
 // Mock dependencies
 jest.mock('../../src/core/services/AppleOAuthService');
@@ -18,6 +20,9 @@ jest.mock('../../src/config/env', () => ({
     OAUTH_APPLE_KEY_ID: 'test-key',
     OAUTH_APPLE_PRIVATE_KEY: 'test-private-key',
     OAUTH_APPLE_REDIRECT_URI: 'https://example.com/callback',
+    JWT_ACCESS_EXPIRY: '1h',
+    JWT_REFRESH_EXPIRY: '7d',
+    JWT_SECRET: 'test-secret',
   }),
 }));
 
@@ -29,16 +34,18 @@ describe('Apple Auth Controller', () => {
     app = express();
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
-    app.use(session({ secret: 'test', resave: false, saveUninitialized: true }));
+    app.use(cookieParser('test-secret'));
 
     // Setup routes
     app.get('/auth/apple/start', appleController.start);
-    // Middleware to inject session state for callback test
+    // Middleware to inject state for callback test
     app.post(
       '/auth/apple/callback',
       (req, res, next) => {
         if (req.headers['x-test-state']) {
-          (req.session as any).oauth_state_apple = req.headers['x-test-state'];
+          // Mock signedCookies manually since we are not going through the full browser flow
+          req.signedCookies = req.signedCookies || {};
+          req.signedCookies['oauth_state_apple'] = req.headers['x-test-state'];
         }
         next();
       },

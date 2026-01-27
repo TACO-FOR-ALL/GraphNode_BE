@@ -94,6 +94,21 @@ class InMemoryMsgRepo implements MessageRepository {
     return a.length;
   }
 
+  async deleteAllByUserId(ownerUserId: string, session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const [cid, msgs] of this.msgs.entries()) {
+      const remaining = msgs.filter((m) => m.ownerUserId !== ownerUserId);
+      const deleted = msgs.length - remaining.length;
+      if (remaining.length === 0) {
+        this.msgs.delete(cid);
+      } else {
+        this.msgs.set(cid, remaining);
+      }
+      count += deleted;
+    }
+    return count;
+  }
+
   async softDeleteAllByConversationId(
     conversationId: string,
     session?: ClientSession

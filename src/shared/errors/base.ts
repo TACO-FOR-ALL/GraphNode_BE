@@ -106,6 +106,5 @@ export function unknownToAppError(err: unknown): AppError {
     code = 'UNKNOWN_ERROR';
     httpStatus = 500;
   })(message);
-  console.log('DEBUG_ERR_standardized:', out.code, out.httpStatus);
   return out;
 }

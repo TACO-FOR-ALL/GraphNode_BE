@@ -70,7 +70,7 @@ describe('GraphEmbeddingService', () => {
   describe('deleteNode', () => {
     it('should delegate to graphManagementService.deleteNode', async () => {
       await service.deleteNode('u1', 1);
-      expect(mockGraphService.deleteNode).toHaveBeenCalledWith('u1', 1, undefined);
+      expect(mockGraphService.deleteNode).toHaveBeenCalledWith('u1', 1);
     });
   });
 

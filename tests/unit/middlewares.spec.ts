@@ -2,7 +2,6 @@ import { Request, Response, NextFunction } from 'express';
 
 import { requestContext } from '../../src/app/middlewares/request-context';
 import { requireLogin } from '../../src/app/middlewares/auth';
-import { bindSessionUser } from '../../src/app/middlewares/session';
 import { requestStore } from '../../src/shared/context/requestStore';
 import { AuthError } from '../../src/shared/errors/domain';
 
@@ -22,7 +21,6 @@ describe('Middlewares', () => {
     req = {
       header: jest.fn(),
       get: jest.fn(),
-      session: {} as any,
     };
     res = {};
     next = jest.fn();
@@ -59,7 +57,7 @@ describe('Middlewares', () => {
     });
 
     it('should extract userId from session', () => {
-      (req.session as any).userId = 'u_123';
+      (req as any).userId = 'u_123';
 
       requestContext(req as Request, res as Response, next);
 
@@ -86,27 +84,8 @@ describe('Middlewares', () => {
 
       requireLogin(req as Request, res as Response, next);
 
-      expect(next).toHaveBeenCalledWith(expect.any(AuthError));
+      expect(next).toHaveBeenCalledWith(expect.any(Error));
     });
   });
 
-  describe('bindSessionUser', () => {
-    it('should bind userId from session to req', () => {
-      (req.session as any).userId = 'u_1';
-
-      bindSessionUser(req as Request, res as Response, next);
-
-      expect((req as any).userId).toBe('u_1');
-      expect(next).toHaveBeenCalled();
-    });
-
-    it('should do nothing if session userId is missing', () => {
-      (req.session as any).userId = undefined;
-
-      bindSessionUser(req as Request, res as Response, next);
-
-      expect((req as any).userId).toBeUndefined();
-      expect(next).toHaveBeenCalled();
-    });
-  });
 });

@@ -43,14 +43,14 @@ export class GraphController {
 
   /**
    * 단일 노드 조회
-   * [GET] /v1/graph/nodes/:nodeId
+   * [GET] /v1/graph/nodes/:id
    */
   async getNode(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
-    const nodeId = parseInt(req.params.nodeId, 10);
+    const id = parseInt(req.params.id, 10);
 
     // 서비스 호출 (노드 조회)
-    const node = await this.graphEmbeddingService.findNode(userId, nodeId);
+    const node = await this.graphEmbeddingService.findNode(userId, id);
 
     res.status(200).json(node);
   }
@@ -70,48 +70,48 @@ export class GraphController {
 
   /**
    * 노드 부분 수정 (Patch)
-   * [PATCH] /v1/graph/nodes/:nodeId
+   * [PATCH] /v1/graph/nodes/:id
    */
   async updateNode(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
-    const nodeId = parseInt(req.params.nodeId, 10);
+    const id = parseInt(req.params.id, 10);
     const patch = req.body;
 
     // 서비스 호출 (노드 수정)
-    await this.graphEmbeddingService.updateNode(userId, nodeId, patch);
+    await this.graphEmbeddingService.updateNode(userId, id, patch);
 
     res.status(204).send();
   }
 
   /**
    * 노드 삭제
-   * [DELETE] /v1/graph/nodes/:nodeId
+   * [DELETE] /v1/graph/nodes/:id
    *
    * 주의: 이 API는 노드만 삭제하며, 연결된 엣지는 남을 수 있습니다.
    */
   async deleteNode(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
-    const nodeId = parseInt(req.params.nodeId, 10);
+    const id = parseInt(req.params.id, 10);
 
     // 서비스 호출 (노드 삭제)
-    await this.graphEmbeddingService.deleteNode(userId, nodeId);
+    await this.graphEmbeddingService.deleteNode(userId, id);
 
     res.status(204).send();
   }
 
   /**
    * 노드 및 관련 데이터 연쇄 삭제 (Cascade)
-   * [DELETE] /v1/graph/nodes/:nodeId/cascade
+   * [DELETE] /v1/graph/nodes/:id/cascade
    *
    * 역할:
    * - 해당 노드와 연결된 모든 엣지를 함께 삭제합니다.
    */
   async deleteNodeCascade(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
-    const nodeId = parseInt(req.params.nodeId, 10);
+    const id = parseInt(req.params.id, 10);
 
     // 서비스 호출 (Cascade 삭제)
-    await this.graphEmbeddingService.removeNodeCascade(userId, nodeId);
+    await this.graphEmbeddingService.removeNodeCascade(userId, id);
 
     res.status(204).send();
   }
@@ -177,14 +177,14 @@ export class GraphController {
 
   /**
    * 단일 클러스터 조회
-   * [GET] /v1/graph/clusters/:clusterId
+   * [GET] /v1/graph/clusters/:id
    */
   async getCluster(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
-    const clusterId = req.params.clusterId;
+    const id = req.params.id;
 
     // 서비스 호출 (클러스터 조회)
-    const cluster = await this.graphEmbeddingService.findCluster(userId, clusterId);
+    const cluster = await this.graphEmbeddingService.findCluster(userId, id);
 
     res.status(200).json(cluster);
   }
@@ -204,23 +204,23 @@ export class GraphController {
 
   /**
    * 클러스터 삭제
-   * [DELETE] /v1/graph/clusters/:clusterId
+   * [DELETE] /v1/graph/clusters/:id
    *
    * 주의: 클러스터만 삭제되며, 내부에 속한 노드들은 삭제되지 않습니다.
    */
   async deleteCluster(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
-    const clusterId = req.params.clusterId;
+    const id = req.params.id;
 
     // 서비스 호출 (클러스터 삭제)
-    await this.graphEmbeddingService.deleteCluster(userId, clusterId);
+    await this.graphEmbeddingService.deleteCluster(userId, id);
 
     res.status(204).send();
   }
 
   /**
    * 클러스터 및 내부 요소 연쇄 삭제 (Cascade)
-   * [DELETE] /v1/graph/clusters/:clusterId/cascade
+   * [DELETE] /v1/graph/clusters/:id/cascade
    *
    * 역할:
    * - 클러스터와 그 안에 속한 모든 노드, 그리고 그 노드들에 연결된 엣지까지 모두 삭제합니다.
@@ -228,10 +228,10 @@ export class GraphController {
    */
   async deleteClusterCascade(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
-    const clusterId = req.params.clusterId;
+    const id = req.params.id;
 
     // 서비스 호출 (Cascade 삭제)
-    await this.graphEmbeddingService.removeClusterCascade(userId, clusterId);
+    await this.graphEmbeddingService.removeClusterCascade(userId, id);
 
     res.status(204).send();
   }

@@ -68,5 +68,13 @@ async function ensureIndexes() {
   // messages 컬렉션: 대화방 ID로 메시지 목록을 조회하므로 인덱스 생성
   await db.collection('messages').createIndex({ conversationId: 1, _id: 1 });
 
+  // Graph Collections: {id, userId} 조합으로 조회하므로 복합 인덱스 생성 (Unique)
+  await db.collection('graph_nodes').createIndex({ userId: 1, id: 1 }, { unique: true });
+  await db.collection('graph_edges').createIndex({ userId: 1, id: 1 }, { unique: true });
+  await db.collection('graph_clusters').createIndex({ userId: 1, id: 1 }, { unique: true });
+
+  // Graph Stats: 사용자당 하나이므로 userId 인덱스
+  await db.collection('graph_stats').createIndex({ userId: 1 }, { unique: true });
+
   logger.info({ event: 'db.migrations_checked' }, 'DB indexes ensured');
 }

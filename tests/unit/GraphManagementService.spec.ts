@@ -53,7 +53,7 @@ describe('GraphManagementService', () => {
       expect(mockRepo.upsertNode).toHaveBeenCalledTimes(1);
       const calledDoc = mockRepo.upsertNode.mock.calls[0][0];
       expect(calledDoc).toMatchObject({
-        nodeId: validNode.id,
+        id: validNode.id,
         userId: validNode.userId,
         origId: validNode.origId,
       });
@@ -103,8 +103,7 @@ describe('GraphManagementService', () => {
   describe('findNode', () => {
     it('should return DTO if node exists', async () => {
       const mockDoc: GraphNodeDoc = {
-        _id: 'user-1::1',
-        nodeId: 1,
+        id: 1,
         userId: 'user-1',
         origId: 'conv-1',
         clusterId: 'cluster-1',

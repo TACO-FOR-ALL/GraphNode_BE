@@ -65,6 +65,7 @@ export function decodeToken(token: string): JwtPayload | null {
  * - 단위가 없으면 ms로 간주
  */
 export function parseDuration(duration: string): number {
+  if (!duration) return 3600000; // Default 1h if missing
   const match = duration.match(/^(\d+)([dhms])?$/);
   if (!match) {
     // 숫자로만 되어 있으면 그대로 반환, 아니면 기본값(1h)

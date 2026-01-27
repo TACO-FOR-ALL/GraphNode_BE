@@ -8,8 +8,6 @@
 
 import type { Request, Response, NextFunction } from 'express';
 
-import { AuthError } from '../../shared/errors/domain';
-
 /**
  * 로그인 필수 미들웨어 (Legacy)
  * - JWT 인증(authJwt)에서 이미 검증을 수행하므로 여기서는 pass-through 처리

@@ -18,29 +18,26 @@ export interface Neo4jOptions {
 export interface GraphNeo4jStore {
   // --- 노드(Node) ---
   upsertNode(node: GraphNodeDoc, options?: Neo4jOptions): Promise<void>;
-  deleteNode(userId: string, nodeId: number | string, options?: Neo4jOptions): Promise<void>;
-  deleteNodes(userId: string, nodeIds: (number | string)[], options?: Neo4jOptions): Promise<void>;
-  findNode(userId: string, nodeId: number | string): Promise<GraphNodeDoc | null>;
+  deleteNode(userId: string, id: number, options?: Neo4jOptions): Promise<void>;
+  deleteNodes(userId: string, ids: number[], options?: Neo4jOptions): Promise<void>;
+  findNode(userId: string, id: number): Promise<GraphNodeDoc | null>;
 
   // --- 엣지(Relationship) ---
   upsertEdge(edge: GraphEdgeDoc, options?: Neo4jOptions): Promise<string>;
   deleteEdgeBetween(
     userId: string,
-    source: number | string,
-    target: number | string,
+    source: number,
+    target: number,
     options?: Neo4jOptions
   ): Promise<void>;
   deleteEdgesByNodeIds(
     userId: string,
-    nodeIds: (number | string)[],
+    ids: number[],
     options?: Neo4jOptions
   ): Promise<void>;
 
   // --- 클러스터(Cluster) & 통계 ---
-  // Neo4j에서도 클러스터 노드를 표현할 수 있음
   upsertCluster(cluster: GraphClusterDoc, options?: Neo4jOptions): Promise<void>;
   deleteCluster(userId: string, clusterId: string, options?: Neo4jOptions): Promise<void>;
-
-  // 통계는 보통 Mongo나 Cache에 두지만, Neo4j에서 계산된 값을 저장할 수도 있음
   saveStats(stats: GraphStatsDoc, options?: Neo4jOptions): Promise<void>;
 }

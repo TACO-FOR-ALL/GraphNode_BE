@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+
 import { IAiProvider, Result } from './IAiProvider';
 import { ChatMessageRequest } from './ChatMessageRequest';
 

@@ -1,7 +1,6 @@
 import { initMongo } from './mongodb';
 import { loadEnv } from '../../config/env';
 import prisma from './prisma';
-import { initMySql } from './mysql';
 
 /**
  * MySQL(Prisma)/MongoDB를 순차 초기화한다. ENV 유효성 검증 포함.
@@ -12,9 +11,6 @@ export async function initDatabases() {
   const env = loadEnv();
   // Prisma Connection
   await prisma.$connect();
-
-  // Legacy MySQL Init (스키마 확인용, deprecated)
-  // await initMySql(env.MYSQL_URL);
 
   await initMongo(env.MONGODB_URL);
 

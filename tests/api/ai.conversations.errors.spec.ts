@@ -48,44 +48,53 @@ jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => {
       async findOrCreateFromProvider() {
         return { id: 'u_1' } as any;
       }
+      async findById(id: any) {
+        if (id === 'u_1') return { id: 'u_1', email: 'u@example.com' };
+        return null;
+      }
     },
   };
 });
 
-// Service 레이어 간단 목: 존재하지 않는 리소스 접근 시 404 유도
-jest.mock('../../src/core/services/ConversationService', () => {
+// --- Service 레이어 목 ---
+jest.mock('../../src/core/services/ChatManagementService', () => {
   return {
-    ConversationService: class {
-      async getById(_id: string, _ownerUserId: string) {
-        throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+    ChatManagementService: class {
+      async getConversation(_id: string, _ownerUserId: string) {
+        const { NotFoundError } = require('../../src/shared/errors/domain');
+        throw new NotFoundError(`Conversation not found: ${_id}`);
       }
-      async listByOwner(_ownerUserId: string, _limit: number) {
+      async listConversations(_ownerUserId: string, _limit: number) {
         return { items: [], nextCursor: null };
       }
-      async create() {
+      async createConversation() {
         return { id: 'never', title: 'x', updatedAt: new Date().toISOString(), messages: [] };
       }
-      async update() {
-        throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+      async updateConversation() {
+        const { NotFoundError } = require('../../src/shared/errors/domain');
+        throw new NotFoundError('not found');
       }
-      async delete() {
-        throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+      async deleteConversation() {
+        const { NotFoundError } = require('../../src/shared/errors/domain');
+        throw new NotFoundError('not found');
+      }
+      async createMessage() {
+        const { NotFoundError } = require('../../src/shared/errors/domain');
+        throw new NotFoundError('not found');
+      }
+      async updateMessage() {
+        const { NotFoundError } = require('../../src/shared/errors/domain');
+        throw new NotFoundError('not found');
       }
     },
   };
 });
 
-jest.mock('../../src/core/services/MessageService', () => {
+jest.mock('../../src/core/services/AiInteractionService', () => {
   return {
-    MessageService: class {
-      async create() {
-        return { id: 'm_x', role: 'user', content: 'x', ts: new Date().toISOString() };
-      }
-      async update() {
-        throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
-      }
-      async delete() {
-        throw Object.assign(new Error('not found'), { code: 'NOT_FOUND' });
+    AiInteractionService: class {
+      async handleAIChat() {
+        return { id: 'm_x', role: 'assistant', content: 'x', ts: new Date().toISOString() };
       }
     },
   };
@@ -103,6 +112,7 @@ function appWithTestEnv() {
   process.env.QDRANT_API_KEY = 'test-key';
   process.env.QDRANT_COLLECTION_NAME = 'test-collection';
   process.env.REDIS_URL = 'redis://localhost:6379';
+  process.env.JWT_SECRET = 'test-jwt-secret';
   return createApp();
 }
 

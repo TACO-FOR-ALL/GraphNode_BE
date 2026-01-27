@@ -1,17 +1,13 @@
-import { GraphNodeDto } from '../../shared/dtos/graph';
-import type { VectorStore } from '../ports/VectorStore';
-import { logger } from '../../shared/utils/logger';
-import { UpstreamError } from '../../shared/errors/domain';
-import type {
+import {
+  GraphNodeDto,
   GraphClusterDto,
   GraphEdgeDto,
   GraphStatsDto,
   GraphSnapshotDto,
   PersistGraphPayloadDto,
 } from '../../shared/dtos/graph';
+import type { VectorStore } from '../ports/VectorStore';
 import { getMongo } from '../../infra/db/mongodb';
-import { VectorItem } from '../ports/VectorStore';
-
 import { GraphManagementService } from './GraphManagementService';
 
 /**
@@ -80,7 +76,7 @@ export class GraphEmbeddingService {
   async findNodesMissingVectors(
     _userId: string,
     _collection: string,
-    _nodeIds: Array<number | string>
+    _nodeIds: Array<number>
   ) {
     this.throwVectorDisabledError();
   }
@@ -103,13 +99,13 @@ export class GraphEmbeddingService {
    * 기존 그래프 노드의 일부 속성을 갱신합니다.
    *
    * @param userId - 작업을 요청한 사용자 ID
-   * @param nodeId - 갱신할 노드의 ID
+   * @param id - 갱신할 노드의 ID
    * @param patch - 갱신할 속성 객체
    * @returns Promise<void>
    * @throws {NotFoundError | UpstreamError} - 노드가 없거나 DB 오류 발생 시
    */
-  updateNode(userId: string, nodeId: number, patch: Partial<GraphNodeDto>) {
-    return this.graphManagementService.updateNode(userId, nodeId, patch);
+  updateNode(userId: string, id: number, patch: Partial<GraphNodeDto>) {
+    return this.graphManagementService.updateNode(userId, id, patch);
   }
 
   /**
@@ -118,24 +114,24 @@ export class GraphEmbeddingService {
    * 이 메서드는 단일 노드만 삭제하며, 연결된 엣지는 `GraphService` 또는 `GraphRepository` 레벨에서 처리됩니다.
    *
    * @param userId - 작업을 요청한 사용자 ID
-   * @param nodeId - 삭제할 노드의 ID
+   * @param id - 삭제할 노드의 ID
    * @returns Promise<void>
    * @throws {UpstreamError} - DB 오류 발생 시
    * @see removeNodeCascade - 노드와 연결된 모든 엣지를 함께 삭제하려면 이 메서드를 사용하세요.
    */
-  deleteNode(userId: string, nodeId: number) {
-    return this.graphManagementService.deleteNode(userId, nodeId);
+  deleteNode(userId: string, id: number) {
+    return this.graphManagementService.deleteNode(userId, id);
   }
 
   /**
    * 특정 노드를 조회합니다.
    * @param userId - 작업을 요청한 사용자 ID
-   * @param nodeId - 조회할 노드의 ID
+   * @param id - 조회할 노드의 ID
    * @returns 조회된 노드 객체. 없으면 `null`을 반환합니다.
    * @throws {UpstreamError} - DB 오류 발생 시
    */
-  findNode(userId: string, nodeId: number) {
-    return this.graphManagementService.findNode(userId, nodeId);
+  findNode(userId: string, id: number) {
+    return this.graphManagementService.findNode(userId, id);
   }
 
   /**
@@ -218,12 +214,12 @@ export class GraphEmbeddingService {
   /**
    * 특정 클러스터를 삭제합니다.
    * @param userId - 작업을 요청한 사용자 ID
-   * @param clusterId - 삭제할 클러스터의 ID
+   * @param id - 삭제할 클러스터의 ID
    * @returns Promise<void>
    * @throws {UpstreamError} - DB 오류 발생 시
    * @see removeClusterCascade - 클러스터와 속한 모든 노드/엣지를 삭제하려면 이 메서드를 사용하세요.
    */
-  async deleteCluster(userId: string, clusterId: string): Promise<void> {
+  async deleteCluster(userId: string, id: string): Promise<void> {
     const mongoClient = getMongo();
     if (!mongoClient) {
       throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
@@ -231,7 +227,7 @@ export class GraphEmbeddingService {
     const session = mongoClient.startSession();
     try {
       await session.withTransaction(async () => {
-        await this.graphManagementService.deleteCluster(userId, clusterId, { session });
+        await this.graphManagementService.deleteCluster(userId, id, { session });
       });
     } finally {
       await session.endSession();
@@ -241,12 +237,12 @@ export class GraphEmbeddingService {
   /**
    * 특정 클러스터를 조회합니다.
    * @param userId - 작업을 요청한 사용자 ID
-   * @param clusterId - 조회할 클러스터의 ID
+   * @param id - 조회할 클러스터의 ID
    * @returns 조회된 클러스터 객체. 없으면 `null`을 반환합니다.
    * @throws {UpstreamError} - DB 오류 발생 시
    */
-  findCluster(userId: string, clusterId: string) {
-    return this.graphManagementService.findCluster(userId, clusterId);
+  findCluster(userId: string, id: string) {
+    return this.graphManagementService.findCluster(userId, id);
   }
 
   /**
@@ -296,16 +292,16 @@ export class GraphEmbeddingService {
    * 노드와 엣지를 트랜잭션처럼 처리하는 로직에 의존합니다.
    *
    * @param userId - 작업을 요청한 사용자 ID
-   * @param nodeId - 삭제할 노드의 ID
+   * @param id - 삭제할 노드의 ID
    * @returns Promise<void>
    * @throws {UpstreamError} - DB 작업 중 오류 발생 시
    * @example
    * // 노드 5와 연결된 모든 엣지를 함께 삭제
    * await service.removeNodeCascade('u-123', 5);
    */
-  async removeNodeCascade(userId: string, nodeId: number): Promise<void> {
+  async removeNodeCascade(userId: string, id: number): Promise<void> {
     // GraphRepositoryMongo.deleteNode 에 이미 관련 엣지 삭제 로직이 포함되어 있음
-    await this.graphManagementService.deleteNode(userId, nodeId);
+    await this.graphManagementService.deleteNode(userId, id);
   }
 
   /**
@@ -315,11 +311,11 @@ export class GraphEmbeddingService {
    * 따라서 MongoDB 트랜잭션을 사용하여 원자적으로 처리됩니다.
    *
    * @param userId - 작업을 요청한 사용자 ID
-   * @param clusterId - 삭제할 클러스터의 ID
+   * @param id - 삭제할 클러스터의 ID
    * @returns Promise<void>
    * @throws {UpstreamError} - DB 작업 중 오류 발생 시
    */
-  async removeClusterCascade(userId: string, clusterId: string): Promise<void> {
+  async removeClusterCascade(userId: string, id: string): Promise<void> {
     const mongoClient = getMongo();
     if (!mongoClient) {
       throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
@@ -329,16 +325,16 @@ export class GraphEmbeddingService {
       await session.withTransaction(async () => {
         const nodesInCluster = await this.graphManagementService.listNodesByCluster(
           userId,
-          clusterId
+          id
         );
         if (nodesInCluster.length > 0) {
-          const nodeIds = nodesInCluster.map((n) => n.id);
+          const ids = nodesInCluster.map((n) => n.id);
           // 1. 클러스터에 속한 모든 노드와 관련 엣지 삭제
-          await this.graphManagementService.deleteEdgesByNodeIds(userId, nodeIds, { session });
-          await this.graphManagementService.deleteNodes(userId, nodeIds, { session });
+          await this.graphManagementService.deleteEdgesByNodeIds(userId, ids, { session });
+          await this.graphManagementService.deleteNodes(userId, ids, { session });
         }
         // 2. 클러스터 자체 삭제
-        await this.graphManagementService.deleteCluster(userId, clusterId, { session });
+        await this.graphManagementService.deleteCluster(userId, id, { session });
       });
     } finally {
       await session.endSession();

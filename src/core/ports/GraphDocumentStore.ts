@@ -20,13 +20,13 @@ export interface GraphDocumentStore {
   upsertNode(node: GraphNodeDoc, options?: RepoOptions): Promise<void>;
   updateNode(
     userId: string,
-    nodeId: number | string,
+    id: number,
     patch: Partial<GraphNodeDoc>,
     options?: RepoOptions
   ): Promise<void>;
-  deleteNode(userId: string, nodeId: number | string, options?: RepoOptions): Promise<void>;
-  deleteNodes(userId: string, nodeIds: (number | string)[], options?: RepoOptions): Promise<void>;
-  findNode(userId: string, nodeId: number | string): Promise<GraphNodeDoc | null>;
+  deleteNode(userId: string, id: number, options?: RepoOptions): Promise<void>;
+  deleteNodes(userId: string, ids: number[], options?: RepoOptions): Promise<void>;
+  findNode(userId: string, id: number): Promise<GraphNodeDoc | null>;
   listNodes(userId: string): Promise<GraphNodeDoc[]>;
   listNodesByCluster(userId: string, clusterId: string): Promise<GraphNodeDoc[]>;
 
@@ -35,13 +35,13 @@ export interface GraphDocumentStore {
   deleteEdge(userId: string, edgeId: string, options?: RepoOptions): Promise<void>;
   deleteEdgeBetween(
     userId: string,
-    source: number | string,
-    target: number | string,
+    source: number,
+    target: number,
     options?: RepoOptions
   ): Promise<void>;
   deleteEdgesByNodeIds(
     userId: string,
-    nodeIds: (number | string)[],
+    ids: number[],
     options?: RepoOptions
   ): Promise<void>;
   listEdges(userId: string): Promise<GraphEdgeDoc[]>;

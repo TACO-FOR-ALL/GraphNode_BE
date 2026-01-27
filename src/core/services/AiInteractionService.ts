@@ -18,7 +18,7 @@ import { AIchatType } from '../../shared/ai-providers/AIchatType';
 import { ChatManagementService } from './ChatManagementService';
 import { UserService } from './UserService';
 import { AIChatResponseDto, ChatMessage, ChatThread } from '../../shared/dtos/ai';
-import { getAiProvider, IAiProvider, Result } from '../../shared/ai-providers/index';
+import { getAiProvider, IAiProvider } from '../../shared/ai-providers/index';
 import { ChatMessageRequest } from '../../shared/ai-providers/ChatMessageRequest';
 
 export class AiInteractionService {

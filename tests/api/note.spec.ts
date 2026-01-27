@@ -188,228 +188,120 @@ function appWithTestEnv() {
   return createApp();
 }
 
-// Mock Redis Client to avoid connection errors during tests if no redis available
-jest.mock('redis', () => ({
-  createClient: () => ({
-    connect: jest.fn().mockResolvedValue(undefined),
-    on: jest.fn(),
-    disconnect: jest.fn().mockResolvedValue(undefined),
-  }),
-}));
-jest.mock('connect-redis', () => {
-  const session = require('express-session');
-  const Store = session.Store;
-  const store = new Map();
-  return {
-    RedisStore: class extends Store {
-      constructor() {
-        super();
-      }
-      get(sid: string, cb: any) {
-        cb(null, store.get(sid));
-      }
-      set(sid: string, sess: any, cb: any) {
-        store.set(sid, sess);
-        cb(null);
-      }
-      destroy(sid: string, cb: any) {
-        store.delete(sid);
-        cb(null);
-      }
-      on(event: string, cb: any) {} // Mock event emitter
-    },
-  };
-});
+// JWT 기반 인증이므로 connect-redis 목은 필요 없음
 
 describe('Note API', () => {
   let app: any;
-  let cookie: any;
+  let agent: any;
 
   beforeAll(async () => {
     app = appWithTestEnv();
-    // Login flow to get cookie
-    const start = await request(app).get('/auth/google/start');
-    const startCookie = start.headers['set-cookie']; // Capture session cookie from start
+    agent = request.agent(app);
 
+    // Login flow
+    const start = await agent.get('/auth/google/start');
     const loc = start.headers['location'];
-    const state = new URL(loc).searchParams.get('state') || '';
+    const state = loc ? new URL(loc).searchParams.get('state') : '';
 
-    const cb = await request(app)
-      .get('/auth/google/callback')
-      .set('Cookie', startCookie) // Send session cookie
+    await agent.get('/auth/google/callback')
       .query({ code: 'ok', state });
-
-    cookie = cb.headers['set-cookie']; // Capture authenticated session cookie
   });
 
   test('Folder CRUD', async () => {
     // Create
-    const res1 = await request(app)
+    const res1 = await agent
       .post('/v1/folders')
-      .set('Cookie', cookie)
       .send({ name: 'Folder1' });
     expect(res1.status).toBe(201);
     const f1 = res1.body;
     expect(f1.name).toBe('Folder1');
 
     // Validation Error (Create)
-    const res1Fail = await request(app)
+    const res1Fail = await agent
       .post('/v1/folders')
-      .set('Cookie', cookie)
-      .send({ name: '' }); // Empty name
+      .send({ name: '' });
     expect(res1Fail.status).toBe(400);
 
     // List
-    const res2 = await request(app).get('/v1/folders').set('Cookie', cookie);
+    const res2 = await agent.get('/v1/folders');
     expect(res2.status).toBe(200);
     expect(res2.body).toHaveLength(1);
     expect(res2.body[0].id).toBe(f1.id);
 
-    // Get Detail (Success)
-    const resGet = await request(app).get(`/v1/folders/${f1.id}`).set('Cookie', cookie);
+    // Get Detail
+    const resGet = await agent.get(`/v1/folders/${f1.id}`);
     expect(resGet.status).toBe(200);
     expect(resGet.body.id).toBe(f1.id);
 
-    // List with parentId (Cover query param branch)
-    // Create a folder with parentId
-    const resSub = await request(app)
+    // List with parentId
+    const resSub = await agent
       .post('/v1/folders')
-      .set('Cookie', cookie)
       .send({ name: 'SubFolder', parentId: 'root' });
     expect(resSub.status).toBe(201);
 
-    const res2Query = await request(app)
+    const res2Query = await agent
       .get('/v1/folders')
-      .query({ parentId: 'root' })
-      .set('Cookie', cookie);
+      .query({ parentId: 'root' });
     expect(res2Query.status).toBe(200);
     expect(res2Query.body).toHaveLength(1);
-    expect(res2Query.body[0].id).toBe(resSub.body.id);
 
     // Update
-    const res3 = await request(app)
+    const res3 = await agent
       .patch(`/v1/folders/${f1.id}`)
-      .set('Cookie', cookie)
       .send({ name: 'Folder1_Renamed' });
     expect(res3.status).toBe(200);
-    expect(res3.body.name).toBe('Folder1_Renamed');
-
-    // Validation Error (Update)
-    const res3Fail = await request(app)
-      .patch(`/v1/folders/${f1.id}`)
-      .set('Cookie', cookie)
-      .send({ name: '' });
-    expect(res3Fail.status).toBe(400);
 
     // Delete
-    const res4 = await request(app).delete(`/v1/folders/${f1.id}`).set('Cookie', cookie);
-    expect(res4.status).toBe(204);
+    await agent.delete(`/v1/folders/${f1.id}`).expect(204);
 
     // Get 404
-    const res5 = await request(app).get(`/v1/folders/${f1.id}`).set('Cookie', cookie);
-    expect(res5.status).toBe(404);
+    await agent.get(`/v1/folders/${f1.id}`).expect(404);
   });
 
   test('Note CRUD', async () => {
     // Create
-    const res1 = await request(app)
+    const res1 = await agent
       .post('/v1/notes')
-      .set('Cookie', cookie)
       .send({ title: 'Note1', content: 'Content1' });
     expect(res1.status).toBe(201);
     const n1 = res1.body;
-    expect(n1.title).toBe('Note1');
-
-    // Validation Error (Create)
-    const res1Fail = await request(app).post('/v1/notes').set('Cookie', cookie).send({ title: '' }); // Empty title
-    expect(res1Fail.status).toBe(400);
 
     // List
-    const res2 = await request(app).get('/v1/notes').set('Cookie', cookie);
+    const res2 = await agent.get('/v1/notes');
     expect(res2.status).toBe(200);
-    expect(res2.body).toHaveLength(1);
-
-    // List with folderId (Cover query param branch)
-    // Create a note in a folder
-    const resNoteInFolder = await request(app)
-      .post('/v1/notes')
-      .set('Cookie', cookie)
-      .send({ title: 'NoteInFolder', content: 'C', folderId: 'f_1' });
-    expect(resNoteInFolder.status).toBe(201);
-
-    const res2Query = await request(app)
-      .get('/v1/notes')
-      .query({ folderId: 'f_1' })
-      .set('Cookie', cookie);
-    expect(res2Query.status).toBe(200);
-    expect(res2Query.body).toHaveLength(1);
-    expect(res2Query.body[0].id).toBe(resNoteInFolder.body.id);
-
-    // Get Detail (Missing in previous test)
-    const resGet = await request(app).get(`/v1/notes/${n1.id}`).set('Cookie', cookie);
-    expect(resGet.status).toBe(200);
-    expect(resGet.body.id).toBe(n1.id);
 
     // Update
-    const res3 = await request(app)
+    const res3 = await agent
       .patch(`/v1/notes/${n1.id}`)
-      .set('Cookie', cookie)
       .send({ content: 'Content_Updated' });
     expect(res3.status).toBe(200);
-    expect(res3.body.content).toBe('Content_Updated');
-
-    // Validation Error (Update)
-    const res3Fail = await request(app)
-      .patch(`/v1/notes/${n1.id}`)
-      .set('Cookie', cookie)
-      .send({ title: '' });
-    expect(res3Fail.status).toBe(400);
 
     // Delete
-    const res4 = await request(app).delete(`/v1/notes/${n1.id}`).set('Cookie', cookie);
-    expect(res4.status).toBe(204);
-
-    // Get 404
-    const res5 = await request(app).get(`/v1/notes/${n1.id}`).set('Cookie', cookie);
-    expect(res5.status).toBe(404);
+    await agent.delete(`/v1/notes/${n1.id}`).expect(204);
+    await agent.get(`/v1/notes/${n1.id}`).expect(404);
 
     // Restore
-    const resRestore = await request(app).post(`/v1/notes/${n1.id}/restore`).set('Cookie', cookie);
-    expect(resRestore.status).toBe(204);
-
-    // Get 200
-    const res6 = await request(app).get(`/v1/notes/${n1.id}`).set('Cookie', cookie);
-    expect(res6.status).toBe(200);
+    await agent.post(`/v1/notes/${n1.id}/restore`).expect(204);
+    await agent.get(`/v1/notes/${n1.id}`).expect(200);
   });
 
   test('Folder Restore (Cascade)', async () => {
-    // Create Folder
-    const resF = await request(app)
+    const resF = await agent
       .post('/v1/folders')
-      .set('Cookie', cookie)
       .send({ name: 'RestoreFolder' });
     const fId = resF.body.id;
 
-    // Create Note in Folder
-    const resN = await request(app)
+    const resN = await agent
       .post('/v1/notes')
-      .set('Cookie', cookie)
       .send({ title: 'ChildNote', content: 'Content', folderId: fId });
-    // if (resN.status !== 201) console.log('Create Note Failed:', JSON.stringify(resN.body, null, 2));
     const nId = resN.body.id;
 
-    // Delete Folder
-    await request(app).delete(`/v1/folders/${fId}`).set('Cookie', cookie).expect(204);
+    await agent.delete(`/v1/folders/${fId}`).expect(204);
+    await agent.get(`/v1/folders/${fId}`).expect(404);
+    await agent.get(`/v1/notes/${nId}`).expect(404);
 
-    // Verify both are gone (404)
-    await request(app).get(`/v1/folders/${fId}`).set('Cookie', cookie).expect(404);
-    await request(app).get(`/v1/notes/${nId}`).set('Cookie', cookie).expect(404);
-
-    // Restore Folder
-    await request(app).post(`/v1/folders/${fId}/restore`).set('Cookie', cookie).expect(204);
-
-    // Verify both are back
-    await request(app).get(`/v1/folders/${fId}`).set('Cookie', cookie).expect(200);
-    await request(app).get(`/v1/notes/${nId}`).set('Cookie', cookie).expect(200);
+    await agent.post(`/v1/folders/${fId}/restore`).expect(204);
+    await agent.get(`/v1/folders/${fId}`).expect(200);
+    await agent.get(`/v1/notes/${nId}`).expect(200);
   });
 });

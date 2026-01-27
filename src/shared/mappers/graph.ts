@@ -29,14 +29,13 @@ import type {
  */
 export function toGraphNodeDoc(dto: GraphNodeDto): GraphNodeDoc {
   const now = new Date().toISOString();
-  const nodeId = typeof dto.id === 'string' ? parseInt(dto.id, 10) : dto.id;
-  if (isNaN(nodeId)) {
+  const id = typeof dto.id === 'string' ? parseInt(dto.id, 10) : dto.id;
+  if (isNaN(id)) {
     throw new Error(`Invalid node ID: ${dto.id}`);
   }
   return {
-    _id: `${dto.userId}::${nodeId}`,
+    id: id,
     userId: dto.userId,
-    nodeId: nodeId,
     origId: dto.origId,
     clusterId: dto.clusterId,
     clusterName: dto.clusterName,
@@ -55,7 +54,7 @@ export function toGraphNodeDoc(dto: GraphNodeDto): GraphNodeDoc {
  */
 export function toGraphNodeDto(doc: GraphNodeDoc): GraphNodeDto {
   return {
-    id: doc.nodeId,
+    id: doc.id,
     userId: doc.userId,
     origId: doc.origId,
     clusterId: doc.clusterId,
@@ -84,9 +83,9 @@ export function toGraphEdgeDoc(dto: GraphEdgeDto): GraphEdgeDoc {
     throw new Error(`Invalid edge source/target: ${dto.source}->${dto.target}`);
   }
 
-  const docId = dto.id ?? `${dto.userId}::${source}->${target}`;
+  const id = dto.id ?? `${dto.userId}::${source}->${target}`;
   return {
-    _id: docId,
+    id: id,
     userId: dto.userId,
     source: source,
     target: target,
@@ -106,7 +105,7 @@ export function toGraphEdgeDoc(dto: GraphEdgeDto): GraphEdgeDoc {
  */
 export function toGraphEdgeDto(doc: GraphEdgeDoc): GraphEdgeDto {
   return {
-    id: doc._id,
+    id: doc.id,
     userId: doc.userId,
     source: doc.source,
     target: doc.target,
@@ -129,9 +128,8 @@ export function toGraphEdgeDto(doc: GraphEdgeDoc): GraphEdgeDto {
 export function toGraphClusterDoc(dto: GraphClusterDto): GraphClusterDoc {
   const now = new Date().toISOString();
   return {
-    _id: `${dto.userId}::${dto.id}`,
+    id: dto.id,
     userId: dto.userId,
-    clusterId: dto.id,
     name: dto.name,
     description: dto.description,
     size: dto.size,
@@ -149,7 +147,7 @@ export function toGraphClusterDoc(dto: GraphClusterDto): GraphClusterDoc {
  */
 export function toGraphClusterDto(doc: GraphClusterDoc): GraphClusterDto {
   return {
-    id: doc.clusterId,
+    id: doc.id,
     userId: doc.userId,
     name: doc.name,
     description: doc.description,
@@ -171,7 +169,7 @@ export function toGraphClusterDto(doc: GraphClusterDoc): GraphClusterDto {
 export function toGraphStatsDoc(dto: GraphStatsDto): GraphStatsDoc {
   const now = new Date().toISOString();
   return {
-    _id: dto.userId, // 통계는 사용자당 하나이므로 userId를 _id로 사용
+    id: dto.userId,
     userId: dto.userId,
     nodes: dto.nodes,
     edges: dto.edges,

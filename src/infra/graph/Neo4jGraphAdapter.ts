@@ -49,21 +49,18 @@ export class Neo4jGraphAdapter implements GraphNeo4jStore {
       summary: (node as any).summary,
       clusterId: node.clusterId,
       metadata: (node as any).metadata ? JSON.stringify((node as any).metadata) : null,
-      // Store other fields if needed, or rely on id/userId
       timestamp: node.timestamp,
       numMessages: node.numMessages
     };
 
     try {
-        await this.runQuery(query, { id: (node as any).id, userId: node.userId, props }, options);
+        await this.runQuery(query, { id: node.id, userId: node.userId, props }, options);
     } catch (e) {
         throw new UpstreamError('Neo4j upsertNode failed', { cause: e as any });
     }
   }
 
-  async updateNode(userId: string, nodeId: number | string, patch: Partial<GraphNodeDoc>, options?: Neo4jOptions): Promise<void> {
-    // Note: patch fields might need flattening or JSON serialization like upsert
-    // For simplicity, assuming simple fields or manually handled.
+  async updateNode(userId: string, id: number, patch: Partial<GraphNodeDoc>, options?: Neo4jOptions): Promise<void> {
     const query = `
       MATCH (n:Node {id: $id, userId: $userId})
       SET n += $patch, n.updatedAt = datetime()
@@ -71,32 +68,32 @@ export class Neo4jGraphAdapter implements GraphNeo4jStore {
     const patchProps: any = { ...patch };
     if ((patch as any).metadata) patchProps.metadata = JSON.stringify((patch as any).metadata); 
 
-    await this.runQuery(query, { id: nodeId, userId, patch: patchProps }, options);
+    await this.runQuery(query, { id, userId, patch: patchProps }, options);
   }
 
-  async deleteNode(userId: string, nodeId: number | string, options?: Neo4jOptions): Promise<void> {
+  async deleteNode(userId: string, id: number, options?: Neo4jOptions): Promise<void> {
     const query = `
       MATCH (n:Node {id: $id, userId: $userId})
       DETACH DELETE n
     `;
-    await this.runQuery(query, { id: nodeId, userId }, options);
+    await this.runQuery(query, { id, userId }, options);
   }
 
-  async deleteNodes(userId: string, nodeIds: (number | string)[], options?: Neo4jOptions): Promise<void> {
+  async deleteNodes(userId: string, ids: number[], options?: Neo4jOptions): Promise<void> {
     const query = `
       MATCH (n:Node)
-      WHERE n.userId = $userId AND n.id IN $nodeIds
+      WHERE n.userId = $userId AND n.id IN $ids
       DETACH DELETE n
     `;
-    await this.runQuery(query, { userId, nodeIds }, options);
+    await this.runQuery(query, { userId, ids }, options);
   }
 
-  async findNode(userId: string, nodeId: number | string): Promise<GraphNodeDoc | null> {
+  async findNode(userId: string, id: number): Promise<GraphNodeDoc | null> {
     const query = `
       MATCH (n:Node {id: $id, userId: $userId})
       RETURN n
     `;
-    const result = await this.runQuery(query, { id: nodeId, userId });
+    const result = await this.runQuery(query, { id, userId });
     if (result.records.length === 0) return null;
     
     const props = result.records[0].get('n').properties;
@@ -106,7 +103,6 @@ export class Neo4jGraphAdapter implements GraphNeo4jStore {
   // --- Edge Methods ---
 
   async upsertEdge(edge: GraphEdgeDoc, options?: Neo4jOptions): Promise<string> {
-    // Edge in Graph DB connects two nodes.
     const query = `
       MATCH (s:Node {id: $source, userId: $userId})
       MATCH (t:Node {id: $target, userId: $userId})
@@ -125,15 +121,15 @@ export class Neo4jGraphAdapter implements GraphNeo4jStore {
         source: edge.source, 
         target: edge.target, 
         userId: edge.userId, 
-        id: edge._id, 
+        id: edge.id, 
         props 
     }, options);
 
-    if (result.records.length === 0) return edge._id; 
+    if (result.records.length === 0) return edge.id; 
     return result.records[0].get('id');
   }
 
-  async deleteEdgeBetween(userId: string, source: number | string, target: number | string, options?: Neo4jOptions): Promise<void> {
+  async deleteEdgeBetween(userId: string, source: number, target: number, options?: Neo4jOptions): Promise<void> {
     const query = `
       MATCH (s:Node {id: $source, userId: $userId})-[r:RELATED]-(t:Node {id: $target, userId: $userId})
       DELETE r
@@ -141,13 +137,13 @@ export class Neo4jGraphAdapter implements GraphNeo4jStore {
     await this.runQuery(query, { source, target, userId }, options);
   }
 
-  async deleteEdgesByNodeIds(userId: string, nodeIds: (number | string)[], options?: Neo4jOptions): Promise<void> {
+  async deleteEdgesByNodeIds(userId: string, ids: number[], options?: Neo4jOptions): Promise<void> {
     const query = `
         MATCH (n:Node)-[r:RELATED]-()
-        WHERE n.userId = $userId AND n.id IN $nodeIds
+        WHERE n.userId = $userId AND n.id IN $ids
         DELETE r
     `;
-    await this.runQuery(query, { userId, nodeIds }, options);
+    await this.runQuery(query, { userId, ids }, options);
   }
 
   // --- Cluster Methods ---
@@ -162,19 +158,18 @@ export class Neo4jGraphAdapter implements GraphNeo4jStore {
         summary: (cluster as any).summary,
         description: cluster.description
     };
-    await this.runQuery(query, { id: cluster.clusterId, userId: cluster.userId, props }, options);
+    await this.runQuery(query, { id: cluster.id, userId: cluster.userId, props }, options);
   }
 
-  async deleteCluster(userId: string, clusterId: string, options?: Neo4jOptions): Promise<void> {
+  async deleteCluster(userId: string, id: string, options?: Neo4jOptions): Promise<void> {
     const query = `
       MATCH (c:Cluster {id: $id, userId: $userId})
       DETACH DELETE c
     `;
-    await this.runQuery(query, { id: clusterId, userId }, options);
+    await this.runQuery(query, { id, userId }, options);
   }
 
-  async findCluster(userId: string, clusterId: string): Promise<GraphClusterDoc | null> {
-      // Not typically needed if reading from Mongo, but for completeness
+  async findCluster(userId: string, id: string): Promise<GraphClusterDoc | null> {
       return null; 
   }
   
@@ -190,9 +185,9 @@ export class Neo4jGraphAdapter implements GraphNeo4jStore {
       SET s += $props, s.updatedAt = datetime()
     `;
     const props = {
-        nodeCount: (stats as any).nodeCount || stats.nodes,
-        edgeCount: (stats as any).edgeCount || stats.edges,
-        clusterCount: (stats as any).clusterCount || stats.clusters
+        nodeCount: stats.nodes,
+        edgeCount: stats.edges,
+        clusterCount: stats.clusters
     };
     await this.runQuery(query, { userId: stats.userId, props }, options);
   } 
@@ -201,7 +196,7 @@ export class Neo4jGraphAdapter implements GraphNeo4jStore {
   
   private mapToGraphNodeDoc(props: any): GraphNodeDoc {
     return {
-      nodeId: props.id, 
+      id: props.id, 
       userId: props.userId,
       clusterId: props.clusterId,
       createdAt: new Date().toISOString(), 
@@ -209,8 +204,7 @@ export class Neo4jGraphAdapter implements GraphNeo4jStore {
       origId: '',
       clusterName: '',
       timestamp: null,
-      numMessages: 0,
-      _id: props.id 
+      numMessages: 0
     };
   }
 }

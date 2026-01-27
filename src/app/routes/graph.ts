@@ -26,11 +26,11 @@ export function createGraphRouter(graphEmbeddingService: GraphEmbeddingService) 
   // Node routes
   router.post('/nodes', asyncHandler(graphController.createNode.bind(graphController)));
   router.get('/nodes', asyncHandler(graphController.listNodes.bind(graphController)));
-  router.get('/nodes/:nodeId', asyncHandler(graphController.getNode.bind(graphController)));
-  router.patch('/nodes/:nodeId', asyncHandler(graphController.updateNode.bind(graphController)));
-  router.delete('/nodes/:nodeId', asyncHandler(graphController.deleteNode.bind(graphController)));
+  router.get('/nodes/:id', asyncHandler(graphController.getNode.bind(graphController)));
+  router.patch('/nodes/:id', asyncHandler(graphController.updateNode.bind(graphController)));
+  router.delete('/nodes/:id', asyncHandler(graphController.deleteNode.bind(graphController)));
   router.delete(
-    '/nodes/:nodeId/cascade',
+    '/nodes/:id/cascade',
     asyncHandler(graphController.deleteNodeCascade.bind(graphController))
   );
 
@@ -43,15 +43,15 @@ export function createGraphRouter(graphEmbeddingService: GraphEmbeddingService) 
   router.post('/clusters', asyncHandler(graphController.createCluster.bind(graphController)));
   router.get('/clusters', asyncHandler(graphController.listClusters.bind(graphController)));
   router.get(
-    '/clusters/:clusterId',
+    '/clusters/:id',
     asyncHandler(graphController.getCluster.bind(graphController))
   );
   router.delete(
-    '/clusters/:clusterId',
+    '/clusters/:id',
     asyncHandler(graphController.deleteCluster.bind(graphController))
   );
   router.delete(
-    '/clusters/:clusterId/cascade',
+    '/clusters/:id/cascade',
     asyncHandler(graphController.deleteClusterCascade.bind(graphController))
   );
 

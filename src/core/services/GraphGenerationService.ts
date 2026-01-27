@@ -41,7 +41,7 @@ export class GraphGenerationService {
       timeout: 300000,
     });
     // TODO: 환경변수 SQS_QUEUE_URL 추가 필요
-    this.jobQueueUrl = process.env.SQS_QUEUE_URL || 'TO_BE_CONFIGURED';
+    this.jobQueueUrl = process.env.SQS_REQUEST_QUEUE_URL || 'TO_BE_CONFIGURED';
   }
 
   /**
@@ -248,11 +248,11 @@ export class GraphGenerationService {
         });
 
         for (const msg of messages) {
-          const nodeId = msg.id;
-          mapping[nodeId] = {
-            id: nodeId,
+          const id = msg.id;
+          mapping[id] = {
+            id: id,
             message: {
-              id: nodeId,
+              id: id,
               author: { role: msg.role },
               content: { content_type: 'text', parts: [msg.content] },
             },
@@ -261,10 +261,10 @@ export class GraphGenerationService {
           };
 
           if (prevMsgId && mapping[prevMsgId]) {
-            mapping[prevMsgId].children.push(nodeId);
+            mapping[prevMsgId].children.push(id);
           }
 
-          prevMsgId = nodeId;
+          prevMsgId = id;
         }
 
         //FIXED: id 필드 추가
