@@ -1,6 +1,6 @@
 /**
  * 모듈: HttpClient (HTTP 통신 클라이언트)
- * 
+ *
  * 책임:
  * - 외부 API(OpenAI, Google 등)와 통신하기 위한 표준화된 클라이언트를 제공합니다.
  * - Axios 라이브러리를 래핑(Wrapping)하여 사용합니다.
@@ -11,7 +11,7 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 
 import { logger } from '../../shared/utils/logger';
 import { UpstreamError, UpstreamTimeout } from '../../shared/errors/domain';
-import { getCorrelationId } from '../../shared/context/requestStore'; 
+import { getCorrelationId } from '../../shared/context/requestStore';
 
 /**
  * HttpClient 설정 인터페이스
@@ -24,7 +24,7 @@ export interface HttpClientConfig {
 
 /**
  * HttpClient 클래스
- * 
+ *
  * 외부 서비스와의 통신을 담당하는 클래스입니다.
  * 모든 요청/응답을 자동으로 로깅하고, 에러 발생 시 표준 AppError로 변환합니다.
  */
@@ -56,7 +56,7 @@ export class HttpClient {
 
   /**
    * Axios 인터셉터 설정 (내부 메서드)
-   * 
+   *
    * 역할:
    * 1. 요청 전: 로그 출력, Correlation ID 헤더 추가
    * 2. 응답 후: 성공 로그 출력
@@ -128,17 +128,18 @@ export class HttpClient {
 
         // 타임아웃 에러 처리
         if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
-          throw new UpstreamTimeout(
-            `Timeout from ${this.serviceName}`,
-            { service: this.serviceName, detail: error.message }
-          );
+          throw new UpstreamTimeout(`Timeout from ${this.serviceName}`, {
+            service: this.serviceName,
+            detail: error.message,
+          });
         }
 
         // 그 외 업스트림 에러 처리
-        throw new UpstreamError(
-          `Error from ${this.serviceName}`,
-          { service: this.serviceName, status: error.response?.status, detail: error.message }
-        );
+        throw new UpstreamError(`Error from ${this.serviceName}`, {
+          service: this.serviceName,
+          status: error.response?.status,
+          detail: error.message,
+        });
       }
     );
   }

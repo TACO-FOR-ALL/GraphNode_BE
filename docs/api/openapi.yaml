@@ -110,6 +110,21 @@ paths:
                 $ref: ../schemas/problem.json
               example:
                 $ref: './examples/problem-502.json'
+  /v1/notifications/stream:
+    get:
+      summary: Connect to notification stream (SSE)
+      description: Establishes a Server-Sent Events (SSE) connection to receive real-time notifications.
+      responses:
+        '200':
+          description: Stream established
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                example: |
+                  data: {"type":"CONNECTED","message":"SSE Connection established"}
+
+                  data: {"type":"JOB_COMPLETED","payload":{...}}
   /v1/me:
     get:
       summary: Check login status

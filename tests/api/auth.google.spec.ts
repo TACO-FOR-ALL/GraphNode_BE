@@ -38,7 +38,7 @@ jest.mock('../../src/core/services/GoogleOAuthService', () => {
       async fetchUserInfo(_token: any) {
         return { sub: 'google-uid-1', email: 'u@example.com', name: 'U', picture: 'https://img' };
       }
-    }
+    },
   };
 });
 
@@ -49,7 +49,7 @@ jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => {
       async findOrCreateFromProvider() {
         return { id: 42 } as any;
       }
-    }
+    },
   };
 });
 
@@ -80,12 +80,14 @@ describe('Auth Google', () => {
     const res = await request(app).get('/auth/google/start');
     // 기대: 302 상태코드 + Google 권한 URL로 리다이렉트
     expect(res.status).toBe(302);
-    expect(res.headers['location']).toMatch(/^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth\?/);
-    // 기대: 세션 쿠키가 설정됨(쿠키 이름은 환경/구현에 따라 다를 수 있어 정규식으로 검증)
+    expect(res.headers['location']).toMatch(
+      /^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth\?/
+    );
+    // 기대: OAuth State 쿠키가 설정됨 (oauth_state)
     const raw = res.headers['set-cookie'];
-    const setCookies: string[] = Array.isArray(raw) ? raw : (raw ? [raw] : []);
-    const hasSession = setCookies.some((c: string) => /(?:^|;\s)(__Host-session=|sid=)/.test(c));
-    expect(hasSession).toBe(true);
+    const setCookies: string[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    const hasStateCookie = setCookies.some((c: string) => /(?:^|;\s)oauth_state=/.test(c));
+    expect(hasStateCookie).toBe(true);
   });
 
   test('GET /auth/google/callback with missing query returns 400 Problem Details', async () => {
@@ -128,18 +130,19 @@ describe('Auth Google', () => {
     expect(res.status).toBe(200);
     expect(res.text).toContain('window.opener.postMessage');
     expect(res.text).toContain('oauth-success');
-  // session cookie should be present among Set-Cookie headers
-  const raw = res.headers['set-cookie'];
-  const setCookies: string[] = Array.isArray(raw) ? raw : (raw ? [raw] : []);
-  const hasSession = setCookies.some((c: string) => /(?:^|;\s)(sid=|__Host-session=)/.test(c));
-  expect(hasSession).toBe(true);
+    // session cookie should be present among Set-Cookie headers
+    const raw = res.headers['set-cookie'];
+    const setCookies: string[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    const hasSession = setCookies.some((c: string) => /(?:^|;\s)(access_token=)/.test(c));
+    expect(hasSession).toBe(true);
   });
 
   test('GET /auth/google/callback with missing user info binds session and returns ok', async () => {
     const app = appWithTestEnv();
-    
+
     // Override the mock for this specific test
-    const GoogleOAuthService = require('../../src/core/services/GoogleOAuthService').GoogleOAuthService;
+    const GoogleOAuthService =
+      require('../../src/core/services/GoogleOAuthService').GoogleOAuthService;
     const originalFetchUserInfo = GoogleOAuthService.prototype.fetchUserInfo;
     GoogleOAuthService.prototype.fetchUserInfo = async () => ({ sub: 'google-uid-2' }); // Missing email, name, picture
 

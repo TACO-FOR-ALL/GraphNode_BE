@@ -1,44 +1,43 @@
-import type { RowDataPacket, ResultSetHeader } from 'mysql2/promise';
-
 import { User, Provider } from '../../core/types/persistence/UserPersistence';
 import { UserRepository } from '../../core/ports/UserRepository';
-import { getMySql } from '../db/mysql';
+import prisma from '../db/prisma';
+import { ApiKeyModel } from '../../shared/dtos/me';
 
 /**
- * UserRepository (MySQL 구현)
- * @remarks
- * - 테이블: users(id, provider, provider_user_id, email, display_name, avatar_url, api_key_openai, api_key_deepseek, created_at, last_login_at)
- * - 제약: UNIQUE(provider, provider_user_id)
+ * UserRepository (Prisma 구현)
+ * 기존 UserRepositoryMySQL을 대체하며, PrismaClient를 사용합니다.
  */
 export class UserRepositoryMySQL implements UserRepository {
   /**
    * id로 단건 조회.
-   * @param id 내부 사용자 식별자
-   * @returns User 또는 null
+   * @param id 내부 사용자 식별자 (number)
    */
   async findById(id: number): Promise<User | null> {
-    const [rows] = await getMySql().query<RowDataPacket[]>('SELECT * FROM users WHERE id=?', [id]);
-    if (rows.length === 0) return null;
-    return mapUser(rows[0]);
+    const user = await prisma.user.findUnique({
+      where: { id: BigInt(id) },
+    });
+    if (!user) return null;
+    return this.mapUser(user);
   }
 
   /**
    * 내부 사용자 식별자로 API Key 조회
-   * @param id 내부 사용자 식별자
-   * @param model 'openai' 또는 'deepseek'
-   * @returns API Key 또는 null
    */
-  async findApiKeyById(id: number, model: 'openai' | 'deepseek'): Promise<string | null> {
-    const [rows] = await getMySql().query<RowDataPacket[]>(
-      'SELECT api_key_openai, api_key_deepseek FROM users WHERE id=?',
-      [id]
-    );
-    if (rows.length === 0) return null;
+  async findApiKeyById(id: number, model: ApiKeyModel): Promise<string | null> {
+    const user = await prisma.user.findUnique({
+      where: { id: BigInt(id) },
+    });
+    if (!user) return null;
+
     switch (model) {
       case 'openai':
-        return rows[0].api_key_openai ?? null;
+        return user.apiKeyOpenai;
       case 'deepseek':
-        return rows[0].api_key_deepseek ?? null;
+        return user.apiKeyDeepseek;
+      case 'claude':
+        return user.apiKeyClaude ?? null; // Prisma types might not update instantly in IDE, using ?? null for safety
+      case 'gemini':
+        return user.apiKeyGemini ?? null;
       default:
         return null;
     }
@@ -46,56 +45,74 @@ export class UserRepositoryMySQL implements UserRepository {
 
   /**
    * 내부 사용자 식별자로 API Key 업데이트
-   * @param id 내부 사용자 식별자
-   * @param model 'openai' 또는 'deepseek'
-   * @param apiKey API Key
    */
-  async updateApiKeyById(id: number, model: 'openai' | 'deepseek', apiKey: string): Promise<void> {
+  async updateApiKeyById(id: number, model: ApiKeyModel, apiKey: string): Promise<void> {
+    const data: any = {};
     switch (model) {
       case 'openai':
-        await getMySql().query('UPDATE users SET api_key_openai=? WHERE id=?', [apiKey, id]);
+        data.apiKeyOpenai = apiKey;
         break;
       case 'deepseek':
-        await getMySql().query('UPDATE users SET api_key_deepseek=? WHERE id=?', [apiKey, id]);
+        data.apiKeyDeepseek = apiKey;
+        break;
+      case 'claude':
+        data.apiKeyClaude = apiKey;
+        break;
+      case 'gemini':
+        data.apiKeyGemini = apiKey;
         break;
     }
+
+    await prisma.user.update({
+      where: { id: BigInt(id) },
+      data,
+    });
   }
 
   /**
    * 내부 사용자 식별자로 API Key 삭제
-   * @param id 내부 사용자 식별자
-   * @param model 'openai' 또는 'deepseek'
    */
-  async deleteApiKeyById(id: number, model: 'openai' | 'deepseek'): Promise<void> {
+  async deleteApiKeyById(id: number, model: ApiKeyModel): Promise<void> {
+    const data: any = {};
     switch (model) {
       case 'openai':
-        await getMySql().query('UPDATE users SET api_key_openai=NULL WHERE id=?', [id]);
+        data.apiKeyOpenai = null;
         break;
       case 'deepseek':
-        await getMySql().query('UPDATE users SET api_key_deepseek=NULL WHERE id=?', [id]);
+        data.apiKeyDeepseek = null;
+        break;
+      case 'claude':
+        data.apiKeyClaude = null;
+        break;
+      case 'gemini':
+        data.apiKeyGemini = null;
         break;
     }
+
+    await prisma.user.update({
+      where: { id: BigInt(id) },
+      data,
+    });
   }
 
   /**
    * provider + provider_user_id로 단건 조회.
-   * @param provider 제공자
-   * @param providerUserId 제공자 측 사용자 ID
-   * @returns User 또는 null
    */
   async findByProvider(provider: Provider, providerUserId: string): Promise<User | null> {
-    const [rows] = await getMySql().query<RowDataPacket[]>(
-      'SELECT * FROM users WHERE provider=? AND provider_user_id=?',
-      [provider, providerUserId]
-    );
-    if (rows.length === 0) return null;
-    return mapUser(rows[0]);
+    const user = await prisma.user.findUnique({
+      where: {
+        provider_providerUserId: {
+          provider,
+          providerUserId,
+        },
+      },
+    });
+    if (!user) return null;
+    return this.mapUser(user);
   }
 
   /**
-   * 사용자 생성 후 방금 생성한 레코드를 재조회하여 반환.
-   * @param input provider/providerUserId/프로필 필드
-   * @returns 생성된 User 엔티티
+   * 사용자 생성
    */
   async create(input: {
     provider: Provider;
@@ -104,30 +121,20 @@ export class UserRepositoryMySQL implements UserRepository {
     displayName?: string | null;
     avatarUrl?: string | null;
   }): Promise<User> {
-    const [res] = await getMySql().query<ResultSetHeader>(
-      'INSERT INTO users(provider, provider_user_id, email, display_name, avatar_url) VALUES (?,?,?,?,?)',
-      [
-        input.provider,
-        input.providerUserId,
-        input.email ?? null,
-        input.displayName ?? null,
-        input.avatarUrl ?? null,
-      ]
-    );
-    const [rows] = await getMySql().query<RowDataPacket[]>('SELECT * FROM users WHERE id=?', [
-      res.insertId,
-    ]);
-    return mapUser(rows[0]);
+    const user = await prisma.user.create({
+      data: {
+        provider: input.provider,
+        providerUserId: input.providerUserId,
+        email: input.email,
+        displayName: input.displayName,
+        avatarUrl: input.avatarUrl,
+      },
+    });
+    return this.mapUser(user);
   }
 
   /**
-   * provider+provider_user_id 기준으로 레코드를 조회하고, 없으면 생성한다.
-   * @param input.provider 제공자
-   * @param input.providerUserId 제공자 측 사용자 ID
-   * @param input.email 이메일(선택)
-   * @param input.displayName 표시 이름(선택)
-   * @param input.avatarUrl 아바타 URL(선택)
-   * @returns User 엔티티
+   * findOrCreateFromProvider
    */
   async findOrCreateFromProvider(input: {
     provider: Provider;
@@ -136,44 +143,39 @@ export class UserRepositoryMySQL implements UserRepository {
     displayName?: string | null;
     avatarUrl?: string | null;
   }): Promise<User> {
+    // upsert is possible, but last_login_at logic in legacy code was:
+    // If exists -> update last_login_at, return object with new last_login_at
+    // If new -> create
+
+    // Using simple upsert logic or manual verify as before to keep exact behavior
     const existing = await this.findByProvider(input.provider, input.providerUserId);
     if (existing) {
-      await getMySql().query('UPDATE users SET last_login_at=CURRENT_TIMESTAMP WHERE id=?', [
-        existing.id,
-      ]);
-      return new User({
-        id: existing.id,
-        provider: existing.provider,
-        providerUserId: existing.providerUserId,
-        email: existing.email,
-        displayName: existing.displayName,
-        avatarUrl: existing.avatarUrl,
-        createdAt: existing.createdAt,
-        lastLoginAt: new Date(),
-        apiKeyOpenai: existing.apiKeyOpenai,
-        apiKeyDeepseek: existing.apiKeyDeepseek,
+      const updated = await prisma.user.update({
+        where: { id: BigInt(existing.id) },
+        data: { lastLoginAt: new Date() },
       });
+      return this.mapUser(updated);
     }
     return this.create(input);
   }
-}
 
-/**
- * RowDataPacket을 User 도메인 엔티티로 매핑한다.
- * @param r MySQL RowDataPacket(컬럼: users.*)
- * @returns User 엔티티(불변)
- */
-function mapUser(r: RowDataPacket): User {
-  return new User({
-    id: String(r.id),
-    provider: r.provider as Provider,
-    providerUserId: String(r.provider_user_id),
-    email: r.email ?? null,
-    displayName: r.display_name ?? null,
-    avatarUrl: r.avatar_url ?? null,
-    createdAt: new Date(r.created_at),
-    lastLoginAt: r.last_login_at ? new Date(r.last_login_at) : null,
-    apiKeyOpenai: r.api_key_openai ?? null,
-    apiKeyDeepseek: r.api_key_deepseek ?? null,
-  });
+  /**
+   * Prisma User -> Domain User 매핑
+   */
+  private mapUser(pUser: any): User {
+    return new User({
+      id: pUser.id.toString(),
+      provider: pUser.provider as Provider,
+      providerUserId: pUser.providerUserId,
+      email: pUser.email,
+      displayName: pUser.displayName,
+      avatarUrl: pUser.avatarUrl,
+      createdAt: pUser.createdAt,
+      lastLoginAt: pUser.lastLoginAt,
+      apiKeyOpenai: pUser.apiKeyOpenai,
+      apiKeyDeepseek: pUser.apiKeyDeepseek,
+      apiKeyClaude: pUser.apiKeyClaude,
+      apiKeyGemini: pUser.apiKeyGemini,
+    });
+  }
 }

@@ -1,0 +1,274 @@
+{
+  "nodes": [
+    {
+      "clusterId": "cluster_1",
+      "clusterName": "Content Monetization Challenges",
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "numMessages": 8,
+      "origId": "ee1fce2e-e238-415a-825b-1580642127a7",
+      "timestamp": null,
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "id": 0
+    },
+    {
+      "clusterId": "cluster_2",
+      "clusterName": "Collaboration Tools Effectiveness",
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "numMessages": 2,
+      "origId": "703de5ab-b7d3-454e-90a9-6de6668d4cd6",
+      "timestamp": null,
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "id": 1
+    },
+    {
+      "clusterId": "cluster_4",
+      "clusterName": "Design Principles and User Experience",
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "numMessages": 2,
+      "origId": "d6d261a1-ffcd-4107-b6af-636976f2197f",
+      "timestamp": null,
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "id": 2
+    },
+    {
+      "clusterId": "cluster_4",
+      "clusterName": "Design Principles and User Experience",
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "numMessages": 2,
+      "origId": "59543ada-e4c4-498e-8f37-609070edbd87",
+      "timestamp": null,
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "id": 12
+    },
+    {
+      "clusterId": "cluster_5",
+      "clusterName": "Impact of Technology on Employment",
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "numMessages": 2,
+      "origId": "dc2df743-8069-472a-93e9-e087907fdbd7",
+      "timestamp": null,
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "id": 8
+    },
+    {
+      "clusterId": "cluster_3",
+      "clusterName": "Technology and Ethics",
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "numMessages": 2,
+      "origId": "4beba588-80d5-43ab-bcdd-b149e186f359",
+      "timestamp": null,
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "id": 4
+    },
+    {
+      "clusterId": "cluster_4",
+      "clusterName": "Design Principles and User Experience",
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "numMessages": 4,
+      "origId": "edb1e81d-72f4-407b-8114-a63107061b83",
+      "timestamp": null,
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "id": 11
+    },
+    {
+      "clusterId": "cluster_4",
+      "clusterName": "Design Principles and User Experience",
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "numMessages": 2,
+      "origId": "5d4e8404-b88e-463f-9525-918a21e254ce",
+      "timestamp": null,
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "id": 5
+    },
+    {
+      "clusterId": "cluster_4",
+      "clusterName": "Design Principles and User Experience",
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "numMessages": 4,
+      "origId": "c9e4e720-90f9-43e6-9edb-82c6d72012ce",
+      "timestamp": null,
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "id": 9
+    },
+    {
+      "clusterId": "cluster_3",
+      "clusterName": "Technology and Ethics",
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "numMessages": 2,
+      "origId": "8ba6eae2-2f6b-4c17-b2bf-2b96e8e20f30",
+      "timestamp": null,
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "id": 6
+    },
+    {
+      "clusterId": "cluster_4",
+      "clusterName": "Design Principles and User Experience",
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "numMessages": 6,
+      "origId": "53c3223b-860a-4ca2-80e9-b373ce1f3899",
+      "timestamp": null,
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "id": 10
+    },
+    {
+      "clusterId": "cluster_3",
+      "clusterName": "Technology and Ethics",
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "numMessages": 8,
+      "origId": "6e001ee6-1dea-4258-b65d-31c841dd68f7",
+      "timestamp": null,
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "id": 3
+    },
+    {
+      "clusterId": "cluster_3",
+      "clusterName": "Technology and Ethics",
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "numMessages": 2,
+      "origId": "6c1421f1-79cd-4c63-a8ea-6acb856f47c2",
+      "timestamp": null,
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "id": 7
+    }
+  ],
+  "edges": [
+    {
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "intraCluster": true,
+      "source": 11,
+      "target": 12,
+      "type": "insight",
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "weight": 0.7700793147087097,
+      "id": "7::11->12"
+    },
+    {
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "intraCluster": true,
+      "source": 3,
+      "target": 4,
+      "type": "hard",
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "weight": 0.8014981150627136,
+      "id": "7::3->4"
+    },
+    {
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "intraCluster": true,
+      "source": 9,
+      "target": 11,
+      "type": "hard",
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "weight": 0.8102837800979614,
+      "id": "7::9->11"
+    },
+    {
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "intraCluster": true,
+      "source": 9,
+      "target": 12,
+      "type": "insight",
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "weight": 0.7108692526817322,
+      "id": "7::9->12"
+    }
+  ],
+  "clusters": [
+    {
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "description": "Discussions focused on the difficulties and factors affecting content monetization.",
+      "name": "Content Monetization Challenges",
+      "size": 1,
+      "themes": [
+        "content monetization",
+        "premium features",
+        "consumer demand"
+      ],
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "id": "cluster_1"
+    },
+    {
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "description": "Conversations about the use and effectiveness of collaboration tools in various settings.",
+      "name": "Collaboration Tools Effectiveness",
+      "size": 1,
+      "themes": [
+        "collaboration tools",
+        "effective utilization",
+        "teamwork"
+      ],
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "id": "cluster_2"
+    },
+    {
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "description": "Topics surrounding the relationship between technological advancements and ethical considerations.",
+      "name": "Technology and Ethics",
+      "size": 4,
+      "themes": [
+        "technology ethics",
+        "human-technology relationship",
+        "societal impact"
+      ],
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "id": "cluster_3"
+    },
+    {
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "description": "Exploration of how technology affects job markets and generational wage differences.",
+      "name": "Impact of Technology on Employment",
+      "size": 1,
+      "themes": [
+        "job market impact",
+        "employment changes",
+        "wage differences"
+      ],
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "id": "cluster_5"
+    },
+    {
+      "createdAt": "2025-12-20T18:21:22.101006Z",
+      "description": "Insights into design principles that enhance user experience and cognitive load.",
+      "name": "Design Principles and User Experience",
+      "size": 6,
+      "themes": [
+        "user-centered design",
+        "cognitive load",
+        "design effectiveness"
+      ],
+      "updatedAt": "2025-12-20T18:21:22.101006Z",
+      "userId": "7",
+      "id": "cluster_4"
+    }
+  ],
+  "stats": {
+    "nodes": 13,
+    "edges": 4,
+    "clusters": 5,
+    "generatedAt": "2025-12-20T18:21:22.101006Z",
+    "metadata": {
+      "source_generated_at": "2025-12-20T18:21:22.101006Z"
+    }
+  }
+}

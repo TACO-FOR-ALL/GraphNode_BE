@@ -17,8 +17,11 @@ import { AiApi } from './endpoints/ai.js';
  * @property fetch 커스텀 fetch 함수 (선택)
  * @property headers 기본 헤더 (선택)
  * @property credentials 인증 모드 (include | omit | same-origin)
+ * @property accessToken 초기 Access Token (선택)
  */
-export interface GraphNodeClientOptions extends Omit<BuilderOptions, 'baseUrl'> {}
+export interface GraphNodeClientOptions extends Omit<BuilderOptions, 'baseUrl' | 'accessToken'> {
+  accessToken?: string | null;
+}
 
 /**
  * GraphNode API 클라이언트
@@ -46,6 +49,7 @@ export class GraphNodeClient {
   readonly sync: SyncApi;
   readonly ai: AiApi;
   private readonly rb: RequestBuilder;
+  private _accessToken: string | null = null;
 
   constructor(opts: GraphNodeClientOptions = {}) {
     let fetchFn = opts.fetch;
@@ -61,11 +65,14 @@ export class GraphNodeClient {
       }
     }
 
+    this._accessToken = opts.accessToken ?? null;
+
     // 내부 고정 baseUrl 사용, FE는 fetch/headers/credentials 정도만 선택 주입 가능
     this.rb = createRequestBuilder({
       baseUrl: GRAPHNODE_BASE_URL,
       ...opts,
       fetch: fetchFn, // 바인딩된 fetch 주입
+      accessToken: () => this._accessToken, // 동적 토큰 주입을 위한 함수 전달
     });
     this.health = new HealthApi(this.rb);
     this.me = new MeApi(this.rb);
@@ -77,6 +84,14 @@ export class GraphNodeClient {
     this.appleAuth = new AppleAuthApi(GRAPHNODE_BASE_URL);
     this.sync = new SyncApi(this.rb);
     this.ai = new AiApi(this.rb);
+  }
+
+  /**
+   * Access Token을 설정합니다.
+   * @param token JWT Access Token 또는 null (로그아웃 시)
+   */
+  setAccessToken(token: string | null) {
+    this._accessToken = token;
   }
 }
 

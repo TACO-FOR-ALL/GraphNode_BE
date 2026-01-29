@@ -12,50 +12,13 @@ import request from 'supertest';
 
 import { createApp } from '../../src/bootstrap/server';
 
-// Mock express-session to allow simulating destroy errors
-jest.mock('express-session', () => {
-  const originalSession = jest.requireActual('express-session');
-  const mockSession = (options: any) => {
-    const middleware = originalSession(options);
-    return (req: any, res: any, next: any) => {
-      middleware(req, res, (err: any) => {
-        if (err) return next(err);
-        // Intercept session.destroy if a specific header is present
-        if (req.headers['x-test-error'] === 'true' && req.session) {
-          req.session.destroy = (cb: any) => {
-             cb(new Error('Session destroy failed'));
-          };
-        }
-        
-        // Simulate sync error
-        if (req.headers['x-test-throw'] === 'true') {
-           req.session.destroy = () => { throw new Error('Sync error'); };
-        }
-
-        next();
-      });
-    };
-  };
-  // Ensure Store and other properties are available
-  mockSession.Store = originalSession.Store;
-  return mockSession;
-});
-
 // 외부 네트워크 차단: GoogleOAuthService 는 목으로 대체
 jest.mock('../../src/core/services/GoogleOAuthService', () => {
   return {
     GoogleOAuthService: class {
       constructor(_cfg: any) {}
       buildAuthUrl(state: string) {
-        const u = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-        u.searchParams.set('client_id', 'test-client');
-        u.searchParams.set('redirect_uri', 'http://localhost:3000/auth/google/callback');
-        u.searchParams.set('response_type', 'code');
-        u.searchParams.set('scope', 'openid email profile');
-        u.searchParams.set('state', state);
-        u.searchParams.set('access_type', 'offline');
-        u.searchParams.set('prompt', 'consent');
-        return u.toString();
+        return `http://mock.auth/url?state=${state}`;
       }
       async exchangeCode(_code: string) {
         return { access_token: 'at', expires_in: 3600, token_type: 'Bearer' };
@@ -63,7 +26,7 @@ jest.mock('../../src/core/services/GoogleOAuthService', () => {
       async fetchUserInfo(_token: any) {
         return { sub: 'google-uid-1', email: 'u@example.com', name: 'U', picture: 'https://img' };
       }
-    }
+    },
   };
 });
 
@@ -72,9 +35,13 @@ jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => {
   return {
     UserRepositoryMySQL: class {
       async findOrCreateFromProvider() {
-        return { id: 43 } as any;
+        return { id: 'u_43' } as any;
       }
-    }
+      async findById(id: any) {
+        if (id === 'u_43') return { id: 'u_43', email: 'u@example.com' };
+        return null;
+      }
+    },
   };
 });
 
@@ -83,102 +50,56 @@ function appWithTestEnv() {
   process.env.OAUTH_GOOGLE_CLIENT_ID = 'test-client';
   process.env.OAUTH_GOOGLE_CLIENT_SECRET = 'test-secret';
   process.env.OAUTH_GOOGLE_REDIRECT_URI = 'http://localhost:3000/auth/google/callback';
-  process.env.SESSION_SECRET = 'test-secret';
   process.env.MYSQL_URL = 'mysql://user:pass@localhost:3306/db';
   process.env.MONGODB_URL = 'mongodb://localhost:27017/db';
   process.env.QDRANT_URL = 'http://localhost:6333';
   process.env.QDRANT_API_KEY = 'test-key';
   process.env.QDRANT_COLLECTION_NAME = 'test-collection';
   process.env.REDIS_URL = 'redis://localhost:6379';
+  process.env.JWT_SECRET = 'test-jwt-secret';
   return createApp();
 }
 
 describe('Auth session (me/logout)', () => {
-  test('GET /v1/me without session -> 401', async () => {
+  test('GET /v1/me without token -> 401', async () => {
     const app = appWithTestEnv();
-    // 액션: 세션 없이 /v1/me 호출
     const res = await request(app).get('/v1/me');
-    // 기대: 401 Problem Details
     expect(res.status).toBe(401);
-    expect(res.headers['content-type']).toContain('application/problem+json');
   });
 
-  test('login via google -> me 200; logout -> me 401', async () => {
+  test('OAuth mock flow -> /v1/me 200', async () => {
     const app = appWithTestEnv();
-    // 세션 만들기: Google OAuth 목 플로우(start → callback)
-    const start = await request(app).get('/auth/google/start');
-    const cookie = start.headers['set-cookie'];
-    const location = start.headers['location'] as string;
-    const state = new URL(location).searchParams.get('state') || '';
-    const cb = await request(app).get('/auth/google/callback').set('Cookie', cookie).query({ code: 'ok', state });
-    expect(cb.status).toBe(200);
+    const agent = request.agent(app);
 
-    // Update cookies with those set by callback (gn-logged-in, gn-profile)
-    const cbCookies = cb.headers['set-cookie'];
-    const allCookies = [...(cookie || []), ...(cbCookies || [])];
+    // 1. Start
+    const startRes = await agent.get('/auth/google/start').expect(302);
+    const location = startRes.headers['location'];
+    const state = new URL(location).searchParams.get('state');
 
-    // 로그인된 세션으로 /v1/me → 200
-    const me200 = await request(app).get('/v1/me').set('Cookie', allCookies);
-    expect(me200.status).toBe(200);
-    expect(me200.body.userId).toBeDefined();
-    expect(me200.body.profile).toBeDefined(); // Should be present now
+    // 2. Callback
+    await agent.get('/auth/google/callback').query({ code: 'mock_code', state }).expect(200);
 
-    // 로그아웃 후 → 204
-    const lo = await request(app).post('/auth/logout').set('Cookie', allCookies);
-    expect(lo.status).toBe(204);
-
-    // 다시 /v1/me → 401
-    const me401 = await request(app).get('/v1/me').set('Cookie', allCookies);
-    expect(me401.status).toBe(401);
+    // 3. /v1/me check
+    const meRes = await agent.get('/v1/me').expect(200);
+    expect(meRes.body.me.id).toBe('u_43');
   });
 
-  test('POST /auth/logout handles session destroy error', async () => {
+  test('/auth/logout clears cookies', async () => {
     const app = appWithTestEnv();
-    
-    // The mock express-session above will intercept this request
-    // based on the x-test-error header
+    const agent = request.agent(app);
 
-    const res = await request(app)
-      .post('/auth/logout')
-      .set('x-test-error', 'true');
+    // Login
+    const startRes = await agent.get('/auth/google/start');
+    const state = new URL(startRes.headers['location']).searchParams.get('state');
+    await agent.get('/auth/google/callback').query({ code: 'mock_code', state }).expect(200);
 
-    expect(res.status).toBe(500);
-    expect(res.body.type).toContain('unknown-error');
-  });
+    // Verify
+    await agent.get('/v1/me').expect(200);
 
-  test('POST /auth/logout handles synchronous error', async () => {
-    const app = appWithTestEnv();
-    const res = await request(app)
-      .post('/auth/logout')
-      .set('x-test-throw', 'true');
+    // Logout
+    await agent.post('/auth/logout').expect(204);
 
-    expect(res.status).toBe(500);
-    expect(res.body.type).toContain('unknown-error');
-  });
-
-  test('GET /v1/me with invalid gn-profile cookie -> ignores profile', async () => {
-    const app = appWithTestEnv();
-    // Login first to get a valid session
-    const start = await request(app).get('/auth/google/start');
-    const cookie = start.headers['set-cookie'];
-    const location = start.headers['location'] as string;
-    const state = new URL(location).searchParams.get('state') || '';
-    const cb = await request(app).get('/auth/google/callback').set('Cookie', cookie).query({ code: 'ok', state });
-    
-    const cbCookies = cb.headers['set-cookie'] as unknown as string[];
-    // We need to keep the session cookie (sid) valid
-    const sessionCookie = cbCookies.find((c: string) => c.startsWith('sid'));
-    if (!sessionCookie) throw new Error('Session cookie not found');
-
-    // Add invalid gn-profile cookie (base64url 'ew' -> '{' which is invalid JSON)
-    const invalidProfileCookie = 'gn-profile=ew; Path=/; HttpOnly';
-    
-    const cookies = [sessionCookie, invalidProfileCookie];
-
-    const res = await request(app).get('/v1/me').set('Cookie', cookies);
-    
-    expect(res.status).toBe(200);
-    expect(res.body.userId).toBeDefined();
-    expect(res.body.profile).toBeUndefined(); // Profile parsing failed, so it should be undefined
+    // After logout
+    await agent.get('/v1/me').expect(401);
   });
 });

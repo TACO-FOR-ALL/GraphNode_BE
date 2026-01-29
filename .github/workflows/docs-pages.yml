@@ -2,7 +2,7 @@ name: Docs Pages
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ['main']
   # 수동 실행 버튼(초기 디버그용)
   workflow_dispatch:
 
@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "pages"
+  group: 'pages'
   cancel-in-progress: true
 
 jobs:

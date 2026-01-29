@@ -15,9 +15,9 @@ jest.mock('../../src/infra/db/mongodb', () => ({
       commitTransaction: jest.fn(),
       abortTransaction: jest.fn(),
       endSession: jest.fn(),
-      withTransaction: jest.fn(async (cb) => await cb())
-    })
-  })
+      withTransaction: jest.fn(async (cb) => await cb()),
+    }),
+  }),
 }));
 
 describe('SyncService', () => {
@@ -59,7 +59,7 @@ describe('SyncService', () => {
     it('should fetch modified data from all services', async () => {
       const userId = 'u1';
       const since = new Date();
-      
+
       mockConvSvc.findModifiedSince.mockResolvedValue([]);
       mockMsgSvc.findModifiedSince.mockResolvedValue([]);
       mockNoteSvc.findNotesModifiedSince.mockResolvedValue([]);

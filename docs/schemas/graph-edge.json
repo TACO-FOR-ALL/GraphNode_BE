@@ -49,12 +49,5 @@
       "format": "date-time"
     }
   },
-  "required": [
-    "userId",
-    "source",
-    "target",
-    "weight",
-    "type",
-    "intraCluster"
-  ]
+  "required": ["userId", "source", "target", "weight", "type", "intraCluster"]
 }

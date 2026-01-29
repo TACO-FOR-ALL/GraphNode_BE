@@ -18,14 +18,34 @@ function cookieOpts() {
   const sameSite = secure ? 'none' : 'lax';
 
   const cookieConfig = {
-      httpOnly: false,
-      sameSite: sameSite as 'none' | 'lax',
-      secure: secure,
+    httpOnly: false,
+    sameSite: sameSite as 'none' | 'lax',
+    secure: secure,
   };
-  
-
 
   return { ...cookieConfig, path: '/', ...(maxAge ? { maxAge } : {}) };
+}
+
+/**
+ * OAuth State용 쿠키 옵션 (보안 필수)
+ * - HttpOnly: true
+ * - MaxAge: 10분
+ * - Signed: true (서명됨)
+ */
+export function getOauthStateCookieOpts() {
+  const isProd = process.env.NODE_ENV === 'production';
+  const insecure = process.env.DEV_INSECURE_COOKIES === 'true';
+  const secure = isProd && !insecure;
+  const sameSite = secure ? 'none' : 'lax';
+
+  return {
+    httpOnly: true,
+    secure: secure,
+    sameSite: sameSite as 'none' | 'lax',
+    signed: true,
+    maxAge: 10 * 60 * 1000, // 10분
+    path: '/',
+  };
 }
 
 /**
@@ -35,7 +55,15 @@ function cookieOpts() {
  * @param res Express Response
  * @param profile 표시용 프로필(선택)
  */
-export function setHelperLoginCookies(res: Response, profile?: { id: string | number; displayName?: string | null; avatarUrl?: string | null; email?: string | null }) {
+export function setHelperLoginCookies(
+  res: Response,
+  profile?: {
+    id: string | number;
+    displayName?: string | null;
+    avatarUrl?: string | null;
+    email?: string | null;
+  }
+) {
   const opts = cookieOpts();
   res.cookie('gn-logged-in', '1', opts);
   if (profile) {

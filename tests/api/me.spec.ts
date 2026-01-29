@@ -149,7 +149,7 @@ describe('MeController', () => {
       mockGetUserId.mockReturnValue(userId);
       mockUserService.getApiKeys.mockRejectedValue(new NotFoundError('User not found'));
 
-      const res = await request(app).get('/v1/me/api-keys');
+      const res = await request(app).get('/v1/me/api-keys/openai');
 
       expect(res.status).toBe(404);
       expect(res.body.type).toContain('not-found');

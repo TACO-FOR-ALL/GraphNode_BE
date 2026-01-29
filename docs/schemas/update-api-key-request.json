@@ -1,0 +1,10 @@
+{
+  "$id": "https://graphnode.dev/schemas/update-api-key-request.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "UpdateApiKeyRequest",
+  "type": "object",
+  "properties": {
+    "apiKey": { "type": "string", "minLength": 1 }
+  },
+  "required": ["apiKey"]
+}

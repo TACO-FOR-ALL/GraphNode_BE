@@ -3,7 +3,6 @@ import OpenAI from 'openai';
 
 import { bindSessionUser } from '../middlewares/session';
 import { requireLogin } from '../middlewares/auth';
-import type { UserRepositoryMySQL } from '../../infra/repositories/UserRepositoryMySQL';
 import { getUserIdFromRequest } from '../utils/request';
 
 type Mode = 'chat' | 'summary' | 'note';
@@ -26,7 +25,9 @@ type ChatStreamRequestBody = {
  * - 구조는 `me.ts`와 동일하게 Router 팩토리 함수 형태를 따른다.
  * - 기능은 기존 `agent.test.ts`의 /chat/stream SSE 로직만 사용한다.
  */
-export function createAgentRouter(userRepository: UserRepositoryMySQL): Router {
+export function createAgentRouter(userRepository: {
+  findApiKeyById(userId: number, provider: string): Promise<string | null>;
+}): Router {
   const router = Router();
 
   router.use(bindSessionUser);
@@ -56,7 +57,6 @@ export function createAgentRouter(userRepository: UserRepositoryMySQL): Router {
    * POST /v1/agent/chat/stream
    */
   router.post('/chat/stream', async (req, res) => {
-
     // SSE setup
     const { sendEvent } = setupSSE(res);
 
@@ -142,7 +142,7 @@ export function createAgentRouter(userRepository: UserRepositoryMySQL): Router {
       // 돌아온 결과 파싱
       const classifierContent = classifierResp.choices[0]?.message?.content ?? '{"mode":"chat"}';
 
-      // 
+      //
       let mode: Mode = 'chat';
 
       try {

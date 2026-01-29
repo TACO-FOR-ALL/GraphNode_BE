@@ -5,19 +5,19 @@ rules: {}
 
 overrides:
   - files:
-      - "docs/schemas/*.json"
+      - 'docs/schemas/*.json'
     rules:
       schema-must-declare-dialect:
         description: JSON Schema 2020-12 dialect 선언은 필수입니다.
         severity: error
-        given: "$"
+        given: '$'
         then:
-          field: "$schema"
+          field: '$schema'
           function: truthy
       schema-must-declare-id:
         description: JSON Schema는 고유 $id를 가져야 합니다.
         severity: error
-        given: "$"
+        given: '$'
         then:
-          field: "$id"
+          field: '$id'
           function: truthy

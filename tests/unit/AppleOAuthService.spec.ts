@@ -12,7 +12,7 @@ describe('AppleOAuthService', () => {
       teamId: 'test-team-id',
       keyId: 'test-key-id',
       privateKey: 'test-private-key',
-      redirectUri: 'http://localhost/callback'
+      redirectUri: 'http://localhost/callback',
     });
   });
 

@@ -1,11 +1,11 @@
 /**
  * 모듈: Google OAuth 서비스
- * 
+ *
  * 책임:
  * - Google OAuth2/OIDC 인증 흐름을 처리합니다.
  * - 인증 코드(Authorization Code)를 액세스 토큰으로 교환합니다.
  * - 액세스 토큰을 사용하여 사용자 프로필 정보를 조회합니다.
- * 
+ *
  * 외부 의존성:
  * - undici (fetch API): HTTP 요청
  * - Google OAuth/OIDC 엔드포인트
@@ -17,7 +17,7 @@ import { UpstreamError } from '../../shared/errors/domain';
 
 /**
  * Google 토큰 응답 인터페이스
- * 
+ *
  * @property access_token 액세스 토큰 (API 호출용)
  * @property expires_in 토큰 만료 시간 (초)
  * @property refresh_token 리프레시 토큰 (액세스 토큰 갱신용)
@@ -36,7 +36,7 @@ export interface GoogleTokenResponse {
 
 /**
  * Google 사용자 정보 인터페이스 (OIDC UserInfo)
- * 
+ *
  * @property sub 사용자 고유 식별자 (Subject)
  * @property email 이메일 주소
  * @property email_verified 이메일 인증 여부
@@ -53,7 +53,7 @@ export interface GoogleUserInfo {
 
 /**
  * Google OAuth 서비스 클래스
- * 
+ *
  * 역할:
  * - 컨트롤러에서 복잡한 OAuth 로직을 분리하여 처리합니다.
  * - 외부 Google API와의 통신을 담당합니다.
@@ -64,9 +64,9 @@ export class GoogleOAuthService {
 
   /**
    * Google 로그인 URL 생성
-   * 
+   *
    * 사용자를 Google 로그인 페이지로 리다이렉트하기 위한 URL을 만듭니다.
-   * 
+   *
    * @param state CSRF 공격 방지를 위한 랜덤 문자열 (보안 필수)
    * @returns Google 로그인 페이지 URL
    */
@@ -84,10 +84,10 @@ export class GoogleOAuthService {
 
   /**
    * 인증 코드를 토큰으로 교환
-   * 
+   *
    * 사용자가 로그인을 완료하면 Google이 보내주는 'code'를 사용하여
    * 실제 API 호출에 필요한 'access_token'을 받아옵니다.
-   * 
+   *
    * @param code Google로부터 받은 인증 코드
    * @returns 토큰 응답 객체
    * @throws {UpstreamError} 토큰 교환 실패 시
@@ -98,43 +98,43 @@ export class GoogleOAuthService {
       client_secret: this.config.clientSecret,
       code,
       grant_type: 'authorization_code',
-      redirect_uri: this.config.redirectUri
+      redirect_uri: this.config.redirectUri,
     });
-    
+
     const resp = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body
+      body,
     });
 
     if (!resp.ok) {
       const text = await resp.text().catch(() => '');
       throw new UpstreamError(`Google token exchange failed: ${resp.status} ${text}`);
     }
-    
+
     const json = await resp.json();
     return json as GoogleTokenResponse;
   }
 
   /**
    * 사용자 정보 조회
-   * 
+   *
    * 액세스 토큰을 사용하여 Google 사용자 정보(이메일, 이름 등)를 가져옵니다.
-   * 
+   *
    * @param token 토큰 응답 객체
    * @returns 사용자 정보 객체
    * @throws {UpstreamError} 조회 실패 시
    */
   async fetchUserInfo(token: GoogleTokenResponse): Promise<GoogleUserInfo> {
     const resp = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
-      headers: { Authorization: `Bearer ${token.access_token}` }
+      headers: { Authorization: `Bearer ${token.access_token}` },
     });
 
     if (!resp.ok) {
       const text = await resp.text().catch(() => '');
       throw new UpstreamError(`Google userinfo failed: ${resp.status} ${text}`);
     }
-    
+
     const json = await resp.json();
     return json as GoogleUserInfo;
   }

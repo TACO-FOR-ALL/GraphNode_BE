@@ -31,10 +31,7 @@
     },
     "timestamp": {
       "description": "The timestamp of the conversation (ISO 8601) or null.",
-      "oneOf": [
-        { "type": "string", "format": "date-time" },
-        { "type": "null" }
-      ]
+      "oneOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }]
     },
     "numMessages": {
       "description": "The number of messages included in this node.",
@@ -52,13 +49,5 @@
       "format": "date-time"
     }
   },
-  "required": [
-    "id",
-    "userId",
-    "origId",
-    "clusterId",
-    "clusterName",
-    "timestamp",
-    "numMessages"
-  ]
+  "required": ["id", "userId", "origId", "clusterId", "clusterName", "timestamp", "numMessages"]
 }

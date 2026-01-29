@@ -2,6 +2,10 @@
  * MySQL 초기화 스키마 정의.
  * 빌드 시 정적 파일(.sql) 누락 문제를 방지하기 위해 TypeScript 상수로 관리한다.
  */
+/**
+ * @deprecated Prisma Migration으로 인해 더 이상 사용되지 않습니다.
+ * `prisma/schema.prisma`를 참고하세요.
+ */
 export const MYSQL_INIT_SCHEMA = `
 -- MySQL init schema for GraphNode
 CREATE TABLE IF NOT EXISTS users (

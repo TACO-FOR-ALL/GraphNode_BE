@@ -40,11 +40,13 @@
 ```
 
 ## 네이밍 규칙
+
 - 파일/폴더: 케밥 케이스(kebab-case) 권장. 클래스/컴포넌트는 PascalCase.
 - 타입/인터페이스: PascalCase. 공용 타입은 `src/shared/dtos`.
 - 환경변수/상수: UPPER_SNAKE_CASE.
 
 ## 빠른 참조
+
 - 서버 부트스트랩: `src/bootstrap/server.ts`
 - 헬스 체크 라우트: `src/app/routes/health.ts` (→ `/healthz`, `/v1/healthz`)
 - 에러 규격 변환: `src/app/presenters/problem.ts`

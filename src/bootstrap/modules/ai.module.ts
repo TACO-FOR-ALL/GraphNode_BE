@@ -12,7 +12,8 @@ export function makeAiRouter(): Router {
   const aiInteractionService = container.getAiInteractionService();
 
   // Router(factory)
-  return createAiRouter({ 
-    chatManagementService, 
-    aiInteractionService });
+  return createAiRouter({
+    chatManagementService,
+    aiInteractionService,
+  });
 }

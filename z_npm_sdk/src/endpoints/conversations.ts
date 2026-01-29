@@ -9,16 +9,16 @@ import type { MessageCreateDto, MessageUpdateDto, MessageDto } from '../types/me
 
 /**
  * Conversations API
- * 
+ *
  * AI와의 대화(Conversation) 및 메시지(Message)를 관리하는 API 클래스입니다.
  * `/v1/ai/conversations` 엔드포인트 하위의 API들을 호출합니다.
- * 
+ *
  * 주요 기능:
  * - 대화 생성, 조회, 수정, 삭제 (`create`, `get`, `list`, `update`, `delete`)
  * - 대화 일괄 생성 (`bulkCreate`)
  * - 삭제된 대화 복원 (`restore`)
  * - 메시지 추가 (`createMessage`)
- * 
+ *
  * @public
  */
 export class ConversationsApi {
@@ -44,7 +44,7 @@ export class ConversationsApi {
    *     { role: 'user', content: 'Let\'s brainstorm some ideas.' }
    *   ]
    * });
-   * 
+   *
    * console.log(response.data);
    * // Output:
    *  {
@@ -80,7 +80,7 @@ export class ConversationsApi {
    *     }
    *   ]
    * });
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {
@@ -115,7 +115,7 @@ export class ConversationsApi {
    * @returns 대화 목록 (ConversationDto 배열)
    * @example
    * const response = await client.conversations.list();
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * [
@@ -150,7 +150,7 @@ export class ConversationsApi {
    *    - `updatedAt` (string): 수정 일시
    * @example
    * const response = await client.conversations.get('conv-123');
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {
@@ -177,7 +177,7 @@ export class ConversationsApi {
    * const response = await client.conversations.update('conv-123', {
    *   title: 'Renamed Conversation'
    * });
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {
@@ -201,7 +201,7 @@ export class ConversationsApi {
    * @param permanent 영구 삭제 여부 (true: 영구 삭제, false: soft delete)
    * @example
    * const response = await client.conversations.delete('conv-123');
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {
@@ -232,7 +232,7 @@ export class ConversationsApi {
    * @returns 복구된 대화 정보
    * @example
    * const response = await client.conversations.restore('conv-123');
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {
@@ -266,7 +266,7 @@ export class ConversationsApi {
    *   role: 'user',
    *   content: 'Tell me a joke about programming.'
    * });
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {
@@ -291,7 +291,7 @@ export class ConversationsApi {
    * const response = await client.conversations.updateMessage('conv-123', 'msg-999', {
    *   content: 'Tell me a joke about Python.'
    * });
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {
@@ -319,7 +319,7 @@ export class ConversationsApi {
    * @returns 성공 시 빈 응답
    * @example
    * const response = await client.conversations.deleteMessage('conv-123', 'msg-999');
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {
@@ -344,7 +344,7 @@ export class ConversationsApi {
    * @returns 복구된 메시지 정보
    * @example
    * const response = await client.conversations.restoreMessage('conv-123', 'msg-999');
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {

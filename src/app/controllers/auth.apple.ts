@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto';
 import { container } from '../../bootstrap/container';
 import { completeLogin } from '../utils/authLogin';
 import { ValidationError } from '../../shared/errors/domain';
+import { getOauthStateCookieOpts } from '../utils/sessionCookies';
 
 function getService() {
   return container.getAppleOAuthService();
@@ -23,7 +24,7 @@ function getService() {
  */
 export async function start(req: Request, res: Response, _next: NextFunction) {
   const state = randomUUID();
-  (req.session as any).oauth_state_apple = state;
+  res.cookie('oauth_state_apple', state, getOauthStateCookieOpts());
 
   const svc = getService();
   const url = svc.buildAuthUrl(state);
@@ -51,10 +52,14 @@ export async function callback(req: Request, res: Response, next: NextFunction) 
       throw new ValidationError('Missing code or state');
     }
 
-    const expected = (req.session as any).oauth_state_apple;
+    // 서명된 쿠키에서 state 검증
+    const expected = req.signedCookies['oauth_state_apple'];
     if (!expected || expected !== state) {
       throw new ValidationError('Invalid state');
     }
+
+    // 검증 완료 후 쿠키 제거
+    res.clearCookie('oauth_state_apple', { path: '/' });
 
     const svc = getService();
     const tokenSet = await svc.exchangeCode(code);

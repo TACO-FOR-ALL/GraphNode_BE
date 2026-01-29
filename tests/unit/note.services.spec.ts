@@ -37,11 +37,49 @@ class InMemoryNoteRepo implements NoteRepository {
 
   async listNotes(ownerUserId: string, folderId: string | null): Promise<NoteDoc[]> {
     return Array.from(this.notes.values()).filter(
-      n => n.ownerUserId === ownerUserId && n.folderId === folderId
+      (n) => n.ownerUserId === ownerUserId && n.folderId === folderId
     );
   }
 
-  async updateNote(id: string, ownerUserId: string, updates: Partial<NoteDoc>, session?: ClientSession): Promise<NoteDoc | null> {
+  async deleteAllNotes(ownerUserId: string, session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const [id, doc] of this.notes) {
+      if (doc.ownerUserId === ownerUserId) {
+        this.notes.delete(id);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  async deleteAllNotesInFolders(ownerUserId: string, session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const [id, doc] of this.notes) {
+      if (doc.ownerUserId === ownerUserId && doc.folderId) {
+        this.notes.delete(id);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  async deleteAllFolders(ownerUserId: string, session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const [id, doc] of this.folders) {
+      if (doc.ownerUserId === ownerUserId) {
+        this.folders.delete(id);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  async updateNote(
+    id: string,
+    ownerUserId: string,
+    updates: Partial<NoteDoc>,
+    session?: ClientSession
+  ): Promise<NoteDoc | null> {
     const doc = this.notes.get(id);
     if (!doc || doc.ownerUserId !== ownerUserId) return null;
     const updated = { ...doc, ...updates };
@@ -76,15 +114,23 @@ class InMemoryNoteRepo implements NoteRepository {
 
   async findNotesModifiedSince(ownerUserId: string, since: Date): Promise<NoteDoc[]> {
     return Array.from(this.notes.values()).filter(
-      n => n.ownerUserId === ownerUserId && n.updatedAt >= since
+      (n) => n.ownerUserId === ownerUserId && n.updatedAt >= since
     );
   }
 
-  async deleteNotesByFolderIds(folderIds: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+  async deleteNotesByFolderIds(
+    folderIds: string[],
+    ownerUserId: string,
+    session?: ClientSession
+  ): Promise<number> {
     return this.hardDeleteNotesByFolderIds(folderIds, ownerUserId, session);
   }
 
-  async softDeleteNotesByFolderIds(folderIds: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+  async softDeleteNotesByFolderIds(
+    folderIds: string[],
+    ownerUserId: string,
+    session?: ClientSession
+  ): Promise<number> {
     let count = 0;
     for (const [id, note] of Array.from(this.notes.entries())) {
       if (note.ownerUserId === ownerUserId && note.folderId && folderIds.includes(note.folderId)) {
@@ -95,7 +141,11 @@ class InMemoryNoteRepo implements NoteRepository {
     return count;
   }
 
-  async hardDeleteNotesByFolderIds(folderIds: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+  async hardDeleteNotesByFolderIds(
+    folderIds: string[],
+    ownerUserId: string,
+    session?: ClientSession
+  ): Promise<number> {
     let count = 0;
     for (const [id, note] of Array.from(this.notes.entries())) {
       if (note.ownerUserId === ownerUserId && note.folderId && folderIds.includes(note.folderId)) {
@@ -106,7 +156,11 @@ class InMemoryNoteRepo implements NoteRepository {
     return count;
   }
 
-  async restoreNotesByFolderIds(folderIds: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+  async restoreNotesByFolderIds(
+    folderIds: string[],
+    ownerUserId: string,
+    session?: ClientSession
+  ): Promise<number> {
     let count = 0;
     for (const [id, note] of Array.from(this.notes.entries())) {
       if (note.ownerUserId === ownerUserId && note.folderId && folderIds.includes(note.folderId)) {
@@ -131,11 +185,16 @@ class InMemoryNoteRepo implements NoteRepository {
 
   async listFolders(ownerUserId: string, parentId: string | null): Promise<FolderDoc[]> {
     return Array.from(this.folders.values()).filter(
-      f => f.ownerUserId === ownerUserId && f.parentId === parentId
+      (f) => f.ownerUserId === ownerUserId && f.parentId === parentId
     );
   }
 
-  async updateFolder(id: string, ownerUserId: string, updates: Partial<FolderDoc>, session?: ClientSession): Promise<FolderDoc | null> {
+  async updateFolder(
+    id: string,
+    ownerUserId: string,
+    updates: Partial<FolderDoc>,
+    session?: ClientSession
+  ): Promise<FolderDoc | null> {
     const doc = this.folders.get(id);
     if (!doc || doc.ownerUserId !== ownerUserId) return null;
     const updated = { ...doc, ...updates };
@@ -166,11 +225,19 @@ class InMemoryNoteRepo implements NoteRepository {
     return descendants;
   }
 
-  async deleteFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+  async deleteFolders(
+    ids: string[],
+    ownerUserId: string,
+    session?: ClientSession
+  ): Promise<number> {
     return this.hardDeleteFolders(ids, ownerUserId, session);
   }
 
-  async softDeleteFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+  async softDeleteFolders(
+    ids: string[],
+    ownerUserId: string,
+    session?: ClientSession
+  ): Promise<number> {
     let count = 0;
     for (const id of ids) {
       const doc = this.folders.get(id);
@@ -182,7 +249,11 @@ class InMemoryNoteRepo implements NoteRepository {
     return count;
   }
 
-  async hardDeleteFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+  async hardDeleteFolders(
+    ids: string[],
+    ownerUserId: string,
+    session?: ClientSession
+  ): Promise<number> {
     let count = 0;
     for (const id of ids) {
       const doc = this.folders.get(id);
@@ -194,7 +265,11 @@ class InMemoryNoteRepo implements NoteRepository {
     return count;
   }
 
-  async restoreFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+  async restoreFolders(
+    ids: string[],
+    ownerUserId: string,
+    session?: ClientSession
+  ): Promise<number> {
     let count = 0;
     for (const id of ids) {
       const doc = this.folders.get(id);
@@ -208,7 +283,7 @@ class InMemoryNoteRepo implements NoteRepository {
 
   async findFoldersModifiedSince(ownerUserId: string, since: Date): Promise<FolderDoc[]> {
     return Array.from(this.folders.values()).filter(
-      f => f.ownerUserId === ownerUserId && f.updatedAt >= since
+      (f) => f.ownerUserId === ownerUserId && f.updatedAt >= since
     );
   }
 }
@@ -243,7 +318,7 @@ describe('NoteService', () => {
   test('listNotes returns notes in folder', async () => {
     await service.createNote('u1', { content: 'root note', folderId: null });
     await service.createNote('u1', { content: 'folder note', folderId: 'f1' });
-    
+
     const rootNotes = await service.listNotes('u1', null);
     expect(rootNotes).toHaveLength(1);
     expect(rootNotes[0].content).toBe('root note');
@@ -268,7 +343,7 @@ describe('NoteService', () => {
 
   test('soft delete and restore note', async () => {
     const created = await service.createNote('u1', { content: 'To restore' });
-    
+
     // Soft Delete
     await service.deleteNote('u1', created.id, false);
     const doc = await repo.getNote(created.id, 'u1');
@@ -284,7 +359,7 @@ describe('NoteService', () => {
     const folder = await service.createFolder('u1', { name: 'My Folder' });
     expect(folder.name).toBe('My Folder');
     expect(folder.parentId).toBeNull();
-    
+
     const doc = await repo.getFolder(folder.id, 'u1');
     expect(doc?.ownerUserId).toBe('u1');
   });
@@ -295,10 +370,13 @@ describe('NoteService', () => {
     //   - childFolder
     //     - noteInChild
     //   - noteInRoot
-    
+
     const rootFolder = await service.createFolder('u1', { name: 'Root' });
-    const childFolder = await service.createFolder('u1', { name: 'Child', parentId: rootFolder.id });
-    
+    const childFolder = await service.createFolder('u1', {
+      name: 'Child',
+      parentId: rootFolder.id,
+    });
+
     const noteInRoot = await service.createNote('u1', { content: 'n1', folderId: rootFolder.id });
     const noteInChild = await service.createNote('u1', { content: 'n2', folderId: childFolder.id });
 
@@ -314,15 +392,18 @@ describe('NoteService', () => {
 
   test('restoreFolder performs cascade restore', async () => {
     const rootFolder = await service.createFolder('u1', { name: 'Root' });
-    const childFolder = await service.createFolder('u1', { name: 'Child', parentId: rootFolder.id });
+    const childFolder = await service.createFolder('u1', {
+      name: 'Child',
+      parentId: rootFolder.id,
+    });
     const noteInChild = await service.createNote('u1', { content: 'n2', folderId: childFolder.id });
 
     // Soft Delete
     await service.deleteFolder('u1', rootFolder.id, false);
-    
+
     const rootDoc = await repo.getFolder(rootFolder.id, 'u1');
     expect(rootDoc?.deletedAt).not.toBeNull();
-    
+
     const childDoc = await repo.getFolder(childFolder.id, 'u1');
     expect(childDoc?.deletedAt).not.toBeNull();
 
@@ -346,11 +427,13 @@ describe('NoteService', () => {
     // Mock getMongo to throw error in transaction
     const { getMongo } = require('../../src/infra/db/mongodb');
     const originalGetMongo = getMongo();
-    
+
     // Override mock for this test
     require('../../src/infra/db/mongodb').getMongo = () => ({
       startSession: () => ({
-        withTransaction: async () => { throw new Error('Tx Failed'); },
+        withTransaction: async () => {
+          throw new Error('Tx Failed');
+        },
         endSession: async () => {},
       }),
     });

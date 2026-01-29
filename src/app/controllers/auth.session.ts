@@ -11,15 +11,16 @@ import { clearHelperLoginCookies } from '../utils/sessionCookies';
  */
 export function logout(req: Request, res: Response, next: NextFunction) {
   try {
-    req.session.destroy(err => {
-      if (err) {
-        return next(err);
-      }
-      res.clearCookie('sid', { path: '/' });
-      res.clearCookie('__Host-session', { path: '/' });
-      clearHelperLoginCookies(res);
-      res.status(204).end();
-    });
+    // JWT 쿠키 제거
+    res.clearCookie('access_token', { path: '/' });
+    res.clearCookie('refresh_token', { path: '/' });
+
+    // 기존 세션 쿠키도 혹시 모르니 제거
+    res.clearCookie('sid', { path: '/' });
+    res.clearCookie('__Host-session', { path: '/' });
+
+    clearHelperLoginCookies(res);
+    res.status(204).end();
   } catch (e) {
     next(e);
   }

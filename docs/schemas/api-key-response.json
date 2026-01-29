@@ -1,0 +1,10 @@
+{
+  "$id": "https://graphnode.dev/schemas/api-key-response.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ApiKeyResponse",
+  "type": "object",
+  "properties": {
+    "apiKey": { "type": ["string", "null"] }
+  },
+  "required": ["apiKey"]
+}

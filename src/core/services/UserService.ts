@@ -1,8 +1,14 @@
 import { UserRepository } from '../ports/UserRepository';
 import { UserProfileDto, ApiKeysResponseDto, ApiKeyModel } from '../../shared/dtos/me';
-import { NotFoundError, ValidationError, UpstreamError, InvalidApiKeyError } from '../../shared/errors/domain';
+import {
+  NotFoundError,
+  ValidationError,
+  UpstreamError,
+  InvalidApiKeyError,
+} from '../../shared/errors/domain';
 import { User } from '../types/persistence/UserPersistence';
-import { openAI } from '../../shared/openai/index';
+// import { openAI } from '../../shared/openai/index'; // Moved checkAPIKeyValid responsibility to AiProvider or just save it
+import { getAiProvider } from '../../shared/ai-providers/index';
 
 /**
  * 사용자 관련 비즈니스 로직을 처리하는 서비스 클래스.
@@ -77,6 +83,10 @@ export class UserService {
           return { apiKey: user.apiKeyOpenai ?? null };
         case 'deepseek':
           return { apiKey: user.apiKeyDeepseek ?? null };
+        case 'claude':
+          return { apiKey: user.apiKeyClaude ?? null };
+        case 'gemini':
+          return { apiKey: user.apiKeyGemini ?? null };
         default:
           throw new ValidationError('Invalid model');
       }
@@ -104,26 +114,31 @@ export class UserService {
         throw new ValidationError('User ID must be a valid number string.');
       }
 
-      // 모델 검증
-      if (model !== 'openai' && model !== 'deepseek') {
-        throw new ValidationError('Model must be either "openai" or "deepseek".');
+      // 1. 모델 검증
+      const allowedModels: ApiKeyModel[] = ['openai', 'deepseek', 'claude', 'gemini'];
+      if (!allowedModels.includes(model)) {
+        throw new ValidationError('Model must be one of: ' + allowedModels.join(', '));
       }
 
-      // API Key 검증
+      // 2. API Key 검증
       if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
         throw new ValidationError('API Key is required and must be a non-empty string.');
       }
 
-      // API Key 유효성 검증
-      if (model === 'openai') {
-        const result = await openAI.checkAPIKeyValid(apiKey);
+      // 3. Provider를 통한 외부 검증
+      // Provider 팩토리를 통해 해당 모델의 서비스 객체 가져옴
+      try {
+        const provider = getAiProvider(model);
+        const result = await provider.checkAPIKeyValid(apiKey);
         if (!result.ok) {
-          throw new InvalidApiKeyError(result.error);
+          throw new InvalidApiKeyError(`Invalid API Key for ${model}: ${result.error}`);
         }
+      } catch (err: unknown) {
+        // Provider 로드 실패나 검증 중 알 수 없는 에러
+        // 검증 스킵할지 fail할지 정책 결정. 여기선 Fail.
+        if (err instanceof InvalidApiKeyError) throw err;
+        throw new ValidationError(`Failed to validate API Key for ${model}.`);
       }
-
-      // TODO : DeepSeek API Key 검증 추가
-
 
       const numericUserId = parseInt(userId, 10);
 
@@ -155,8 +170,9 @@ export class UserService {
       if (!userId || !/^\d+$/.test(userId)) {
         throw new ValidationError('User ID must be a valid number string.');
       }
-      if (model !== 'openai' && model !== 'deepseek') {
-        throw new ValidationError('Model must be either "openai" or "deepseek".');
+      const allowedModels: ApiKeyModel[] = ['openai', 'deepseek', 'claude', 'gemini'];
+      if (!allowedModels.includes(model)) {
+        throw new ValidationError('Invalid model provided.');
       }
 
       const numericUserId = parseInt(userId, 10);

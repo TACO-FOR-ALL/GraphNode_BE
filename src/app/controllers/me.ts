@@ -6,7 +6,6 @@ import { UserService } from '../../core/services/UserService';
 import { MeResponseDto, ApiKeyModel } from '../../shared/dtos/me';
 import { ValidationError } from '../../shared/errors/domain';
 
-
 /**
  * /v1/me 엔드포인트의 컨트롤러 클래스.
  */
@@ -43,9 +42,10 @@ export class MeController {
       const userId = getUserIdFromRequest(req)!;
       const { model } = req.params;
 
-      // TODO: 프론트에서도 모델 검증 필요함
-      if (model !== 'openai' && model !== 'deepseek') {
-        throw new ValidationError('Model must be either "openai" or "deepseek".');
+      // 모델 검증
+      const allowedModels: ApiKeyModel[] = ['openai', 'deepseek', 'claude', 'gemini'];
+      if (!allowedModels.includes(model as ApiKeyModel)) {
+        throw new ValidationError('Invalid model provided.');
       }
 
       const apiKey = await this.userService.getApiKeys(userId, model as ApiKeyModel);

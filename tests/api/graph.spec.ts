@@ -11,10 +11,16 @@ jest.mock('../../src/core/services/GoogleOAuthService', () => {
   return {
     GoogleOAuthService: class {
       constructor(_cfg: any) {}
-      buildAuthUrl(state: string) { return `http://mock-auth?state=${state}`; }
-      async exchangeCode(_code: string) { return { access_token: 'at', expires_in: 3600, token_type: 'Bearer' }; }
-      async fetchUserInfo(_token: any) { return { sub: 'google-uid-1', email: 'u@example.com', name: 'U', picture: 'https://img' }; }
-    }
+      buildAuthUrl(state: string) {
+        return `http://mock-auth?state=${state}`;
+      }
+      async exchangeCode(_code: string) {
+        return { access_token: 'at', expires_in: 3600, token_type: 'Bearer' };
+      }
+      async fetchUserInfo(_token: any) {
+        return { sub: 'google-uid-1', email: 'u@example.com', name: 'U', picture: 'https://img' };
+      }
+    },
   };
 });
 
@@ -23,15 +29,25 @@ jest.mock('../../src/app/utils/authLogin', () => {
   return {
     completeLogin: async (req: any, res: any, input: any) => {
       const userId = 'u_1';
-      if (req.session) { req.session.userId = userId; }
-      if (res.cookie) { res.cookie('gn-logged-in', '1'); }
+      if (req.session) {
+        req.session.userId = userId;
+      }
+      if (res.cookie) {
+        res.cookie('gn-logged-in', '1');
+      }
       return { userId };
-    }
+    },
   };
 });
 
 jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => {
-  return { UserRepositoryMySQL: class { async findOrCreateFromProvider() { return { id: 'u_1' } as any; } } };
+  return {
+    UserRepositoryMySQL: class {
+      async findOrCreateFromProvider() {
+        return { id: 'u_1' } as any;
+      }
+    },
+  };
 });
 
 describe('Graph API', () => {
@@ -49,16 +65,18 @@ describe('Graph API', () => {
   beforeEach(() => {
     // Reset mocks
     (GraphEmbeddingService as jest.Mock).mockClear();
-    
+
     // Setup mock implementation for the instance that will be created
-    mockGraphEmbeddingService = new GraphEmbeddingService({} as any) as jest.Mocked<GraphEmbeddingService>;
-    
-    // We need to ensure the controller uses this mock. 
-    // Since `createApp` creates a new container and new controller instances, 
+    mockGraphEmbeddingService = new GraphEmbeddingService(
+      {} as any
+    ) as jest.Mocked<GraphEmbeddingService>;
+
+    // We need to ensure the controller uses this mock.
+    // Since `createApp` creates a new container and new controller instances,
     // and we mocked the class file, the controller will receive a mocked instance.
     // We need to control the behavior of that mocked instance.
     // The `jest.mock` above replaces the constructor.
-    
+
     // Let's refine the mock to return our controlled instance or methods
   });
 
@@ -71,12 +89,13 @@ describe('Graph API', () => {
       id: 1,
       userId: 'u_1',
       label: 'New Node',
-      x: 10,
-      y: 10,
-      size: 5,
-      color: 'red',
+      origId: 'conv-1',
+      clusterId: 'cluster-1',
+      clusterName: 'Cluster 1',
+      numMessages: 0,
+      timestamp: null,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     };
 
     // Mock implementation
@@ -89,17 +108,17 @@ describe('Graph API', () => {
     // We can use a test helper to "login" or mock the middleware.
     // For this example, let's assume we can bypass auth or use a mock token if implemented.
     // But since we mocked `authLogin`, let's try to hit a login endpoint if it exists, or mock the middleware.
-    
+
     // Alternative: Mock the `isAuthenticated` middleware
     // But `createApp` is already imported.
-    
+
     // Let's try to use the `agent` which persists cookies.
     // We need a way to establish a session.
     // If we don't have a direct login endpoint for tests, we might need to mock the middleware globally.
   });
-  
-  // NOTE: Testing Express controllers with Supertest often requires mocking the middleware 
+
+  // NOTE: Testing Express controllers with Supertest often requires mocking the middleware
   // or having a "test login" endpoint.
-  // Given the current setup, let's focus on Unit Tests for Services first as requested, 
+  // Given the current setup, let's focus on Unit Tests for Services first as requested,
   // and maybe add API tests if we can easily mock auth.
 });

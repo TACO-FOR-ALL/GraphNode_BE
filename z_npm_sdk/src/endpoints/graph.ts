@@ -11,16 +11,16 @@ import type {
 
 /**
  * Graph API
- * 
+ *
  * 지식 그래프(Knowledge Graph)의 노드, 엣지, 클러스터를 관리하는 API 클래스입니다.
  * `/v1/graph` 엔드포인트 하위의 API들을 호출합니다.
- * 
+ *
  * 주요 기능:
  * - 노드 관리 (생성, 조회, 수정, 삭제) (`createNode`, `listNodes`, `getNode`, `updateNode`, `deleteNode`)
  * - 엣지 관리 (생성, 조회, 삭제) (`createEdge`, `listEdges`, `deleteEdge`)
  * - 클러스터 관리 (생성, 조회, 삭제) (`createCluster`, `listClusters`, `getCluster`, `deleteCluster`)
  * - 그래프 통계 및 스냅샷 (`getStats`, `getSnapshot`, `saveSnapshot`)
- * 
+ *
  * @public
  */
 export class GraphApi {
@@ -51,7 +51,7 @@ export class GraphApi {
    *   timestamp: new Date().toISOString(),
    *   numMessages: 5
    * });
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {
@@ -73,7 +73,7 @@ export class GraphApi {
    * @returns 노드 목록 (GraphNodeDto 배열)
    * @example
    * const response = await client.graph.listNodes();
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * [
@@ -107,7 +107,7 @@ export class GraphApi {
    * @returns 요청한 노드 상세 정보
    * @example
    * const response = await client.graph.getNode(101);
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {
@@ -180,7 +180,7 @@ export class GraphApi {
    *   type: 'insight',
    *   intraCluster: true
    * });
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {
@@ -196,7 +196,7 @@ export class GraphApi {
    * @returns 엣지 목록 (GraphEdgeDto 배열)
    * @example
    * const response = await client.graph.listEdges();
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * [
@@ -243,7 +243,7 @@ export class GraphApi {
    *   name: 'Project Alpha',
    *   summary: 'Main project discussion'
    * });
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {
@@ -261,7 +261,7 @@ export class GraphApi {
    * @returns 클러스터 목록
    * @example
    * const response = await client.graph.listClusters();
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * [
@@ -287,7 +287,7 @@ export class GraphApi {
    * @returns 요청한 클러스터
    * @example
    * const response = await client.graph.getCluster('cluster-a');
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {
@@ -327,7 +327,7 @@ export class GraphApi {
    * @returns 그래프 통계
    * @example
    * const response = await client.graph.getStats();
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {
@@ -346,7 +346,7 @@ export class GraphApi {
    * @returns 그래프 스냅샷
    * @example
    * const response = await client.graph.getSnapshot();
-   * 
+   *
    * console.log(response.data);
    * // Output:
    * {

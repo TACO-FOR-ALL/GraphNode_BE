@@ -5,7 +5,7 @@
 
 /**
  * 메시지 내용
- * 
+ *
  * 메시지의 실제 콘텐츠를 담고 있습니다. 현재는 텍스트 타입만 지원합니다.
  * @public
  */
@@ -22,7 +22,7 @@ export interface AiInputMessageContent {
 
 /**
  * 메시지 작성자 정보
- * 
+ *
  * 메시지를 누가 작성했는지 나타냅니다.
  * @public
  */
@@ -38,7 +38,7 @@ export interface AiInputMessageAuthor {
 
 /**
  * AI 입력 메시지 구조
- * 
+ *
  * 개별 메시지의 상세 정보를 담는 객체입니다.
  * @public
  */
@@ -59,7 +59,7 @@ export interface AiInputMessage {
 
 /**
  * 대화 트리 매핑 노드
- * 
+ *
  * 대화의 흐름(트리 구조)을 표현하기 위한 노드 객체입니다.
  * 각 노드는 메시지 정보와 부모/자식 관계를 가집니다.
  * @public
@@ -85,7 +85,7 @@ export interface AiInputMappingNode {
 
 /**
  * AI 입력 데이터 (대화 스레드)
- * 
+ *
  * 하나의 대화 스레드 전체를 나타내는 최상위 객체입니다.
  * ChatGPT 데이터 내보내기 포맷과 호환됩니다.
  * @public

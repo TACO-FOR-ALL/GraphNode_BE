@@ -36,10 +36,5 @@
       "additionalProperties": true
     }
   },
-  "required": [
-    "userId",
-    "nodes",
-    "edges",
-    "clusters"
-  ]
+  "required": ["userId", "nodes", "edges", "clusters"]
 }

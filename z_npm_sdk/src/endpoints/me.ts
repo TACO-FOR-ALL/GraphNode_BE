@@ -3,15 +3,15 @@ import type { MeResponseDto, ApiKeysResponseDto, ApiKeyModel } from '../types/me
 
 /**
  * Me API (User Profile & Settings)
- * 
+ *
  * 현재 로그인한 사용자의 정보 및 설정을 관리하는 API 클래스입니다.
  * `/v1/me` 및 `/auth` 관련 엔드포인트들을 호출합니다.
- * 
+ *
  * 주요 기능:
  * - 내 프로필 조회 (`get`)
  * - 로그아웃 (`logout`)
  * - API 키 관리 (조회, 업데이트, 삭제) (`getApiKeys`, `updateApiKey`, `deleteApiKey`)
- * 
+ *
  * @public
  */
 export class MeApi {

@@ -7,7 +7,7 @@ import { getMongo } from '../db/mongodb';
 /**
  * 모듈: NoteRepository MongoDB 구현체
  * 책임: MongoDB를 사용하여 노트 및 폴더 데이터를 영속화한다.
- * 
+ *
  * - `notes` 컬렉션과 `folders` 컬렉션을 사용한다.
  * - `$graphLookup`을 사용하여 계층형 폴더 구조를 효율적으로 조회한다.
  */
@@ -67,7 +67,12 @@ export class NoteRepositoryMongo implements NoteRepository {
    * @param session (선택) 트랜잭션 세션
    * @returns 수정된 노트 문서 또는 null
    */
-  async updateNote(id: string, ownerUserId: string, updates: Partial<NoteDoc>, session?: ClientSession): Promise<NoteDoc | null> {
+  async updateNote(
+    id: string,
+    ownerUserId: string,
+    updates: Partial<NoteDoc>,
+    session?: ClientSession
+  ): Promise<NoteDoc | null> {
     const result = await this.notesCol().findOneAndUpdate(
       { _id: id, ownerUserId },
       { $set: updates },
@@ -96,7 +101,7 @@ export class NoteRepositoryMongo implements NoteRepository {
    * @returns 삭제 성공 여부
    */
   async softDeleteNote(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
-    const result : UpdateResult<NoteDoc> = await this.notesCol().updateOne(
+    const result: UpdateResult<NoteDoc> = await this.notesCol().updateOne(
       { _id: id, ownerUserId },
       { $set: { deletedAt: new Date(), updatedAt: new Date() } },
       { session }
@@ -162,10 +167,12 @@ export class NoteRepositoryMongo implements NoteRepository {
    * @returns 변경된 노트 문서 배열
    */
   async findNotesModifiedSince(ownerUserId: string, since: Date): Promise<NoteDoc[]> {
-    return this.notesCol().find({
-      ownerUserId,
-      updatedAt: { $gte: since }
-    }).toArray();
+    return this.notesCol()
+      .find({
+        ownerUserId,
+        updatedAt: { $gte: since },
+      })
+      .toArray();
   }
 
   /**
@@ -175,10 +182,12 @@ export class NoteRepositoryMongo implements NoteRepository {
    * @returns 변경된 폴더 문서 배열
    */
   async findFoldersModifiedSince(ownerUserId: string, since: Date): Promise<FolderDoc[]> {
-    return this.foldersCol().find({
-      ownerUserId,
-      updatedAt: { $gte: since }
-    }).toArray();
+    return this.foldersCol()
+      .find({
+        ownerUserId,
+        updatedAt: { $gte: since },
+      })
+      .toArray();
   }
 
   /**
@@ -188,9 +197,13 @@ export class NoteRepositoryMongo implements NoteRepository {
    * @param session (선택) 트랜잭션 세션
    * @returns 삭제된 노트 수
    */
-  async deleteNotesByFolderIds(folderIds: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+  async deleteNotesByFolderIds(
+    folderIds: string[],
+    ownerUserId: string,
+    session?: ClientSession
+  ): Promise<number> {
     if (folderIds.length === 0) return 0;
-    const result : DeleteResult = await this.notesCol().deleteMany(
+    const result: DeleteResult = await this.notesCol().deleteMany(
       { folderId: { $in: folderIds }, ownerUserId },
       { session }
     );
@@ -204,9 +217,13 @@ export class NoteRepositoryMongo implements NoteRepository {
    * @param session (선택) 트랜잭션 세션
    * @returns 업데이트된 노트 수
    */
-  async softDeleteNotesByFolderIds(folderIds: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+  async softDeleteNotesByFolderIds(
+    folderIds: string[],
+    ownerUserId: string,
+    session?: ClientSession
+  ): Promise<number> {
     if (folderIds.length === 0) return 0;
-    const result : UpdateResult<NoteDoc> = await this.notesCol().updateMany(
+    const result: UpdateResult<NoteDoc> = await this.notesCol().updateMany(
       { folderId: { $in: folderIds }, ownerUserId },
       { $set: { deletedAt: new Date(), updatedAt: new Date() } },
       { session }
@@ -221,9 +238,13 @@ export class NoteRepositoryMongo implements NoteRepository {
    * @param session (선택) 트랜잭션 세션
    * @returns 삭제된 노트 수
    */
-  async hardDeleteNotesByFolderIds(folderIds: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+  async hardDeleteNotesByFolderIds(
+    folderIds: string[],
+    ownerUserId: string,
+    session?: ClientSession
+  ): Promise<number> {
     if (folderIds.length === 0) return 0;
-    const result : DeleteResult = await this.notesCol().deleteMany(
+    const result: DeleteResult = await this.notesCol().deleteMany(
       { folderId: { $in: folderIds }, ownerUserId },
       { session }
     );
@@ -237,9 +258,13 @@ export class NoteRepositoryMongo implements NoteRepository {
    * @param session (선택) 트랜잭션 세션
    * @returns 복구된 노트 수
    */
-  async restoreNotesByFolderIds(folderIds: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+  async restoreNotesByFolderIds(
+    folderIds: string[],
+    ownerUserId: string,
+    session?: ClientSession
+  ): Promise<number> {
     if (folderIds.length === 0) return 0;
-    const result : UpdateResult<NoteDoc> = await this.notesCol().updateMany(
+    const result: UpdateResult<NoteDoc> = await this.notesCol().updateMany(
       { folderId: { $in: folderIds }, ownerUserId },
       { $set: { deletedAt: null, updatedAt: new Date() } },
       { session }
@@ -274,9 +299,13 @@ export class NoteRepositoryMongo implements NoteRepository {
   /**
    * 폴더를 수정한다.
    */
-  async updateFolder(id: string, ownerUserId: string, updates: Partial<FolderDoc>, session?: ClientSession): Promise<FolderDoc | null> {
-
-    const result : WithId<FolderDoc> | null = await this.foldersCol().findOneAndUpdate(
+  async updateFolder(
+    id: string,
+    ownerUserId: string,
+    updates: Partial<FolderDoc>,
+    session?: ClientSession
+  ): Promise<FolderDoc | null> {
+    const result: WithId<FolderDoc> | null = await this.foldersCol().findOneAndUpdate(
       { _id: id, ownerUserId },
       { $set: updates },
       { returnDocument: 'after', session }
@@ -312,14 +341,14 @@ export class NoteRepositoryMongo implements NoteRepository {
           connectFromField: '_id',
           connectToField: 'parentId',
           as: 'descendants',
-          restrictSearchWithMatch: { ownerUserId } // 보안: 동일 소유자 내에서만 검색
-        }
+          restrictSearchWithMatch: { ownerUserId }, // 보안: 동일 소유자 내에서만 검색
+        },
       },
       {
         $project: {
-          descendantIds: '$descendants._id'
-        }
-      }
+          descendantIds: '$descendants._id',
+        },
+      },
     ];
 
     const result: any[] = await this.foldersCol().aggregate(pipeline).toArray();
@@ -336,9 +365,13 @@ export class NoteRepositoryMongo implements NoteRepository {
    * @param session (선택) 트랜잭션 세션
    * @returns 삭제된 폴더 수
    */
-  async deleteFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+  async deleteFolders(
+    ids: string[],
+    ownerUserId: string,
+    session?: ClientSession
+  ): Promise<number> {
     if (ids.length === 0) return 0;
-    const result : DeleteResult = await this.foldersCol().deleteMany(
+    const result: DeleteResult = await this.foldersCol().deleteMany(
       { _id: { $in: ids }, ownerUserId },
       { session }
     );
@@ -352,9 +385,13 @@ export class NoteRepositoryMongo implements NoteRepository {
    * @param session (선택) 트랜잭션 세션
    * @returns 업데이트된 폴더 수
    */
-  async softDeleteFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+  async softDeleteFolders(
+    ids: string[],
+    ownerUserId: string,
+    session?: ClientSession
+  ): Promise<number> {
     if (ids.length === 0) return 0;
-    const result : UpdateResult<FolderDoc> = await this.foldersCol().updateMany(
+    const result: UpdateResult<FolderDoc> = await this.foldersCol().updateMany(
       { _id: { $in: ids }, ownerUserId },
       { $set: { deletedAt: new Date(), updatedAt: new Date() } },
       { session }
@@ -369,9 +406,13 @@ export class NoteRepositoryMongo implements NoteRepository {
    * @param session (선택) 트랜잭션 세션
    * @returns 삭제된 폴더 수
    */
-  async hardDeleteFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+  async hardDeleteFolders(
+    ids: string[],
+    ownerUserId: string,
+    session?: ClientSession
+  ): Promise<number> {
     if (ids.length === 0) return 0;
-    const result : DeleteResult = await this.foldersCol().deleteMany(
+    const result: DeleteResult = await this.foldersCol().deleteMany(
       { _id: { $in: ids }, ownerUserId },
       { session }
     );
@@ -401,9 +442,13 @@ export class NoteRepositoryMongo implements NoteRepository {
    * @param session (선택) 트랜잭션 세션
    * @returns 복구된 폴더 수
    */
-  async restoreFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number> {
+  async restoreFolders(
+    ids: string[],
+    ownerUserId: string,
+    session?: ClientSession
+  ): Promise<number> {
     if (ids.length === 0) return 0;
-    const result : UpdateResult<FolderDoc> = await this.foldersCol().updateMany(
+    const result: UpdateResult<FolderDoc> = await this.foldersCol().updateMany(
       { _id: { $in: ids }, ownerUserId },
       { $set: { deletedAt: null, updatedAt: new Date() } },
       { session }

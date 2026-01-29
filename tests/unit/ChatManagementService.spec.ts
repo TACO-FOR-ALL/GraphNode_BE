@@ -19,41 +19,70 @@ jest.mock('../../src/infra/db/mongodb', () => ({
       commitTransaction: jest.fn(),
       abortTransaction: jest.fn(),
       endSession: jest.fn(),
-      withTransaction: jest.fn(async (cb) => await cb())
-    })
-  })
+      withTransaction: jest.fn(async (cb) => await cb()),
+    }),
+  }),
 }));
 
 class InMemoryConvRepo implements ConversationRepository {
   data = new Map<string, ConversationDoc>();
-  
+
   async create(doc: ConversationDoc, session?: ClientSession): Promise<ConversationDoc> {
     this.data.set(doc._id, doc);
     return doc;
   }
-  
-  async findById(id: string, ownerUserId: string, session?: ClientSession): Promise<ConversationDoc | null> {
+
+  async createMany(docs: ConversationDoc[], session?: ClientSession): Promise<ConversationDoc[]> {
+    docs.forEach((doc) => this.data.set(doc._id, doc));
+    return docs;
+  }
+
+  async findById(
+    id: string,
+    ownerUserId: string,
+    session?: ClientSession
+  ): Promise<ConversationDoc | null> {
     const doc = this.data.get(id);
     if (!doc) return null;
     if (ownerUserId && doc.ownerUserId !== ownerUserId) return null;
     return doc;
   }
-  
-  async listByOwner(ownerUserId: string, limit: number, cursor?: string): Promise<{ items: ConversationDoc[]; nextCursor?: string | null; }> {
+
+  async listByOwner(
+    ownerUserId: string,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: ConversationDoc[]; nextCursor?: string | null }> {
     const items = Array.from(this.data.values())
-      .filter(v => v.ownerUserId === ownerUserId)
+      .filter((v) => v.ownerUserId === ownerUserId)
       .slice(0, limit);
     return { items, nextCursor: null };
   }
-  
-  async update(id: string, ownerUserId: string, updates: Partial<ConversationDoc>, session?: ClientSession): Promise<ConversationDoc | null> {
+
+  async deleteAll(ownerUserId: string, session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const [key, value] of this.data.entries()) {
+      if (value.ownerUserId === ownerUserId) {
+        this.data.delete(key);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  async update(
+    id: string,
+    ownerUserId: string,
+    updates: Partial<ConversationDoc>,
+    session?: ClientSession
+  ): Promise<ConversationDoc | null> {
     const doc = this.data.get(id);
     if (!doc || doc.ownerUserId !== ownerUserId) return null;
     const updated = { ...doc, ...updates };
     this.data.set(id, updated);
     return updated;
   }
-  
+
   async delete(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
     return this.hardDelete(id, ownerUserId, session);
   }
@@ -80,21 +109,22 @@ class InMemoryConvRepo implements ConversationRepository {
   }
 
   async findModifiedSince(ownerUserId: string, since: Date): Promise<ConversationDoc[]> {
-    return Array.from(this.data.values())
-      .filter(v => v.ownerUserId === ownerUserId && v.updatedAt >= since.getTime());
+    return Array.from(this.data.values()).filter(
+      (v) => v.ownerUserId === ownerUserId && v.updatedAt >= since.getTime()
+    );
   }
 }
 
 class InMemoryMsgRepo implements MessageRepository {
   msgs = new Map<string, MessageDoc[]>();
-  
+
   async create(doc: MessageDoc, session?: ClientSession): Promise<MessageDoc> {
     const a = this.msgs.get(doc.conversationId) || [];
     a.push(doc);
     this.msgs.set(doc.conversationId, a);
     return doc;
   }
-  
+
   async createMany(docs: MessageDoc[], session?: ClientSession): Promise<MessageDoc[]> {
     if (docs.length === 0) return [];
     const conversationId = docs[0].conversationId;
@@ -106,31 +136,36 @@ class InMemoryMsgRepo implements MessageRepository {
 
   async findById(id: string): Promise<MessageDoc | null> {
     for (const msgs of this.msgs.values()) {
-      const m = msgs.find(x => x._id === id);
+      const m = msgs.find((x) => x._id === id);
       if (m) return m;
     }
     return null;
   }
-  
+
   async findAllByConversationId(conversationId: string): Promise<MessageDoc[]> {
     return this.msgs.get(conversationId) || [];
   }
-  
-  async update(id: string, conversationId: string, updates: Partial<MessageDoc>, session?: ClientSession): Promise<MessageDoc | null> {
+
+  async update(
+    id: string,
+    conversationId: string,
+    updates: Partial<MessageDoc>,
+    session?: ClientSession
+  ): Promise<MessageDoc | null> {
     const a = this.msgs.get(conversationId) || [];
-    const m = a.find(x => x._id === id);
+    const m = a.find((x) => x._id === id);
     if (!m) return null;
     Object.assign(m, updates);
     return m;
   }
-  
+
   async delete(id: string, conversationId: string, session?: ClientSession): Promise<boolean> {
     return this.hardDelete(id, conversationId, session);
   }
 
   async softDelete(id: string, conversationId: string, session?: ClientSession): Promise<boolean> {
     const a = this.msgs.get(conversationId) || [];
-    const m = a.find(x => x._id === id);
+    const m = a.find((x) => x._id === id);
     if (!m) return false;
     m.deletedAt = Date.now();
     return true;
@@ -138,25 +173,49 @@ class InMemoryMsgRepo implements MessageRepository {
 
   async hardDelete(id: string, conversationId: string, session?: ClientSession): Promise<boolean> {
     const a = this.msgs.get(conversationId) || [];
-    const filtered = a.filter(x => x._id !== id);
+    const filtered = a.filter((x) => x._id !== id);
     const deleted = filtered.length !== a.length;
     this.msgs.set(conversationId, filtered);
     return deleted;
   }
-  
-  async deleteAllByConversationId(conversationId: string, session?: ClientSession): Promise<number> {
+
+  async deleteAllByConversationId(
+    conversationId: string,
+    session?: ClientSession
+  ): Promise<number> {
     const a = this.msgs.get(conversationId) || [];
     this.msgs.delete(conversationId);
     return a.length;
   }
 
-  async softDeleteAllByConversationId(conversationId: string, session?: ClientSession): Promise<number> {
+  async deleteAllByUserId(ownerUserId: string, session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const [cid, msgs] of this.msgs.entries()) {
+      const remaining = msgs.filter((m) => m.ownerUserId !== ownerUserId);
+      const deleted = msgs.length - remaining.length;
+      if (remaining.length === 0) {
+        this.msgs.delete(cid);
+      } else {
+        this.msgs.set(cid, remaining);
+      }
+      count += deleted;
+    }
+    return count;
+  }
+
+  async softDeleteAllByConversationId(
+    conversationId: string,
+    session?: ClientSession
+  ): Promise<number> {
     const a = this.msgs.get(conversationId) || [];
-    a.forEach(m => m.deletedAt = Date.now());
+    a.forEach((m) => (m.deletedAt = Date.now()));
     return a.length;
   }
 
-  async hardDeleteAllByConversationId(conversationId: string, session?: ClientSession): Promise<number> {
+  async hardDeleteAllByConversationId(
+    conversationId: string,
+    session?: ClientSession
+  ): Promise<number> {
     const a = this.msgs.get(conversationId) || [];
     this.msgs.delete(conversationId);
     return a.length;
@@ -164,22 +223,27 @@ class InMemoryMsgRepo implements MessageRepository {
 
   async restore(id: string, conversationId: string, session?: ClientSession): Promise<boolean> {
     const a = this.msgs.get(conversationId) || [];
-    const m = a.find(x => x._id === id);
+    const m = a.find((x) => x._id === id);
     if (!m) return false;
     m.deletedAt = null;
     return true;
   }
 
-  async restoreAllByConversationId(conversationId: string, session?: ClientSession): Promise<number> {
+  async restoreAllByConversationId(
+    conversationId: string,
+    session?: ClientSession
+  ): Promise<number> {
     const a = this.msgs.get(conversationId) || [];
-    a.forEach(m => m.deletedAt = null);
+    a.forEach((m) => (m.deletedAt = null));
     return a.length;
   }
 
   async findModifiedSince(ownerUserId: string, since: Date): Promise<MessageDoc[]> {
     const result: MessageDoc[] = [];
     for (const msgs of this.msgs.values()) {
-      result.push(...msgs.filter(m => m.ownerUserId === ownerUserId && m.updatedAt >= since.getTime()));
+      result.push(
+        ...msgs.filter((m) => m.ownerUserId === ownerUserId && m.updatedAt >= since.getTime())
+      );
     }
     return result;
   }
@@ -201,8 +265,10 @@ describe('ChatManagementService', () => {
   });
 
   test('createConversation creates both conversation and messages', async () => {
-    const result = await chatSvc.createConversation('u1', 'c1', 'Hello', [{ id: 'm1', role: 'user', content: 'hi' }]);
-    
+    const result = await chatSvc.createConversation('u1', 'c1', 'Hello', [
+      { id: 'm1', role: 'user', content: 'hi' },
+    ]);
+
     expect(result.id).toBe('c1');
     expect(result.title).toBe('Hello');
     expect(result.messages).toHaveLength(1);
@@ -217,42 +283,48 @@ describe('ChatManagementService', () => {
   });
 
   test('listConversations returns messages populated', async () => {
-    await chatSvc.createConversation('u1', 'c1', 'Hello', [{ id: 'm1', role: 'user', content: 'hi' }]);
+    await chatSvc.createConversation('u1', 'c1', 'Hello', [
+      { id: 'm1', role: 'user', content: 'hi' },
+    ]);
     await chatSvc.createConversation('u1', 'c2', 'World', []);
 
     const list = await chatSvc.listConversations('u1', 10);
     expect(list.items).toHaveLength(2);
-    
-    const c1 = list.items.find(i => i.id === 'c1');
+
+    const c1 = list.items.find((i) => i.id === 'c1');
     expect(c1?.messages).toHaveLength(1);
     expect(c1?.messages[0].content).toBe('hi');
 
-    const c2 = list.items.find(i => i.id === 'c2');
+    const c2 = list.items.find((i) => i.id === 'c2');
     expect(c2?.messages).toHaveLength(0);
   });
 
   test('deleteConversation cascades to messages', async () => {
-    await chatSvc.createConversation('u1', 'c1', 'Hello', [{ id: 'm1', role: 'user', content: 'hi' }]);
-    
+    await chatSvc.createConversation('u1', 'c1', 'Hello', [
+      { id: 'm1', role: 'user', content: 'hi' },
+    ]);
+
     // Soft Delete
     await chatSvc.deleteConversation('c1', 'u1', false);
-    
+
     const convDoc = await convRepo.findById('c1', 'u1');
     expect(convDoc?.deletedAt).not.toBeNull();
-    
+
     const msgDocs = await msgRepo.findAllByConversationId('c1');
     expect(msgDocs[0].deletedAt).not.toBeNull();
   });
 
   test('restoreConversation cascades to messages', async () => {
-    await chatSvc.createConversation('u1', 'c1', 'Hello', [{ id: 'm1', role: 'user', content: 'hi' }]);
+    await chatSvc.createConversation('u1', 'c1', 'Hello', [
+      { id: 'm1', role: 'user', content: 'hi' },
+    ]);
     await chatSvc.deleteConversation('c1', 'u1', false);
-    
+
     await chatSvc.restoreConversation('c1', 'u1');
-    
+
     const convDoc = await convRepo.findById('c1', 'u1');
     expect(convDoc?.deletedAt).toBeNull();
-    
+
     const msgDocs = await msgRepo.findAllByConversationId('c1');
     expect(msgDocs[0].deletedAt).toBeNull();
   });

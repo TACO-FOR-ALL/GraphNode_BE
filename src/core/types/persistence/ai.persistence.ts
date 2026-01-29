@@ -3,7 +3,7 @@ import type { ChatRole } from '../../../shared/dtos/ai';
 /**
  * Provider 유형
  * @public
- * 
+ *
  */
 export type Provider =
   | 'openai'
@@ -23,7 +23,7 @@ export type Source = 'api' | 'export' | 'import';
  * Collection: conversations
  * @property _id 문서 고유 ID (UUID/ULID)
  * @property ownerUserId 소유자 사용자 ID
- * @property title 대화 제목  
+ * @property title 대화 제목
  * @property updatedAt 마지막 업데이트 시각 (타임스탬프)
  * @property createdAt 생성 시각 (타임스탬프, 선택적)
  * @property provider AI 서비스 제공자

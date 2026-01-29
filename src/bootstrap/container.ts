@@ -12,6 +12,7 @@ import { GraphManagementService } from '../core/services/GraphManagementService'
 import { GraphEmbeddingService } from '../core/services/GraphEmbeddingService';
 import { GraphGenerationService } from '../core/services/GraphGenerationService';
 import { SyncService } from '../core/services/SyncService';
+import { NotificationService } from '../core/services/NotificationService';
 import { AiInteractionService } from '../core/services/AiInteractionService';
 import { GoogleOAuthService } from '../core/services/GoogleOAuthService';
 import { AppleOAuthService } from '../core/services/AppleOAuthService';
@@ -21,12 +22,26 @@ import { loadEnv } from '../config/env';
 import { ConversationRepository } from '../core/ports/ConversationRepository';
 import { MessageRepository } from '../core/ports/MessageRepository';
 import { UserRepository } from '../core/ports/UserRepository';
+// DB / Infrastructure Adapters
+// import { Neo4jGraphAdapter } from '../infra/graph/Neo4jGraphAdapter';
+import { ChromaVectorAdapter } from '../infra/vector/ChromaVectorAdapter';
+// import { QdrantClientAdapter } from '../infra/repositories/QdrantClientAdapter'; // Removed
 import { NoteRepository } from '../core/ports/NoteRepository';
-import { GraphStore } from '../core/ports/GraphStore';
+// Ports
+import { GraphDocumentStore } from '../core/ports/GraphDocumentStore';
+import { GraphNeo4jStore } from '../core/ports/GraphNeo4jStore';
+import { VectorStore } from '../core/ports/VectorStore';
+import { QueuePort } from '../core/ports/QueuePort';
+import { StoragePort } from '../core/ports/StoragePort';
+import { EventBusPort } from '../core/ports/EventBusPort';
+// Infra Adapters
+import { AwsSqsAdapter } from '../infra/aws/AwsSqsAdapter';
+import { AwsS3Adapter } from '../infra/aws/AwsS3Adapter';
+import { RedisEventBusAdapter } from '../infra/redis/RedisEventBusAdapter';
 
 /**
  * 애플리케이션의 의존성 주입(Dependency Injection)을 관리하는 싱글톤 컨테이너입니다.
- * 
+ *
  * 책임:
  * - Repository, Service 등 주요 객체의 인스턴스를 생성하고 관리합니다.
  * - 싱글톤 패턴을 사용하여 애플리케이션 전체에서 동일한 인스턴스를 공유하도록 보장합니다.
@@ -41,7 +56,14 @@ export class Container {
   private messageRepo: MessageRepository | null = null;
   private userRepo: UserRepository | null = null;
   private noteRepo: NoteRepository | null = null;
-  private graphRepo: GraphStore | null = null;
+  private graphRepo: GraphDocumentStore | null = null; // Renamed to Mongo Store
+  private neo4jStore: GraphNeo4jStore | null = null; // Added
+  private vectorStore: VectorStore | null = null; // Added
+
+  // Infra Adapters
+  private queueAdapter: QueuePort | null = null;
+  private storageAdapter: StoragePort | null = null;
+  private eventBusAdapter: EventBusPort | null = null;
 
   // Services
   private conversationService: ConversationService | null = null;
@@ -53,6 +75,7 @@ export class Container {
   private graphEmbeddingService: GraphEmbeddingService | null = null;
   private graphGenerationService: GraphGenerationService | null = null;
   private syncService: SyncService | null = null;
+  private notificationService: NotificationService | null = null;
   private aiInteractionService: AiInteractionService | null = null;
   private googleOAuthService: GoogleOAuthService | null = null;
   private appleOAuthService: AppleOAuthService | null = null;
@@ -69,6 +92,63 @@ export class Container {
       Container.instance = new Container();
     }
     return Container.instance;
+  }
+
+  // --- Infra Adapters ---
+  /**
+   * AwsSqsAdapter 인스턴스를 반환합니다.
+   * @returns AwsSqsAdapter 인스턴스
+   */
+  getAwsSqsAdapter(): QueuePort {
+    if (!this.queueAdapter) {
+      this.queueAdapter = new AwsSqsAdapter();
+    }
+    return this.queueAdapter;
+  }
+
+  // --- Infrastructure / DB ---
+
+  getGraphDocumentStore(): GraphDocumentStore {
+    if (!this.graphRepo) {
+      this.graphRepo = new GraphRepositoryMongo();
+    }
+    return this.graphRepo;
+  }
+
+  // getGraphNeo4jStore(): GraphNeo4jStore {
+  //     if (!this.neo4jStore) {
+  //         this.neo4jStore = new Neo4jGraphAdapter();
+  //     }
+  //     return this.neo4jStore;
+  // }
+
+  getVectorStore(): VectorStore {
+    if (!this.vectorStore) {
+      this.vectorStore = new ChromaVectorAdapter();
+    }
+    return this.vectorStore;
+  }
+
+  /**
+   * AwsS3Adapter 인스턴스를 반환합니다.
+   * @returns AwsS3Adapter 인스턴스
+   */
+  getAwsS3Adapter(): StoragePort {
+    if (!this.storageAdapter) {
+      this.storageAdapter = new AwsS3Adapter();
+    }
+    return this.storageAdapter;
+  }
+
+  /**
+   * RedisEventBusAdapter 인스턴스를 반환합니다.
+   * @returns RedisEventBusAdapter 인스턴스
+   */
+  getRedisEventBusAdapter(): EventBusPort {
+    if (!this.eventBusAdapter) {
+      this.eventBusAdapter = new RedisEventBusAdapter();
+    }
+    return this.eventBusAdapter;
   }
 
   // --- Repositories ---
@@ -118,14 +198,12 @@ export class Container {
   }
 
   /**
-   * GraphStore(Repository) 인스턴스를 반환합니다.
-   * @returns GraphStore 인스턴스
+   * GraphDocumentStore(Repository) 인스턴스를 반환합니다.
+   * @returns GraphDocumentStore 인스턴스
    */
-  getGraphRepository(): GraphStore {
-    if (!this.graphRepo) {
-      this.graphRepo = new GraphRepositoryMongo();
-    }
-    return this.graphRepo;
+  getGraphRepository(): GraphDocumentStore {
+    return this.getGraphDocumentStore(); // Alias for backward compatibility if needed, or better rename it fully.
+    // Since we replaced usage in this file, we can just redirect.
   }
 
   // --- Services ---
@@ -136,9 +214,7 @@ export class Container {
    */
   getConversationService(): ConversationService {
     if (!this.conversationService) {
-      const raw = new ConversationService(
-        this.getConversationRepository()
-      );
+      const raw = new ConversationService(this.getConversationRepository());
       this.conversationService = createAuditProxy(raw, 'ConversationService');
     }
     return this.conversationService;
@@ -149,9 +225,7 @@ export class Container {
    */
   getMessageService(): MessageService {
     if (!this.messageService) {
-      const raw = new MessageService(
-        this.getMessageRepository()
-      );
+      const raw = new MessageService(this.getMessageRepository());
       this.messageService = createAuditProxy(raw, 'MessageService');
     }
     return this.messageService;
@@ -198,7 +272,7 @@ export class Container {
    */
   getGraphManagementService(): GraphManagementService {
     if (!this.graphManagementService) {
-      const raw = new GraphManagementService(this.getGraphRepository());
+      const raw = new GraphManagementService(this.getGraphDocumentStore());
       this.graphManagementService = createAuditProxy(raw, 'GraphManagementService');
     }
     return this.graphManagementService;
@@ -209,8 +283,11 @@ export class Container {
    */
   getGraphEmbeddingService(): GraphEmbeddingService {
     if (!this.graphEmbeddingService) {
-      // VectorService is optional/disabled currently
-      const raw = new GraphEmbeddingService(this.getGraphManagementService());
+      // Inject GraphManagementService (Mongo)
+      const raw = new GraphEmbeddingService(
+        this.getGraphManagementService(),
+        this.getVectorStore()
+      );
       this.graphEmbeddingService = createAuditProxy(raw, 'GraphEmbeddingService');
     }
     return this.graphEmbeddingService;
@@ -223,7 +300,9 @@ export class Container {
     if (!this.graphGenerationService) {
       const raw = new GraphGenerationService(
         this.getChatManagementService(),
-        this.getGraphEmbeddingService()
+        this.getGraphEmbeddingService(),
+        this.getAwsSqsAdapter(),
+        this.getAwsS3Adapter()
       );
       this.graphGenerationService = createAuditProxy(raw, 'GraphGenerationService');
     }
@@ -245,16 +324,24 @@ export class Container {
     return this.syncService;
   }
 
+  /**NotificationService 인스턴스를 반환합니다.
+   */
+  getNotificationService(): NotificationService {
+    if (!this.notificationService) {
+      const raw = new NotificationService(this.getRedisEventBusAdapter());
+      this.notificationService = createAuditProxy(raw, 'NotificationService');
+    }
+    return this.notificationService;
+  }
+
   /**
+   *
    * AiInteractionService 인스턴스를 반환합니다.
    */
   getAiInteractionService(): AiInteractionService {
     if (!this.aiInteractionService) {
-        const raw = new AiInteractionService(
-            this.getChatManagementService(),
-            this.getUserService()
-            );
-        this.aiInteractionService = createAuditProxy(raw, 'AiInteractionService');
+      const raw = new AiInteractionService(this.getChatManagementService(), this.getUserService());
+      this.aiInteractionService = createAuditProxy(raw, 'AiInteractionService');
     }
     return this.aiInteractionService;
   }
@@ -264,13 +351,13 @@ export class Container {
    */
   getGoogleOAuthService(): GoogleOAuthService {
     if (!this.googleOAuthService) {
-        const env = loadEnv();
-        const raw = new GoogleOAuthService({
-            clientId: env.OAUTH_GOOGLE_CLIENT_ID,
-            clientSecret: env.OAUTH_GOOGLE_CLIENT_SECRET,
-            redirectUri: env.OAUTH_GOOGLE_REDIRECT_URI,
-        });
-        this.googleOAuthService = createAuditProxy(raw, 'GoogleOAuthService');
+      const env = loadEnv();
+      const raw = new GoogleOAuthService({
+        clientId: env.OAUTH_GOOGLE_CLIENT_ID,
+        clientSecret: env.OAUTH_GOOGLE_CLIENT_SECRET,
+        redirectUri: env.OAUTH_GOOGLE_REDIRECT_URI,
+      });
+      this.googleOAuthService = createAuditProxy(raw, 'GoogleOAuthService');
     }
     return this.googleOAuthService;
   }
@@ -279,16 +366,16 @@ export class Container {
    * AppleOAuthService 인스턴스를 반환합니다.
    */
   getAppleOAuthService(): AppleOAuthService {
-        if (!this.appleOAuthService) {
-        const env = loadEnv();
-        const raw = new AppleOAuthService({
-            clientId: env.OAUTH_APPLE_CLIENT_ID,
-            teamId: env.OAUTH_APPLE_TEAM_ID,
-            keyId: env.OAUTH_APPLE_KEY_ID,
-            privateKey: env.OAUTH_APPLE_PRIVATE_KEY,
-            redirectUri: env.OAUTH_APPLE_REDIRECT_URI,
-        });
-        this.appleOAuthService = createAuditProxy(raw, 'AppleOAuthService');
+    if (!this.appleOAuthService) {
+      const env = loadEnv();
+      const raw = new AppleOAuthService({
+        clientId: env.OAUTH_APPLE_CLIENT_ID,
+        teamId: env.OAUTH_APPLE_TEAM_ID,
+        keyId: env.OAUTH_APPLE_KEY_ID,
+        privateKey: env.OAUTH_APPLE_PRIVATE_KEY,
+        redirectUri: env.OAUTH_APPLE_REDIRECT_URI,
+      });
+      this.appleOAuthService = createAuditProxy(raw, 'AppleOAuthService');
     }
     return this.appleOAuthService;
   }

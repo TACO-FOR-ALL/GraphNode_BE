@@ -11,13 +11,13 @@ export interface HealthResponse {
 
 /**
  * Health Check API
- * 
+ *
  * 서버의 상태를 확인하는 API 클래스입니다.
  * `/healthz` 엔드포인트를 호출합니다.
- * 
+ *
  * 주요 기능:
  * - 서버 헬스 체크 (`get`)
- * 
+ *
  * @public
  */
 export class HealthApi {

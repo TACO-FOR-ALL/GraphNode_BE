@@ -16,21 +16,21 @@ jest.mock('../../src/infra/db/mongodb', () => ({
       commitTransaction: jest.fn(),
       abortTransaction: jest.fn(),
       endSession: jest.fn(),
-      withTransaction: jest.fn(async (cb) => await cb())
-    })
-  })
+      withTransaction: jest.fn(async (cb) => await cb()),
+    }),
+  }),
 }));
 
 class InMemoryMsgRepo implements MessageRepository {
   msgs = new Map<string, MessageDoc[]>();
-  
+
   async create(doc: MessageDoc, session?: ClientSession): Promise<MessageDoc> {
     const a = this.msgs.get(doc.conversationId) || [];
     a.push(doc);
     this.msgs.set(doc.conversationId, a);
     return doc;
   }
-  
+
   async createMany(docs: MessageDoc[], session?: ClientSession): Promise<MessageDoc[]> {
     if (docs.length === 0) return [];
     const conversationId = docs[0].conversationId;
@@ -42,31 +42,36 @@ class InMemoryMsgRepo implements MessageRepository {
 
   async findById(id: string): Promise<MessageDoc | null> {
     for (const msgs of this.msgs.values()) {
-      const m = msgs.find(x => x._id === id);
+      const m = msgs.find((x) => x._id === id);
       if (m) return m;
     }
     return null;
   }
-  
+
   async findAllByConversationId(conversationId: string): Promise<MessageDoc[]> {
     return this.msgs.get(conversationId) || [];
   }
-  
-  async update(id: string, conversationId: string, updates: Partial<MessageDoc>, session?: ClientSession): Promise<MessageDoc | null> {
+
+  async update(
+    id: string,
+    conversationId: string,
+    updates: Partial<MessageDoc>,
+    session?: ClientSession
+  ): Promise<MessageDoc | null> {
     const a = this.msgs.get(conversationId) || [];
-    const m = a.find(x => x._id === id);
+    const m = a.find((x) => x._id === id);
     if (!m) return null;
     Object.assign(m, updates);
     return m;
   }
-  
+
   async delete(id: string, conversationId: string, session?: ClientSession): Promise<boolean> {
     return this.hardDelete(id, conversationId, session);
   }
 
   async softDelete(id: string, conversationId: string, session?: ClientSession): Promise<boolean> {
     const a = this.msgs.get(conversationId) || [];
-    const m = a.find(x => x._id === id);
+    const m = a.find((x) => x._id === id);
     if (!m) return false;
     m.deletedAt = Date.now();
     return true;
@@ -74,25 +79,49 @@ class InMemoryMsgRepo implements MessageRepository {
 
   async hardDelete(id: string, conversationId: string, session?: ClientSession): Promise<boolean> {
     const a = this.msgs.get(conversationId) || [];
-    const filtered = a.filter(x => x._id !== id);
+    const filtered = a.filter((x) => x._id !== id);
     const deleted = filtered.length !== a.length;
     this.msgs.set(conversationId, filtered);
     return deleted;
   }
-  
-  async deleteAllByConversationId(conversationId: string, session?: ClientSession): Promise<number> {
+
+  async deleteAllByConversationId(
+    conversationId: string,
+    session?: ClientSession
+  ): Promise<number> {
     const a = this.msgs.get(conversationId) || [];
     this.msgs.delete(conversationId);
     return a.length;
   }
 
-  async softDeleteAllByConversationId(conversationId: string, session?: ClientSession): Promise<number> {
+  async deleteAllByUserId(ownerUserId: string, session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const [cid, msgs] of this.msgs.entries()) {
+      const remaining = msgs.filter((m) => m.ownerUserId !== ownerUserId);
+      const deleted = msgs.length - remaining.length;
+      if (remaining.length === 0) {
+        this.msgs.delete(cid);
+      } else {
+        this.msgs.set(cid, remaining);
+      }
+      count += deleted;
+    }
+    return count;
+  }
+
+  async softDeleteAllByConversationId(
+    conversationId: string,
+    session?: ClientSession
+  ): Promise<number> {
     const a = this.msgs.get(conversationId) || [];
-    a.forEach(m => m.deletedAt = Date.now());
+    a.forEach((m) => (m.deletedAt = Date.now()));
     return a.length;
   }
 
-  async hardDeleteAllByConversationId(conversationId: string, session?: ClientSession): Promise<number> {
+  async hardDeleteAllByConversationId(
+    conversationId: string,
+    session?: ClientSession
+  ): Promise<number> {
     const a = this.msgs.get(conversationId) || [];
     this.msgs.delete(conversationId);
     return a.length;
@@ -100,22 +129,27 @@ class InMemoryMsgRepo implements MessageRepository {
 
   async restore(id: string, conversationId: string, session?: ClientSession): Promise<boolean> {
     const a = this.msgs.get(conversationId) || [];
-    const m = a.find(x => x._id === id);
+    const m = a.find((x) => x._id === id);
     if (!m) return false;
     m.deletedAt = null;
     return true;
   }
 
-  async restoreAllByConversationId(conversationId: string, session?: ClientSession): Promise<number> {
+  async restoreAllByConversationId(
+    conversationId: string,
+    session?: ClientSession
+  ): Promise<number> {
     const a = this.msgs.get(conversationId) || [];
-    a.forEach(m => m.deletedAt = null);
+    a.forEach((m) => (m.deletedAt = null));
     return a.length;
   }
 
   async findModifiedSince(ownerUserId: string, since: Date): Promise<MessageDoc[]> {
     const result: MessageDoc[] = [];
     for (const msgs of this.msgs.values()) {
-      result.push(...msgs.filter(m => m.ownerUserId === ownerUserId && m.updatedAt >= since.getTime()));
+      result.push(
+        ...msgs.filter((m) => m.ownerUserId === ownerUserId && m.updatedAt >= since.getTime())
+      );
     }
     return result;
   }
@@ -128,7 +162,15 @@ describe('MessageService', () => {
 
     // Create Doc
     const now = Date.now();
-    const doc: MessageDoc = { _id: 'm1', conversationId: 'c1', ownerUserId: 'u1', role: 'user', content: 'hi', createdAt: now, updatedAt: now };
+    const doc: MessageDoc = {
+      _id: 'm1',
+      conversationId: 'c1',
+      ownerUserId: 'u1',
+      role: 'user',
+      content: 'hi',
+      createdAt: now,
+      updatedAt: now,
+    };
     await svc.createDoc(doc);
 
     const found = await svc.findDocById('m1');

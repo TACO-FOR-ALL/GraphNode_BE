@@ -8,7 +8,6 @@ import { container } from '../container';
  * @returns Express 라우터
  */
 export function makeAgentRouter(): Router {
-
   // singleton repository
   const userRepository = container.getUserRepository();
   return createAgentRouter(userRepository);

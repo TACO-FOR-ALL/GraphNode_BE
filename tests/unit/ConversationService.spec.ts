@@ -16,41 +16,70 @@ jest.mock('../../src/infra/db/mongodb', () => ({
       commitTransaction: jest.fn(),
       abortTransaction: jest.fn(),
       endSession: jest.fn(),
-      withTransaction: jest.fn(async (cb) => await cb())
-    })
-  })
+      withTransaction: jest.fn(async (cb) => await cb()),
+    }),
+  }),
 }));
 
 class InMemoryConvRepo implements ConversationRepository {
   data = new Map<string, ConversationDoc>();
-  
+
   async create(doc: ConversationDoc, session?: ClientSession): Promise<ConversationDoc> {
     this.data.set(doc._id, doc);
     return doc;
   }
-  
-  async findById(id: string, ownerUserId: string, session?: ClientSession): Promise<ConversationDoc | null> {
+
+  async createMany(docs: ConversationDoc[], session?: ClientSession): Promise<ConversationDoc[]> {
+    docs.forEach((doc) => this.data.set(doc._id, doc));
+    return docs;
+  }
+
+  async findById(
+    id: string,
+    ownerUserId: string,
+    session?: ClientSession
+  ): Promise<ConversationDoc | null> {
     const doc = this.data.get(id);
     if (!doc) return null;
     if (ownerUserId && doc.ownerUserId !== ownerUserId) return null;
     return doc;
   }
-  
-  async listByOwner(ownerUserId: string, limit: number, cursor?: string): Promise<{ items: ConversationDoc[]; nextCursor?: string | null; }> {
+
+  async listByOwner(
+    ownerUserId: string,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: ConversationDoc[]; nextCursor?: string | null }> {
     const items = Array.from(this.data.values())
-      .filter(v => v.ownerUserId === ownerUserId)
+      .filter((v) => v.ownerUserId === ownerUserId)
       .slice(0, limit);
     return { items, nextCursor: null };
   }
-  
-  async update(id: string, ownerUserId: string, updates: Partial<ConversationDoc>, session?: ClientSession): Promise<ConversationDoc | null> {
+
+  async deleteAll(ownerUserId: string, session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const [key, value] of this.data.entries()) {
+      if (value.ownerUserId === ownerUserId) {
+        this.data.delete(key);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  async update(
+    id: string,
+    ownerUserId: string,
+    updates: Partial<ConversationDoc>,
+    session?: ClientSession
+  ): Promise<ConversationDoc | null> {
     const doc = this.data.get(id);
     if (!doc || doc.ownerUserId !== ownerUserId) return null;
     const updated = { ...doc, ...updates };
     this.data.set(id, updated);
     return updated;
   }
-  
+
   async delete(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
     return this.hardDelete(id, ownerUserId, session);
   }
@@ -77,8 +106,9 @@ class InMemoryConvRepo implements ConversationRepository {
   }
 
   async findModifiedSince(ownerUserId: string, since: Date): Promise<ConversationDoc[]> {
-    return Array.from(this.data.values())
-      .filter(v => v.ownerUserId === ownerUserId && v.updatedAt >= since.getTime());
+    return Array.from(this.data.values()).filter(
+      (v) => v.ownerUserId === ownerUserId && v.updatedAt >= since.getTime()
+    );
   }
 }
 
@@ -89,9 +119,15 @@ describe('ConversationService', () => {
 
     // Create Doc
     const now = Date.now();
-    const doc: ConversationDoc = { _id: 'c1', ownerUserId: 'u1', title: 'T', createdAt: now, updatedAt: now };
+    const doc: ConversationDoc = {
+      _id: 'c1',
+      ownerUserId: 'u1',
+      title: 'T',
+      createdAt: now,
+      updatedAt: now,
+    };
     await svc.createDoc(doc);
-    
+
     const found = await svc.findDocById('c1', 'u1');
     expect(found).toEqual(doc);
 

@@ -1,12 +1,12 @@
 import { GraphEmbeddingService } from '../../src/core/services/GraphEmbeddingService';
 import { GraphManagementService } from '../../src/core/services/GraphManagementService';
-import { VectorService } from '../../src/core/services/VectorService';
+import { VectorStore } from '../../src/core/ports/VectorStore';
 import { GraphNodeDto } from '../../src/shared/dtos/graph';
 
 describe('GraphEmbeddingService', () => {
   let service: GraphEmbeddingService;
   let mockGraphService: jest.Mocked<GraphManagementService>;
-  let mockVectorService: jest.Mocked<VectorService>;
+  let mockVectorStore: jest.Mocked<VectorStore>;
 
   beforeEach(() => {
     mockGraphService = {
@@ -15,11 +15,29 @@ describe('GraphEmbeddingService', () => {
       deleteNode: jest.fn(),
       findNode: jest.fn(),
       listNodes: jest.fn(),
+      upsertEdge: jest.fn(),
+      deleteEdge: jest.fn(),
+      deleteEdgeBetween: jest.fn(),
+      listEdges: jest.fn(),
+      upsertCluster: jest.fn(),
+      deleteCluster: jest.fn(),
+      findCluster: jest.fn(),
+      listClusters: jest.fn(),
+      saveStats: jest.fn(),
+      getStats: jest.fn(),
+      deleteStats: jest.fn(),
+      listNodesByCluster: jest.fn(),
+      deleteEdgesByNodeIds: jest.fn(),
     } as unknown as jest.Mocked<GraphManagementService>;
 
-    mockVectorService = {} as unknown as jest.Mocked<VectorService>;
+    mockVectorStore = {
+      ensureCollection: jest.fn(),
+      upsert: jest.fn(),
+      search: jest.fn(),
+      deleteByFilter: jest.fn(),
+    } as unknown as jest.Mocked<VectorStore>;
 
-    service = new GraphEmbeddingService(mockGraphService, mockVectorService);
+    service = new GraphEmbeddingService(mockGraphService, mockVectorStore);
   });
 
   describe('upsertNode', () => {
@@ -33,7 +51,7 @@ describe('GraphEmbeddingService', () => {
         timestamp: null,
         numMessages: 0,
         createdAt: '',
-        updatedAt: ''
+        updatedAt: '',
       };
 
       await service.upsertNode(node);
@@ -52,7 +70,7 @@ describe('GraphEmbeddingService', () => {
   describe('deleteNode', () => {
     it('should delegate to graphManagementService.deleteNode', async () => {
       await service.deleteNode('u1', 1);
-      expect(mockGraphService.deleteNode).toHaveBeenCalledWith('u1', 1, undefined);
+      expect(mockGraphService.deleteNode).toHaveBeenCalledWith('u1', 1);
     });
   });
 
@@ -72,19 +90,27 @@ describe('GraphEmbeddingService', () => {
 
   describe('Vector operations (Disabled)', () => {
     it('prepareNodeAndVector should throw error', async () => {
-      await expect(service.prepareNodeAndVector({}, [], {})).rejects.toThrow('Vector operations are temporarily disabled');
+      await expect(service.prepareNodeAndVector({}, [], {})).rejects.toThrow(
+        'Vector operations are temporarily disabled'
+      );
     });
 
     it('applyBatchNodes should throw error', async () => {
-      await expect(service.applyBatchNodes([])).rejects.toThrow('Vector operations are temporarily disabled');
+      await expect(service.applyBatchNodes([])).rejects.toThrow(
+        'Vector operations are temporarily disabled'
+      );
     });
 
     it('searchNodesByVector should throw error', async () => {
-      await expect(service.searchNodesByVector('u1', 'col', [])).rejects.toThrow('Vector operations are temporarily disabled');
+      await expect(service.searchNodesByVector('u1', 'col', [])).rejects.toThrow(
+        'Vector operations are temporarily disabled'
+      );
     });
 
     it('findNodesMissingVectors should throw error', async () => {
-      await expect(service.findNodesMissingVectors('u1', 'col', [])).rejects.toThrow('Vector operations are temporarily disabled');
+      await expect(service.findNodesMissingVectors('u1', 'col', [])).rejects.toThrow(
+        'Vector operations are temporarily disabled'
+      );
     });
   });
 });

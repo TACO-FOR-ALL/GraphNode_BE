@@ -47,7 +47,7 @@ export interface FolderDto {
  * @property folderId 폴더 ID (선택)
  */
 export interface NoteCreateDto {
-  id : string;
+  id: string;
   title?: string;
   content: string;
   folderId?: string | null;

@@ -5,8 +5,12 @@ import { AiInteractionService } from '../../src/core/services/AiInteractionServi
 import { ChatManagementService } from '../../src/core/services/ChatManagementService';
 import { UserService } from '../../src/core/services/UserService';
 
-jest.mock('../../src/shared/openai/index', () => ({
-  openAI: jest.fn()
+jest.mock('../../src/shared/ai-providers/index', () => ({
+  getAiProvider: jest.fn().mockReturnValue({
+    checkAPIKeyValid: jest.fn().mockResolvedValue({ ok: true, data: true }),
+    requestWithoutStream: jest.fn(),
+    request: jest.fn(),
+  }),
 }));
 
 describe('AiInteractionService', () => {
@@ -17,7 +21,7 @@ describe('AiInteractionService', () => {
   beforeEach(() => {
     mockChatSvc = {} as any;
     mockUserSvc = {
-      getApiKeys: jest.fn()
+      getApiKeys: jest.fn(),
     } as any;
 
     service = new AiInteractionService(mockChatSvc, mockUserSvc);

@@ -1,53 +1,72 @@
 import request from 'supertest';
 
 import { createApp } from '../../src/bootstrap/server';
+import { generateAccessToken } from '../../src/app/utils/jwt';
 
 // 인메모리 스토어 모의
 const store = {
-  conversations: new Map<string, { id: string; title: string; updatedAt: string; messages: any[]; ownerUserId: string }>()
+  conversations: new Map<
+    string,
+    { id: string; title: string; updatedAt: string; messages: any[]; ownerUserId: string }
+  >(),
 };
 
 // 인증 및 서비스 레이어 모의
 jest.mock('../../src/core/services/GoogleOAuthService', () => ({
   GoogleOAuthService: class {
     buildAuthUrl = (state: string) => `http://mock.auth/url?state=${state}`;
-    exchangeCode = async (_code: string) => ({ access_token: 'at', expires_in: 3600, token_type: 'Bearer' });
-    fetchUserInfo = async (_token: any) => ({ sub: 'google-uid-test', email: 'test@example.com', name: 'Test User', picture: '' });
-  }
+    exchangeCode = async (_code: string) => ({
+      access_token: 'at',
+      expires_in: 3600,
+      token_type: 'Bearer',
+    });
+    fetchUserInfo = async (_token: any) => ({
+      sub: 'google-uid-test',
+      email: 'test@example.com',
+      name: 'Test User',
+      picture: '',
+    });
+  },
 }));
 
 jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => ({
   UserRepositoryMySQL: class {
-    async findOrCreateFromProvider() { return { id: 'user-test-id' } as any; }
-  }
+    async findOrCreateFromProvider() {
+      return { id: 'user-test-id' } as any;
+    }
+    async findById(id: any) {
+      if (id === 'user-test-id') return { id: 'user-test-id', email: 'test@example.com' };
+      return null;
+    }
+  },
 }));
 
-jest.mock('../../src/core/services/ConversationService', () => ({
-  ConversationService: class {
-    async create(ownerUserId: string, id: string, title: string, messages: any[]) {
+jest.mock('../../src/core/services/ChatManagementService', () => ({
+  ChatManagementService: class {
+    async createConversation(ownerUserId: string, id: string, title: string, messages: any[]) {
       const newConv = { id, title, messages, ownerUserId, updatedAt: new Date().toISOString() };
       store.conversations.set(id, newConv);
       return newConv;
     }
-    async bulkCreate(ownerUserId: string, threads: any[]) {
-      return threads.map(t => {
-        const newConv = { 
-          id: t.id || 'mock-id', 
-          title: t.title, 
-          messages: t.messages || [], 
-          ownerUserId, 
-          updatedAt: new Date().toISOString() 
+    async bulkCreateConversations(ownerUserId: string, threads: any[]) {
+      return threads.map((t) => {
+        const newConv = {
+          id: t.id || 'mock-id',
+          title: t.title,
+          messages: t.messages || [],
+          ownerUserId,
+          updatedAt: new Date().toISOString(),
         };
         store.conversations.set(newConv.id, newConv);
         return newConv;
       });
     }
-    async getById(id: string, ownerUserId: string) {
+    async getConversation(id: string, ownerUserId: string) {
       const conv = store.conversations.get(id);
       if (conv && conv.ownerUserId === ownerUserId) return conv;
       return null;
     }
-  }
+  },
 }));
 
 function appWithTestEnv() {
@@ -62,16 +81,19 @@ function appWithTestEnv() {
   process.env.QDRANT_API_KEY = 'test-key';
   process.env.QDRANT_COLLECTION_NAME = 'test-collection';
   process.env.REDIS_URL = 'redis://localhost:6379';
+  process.env.JWT_SECRET = 'test-jwt-secret';
   return createApp();
 }
 
 describe('POST /v1/ai/conversations/bulk', () => {
   let app: Express.Application;
   let agent: request.SuperTest<request.Test>;
+  let accessToken: string;
 
   beforeAll(async () => {
     app = appWithTestEnv();
     agent = request.agent(app);
+    accessToken = generateAccessToken({ userId: 'user-test-id' });
 
     // 로그인 플로우를 통해 세션 설정
     const startRes = await agent.get('/auth/google/start');
@@ -103,10 +125,8 @@ describe('POST /v1/ai/conversations/bulk', () => {
       ],
     };
 
-    const res = await agent
-      .post('/v1/ai/conversations/bulk')
-      .send(bulkRequest)
-      .expect(201);
+    const res = await agent.post('/v1/ai/conversations/bulk').send(bulkRequest);
+    expect(res.status).toBe(201);
 
     expect(res.body.conversations).toHaveLength(2);
     expect(res.body.conversations[0].title).toBe('Bulk Conv 1');
@@ -127,21 +147,13 @@ describe('POST /v1/ai/conversations/bulk', () => {
   it('should return 401 if not authenticated', async () => {
     const bulkRequest = { conversations: [] };
     // 새로운 인증되지 않은 에이전트로 요청
-    await request(app)
-      .post('/v1/ai/conversations/bulk')
-      .send(bulkRequest)
-      .expect(401);
+    await request(app).post('/v1/ai/conversations/bulk').send(bulkRequest).expect(401);
   });
 
   it('should return 400 for invalid request body', async () => {
     const invalidRequest = {
-      conversations: [
-        { id: 'conv-1' /* missing title */ },
-      ],
+      conversations: [{ id: 'conv-1' /* missing title */ }],
     };
-    await agent
-      .post('/v1/ai/conversations/bulk')
-      .send(invalidRequest)
-      .expect(400);
+    await agent.post('/v1/ai/conversations/bulk').send(invalidRequest).expect(400);
   });
 });

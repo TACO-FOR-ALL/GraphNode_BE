@@ -1,0 +1,32 @@
+{
+  "userId": "2",
+  "snapshot": {
+    "nodes": [
+      { "id": 8, "userId": "2", "origId": "ca8c8d78-f5bd-41c5-aca2-19ca79d7bd12", "clusterId": "cluster_4", "clusterName": "Software Development Concepts", "createdAt": "2025-12-19T05:45:18.842371Z", "numMessages": 6, "timestamp": null, "updatedAt": "2025-12-19T05:45:18.842371Z" },
+      { "id": 29, "userId": "2", "origId": "1c0812d1-46eb-4d72-be83-ec492718f190", "clusterId": "cluster_4", "clusterName": "Software Development Concepts", "createdAt": "2025-12-19T05:45:18.842371Z", "numMessages": 373, "timestamp": null, "updatedAt": "2025-12-19T05:45:18.842371Z" },
+      { "id": 24, "userId": "2", "origId": "40f2f9fc-f9c8-4d67-9a6b-dbb52c06a8de", "clusterId": "cluster_3", "clusterName": "Health and Fitness", "createdAt": "2025-12-19T05:45:18.842371Z", "numMessages": 246, "timestamp": null, "updatedAt": "2025-12-19T05:45:18.842371Z" },
+      { "id": 20, "userId": "2", "origId": "b0ad812e-393c-48fa-a211-1139757cf407", "clusterId": "cluster_5", "clusterName": "Language and Linguistics Research", "createdAt": "2025-12-19T05:45:18.842371Z", "numMessages": 235, "timestamp": null, "updatedAt": "2025-12-19T05:45:18.842371Z" },
+      { "id": 16, "userId": "2", "origId": "ceb856da-0b7c-494a-90fa-f51753ecfcae", "clusterId": "cluster_4", "clusterName": "Software Development Concepts", "createdAt": "2025-12-19T05:45:18.842371Z", "numMessages": 10, "timestamp": null, "updatedAt": "2025-12-19T05:45:18.842371Z" },
+      { "id": 14, "userId": "2", "origId": "cb232e1c-cebc-45e4-af64-2cecdbfa1c19", "clusterId": "cluster_4", "clusterName": "Software Development Concepts", "createdAt": "2025-12-19T05:45:18.842371Z", "numMessages": 295, "timestamp": null, "updatedAt": "2025-12-19T05:45:18.842371Z" },
+      { "id": 11, "userId": "2", "origId": "56511f1d-43a4-4735-8615-293685f6cd69", "clusterId": "cluster_3", "clusterName": "Health and Fitness", "createdAt": "2025-12-19T05:45:18.842371Z", "numMessages": 82, "timestamp": null, "updatedAt": "2025-12-19T05:45:18.842371Z" },
+      { "id": 10, "userId": "2", "origId": "5bd1d68d-5858-43b1-aac3-66b5053dd555", "clusterId": "cluster_4", "clusterName": "Software Development Concepts", "createdAt": "2025-12-19T05:45:18.842371Z", "numMessages": 4, "timestamp": null, "updatedAt": "2025-12-19T05:45:18.842371Z" },
+      { "id": 6, "userId": "2", "origId": "04d23595-31e6-4429-bf63-0612aabd6f4a", "clusterId": "cluster_4", "clusterName": "Software Development Concepts", "createdAt": "2025-12-19T05:45:18.842371Z", "numMessages": 8, "timestamp": null, "updatedAt": "2025-12-19T05:45:18.842371Z" },
+      { "id": 21, "userId": "2", "origId": "77919500-6b18-4332-bb53-55c032e1c3a4", "clusterId": "cluster_4", "clusterName": "Software Development Concepts", "createdAt": "2025-12-19T05:45:18.842371Z", "numMessages": 4, "timestamp": null, "updatedAt": "2025-12-19T05:45:18.842371Z" }
+    ],
+    "edges": [
+      { "id": "2::0->11", "userId": "2", "source": 0, "target": 11, "weight": 0.8544108867645264, "type": "hard", "intraCluster": false, "createdAt": "2025-12-18T12:54:53.776849Z", "updatedAt": "2025-12-18T12:54:53.776849Z" },
+      { "id": "2::0->15", "userId": "2", "source": 0, "target": 15, "weight": 0.8388729691505432, "type": "hard", "intraCluster": true, "createdAt": "2025-12-18T12:54:53.776849Z", "updatedAt": "2025-12-18T12:54:53.776849Z" },
+      { "id": "2::0->18", "userId": "2", "source": 0, "target": 18, "weight": 0.8895815014839172, "type": "hard", "intraCluster": true, "createdAt": "2025-12-18T12:54:53.776849Z", "updatedAt": "2025-12-18T12:54:53.776849Z" }
+    ],
+    "clusters": [
+      { "id": "cluster_1", "userId": "2", "name": "Religious Literature and Belief", "description": "Conversations focused on the intersection of literature, religion, and belief systems.", "size": 3, "themes": ["人本主义", "信仰", "宗教社会学", "陈映真小说", "文学表达"], "createdAt": "2025-12-19T05:45:18.842371Z", "updatedAt": "2025-12-19T05:45:18.842371Z" },
+      { "id": "cluster_2", "userId": "2", "name": "Virtual Content Creation", "description": "Discussions surrounding virtual YouTubers and content creation in digital spaces.", "size": 1, "themes": ["가상 youtuber", "vtuber", "디지털 콘텐츠", "유튜브", "소셜 미디어"], "createdAt": "2025-12-19T05:45:18.842371Z", "updatedAt": "2025-12-19T05:45:18.842371Z" }
+    ],
+    "stats": {
+      "nodes": 32,
+      "edges": 29,
+      "clusters": 5,
+      "generatedAt": "2025-12-19T05:45:18.842371Z"
+    }
+  }
+}

@@ -40,6 +40,10 @@ export interface UserProps {
   apiKeyOpenai?: string | null;
   /** DeepSeek API Key(선택) */
   apiKeyDeepseek?: string | null;
+  /** Claude API Key(선택) */
+  apiKeyClaude?: string | null;
+  /** Gemini API Key(선택) */
+  apiKeyGemini?: string | null;
 }
 
 /**
@@ -86,6 +90,14 @@ export class User {
   /** DeepSeek API Key(없으면 undefined) */
   get apiKeyDeepseek() {
     return this.props.apiKeyDeepseek ?? undefined;
+  }
+  /** Claude API Key(없으면 undefined) */
+  get apiKeyClaude() {
+    return this.props.apiKeyClaude ?? undefined;
+  }
+  /** Gemini API Key(없으면 undefined) */
+  get apiKeyGemini() {
+    return this.props.apiKeyGemini ?? undefined;
   }
   /**
    * 사용자 프로필 뷰로 매핑
