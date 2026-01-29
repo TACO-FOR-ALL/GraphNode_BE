@@ -9,7 +9,7 @@ on:
       - '.github/workflows/npm-deploy.yml'
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
@@ -21,6 +21,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 버전 태그 및 히스토리 확인을 위해 전체 가져오기
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -32,7 +35,14 @@ jobs:
       - name: Build SDK
         run: npm run build
 
+      - name: Automated Version Bump
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          # 패치 버전 자동 업데이트 (0.1.x -> 0.1.x+1)
+          npm version patch -m "chore: bump version to %s [skip ci]"
+          git push origin main --follow-tags
+
       - name: Publish to npm
+        # OIDC를 통한 인증 (Trusted Publishers 설정이 npm에서 선행되어야 함)
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

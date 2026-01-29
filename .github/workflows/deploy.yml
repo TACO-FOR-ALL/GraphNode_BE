@@ -10,6 +10,9 @@ on:
       - '.github/workflows/deploy.yml'
       - 'ecs/**'
       - 'src/**'
+      - 'Dockerfile'
+      - 'package*.json'
+      - 'prisma/**'
 
 # 권한 설정
 permissions:
