@@ -4,7 +4,10 @@ WORKDIR /app
 ENV NODE_ENV=development
 COPY package*.json ./
 RUN npm ci
+# Prisma 스키마를 먼저 복사해야 generate가 타입을 생성할 수 있음
+COPY prisma ./prisma
 RUN npx prisma generate
+# 나머지 소스 코드 복사
 COPY . .
 RUN npm run build
 
