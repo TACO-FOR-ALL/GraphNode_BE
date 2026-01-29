@@ -21,7 +21,7 @@ const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
 
   // 데이터베이스 연결 URL
-  MYSQL_URL: z.string().min(1, 'MYSQL_URL required'),
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL required'),
   MONGODB_URL: z.string().min(1, 'MONGODB_URL required'),
 
   // OAuth (Google 로그인) 설정

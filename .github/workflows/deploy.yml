@@ -64,21 +64,40 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-        # Amazon ECS 작업 정의에 새 이미지 ID 채우기
-      - name: Fill in the new image ID in the Amazon ECS task definition
-        id: task-def
+        # Amazon ECS 작업 정의에 새 이미지 ID 채우기 (API)
+      - name: Fill in the new image ID in the Amazon ECS task definition (API)
+        id: task-def-api
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: ecs/task-definition.json
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ steps.build-image.outputs.image }}
 
-        # Amazon ECS 서비스에 새 작업 정의 배포
-      - name: Deploy Amazon ECS task definition
+        # Amazon ECS 작업 정의에 새 이미지 ID 채우기 (Worker)
+      - name: Fill in the new image ID in the Amazon ECS task definition (Worker)
+        id: task-def-worker
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ecs/worker-task-definition.json
+          container-name: taco4_graphnode_worker_container
+          image: ${{ steps.build-image.outputs.image }}
+
+        # Amazon ECS 서비스에 새 작업 정의 배포 (API)
+      - name: Deploy Amazon ECS task definition (API)
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          task-definition: ${{ steps.task-def-api.outputs.task-definition }}
           service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+          force-new-deployment: true
+
+        # Amazon ECS 서비스에 새 작업 정의 배포 (Worker)
+      - name: Deploy Amazon ECS task definition (Worker)
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def-worker.outputs.task-definition }}
+          service: taco-4-graphnode-worker-service
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
           force-new-deployment: true
