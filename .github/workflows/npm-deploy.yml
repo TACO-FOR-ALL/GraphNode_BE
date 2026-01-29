@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # 버전 태그 및 히스토리 확인을 위해 전체 가져오기
+          fetch-depth: 0 # 버전 태그 및 히스토리 확인을 위해 전체 가져오기 ㅇ
 
       - uses: actions/setup-node@v4
         with:
