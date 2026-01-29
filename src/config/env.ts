@@ -37,23 +37,23 @@ const EnvSchema = z.object({
   OAUTH_APPLE_REDIRECT_URI: z.string().url('OAUTH_APPLE_REDIRECT_URI must be URL'),
 
   // Qdrant(VectorDB)
-  QDRANT_URL: z.string().min(1, 'QDRANT_URL must be URL'),
-  QDRANT_API_KEY: z.string().min(1, 'QDRANT_API_KEY required'),
-  QDRANT_COLLECTION_NAME: z.string().min(1, 'QDRANT_COLLECTION_NAME required'),
-  QDRANT_VECTOR_SIZE: z.coerce.number().int().positive().default(1536), // OpenAI 임베딩 차원 수
-  QDRANT_DISTANCE_METRIC: z.enum(['Cosine', 'Euclidean']).default('Cosine'), // 거리 측정 방식
+  // QDRANT_URL: z.string().min(1, 'QDRANT_URL must be URL'),
+  // QDRANT_API_KEY: z.string().min(1, 'QDRANT_API_KEY required'),
+  // QDRANT_COLLECTION_NAME: z.string().min(1, 'QDRANT_COLLECTION_NAME required'),
+  // QDRANT_VECTOR_SIZE: z.coerce.number().int().positive().default(1536), // OpenAI 임베딩 차원 수
+  // QDRANT_DISTANCE_METRIC: z.enum(['Cosine', 'Euclidean']).default('Cosine'), // 거리 측정 방식
 
   // Redis (캐시 및 세션 저장소) 설정
   REDIS_URL: z.string().min(1, 'REDIS_URL required'),
 
-  // Neo4j
-  NEO4J_URI: z.string().default('bolt://localhost:7687'),
-  NEO4J_USERNAME: z.string().default('neo4j'),
-  NEO4J_PASSWORD: z.string().default('password'),
+  // Neo4j FIXME
+  // NEO4J_URI: z.string().default('bolt://localhost:7687'),
+  // NEO4J_USERNAME: z.string().default('neo4j'),
+  // NEO4J_PASSWORD: z.string().default('password'),
 
-  // ChromaDB
-  CHROMA_API_URL: z.string().default('http://localhost:8000'),
-  CHROMA_API_KEY: z.string().optional(),
+  // // ChromaDB FIXME
+  // CHROMA_API_URL: z.string().default('http://localhost:8000'),
+  // CHROMA_API_KEY: z.string().optional(),
 
   // AWS
   AWS_REGION: z.string().default('ap-northeast-2'),

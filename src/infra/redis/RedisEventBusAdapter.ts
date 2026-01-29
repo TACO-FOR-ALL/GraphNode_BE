@@ -1,25 +1,17 @@
-import Redis from 'ioredis';
-
 import { EventBusPort } from '../../core/ports/EventBusPort';
-import { loadEnv } from '../../config/env';
 import { logger } from '../../shared/utils/logger';
 import { UpstreamError } from '../../shared/errors/domain';
+import { redis, redisSubscriber } from './client';
 
 /**
  * Redis 기반 이벤트 버스 어댑터
  *
  * 책임:
  * - Redis Pub/Sub을 사용하여 EventBusPort 인터페이스를 구현합니다.
- * - 발행용(Publisher)과 구독용(Subscriber) Redis 연결을 별도로 관리합니다.
+ * - 중앙에서 초기화된 발행용(Publisher)과 구독용(Subscriber) Redis 인스턴스를 공유하여 사용합니다.
  * - 애플리케이션 내의 이벤트 발행/구독 로직을 실제 인프라(Redis)와 연결합니다.
  */
 export class RedisEventBusAdapter implements EventBusPort {
-  /** 이벤트를 발행하는 전용 Redis 클라이언트 */
-  private readonly publisher: Redis;
-
-  /** 이벤트를 구독하고 수신하는 전용 Redis 클라이언트 (블로킹 방지) */
-  private readonly subscriber: Redis;
-
   /**
    * 구독 채널별 핸들러(콜백)를 관리하는 맵
    * key: channel name, value: callback function
@@ -28,18 +20,9 @@ export class RedisEventBusAdapter implements EventBusPort {
 
   /**
    * 생성자
-   * - 환경 변수에서 Redis URL을 로드합니다.
-   * - 발행용과 구독용 클라이언트를 각각 초기화합니다.
+   * - 중앙에서 관리되는 Redis 클라이언트들을 사용하도록 설정합니다.
    */
   constructor() {
-    const env = loadEnv();
-
-    // 발행용 클라이언트 초기화: 일반적인 Redis 명령 및 Publish 명령 수행
-    this.publisher = new Redis(env.REDIS_URL);
-
-    // 구독용 클라이언트 초기화: Subscribe 모드로 동작하며, 블로킹 작업이 발생할 수 있어 분리
-    this.subscriber = new Redis(env.REDIS_URL);
-
     // 구독자 이벤트 리스너 설정
     this.setupsubscriber();
   }
@@ -50,7 +33,7 @@ export class RedisEventBusAdapter implements EventBusPort {
    */
   private setupsubscriber() {
     // Redis 'message' 이벤트: 구독 중인 채널에 메시지가 도착하면 발생
-    this.subscriber.on('message', (channel, message) => {
+    redisSubscriber.on('message', (channel: string, message: string) => {
       try {
         // 1. 해당 채널에 등록된 핸들러가 있는지 확인
         const handler = this.handlers.get(channel);
@@ -68,14 +51,8 @@ export class RedisEventBusAdapter implements EventBusPort {
       }
     });
 
-    // Redis 클라이언트 자체 에러 핸들링 (연결 끊김 등)
-    this.publisher.on('error', (err) => {
-      logger.error({ err }, 'Redis Publisher Error');
-    });
-
-    this.subscriber.on('error', (err) => {
-      logger.error({ err }, 'Redis Subscriber Error');
-    });
+    // Redis 클라이언트 자체 에러 핸들링은 client.ts에서 공통 처리하므로 여기서는 생략 가능하지만,
+    // 특정 비즈니스 로그가 필요하다면 추가할 수 있습니다.
   }
 
   /**
@@ -91,8 +68,8 @@ export class RedisEventBusAdapter implements EventBusPort {
       // 1. 메시지 객체를 전송 가능한 문자열(JSON)로 직렬화
       const payload = JSON.stringify(message);
 
-      // 2. Redis Publisher 클라이언트를 통해 메시지 발행
-      await this.publisher.publish(channel, payload);
+      // 2. 중앙 Redis Publisher 클라이언트를 통해 메시지 발행
+      await redis.publish(channel, payload);
     } catch (error) {
       // 3. 실패 시 로깅 및 도메인 에러(UpstreamError)로 래핑하여 전파
       logger.error({ err: error, channel }, 'Failed to publish to Redis');
@@ -113,7 +90,7 @@ export class RedisEventBusAdapter implements EventBusPort {
     try {
       // 1. 아직 Redis 레벨에서 구독하지 않은 채널이라면 구독 명령 전송
       if (!this.handlers.has(channel)) {
-        await this.subscriber.subscribe(channel);
+        await redisSubscriber.subscribe(channel);
       }
 
       // 2. 로컬 맵에 채널과 핸들러 매핑 저장
@@ -135,7 +112,7 @@ export class RedisEventBusAdapter implements EventBusPort {
   async unsubscribe(channel: string): Promise<void> {
     try {
       // 1. Redis 레벨에서 구독 취소 명령 전송
-      await this.subscriber.unsubscribe(channel);
+      await redisSubscriber.unsubscribe(channel);
 
       // 2. 로컬 맵에서 핸들러 제거 (메모리 누수 방지)
       this.handlers.delete(channel);
