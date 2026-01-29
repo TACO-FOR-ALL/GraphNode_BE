@@ -7,20 +7,23 @@
 ├─ src/
 │  ├─ app/                # HTTP 레이어(Express): routes/controllers/middlewares/presenters
 │  │  ├─ routes/          # 라우트 정의(예: health.ts)
-│  │  ├─ controllers/     # 컨트롤러(입출력 바인딩)
-│  │  ├─ middlewares/     # 요청 컨텍스트/에러 핸들러 등
+│  │  ├─ controllers/     # 컨트롤러(입출력 바인딩, 요청 유효성 검사)
+│  │  ├─ middlewares/     # 요청 컨텍스트, 인증(JWT), 에러 핸들러 등
 │  │  └─ presenters/      # Problem Details 등 응답 변환기
-│  ├─ core/               # 비즈니스(프레임워크 비의존)
-│  │  ├─ domain/          # 엔티티/값 객체
-│  │  ├─ ports/           # 서비스가 의존하는 추상 포트(리포 인터페이스)
-│  │  └─ services/        # 유스케이스 구현
-│  ├─ infra/              # 어댑터(외부 시스템)
-│  │  ├─ db/              # DB 커넥션(MySQL/Mongo) 및 초기화
-│  │  └─ repositories/    # ports 구현체
-│  ├─ shared/             # 공통(DTO/에러/유틸 등)
-│  ├─ bootstrap/          # 서버 기동/DI 바인딩
-│  ├─ config/             # 환경 변수 스키마/로더
-│  └─ index.ts            # 엔트리포인트(부트스트랩 호출)
+│  ├─ core/               # 비즈니스 로직(Pure Logic, 프레임워크 비의존)
+│  │  ├─ domain/          # 엔티티, 값 객체, 도메인 이벤트
+│  │  ├─ ports/           # 서비스가 의존하는 추상 인터페이스(Repository Ports)
+│  │  └─ services/        # 유스케이스 구현(Business Logic)
+│  ├─ infra/              # 인프라스트럭처/어댑터(외부 시스템 연동)
+│  │  ├─ db/              # DB 커넥션(MySQL/Mongo) 초기화 및 싱글톤 관리
+│  │  └─ repositories/    # core/ports 인터페이스의 실제 DB 구현체
+│  ├─ shared/             # 공용 모듈(DTO, 에러 정의, 유틸리티, 로거)
+│  ├─ workers/            # 백그라운드 워커(SQS Consumer)
+│  │  ├─ handlers/        # SQS 메시지 유형별 처리 로직
+│  │  └─ index.ts         # 워커 엔트리포인트 (SQS Polling 기동)
+│  ├─ bootstrap/          # 애플리케이션 초기 설정 및 DI(Dependency Injection) 바인딩
+│  ├─ config/             # 환경 변수 스키마 검증 및 로더 (Zod 사용)
+│  └─ index.ts            # 메인 API 서버 엔트리포인트
 │
 ├─ docs/
 │  ├─ api/                # OpenAPI 3.1 계약 및 예제

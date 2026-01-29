@@ -4,6 +4,7 @@ WORKDIR /app
 ENV NODE_ENV=development
 COPY package*.json ./
 RUN npm ci
+RUN npx prisma generate
 COPY . .
 RUN npm run build
 
