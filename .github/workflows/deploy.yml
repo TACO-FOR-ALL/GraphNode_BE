@@ -16,7 +16,7 @@ on:
 
 # 권한 설정
 permissions:
-  id-token: write # This is required for requesting the JWT
+  id-token: write # This is required for requesting the JWT test
   contents: read # This is required for actions/checkout
 
 env:
