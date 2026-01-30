@@ -47,13 +47,13 @@ const EnvSchema = z.object({
   REDIS_URL: z.string().min(1, 'REDIS_URL required'),
 
   // Neo4j FIXME
-  // NEO4J_URI: z.string().default('bolt://localhost:7687'),
-  // NEO4J_USERNAME: z.string().default('neo4j'),
-  // NEO4J_PASSWORD: z.string().default('password'),
+  NEO4J_URI: z.string().default('bolt://localhost:7687'),
+  NEO4J_USERNAME: z.string().default('neo4j'),
+  NEO4J_PASSWORD: z.string().default('password'),
 
   // // ChromaDB FIXME
-  // CHROMA_API_URL: z.string().default('http://localhost:8000'),
-  // CHROMA_API_KEY: z.string().optional(),
+  CHROMA_API_URL: z.string().default('http://localhost:8000'),
+  CHROMA_API_KEY: z.string().optional(),
 
   // AWS
   AWS_REGION: z.string().default('ap-northeast-2'),
