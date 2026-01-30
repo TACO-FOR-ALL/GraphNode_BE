@@ -11,7 +11,7 @@ import { logger } from './shared/utils/logger';
     const { app } = await bootstrap();
 
     const port = Number(process.env.PORT) || 3000;
-    const host = process.env.HOST || '127.0.0.1';
+    const host = process.env.HOST || '0.0.0.0';
 
     const server = app.listen(port, host, () => {
       logger.info(

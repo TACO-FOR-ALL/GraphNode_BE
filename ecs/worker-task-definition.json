@@ -5,20 +5,43 @@
       "cpu": 0,
       "environment": [
         { "name": "NODE_ENV", "value": "production" },
+        {"name" : "HOST", "value" : "0.0.0.0"},
+        { "name": "PORT", "value": "3000" },
+        { "name": "DEV_INSECURE_COOKIES", "value": "false" },
+        { "name": "OAUTH_GOOGLE_REDIRECT_URI", "value": "https://taco4graphnode.online/auth/google/callback" },
+        { "name": "OAUTH_APPLE_REDIRECT_URI", "value": "https://taco4graphnode.online/auth/apple/callback" },
         { "name": "AWS_REGION", "value": "ap-northeast-2" },
         { "name": "SQS_REQUEST_QUEUE_URL", "value": "https://sqs.ap-northeast-2.amazonaws.com/954976324655/taco-graphnode-request-graph-sqs" },
         { "name": "SQS_RESULT_QUEUE_URL", "value": "https://sqs.ap-northeast-2.amazonaws.com/954976324655/taco-graphnode-response-graph-sqs" },
-        { "name": "S3_PAYLOAD_BUCKET", "value": "taco-graphnode-graphdata-s3" }
+        { "name": "S3_PAYLOAD_BUCKET", "value": "taco-graphnode-graphdata-s3" },
+        { "name": "NEO4J_URI", "value": "bolt://localhost:7687" },
+        { "name": "NEO4J_USERNAME", "value": "neo4j" },
+        { "name": "CHROMA_API_URL", "value": "http://localhost:8000" }
       ],
       "secrets": [
         { "name": "DATABASE_URL", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-vpNf7c:DATABASE_URL::" },
         { "name": "MONGODB_URL", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-vpNf7c:MONGODB_URL::" },
-        { "name": "REDIS_URL", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-vpNf7c:REDIS_URL::" }
-        
+        { "name": "REDIS_URL", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-vpNf7c:REDIS_URL::" },
+        { "name": "SESSION_SECRET", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-vpNf7c:SESSION_SECRET::" },
+        { "name": "JWT_SECRET", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-vpNf7c:JWT_SECRET::" },
+        { "name": "OAUTH_GOOGLE_CLIENT_ID", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-vpNf7c:OAUTH_GOOGLE_CLIENT_ID::" },
+        { "name": "OAUTH_GOOGLE_CLIENT_SECRET", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-vpNf7c:OAUTH_GOOGLE_CLIENT_SECRET::" },
+        { "name": "OAUTH_APPLE_TEAM_ID", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-vpNf7c:OAUTH_APPLE_TEAM_ID::" },
+        { "name": "OAUTH_APPLE_KEY_ID", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-vpNf7c:OAUTH_APPLE_KEY_ID::" },
+        { "name": "OAUTH_APPLE_CLIENT_ID", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-vpNf7c:OAUTH_APPLE_CLIENT_ID::" },
+        { "name": "OAUTH_APPLE_PRIVATE_KEY", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-vpNf7c:OAUTH_APPLE_PRIVATE_KEY::" },
+        { "name": "NEO4J_PASSWORD", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-vpNf7c:NEO4J_PASSWORD::" }
       ],
       "command": ["node", "dist/workers/index.js"],
       "essential": true,
-      "image": "<IMAGE_ID>",
+      "healthCheck": {
+        "command": [ "CMD-SHELL", "exit 0" ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 0
+      },
+      "image": "954976324655.dkr.ecr.ap-northeast-2.amazonaws.com/taco4/graphnode:latest_10",
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {

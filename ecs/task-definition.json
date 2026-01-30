@@ -5,6 +5,7 @@
       "cpu": 0,
       "environment": [
         { "name": "NODE_ENV", "value": "production" },
+        {"name" : "HOST", "value" : "0.0.0.0"},
         { "name": "PORT", "value": "3000" },
         { "name": "DEV_INSECURE_COOKIES", "value": "false" },
         { "name": "OAUTH_GOOGLE_REDIRECT_URI", "value": "https://taco4graphnode.online/auth/google/callback" },

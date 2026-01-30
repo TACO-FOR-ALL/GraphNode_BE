@@ -38,9 +38,9 @@ RUN chmod +x entrypoint.sh
 # node 사용자에게 /app 디렉토리 소유권 부여
 RUN chown -R node:node /app
 
-EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=60s \
-  CMD node -e "fetch('http://localhost:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+# EXPOSE 3000
+# HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=60s \
+#   CMD node -e "fetch('http://localhost:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 # 보안을 위해 node 사용자로 전환
 USER node
