@@ -94,8 +94,8 @@ export function createApp() {
 }
 
 export async function bootstrap() {
-  const app = createApp();
   const database = await initDatabases();
+  const app = createApp();
 
   return { app, database };
 }
