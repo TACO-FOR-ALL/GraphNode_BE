@@ -11,7 +11,8 @@ import { SQSClient } from '@aws-sdk/client-sqs';
 
 import { logger } from '../shared/utils/logger';
 import { loadEnv } from '../config/env';
-import { Container } from '../bootstrap/container'; // 기존 DI 컨테이너 재사용
+import { initDatabases } from '../infra/db';
+import { Container } from '../bootstrap/container';
 import { QueueMessage, TaskType } from '../shared/dtos/queue';
 // Handlers
 import { JobHandler } from './handlers/JobHandler';
@@ -19,10 +20,14 @@ import { GraphGenerationResultHandler } from './handlers/GraphGenerationResultHa
 
 async function startWorker() {
   const env = loadEnv();
+  console.log('Worker process starting...'); // Direct stdout for debugging
   logger.info('Starting Worker Process...');
 
-  // 1. Initialize Dependency Container
-  // API 서버와 동일한 설정을 사용하여 DB, Redis, S3 등의 연결을 맺습니다.
+  // 1. Initialize Databases (Redis, Mongo, Prisma)
+  // This is required for RedisEventBusAdapter and Repositories to work.
+  await initDatabases();
+  
+  // 2. Initialize Dependency Container
   const container = Container.getInstance();
 
   // 중요: DB 연결 등 비동기 초기화가 필요할 수 있음
