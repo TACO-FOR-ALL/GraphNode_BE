@@ -42,6 +42,13 @@ export const bulkCreateConversationsSchema = z.object({
 });
 
 /**
+ * 개발용 API 키 검증 요청 스키마
+ */
+export const devValidateApiKeySchema = z.object({
+  model: z.enum(['openai', 'deepseek', 'claude', 'gemini']).default('openai'),
+});
+
+/**
  * 대화방 수정 요청 스키마
  *
  * 현재는 제목(title) 수정만 지원합니다.
@@ -79,3 +86,4 @@ export type UpdateConversationRequest = z.infer<typeof updateConversationSchema>
 export type BulkCreateConversationsRequest = z.infer<typeof bulkCreateConversationsSchema>;
 export type CreateMessageRequest = z.infer<typeof createMessageSchema>;
 export type UpdateMessageRequest = z.infer<typeof updateMessageSchema>;
+export type DevValidateApiKeyRequest = z.infer<typeof devValidateApiKeySchema>;

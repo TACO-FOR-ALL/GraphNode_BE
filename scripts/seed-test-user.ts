@@ -82,6 +82,9 @@ async function main() {
       },
     });
     console.log(`✅ User created/updated: id=${user.id}`);
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`Your test user ID is: ${user.id}`);
+    console.log(`${'='.repeat(60)}\n`);
   } catch (error) {
     console.error('❌ Failed to create user:', error);
     throw error;

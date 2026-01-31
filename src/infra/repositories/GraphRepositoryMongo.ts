@@ -334,7 +334,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    */
   async getStats(userId: string): Promise<GraphStatsDoc | null> {
     try {
-      return await this.graphStats_col().findOne({ id: userId } as any);
+      return await this.graphStats_col().findOne({ userId } as any);
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.getStats failed', { cause: String(err) });
     }

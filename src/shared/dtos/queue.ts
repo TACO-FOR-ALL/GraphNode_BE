@@ -12,6 +12,7 @@
 export enum TaskType {
   GRAPH_GENERATION_REQUEST = 'GRAPH_GENERATION_REQUEST', // API -> AI
   GRAPH_GENERATION_RESULT = 'GRAPH_GENERATION_RESULT', // AI -> Worker
+  ADD_CONVERSATION_REQUEST = 'ADD_CONVERSATION_REQUEST', // API -> AI (single conversation)
 }
 
 // 공통 메시지 베이스
@@ -64,5 +65,25 @@ export interface GraphGenResultPayload extends BaseQueueMessage {
   };
 }
 
+// 3. API -> AI: 단일 대화 추가 요청 메시지
+/**
+ * 단일 대화 추가 요청 메시지 페이로드(API -> AI)
+ * - taskType: 메시지 타입 식별자
+ * - payload: 실제 요청 데이터
+ *  - userId: 요청한 사용자 ID
+ *  - conversationId: 추가할 대화 ID
+ *  - s3Key: 입력 데이터가 담긴 S3 키
+ *  - bucket: 버킷명 (옵션)
+ */
+export interface AddConversationRequestPayload extends BaseQueueMessage {
+  taskType: TaskType.ADD_CONVERSATION_REQUEST;
+  payload: {
+    userId: string;
+    conversationId: string;
+    s3Key: string;
+    bucket?: string;
+  };
+}
+
 // 전체 메시지 유니온 타입 (확장성을 위해)
-export type QueueMessage = GraphGenRequestPayload | GraphGenResultPayload;
+export type QueueMessage = GraphGenRequestPayload | GraphGenResultPayload | AddConversationRequestPayload;

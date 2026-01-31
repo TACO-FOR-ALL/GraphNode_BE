@@ -32,7 +32,7 @@ export const openAI = {
   async checkAPIKeyValid(apiKey: string): Promise<Result<true>> {
     const client = new OpenAI({ apiKey });
     try {
-      await client.models.retrieve('gpt-4o-mini', { timeout: 5000 });
+      await client.models.retrieve('gpt-4o-mini', { timeout: 3000 });
       return { ok: true, data: true };
     } catch (e) {
       return { ok: false, error: normalizeError(e) };

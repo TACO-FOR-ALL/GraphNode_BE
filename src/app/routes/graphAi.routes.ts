@@ -23,5 +23,11 @@ export function createGraphAiRouter(graphGenerationService: GraphGenerationServi
   // POST /v1/graph-ai/generate
   router.post('/generate', asyncHandler(graphAiController.generateGraph.bind(graphAiController)));
 
+  // POST /v1/graph-ai/add-conversation/:conversationId
+  router.post(
+    '/add-conversation/:conversationId',
+    asyncHandler(graphAiController.addConversationToGraph.bind(graphAiController))
+  );
+
   return router;
 }

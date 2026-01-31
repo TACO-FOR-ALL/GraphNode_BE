@@ -7,11 +7,11 @@ import { HttpClient } from '../../infra/http/httpClient';
 import { AiInputConversation, AiInputData, AiInputMappingNode } from '../../shared/dtos/ai_input';
 import { logger } from '../../shared/utils/logger';
 import { GraphSnapshotDto, PersistGraphPayloadDto } from '../../shared/dtos/graph';
-import { AppError, ConflictError, UpstreamError } from '../../shared/errors/domain';
+import { AppError, ConflictError, UpstreamError, NotFoundError } from '../../shared/errors/domain';
 import { ChatMessage } from '../../shared/dtos/ai';
 import { AiGraphOutputDto } from '../../shared/dtos/ai_graph_output';
 import { mapAiOutputToSnapshot } from '../../shared/mappers/ai_graph_output.mapper';
-import { GraphGenRequestPayload, TaskType } from '../../shared/dtos/queue';
+import { GraphGenRequestPayload, AddConversationRequestPayload, TaskType } from '../../shared/dtos/queue';
 // Interfaces
 import { QueuePort } from '../ports/QueuePort';
 import { StoragePort } from '../ports/StoragePort';
@@ -101,6 +101,101 @@ export class GraphGenerationService {
       logger.error({ err, userId }, 'Failed to enqueue graph generation request');
       if (err instanceof AppError) throw err;
       throw new UpstreamError('Failed to request graph generation via queue', {
+        cause: String(err),
+      });
+    }
+  }
+
+  /**
+   * [New] SQS 기반 단일 대화 추가 요청
+   * 단일 대화 데이터를 S3에 업로드하고, 작업 요청 메시지를 SQS에 발행합니다.
+   *
+   * @param userId 사용자 ID
+   * @param conversationId 추가할 대화 ID
+   * @returns 발행된 작업의 연관 ID (TaskId)
+   */
+  async requestAddConversationViaQueue(userId: string, conversationId: string): Promise<string> {
+    try {
+      const taskId = `task_add_conv_${userId}_${ulid()}`;
+      const s3Key = `graph-generation/${taskId}/conversation.json`;
+
+      logger.info({ userId, conversationId, taskId }, 'Preparing add conversation request');
+
+      // 1. Fetch single conversation with messages
+      const conversation = await this.chatManagementService.getConversation(conversationId, userId);
+
+      if (!conversation) {
+        throw new NotFoundError('Conversation not found');
+      }
+
+      // 2. Convert to AI input format (matching existing format)
+      const messages: ChatMessage[] = conversation.messages;
+      const mapping: Record<string, AiInputMappingNode> = {};
+
+      let prevMsgId: string | null = null;
+
+      // Sort messages by createdAt
+      messages.sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeA - timeB;
+      });
+
+      // Build mapping structure
+      for (const msg of messages) {
+        const id = msg.id;
+        mapping[id] = {
+          id: id,
+          message: {
+            id: id,
+            author: { role: msg.role },
+            content: { content_type: 'text', parts: [msg.content] },
+          },
+          parent: prevMsgId,
+          children: [],
+        };
+
+        if (prevMsgId && mapping[prevMsgId]) {
+          mapping[prevMsgId].children.push(id);
+        }
+
+        prevMsgId = id;
+      }
+
+      const aiInputData: AiInputConversation = {
+        id: conversation.id,
+        conversation_id: conversation.id,
+        title: conversation.title,
+        create_time: conversation.createdAt ? new Date(conversation.createdAt).getTime() / 1000 : 0,
+        update_time: conversation.updatedAt ? new Date(conversation.updatedAt).getTime() / 1000 : 0,
+        mapping: mapping,
+      };
+
+      // 3. Upload to S3
+      const dataStream = Readable.from(JSON.stringify(aiInputData));
+      await this.storagePort.upload(s3Key, dataStream, 'application/json');
+
+      // 4. Send SQS message
+      const messageBody: AddConversationRequestPayload = {
+        taskId,
+        taskType: TaskType.ADD_CONVERSATION_REQUEST,
+        payload: {
+          userId,
+          conversationId,
+          s3Key,
+          bucket: process.env.S3_PAYLOAD_BUCKET,
+        },
+        timestamp: new Date().toISOString(),
+      };
+
+      logger.info({ userId, conversationId, taskId }, 'Sending add conversation job to SQS');
+      await this.queuePort.sendMessage(this.jobQueueUrl, messageBody);
+
+      return taskId;
+    } catch (err) {
+      logger.error({ err, userId, conversationId }, 'Failed to queue add conversation request');
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('Failed to request add conversation via queue', {
         cause: String(err),
       });
     }

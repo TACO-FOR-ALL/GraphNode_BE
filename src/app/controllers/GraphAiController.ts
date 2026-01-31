@@ -52,4 +52,31 @@ export class GraphAiController {
       status: 'queued',
     });
   };
+
+  /**
+   * POST /v1/graph-ai/add-conversation/:conversationId
+   * 단일 대화를 기존 그래프에 추가합니다.
+   */
+  addConversationToGraph = async (req: Request, res: Response) => {
+    const userId = getUserIdFromRequest(req);
+    const { conversationId } = req.params;
+
+    // Validate conversationId format
+    if (!conversationId || typeof conversationId !== 'string') {
+      res.status(400).json({ message: 'Invalid conversationId' });
+      return;
+    }
+
+    // Request async processing via SQS
+    const taskId = await this.graphGenerationService.requestAddConversationViaQueue(
+      userId,
+      conversationId
+    );
+
+    res.status(202).json({
+      message: 'Add conversation to graph queued',
+      taskId: taskId,
+      status: 'queued',
+    });
+  };
 }
