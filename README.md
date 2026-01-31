@@ -115,10 +115,9 @@ console.log('TEST:', process.env.TEST_KEY);
 - `--env=value`명령어를 통해 특정 배포 상태의 환경 변수를 지정할 수 있습니다. (dev, staging, prod)
 
 ```bash
+# example
 infisical run --env=prod -- npm start
 ```
-
--
 
 3.  **데이터베이스 기동**:
     ```bash
