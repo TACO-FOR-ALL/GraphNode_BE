@@ -18,7 +18,8 @@
     "db:up": "docker compose up -d",
     "db:down": "docker compose down -v",
     "db:logs": "docker compose logs -f",
-    "test:users": "tsx tests/scripts/test-users-crud.ts"
+    "test:users": "tsx tests/scripts/test-users-crud.ts",
+    "seed:test-user": "tsx scripts/seed-test-user.ts"
   },
   "repository": {
     "type": "git",
