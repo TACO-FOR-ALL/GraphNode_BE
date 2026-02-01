@@ -1,5 +1,5 @@
 /**
- * 테스트 유저 (userId: "123") 시드 스크립트
+ * 테스트 유저 (userId: 자동) 시드 스크립트
  *
  * GraphNode_AI/main/output/FE_graph.json 데이터를 사용하여
  * 개발 환경에서 테스트할 수 있는 기본 데이터를 생성합니다.
@@ -44,7 +44,6 @@ interface FEGraphData {
 }
 
 const TEST_USER = {
-  userId: '123',
   provider: 'dev',
   providerUserId: '123',
   email: 'work.johnhan@gmail.com',
@@ -54,10 +53,11 @@ const TEST_USER = {
 };
 
 async function main() {
-  console.log('🌱 Starting seed for test user (userId: 123)...\n');
+  console.log('Starting seed for test user (userId: auto)...\n');
 
   // 1. PostgreSQL - User 생성
-  console.log('📦 Creating PostgreSQL user...');
+  console.log('Creating PostgreSQL user...');
+  let resolvedUserId = '1';
   try {
     const user = await prisma.user.upsert({
       where: {
@@ -85,13 +85,14 @@ async function main() {
     console.log(`\n${'='.repeat(60)}`);
     console.log(`Your test user ID is: ${user.id}`);
     console.log(`${'='.repeat(60)}\n`);
+    resolvedUserId = String(user.id);
   } catch (error) {
     console.error('❌ Failed to create user:', error);
     throw error;
   }
 
   // 2. MongoDB - Graph 데이터 생성
-  console.log('\n📦 Creating MongoDB graph data...');
+  console.log('\n Creating MongoDB graph data...');
 
   const mongoUrl = process.env.MONGODB_URL;
   if (!mongoUrl) {
@@ -112,20 +113,20 @@ async function main() {
       fs.readFileSync(graphDataPath, 'utf-8')
     );
 
-    console.log(`📊 Loaded graph data: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges, ${graphData.clusters.length} clusters`);
+    console.log(`Loaded graph data: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges, ${graphData.clusters.length} clusters`);
 
     // 기존 데이터 삭제
-    console.log('\n🗑️  Removing existing graph data for user 123...');
-    await db.collection('graph_nodes').deleteMany({ userId: TEST_USER.userId });
-    await db.collection('graph_edges').deleteMany({ userId: TEST_USER.userId });
-    await db.collection('graph_clusters').deleteMany({ userId: TEST_USER.userId });
-    await db.collection('graph_stats').deleteMany({ userId: TEST_USER.userId });
+    console.log(`\n  Removing existing graph data for user ${resolvedUserId}...`);
+    await db.collection('graph_nodes').deleteMany({ userId: resolvedUserId });
+    await db.collection('graph_edges').deleteMany({ userId: resolvedUserId });
+    await db.collection('graph_clusters').deleteMany({ userId: resolvedUserId });
+    await db.collection('graph_stats').deleteMany({ userId: resolvedUserId });
 
     // Nodes 삽입
     console.log('📥 Inserting graph nodes...');
     const nodes = graphData.nodes.map((node) => ({
       id: node.id,
-      userId: TEST_USER.userId,
+      userId: resolvedUserId,
       origId: node.orig_id,
       clusterId: node.cluster_id,
       clusterName: node.cluster_name,
@@ -143,7 +144,7 @@ async function main() {
     console.log('📥 Inserting graph edges...');
     const edges = graphData.edges.map((edge, index) => ({
       id: `edge_${index}`,
-      userId: TEST_USER.userId,
+      userId: resolvedUserId,
       source: edge.source,
       target: edge.target,
       weight: edge.weight,
@@ -161,11 +162,11 @@ async function main() {
     console.log('📥 Inserting graph clusters...');
     const clusters = graphData.clusters.map((cluster) => ({
       id: cluster.id,
-      userId: TEST_USER.userId,
+      userId: resolvedUserId,
       name: cluster.name,
       description: cluster.description,
       size: cluster.size,
-      themes: cluster.themes.slice(0, 3), // 최대 3개만
+      themes: cluster.themes.slice(0, 5), // 최대 3개만
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }));
@@ -175,9 +176,9 @@ async function main() {
     }
 
     // Stats 삽입
-    console.log('📥 Inserting graph stats...');
+    console.log(' Inserting graph stats...');
     await db.collection('graph_stats').insertOne({
-      userId: TEST_USER.userId,
+      userId: resolvedUserId,
       nodes: graphData.stats.nodes,
       edges: graphData.stats.edges,
       clusters: graphData.stats.clusters,
@@ -191,11 +192,11 @@ async function main() {
 
     console.log('\n✨ Seed completed successfully!');
     console.log('\n📌 Test user credentials:');
-    console.log(`   userId: ${TEST_USER.userId}`);
+    console.log(`   userId: ${resolvedUserId}`);
     console.log(`   email: ${TEST_USER.email}`);
     console.log(`   displayName: ${TEST_USER.displayName}`);
     console.log('\n💡 To use in development:');
-    console.log('   1. Frontend will auto-login with userId "123" in dev mode');
+    console.log('   1. Frontend will auto-login with providerUserId "123" in dev mode');
     console.log('   2. Or call: POST http://localhost:3000/dev/login');
     console.log('   3. Graph data is ready to visualize!\n');
   } catch (error) {
