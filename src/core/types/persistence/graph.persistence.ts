@@ -72,6 +72,23 @@ export interface GraphClusterDoc {
 }
 
 /**
+ * Graph Subcluster Document (MongoDB)
+ * Collection: graph_subclusters
+ */
+export interface GraphSubclusterDoc {
+  id: string; // "subcluster_4_1"
+  userId: string;
+  clusterId: string;
+  nodeIds: number[];
+  representativeNodeId: number;
+  size: number;
+  density: number;
+  topKeywords: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
  * Graph Stats Document (MongoDB)
  * Collection: graph_stats
  * @property id Key: userId

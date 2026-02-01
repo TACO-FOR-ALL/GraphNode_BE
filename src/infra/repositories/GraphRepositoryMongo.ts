@@ -5,6 +5,7 @@ import {
   GraphClusterDoc,
   GraphEdgeDoc,
   GraphNodeDoc,
+  GraphSubclusterDoc,
   GraphStatsDoc,
 } from '../../core/types/persistence/graph.persistence';
 import { getMongo } from '../db/mongodb';
@@ -33,6 +34,9 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     return this.db().collection<GraphStatsDoc>('graph_stats');
   }
 
+  private graphSubclusters_col() {
+    return this.db().collection<GraphSubclusterDoc>('graph_subclusters');
+  }
 
   /**
    * 노드 생성 또는 업데이트 (upsert).
@@ -310,6 +314,51 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         .toArray();
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.listClusters failed', { cause: String(err) });
+    }
+  }
+
+
+
+  async upsertSubcluster(subcluster: GraphSubclusterDoc, options?: RepoOptions): Promise<void> {
+    try {
+      await this.graphSubclusters_col().updateOne(
+        { id: subcluster.id, userId: subcluster.userId } as any,
+        { $set: subcluster },
+        { upsert: true, ...options, session: options?.session as any }
+      );
+    } catch (err: unknown) {
+      throw new UpstreamError('GraphRepositoryMongo.upsertSubcluster failed', {
+        cause: String(err),
+      });
+    }
+  }
+
+  async deleteSubcluster(
+    userId: string,
+    subclusterId: string,
+    options?: RepoOptions
+  ): Promise<void> {
+    try {
+      await this.graphSubclusters_col().deleteOne({ id: subclusterId, userId } as any, {
+        ...options,
+        session: options?.session as any,
+      });
+    } catch (err: unknown) {
+      throw new UpstreamError('GraphRepositoryMongo.deleteSubcluster failed', {
+        cause: String(err),
+      });
+    }
+  }
+
+  async listSubclusters(userId: string): Promise<GraphSubclusterDoc[]> {
+    try {
+      return await this.graphSubclusters_col()
+        .find({ userId } as any)
+        .toArray();
+    } catch (err: unknown) {
+      throw new UpstreamError('GraphRepositoryMongo.listSubclusters failed', {
+        cause: String(err),
+      });
     }
   }
 

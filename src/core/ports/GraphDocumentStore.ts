@@ -2,6 +2,7 @@ import {
   GraphNodeDoc,
   GraphEdgeDoc,
   GraphClusterDoc,
+  GraphSubclusterDoc,
   GraphStatsDoc,
 } from '../types/persistence/graph.persistence';
 
@@ -51,6 +52,11 @@ export interface GraphDocumentStore {
   deleteCluster(userId: string, clusterId: string, options?: RepoOptions): Promise<void>;
   findCluster(userId: string, clusterId: string): Promise<GraphClusterDoc | null>;
   listClusters(userId: string): Promise<GraphClusterDoc[]>;
+
+  // Subclusters
+  upsertSubcluster(subcluster: GraphSubclusterDoc, options?: RepoOptions): Promise<void>;
+  deleteSubcluster(userId: string, subclusterId: string, options?: RepoOptions): Promise<void>;
+  listSubclusters(userId: string): Promise<GraphSubclusterDoc[]>;
 
   // --- 통계(Stats) 관련 메서드 ---
   saveStats(stats: GraphStatsDoc, options?: RepoOptions): Promise<void>;

@@ -142,11 +142,32 @@ export interface GraphStatsDto {
 }
 
 /**
+ * 그래프 서브클러스터 DTO.
+ */
+export interface GraphSubclusterDto {
+  /** 서브클러스터 ID */
+  id: string;
+  /** 소속 클러스터 ID */
+  clusterId: string;
+  /** 포함된 노드 ID 목록 */
+  nodeIds: number[];
+  /** 대표 노드 ID */
+  representativeNodeId: number;
+  /** 서브클러스터 크기 (노드 수) */
+  size: number;
+  /** 밀도 */
+  density: number;
+  /** 주요 키워드 */
+  topKeywords: string[];
+}
+
+/**
  * 그래프 스냅샷 DTO(단일 사용자 기준).
  * @public
  * @param nodes - 그래프 노드 목록
  * @param edges - 그래프 엣지 목록
  * @param clusters - 그래프 클러스터 목록
+ * @param subclusters - 그래프 서브클러스터 목록
  * @param stats - 그래프 통계
  * @remarks
  * - 외부 AI 모듈이 전달하는 페이로드 구조와 일치한다.
@@ -158,6 +179,8 @@ export interface GraphSnapshotDto {
   edges: GraphEdgeDto[];
   /** 그래프 클러스터 목록 */
   clusters: GraphClusterDto[];
+  /** 그래프 서브클러스터 목록 */
+  subclusters?: GraphSubclusterDto[];
   /** 그래프 통계 */
   stats: Omit<GraphStatsDto, 'userId'>;
 }

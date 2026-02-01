@@ -340,7 +340,11 @@ export class Container {
    */
   getAiInteractionService(): AiInteractionService {
     if (!this.aiInteractionService) {
-      const raw = new AiInteractionService(this.getChatManagementService(), this.getUserService());
+      const raw = new AiInteractionService(
+        this.getChatManagementService(),
+        this.getUserService(),
+        this.getAwsS3Adapter()
+      );
       this.aiInteractionService = createAuditProxy(raw, 'AiInteractionService');
     }
     return this.aiInteractionService;

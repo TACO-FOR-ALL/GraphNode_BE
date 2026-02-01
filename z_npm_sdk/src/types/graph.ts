@@ -101,17 +101,36 @@ export interface GraphStatsDto {
 }
 
 /**
+ * 그래프 서브클러스터 DTO
+ * @public
+ */
+export interface GraphSubclusterDto {
+  id: string;
+  userId: string;
+  clusterId: string;
+  nodeIds: number[];
+  representativeNodeId: number;
+  size: number;
+  density: number;
+  topKeywords: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/**
  * 그래프 스냅샷 DTO (전체 그래프 데이터)
  * @public
  * @property nodes 노드 목록
  * @property edges 엣지 목록
  * @property clusters 클러스터 목록
+ * @property subclusters 서브클러스터 목록
  * @property stats 그래프 통계 (userId 제외)
  */
 export interface GraphSnapshotDto {
   nodes: GraphNodeDto[];
   edges: GraphEdgeDto[];
   clusters: GraphClusterDto[];
+  subclusters?: GraphSubclusterDto[];
   stats: Omit<GraphStatsDto, 'userId'>;
 }
 

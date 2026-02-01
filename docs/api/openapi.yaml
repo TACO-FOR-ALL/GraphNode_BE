@@ -463,6 +463,78 @@ paths:
             application/problem+json:
               schema:
                 $ref: ../schemas/problem.json
+  /v1/ai/conversations/{conversationId}/chat:
+    post:
+      summary: Send message to AI (Chat)
+      description: Sends a user message to the AI model. Supports file uploads for multimodal models (e.g., OpenAI Assistants, GPT-4o).
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [model, chatContent]
+              properties:
+                id: { type: string, format: uuid }
+                model:
+                  type: string
+                  enum: [openai, claude, gemini, deepseek]
+                chatContent: { type: string }
+                files:
+                  type: array
+                  items: { type: string, format: binary }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title: { type: string }
+                  messages:
+                    type: array
+                    items: { $ref: ../schemas/message.json }
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+  /v1/ai/files/{key}:
+    get:
+      summary: Download AI file
+      description: Downloads a file generated or uploaded during AI chat interactions.
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '404':
+          description: File not found
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
   /auth/logout:
     post:
       summary: Logout and destroy session
@@ -798,6 +870,100 @@ paths:
           description: Cluster deleted successfully.
         '401':
           description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/subclusters:
+    post:
+      summary: Create or update a graph subcluster
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/graph-subcluster.json
+      responses:
+        '201':
+          description: Subcluster created/updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/graph-subcluster.json
+        '400':
+          description: Bad Request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+    get:
+      summary: List all graph subclusters for the user
+      responses:
+        '200':
+          description: A list of graph subclusters.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: ../schemas/graph-subcluster.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/subclusters/{subclusterId}:
+    get:
+      summary: Get a specific graph subcluster
+      parameters:
+        - name: subclusterId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The requested graph subcluster.
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/graph-subcluster.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '404':
+          description: Subcluster not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+    delete:
+      summary: Delete a graph subcluster
+      parameters:
+        - name: subclusterId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Subcluster deleted successfully.
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
           content:
             application/problem+json:
               schema:

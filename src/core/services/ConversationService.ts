@@ -170,7 +170,7 @@ export class ConversationService {
   async updateDoc(
     id: string,
     ownerUserId: string,
-    updates: Partial<Pick<ChatThread, 'title'>> & { updatedAt?: number },
+    updates: Partial<ConversationDoc>, // Widened from Restricted Pick
     session?: ClientSession
   ): Promise<ConversationDoc | null> {
     try {

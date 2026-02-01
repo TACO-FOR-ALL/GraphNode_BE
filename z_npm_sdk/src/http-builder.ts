@@ -139,8 +139,12 @@ export class RequestBuilder {
     return this.baseUrl + path + (qs ? `?${qs}` : '');
   }
 
-  private async send<T>(method: string, body?: unknown): Promise<HttpResponse<T>> {
-    const headers = { ...this.headers } as Record<string, string>;
+  public async sendRaw(
+    method: string,
+    body?: unknown,
+    extraHeaders?: Record<string, string>
+  ): Promise<Response> {
+    const headers = { ...this.headers, ...extraHeaders } as Record<string, string>;
 
     // Access Token 주입
     if (this.accessToken) {
@@ -152,12 +156,45 @@ export class RequestBuilder {
 
     const init: RequestInit = { method, headers, credentials: this.credentials };
     if (body !== undefined) {
-      headers['Content-Type'] = 'application/json';
-      init.body = JSON.stringify(body);
+      if (typeof FormData !== 'undefined' && body instanceof FormData) {
+        init.body = body;
+      } else {
+        headers['Content-Type'] = 'application/json';
+        init.body = JSON.stringify(body);
+      }
     }
 
+    const makeRequest = async () => this.fetchImpl(this.url(), init);
+    let res = await makeRequest();
+
+    // 401 Unauthorized 발생 시 Refresh Token으로 갱신 시도
+    if (res.status === 401) {
+      try {
+        // Refresh API 호출 (http-builder 내부 로직 재사용 방지 위해 fetchImpl 직접 사용)
+        const refreshUrl = `${this.baseUrl}/auth/refresh`;
+        const refreshRes = await this.fetchImpl(refreshUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include', // 쿠키 전송 필수
+        });
+
+        if (refreshRes.ok) {
+          // 갱신 성공 시, 원래 요청 재시도
+          // (브라우저가 새 Access Token 쿠키를 자동으로 저장했으므로, 재요청 시 새 토큰이 나감)
+          res = await makeRequest();
+        }
+      } catch (e) {
+        // Refresh 실패 시, 원래의 401 응답을 그대로 반환 (또는 로깅)
+        console.error('Auto-refresh failed:', e);
+      }
+    }
+
+    return res;
+  }
+
+  private async send<T>(method: string, body?: unknown): Promise<HttpResponse<T>> {
     try {
-      const res = await this.fetchImpl(this.url(), init);
+      const res = await this.sendRaw(method, body);
       const ct = res.headers.get('content-type') || '';
       const isJson = ct.includes('application/json') || ct.includes('application/problem+json');
 
@@ -194,7 +231,7 @@ export class RequestBuilder {
       return {
         isSuccess: false,
         error: {
-          statusCode: 0, // Network error or other fetch-related error
+          statusCode: 0,
           message: err.message,
         },
       };

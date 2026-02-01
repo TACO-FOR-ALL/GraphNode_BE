@@ -22,6 +22,7 @@ import {
   GraphEdgeDoc,
   GraphNodeDoc,
   GraphStatsDoc,
+  GraphSubclusterDoc,
 } from '../types/persistence/graph.persistence';
 
 /**
@@ -345,6 +346,50 @@ export class GraphManagementService {
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.listClusters failed', { cause: String(err) });
+    }
+  }
+
+  // --- Subclusters ---
+
+  /**
+   * 서브클러스터 생성 또는 업데이트
+   */
+  async upsertSubcluster(subcluster: GraphSubclusterDoc, options?: RepoOptions): Promise<void> {
+    try {
+      await this.repo.upsertSubcluster(subcluster, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.upsertSubcluster failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 서브클러스터 삭제
+   */
+  async deleteSubcluster(
+    userId: string,
+    subclusterId: string,
+    options?: RepoOptions
+  ): Promise<void> {
+    try {
+      this.assertUser(userId);
+      await this.repo.deleteSubcluster(userId, subclusterId, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.deleteSubcluster failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 서브클러스터 목록 조회
+   */
+  async listSubclusters(userId: string): Promise<GraphSubclusterDoc[]> {
+    try {
+      this.assertUser(userId);
+      return await this.repo.listSubclusters(userId);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.listSubclusters failed', { cause: String(err) });
     }
   }
 
