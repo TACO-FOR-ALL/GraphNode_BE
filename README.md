@@ -134,7 +134,7 @@ infisical run --env=prod -- npm start
 
 프로젝트의 모든 문서는 내장된 **[문서 포털](docs/index.html)**을 통해 정적 웹 페이지 형태로 확인하실 수 있습니다.
 
-- **API Reference**: Swagger UI / Redoc을 통한 인터랙티브 명세
+- **API Reference**: [OpenAPI Spec (YAML)](docs/api/openapi.yaml) / Swagger UI / Redoc을 통한 인터랙티브 명세
 - **TypeDoc**: 소스 코드 레벨의 클래스/함수 레퍼런스
 - **Guides**: 일일 개발 일지 및 트러블슈팅 가이드
 
