@@ -53,6 +53,8 @@ export class AddConversationRequestHandler implements JobHandler {
           isNewCluster: boolean;
           confidence: number;
           reasoning: string;
+          name?: string;
+          themes?: string[];
         };
       }>('/add-node', inputData);
 
@@ -64,19 +66,19 @@ export class AddConversationRequestHandler implements JobHandler {
       // 3. MongoDB에 저장
       // 노드 ID 생성 (기존 노드들의 max ID + 1)
       const existingNodes = await graphService.listNodes(userId);
-      let nextNodeId = existingNodes.length > 0
+      const nextNodeId = existingNodes.length > 0
         ? Math.max(...existingNodes.map(n => n.id)) + 1
         : 1;
 
       const createdNodeIds: Map<number, number> = new Map(); // tempId -> realId
 
-      // 노드 저장
+      // 노드 저장 (항상 1개만 추가)
       for (const node of aiResult.nodes) {
-        const nodeId = nextNodeId++;
-        createdNodeIds.set(node._tempId || 1, nodeId);
+        const tempId = node.id;  // -1 (AI 서버에서 설정한 임시 ID)
+        createdNodeIds.set(tempId, nextNodeId);
 
         await graphService.upsertNode({
-          id: nodeId,
+          id: nextNodeId,
           userId,
           origId: node.origId,
           clusterId: node.clusterId,
@@ -96,6 +98,27 @@ export class AddConversationRequestHandler implements JobHandler {
           target: edge.target,
           weight: edge.weight || 1.0,
           type: edge.type || 'similarity',
+        });
+      }
+
+      // 클러스터 저장 (새 클러스터인 경우)
+      // 이부분은 아예 llm에게 새 클러스터를 요청하는 경우는 없게 하는 방안도 생각중
+      if (aiResult.assignedCluster?.isNewCluster) {
+        const newClusterId = aiResult.assignedCluster.clusterId;
+        const clusterName = aiResult.assignedCluster.name || 'New Cluster';
+        const clusterThemes = aiResult.assignedCluster.themes || [];
+
+        logger.info({ clusterId: newClusterId, name: clusterName }, 'Creating new cluster');
+
+        await graphService.upsertCluster({
+          id: newClusterId,
+          userId,
+          name: clusterName,
+          description: aiResult.assignedCluster.reasoning || '',
+          themes: clusterThemes,
+          nodeCount: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
         });
       }
 
