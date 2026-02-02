@@ -18,8 +18,7 @@ export async function devLogin(req: Request, res: Response) {
     return res.status(404).json({ message: 'Not found' });
   }
 
-  // 요청 body에서 providerUserId 받기 (없으면 기본값 '123')
-  const providerUserId = req.body.userId || '123';
+  const providerUserId = req.body.userId || '1';
 
   // DB에서 실제 유저 찾기
   const userRepo = new UserRepositoryMySQL();
