@@ -45,7 +45,7 @@ interface FEGraphData {
 
 const TEST_USER = {
   provider: 'dev',
-  providerUserId: '123',
+  providerUserId: '1',
   email: 'work.johnhan@gmail.com',
   displayName: 'John Han',
   avatarUrl:
@@ -107,7 +107,7 @@ async function main() {
     // FE_graph.json 로드
     const graphDataPath = path.join(
       __dirname,
-      '../../GraphNode_AI/main/output/FE_graph.json'
+      '../../GraphNode_AI/Ky/output/FE_graph.json'
     );
     const graphData: FEGraphData = JSON.parse(
       fs.readFileSync(graphDataPath, 'utf-8')
@@ -185,7 +185,7 @@ async function main() {
       generatedAt: new Date().toISOString(),
       metadata: {
         source: 'seed-script',
-        originalFile: 'GraphNode_AI/main/output/FE_graph.json',
+        originalFile: 'GraphNode_AI/Ky/output/FE_graph.json',
       },
     });
     console.log(`✅ Inserted graph stats`);
@@ -196,7 +196,7 @@ async function main() {
     console.log(`   email: ${TEST_USER.email}`);
     console.log(`   displayName: ${TEST_USER.displayName}`);
     console.log('\n💡 To use in development:');
-    console.log('   1. Frontend will auto-login with providerUserId "123" in dev mode');
+    console.log('   1. Frontend will auto-login with providerUserId "1" in dev mode');
     console.log('   2. Or call: POST http://localhost:3000/dev/login');
     console.log('   3. Graph data is ready to visualize!\n');
   } catch (error) {
