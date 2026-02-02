@@ -83,14 +83,6 @@ GraphNode는 대화형 AI와 지식 그래프를 결합한 차세대 지식 관�
     npm run dev    # API 서버: http://localhost:3000
     ```
 
-5.  **테스트 유저 데이터 생성** (선택):
-    ```bash
-    npm run seed:test-user
-    ```
-    - userId `"123"`으로 테스트 계정 및 샘플 그래프 데이터 생성
-    - 프론트엔드 개발 모드에서 자동 로그인됨
-    - GraphNode_AI/main/output 기반 실제 그래프 데이터 포함
-
 ---
 
 ## 📚 Documentation Portal
