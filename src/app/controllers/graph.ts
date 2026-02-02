@@ -58,14 +58,32 @@ export class GraphController {
   /**
    * 노드 목록 조회
    * [GET] /v1/graph/nodes
+   * Query params:
+   * - clusterId: 특정 클러스터만 조회
+   * - includeEmbeddings: true이면 embedding 포함 (기본 false)
+   *    - graph render시에는 embedding이 필요하지 않고
+   *    - ai서버에서 add_node시에 필요해서 추가
    */
   async listNodes(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
 
-    // 서비스 호출 (전체 노드 목록)
-    const nodes = await this.graphEmbeddingService.listNodes(userId);
+    const clusterId = typeof req.query.clusterId === 'string' ? req.query.clusterId : undefined;
+    const includeEmbeddings = req.query.includeEmbeddings === 'true';
 
-    res.status(200).json(nodes);
+    const nodes = clusterId
+      ? await this.graphEmbeddingService.listNodesByCluster(userId, clusterId)
+      : await this.graphEmbeddingService.listNodes(userId);
+
+    // includeEmbeddings가 false면 embedding 필드 제거
+    if (!includeEmbeddings) {
+      const nodesWithoutEmbedding = nodes.map(node => {
+        const { embedding, ...rest } = node;
+        return rest;
+      });
+      res.status(200).json(nodesWithoutEmbedding);
+    } else {
+      res.status(200).json(nodes);
+    }
   }
 
   /**

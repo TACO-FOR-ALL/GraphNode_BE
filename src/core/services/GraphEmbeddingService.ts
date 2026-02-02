@@ -144,6 +144,10 @@ export class GraphEmbeddingService {
     return this.graphManagementService.listNodes(userId);
   }
 
+  listNodesByCluster(userId: string, clusterId: string) {
+    return this.graphManagementService.listNodesByCluster(userId, clusterId);
+  }
+
   /**
    * 그래프 엣지를 생성하거나 갱신합니다.
    * @param edge - 저장할 엣지 데이터. `userId`, `source`, `target`은 필수입니다.

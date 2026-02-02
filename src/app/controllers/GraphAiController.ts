@@ -67,14 +67,13 @@ export class GraphAiController {
       return;
     }
 
-    // Request async processing via SQS
-    const taskId = await this.graphGenerationService.requestAddConversationViaQueue(
-      userId,
-      conversationId
-    );
+    const useDirect = process.env.GRAPH_AI_DIRECT === 'true';
+    const taskId = useDirect
+      ? await this.graphGenerationService.requestAddConversationDirect(userId, conversationId)
+      : await this.graphGenerationService.requestAddConversationViaQueue(userId, conversationId);
 
     res.status(202).json({
-      message: 'Add conversation to graph queued',
+      message: useDirect ? 'Add conversation to graph started (Direct)' : 'Add conversation to graph queued',
       taskId: taskId,
       status: 'queued',
     });
