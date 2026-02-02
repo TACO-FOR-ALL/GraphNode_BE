@@ -125,6 +125,61 @@ paths:
                   data: {"type":"CONNECTED","message":"SSE Connection established"}
 
                   data: {"type":"JOB_COMPLETED","payload":{...}}
+  /v1/notifications/device-token:
+    post:
+      summary: Register FCM device token
+      description: Registers a Firebase Cloud Messaging (FCM) token for the authenticated user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  description: The FCM device token to register.
+      responses:
+        '200':
+          description: Token registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+        '400':
+          description: Bad Request (missing token)
+        '401':
+          description: Not authenticated
+    delete:
+      summary: Unregister FCM device token
+      description: Removes a Firebase Cloud Messaging (FCM) token for the authenticated user (e.g., on logout).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  description: The FCM device token to unregister.
+      responses:
+        '200':
+          description: Token unregistered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+        '400':
+          description: Bad Request (missing token)
+        '401':
+          description: Not authenticated
   /v1/me:
     get:
       summary: Check login status

@@ -21,6 +21,7 @@ GraphNode는 대화형 AI와 지식 그래프를 결합한 차세대 지식 관�
 | 🌐 [시스템 전체 구조](docs/architecture/ARCHITECTURE.md)  | 전반적인 컴포넌트 구성 및 데이터 흐름      |
 | 📩 [SQS 비동기 파이프라인](docs/architecture/SQS_FLOW.md) | BE-AI 서버 간의 메시징 워크플로우          |
 | 🔐 [인증 및 보안 시스템](docs/architecture/AUTH_JWT.md)   | JWT 및 소셜(Google/Apple) 로그인 구현 방식 |
+| 📱 [FCM 모바일 알림 구조](docs/guides/FCM-NOTIFICATION-FLOW.md) | Firebase Cloud Messaging 기반 푸시 알림 설계 |
 
 ---
 

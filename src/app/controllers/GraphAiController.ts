@@ -27,6 +27,24 @@ export class GraphAiController {
   };
 
   /**
+   * POST /v1/graph-ai/summary
+   * 그래프 요약 생성을 요청합니다.
+   */
+  summarizeGraph = async (req: Request, res: Response) => {
+    const userId = getUserIdFromRequest(req);
+
+    // 그래프 요약 프로세스 시작 (SQS 요청)
+    // FIXME: 실제 구현 시 GraphGenerationService의 메서드가 SQS 메시지를 발행하도록 구성해야 함
+    const taskId = await this.graphGenerationService.requestGraphSummary(userId!);
+
+    res.status(202).json({
+      message: 'Graph summary generation queued',
+      taskId: taskId,
+      status: 'queued',
+    });
+  };
+
+  /**
    * [테스트용] POST /v1/graph-ai/test/generate-json
    * 클라이언트로부터 직접 JSON 데이터를 받아 그래프 생성을 요청합니다.
    */

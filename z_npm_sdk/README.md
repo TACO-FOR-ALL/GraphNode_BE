@@ -7,8 +7,7 @@ GraphNode 백엔드 API를 타입 안전(Type-Safe)하게 사용할 수 있도�
 ## 📦 설치 (Installation)
 
 ```bash
-npm install graphnode-sdk
-# 또는 yarn add graphnode-sdk
+npm install @taco_tsinghua/graphnode-sdk
 ```
 
 *(현재는 모노레포 내부 패키지로 관리되고 있습니다.)*

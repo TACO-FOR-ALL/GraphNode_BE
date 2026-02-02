@@ -56,4 +56,46 @@ export class NotificationController {
       res.end();
     }
   }
+
+  /**
+   * FCM 디바이스 토큰 등록
+   * POST /v1/notifications/device-token
+   * Body: { token: string }
+   */
+  async registerDeviceToken(req: Request, res: Response): Promise<void> {
+    const userId = getUserIdFromRequest(req);
+    const { token } = req.body;
+
+    if (!userId) {
+      throw new AuthError('User must be authenticated');
+    }
+    if (!token) {
+      res.status(400).json({ error: 'Token is required' });
+      return;
+    }
+
+    await this.notificationService.registerDeviceToken(userId, token);
+    res.status(200).json({ success: true });
+  }
+
+  /**
+   * FCM 디바이스 토큰 삭제 (로그아웃 등)
+   * DELETE /v1/notifications/device-token
+   * Body: { token: string }
+   */
+  async unregisterDeviceToken(req: Request, res: Response): Promise<void> {
+    const userId = getUserIdFromRequest(req);
+    const { token } = req.body;
+
+    if (!userId) {
+      throw new AuthError('User must be authenticated');
+    }
+    if (!token) {
+      res.status(400).json({ error: 'Token is required' });
+      return;
+    }
+
+    await this.notificationService.unregisterDeviceToken(userId, token);
+    res.status(200).json({ success: true });
+  }
 }

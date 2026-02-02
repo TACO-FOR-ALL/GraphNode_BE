@@ -11,6 +11,7 @@ import type {
   GraphClusterDto,
   GraphStatsDto,
   GraphEdgeType,
+  GraphSubclusterDto,
 } from '../dtos/graph';
 
 /**
@@ -78,8 +79,7 @@ export function mapAiOutputToSnapshot(output: AiGraphOutputDto, userId: string):
   );
 
   // 4. Subclusters 변환
-  // subclusters가 없는 경우 빈 배열 처리
-  const subclusters: unknown[] = (output.subclusters || []).map((sc) => ({
+  const subclusters: GraphSubclusterDto[] = (output.subclusters || []).map((sc) => ({
     id: sc.id,
     clusterId: sc.cluster_id,
     nodeIds: sc.node_ids,
@@ -87,7 +87,6 @@ export function mapAiOutputToSnapshot(output: AiGraphOutputDto, userId: string):
     size: sc.size,
     density: sc.density,
     topKeywords: sc.top_keywords,
-    // 필요 시 createdAt/updatedAt 추가
   }));
 
   // 5. Stats 변환
@@ -106,7 +105,7 @@ export function mapAiOutputToSnapshot(output: AiGraphOutputDto, userId: string):
     nodes,
     edges,
     clusters,
-    subclusters: subclusters as any, // Type matching needed or import GraphSubclusterDto
+    subclusters,
     stats,
   };
 }

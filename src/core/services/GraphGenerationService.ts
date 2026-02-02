@@ -107,6 +107,22 @@ export class GraphGenerationService {
   }
 
   /**
+   * [New] SQS 기반 그래프 요약 요청
+   * 그래프와 Insight 데이터를 기반으로 요약을 생성하도록 요청합니다.
+   *
+   * @param userId 사용자 ID
+   * @returns 발행된 작업의 연관 ID (TaskId)
+   */
+  async requestGraphSummary(userId: string): Promise<string> {
+    const taskId = `summary_${userId}_${ulid()}`;
+    // FIXME: 실제 구현 필요 (SQS 메시지 발행 등)
+    // 1. 필요한 데이터(features.json 등) 확인
+    // 2. SQS 메시지 구성 및 전송
+    logger.info({ userId, taskId }, 'Requesting graph summary (Dummy Implementation)');
+    return taskId;
+  }
+
+  /**
    * @deprecated 사용 금지 - SQS 도입 전 구 방식 (HTTP Streaming 직접 전송)
    * 사용자에 대한 그래프 생성 프로세스를 시작합니다.
    * 1. 사용자의 모든 대화와 메시지를 가져옵니다.

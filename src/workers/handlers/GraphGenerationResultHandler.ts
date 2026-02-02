@@ -35,12 +35,18 @@ export class GraphGenerationResultHandler implements JobHandler {
         const errorMsg = error || 'Unknown error from AI server';
         logger.warn({ taskId, userId, error: errorMsg }, 'Graph generation failed');
 
-        // 실패 알림 전송(Redis Pub/Sub)
+        // 실패 알림 전송(Redis Pub/Sub & FCM)
         await notiService.sendNotification(userId, 'GRAPH_GENERATION_FAILED', {
           taskId,
           error: errorMsg,
           timestamp: new Date().toISOString(),
         });
+        await notiService.sendFcmPushNotification(
+          userId,
+          'Graph Generation Failed',
+          'Failed to generate knowledge graph. Please try again.',
+          { type: 'GRAPH_GENERATION_FAILED', taskId, error: errorMsg }
+        );
         return;
       }
 
@@ -69,6 +75,12 @@ export class GraphGenerationResultHandler implements JobHandler {
           edgeCount: snapshot.edges.length,
           timestamp: new Date().toISOString(),
         });
+        await notiService.sendFcmPushNotification(
+          userId,
+          'Graph Ready',
+          `Your knowledge graph (${snapshot.nodes.length} nodes) is ready!`,
+          { type: 'GRAPH_GENERATION_COMPLETED', taskId }
+        );
       }
     } catch (err) {
       logger.error({ err, taskId, userId }, 'Error processing graph generation result');
