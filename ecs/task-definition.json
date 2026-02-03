@@ -33,7 +33,10 @@
         { "name": "OAUTH_APPLE_PRIVATE_KEY", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-vpNf7c:OAUTH_APPLE_PRIVATE_KEY::" },
         { "name": "NEO4J_PASSWORD", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-vpNf7c:NEO4J_PASSWORD::" },
         {"name" : "OPENAI_ASSISTANT_ID", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-vpNf7c:OPENAI_ASSISTANT_ID::"},
-        {"name" : "FIREBASE_CREDENTIALS_JSON", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-vpNf7c:FIREBASE_CREDENTIALS_JSON::"}
+        {"name" : "FIREBASE_CREDENTIALS_JSON", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-vpNf7c:FIREBASE_CREDENTIALS_JSON::"},
+        {"name" : "CHROMA_API_KEY", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-vpNf7c:CHROMA_API_KEY::"},
+        {"name" : "CHROMA_TENANT", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-vpNf7c:CHROMA_TENANT::"},
+        {"name" : "CHROMA_DATABASE", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:954976324655:secret:taco4/graphnode/mvp-vpNf7c:CHROMA_DATABASE::"}
       ],
       "essential": true,
       "image": "954976324655.dkr.ecr.ap-northeast-2.amazonaws.com/taco4/graphnode:latest_10",
