@@ -24,17 +24,38 @@ jest.mock('../../src/core/services/GoogleOAuthService', () => {
   };
 });
 
+// JWT Mock
+jest.mock('../../src/app/utils/jwt', () => {
+  return {
+    generateAccessToken: () => 'mock_at',
+    generateRefreshToken: () => 'mock_rt',
+    verifyToken: (token: string) => {
+      if (token === 'mock_at') return { userId: 'u_1' };
+      if (token === 'mock_rt') return { userId: 'u_1' };
+      throw new Error('Invalid token');
+    },
+    JWT_ACCESS_EXPIRY_MS: 3600000,
+    JWT_REFRESH_EXPIRY_MS: 3600000,
+  };
+});
+
 // Mock authLogin to bypass DB and ensure session is set
 jest.mock('../../src/app/utils/authLogin', () => {
   return {
     completeLogin: async (req: any, res: any, input: any) => {
       const userId = 'u_1';
-      if (req.session) {
-        req.session.userId = userId;
-      }
-      if (res.cookie) {
-        res.cookie('gn-logged-in', '1');
-      }
+      // Set JWT cookies (Mocked)
+      const common = {
+        httpOnly: true,
+        signed: true,
+        path: '/',
+        maxAge: 3600000,
+      };
+      
+      res.cookie('access_token', 'mock_at', common);
+      res.cookie('refresh_token', 'mock_rt', common);
+      res.cookie('gn-logged-in', '1');
+      
       return { userId };
     },
   };

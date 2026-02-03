@@ -21,6 +21,7 @@ GraphNode는 대화형 AI와 지식 그래프를 결합한 차세대 지식 관�
 | 🌐 [시스템 전체 구조](docs/architecture/ARCHITECTURE.md)  | 전반적인 컴포넌트 구성 및 데이터 흐름      |
 | 📩 [SQS 비동기 파이프라인](docs/architecture/SQS_FLOW.md) | BE-AI 서버 간의 메시징 워크플로우          |
 | 🔐 [인증 및 보안 시스템](docs/architecture/AUTH_JWT.md)   | JWT 및 소셜(Google/Apple) 로그인 구현 방식 |
+| 📱 [FCM 모바일 알림 구조](docs/guides/FCM-NOTIFICATION-FLOW.md) | Firebase Cloud Messaging 기반 푸시 알림 설계 |
 
 ---
 
@@ -134,9 +135,19 @@ infisical run --env=prod -- npm start
 
 프로젝트의 모든 문서는 내장된 **[문서 포털](docs/index.html)**을 통해 정적 웹 페이지 형태로 확인하실 수 있습니다.
 
-- **API Reference**: Swagger UI / Redoc을 통한 인터랙티브 명세
+- **API Reference**: [OpenAPI Spec (YAML)](docs/api/openapi.yaml) / Swagger UI / Redoc을 통한 인터랙티브 명세
 - **TypeDoc**: 소스 코드 레벨의 클래스/함수 레퍼런스
 - **Guides**: 일일 개발 일지 및 트러블슈팅 가이드
+- **Help**: [Troubleshooting](docs/guides/TROUBLESHOOTING.md) | [Contributing](CONTRIBUTING.md)
+
+---
+
+## ✨ Features
+
+- **지식 그래프 생성**: 비정형 대화 내용을 구조화된 지식 그래프로 변환
+- **그래프 요약**: 대규모 그래프 네트워크에 대한 AI 기반 요약 제공
+- **벡터 검색**: ChromaDB를 활용한 그래프 노드 의미 기반 검색(Semantic Search)
+- **비동기 처리**: 대용량 AI 워크로드를 위한 SQS/ECS 기반 오토스케일링 아키텍처
 
 ---
 

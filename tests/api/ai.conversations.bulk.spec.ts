@@ -1,14 +1,13 @@
+import { jest, describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
 
 import { createApp } from '../../src/bootstrap/server';
 import { generateAccessToken } from '../../src/app/utils/jwt';
+import { ChatThread, ChatMessage } from '../../src/shared/dtos/ai';
 
 // 인메모리 스토어 모의
 const store = {
-  conversations: new Map<
-    string,
-    { id: string; title: string; updatedAt: string; messages: any[]; ownerUserId: string }
-  >(),
+  conversations: new Map<string, ChatThread & { ownerUserId: string }>(),
 };
 
 // 인증 및 서비스 레이어 모의
@@ -43,19 +42,43 @@ jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => ({
 
 jest.mock('../../src/core/services/ChatManagementService', () => ({
   ChatManagementService: class {
-    async createConversation(ownerUserId: string, id: string, title: string, messages: any[]) {
-      const newConv = { id, title, messages, ownerUserId, updatedAt: new Date().toISOString() };
+    async createConversation(ownerUserId: string, id: string, title: string, messages: Partial<ChatMessage>[]) {
+      const now = new Date().toISOString();
+      const newConv: ChatThread & { ownerUserId: string } = {
+        id,
+        title,
+        messages: (messages || []).map(m => ({
+            id: m.id || 'msg-id',
+            role: m.role || 'user',
+            content: m.content || '',
+            createdAt: now,
+            updatedAt: now,
+            userId: ownerUserId
+        })) as ChatMessage[],
+        createdAt: now,
+        updatedAt: now,
+        ownerUserId,
+      };
       store.conversations.set(id, newConv);
       return newConv;
     }
-    async bulkCreateConversations(ownerUserId: string, threads: any[]) {
+    async bulkCreateConversations(ownerUserId: string, threads: { id: string; title: string; messages?: Partial<ChatMessage>[] }[]) {
+      const now = new Date().toISOString();
       return threads.map((t) => {
-        const newConv = {
+        const newConv: ChatThread & { ownerUserId: string } = {
           id: t.id || 'mock-id',
           title: t.title,
-          messages: t.messages || [],
+          messages: (t.messages || []).map(m => ({
+            id: m.id || 'msg-id',
+            role: m.role || 'user',
+            content: m.content || '',
+            createdAt: now,
+            updatedAt: now,
+            userId: ownerUserId
+          })) as ChatMessage[],
+          createdAt: now,
+          updatedAt: now,
           ownerUserId,
-          updatedAt: new Date().toISOString(),
         };
         store.conversations.set(newConv.id, newConv);
         return newConv;

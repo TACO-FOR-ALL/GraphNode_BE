@@ -48,6 +48,9 @@ export interface GraphNodeDto {
   numMessages: number;
   /** 임베딩 (선택) */
   embedding?: number[];
+  
+  /** 키워드 (AI 분석 결과) */
+  keywords?: Array<{ term: string; score: number }>;
 
   /** 생성 시각(ISO 8601 UTC) */
   createdAt?: string;
@@ -142,11 +145,32 @@ export interface GraphStatsDto {
 }
 
 /**
+ * 그래프 서브클러스터 DTO.
+ */
+export interface GraphSubclusterDto {
+  /** 서브클러스터 ID */
+  id: string;
+  /** 소속 클러스터 ID */
+  clusterId: string;
+  /** 포함된 노드 ID 목록 */
+  nodeIds: number[];
+  /** 대표 노드 ID */
+  representativeNodeId: number;
+  /** 서브클러스터 크기 (노드 수) */
+  size: number;
+  /** 밀도 */
+  density: number;
+  /** 주요 키워드 */
+  topKeywords: string[];
+}
+
+/**
  * 그래프 스냅샷 DTO(단일 사용자 기준).
  * @public
  * @param nodes - 그래프 노드 목록
  * @param edges - 그래프 엣지 목록
  * @param clusters - 그래프 클러스터 목록
+ * @param subclusters - 그래프 서브클러스터 목록
  * @param stats - 그래프 통계
  * @remarks
  * - 외부 AI 모듈이 전달하는 페이로드 구조와 일치한다.
@@ -158,6 +182,8 @@ export interface GraphSnapshotDto {
   edges: GraphEdgeDto[];
   /** 그래프 클러스터 목록 */
   clusters: GraphClusterDto[];
+  /** 그래프 서브클러스터 목록 */
+  subclusters?: GraphSubclusterDto[];
   /** 그래프 통계 */
   stats: Omit<GraphStatsDto, 'userId'>;
 }
@@ -173,4 +199,50 @@ export interface PersistGraphPayloadDto {
   userId: string;
   /** 그래프 전체 스냅샷 */
   snapshot: GraphSnapshotDto;
+}
+
+export interface GraphSummaryDto {
+  overview: {
+    total_conversations: number;
+    time_span: string;
+    primary_interests: string[];
+    conversation_style: string;
+    most_active_period: string;
+    summary_text: string;
+  };
+  clusters: Array<{
+    cluster_id: string;
+    name: string;
+    size: number;
+    density: number;
+    centrality: number;
+    recency: string;
+    top_keywords: string[];
+    key_themes: string[];
+    common_question_types: string[];
+    insight_text: string;
+    notable_conversations: string[];
+  }>;
+  patterns: Array<{
+    pattern_type: string;
+    description: string;
+    evidence: string[];
+    significance: string;
+  }>;
+  connections: Array<{
+    source_cluster: string;
+    target_cluster: string;
+    connection_strength: number;
+    bridge_keywords: string[];
+    description: string;
+  }>;
+  recommendations: Array<{
+    type: string;
+    title: string;
+    description: string;
+    related_nodes: string[];
+    priority: string;
+  }>;
+  generated_at: string;
+  detail_level: string;
 }

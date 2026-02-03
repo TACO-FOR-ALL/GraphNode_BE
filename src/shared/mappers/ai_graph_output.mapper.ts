@@ -11,6 +11,7 @@ import type {
   GraphClusterDto,
   GraphStatsDto,
   GraphEdgeType,
+  GraphSubclusterDto,
 } from '../dtos/graph';
 
 /**
@@ -77,7 +78,18 @@ export function mapAiOutputToSnapshot(output: AiGraphOutputDto, userId: string):
     })
   );
 
-  // 4. Stats 변환
+  // 4. Subclusters 변환
+  const subclusters: GraphSubclusterDto[] = (output.subclusters || []).map((sc) => ({
+    id: sc.id,
+    clusterId: sc.cluster_id,
+    nodeIds: sc.node_ids,
+    representativeNodeId: sc.representative_node_id,
+    size: sc.size,
+    density: sc.density,
+    topKeywords: sc.top_keywords,
+  }));
+
+  // 5. Stats 변환
   const stats: Omit<GraphStatsDto, 'userId'> = {
     nodes: output.metadata.total_nodes,
     edges: output.metadata.total_edges,
@@ -93,6 +105,7 @@ export function mapAiOutputToSnapshot(output: AiGraphOutputDto, userId: string):
     nodes,
     edges,
     clusters,
+    subclusters,
     stats,
   };
 }

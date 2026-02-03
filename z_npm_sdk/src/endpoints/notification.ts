@@ -46,4 +46,23 @@ export class NotificationApi {
   getStreamUrl(): string {
     return this.rb.path('/stream').url();
   }
+
+  /**
+   * FCM 디바이스 토큰을 등록합니다.
+   *
+   * @param token - FCM 디바이스 토큰
+   */
+  async registerDeviceToken(token: string): Promise<void> {
+    await this.rb.path('/device-token').post({ token });
+  }
+
+  /**
+   * FCM 디바이스 토큰을 삭제(등록 해제)합니다.
+   *
+   * @param token - 삭제할 FCM 디바이스 토큰
+   */
+  async removeDeviceToken(token: string): Promise<void> {
+    await this.rb.path('/device-token').delete({ token });
+  }
+
 }

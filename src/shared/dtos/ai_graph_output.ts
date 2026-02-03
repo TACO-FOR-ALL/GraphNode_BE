@@ -42,8 +42,19 @@ export interface AiGraphMetadataOutput {
   // 필요시 추가
 }
 
+export interface AiGraphSubclusterOutput {
+  id: string; // e.g. "subcluster_4_1"
+  cluster_id: string; // "cluster_4"
+  node_ids: number[];
+  representative_node_id: number;
+  size: number;
+  density: number;
+  top_keywords: string[];
+}
+
 export interface AiGraphOutputDto {
   nodes: AiGraphNodeOutput[];
   edges: AiGraphEdgeOutput[];
+  subclusters?: AiGraphSubclusterOutput[];
   metadata: AiGraphMetadataOutput;
 }

@@ -3,6 +3,8 @@ import { MessageRepositoryMongo } from '../infra/repositories/MessageRepositoryM
 import { UserRepositoryMySQL } from '../infra/repositories/UserRepositoryMySQL';
 import { NoteRepositoryMongo } from '../infra/repositories/NoteRepositoryMongo';
 import { GraphRepositoryMongo } from '../infra/repositories/GraphRepositoryMongo';
+import { GraphVectorRepository } from '../infra/repositories/GraphVectorRepository';
+import { GraphVectorService } from '../core/services/GraphVectorService';
 import { ConversationService } from '../core/services/ConversationService';
 import { MessageService } from '../core/services/MessageService';
 import { ChatManagementService } from '../core/services/ChatManagementService';
@@ -59,6 +61,8 @@ export class Container {
   private graphRepo: GraphDocumentStore | null = null; // Renamed to Mongo Store
   private neo4jStore: GraphNeo4jStore | null = null; // Added
   private vectorStore: VectorStore | null = null; // Added
+  private graphVectorRepo: GraphVectorRepository | null = null; // Added
+  private graphVectorService: GraphVectorService | null = null; // Added new service
 
   // Infra Adapters
   private queueAdapter: QueuePort | null = null;
@@ -127,6 +131,20 @@ export class Container {
       this.vectorStore = new ChromaVectorAdapter();
     }
     return this.vectorStore;
+  }
+
+  getGraphVectorRepository(): GraphVectorRepository {
+    if (!this.graphVectorRepo) {
+      this.graphVectorRepo = new GraphVectorRepository(this.getVectorStore());
+    }
+    return this.graphVectorRepo;
+  }
+
+  getGraphVectorService(): GraphVectorService {
+    if (!this.graphVectorService) {
+      this.graphVectorService = new GraphVectorService(this.getGraphVectorRepository());
+    }
+    return this.graphVectorService;
   }
 
   /**
@@ -340,7 +358,11 @@ export class Container {
    */
   getAiInteractionService(): AiInteractionService {
     if (!this.aiInteractionService) {
-      const raw = new AiInteractionService(this.getChatManagementService(), this.getUserService());
+      const raw = new AiInteractionService(
+        this.getChatManagementService(),
+        this.getUserService(),
+        this.getAwsS3Adapter()
+      );
       this.aiInteractionService = createAuditProxy(raw, 'AiInteractionService');
     }
     return this.aiInteractionService;

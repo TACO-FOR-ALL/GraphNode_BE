@@ -7,5 +7,5 @@ export type ChatRole = 'user' | 'assistant' | 'system';
  */
 export interface ChatMessageRequest {
   role: ChatRole;
-  content: string;
+  content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
 }

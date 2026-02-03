@@ -101,17 +101,36 @@ export interface GraphStatsDto {
 }
 
 /**
+ * 그래프 서브클러스터 DTO
+ * @public
+ */
+export interface GraphSubclusterDto {
+  id: string;
+  userId: string;
+  clusterId: string;
+  nodeIds: number[];
+  representativeNodeId: number;
+  size: number;
+  density: number;
+  topKeywords: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/**
  * 그래프 스냅샷 DTO (전체 그래프 데이터)
  * @public
  * @property nodes 노드 목록
  * @property edges 엣지 목록
  * @property clusters 클러스터 목록
+ * @property subclusters 서브클러스터 목록
  * @property stats 그래프 통계 (userId 제외)
  */
 export interface GraphSnapshotDto {
   nodes: GraphNodeDto[];
   edges: GraphEdgeDto[];
   clusters: GraphClusterDto[];
+  subclusters?: GraphSubclusterDto[];
   stats: Omit<GraphStatsDto, 'userId'>;
 }
 
@@ -131,3 +150,52 @@ export interface CreateEdgeResponse {
  * @property clusterName 클러스터 이름 (선택)
  */
 export type UpdateNodePayload = Partial<Pick<GraphNodeDto, 'clusterId' | 'clusterName'>>;
+
+/**
+ * Graph Summary DTO
+ */
+export interface GraphSummaryDto {
+  overview: {
+    total_conversations: number;
+    time_span: string;
+    primary_interests: string[];
+    conversation_style: string;
+    most_active_period: string;
+    summary_text: string;
+  };
+  clusters: Array<{
+    cluster_id: string;
+    name: string;
+    size: number;
+    density: number;
+    centrality: number;
+    recency: string;
+    top_keywords: string[];
+    key_themes: string[];
+    common_question_types: string[];
+    insight_text: string;
+    notable_conversations: string[];
+  }>;
+  patterns: Array<{
+    pattern_type: string;
+    description: string;
+    evidence: string[];
+    significance: string;
+  }>;
+  connections: Array<{
+    source_cluster: string;
+    target_cluster: string;
+    connection_strength: number;
+    bridge_keywords: string[];
+    description: string;
+  }>;
+  recommendations: Array<{
+    type: string;
+    title: string;
+    description: string;
+    related_nodes: string[];
+    priority: string;
+  }>;
+  generated_at: string;
+  detail_level: string;
+}

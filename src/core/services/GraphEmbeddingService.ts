@@ -349,10 +349,11 @@ export class GraphEmbeddingService {
    * @throws {UpstreamError} - DB 조회 중 오류 발생 시
    */
   async getSnapshotForUser(userId: string): Promise<GraphSnapshotDto> {
-    const [nodes, edges, clusters, stats] = await Promise.all([
+    const [nodes, edges, clusters, subclusters, stats] = await Promise.all([
       this.graphManagementService.listNodes(userId),
       this.graphManagementService.listEdges(userId),
       this.graphManagementService.listClusters(userId),
+      this.graphManagementService.listSubclusters(userId),
       this.graphManagementService.getStats(userId),
     ]);
 
@@ -360,6 +361,7 @@ export class GraphEmbeddingService {
       nodes,
       edges,
       clusters,
+      subclusters,
       stats: stats
         ? { nodes: stats.nodes, edges: stats.edges, clusters: stats.clusters }
         : { nodes: 0, edges: 0, clusters: 0 },
@@ -385,6 +387,9 @@ export class GraphEmbeddingService {
     try {
       await session.withTransaction(async () => {
         const { userId, snapshot } = payload;
+        
+        // subclusters가 undefined일 경우 빈 배열로 처리
+        const subclusters = snapshot.subclusters || [];
 
         const upsertPromises = [
           ...snapshot.nodes.map((node) =>
@@ -396,6 +401,17 @@ export class GraphEmbeddingService {
           ...snapshot.clusters.map((cluster) =>
             this.graphManagementService.upsertCluster({ ...cluster, userId }, { session })
           ),
+          ...subclusters.map((subcluster) =>
+            this.graphManagementService.upsertSubcluster(
+              {
+                ...subcluster,
+                userId,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              },
+              { session }
+            )
+          ),
           this.graphManagementService.saveStats({ ...snapshot.stats, userId }, { session }),
         ];
 
@@ -404,5 +420,21 @@ export class GraphEmbeddingService {
     } finally {
       await session.endSession();
     }
+  }
+
+  // --- Insight Summary ---
+
+  /**
+   * 그래프 요약/인사이트 저장 (Delegation)
+   */
+  async upsertGraphSummary(userId: string, summary: any) {
+    return this.graphManagementService.upsertGraphSummary(userId, summary);
+  }
+
+  /**
+   * 그래프 요약/인사이트 조회 (Delegation)
+   */
+  async getGraphSummary(userId: string) {
+    return this.graphManagementService.getGraphSummary(userId);
   }
 }

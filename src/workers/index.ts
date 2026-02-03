@@ -17,6 +17,7 @@ import { QueueMessage, TaskType } from '../shared/dtos/queue';
 // Handlers
 import { JobHandler } from './handlers/JobHandler';
 import { GraphGenerationResultHandler } from './handlers/GraphGenerationResultHandler';
+import { GraphSummaryResultHandler } from './handlers/GraphSummaryResultHandler';
 
 async function startWorker() {
   const env = loadEnv();
@@ -28,7 +29,7 @@ async function startWorker() {
   await initDatabases();
   
   // 2. Initialize Dependency Container
-  const container = Container.getInstance();
+  const container : Container = Container.getInstance();
 
   // 중요: DB 연결 등 비동기 초기화가 필요할 수 있음
   // Container 클래스에 initializeAsync 같은게 없다면, 서비스들이 Lazy loading되거나
@@ -39,6 +40,7 @@ async function startWorker() {
   // 메시지 타입에 따라 적절한 핸들러를 매핑합니다.
   const handlers: Record<string, JobHandler> = {
     [TaskType.GRAPH_GENERATION_RESULT]: new GraphGenerationResultHandler(),
+    [TaskType.GRAPH_SUMMARY_RESULT]: new GraphSummaryResultHandler(),
     // 추후 추가: [TaskType.OTHER_TASK]: new OtherTaskHandler(),
   };
 

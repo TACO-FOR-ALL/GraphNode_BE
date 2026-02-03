@@ -12,6 +12,9 @@ import { StoragePort } from '../../src/core/ports/StoragePort';
 
 // Mock HttpClient
 jest.mock('../../src/infra/http/httpClient');
+jest.mock('../../src/shared/mappers/graph_ai_input.mapper', () => ({
+  mapSnapshotToAiInput: jest.fn().mockReturnValue({ nodes: [], edges: [] }),
+}));
 
 describe('GraphGenerationService', () => {
   let service: GraphGenerationService;
@@ -124,6 +127,39 @@ describe('GraphGenerationService', () => {
       // Assert
       await expect(service.generateGraphForUser(userId)) // Second call
         .rejects.toThrow(ConflictError);
+    });
+  });
+
+  describe('requestGraphSummary', () => {
+    const userId = 'user1';
+
+    it('should request summary successfully', async () => {
+      // Arrange
+      const snapshot = { nodes: [{ id: 1 }] };
+      mockGraphEmbSvc.getSnapshotForUser = jest.fn().mockResolvedValue(snapshot);
+      mockStoragePort.upload.mockResolvedValue(undefined);
+      mockQueuePort.sendMessage.mockResolvedValue(undefined);
+
+      // Act
+      const taskId = await service.requestGraphSummary(userId);
+
+      // Assert
+      expect(taskId).toContain('summary_user1');
+      expect(mockGraphEmbSvc.getSnapshotForUser).toHaveBeenCalledWith(userId);
+      expect(mockStoragePort.upload).toHaveBeenCalled();
+      expect(mockQueuePort.sendMessage).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          taskType: 'GRAPH_SUMMARY_REQUEST',
+          payload: expect.objectContaining({ userId }),
+        })
+      );
+    });
+
+    it('should throw Error if snapshot not found', async () => {
+      mockGraphEmbSvc.getSnapshotForUser = jest.fn().mockResolvedValue(null);
+
+      await expect(service.requestGraphSummary(userId)).rejects.toThrow();
     });
   });
 });

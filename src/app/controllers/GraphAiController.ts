@@ -27,6 +27,39 @@ export class GraphAiController {
   };
 
   /**
+   * POST /v1/graph-ai/summary
+   * 그래프 요약 생성을 요청합니다.
+   */
+  summarizeGraph = async (req: Request, res: Response) => {
+    const userId = getUserIdFromRequest(req);
+
+    // 그래프 요약 프로세스 시작 (SQS 요청)
+    const taskId = await this.graphGenerationService.requestGraphSummary(userId!);
+
+    res.status(202).json({
+      message: 'Graph summary generation queued',
+      taskId: taskId,
+      status: 'queued',
+    });
+  };
+
+  /**
+   * GET /v1/graph-ai/summary
+   * 생성된 그래프 요약을 조회합니다.
+   */
+  getSummary = async (req: Request, res: Response) => {
+    const userId = getUserIdFromRequest(req);
+    const summary = await this.graphGenerationService.getGraphSummary(userId!);
+
+    if (!summary) {
+      res.status(404).json({ message: 'Summary not found' });
+      return;
+    }
+
+    res.status(200).json(summary);
+  };
+
+  /**
    * [테스트용] POST /v1/graph-ai/test/generate-json
    * 클라이언트로부터 직접 JSON 데이터를 받아 그래프 생성을 요청합니다.
    */

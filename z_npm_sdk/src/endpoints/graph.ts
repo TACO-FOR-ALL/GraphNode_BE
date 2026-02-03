@@ -5,6 +5,7 @@ import type {
   GraphClusterDto,
   GraphStatsDto,
   GraphSnapshotDto,
+  GraphSubclusterDto,
   CreateEdgeResponse,
   UpdateNodePayload,
 } from '../types/graph.js';
@@ -309,6 +310,20 @@ export class GraphApi {
    */
   deleteCluster(clusterId: string): Promise<HttpResponse<void>> {
     return this.rb.path(`/clusters/${clusterId}`).delete<void>();
+  }
+
+  // --- Subclusters ---
+
+  async listSubclusters(): Promise<HttpResponse<GraphSubclusterDto[]>> {
+    return this.rb.path('/subclusters').get<GraphSubclusterDto[]>();
+  }
+
+  async getSubcluster(subclusterId: string): Promise<HttpResponse<GraphSubclusterDto>> {
+    return this.rb.path(`/subclusters/${subclusterId}`).get<GraphSubclusterDto>();
+  }
+
+  async deleteSubcluster(subclusterId: string): Promise<HttpResponse<void>> {
+    return this.rb.path(`/subclusters/${subclusterId}`).delete<void>();
   }
 
   /**

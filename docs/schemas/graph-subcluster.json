@@ -1,0 +1,26 @@
+{
+    "$id": "https://graphnode.dev/schemas/graph-subcluster.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Graph Subcluster",
+    "type": "object",
+    "properties": {
+      "id": { "type": "string" },
+      "userId": { "type": "string" },
+      "clusterId": { "type": "string" },
+      "nodeIds": { 
+        "type": "array",
+        "items": { "type": "integer" }
+      },
+      "representativeNodeId": { "type": "integer" },
+      "size": { "type": "integer" },
+      "density": { "type": "number" },
+      "topKeywords": {
+        "type": "array",
+        "items": { "type": "string" }
+      },
+      "createdAt": { "type": "string", "format": "date-time" },
+      "updatedAt": { "type": "string", "format": "date-time" }
+    },
+    "required": ["id", "userId", "clusterId", "nodeIds", "representativeNodeId", "size"],
+    "additionalProperties": false
+  }

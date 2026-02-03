@@ -125,6 +125,61 @@ paths:
                   data: {"type":"CONNECTED","message":"SSE Connection established"}
 
                   data: {"type":"JOB_COMPLETED","payload":{...}}
+  /v1/notifications/device-token:
+    post:
+      summary: Register FCM device token
+      description: Registers a Firebase Cloud Messaging (FCM) token for the authenticated user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  description: The FCM device token to register.
+      responses:
+        '200':
+          description: Token registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+        '400':
+          description: Bad Request (missing token)
+        '401':
+          description: Not authenticated
+    delete:
+      summary: Unregister FCM device token
+      description: Removes a Firebase Cloud Messaging (FCM) token for the authenticated user (e.g., on logout).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  description: The FCM device token to unregister.
+      responses:
+        '200':
+          description: Token unregistered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+        '400':
+          description: Bad Request (missing token)
+        '401':
+          description: Not authenticated
   /v1/me:
     get:
       summary: Check login status
@@ -463,6 +518,83 @@ paths:
             application/problem+json:
               schema:
                 $ref: ../schemas/problem.json
+  /v1/ai/conversations/{conversationId}/chat:
+    post:
+      summary: Send message to AI (Chat)
+      description: Sends a user message to the AI model. Supports file uploads for multimodal models (e.g., OpenAI Assistants, GPT-4o).
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [model, chatContent]
+              properties:
+                id: { type: string, format: uuid }
+                model:
+                  type: string
+                  enum: [openai, claude, gemini, deepseek]
+                chatContent: { type: string }
+                files:
+                  type: array
+                  items: { type: string, format: binary }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title: { type: string }
+                  messages:
+                    type: array
+                    items: { $ref: ../schemas/message.json }
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '502':
+          description: Upstream error (AI provider failure)
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+  /v1/ai/files/{key}:
+    get:
+      summary: Download AI file
+      description: Downloads a file generated or uploaded during AI chat interactions.
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '404':
+          description: File not found
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
   /auth/logout:
     post:
       summary: Logout and destroy session
@@ -802,6 +934,97 @@ paths:
             application/problem+json:
               schema:
                 $ref: ../schemas/problem.json
+  /v1/graph/subclusters:
+    post:
+      summary: Create or update a graph subcluster
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/graph-subcluster.json
+      responses:
+        '201':
+          description: Subcluster created/updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/graph-subcluster.json
+        '400':
+          description: Bad Request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+    get:
+      summary: List all graph subclusters for the user
+      responses:
+        '200':
+          description: A list of graph subclusters.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: ../schemas/graph-subcluster.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/subclusters/{subclusterId}:
+    get:
+      summary: Get a specific graph subcluster
+      parameters:
+        - name: subclusterId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The requested graph subcluster.
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/graph-subcluster.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '404':
+          description: Subcluster not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+    delete:
+      summary: Delete a graph subcluster
+      parameters:
+        - name: subclusterId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Subcluster deleted successfully.
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+
   /v1/graph/clusters/{clusterId}/cascade:
     delete:
       summary: Delete a cluster and its contained nodes and edges
@@ -954,6 +1177,12 @@ paths:
       responses:
         '200':
           description: Push successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
         '400':
           description: Bad Request
           content:
@@ -961,6 +1190,11 @@ paths:
               schema: { $ref: '../schemas/problem.json' }
         '401':
           description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '502':
+          description: Upstream error (Database failure)
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }
@@ -1326,6 +1560,109 @@ paths:
             application/problem+json:
               schema:
                 $ref: ../schemas/problem.json
+  /v1/agent/chat/stream:
+    post:
+      summary: Stream agent chat
+      description: Interactive chat with the AI agent, supporting multiple modes (chat, summary, note). Returns a Server-Sent Events (SSE) stream.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userMessage]
+              properties:
+                userMessage: { type: string }
+                contextText: { type: string }
+                modeHint: { type: string, enum: [chat, summary, note, auto] }
+      responses:
+        '200':
+          description: SSE stream established
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                example: |
+                  event: status
+                  data: {"phase":"analyzing","message":"..."}
+                  
+                  event: chunk
+                  data: {"text":"Hello"}
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+  /v1/graph-ai/generate:
+    post:
+      summary: Generate graph from text (Async)
+      description: Starts an asynchronous background task to generate a graph from the user's conversation history. Returns a task ID.
+      responses:
+        '202':
+          description: Task accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  taskId: { type: string }
+                  status: { type: string }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '409':
+          description: Conflict (Task already processing)
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+  /v1/graph-ai/summary:
+    post:
+      summary: Request graph summary generation
+      description: Starts an asynchronous background task to generate a summary of the user's graph.
+      responses:
+        '202':
+          description: Task accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  taskId: { type: string }
+                  status: { type: string }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '409':
+          description: Conflict (Task already processing)
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+    get:
+      summary: Get graph summary
+      description: Retrieves the generated summary and insights for the user's graph.
+      responses:
+        '200':
+          description: Graph summary
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/graph-summary.json
+        '404':
+          description: Summary not found
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
 components:
   schemas:
     Problem:

@@ -17,6 +17,7 @@
 ```mermaid
 flowchart TD
     Client(User Client) -->|1. POST /gen (HTTP)| API[BE API Server]
+    Client -->|1a. POST /summary (HTTP)| API
 
     subgraph "Producer (Node.js)"
         API -->|2. Upload JSON| S3[(S3 Bucket)]
@@ -32,7 +33,7 @@ flowchart TD
     subgraph "Result Handler (Node.js Worker)"
         AI_WORKER -->|7. Send Done Msg| SQS_RES[AWS SQS\nResult Queue]
         SQS_RES -->|8. Poll Msg| BE_WORKER[BE Worker Process]
-        BE_WORKER -->|9. Persist Graph| DB[(MySQL/Mongo)]
+        BE_WORKER -->|9. Persist Graph/Summary| DB[(MySQL/Mongo)]
         BE_WORKER -->|10. Pub Event| REDIS[Redis]
     end
 
@@ -50,7 +51,7 @@ SQS 기능을 유지보수하거나 확장할 때 다음 파일들을 참고해�
 | 역할             | 파일 경로                        | 설명                                                                           |
 | ---------------- | -------------------------------- | ------------------------------------------------------------------------------ |
 | **Worker Entry** | `src/workers/index.ts`           | **워커 프로세스의 시작점**. API 서버와 별도로 실행되며 SQS 폴링 루프를 돕니다. |
-| **Strategy**     | `src/workers/handlers/*.ts`      | 메시지 타입(`taskType`)별 처리 로직. (예: `GraphGenerationResultHandler.ts`)   |
+| **Strategy**     | `src/workers/handlers/*.ts`      | 메시지 타입(`taskType`)별 처리 로직. (예: `GraphGenerationResultHandler.ts`, `GraphSummaryResultHandler.ts`)   |
 | **DI Setup**     | `src/bootstrap/container.ts`     | 워커도 API 서버와 동일한 DB/Redis 연결을 쓰므로, 이 컨테이너를 재사용합니다.   |
 | **Infra**        | `src/infra/aws/AwsSqsAdapter.ts` | AWS SDK를 이용해 메시지를 보내고 삭제하는 저수준 구현체.                       |
 | **Infra**        | `src/infra/aws/AwsS3Adapter.ts`  | 대용량 JSON 페이로드를 S3에 스트림으로 업로드/다운로드하는 구현체.             |

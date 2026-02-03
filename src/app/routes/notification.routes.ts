@@ -19,5 +19,21 @@ export function createNotificationRouter(notificationService: NotificationServic
     asyncHandler(controller.stream.bind(controller))
   );
 
+  // FCM 토큰 등록
+  router.post(
+    '/device-token',
+    bindSessionUser,
+    requireLogin,
+    asyncHandler(controller.registerDeviceToken.bind(controller))
+  );
+
+  // FCM 토큰 삭제
+  router.delete(
+    '/device-token',
+    bindSessionUser,
+    requireLogin,
+    asyncHandler(controller.unregisterDeviceToken.bind(controller))
+  );
+
   return router;
 }

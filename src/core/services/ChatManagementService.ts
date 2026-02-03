@@ -296,6 +296,30 @@ export class ChatManagementService {
   }
 
   /**
+   * 대화의 외부 Thread ID를 업데이트합니다.
+   *
+   * @param id 대화 ID
+   * @param ownerUserId 소유자 ID
+   * @param externalThreadId 외부 Thread ID
+   */
+  async updateThreadId(
+    id: string,
+    ownerUserId: string,
+    externalThreadId: string
+  ): Promise<void> {
+     // 내부적으로 updateDoc 사용
+     const client: MongoClient = getMongo();
+     const session: ClientSession = client.startSession();
+     try {
+       await this.conversationService.updateDoc(id, ownerUserId, { externalThreadId }, session);
+     } finally {
+       await session.endSession();
+     }
+  }
+
+
+
+  /**
    * 대화를 삭제합니다. (Cascade Delete)
    *
    * @param id 대화 ID

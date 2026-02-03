@@ -20,6 +20,11 @@ const router = Router();
  */
 router.post('/logout', ctrl.logout);
 
+/**
+ * POST /auth/refresh — Refresh Token을 사용하여 Access Token 재발급
+ */
+router.post('/refresh', ctrl.refresh);
+
 // (resume token 관련 엔드포인트는 제거됨)
 
 export default router;

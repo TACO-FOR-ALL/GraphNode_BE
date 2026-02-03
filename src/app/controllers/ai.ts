@@ -61,14 +61,52 @@ export class AiController {
 
     const chatbody: AIchatType = req.body as AIchatType;
 
-    // AI 서비스의 handleAIChat 메서드를 호출하여 실제 대화 로직을 수행합니다.
-    const result: AIChatResponseDto = await this.aiInteractionService.handleAIChat(
-      ownerUserId,
-      chatbody,
-      conversationId
-    );
+    // Multer로 업로드된 파일들
+    const files = req.files as Express.Multer.File[] | undefined;
 
-    res.status(201).json(result);
+    const isStreaming = req.headers['accept'] === 'text/event-stream';
+
+    if (isStreaming) {
+      // SSE Setup
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders?.();
+
+      const sendEvent = (event: string, data: unknown) => {
+        res.write(`event: ${event}\n`);
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+      };
+
+      try {
+        const result: AIChatResponseDto = await this.aiInteractionService.handleAIChat(
+          ownerUserId,
+          chatbody,
+          conversationId,
+          files,
+          (chunk) => {
+            sendEvent('chunk', { text: chunk });
+          }
+        );
+
+        sendEvent('status', { phase: 'done' });
+        sendEvent('result', result);
+        res.end();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        sendEvent('error', { message });
+        res.end();
+      }
+    } else {
+      // Normal Request
+      const result: AIChatResponseDto = await this.aiInteractionService.handleAIChat(
+        ownerUserId,
+        chatbody,
+        conversationId,
+        files
+      );
+      res.status(201).json(result);
+    }
   }
 
   /**
@@ -378,5 +416,21 @@ export class AiController {
     const userId = getUserIdFromRequest(req)!;
     const count = await this.chatManagementService.deleteAllConversations(userId);
     res.status(200).json({ deletedCount: count });
+  }
+
+  async downloadFile(req: Request, res: Response) {
+    const key = req.params.key;
+    if (!key) throw new ValidationError('File key is required');
+
+    // 다운로드 스트림 가져오기
+    const stream = await this.aiInteractionService.downloadFile(key);
+
+    // MIME 타입 설정 (확장자 기반 추론 또는 기본값)
+    // 여기서는 기본적으로 octet-stream 사용하거나, key에서 추론 가능.
+    // 간단히 octet-stream으로 설정.
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${key.split('/').pop() || 'file'}"`);
+
+    stream.pipe(res);
   }
 }
