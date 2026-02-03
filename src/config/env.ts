@@ -55,8 +55,9 @@ const EnvSchema = z.object({
   NEO4J_PASSWORD: z.string().default('password'),
 
   // // ChromaDB FIXME
-  CHROMA_API_URL: z.string().default('http://localhost:8000'),
   CHROMA_API_KEY: z.string().optional(),
+  CHROMA_TENANT: z.string().optional(),
+  CHROMA_DATABASE: z.string().optional(),
 
   // AWS
   AWS_REGION: z.string().default('ap-northeast-2'),

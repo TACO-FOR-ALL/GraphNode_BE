@@ -4,6 +4,7 @@ import {
   GraphClusterDoc,
   GraphSubclusterDoc,
   GraphStatsDoc,
+  GraphSummaryDoc,
 } from '../types/persistence/graph.persistence';
 
 export interface RepoOptions {
@@ -62,4 +63,8 @@ export interface GraphDocumentStore {
   saveStats(stats: GraphStatsDoc, options?: RepoOptions): Promise<void>;
   getStats(userId: string): Promise<GraphStatsDoc | null>;
   deleteStats(userId: string, options?: RepoOptions): Promise<void>;
+
+  // --- Insight Summary ---
+  upsertGraphSummary(userId: string, summary: GraphSummaryDoc, options?: RepoOptions): Promise<void>;
+  getGraphSummary(userId: string): Promise<GraphSummaryDoc | null>;
 }

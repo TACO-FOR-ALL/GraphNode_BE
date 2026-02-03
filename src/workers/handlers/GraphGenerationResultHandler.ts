@@ -68,6 +68,21 @@ export class GraphGenerationResultHandler implements JobHandler {
 
         logger.info({ taskId, userId }, 'Graph snapshot persisted to DB');
 
+        // 3.5. Vector DB 저장 (Features)
+        if (payload.featuresS3Key) {
+          try {
+            const graphVectorService = container.getGraphVectorService(); // Use Service
+            const features = await storagePort.downloadJson<any>(payload.featuresS3Key);
+            await graphVectorService.saveGraphFeatures(userId, features);
+            logger.info({ taskId, userId }, 'Graph features persisted to Vector DB via Service');
+          } catch (featureErr) {
+            logger.error({ err: featureErr, taskId }, 'Failed to persist graph features (Non-fatal)');
+            throw featureErr;
+          }
+        }
+
+
+
         // 4. 성공 알림 전송
         await notiService.sendNotification(userId, 'GRAPH_GENERATION_COMPLETED', {
           taskId,

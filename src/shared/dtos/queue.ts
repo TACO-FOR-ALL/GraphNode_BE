@@ -12,6 +12,8 @@
 export enum TaskType {
   GRAPH_GENERATION_REQUEST = 'GRAPH_GENERATION_REQUEST', // API -> AI
   GRAPH_GENERATION_RESULT = 'GRAPH_GENERATION_RESULT', // AI -> Worker
+  GRAPH_SUMMARY_REQUEST = 'GRAPH_SUMMARY_REQUEST', // API -> AI (Summary only)
+  GRAPH_SUMMARY_RESULT = 'GRAPH_SUMMARY_RESULT', // AI -> Worker (Summary result)
 }
 
 // 공통 메시지 베이스
@@ -60,9 +62,37 @@ export interface GraphGenResultPayload extends BaseQueueMessage {
     userId: string;
     status: 'COMPLETED' | 'FAILED';
     resultS3Key?: string; // 성공 시 결과 JSON이 담긴 S3 키
+    featuresS3Key?: string; // 성공 시 Features JSON이 담긴 S3 키 (Vector DB용)
     error?: string; // 실패 시 에러 메시지
   };
 }
 
+// 3. API -> AI: 그래프 요약 생성 요청 메시지
+export interface GraphSummaryRequestPayload extends BaseQueueMessage {
+  taskType: TaskType.GRAPH_SUMMARY_REQUEST;
+  payload: {
+    userId: string;
+    chatId?: string;
+    graphS3Key: string; // 요약할 대상 그래프(graph_postprocessed.json) S3 키
+    bucket: string;
+    vectorDbS3Key: string; //  Vector DB 경로 
+  };
+}
+
+// 4. AI -> Worker: 그래프 요약 생성 완료 결과 메시지
+export interface GraphSummaryResultPayload extends BaseQueueMessage {
+  taskType: TaskType.GRAPH_SUMMARY_RESULT;
+  payload: {
+    userId: string;
+    status: 'COMPLETED' | 'FAILED';
+    summaryS3Key?: string; // 성공 시 요약 JSON Key
+    error?: string;
+  };
+}
+
 // 전체 메시지 유니온 타입 (확장성을 위해)
-export type QueueMessage = GraphGenRequestPayload | GraphGenResultPayload;
+export type QueueMessage =
+  | GraphGenRequestPayload
+  | GraphGenResultPayload
+  | GraphSummaryRequestPayload
+  | GraphSummaryResultPayload;

@@ -6,6 +6,7 @@ import type {
   GraphEdgeDto,
   GraphNodeDto,
   GraphStatsDto,
+  GraphSummaryDto,
 } from '../../shared/dtos/graph';
 import {
   toGraphClusterDoc,
@@ -438,6 +439,39 @@ export class GraphManagementService {
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.deleteStats failed', { cause: String(err) });
+    }
+  }
+
+  // --- Insight Summary ---
+
+  /**
+   * 그래프 요약/인사이트 저장
+   */
+  async upsertGraphSummary(userId: string, summary: GraphSummaryDto, options?: RepoOptions): Promise<void> {
+    try {
+      this.assertUser(userId);
+      const doc: any = { ...summary, id: userId, userId };
+      await this.repo.upsertGraphSummary(userId, doc, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.upsertGraphSummary failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 그래프 요약/인사이트 조회
+   */
+  async getGraphSummary(userId: string): Promise<GraphSummaryDto | null> {
+    try {
+      this.assertUser(userId);
+      const doc = await this.repo.getGraphSummary(userId);
+      if (!doc) return null;
+      // Doc -> DTO (Simple cast)
+      const { _id, ...rest } = doc as any;
+      return rest as GraphSummaryDto;
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.getGraphSummary failed', { cause: String(err) });
     }
   }
 

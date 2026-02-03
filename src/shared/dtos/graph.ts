@@ -197,3 +197,49 @@ export interface PersistGraphPayloadDto {
   /** 그래프 전체 스냅샷 */
   snapshot: GraphSnapshotDto;
 }
+
+export interface GraphSummaryDto {
+  overview: {
+    total_conversations: number;
+    time_span: string;
+    primary_interests: string[];
+    conversation_style: string;
+    most_active_period: string;
+    summary_text: string;
+  };
+  clusters: Array<{
+    cluster_id: string;
+    name: string;
+    size: number;
+    density: number;
+    centrality: number;
+    recency: string;
+    top_keywords: string[];
+    key_themes: string[];
+    common_question_types: string[];
+    insight_text: string;
+    notable_conversations: string[];
+  }>;
+  patterns: Array<{
+    pattern_type: string;
+    description: string;
+    evidence: string[];
+    significance: string;
+  }>;
+  connections: Array<{
+    source_cluster: string;
+    target_cluster: string;
+    connection_strength: number;
+    bridge_keywords: string[];
+    description: string;
+  }>;
+  recommendations: Array<{
+    type: string;
+    title: string;
+    description: string;
+    related_nodes: string[];
+    priority: string;
+  }>;
+  generated_at: string;
+  detail_level: string;
+}

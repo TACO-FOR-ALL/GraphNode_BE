@@ -23,7 +23,7 @@ export async function initDatabases() {
 
   // 4. ChromaDB Connection
   // FIXME TODO : ChromaDB 연결 추가 필요
-  //await initChroma(env.CHROMA_URL);
+  await initChroma();
 
   // Qdrant 초기화 (스켈레톤), 현재는 사용 안하기에 우선 주석
   // await initQdrant(env.QDRANT_URL, env.QDRANT_API_KEY);

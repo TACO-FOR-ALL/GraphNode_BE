@@ -421,4 +421,20 @@ export class GraphEmbeddingService {
       await session.endSession();
     }
   }
+
+  // --- Insight Summary ---
+
+  /**
+   * 그래프 요약/인사이트 저장 (Delegation)
+   */
+  async upsertGraphSummary(userId: string, summary: any) {
+    return this.graphManagementService.upsertGraphSummary(userId, summary);
+  }
+
+  /**
+   * 그래프 요약/인사이트 조회 (Delegation)
+   */
+  async getGraphSummary(userId: string) {
+    return this.graphManagementService.getGraphSummary(userId);
+  }
 }
