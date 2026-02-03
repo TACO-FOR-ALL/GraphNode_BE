@@ -155,7 +155,7 @@ export class GraphGenerationService {
   }
 
   /**
-   * [New] SQS 기반 단일 대화 추가 요청
+   * [New] SQS 기반 단일 대화 추가 요청 <- 이거 완성해심 감사할듯합니다!
    * 단일 대화 데이터를 S3에 업로드하고, 작업 요청 메시지를 SQS에 발행합니다.
    *
    * @param userId 사용자 ID

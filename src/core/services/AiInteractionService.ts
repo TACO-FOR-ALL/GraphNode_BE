@@ -63,13 +63,17 @@ export class AiInteractionService {
         throw new ValidationError(`Unsupported AI model: ${chatbody.model}`);
       }
 
-      // 2. API Key 검증 (개발 환경에서는 스킵, 추후 삭제)
-      if (process.env.NODE_ENV !== 'development') {
-        const isValid = await provider.checkAPIKeyValid(apiKey);
-        if (!isValid.ok) {
-          throw new ValidationError(`Invalid API Key for ${chatbody.model}: ${isValid.error}`);
-        }
+      const isValid = await provider.checkAPIKeyValid(apiKey);
+      if (!isValid.ok) {
+        throw new ValidationError(`Invalid API Key for ${chatbody.model}: ${isValid.error}`);
       }
+      // // 2. API Key 검증 (개발 환경에서는 스킵, 추후 삭제)
+      // if (process.env.NODE_ENV !== 'development') {
+      //   const isValid = await provider.checkAPIKeyValid(apiKey);
+      //   if (!isValid.ok) {
+      //     throw new ValidationError(`Invalid API Key for ${chatbody.model}: ${isValid.error}`);
+      //   }
+      // }
 
       // 3. 이전 대화 내역 조회
       let conversation: ChatThread; // 대화방 정보
