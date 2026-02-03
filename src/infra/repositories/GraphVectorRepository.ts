@@ -1,23 +1,7 @@
 import { VectorStore } from '../../core/ports/VectorStore';
-import { GraphNodeVectorItem } from '../../core/types/vector/graph-features';
+import { GraphFeaturesJsonDto, GraphNodeVectorItem } from '../../core/types/vector/graph-features';
 import { UpstreamError } from '../../shared/errors/domain';
 import { logger } from '../../shared/utils/logger';
-
-/**
- * features.json 구조 정의
- */
-export interface FeatureData {
-  conversations: Array<{
-    id: number;
-    orig_id: string; // UUID
-    keywords: Array<{ term: string; score: number }>;
-    create_time?: number;
-    update_time?: number;
-    num_messages: number;
-  }>;
-  embeddings: number[][]; // 2D array [index][dim]
-  metadata: Record<string, any>;
-}
 
 export class GraphVectorRepository {
   private readonly NODE_COLLECTION = 'nodes_v1';
@@ -28,9 +12,9 @@ export class GraphVectorRepository {
   /**
    * features.json 데이터를 파싱하여 Vector DB에 저장합니다.
    * @param userId 사용자 ID
-   * @param features features.json 객체
+   * @param features features.json 객체 (GraphFeaturesJsonDto)
    */
-  async saveGraphFeatures(userId: string, features: FeatureData): Promise<void> {
+  async saveGraphFeatures(userId: string, features: GraphFeaturesJsonDto): Promise<void> {
     try {
       const { conversations, embeddings } = features;
 
@@ -43,6 +27,8 @@ export class GraphVectorRepository {
       const items: GraphNodeVectorItem[] = conversations.map((conv, idx) => {
         const vector = embeddings[idx];
         const keywordsList = conv.keywords.map((k) => k.term);
+        // Vector DB Metadata 제한(Nested Object 불가)으로 인해 상세 정보는 JSON String으로 저장
+        const keywordDetailsStr = JSON.stringify(conv.keywords);
 
         return {
           id: conv.orig_id, // Conversation UUID
@@ -52,6 +38,7 @@ export class GraphVectorRepository {
             nodeId: conv.id,
             userId: userId,
             keywords: keywordsList,
+            keywordDetails: keywordDetailsStr,
             messageCount: conv.num_messages,
             createTime: conv.create_time,
             updateTime: conv.update_time,

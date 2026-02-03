@@ -2,8 +2,9 @@
  * 목적: AI 파일 다운로드 API 검증 (GET /v1/ai/files/:key)
  */
 import request from 'supertest';
-import { createApp } from '../../src/bootstrap/server';
 import { Readable } from 'stream';
+
+import { createApp } from '../../src/bootstrap/server';
 
 // Mocks
 jest.mock('../../src/core/services/GoogleOAuthService', () => ({

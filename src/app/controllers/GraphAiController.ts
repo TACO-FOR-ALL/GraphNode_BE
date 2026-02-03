@@ -34,7 +34,6 @@ export class GraphAiController {
     const userId = getUserIdFromRequest(req);
 
     // 그래프 요약 프로세스 시작 (SQS 요청)
-    // FIXME: 실제 구현 시 GraphGenerationService의 메서드가 SQS 메시지를 발행하도록 구성해야 함
     const taskId = await this.graphGenerationService.requestGraphSummary(userId!);
 
     res.status(202).json({
@@ -42,6 +41,22 @@ export class GraphAiController {
       taskId: taskId,
       status: 'queued',
     });
+  };
+
+  /**
+   * GET /v1/graph-ai/summary
+   * 생성된 그래프 요약을 조회합니다.
+   */
+  getSummary = async (req: Request, res: Response) => {
+    const userId = getUserIdFromRequest(req);
+    const summary = await this.graphGenerationService.getGraphSummary(userId!);
+
+    if (!summary) {
+      res.status(404).json({ message: 'Summary not found' });
+      return;
+    }
+
+    res.status(200).json(summary);
   };
 
   /**

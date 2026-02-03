@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+
 import { redis } from '../../infra/redis/client';
 import { EventBusPort } from '../ports/EventBusPort';
 import { logger } from '../../shared/utils/logger';

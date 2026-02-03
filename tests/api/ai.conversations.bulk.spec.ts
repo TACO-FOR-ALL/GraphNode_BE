@@ -3,7 +3,6 @@ import request from 'supertest';
 
 import { createApp } from '../../src/bootstrap/server';
 import { generateAccessToken } from '../../src/app/utils/jwt';
-
 import { ChatThread, ChatMessage } from '../../src/shared/dtos/ai';
 
 // 인메모리 스토어 모의

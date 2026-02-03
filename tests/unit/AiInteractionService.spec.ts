@@ -3,12 +3,12 @@
  * - OpenAI Assistants API 흐름 검증
  * - 파일 업로드/다운로드 로직 검증
  */
+import { Readable } from 'stream';
+
 import { AiInteractionService } from '../../src/core/services/AiInteractionService';
 import { ChatManagementService } from '../../src/core/services/ChatManagementService';
 import { UserService } from '../../src/core/services/UserService';
 import { StoragePort } from '../../src/core/ports/StoragePort';
-import { Readable } from 'stream';
-import { AppError } from '../../src/shared/errors/base';
 
 // Mocks
 const mockChatSvc = {

@@ -11,7 +11,8 @@ import { AppError, ConflictError, UpstreamError } from '../../shared/errors/doma
 import { ChatMessage } from '../../shared/dtos/ai';
 import { AiGraphOutputDto } from '../../shared/dtos/ai_graph_output';
 import { mapAiOutputToSnapshot } from '../../shared/mappers/ai_graph_output.mapper';
-import { GraphGenRequestPayload, TaskType } from '../../shared/dtos/queue';
+import { mapSnapshotToAiInput } from '../../shared/mappers/graph_ai_input.mapper';
+import { GraphGenRequestPayload, GraphSummaryRequestPayload, TaskType } from '../../shared/dtos/queue';
 // Interfaces
 import { QueuePort } from '../ports/QueuePort';
 import { StoragePort } from '../ports/StoragePort';
@@ -107,19 +108,60 @@ export class GraphGenerationService {
   }
 
   /**
-   * [New] SQS 기반 그래프 요약 요청
-   * 그래프와 Insight 데이터를 기반으로 요약을 생성하도록 요청합니다.
-   *
-   * @param userId 사용자 ID
    * @returns 발행된 작업의 연관 ID (TaskId)
    */
   async requestGraphSummary(userId: string): Promise<string> {
-    const taskId = `summary_${userId}_${ulid()}`;
-    // FIXME: 실제 구현 필요 (SQS 메시지 발행 등)
-    // 1. 필요한 데이터(features.json 등) 확인
-    // 2. SQS 메시지 구성 및 전송
-    logger.info({ userId, taskId }, 'Requesting graph summary (Dummy Implementation)');
-    return taskId;
+    try {
+      // 1. Task ID 생성
+      const taskId = `summary_${userId}_${ulid()}`;
+      
+      // 2. 최신 그래프 스냅샷 조회 (DB에서)
+      const snapshot = await this.graphEmbeddingService.getSnapshotForUser(userId);
+      if (!snapshot || snapshot.nodes.length === 0) {
+        throw new Error('Graph data not found for user. Please generate graph first.');
+      }
+      
+      // 3. AI 입력 포맷으로 변환 -> JSON String
+      const aiInput = mapSnapshotToAiInput(snapshot);
+      const jsonPayload = JSON.stringify(aiInput);
+      const dataStream = Readable.from([jsonPayload]); // Readable Stream 생성
+      
+      // 4. S3 업로드
+      const s3Key = `graph-summary/${taskId}/graph.json`;
+      const bucket = process.env.S3_PAYLOAD_BUCKET || 'graph-node-payloads';
+      
+      //logger.info({ userId, s3Key }, 'Uploading graph data for summary');
+      await this.storagePort.upload(s3Key, dataStream, 'application/json');
+      
+      // 5. SQS 메시지 전송 (GRAPH_SUMMARY_REQUEST)
+      const messageBody: GraphSummaryRequestPayload = {
+        taskId,
+        taskType: TaskType.GRAPH_SUMMARY_REQUEST,
+        payload: {
+          userId,
+          graphS3Key: s3Key,
+          bucket: bucket,
+          // vectorDbS3Key: undefined // 필요 시 추가
+        },
+        timestamp: new Date().toISOString(),
+      };
+      
+      logger.info({ userId, taskId, queue: this.jobQueueUrl }, 'Sending Summary Request to SQS');
+      await this.queuePort.sendMessage(this.jobQueueUrl, messageBody);
+      
+      return taskId;
+    } catch (err) {
+      logger.error({ err, userId }, 'Failed to requesting graph summary');
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('Request Graph Summary Failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 그래프 요약/인사이트 조회 (Delegation)
+   */
+  async getGraphSummary(userId: string) {
+    return this.graphEmbeddingService.getGraphSummary(userId);
   }
 
   /**

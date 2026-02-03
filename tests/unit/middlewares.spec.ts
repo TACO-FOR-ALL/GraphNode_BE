@@ -3,7 +3,6 @@ import { Request, Response, NextFunction } from 'express';
 import { requestContext } from '../../src/app/middlewares/request-context';
 import { requireLogin } from '../../src/app/middlewares/auth';
 import { requestStore } from '../../src/shared/context/requestStore';
-import { AuthError } from '../../src/shared/errors/domain';
 
 // Mock requestStore
 jest.mock('../../src/shared/context/requestStore', () => ({

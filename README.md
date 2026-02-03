@@ -138,6 +138,16 @@ infisical run --env=prod -- npm start
 - **API Reference**: [OpenAPI Spec (YAML)](docs/api/openapi.yaml) / Swagger UI / Redoc을 통한 인터랙티브 명세
 - **TypeDoc**: 소스 코드 레벨의 클래스/함수 레퍼런스
 - **Guides**: 일일 개발 일지 및 트러블슈팅 가이드
+- **Help**: [Troubleshooting](docs/guides/TROUBLESHOOTING.md) | [Contributing](CONTRIBUTING.md)
+
+---
+
+## ✨ Features
+
+- **지식 그래프 생성**: 비정형 대화 내용을 구조화된 지식 그래프로 변환
+- **그래프 요약**: 대규모 그래프 네트워크에 대한 AI 기반 요약 제공
+- **벡터 검색**: ChromaDB를 활용한 그래프 노드 의미 기반 검색(Semantic Search)
+- **비동기 처리**: 대용량 AI 워크로드를 위한 SQS/ECS 기반 오토스케일링 아키텍처
 
 ---
 

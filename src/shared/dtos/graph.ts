@@ -48,6 +48,9 @@ export interface GraphNodeDto {
   numMessages: number;
   /** 임베딩 (선택) */
   embedding?: number[];
+  
+  /** 키워드 (AI 분석 결과) */
+  keywords?: Array<{ term: string; score: number }>;
 
   /** 생성 시각(ISO 8601 UTC) */
   createdAt?: string;

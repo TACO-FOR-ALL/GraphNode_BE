@@ -1,4 +1,5 @@
-import { GraphVectorRepository, FeatureData } from '../../infra/repositories/GraphVectorRepository';
+import { GraphVectorRepository } from '../../infra/repositories/GraphVectorRepository';
+import { GraphFeaturesJsonDto } from '../types/vector/graph-features';
 import { logger } from '../../shared/utils/logger';
 
 /**
@@ -19,7 +20,7 @@ export class GraphVectorService {
    * @param userId - 사용자 ID
    * @param features - features.json 파싱 데이터
    */
-  async saveGraphFeatures(userId: string, features: FeatureData): Promise<void> {
+  async saveGraphFeatures(userId: string, features: GraphFeaturesJsonDto): Promise<void> {
     logger.info({ userId }, 'GraphVectorService: Saving graph features');
     await this.graphVectorRepo.saveGraphFeatures(userId, features);
   }

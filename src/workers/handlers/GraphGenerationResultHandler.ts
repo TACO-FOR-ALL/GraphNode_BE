@@ -1,12 +1,13 @@
 import { Readable } from 'stream';
 
 import { JobHandler } from './JobHandler';
-import { Container } from '../../bootstrap/container';
+import type { Container } from '../../bootstrap/container';
 import { GraphGenResultPayload } from '../../shared/dtos/queue';
 import { logger } from '../../shared/utils/logger';
 import { mapAiOutputToSnapshot } from '../../shared/mappers/ai_graph_output.mapper';
 import { PersistGraphPayloadDto } from '../../shared/dtos/graph';
 import { AiGraphOutputDto } from '../../shared/dtos/ai_graph_output';
+import { GraphFeaturesJsonDto } from '../../core/types/vector/graph-features';
 
 /**
  * 그래프 생성 결과 처리 핸들러
@@ -68,14 +69,18 @@ export class GraphGenerationResultHandler implements JobHandler {
 
         logger.info({ taskId, userId }, 'Graph snapshot persisted to DB');
 
+
+
+
         // 3.5. Vector DB 저장 (Features)
         if (payload.featuresS3Key) {
           try {
             const graphVectorService = container.getGraphVectorService(); // Use Service
-            const features = await storagePort.downloadJson<any>(payload.featuresS3Key);
+            const features = await storagePort.downloadJson<GraphFeaturesJsonDto>(payload.featuresS3Key);
             await graphVectorService.saveGraphFeatures(userId, features);
             logger.info({ taskId, userId }, 'Graph features persisted to Vector DB via Service');
           } catch (featureErr) {
+
             logger.error({ err: featureErr, taskId }, 'Failed to persist graph features (Non-fatal)');
             throw featureErr;
           }
