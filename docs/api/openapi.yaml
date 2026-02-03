@@ -565,6 +565,11 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: ../schemas/problem.json }
+        '502':
+          description: Upstream error (AI provider failure)
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
   /v1/ai/files/{key}:
     get:
       summary: Download AI file
@@ -1172,6 +1177,12 @@ paths:
       responses:
         '200':
           description: Push successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
         '400':
           description: Bad Request
           content:
@@ -1179,6 +1190,11 @@ paths:
               schema: { $ref: '../schemas/problem.json' }
         '401':
           description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '502':
+          description: Upstream error (Database failure)
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }
@@ -1592,6 +1608,56 @@ paths:
                   message: { type: string }
                   taskId: { type: string }
                   status: { type: string }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '409':
+          description: Conflict (Task already processing)
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+  /v1/graph-ai/summary:
+    post:
+      summary: Request graph summary generation
+      description: Starts an asynchronous background task to generate a summary of the user's graph.
+      responses:
+        '202':
+          description: Task accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  taskId: { type: string }
+                  status: { type: string }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '409':
+          description: Conflict (Task already processing)
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+    get:
+      summary: Get graph summary
+      description: Retrieves the generated summary and insights for the user's graph.
+      responses:
+        '200':
+          description: Graph summary
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/graph-summary.json
+        '404':
+          description: Summary not found
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
         '401':
           description: Not authenticated
           content:

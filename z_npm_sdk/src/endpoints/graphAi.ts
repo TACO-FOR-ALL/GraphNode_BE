@@ -1,5 +1,6 @@
 import { RequestBuilder, type HttpResponse } from '../http-builder.js';
 import type { GraphGenerationResponseDto } from '../types/graphAi.js';
+import type { GraphSummaryDto } from '../types/graph.js';
 import type { AiInputData } from '../types/aiInput.js';
 
 /**
@@ -80,5 +81,31 @@ export class GraphAiApi {
    */
   async generateGraphTest(data: AiInputData[]): Promise<HttpResponse<GraphGenerationResponseDto>> {
     return this.rb.path('/test/generate-json').post(data);
+  }
+
+  /**
+   * Request graph summary generation (Async)
+   *
+   * Starts a background task to generate insights and summaries for the user's graph network.
+   *
+   * **API Endpoint**: `POST /v1/graph-ai/summary`
+   *
+   * @returns Verification of task acceptance
+   */
+  async requestSummary(): Promise<HttpResponse<GraphGenerationResponseDto>> {
+    return this.rb.path('/summary').post();
+  }
+
+  /**
+   * Get generated graph summary
+   *
+   * Retrieves the previously generated summary. Returns 404 if not found or not ready.
+   *
+   * **API Endpoint**: `GET /v1/graph-ai/summary`
+   *
+   * @returns The graph summary DTO
+   */
+  async getSummary(): Promise<HttpResponse<GraphSummaryDto>> {
+    return this.rb.path('/summary').get();
   }
 }

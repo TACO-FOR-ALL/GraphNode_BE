@@ -65,7 +65,7 @@ export class SyncApi {
    * });
    * console.log('Sync push completed');
    */
-  push(data: SyncPushRequest): Promise<HttpResponse<void>> {
-    return this.rb.path('/v1/sync/push').post<void>(data);
+  push(data: SyncPushRequest): Promise<HttpResponse<{ success: boolean }>> {
+    return this.rb.path('/v1/sync/push').post<{ success: boolean }>(data);
   }
 }
