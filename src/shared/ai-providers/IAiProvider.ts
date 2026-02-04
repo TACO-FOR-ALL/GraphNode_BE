@@ -65,6 +65,11 @@ export interface IAiProvider {
   createThread(apiKey: string): Promise<Result<{ threadId: string }>>;
 
   /**
+   * Assistant 생성
+   */
+  createAssistant(apiKey: string): Promise<Result<{ assistantId: string }>>;
+
+  /**
    * 스레드에 메시지 추가
    */
   addMessage(

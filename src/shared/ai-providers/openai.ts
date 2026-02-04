@@ -199,6 +199,26 @@ export const openAI = {
   },
 
   /**
+   * OpenAI Assistant 생성
+   * @param apiKey 
+   * @returns 
+   */
+  async createAssistant(apiKey: string): Promise<Result<{ assistantId: string }>> {
+    try {
+      const client = new OpenAI({ apiKey });
+      const assistant = await client.beta.assistants.create({
+        name: 'GraphNode User Assistant',
+        instructions: 'You are a helpful assistant for the GraphNode application.',
+        model: 'gpt-4o', // Default model
+        tools: [{ type: 'file_search' }], // Enable RAG by default
+      });
+      return { ok: true, data: { assistantId: assistant.id } };
+    } catch (e) {
+      return { ok: false, error: normalizeError(e) };
+    }
+  },
+
+  /**
    * 
    * @param apiKey 
    * @param threadId 

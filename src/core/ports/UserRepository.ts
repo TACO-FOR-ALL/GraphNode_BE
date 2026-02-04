@@ -97,4 +97,14 @@ import { ApiKeyModel } from '../../shared/dtos/me';
    * @param model ApiKeyModel
    */
   deleteApiKeyById(id: number, model: ApiKeyModel): Promise<void>;
+
+  /**
+   * 사용자의 OpenAI Assistant ID 조회
+   */
+  getOpenAiAssistantId(id: number): Promise<string | null>;
+
+  /**
+   * 사용자의 OpenAI Assistant ID 업데이트
+   */
+  updateOpenAiAssistantId(id: number, assistantId: string): Promise<void>;
 }
