@@ -1,4 +1,4 @@
-import type { ChatRole } from '../../../shared/dtos/ai';
+import type { ChatRole, Attachment } from '../../../shared/dtos/ai';
 
 /**
  * Provider 유형
@@ -42,6 +42,7 @@ export interface ConversationDoc {
   model?: string;
   source?: Source;
   tags?: string[];
+  externalThreadId?: string; // OpenAI Assistants API Thread ID
 }
 
 /**
@@ -65,4 +66,5 @@ export interface MessageDoc {
   createdAt: number;
   updatedAt: number;
   deletedAt?: number | null;
+  attachments?: Attachment[];
 }

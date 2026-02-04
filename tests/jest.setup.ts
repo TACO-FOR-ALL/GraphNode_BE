@@ -1,6 +1,9 @@
 // Set dummy environment variables for tests to pass validation in src/config/env.ts
+import { jest } from '@jest/globals';
+
 process.env.NODE_ENV = 'test';
 process.env.MYSQL_URL = 'mysql://u:p@localhost:3306/db';
+process.env.DATABASE_URL = 'mysql://u:p@localhost:3306/db';
 process.env.MONGODB_URL = 'mongodb://localhost:27017';
 process.env.REDIS_URL = 'redis://localhost:6379';
 process.env.JWT_SECRET = 'test-secret';
@@ -18,63 +21,70 @@ process.env.QDRANT_COLLECTION_NAME = 'col';
 process.env.SQS_REQUEST_QUEUE_URL = 'http://sqs.request';
 process.env.SQS_RESULT_QUEUE_URL = 'http://sqs.result';
 process.env.S3_PAYLOAD_BUCKET = 'bucket';
+process.env.S3_FILE_BUCKET = 'file-bucket';
+process.env.OPENAI_ASSISTANT_ID = 'asst_test';
+
+// Shared Mock Redis Instance
+const mockRedisInstance = {
+  connect: jest.fn<any>().mockResolvedValue(undefined),
+  on: jest.fn<any>().mockReturnThis(),
+  get: jest.fn<any>().mockResolvedValue(null),
+  set: jest.fn<any>().mockResolvedValue('OK'),
+  del: jest.fn<any>().mockResolvedValue(1),
+  quit: jest.fn<any>().mockResolvedValue('OK'),
+  disconnect: jest.fn<any>(),
+  duplicate: jest.fn<any>().mockReturnThis(),
+  publish: jest.fn<any>().mockResolvedValue(1),
+  subscribe: jest.fn<any>().mockResolvedValue(1),
+  unsubscribe: jest.fn<any>().mockResolvedValue(1),
+  once: jest.fn<any>().mockImplementation((event: any, callback: any) => {
+      if (event === 'ready') callback();
+      return mockRedisInstance;
+  }),
+};
 
 // Mock IORedis
 jest.mock('ioredis', () => {
-  return class IORedis {
-    constructor() {}
-    connect() {
-      return Promise.resolve();
-    }
-    on() {
-      return this;
-    }
-    get() {
-      return Promise.resolve(null);
-    }
-    set() {
-      return Promise.resolve('OK');
-    }
-    del() {
-      return Promise.resolve(1);
-    }
-    quit() {
-      return Promise.resolve('OK');
-    }
-    disconnect() {
-      return;
-    }
+  return jest.fn<any>().mockImplementation(() => mockRedisInstance);
+});
+
+// Mock Redis Client Wrapper
+jest.mock('../src/infra/redis/client', () => {
+  return {
+    redis: mockRedisInstance,
+    redisSubscriber: mockRedisInstance,
+    initRedis: jest.fn<any>().mockResolvedValue(undefined),
   };
 });
 
 // Mock MongoDB
 jest.mock('../src/infra/db/mongodb', () => {
   const mockSession = {
-    startTransaction: jest.fn(),
-    commitTransaction: jest.fn(),
-    abortTransaction: jest.fn(),
-    endSession: jest.fn(),
+    startTransaction: jest.fn<any>(),
+    commitTransaction: jest.fn<any>(),
+    abortTransaction: jest.fn<any>(),
+    endSession: jest.fn<any>(),
     withTransaction: async (cb: any) => await cb(),
   };
   const mockDb = {
-    collection: jest.fn().mockReturnValue({
-      createIndex: jest.fn().mockResolvedValue('index'),
-      findOne: jest.fn(),
-      find: jest.fn(),
-      insertOne: jest.fn(),
-      insertMany: jest.fn(),
-      updateOne: jest.fn(),
-      deleteMany: jest.fn(),
+    collection: jest.fn<any>().mockReturnValue({
+      createIndex: jest.fn<any>().mockResolvedValue('index'),
+      findOne: jest.fn<any>(),
+      find: jest.fn<any>(),
+      insertOne: jest.fn<any>(),
+      insertMany: jest.fn<any>(),
+      updateOne: jest.fn<any>(),
+      deleteMany: jest.fn<any>(),
     }),
   };
   const mockClient = {
-    connect: jest.fn().mockResolvedValue(true),
-    db: jest.fn().mockReturnValue(mockDb),
-    startSession: jest.fn().mockReturnValue(mockSession),
+    connect: jest.fn<any>().mockResolvedValue(true),
+    db: jest.fn<any>().mockReturnValue(mockDb),
+    startSession: jest.fn<any>().mockReturnValue(mockSession),
   };
   return {
-    initMongo: jest.fn().mockResolvedValue(mockClient),
-    getMongo: jest.fn().mockReturnValue(mockClient),
+    initMongo: jest.fn<any>().mockResolvedValue(mockClient),
+    getMongo: jest.fn<any>().mockReturnValue(mockClient),
     client: mockClient,
   };
 });

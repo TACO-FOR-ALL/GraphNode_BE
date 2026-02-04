@@ -52,7 +52,7 @@ export const openAI = {
       const client = new OpenAI({ apiKey: apiKey });
       const p = await client.chat.completions.create({
         model,
-        messages,
+        messages: messages as any, // Type casting to bypass union mismatch
       });
       //console.log('request', p);
       return { ok: true, data: p } as Result<typeof p>;
@@ -74,13 +74,34 @@ export const openAI = {
       const client = new OpenAI({ apiKey: apiKey });
       const p = await client.chat.completions.create({
         model,
-        messages,
+        messages: messages as any,
         stream,
       });
       //console.log('request', p);
       return { ok: true, data: p } as Result<typeof p>;
     } catch (e) {
       return { ok: false, error: normalizeError(e) } as Result<never>;
+    }
+  },
+
+  /**
+   * OPENAI API 스트리밍 요청
+   */
+  async requestStream(
+    apiKey: string,
+    model: string,
+    messages: ChatMessageRequest[]
+  ): Promise<Result<AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>>> {
+    try {
+      const client = new OpenAI({ apiKey: apiKey });
+      const stream = await client.chat.completions.create({
+        model,
+        messages: messages as any,
+        stream: true,
+      });
+      return { ok: true, data: stream };
+    } catch (e) {
+      return { ok: false, error: normalizeError(e) };
     }
   },
 
@@ -125,6 +146,132 @@ export const openAI = {
       }
       const fallback = firstUserMessage.slice(0, 15) + (firstUserMessage.length > 15 ? '…' : '');
       return { ok: true, data: fallback };
+    } catch (e) {
+      return { ok: false, error: normalizeError(e) };
+    }
+  },
+
+  // --- Assistants API Implementation ---
+
+  /**
+   * OpenAI 파일 업로드
+   * @param apiKey 
+   * @param file 
+   * @param purpose 
+   * @returns 
+   */
+  async uploadFile(
+    apiKey: string,
+    file: { buffer: Buffer; filename: string; mimetype: string },
+    purpose: 'assistants' | 'vision' = 'assistants'
+  ): Promise<Result<{ fileId: string }>> {
+    try {
+      const client = new OpenAI({ apiKey });
+      // OpenAI expects a File object or ReadStream.
+      // We create a File-like object from buffer.
+      const fileObj = await import('openai/uploads').then((m) =>
+        m.toFile(file.buffer, file.filename, { type: file.mimetype })
+      );
+      
+      const response = await client.files.create({
+        file: fileObj,
+        purpose: purpose,
+      });
+      return { ok: true, data: { fileId: response.id } };
+    } catch (e) {
+      return { ok: false, error: normalizeError(e) };
+    }
+  },
+
+  /**
+   * OpenAI 스레드 생성
+   * @param apiKey 
+   * @returns 
+   */
+  async createThread(apiKey: string): Promise<Result<{ threadId: string }>> {
+    try {
+      const client = new OpenAI({ apiKey });
+      const thread = await client.beta.threads.create();
+      return { ok: true, data: { threadId: thread.id } };
+    } catch (e) {
+      return { ok: false, error: normalizeError(e) };
+    }
+  },
+
+  /**
+   * OpenAI Assistant 생성
+   * @param apiKey 
+   * @returns 
+   */
+  async createAssistant(apiKey: string): Promise<Result<{ assistantId: string }>> {
+    try {
+      const client = new OpenAI({ apiKey });
+      const assistant = await client.beta.assistants.create({
+        name: 'GraphNode User Assistant',
+        instructions: 'You are a helpful assistant for the GraphNode application.',
+        model: 'gpt-4o', // Default model
+        tools: [{ type: 'file_search' }], // Enable RAG by default
+      });
+      return { ok: true, data: { assistantId: assistant.id } };
+    } catch (e) {
+      return { ok: false, error: normalizeError(e) };
+    }
+  },
+
+  /**
+   * 
+   * @param apiKey 
+   * @param threadId 
+   * @param role 
+   * @param content 
+   * @param fileIds 
+   * @returns 
+   */
+  async addMessage(
+    apiKey: string,
+    threadId: string,
+    role: 'user' | 'assistant',
+    content: string,
+    fileIds: string[] = []
+  ): Promise<Result<any>> {
+    try {
+      const client = new OpenAI({ apiKey });
+      
+      const attachments = fileIds.map((fileId) => ({
+        file_id: fileId,
+        tools: [{ type: 'file_search' as const }], // 기본적으로 file_search 활성화
+      }));
+
+      const msg = await client.beta.threads.messages.create(threadId, {
+        role: role,
+        content: content,
+        attachments: attachments.length > 0 ? attachments : undefined,
+      });
+      return { ok: true, data: msg };
+    } catch (e) {
+      return { ok: false, error: normalizeError(e) };
+    }
+  },
+
+  /**
+   * 
+   * @param apiKey 
+   * @param assistantId 
+   * @param threadId 
+   * @returns 
+   */
+  async runAssistantStream(
+    apiKey: string,
+    assistantId: string,
+    threadId: string
+  ): Promise<Result<AsyncIterable<any>>> {
+    try {
+      const client = new OpenAI({ apiKey });
+      const stream = await client.beta.threads.runs.create(threadId, {
+        assistant_id: assistantId,
+        stream: true,
+      });
+      return { ok: true, data: stream };
     } catch (e) {
       return { ok: false, error: normalizeError(e) };
     }

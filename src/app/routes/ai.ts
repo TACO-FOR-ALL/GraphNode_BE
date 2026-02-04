@@ -3,6 +3,10 @@
  * 책임: 주입된 서비스로 라우터를 생성한다. 의존성 생성은 bootstrap에서 수행.
  */
 import { Router } from 'express';
+import multer from 'multer';
+
+// Multer 설정 (메모리 스토리지)
+const upload = multer({ storage: multer.memoryStorage() });
 
 import type { ChatManagementService } from '../../core/services/ChatManagementService';
 import { AiController } from '../controllers/ai';
@@ -70,8 +74,11 @@ export function createAiRouter(deps: {
   // Chat
   router.post(
     '/conversations/:conversationId/chat',
+    upload.array('files'),
     asyncHandler(aiController.handleAIChat.bind(aiController))
   );
+
+  router.get('/files/:key', asyncHandler(aiController.downloadFile.bind(aiController)));
 
   return router;
 }

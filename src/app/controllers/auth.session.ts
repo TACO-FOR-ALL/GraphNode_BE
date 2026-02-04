@@ -25,3 +25,51 @@ export function logout(req: Request, res: Response, next: NextFunction) {
     next(e);
   }
 }
+
+/**
+ * POST /auth/refresh — Refresh Token을 사용하여 Access Token 재발급
+ */
+export function refresh(req: Request, res: Response, next: NextFunction) {
+  try {
+    const refreshToken = req.cookies['refresh_token'];
+    
+    // Refresh Token이 없으면 401 Unauthorized
+    if (!refreshToken) {
+      throw new Error('No refresh token provided');
+    }
+
+    // Refresh Token 검증
+    const payload = verifyToken(refreshToken);
+    if (!payload || !payload.userId) {
+       throw new Error('Invalid refresh token');
+    }
+
+    // 새로운 Access Token 발급
+    const newAccessToken = generateAccessToken({ userId: payload.userId });
+
+    // 새로운 Access Token 쿠키 설정
+    const isProd = process.env.NODE_ENV === 'production';
+    const insecure = process.env.DEV_INSECURE_COOKIES === 'true';
+    const secure = isProd && !insecure;
+    const sameSite = secure ? 'none' : 'lax';
+
+    res.cookie('access_token', newAccessToken, {
+      httpOnly: true,
+      secure,
+      sameSite: sameSite as 'none' | 'lax',
+      signed: true,
+      path: '/',
+      maxAge: JWT_ACCESS_EXPIRY_MS,
+    });
+
+    res.status(200).json({ ok: true });
+
+  } catch (e) {
+    // 갱신 실패 시 쿠키 모두 삭제 -> 재로그인 유도
+    res.clearCookie('access_token', { path: '/' });
+    res.clearCookie('refresh_token', { path: '/' });
+    res.status(401).json({ ok: false, error: 'Refresh failed' });
+  }
+}
+
+import { generateAccessToken, verifyToken, JWT_ACCESS_EXPIRY_MS } from '../utils/jwt';

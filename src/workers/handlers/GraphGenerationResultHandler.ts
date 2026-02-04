@@ -1,12 +1,13 @@
 import { Readable } from 'stream';
 
 import { JobHandler } from './JobHandler';
-import { Container } from '../../bootstrap/container';
+import type { Container } from '../../bootstrap/container';
 import { GraphGenResultPayload } from '../../shared/dtos/queue';
 import { logger } from '../../shared/utils/logger';
 import { mapAiOutputToSnapshot } from '../../shared/mappers/ai_graph_output.mapper';
 import { PersistGraphPayloadDto } from '../../shared/dtos/graph';
 import { AiGraphOutputDto } from '../../shared/dtos/ai_graph_output';
+import { GraphFeaturesJsonDto } from '../../core/types/vector/graph-features';
 
 /**
  * 그래프 생성 결과 처리 핸들러
@@ -35,12 +36,18 @@ export class GraphGenerationResultHandler implements JobHandler {
         const errorMsg = error || 'Unknown error from AI server';
         logger.warn({ taskId, userId, error: errorMsg }, 'Graph generation failed');
 
-        // 실패 알림 전송(Redis Pub/Sub)
+        // 실패 알림 전송(Redis Pub/Sub & FCM)
         await notiService.sendNotification(userId, 'GRAPH_GENERATION_FAILED', {
           taskId,
           error: errorMsg,
           timestamp: new Date().toISOString(),
         });
+        await notiService.sendFcmPushNotification(
+          userId,
+          'Graph Generation Failed',
+          'Failed to generate knowledge graph. Please try again.',
+          { type: 'GRAPH_GENERATION_FAILED', taskId, error: errorMsg }
+        );
         return;
       }
 
@@ -62,6 +69,25 @@ export class GraphGenerationResultHandler implements JobHandler {
 
         logger.info({ taskId, userId }, 'Graph snapshot persisted to DB');
 
+
+
+
+        // 3.5. Vector DB 저장 (Features)
+        if (payload.featuresS3Key) {
+          try {
+            const graphVectorService = container.getGraphVectorService(); // Use Service
+            const features = await storagePort.downloadJson<GraphFeaturesJsonDto>(payload.featuresS3Key);
+            await graphVectorService.saveGraphFeatures(userId, features);
+            logger.info({ taskId, userId }, 'Graph features persisted to Vector DB via Service');
+          } catch (featureErr) {
+
+            logger.error({ err: featureErr, taskId }, 'Failed to persist graph features (Non-fatal)');
+            throw featureErr;
+          }
+        }
+
+
+
         // 4. 성공 알림 전송
         await notiService.sendNotification(userId, 'GRAPH_GENERATION_COMPLETED', {
           taskId,
@@ -69,6 +95,12 @@ export class GraphGenerationResultHandler implements JobHandler {
           edgeCount: snapshot.edges.length,
           timestamp: new Date().toISOString(),
         });
+        await notiService.sendFcmPushNotification(
+          userId,
+          'Graph Ready',
+          `Your knowledge graph (${snapshot.nodes.length} nodes) is ready!`,
+          { type: 'GRAPH_GENERATION_COMPLETED', taskId }
+        );
       }
     } catch (err) {
       logger.error({ err, taskId, userId }, 'Error processing graph generation result');

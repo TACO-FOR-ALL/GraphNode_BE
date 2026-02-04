@@ -1,22 +1,26 @@
-import { ChromaClient } from 'chromadb';
+import { CloudClient } from 'chromadb';
 
 import { loadEnv } from '../../config/env';
 import { logger } from '../../shared/utils/logger';
 
-let client: ChromaClient | null = null;
+let client: CloudClient | null = null;
 
-export const initChroma = async (): Promise<ChromaClient> => {
+export const initChroma = async (): Promise<CloudClient> => {
   if (client) return client;
 
   const env = loadEnv();
-  const path = env.CHROMA_API_URL || 'http://localhost:8000';
+  const apiKey = env.CHROMA_API_KEY;
+  const tenant = env.CHROMA_TENANT;
+  const database = env.CHROMA_DATABASE;
 
-  logger.info({ path }, 'Initializing ChromaDB client...');
+
+  logger.info('Initializing ChromaDB client...');
 
   try {
-    client = new ChromaClient({
-      path: path,
-      // auth: env.CHROMA_API_KEY ? { provider: 'token', credentials: env.CHROMA_API_KEY } : undefined
+    client = new CloudClient({
+      apiKey: apiKey,
+      tenant: tenant,
+      database: database
     });
 
     // 연결 테스트 (heartbeat)
@@ -30,7 +34,7 @@ export const initChroma = async (): Promise<ChromaClient> => {
   }
 };
 
-export const getChromaClient = (): ChromaClient => {
+export const getChromaClient = (): CloudClient => {
   if (!client) {
     throw new Error('ChromaDB client not initialized. Call initChroma() first.');
   }

@@ -5,7 +5,9 @@ import {
   GraphClusterDoc,
   GraphEdgeDoc,
   GraphNodeDoc,
+  GraphSubclusterDoc,
   GraphStatsDoc,
+  GraphSummaryDoc,
 } from '../../core/types/persistence/graph.persistence';
 import { getMongo } from '../db/mongodb';
 import { UpstreamError, ValidationError, NotFoundError } from '../../shared/errors/domain';
@@ -33,6 +35,9 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     return this.db().collection<GraphStatsDoc>('graph_stats');
   }
 
+  private graphSubclusters_col() {
+    return this.db().collection<GraphSubclusterDoc>('graph_subclusters');
+  }
 
   /**
    * 노드 생성 또는 업데이트 (upsert).
@@ -313,6 +318,51 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     }
   }
 
+
+
+  async upsertSubcluster(subcluster: GraphSubclusterDoc, options?: RepoOptions): Promise<void> {
+    try {
+      await this.graphSubclusters_col().updateOne(
+        { id: subcluster.id, userId: subcluster.userId } as any,
+        { $set: subcluster },
+        { upsert: true, ...options, session: options?.session as any }
+      );
+    } catch (err: unknown) {
+      throw new UpstreamError('GraphRepositoryMongo.upsertSubcluster failed', {
+        cause: String(err),
+      });
+    }
+  }
+
+  async deleteSubcluster(
+    userId: string,
+    subclusterId: string,
+    options?: RepoOptions
+  ): Promise<void> {
+    try {
+      await this.graphSubclusters_col().deleteOne({ id: subclusterId, userId } as any, {
+        ...options,
+        session: options?.session as any,
+      });
+    } catch (err: unknown) {
+      throw new UpstreamError('GraphRepositoryMongo.deleteSubcluster failed', {
+        cause: String(err),
+      });
+    }
+  }
+
+  async listSubclusters(userId: string): Promise<GraphSubclusterDoc[]> {
+    try {
+      return await this.graphSubclusters_col()
+        .find({ userId } as any)
+        .toArray();
+    } catch (err: unknown) {
+      throw new UpstreamError('GraphRepositoryMongo.listSubclusters failed', {
+        cause: String(err),
+      });
+    }
+  }
+
   /**
    * 그래프 통계를 저장합니다. 사용자 ID를 키로 사용합니다.
    * @param stats 저장할 통계 문서.
@@ -351,6 +401,43 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
       });
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.deleteStats failed', { cause: String(err) });
+    }
+  }
+
+  // --- Insight Summary ---
+
+  private graphSummary_col() {
+    return this.db().collection<GraphSummaryDoc>('graph_summaries');
+  }
+
+  async upsertGraphSummary(
+    userId: string,
+    summary: GraphSummaryDoc,
+    options?: RepoOptions
+  ): Promise<void> {
+    try {
+      // id는 userId로 가정하거나 summary.id 사용. 여기서는 userId 기준 1:1로 가정
+      const filter = { userId: userId } as any;
+      const update = { $set: summary };
+      await this.graphSummary_col().updateOne(filter, update, {
+        upsert: true,
+        session: options?.session as any,
+      });
+    } catch (err: unknown) {
+      throw new UpstreamError('GraphRepositoryMongo.upsertGraphSummary failed', {
+        cause: String(err),
+      });
+    }
+  }
+
+  async getGraphSummary(userId: string): Promise<GraphSummaryDoc | null> {
+    try {
+      const doc = await this.graphSummary_col().findOne({ userId: userId } as any);
+      return doc;
+    } catch (err: unknown) {
+      throw new UpstreamError('GraphRepositoryMongo.getGraphSummary failed', {
+        cause: String(err),
+      });
     }
   }
 }

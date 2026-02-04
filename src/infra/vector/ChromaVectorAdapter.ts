@@ -17,11 +17,13 @@ export class ChromaVectorAdapter implements VectorStore {
 
       // 거리 메트릭 매핑 (Chroma: l2, ip, cosine)
       let metadata: Record<string, any> | undefined;
+      // ChromaDB Cloud/Local uses "hnsw:space" for distance metric
       if (distance === 'Cosine') metadata = { 'hnsw:space': 'cosine' };
       if (distance === 'Euclid') metadata = { 'hnsw:space': 'l2' };
       if (distance === 'Dot') metadata = { 'hnsw:space': 'ip' };
 
       // getOrCreateCollection 사용 (존재하면 가져오고 없으면 생성)
+      // CloudClient에서도 동일하게 동작
       await client.getOrCreateCollection({
         name,
         metadata,
@@ -50,14 +52,14 @@ export class ChromaVectorAdapter implements VectorStore {
       const embeddings = items.map((i) => i.vector);
       const metadatas = items.map((i) => i.payload || {});
 
-      // Upsert 실행
+      // Upsert 실행 (CloudClient 호환)
       await collection.upsert({
         ids,
         embeddings,
         metadatas,
       });
 
-      logger.debug({ count: items.length }, 'Upserted vectors to ChromaDB');
+      logger.debug({ count: items.length, collectionName }, 'Upserted vectors to ChromaDB');
     } catch (err) {
       throw new UpstreamError('Failed to upsert vectors to ChromaDB', { cause: err as any });
     }
@@ -82,7 +84,7 @@ export class ChromaVectorAdapter implements VectorStore {
         queryEmbeddings: [queryVector],
         nResults: limit,
         where: where,
-        include: ['metadatas', 'distances'] as any, // Bypass strict enum check regarding strict casing or import
+        include: ['metadatas', 'distances'] as any, // Bypass strict enum checks if needed
       });
 
       // 결과 매핑
@@ -114,7 +116,7 @@ export class ChromaVectorAdapter implements VectorStore {
         where: filter,
       });
 
-      logger.info({ filter }, 'Deleted vectors from ChromaDB');
+      logger.info({ filter, collectionName }, 'Deleted vectors from ChromaDB');
     } catch (err) {
       throw new UpstreamError('Failed to delete vectors from ChromaDB', { cause: err as any });
     }

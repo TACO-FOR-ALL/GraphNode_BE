@@ -6,6 +6,7 @@ import type {
   GraphEdgeDto,
   GraphNodeDto,
   GraphStatsDto,
+  GraphSummaryDto,
 } from '../../shared/dtos/graph';
 import {
   toGraphClusterDoc,
@@ -22,6 +23,7 @@ import {
   GraphEdgeDoc,
   GraphNodeDoc,
   GraphStatsDoc,
+  GraphSubclusterDoc,
 } from '../types/persistence/graph.persistence';
 
 /**
@@ -348,6 +350,50 @@ export class GraphManagementService {
     }
   }
 
+  // --- Subclusters ---
+
+  /**
+   * 서브클러스터 생성 또는 업데이트
+   */
+  async upsertSubcluster(subcluster: GraphSubclusterDoc, options?: RepoOptions): Promise<void> {
+    try {
+      await this.repo.upsertSubcluster(subcluster, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.upsertSubcluster failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 서브클러스터 삭제
+   */
+  async deleteSubcluster(
+    userId: string,
+    subclusterId: string,
+    options?: RepoOptions
+  ): Promise<void> {
+    try {
+      this.assertUser(userId);
+      await this.repo.deleteSubcluster(userId, subclusterId, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.deleteSubcluster failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 서브클러스터 목록 조회
+   */
+  async listSubclusters(userId: string): Promise<GraphSubclusterDoc[]> {
+    try {
+      this.assertUser(userId);
+      return await this.repo.listSubclusters(userId);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.listSubclusters failed', { cause: String(err) });
+    }
+  }
+
   /**
    * 그래프 통계 저장
    *
@@ -393,6 +439,39 @@ export class GraphManagementService {
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.deleteStats failed', { cause: String(err) });
+    }
+  }
+
+  // --- Insight Summary ---
+
+  /**
+   * 그래프 요약/인사이트 저장
+   */
+  async upsertGraphSummary(userId: string, summary: GraphSummaryDto, options?: RepoOptions): Promise<void> {
+    try {
+      this.assertUser(userId);
+      const doc: any = { ...summary, id: userId, userId };
+      await this.repo.upsertGraphSummary(userId, doc, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.upsertGraphSummary failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 그래프 요약/인사이트 조회
+   */
+  async getGraphSummary(userId: string): Promise<GraphSummaryDto | null> {
+    try {
+      this.assertUser(userId);
+      const doc = await this.repo.getGraphSummary(userId);
+      if (!doc) return null;
+      // Doc -> DTO (Simple cast)
+      const { _id, ...rest } = doc as any;
+      return rest as GraphSummaryDto;
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.getGraphSummary failed', { cause: String(err) });
     }
   }
 

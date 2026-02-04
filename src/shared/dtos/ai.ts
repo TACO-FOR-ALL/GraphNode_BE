@@ -27,6 +27,16 @@ export interface ChatMessage {
   createdAt?: string; // ISO 8601
   updatedAt?: string; // ISO 8601
   deletedAt?: string | null; // ISO 8601
+  attachments?: Attachment[];
+}
+
+export interface Attachment {
+  id: string;
+  type: 'image' | 'file';
+  url: string;
+  name: string;
+  mimeType: string;
+  size: number;
 }
 
 /**
@@ -44,6 +54,7 @@ export interface ChatThread {
   updatedAt?: string; // ISO 8601
   deletedAt?: string | null; // ISO 8601
   messages: ChatMessage[];
+  externalThreadId?: string; // OpenAI Assistants API Thread ID
 }
 
 // /**

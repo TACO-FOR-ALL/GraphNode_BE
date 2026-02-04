@@ -42,6 +42,9 @@ const EnvSchema = z.object({
   // QDRANT_COLLECTION_NAME: z.string().min(1, 'QDRANT_COLLECTION_NAME required'),
   // QDRANT_VECTOR_SIZE: z.coerce.number().int().positive().default(1536), // OpenAI 임베딩 차원 수
   // QDRANT_DISTANCE_METRIC: z.enum(['Cosine', 'Euclidean']).default('Cosine'), // 거리 측정 방식
+  
+  // OpenAI Assistants
+  OPENAI_ASSISTANT_ID: z.string().optional(),
 
   // Redis (캐시 및 세션 저장소) 설정
   REDIS_URL: z.string().min(1, 'REDIS_URL required'),
@@ -52,8 +55,9 @@ const EnvSchema = z.object({
   NEO4J_PASSWORD: z.string().default('password'),
 
   // // ChromaDB FIXME
-  CHROMA_API_URL: z.string().default('http://localhost:8000'),
   CHROMA_API_KEY: z.string().optional(),
+  CHROMA_TENANT: z.string().optional(),
+  CHROMA_DATABASE: z.string().optional(),
 
   // AWS
   AWS_REGION: z.string().default('ap-northeast-2'),
@@ -66,6 +70,7 @@ const EnvSchema = z.object({
 
   // AWS S3 설정
   S3_PAYLOAD_BUCKET: z.string().min(1, 'S3_PAYLOAD_BUCKET required'),
+  S3_FILE_BUCKET: z.string().min(1, 'S3_FILE_BUCKET required'),
 
   // JWT 설정
   JWT_SECRET: z.string().min(1, 'JWT_SECRET required'),

@@ -192,4 +192,20 @@ export class UserService {
       throw new UpstreamError('Failed to delete API key', { cause: err as any });
     }
   }
+
+  /**
+   * OpenAI Assistant ID 조회
+   */
+  async getOpenAiAssistantId(userId: string): Promise<string | null> {
+    const numericUserId = parseInt(userId, 10);
+    return this.userRepository.getOpenAiAssistantId(numericUserId);
+  }
+
+  /**
+   * OpenAI Assistant ID 업데이트
+   */
+  async updateOpenAiAssistantId(userId: string, assistantId: string): Promise<void> {
+    const numericUserId = parseInt(userId, 10);
+    await this.userRepository.updateOpenAiAssistantId(numericUserId, assistantId);
+  }
 }

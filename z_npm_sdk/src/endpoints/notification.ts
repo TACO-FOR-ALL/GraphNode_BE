@@ -19,6 +19,7 @@ export class NotificationApi {
   }
 
   /**
+   * @deprecated
    * 실시간 알림 수신을 위한 SSE(Server-Sent Events) 스트림 URL을 반환합니다.
    *
    * 이 엔드포인트는 `text/event-stream` 형식으로 데이터를 스트리밍합니다.
@@ -46,4 +47,23 @@ export class NotificationApi {
   getStreamUrl(): string {
     return this.rb.path('/stream').url();
   }
+
+  /**
+   * FCM 디바이스 토큰을 등록합니다.
+   *
+   * @param token - FCM 디바이스 토큰
+   */
+  async registerDeviceToken(token: string): Promise<void> {
+    await this.rb.path('/device-token').post({ token });
+  }
+
+  /**
+   * FCM 디바이스 토큰을 삭제(등록 해제)합니다.
+   *
+   * @param token - 삭제할 FCM 디바이스 토큰
+   */
+  async removeDeviceToken(token: string): Promise<void> {
+    await this.rb.path('/device-token').delete({ token });
+  }
+
 }

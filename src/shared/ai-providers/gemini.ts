@@ -56,6 +56,14 @@ export const geminiProvider: IAiProvider = {
     return this.requestWithoutStream(apiKey, model, messages);
   },
 
+  async requestStream(
+    apiKey: string,
+    model: string,
+    messages: ChatMessageRequest[]
+  ): Promise<Result<AsyncIterable<any>>> {
+    return { ok: false, error: 'not_implemented' };
+  },
+
   async requestGenerateThreadTitle(
     apiKey: string,
     firstUserMessage: string,
@@ -83,6 +91,11 @@ export const geminiProvider: IAiProvider = {
       return { ok: false, error: normalizeError(e) };
     }
   },
+
+  async uploadFile() { return { ok: false, error: 'Not implemented' }; },
+  async createThread() { return { ok: false, error: 'Not implemented' }; },
+  async addMessage() { return { ok: false, error: 'Not implemented' }; },
+  async runAssistantStream() { return { ok: false, error: 'Not implemented' }; },
 };
 
 function normalizeError(e: any): string {

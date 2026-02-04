@@ -73,6 +73,23 @@ export interface GraphClusterDoc {
 }
 
 /**
+ * Graph Subcluster Document (MongoDB)
+ * Collection: graph_subclusters
+ */
+export interface GraphSubclusterDoc {
+  id: string; // "subcluster_4_1"
+  userId: string;
+  clusterId: string;
+  nodeIds: number[];
+  representativeNodeId: number;
+  size: number;
+  density: number;
+  topKeywords: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
  * Graph Stats Document (MongoDB)
  * Collection: graph_stats
  * @property id Key: userId
@@ -91,4 +108,55 @@ export interface GraphStatsDoc {
   clusters: number;
   generatedAt: string;
   metadata: Record<string, unknown>;
+}
+
+/**
+ * Graph Summary Document (MongoDB)
+ * Collection: graph_summaries
+ */
+export interface GraphSummaryDoc {
+  id: string; // userId or uuid
+  userId: string;
+  overview: {
+    total_conversations: number;
+    time_span: string;
+    primary_interests: string[];
+    conversation_style: string;
+    most_active_period: string;
+    summary_text: string;
+  };
+  clusters: Array<{
+    cluster_id: string;
+    name: string;
+    size: number;
+    density: number;
+    centrality: number;
+    recency: string;
+    top_keywords: string[];
+    key_themes: string[];
+    common_question_types: string[];
+    insight_text: string;
+    notable_conversations: string[];
+  }>;
+  patterns: Array<{
+    pattern_type: string;
+    description: string;
+    evidence: string[];
+    significance: string;
+  }>;
+  connections: Array<{
+    source_cluster: string;
+    target_cluster: string;
+    connection_strength: number;
+    bridge_keywords: string[];
+    description: string;
+  }>;
+  recommendations: Array<{
+    type: string;
+    title: string;
+    description: string;
+    related_nodes: string[];
+    priority: string;
+  }>;
+  generatedAt: string;
 }
