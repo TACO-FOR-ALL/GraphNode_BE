@@ -12,7 +12,7 @@
 
 import { AppError } from '../../shared/errors/base';
 import 'multer'; // Ensure Multer types are loaded
-import { NotFoundError, UpstreamError, ValidationError } from '../../shared/errors/domain';
+import { NotFoundError, UpstreamError, ValidationError, ForbiddenError } from '../../shared/errors/domain';
 import { AIchatType } from '../../shared/ai-providers/AIchatType';
 import { ChatManagementService } from './ChatManagementService';
 import { UserService } from './UserService';
@@ -32,6 +32,37 @@ export class AiInteractionService {
     private readonly storageAdapter: StoragePort
   ) {}
 
+
+  /**
+   * API Key 검증
+   */
+  async checkApiKey(ownerUserId: string, model: string): Promise<boolean> {
+    const apiKeyResponse = await this.userService.getApiKeys(ownerUserId, model);
+    const apiKey = apiKeyResponse.apiKey;
+
+    if (!apiKey) {
+      throw new ForbiddenError(
+        `API Key for model ${model} not found. Please register it in settings.`
+      );
+    }
+
+    // Provider 획득 (Factory Pattern)
+    let provider: IAiProvider;
+    try {
+      provider = getAiProvider(model);
+    } catch (e) {
+      throw new ValidationError(`Unsupported AI model: ${model}`);
+    }
+
+    // API Key 검증
+    const isValid = await provider.checkAPIKeyValid(apiKey);
+    if (!isValid.ok) {
+      throw new ValidationError(`Invalid API Key for ${model}: ${isValid.error}`);
+    }
+
+    return true;
+  }
+
   /**
    * AI 챗 메시지를 처리하는 핵심 메서드
    *
@@ -44,11 +75,34 @@ export class AiInteractionService {
    * @throws {UpstreamError} AI 서비스 호출 실패 시
    */
   /**
-   * AI 챗 메시지를 처리하는 핵심 메서드
-   * (files 매개변수 추가됨)
+   * 사용자 API Key 조회 및 검증
+   * @param ownerUserId 사용자 ID
+   * @param chatbody 요청 본문 (모델 정보 포함)
+   * @returns API Key (string)
+   * @throws ForbiddenError
+   */
+  private async validateAndGetApiKey(ownerUserId: string, chatbody: AIchatType): Promise<string> {
+    // 1. 사용자 API Key 조회 (UserService)
+    const apiKeyResponse = await this.userService.getApiKeys(ownerUserId, chatbody.model);
+    
+    // 2. 모델별 적절한 키 추출 (현재는 단일 필드로 가정되나, 향후 확장 가능)
+    const apiKey = apiKeyResponse.apiKey;
+
+    // 3. 검증
+    if (!apiKey) {
+      throw new ForbiddenError(
+        `API Key for model ${chatbody.model} not found. Please register it in settings.`
+      );
+    }
+    return apiKey;
+  }
+
+  /**
+   * AI 챗 메시지를 처리하는 핵심 메서드 (files 매개변수 추가됨)
    */
   async handleAIChat(
     ownerUserId: string,
+    // FIXME: [Model Option Expansion] Provider 내 세부 모델(gpt-4, claude-3 등) 선택 로직 추가 필요
     chatbody: AIchatType,
     conversationId: string,
     files?: Express.Multer.File[],
@@ -63,7 +117,7 @@ export class AiInteractionService {
       const apiKey = apiKeyResponse.apiKey;
 
       if (!apiKey) {
-        throw new ValidationError(
+        throw new ForbiddenError(
           `API Key for model ${chatbody.model} not found. Please register it in settings.`
         );
       }
@@ -222,13 +276,27 @@ export class AiInteractionService {
     );
     if (!addMsgRes.ok) throw new UpstreamError(`Failed to add message to thread: ${addMsgRes.error}`);
 
-    // 4-4. Run Assistant (Stream)
-    const env = loadEnv();
-    const assistantId = env.OPENAI_ASSISTANT_ID;
-    if (!assistantId) throw new Error('OPENAI_ASSISTANT_ID is not configured in env.');
 
-    const runRes = await provider.runAssistantStream(apiKey, assistantId, threadId!);
-    if (!runRes.ok) throw new UpstreamError(`Failed to run assistant: ${runRes.error}`);
+    // 4-4. Run Assistant (Stream)
+    // Dynamic Assistant: 사용자 DB에 저장된 Assistant ID 사용, 없으면 생성
+    let assistantId = await this.userService.getOpenAiAssistantId(ownerUserId);
+
+    if (!assistantId) {
+      const createRes = await provider.createAssistant(apiKey);
+      if (!createRes.ok) throw new UpstreamError(`Failed to create assistant: ${createRes.error}`);
+      assistantId = createRes.data.assistantId;
+      await this.userService.updateOpenAiAssistantId(ownerUserId, assistantId);
+    }
+
+    const runRes = await provider.runAssistantStream(apiKey, assistantId!, threadId!);
+    if (!runRes.ok) {
+      if (runRes.error === 'not_found' || runRes.error === 'key_not_found') {
+        throw new UpstreamError(
+          `Failed to access Assistant (${assistantId}). This usually happens when the User API Key does not belong to the same OpenAI Organization as the Assistant.`
+        );
+      }
+      throw new UpstreamError(`Failed to run assistant: ${runRes.error}`);
+    }
 
     // 4-5. 스트리밍 처리
     // AsyncIterable<any> 이지만, 실제로는 OpenAI StreamEvent 객체들이 옴.

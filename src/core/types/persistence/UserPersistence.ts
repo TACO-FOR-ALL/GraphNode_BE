@@ -44,6 +44,8 @@ export interface UserProps {
   apiKeyClaude?: string | null;
   /** Gemini API Key(선택) */
   apiKeyGemini?: string | null;
+  /** OpenAI Assistant ID(선택) */
+  openaiAssistantId?: string | null;
 }
 
 /**
@@ -98,6 +100,10 @@ export class User {
   /** Gemini API Key(없으면 undefined) */
   get apiKeyGemini() {
     return this.props.apiKeyGemini ?? undefined;
+  }
+  /** OpenAI Assistant ID(없으면 undefined) */
+  get openaiAssistantId() {
+    return this.props.openaiAssistantId ?? undefined;
   }
   /**
    * 사용자 프로필 뷰로 매핑

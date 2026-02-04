@@ -25,7 +25,7 @@ sequenceDiagram
     DB-->>API: User ID
     
     Note over API: JWT 발급 (Access + Refresh)
-    API-->>Client: HTTP-Only Cookie (Refresh) + JSON Payload (Access)
+    API-->>Client: HTTP-Only Cookie (Access + Refresh) + HTML w/ postMessage
 ```
 
 ## 2. JWT 구조 및 전략
@@ -33,7 +33,7 @@ sequenceDiagram
 ### 2.1 Access Token
 - **용도**: 일반 API 요청 인증.
 - **수명**: 1시간 (기본값).
-- **저장**: 클라이언트 메모리 또는 로컬 상태 관리 (JS 접근 가능).
+- **저장**: **HTTP-Only Cookie** (보안성 강화, JS 접근 불가).
 
 ### 2.2 Refresh Token
 - **용도**: Access Token 만료 시 재발급을 위한 토큰.

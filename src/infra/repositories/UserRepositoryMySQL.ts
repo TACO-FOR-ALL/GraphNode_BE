@@ -162,6 +162,26 @@ export class UserRepositoryMySQL implements UserRepository {
   /**
    * Prisma User -> Domain User 매핑
    */
+  /**
+   * 사용자의 OpenAI Assistant ID 조회
+   */
+  async getOpenAiAssistantId(id: number): Promise<string | null> {
+    const user = await prisma.user.findUnique({
+      where: { id: BigInt(id) },
+    });
+    return user?.openaiAssistantId ?? null;
+  }
+
+  /**
+   * 사용자의 OpenAI Assistant ID 업데이트
+   */
+  async updateOpenAiAssistantId(id: number, assistantId: string): Promise<void> {
+    await prisma.user.update({
+      where: { id: BigInt(id) },
+      data: { openaiAssistantId: assistantId },
+    });
+  }
+
   private mapUser(pUser: any): User {
     return new User({
       id: pUser.id.toString(),
@@ -176,6 +196,7 @@ export class UserRepositoryMySQL implements UserRepository {
       apiKeyDeepseek: pUser.apiKeyDeepseek,
       apiKeyClaude: pUser.apiKeyClaude,
       apiKeyGemini: pUser.apiKeyGemini,
+      openaiAssistantId: pUser.openaiAssistantId,
     });
   }
 }

@@ -60,6 +60,7 @@ export class AiController {
     if (!conversationId) throw new ValidationError('conversationId is required');
 
     const chatbody: AIchatType = req.body as AIchatType;
+    // FIXME: [Model Option Expansion] Request Body에서 구체적인 모델명(gpt-4-turbo 등)을 받을 수 있도록 DTO 및 스키마 확장 필요
 
     // Multer로 업로드된 파일들
     const files = req.files as Express.Multer.File[] | undefined;
@@ -67,13 +68,22 @@ export class AiController {
     const isStreaming = req.headers['accept'] === 'text/event-stream';
 
     if (isStreaming) {
-      // SSE Setup
+      // [FE Feedback Reflected]
+      // res.flushHeaders()를 호출하기 전, 서비스 로직 시작 단계에서의 검증(API Key, 모델 등) 실패 시
+      // HTTP 에러(400, 401, 403 등)를 반환할 수 있도록 헤더 전송 시점을 늦춥니다.
+      
+
+      // api key 조회 및 검증 시도
+      await this.aiInteractionService.checkApiKey(ownerUserId, chatbody.model);
+
+      // SSE Setup (헤더 설정만 먼저 수행, flush는 데이터 전송 시 자동 또는 명시적 호출)
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
-      res.flushHeaders?.();
+      res.flushHeaders(); // <-- 제거: 에러 발생 시 HTTP 상태 코드 변경이 불가능해짐
 
       const sendEvent = (event: string, data: unknown) => {
+        // 혹시라도 헤더가 아직 전송되지 않았다면(첫 데이터) 이때 전송됨
         res.write(`event: ${event}\n`);
         res.write(`data: ${JSON.stringify(data)}\n\n`);
       };
@@ -85,6 +95,7 @@ export class AiController {
           conversationId,
           files,
           (chunk) => {
+            // 청크 전송 시 (실제 스트림 시작 후)
             sendEvent('chunk', { text: chunk });
           }
         );
@@ -93,6 +104,14 @@ export class AiController {
         sendEvent('result', result);
         res.end();
       } catch (err) {
+        // 아직 헤더가 전송되지 않았다면(스트림 시작 전 에러), 일반 JSON 에러 응답을 보낼 수 있음
+        if (!res.headersSent) {
+           // Controller는 asyncHandler로 감싸져 있다고 가정하므로 throw 하면 글로벌 핸들러가 처리
+           // 혹은 여기서 직접 처리:
+           throw err; 
+        }
+
+        // 이미 스트림이 시작된 후 에러 발생 시: SSE 에러 이벤트 전송 후 종료
         const message = err instanceof Error ? err.message : String(err);
         sendEvent('error', { message });
         res.end();
