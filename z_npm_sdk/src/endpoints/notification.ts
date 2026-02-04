@@ -19,6 +19,7 @@ export class NotificationApi {
   }
 
   /**
+   * @deprecated
    * 실시간 알림 수신을 위한 SSE(Server-Sent Events) 스트림 URL을 반환합니다.
    *
    * 이 엔드포인트는 `text/event-stream` 형식으로 데이터를 스트리밍합니다.

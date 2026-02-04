@@ -43,14 +43,57 @@ export type HttpResponseError = {
 export type HttpResponse<T> = HttpResponseSuccess<T> | HttpResponseError;
 
 export class RequestBuilder {
+  /**
+   * API 기본 URL (마지막 슬래시 제거됨)
+   * @private
+   */
   private readonly baseUrl: string;
+
+  /**
+   * 실제 HTTP 요청을 수행할 fetch 함수 구현체
+   * @private
+   */
   private readonly fetchImpl: FetchLike;
+
+  /**
+   * 모든 요청에 포함될 기본 HTTP 헤더 (예: Accept: application/json)
+   * @private
+   */
   private readonly headers: Record<string, string>;
+
+  /**
+   * 자격 증명(쿠키) 전송 모드 ('include' | 'omit' | 'same-origin')
+   * - 'include'로 설정 시 브라우저가 자동으로 쿠키를 전송합니다.
+   * @private
+   */
   private readonly credentials: RequestCredentials;
+
+  /**
+   * Access Token을 동적으로 반환하는 함수 또는 정적 문자열.
+   * - 함수로 설정된 경우 요청 시점의 최신 토큰을 조회하여 Authorization 헤더에 사용합니다.
+   * - 값이 없으면(undefined) Authorization 헤더를 추가하지 않습니다 (쿠키 인증 의존).
+   * @private
+   */
   private readonly accessToken?: string | (() => string | null);
+
+  /**
+   * 현재 빌더가 가지고 있는 URL 경로 조각들
+   * @private
+   */
   private readonly segments: string[];
+
+  /**
+   * 현재 빌더가 가지고 있는 쿼리 파라미터들
+   * @private
+   */
   private readonly queryParams: URLSearchParams;
 
+  /**
+   * RequestBuilder 생성자
+   * @param opts 빌더 공통 옵션 (baseUrl, fetch, headers 등)
+   * @param segments 초기 URL 경로 조각 리스트
+   * @param query 초기 쿼리 파라미터
+   */
   constructor(opts: BuilderOptions, segments: string[] = [], query?: URLSearchParams) {
     this.baseUrl = opts.baseUrl.replace(/\/$/, '');
     this.fetchImpl = opts.fetch ?? (globalThis.fetch as FetchLike);

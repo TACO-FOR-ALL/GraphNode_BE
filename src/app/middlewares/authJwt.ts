@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 
 import { AuthError } from '../../shared/errors/domain';
-import { verifyToken, generateAccessToken, JWT_ACCESS_EXPIRY_MS } from '../utils/jwt';
+import { verifyToken, generateAccessToken, generateRefreshToken, JWT_ACCESS_EXPIRY_MS, JWT_REFRESH_EXPIRY_MS } from '../utils/jwt';
 import { bindUserIdToRequest } from '../utils/request';
 import { loadEnv } from '../../config/env';
 
@@ -42,12 +42,13 @@ export async function authJwt(req: Request, res: Response, next: NextFunction) {
     try {
       const payload = verifyToken(refreshToken);
       const newAccessToken = generateAccessToken({ userId: payload.userId });
+      // [Refresh Token Rotation] 보안 강화를 위해 Refresh Token도 함께 갱신
+      const newRefreshToken = generateRefreshToken({ userId: payload.userId });
 
       // 새 Access Token 쿠키 설정
-      const isProd = process.env.NODE_ENV === 'production';
-      const insecure = process.env.DEV_INSECURE_COOKIES === 'true';
-      const secure = isProd && !insecure;
-      const sameSite = secure ? 'none' : 'lax';
+      // Electron/Cross-Domain 환경 고려: 항상 Secure=true, SameSite=None
+      const secure = true;
+      const sameSite = 'none';
 
       res.cookie('access_token', newAccessToken, {
         httpOnly: true,
@@ -55,6 +56,15 @@ export async function authJwt(req: Request, res: Response, next: NextFunction) {
         sameSite: sameSite as 'none' | 'lax',
         signed: true,
         maxAge: JWT_ACCESS_EXPIRY_MS,
+      });
+
+      // 새 Refresh Token 쿠키 설정
+      res.cookie('refresh_token', newRefreshToken, {
+         httpOnly: true,
+         secure,
+         sameSite: sameSite as 'none' | 'lax',
+         signed: true,
+         maxAge: JWT_REFRESH_EXPIRY_MS,
       });
 
       // 헤더로도 새 토큰 전달 (SDK 등에서 사용 가능하도록)
