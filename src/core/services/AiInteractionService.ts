@@ -35,8 +35,12 @@ export class AiInteractionService {
 
   /**
    * API Key 검증
+   * @param ownerUserId 사용자 ID
+   * @param model 모델명
+   * @returns API Key valid 여부
+   * @throws ForbiddenError
    */
-  async checkApiKey(ownerUserId: string, model: string): Promise<boolean> {
+  async checkApiKey(ownerUserId: string, model: ApiKeyModel): Promise<boolean> {
     const apiKeyResponse = await this.userService.getApiKeys(ownerUserId, model);
     const apiKey = apiKeyResponse.apiKey;
 
@@ -433,4 +437,5 @@ export class AiInteractionService {
 import { Attachment } from '../../shared/dtos/ai';
 import { StoragePort } from '../ports/StoragePort';
 
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from 'uuid';import { ApiKeyModel } from '../../shared/dtos/me';
+
