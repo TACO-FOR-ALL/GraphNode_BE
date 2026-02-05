@@ -17,11 +17,20 @@ export class GraphSummaryResultHandler implements JobHandler {
     try {
       if (status === 'FAILED') {
         logger.error({ taskId, userId, error }, 'Graph summary generation failed');
-        await notiService.sendNotification(userId, 'GRAPH_SUMMARY_FAILED', {
-          taskId,
-          error: error || 'Unknown error',
-          timestamp: new Date().toISOString(),
-        });
+        // await notiService.sendNotification(userId, 'GRAPH_SUMMARY_FAILED', {
+        //   taskId,
+        //   error: error || 'Unknown error',
+        //   timestamp: new Date().toISOString(),
+        // });
+        await notiService.sendFcmPushNotification(
+          userId,
+          'Graph Generation Failed',
+          `Graph summary generation failed: ${error || 'Unknown error'}`,
+          {
+            taskId,
+            status: 'FAILED',
+          }
+        );
         return;
       }
 
@@ -35,10 +44,19 @@ export class GraphSummaryResultHandler implements JobHandler {
         logger.info({ taskId, userId }, 'Graph summary persisted to DB');
 
         // 3. Send Notification
-        await notiService.sendNotification(userId, 'GRAPH_SUMMARY_COMPLETED', {
-          taskId,
-          timestamp: new Date().toISOString(),
-        });
+        // await notiService.sendNotification(userId, 'GRAPH_SUMMARY_COMPLETED', {
+        //   taskId,
+        //   timestamp: new Date().toISOString(),
+        // });
+        await notiService.sendFcmPushNotification(
+          userId,
+          'Graph Ready',
+          'Your graph is ready',
+          {
+            taskId,
+            status: 'COMPLETED',
+          }
+        );
       }
     } catch (err) {
       logger.error({ err, taskId, userId }, 'Error processing graph summary result');
