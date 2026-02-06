@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - main
+      - terraform
     paths:
       - '.github/workflows/deploy.yml'
       - 'ecs/**'
