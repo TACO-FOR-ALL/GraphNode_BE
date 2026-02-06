@@ -21,6 +21,9 @@ import { getAiProvider, IAiProvider } from '../../shared/ai-providers/index';
 import { ChatMessageRequest } from '../../shared/ai-providers/ChatMessageRequest';
 import { loadEnv } from '../../config/env';
 import { ApiKeyModel } from '../../shared/dtos/me';
+import { Attachment } from '../../shared/dtos/ai';
+import { StoragePort } from '../ports/StoragePort';
+import { v4 as uuidv4 } from 'uuid';
 
 import { Readable } from 'stream';
 
@@ -436,9 +439,4 @@ export class AiInteractionService {
     });
   }
 }
-
-import { Attachment } from '../../shared/dtos/ai';
-import { StoragePort } from '../ports/StoragePort';
-
-import { v4 as uuidv4 } from 'uuid';import { ApiKeyModel } from '../../shared/dtos/me';
 

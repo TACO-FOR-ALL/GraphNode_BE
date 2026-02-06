@@ -16,7 +16,6 @@ import authGoogleRouter from '../app/routes/auth.google';
 import authAppleRouter from '../app/routes/auth.apple';
 import { makeMeRouter } from './modules/user.module';
 import authSessionRouter from '../app/routes/auth.session';
-import authDevRouter from '../app/routes/auth.dev';
 import { requestContext } from '../app/middlewares/request-context';
 import { httpLogger } from '../shared/utils/logger';
 import { errorHandler } from '../app/middlewares/error';
@@ -30,7 +29,6 @@ import { makeNoteRouter } from './modules/note.module';
 import { makeSyncRouter } from './modules/sync.module';
 import { makeAgentRouter } from './modules/agent.module';
 import { makeNotificationRouter } from './modules/notification.module';
-// import { createTestAgentRouter } from '../app/routes/agent.test';
 
 /**
  * Express 앱 부트스트랩.
@@ -82,11 +80,6 @@ export function createApp() {
   app.use('/auth/apple', authAppleRouter);
   app.use('/v1/me', makeMeRouter());
   app.use('/auth', authSessionRouter);
-
-  // Dev-only auth route (only in development)
-  if (process.env.NODE_ENV === 'development') {
-    app.use('/dev', authDevRouter);
-  }
 
   // 404 fall-through → Problem Details 형식으로 응답
   app.use((req, _res, next) => {
