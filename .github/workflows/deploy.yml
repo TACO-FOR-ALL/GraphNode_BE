@@ -6,7 +6,6 @@ on:
   push:
     branches:
       - main
-      - terraform
     paths:
       - '.github/workflows/deploy.yml'
       - 'ecs/**'
@@ -33,7 +32,7 @@ env:
 
 jobs:
   deploy:
-    name: Deploy # job 이 름
+    name: Deploy # job 
     runs-on: ubuntu-latest # 실행 환경(가상 머신 환경)
 
     steps:
