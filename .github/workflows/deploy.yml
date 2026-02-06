@@ -100,7 +100,7 @@ jobs:
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.task-def-worker.outputs.task-definition }}
-          service: taco-5-graphnode-worker-task-service-cwqcc81e
+          service: taco-5-graphnode-worker-task-service
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
           force-new-deployment: true

@@ -13,6 +13,7 @@
         { "name": "SQS_REQUEST_QUEUE_URL", "value": "https://sqs.ap-northeast-2.amazonaws.com/571721033550/taco-graphnode-request-graph-sqs" },
         { "name": "SQS_RESULT_QUEUE_URL", "value": "https://sqs.ap-northeast-2.amazonaws.com/571721033550/taco-graphnode-response-graph-sqs" },
         { "name": "S3_PAYLOAD_BUCKET", "value": "taco5-graphnode-graphdata-s3" },
+        { "name": "S3_FILE_BUCKET", "value": "taco5-graphnode-filedata-chat-and-note-s3" },
         { "name": "NEO4J_URI", "value": "bolt://localhost:7687" },
         { "name": "NEO4J_USERNAME", "value": "neo4j" },
         { "name": "CHROMA_API_URL", "value": "http://localhost:8000" }
