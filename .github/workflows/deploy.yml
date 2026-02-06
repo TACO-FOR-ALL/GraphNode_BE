@@ -25,9 +25,11 @@ env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
   ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
-  ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
+  ECS_API_SERVICE_NAME: ${{ secrets.ECS_API_SERVICE_NAME }}
+  ECS_WORKER_SERVICE_NAME: ${{ secrets.ECS_WORKER_SERVICE_NAME }}
   CONTAINER_NAME: ${{ secrets.CONTAINER_NAME }}
   AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+
 
 jobs:
   deploy:
@@ -90,7 +92,7 @@ jobs:
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.task-def-api.outputs.task-definition }}
-          service: ${{ env.ECS_SERVICE }}
+          service: ${{ env.ECS_API_SERVICE_NAME }}
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
           force-new-deployment: true
@@ -100,7 +102,7 @@ jobs:
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.task-def-worker.outputs.task-definition }}
-          service: taco-5-graphnode-worker-task-service
+          service: ${{ env.ECS_WORKER_SERVICE_NAME }}
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
           force-new-deployment: true
