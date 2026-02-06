@@ -82,9 +82,8 @@ jobs:
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: ecs/worker-task-definition.json
-          container-name: taco4_graphnode_worker_container
+          container-name: taco5_graphnode_worker_container
           image: ${{ steps.build-image.outputs.image }}
-
         # Amazon ECS 서비스에 새 작업 정의 배포 (API)
       - name: Deploy Amazon ECS task definition (API)
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
@@ -100,7 +99,7 @@ jobs:
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.task-def-worker.outputs.task-definition }}
-          service: taco-4-graphnode-worker-service
+          service: taco-5-graphnode-worker-service
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
           force-new-deployment: true
