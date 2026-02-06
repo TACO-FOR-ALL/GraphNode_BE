@@ -27,8 +27,8 @@ const AI_SERVER_URI = process.env.AI_SERVER_URI || 'https://aaejmqgtjczzbxcq.tun
 function toAiInputConversation(conversation: {
   id: string;
   title: string;
-  createdAt?: Date;
-  updatedAt?: Date;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
   messages: ChatMessage[];
 }): AiInputConversation {
   const messages: ChatMessage[] = conversation.messages;

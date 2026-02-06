@@ -20,6 +20,7 @@ import { AIChatResponseDto, ChatMessage, ChatThread } from '../../shared/dtos/ai
 import { getAiProvider, IAiProvider } from '../../shared/ai-providers/index';
 import { ChatMessageRequest } from '../../shared/ai-providers/ChatMessageRequest';
 import { loadEnv } from '../../config/env';
+import { ApiKeyModel } from '../../shared/dtos/me';
 
 import { Readable } from 'stream';
 
@@ -36,7 +37,7 @@ export class AiInteractionService {
   /**
    * API Key 검증
    */
-  async checkApiKey(ownerUserId: string, model: string): Promise<boolean> {
+  async checkApiKey(ownerUserId: string, model: ApiKeyModel): Promise<boolean> {
     const apiKeyResponse = await this.userService.getApiKeys(ownerUserId, model);
     const apiKey = apiKeyResponse.apiKey;
 

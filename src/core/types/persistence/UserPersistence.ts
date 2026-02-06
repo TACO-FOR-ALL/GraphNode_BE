@@ -4,7 +4,7 @@
  * 외부 의존성: 없음(순수 도메인).
  * 공개 인터페이스: User, Provider, UserProps, profile()
  */
-export type Provider = 'google' | 'apple';
+export type Provider = 'google' | 'apple' | 'dev';
 
 /**
  * User 엔티티의 생성/보관용 프로퍼티 집합

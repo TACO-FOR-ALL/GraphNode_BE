@@ -98,6 +98,7 @@ export class AddConversationRequestHandler implements JobHandler {
           target: edge.target,
           weight: edge.weight || 1.0,
           type: edge.type || 'similarity',
+          intraCluster: edge.intraCluster ?? true,
         });
       }
 
@@ -116,9 +117,9 @@ export class AddConversationRequestHandler implements JobHandler {
           name: clusterName,
           description: aiResult.assignedCluster.reasoning || '',
           themes: clusterThemes,
-          nodeCount: 1,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          size: 1,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         });
       }
 
