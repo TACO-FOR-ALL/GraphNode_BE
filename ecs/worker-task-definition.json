@@ -54,10 +54,10 @@
     }
   ],
   "cpu": "1024",
-  "executionRoleArn": "arn:aws:iam::571721033550:user/graphnode-dev-ops",
+  "executionRoleArn": "arn:aws:iam::571721033550:role/graphnode-ecs-task-role",
   "family": "taco-5-graphnode-worker-task",
   "memory": "2048",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
-  "taskRoleArn": "arn:aws:iam::571721033550:user/graphnode-dev-ops"
+  "taskRoleArn": "arn:aws:iam::571721033550:role/graphnode-ecs-task-role"
 }
