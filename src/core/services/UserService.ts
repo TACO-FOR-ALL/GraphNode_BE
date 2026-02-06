@@ -126,18 +126,18 @@ export class UserService {
       }
 
       // 3. Provider를 통한 외부 검증
-      // Provider 팩토리를 통해 해당 모델의 서비스 객체 가져옴
-      try {
-        const provider = getAiProvider(model);
-        const result = await provider.checkAPIKeyValid(apiKey);
-        if (!result.ok) {
-          throw new InvalidApiKeyError(`Invalid API Key for ${model}: ${result.error}`);
+      // 개발 환경에서는 검증 스킵 (추후 삭제)
+      if (process.env.NODE_ENV !== 'development') {
+        try {
+          const provider = getAiProvider(model);
+          const result = await provider.checkAPIKeyValid(apiKey);
+          if (!result.ok) {
+            throw new InvalidApiKeyError(`Invalid API Key for ${model}: ${result.error}`);
+          }
+        } catch (err: unknown) {
+          if (err instanceof InvalidApiKeyError) throw err;
+          throw new ValidationError(`Failed to validate API Key for ${model}.`);
         }
-      } catch (err: unknown) {
-        // Provider 로드 실패나 검증 중 알 수 없는 에러
-        // 검증 스킵할지 fail할지 정책 결정. 여기선 Fail.
-        if (err instanceof InvalidApiKeyError) throw err;
-        throw new ValidationError(`Failed to validate API Key for ${model}.`);
       }
 
       const numericUserId = parseInt(userId, 10);

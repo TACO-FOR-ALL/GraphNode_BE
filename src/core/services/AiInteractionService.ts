@@ -20,6 +20,7 @@ import { AIChatResponseDto, ChatMessage, ChatThread } from '../../shared/dtos/ai
 import { getAiProvider, IAiProvider } from '../../shared/ai-providers/index';
 import { ChatMessageRequest } from '../../shared/ai-providers/ChatMessageRequest';
 import { loadEnv } from '../../config/env';
+import { ApiKeyModel } from '../../shared/dtos/me';
 
 import { Readable } from 'stream';
 
@@ -134,10 +135,12 @@ export class AiInteractionService {
         throw new ValidationError(`Unsupported AI model: ${chatbody.model}`);
       }
 
-      // 2. API Key 검증
-      const isValid = await provider.checkAPIKeyValid(apiKey);
-      if (!isValid.ok) {
-        throw new ValidationError(`Invalid API Key for ${chatbody.model}: ${isValid.error}`);
+      // 2. API Key 검증 (개발 환경에서는 스킵, 추후 삭제)
+      if (process.env.NODE_ENV !== 'development') {
+        const isValid = await provider.checkAPIKeyValid(apiKey);
+        if (!isValid.ok) {
+          throw new ValidationError(`Invalid API Key for ${chatbody.model}: ${isValid.error}`);
+        }
       }
 
       // 3. 대화방 조회 또는 생성

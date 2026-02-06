@@ -7,12 +7,12 @@ import { HttpClient } from '../../infra/http/httpClient';
 import { AiInputConversation, AiInputData, AiInputMappingNode } from '../../shared/dtos/ai_input';
 import { logger } from '../../shared/utils/logger';
 import { GraphSnapshotDto, PersistGraphPayloadDto } from '../../shared/dtos/graph';
-import { AppError, ConflictError, UpstreamError } from '../../shared/errors/domain';
+import { AppError, ConflictError, UpstreamError, NotFoundError } from '../../shared/errors/domain';
 import { ChatMessage } from '../../shared/dtos/ai';
 import { AiGraphOutputDto } from '../../shared/dtos/ai_graph_output';
 import { mapAiOutputToSnapshot } from '../../shared/mappers/ai_graph_output.mapper';
 import { mapSnapshotToAiInput } from '../../shared/mappers/graph_ai_input.mapper';
-import { GraphGenRequestPayload, GraphSummaryRequestPayload, TaskType } from '../../shared/dtos/queue';
+import { GraphGenRequestPayload, GraphSummaryRequestPayload, AddConversationRequestPayload, TaskType } from '../../shared/dtos/queue';
 // Interfaces
 import { QueuePort } from '../ports/QueuePort';
 import { StoragePort } from '../ports/StoragePort';
@@ -23,6 +23,54 @@ import { loadEnv } from '../../config/env';
 // 향후 개선 사항: 서비스 디스커버리 또는 로드 밸런서 사용.
 // 또한 확장성과 신뢰성을 높이기 위해 메시지 큐(SQS) 사용을 고려.
 const AI_SERVER_URI = process.env.AI_SERVER_URI || 'https://aaejmqgtjczzbxcq.tunnel.elice.io';
+
+function toAiInputConversation(conversation: {
+  id: string;
+  title: string;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+  messages: ChatMessage[];
+}): AiInputConversation {
+  const messages: ChatMessage[] = conversation.messages;
+  const mapping: Record<string, AiInputMappingNode> = {};
+
+  let prevMsgId: string | null = null;
+
+  messages.sort((a, b) => {
+    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return timeA - timeB;
+  });
+
+  for (const msg of messages) {
+    const id = msg.id;
+    mapping[id] = {
+      id: id,
+      message: {
+        id: id,
+        author: { role: msg.role },
+        content: { content_type: 'text', parts: [msg.content] },
+      },
+      parent: prevMsgId,
+      children: [],
+    };
+
+    if (prevMsgId && mapping[prevMsgId]) {
+      mapping[prevMsgId].children.push(id);
+    }
+
+    prevMsgId = id;
+  }
+
+  return {
+    id: conversation.id,
+    conversation_id: conversation.id,
+    title: conversation.title,
+    create_time: conversation.createdAt ? new Date(conversation.createdAt).getTime() / 1000 : 0,
+    update_time: conversation.updatedAt ? new Date(conversation.updatedAt).getTime() / 1000 : 0,
+    mapping: mapping,
+  };
+}
 
 export class GraphGenerationService {
   private readonly httpClient: HttpClient;
@@ -162,6 +210,182 @@ export class GraphGenerationService {
    */
   async getGraphSummary(userId: string) {
     return this.graphEmbeddingService.getGraphSummary(userId);
+  }
+
+  /**
+   * [New] SQS 기반 단일 대화 추가 요청
+   * 단일 대화 데이터를 S3에 업로드하고, 작업 요청 메시지를 SQS에 발행합니다.
+   *
+   * @param userId 사용자 ID
+   * @param conversationId 추가할 대화 ID
+   * @returns 발행된 작업의 연관 ID (TaskId)
+   */
+  async requestAddConversationViaQueue(userId: string, conversationId: string): Promise<string> {
+    try {
+      const taskId = `task_add_conv_${userId}_${ulid()}`;
+      const s3Key = `graph-generation/${taskId}/conversation.json`;
+
+      logger.info({ userId, conversationId, taskId }, 'Preparing add conversation request');
+
+      // 1. Fetch single conversation with messages
+      const conversation = await this.chatManagementService.getConversation(conversationId, userId);
+
+      if (!conversation) {
+        throw new NotFoundError('Conversation not found');
+      }
+
+      // 2. Convert to AI input format (matching existing format)
+      const messages: ChatMessage[] = conversation.messages;
+      const mapping: Record<string, AiInputMappingNode> = {};
+
+      let prevMsgId: string | null = null;
+
+      // Sort messages by createdAt
+      messages.sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeA - timeB;
+      });
+
+      // Build mapping structure
+      for (const msg of messages) {
+        const id = msg.id;
+        mapping[id] = {
+          id: id,
+          message: {
+            id: id,
+            author: { role: msg.role },
+            content: { content_type: 'text', parts: [msg.content] },
+          },
+          parent: prevMsgId,
+          children: [],
+        };
+
+        if (prevMsgId && mapping[prevMsgId]) {
+          mapping[prevMsgId].children.push(id);
+        }
+
+        prevMsgId = id;
+      }
+
+      const aiInputData: AiInputConversation = {
+        id: conversation.id,
+        conversation_id: conversation.id,
+        title: conversation.title,
+        create_time: conversation.createdAt ? new Date(conversation.createdAt).getTime() / 1000 : 0,
+        update_time: conversation.updatedAt ? new Date(conversation.updatedAt).getTime() / 1000 : 0,
+        mapping: mapping,
+      };
+
+      // 3. Upload to S3
+      const payloadJson = JSON.stringify(aiInputData);
+      await this.storagePort.upload(s3Key, payloadJson, 'application/json');
+
+      // 4. Send SQS message
+      const messageBody: AddConversationRequestPayload = {
+        taskId,
+        taskType: TaskType.ADD_CONVERSATION_REQUEST,
+        payload: {
+          userId,
+          conversationId,
+          s3Key,
+          bucket: process.env.S3_PAYLOAD_BUCKET,
+        },
+        timestamp: new Date().toISOString(),
+      };
+
+      logger.info({ userId, conversationId, taskId }, 'Sending add conversation job to SQS');
+      await this.queuePort.sendMessage(this.jobQueueUrl, messageBody);
+
+      return taskId;
+    } catch (err) {
+      logger.error({ err, userId, conversationId }, 'Failed to queue add conversation request');
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('Failed to request add conversation via queue', {
+        cause: String(err),
+      });
+    }
+  }
+
+  /**
+   * [Local] Direct mode (no SQS/S3) for add-conversation
+   */
+  async requestAddConversationDirect(userId: string, conversationId: string): Promise<string> {
+    try {
+      const taskId = `task_add_conv_direct_${userId}_${ulid()}`;
+
+      logger.info({ userId, conversationId, taskId }, 'Preparing add conversation request (Direct)');
+
+      const conversation = await this.chatManagementService.getConversation(conversationId, userId);
+      if (!conversation) {
+        throw new NotFoundError('Conversation not found');
+      }
+
+      const aiInputData: AiInputConversation = toAiInputConversation(conversation);
+      const clusters = await this.graphEmbeddingService.listClusters(userId);
+
+      const inputData = {
+        conversation: aiInputData,
+        userId,
+        existingClusters: clusters,
+      };
+
+      const aiResult = await this.httpClient.post<{
+        nodes: any[];
+        edges: any[];
+        assignedCluster: {
+          clusterId: string;
+          isNewCluster: boolean;
+          confidence: number;
+          reasoning: string;
+        };
+      }>('/add-node', inputData);
+
+      const existingNodes = await this.graphEmbeddingService.listNodes(userId);
+      const nextNodeId =
+        existingNodes.length > 0 ? Math.max(...existingNodes.map((n) => n.id)) + 1 : 1;
+
+      const createdNodeIds: Map<number, number> = new Map();
+
+      // 항상 1개의 노드만 추가
+      for (const node of aiResult.nodes) {
+        const tempId = node.id;  // -1 (AI 서버에서 설정한 임시 ID)
+        createdNodeIds.set(tempId, nextNodeId);
+
+        await this.graphEmbeddingService.upsertNode({
+          id: nextNodeId,
+          userId,
+          origId: node.origId,
+          clusterId: node.clusterId,
+          clusterName: node.clusterName || '',
+          numMessages: node.numMessages || 0,
+          embedding: node.embedding || [],
+          timestamp: node.timestamp || null,
+        });
+      }
+
+      for (const edge of aiResult.edges) {
+        const sourceId = createdNodeIds.get(edge.source) || edge.source;
+        await this.graphEmbeddingService.upsertEdge({
+          userId,
+          source: sourceId,
+          target: edge.target,
+          weight: edge.weight || 1.0,
+          type: edge.type || 'similarity',
+          intraCluster: edge.intraCluster ?? false,
+        });
+      }
+
+      logger.info({ taskId, userId, conversationId }, 'Conversation added to graph (Direct)');
+
+      return taskId;
+    } catch (err) {
+      logger.error({ err, userId, conversationId }, 'Failed to add conversation to graph (Direct)');
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('Failed to request add conversation (Direct)', {
+        cause: String(err),
+      });
+    }
   }
 
   /**

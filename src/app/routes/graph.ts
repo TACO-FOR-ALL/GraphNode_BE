@@ -6,8 +6,7 @@
 import { Router } from 'express';
 
 import type { GraphEmbeddingService } from '../../core/services/GraphEmbeddingService';
-import { bindSessionUser } from '../middlewares/session';
-import { requireLogin } from '../middlewares/auth';
+import { internalOrSession } from '../middlewares/internal';
 import { asyncHandler } from '../utils/asyncHandler';
 import { GraphController } from '../controllers/graph';
 
@@ -21,7 +20,7 @@ export function createGraphRouter(graphEmbeddingService: GraphEmbeddingService) 
   const graphController = new GraphController(graphEmbeddingService);
 
   // 공통 미들웨어 적용: 세션 사용자 바인딩 및 로그인 요구
-  router.use(bindSessionUser, requireLogin);
+  router.use(internalOrSession);
 
   // Node routes
   router.post('/nodes', asyncHandler(graphController.createNode.bind(graphController)));

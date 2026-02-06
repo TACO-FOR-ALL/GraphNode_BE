@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - main
+      - terraform
     paths:
       - '.github/workflows/deploy.yml'
       - 'ecs/**'
@@ -24,9 +25,11 @@ env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
   ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
-  ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
+  ECS_API_SERVICE_NAME: ${{ secrets.ECS_API_SERVICE_NAME }}
+  ECS_WORKER_SERVICE_NAME: ${{ secrets.ECS_WORKER_SERVICE_NAME }}
   CONTAINER_NAME: ${{ secrets.CONTAINER_NAME }}
   AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+
 
 jobs:
   deploy:
@@ -54,18 +57,18 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
         # 도커 이미지 빌드, 태그 지정 및 푸시
-      - name: Build, tag, and push image to Amazon ECR
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build, tag, and push image to Amazon ECR (BuildKit cache)
         id: build-image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          # Build a docker container and
-          # push it to ECR so that it can
-          # be deployed to ECS.
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
         # Amazon ECS 작업 정의에 새 이미지 ID 채우기 (API)
       - name: Fill in the new image ID in the Amazon ECS task definition (API)
@@ -74,7 +77,7 @@ jobs:
         with:
           task-definition: ecs/task-definition.json
           container-name: ${{ env.CONTAINER_NAME }}
-          image: ${{ steps.build-image.outputs.image }}
+          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
 
         # Amazon ECS 작업 정의에 새 이미지 ID 채우기 (Worker)
       - name: Fill in the new image ID in the Amazon ECS task definition (Worker)
@@ -82,15 +85,14 @@ jobs:
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: ecs/worker-task-definition.json
-          container-name: taco4_graphnode_worker_container
-          image: ${{ steps.build-image.outputs.image }}
-
+          container-name: taco5_graphnode_worker_container
+          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
         # Amazon ECS 서비스에 새 작업 정의 배포 (API)
       - name: Deploy Amazon ECS task definition (API)
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.task-def-api.outputs.task-definition }}
-          service: ${{ env.ECS_SERVICE }}
+          service: ${{ env.ECS_API_SERVICE_NAME }}
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
           force-new-deployment: true
@@ -100,7 +102,7 @@ jobs:
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.task-def-worker.outputs.task-definition }}
-          service: taco-4-graphnode-worker-service
+          service: ${{ env.ECS_WORKER_SERVICE_NAME }}
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
           force-new-deployment: true
