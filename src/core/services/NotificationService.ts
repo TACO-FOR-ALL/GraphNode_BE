@@ -121,7 +121,7 @@ export class NotificationService {
       // 전송 실패한 토큰 정리 (Invalid/Expired)
       if (response.failureCount > 0) {
         const failedTokens: string[] = [];
-        response.responses.forEach((resp, idx) => {
+        response.responses.forEach((resp: any, idx: number) => {
           if (!resp.success) {
             const error = resp.error;
             if (

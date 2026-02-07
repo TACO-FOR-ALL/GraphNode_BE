@@ -29,7 +29,6 @@ import { makeNoteRouter } from './modules/note.module';
 import { makeSyncRouter } from './modules/sync.module';
 import { makeAgentRouter } from './modules/agent.module';
 import { makeNotificationRouter } from './modules/notification.module';
-import { createFileRouter } from '../app/routes/file.route';
 import { makeFileRouter } from './modules/file.module';
 // import { createTestAgentRouter } from '../app/routes/agent.test';
 

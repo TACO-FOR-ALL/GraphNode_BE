@@ -41,6 +41,7 @@ export function toGraphNodeDoc(dto: GraphNodeDto): GraphNodeDoc {
     clusterName: dto.clusterName,
     timestamp: dto.timestamp,
     numMessages: dto.numMessages,
+    embedding: dto.embedding,
     createdAt: dto.createdAt ?? now,
     updatedAt: dto.updatedAt ?? now,
   };
@@ -61,6 +62,7 @@ export function toGraphNodeDto(doc: GraphNodeDoc): GraphNodeDto {
     clusterName: doc.clusterName,
     timestamp: doc.timestamp,
     numMessages: doc.numMessages,
+    embedding: doc.embedding,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };

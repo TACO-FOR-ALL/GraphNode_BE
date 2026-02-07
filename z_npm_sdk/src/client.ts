@@ -1,5 +1,5 @@
 import { createRequestBuilder, type BuilderOptions, RequestBuilder } from './http-builder.js';
-import { GRAPHNODE_BASE_URL } from './config.js';
+import { getGraphNodeBaseUrl } from './config.js';
 import { HealthApi } from './endpoints/health.js';
 import { MeApi } from './endpoints/me.js';
 import { ConversationsApi } from './endpoints/conversations.js';
@@ -97,7 +97,7 @@ export class GraphNodeClient {
     // 여기서 accessToken을 '함수' 형태로 넘기는 이유는,
     // 나중에 setAccessToken()으로 값이 바뀌었을 때, RequestBuilder가 최신 값을 참조할 수 있게 하기 위함입니다.
     this.rb = createRequestBuilder({
-      baseUrl: GRAPHNODE_BASE_URL,
+      baseUrl: getGraphNodeBaseUrl(),
       ...opts,
       fetch: fetchFn, // 결정된 fetch 함수 주입
       accessToken: () => this._accessToken, // [중요] 동적 토큰 참조를 위한 Getter 함수 전달
@@ -108,11 +108,11 @@ export class GraphNodeClient {
     this.health = new HealthApi(this.rb);
     this.me = new MeApi(this.rb);
     this.conversations = new ConversationsApi(this.rb);
-    this.googleAuth = new GoogleAuthApi(GRAPHNODE_BASE_URL);
+    this.googleAuth = new GoogleAuthApi(getGraphNodeBaseUrl());
     this.graph = new GraphApi(this.rb);
     this.graphAi = new GraphAiApi(this.rb);
     this.note = new NoteApi(this.rb);
-    this.appleAuth = new AppleAuthApi(GRAPHNODE_BASE_URL);
+    this.appleAuth = new AppleAuthApi(getGraphNodeBaseUrl());
     this.sync = new SyncApi(this.rb);
     this.ai = new AiApi(this.rb);
     this.notification = new NotificationApi(this.rb); 

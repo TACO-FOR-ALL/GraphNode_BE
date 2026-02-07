@@ -1,6 +1,6 @@
 // endpoints/agent.ts
 import { type FetchLike } from '../http-builder.js';
-import { GRAPHNODE_BASE_URL } from '../config.js';
+import { getGraphNodeBaseUrl } from '../config.js';
 
 /**
  * 에이전트 채팅 모드 및 스트림 이벤트 타입들
@@ -85,7 +85,7 @@ export async function openAgentChatStream(
 
   const fetchImpl = fetchFn as FetchLike;
 
-  const url = `${GRAPHNODE_BASE_URL.replace(/\/$/, '')}/v1/agent/chat/stream`;
+  const url = `${getGraphNodeBaseUrl()}/v1/agent/chat/stream`;
 
   const res = await fetchImpl(url, {
     method: 'POST',
