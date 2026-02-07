@@ -35,7 +35,7 @@ export class UserRepositoryMySQL implements UserRepository {
       case 'deepseek':
         return user.apiKeyDeepseek;
       case 'claude':
-        return user.apiKeyClaude ?? null; // Prisma types might not update instantly in IDE, using ?? null for safety
+        return user.apiKeyClaude ?? null;
       case 'gemini':
         return user.apiKeyGemini ?? null;
       default:

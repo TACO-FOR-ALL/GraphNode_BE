@@ -88,6 +88,7 @@ class InMemoryConvRepo implements ConversationRepository {
     const doc = this.data.get(id);
     if (!doc || doc.ownerUserId !== ownerUserId) return false;
     doc.deletedAt = Date.now();
+    this.data.set(id, doc); // Ensure map is updated
     return true;
   }
 
@@ -102,6 +103,7 @@ class InMemoryConvRepo implements ConversationRepository {
     const doc = this.data.get(id);
     if (!doc || doc.ownerUserId !== ownerUserId) return false;
     doc.deletedAt = null;
+    this.data.set(id, doc); // Ensure map is updated
     return true;
   }
 
@@ -113,27 +115,141 @@ class InMemoryConvRepo implements ConversationRepository {
 }
 
 describe('ConversationService', () => {
-  test('CRUD operations', async () => {
-    const convRepo = new InMemoryConvRepo();
-    const svc = new ConversationService(convRepo);
+  let convRepo: InMemoryConvRepo;
+  let svc: ConversationService;
 
-    // Create Doc
-    const now = Date.now();
-    const doc: ConversationDoc = {
-      _id: 'c1',
-      ownerUserId: 'u1',
-      title: 'T',
-      createdAt: now,
-      updatedAt: now,
-    };
-    await svc.createDoc(doc);
+  beforeEach(() => {
+    convRepo = new InMemoryConvRepo();
+    svc = new ConversationService(convRepo);
+  });
 
-    const found = await svc.findDocById('c1', 'u1');
-    expect(found).toEqual(doc);
+  describe('External DTO Methods', () => {
+    test('createConversation returns DTO', async () => {
+      const result = await svc.createConversation('u1', 'c1', 'Title');
+      expect(result.id).toBe('c1');
+      expect(result.title).toBe('Title');
+      expect(result.messages).toHaveLength(0);
 
-    // Update Doc
-    await svc.updateDoc('c1', 'u1', { title: 'T2' });
-    const updated = await svc.findDocById('c1', 'u1');
-    expect(updated?.title).toBe('T2');
+      const doc = await convRepo.findById('c1', 'u1');
+      expect(doc).toBeDefined();
+    });
+
+    test('createConversation validates title', async () => {
+      await expect(svc.createConversation('u1', 'c2', ''))
+        .rejects.toThrow();
+    });
+
+    test('getConversation returns DTO', async () => {
+      await svc.createConversation('u1', 'c1', 'Title');
+      const result = await svc.getConversation('c1', 'u1');
+      expect(result.id).toBe('c1');
+    });
+
+    test('getConversation throws if not found', async () => {
+      await expect(svc.getConversation('none', 'u1'))
+        .rejects.toThrow();
+    });
+
+    test('listConversations returns DTOs', async () => {
+      await svc.createConversation('u1', 'c1', 'T1');
+      await svc.createConversation('u1', 'c2', 'T2');
+      
+      const { items } = await svc.listConversations('u1', 10);
+      expect(items).toHaveLength(2);
+      expect(items[0].id).toBe('c1');
+    });
+  });
+
+  describe('Internal Doc Methods', () => {
+    test('createDoc & findDocById', async () => {
+      const now = Date.now();
+      const doc: ConversationDoc = {
+        _id: 'c1',
+        ownerUserId: 'u1',
+        title: 'T',
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null
+      };
+      await svc.createDoc(doc);
+
+      const found = await svc.findDocById('c1', 'u1');
+      expect(found).toEqual(doc);
+
+      // Update Doc
+      await svc.updateDoc('c1', 'u1', { title: 'T2' });
+      const updated = await svc.findDocById('c1', 'u1');
+      expect(updated?.title).toBe('T2');
+    });
+
+    test('createDocs (Bulk)', async () => {
+        const docs: ConversationDoc[] = [
+            { _id: 'b1', ownerUserId: 'u1', title: 'Batch1', createdAt: Date.now(), updatedAt: Date.now(), deletedAt: null },
+            { _id: 'b2', ownerUserId: 'u1', title: 'Batch2', createdAt: Date.now(), updatedAt: Date.now(), deletedAt: null }
+        ];
+        const result = await svc.createDocs(docs);
+        expect(result).toHaveLength(2);
+        
+        const found = await svc.findDocById('b1', 'u1');
+        expect(found).toBeDefined();
+    });
+
+    test('deleteDoc (Soft)', async () => {
+        await svc.createConversation('u1', 'del1', 'Delete me');
+        const success = await svc.deleteDoc('del1', 'u1', false);
+        expect(success).toBe(true);
+
+        const doc = await svc.findDocById('del1', 'u1');
+        expect(doc?.deletedAt).not.toBeNull();
+    });
+
+    test('deleteDoc (Hard)', async () => {
+        await svc.createConversation('u1', 'del2', 'Hard delete me');
+        const success = await svc.deleteDoc('del2', 'u1', true);
+        expect(success).toBe(true);
+
+        const doc = await svc.findDocById('del2', 'u1');
+        expect(doc).toBeNull();
+    });
+
+    test('restoreDoc', async () => {
+        await svc.createConversation('u1', 'res1', 'Restore me');
+        await svc.deleteDoc('res1', 'u1', false); // soft delete
+        
+        const restored = await svc.restoreDoc('res1', 'u1');
+        expect(restored).toBe(true);
+
+        const doc = await svc.findDocById('res1', 'u1');
+        expect(doc?.deletedAt).toBeNull();
+    });
+
+    test('deleteAllDocs', async () => {
+        await svc.createConversation('u1', 'd1', 'D1');
+        await svc.createConversation('u1', 'd2', 'D2');
+        await svc.createConversation('u2', 'other', 'Other');
+
+        const count = await svc.deleteAllDocs('u1');
+        expect(count).toBe(2);
+
+        const remaining = await svc.listDocsByOwner('u1', 10);
+        expect(remaining.items).toHaveLength(0);
+        
+        const other = await svc.findDocById('other', 'u2');
+        expect(other).toBeDefined();
+    });
+
+    test('findModifiedSince', async () => {
+        const t1 = Date.now() - 10000;
+        const t2 = Date.now();
+        
+        // Old doc
+        await svc.createDoc({ _id: 'old', ownerUserId: 'u1', title: 'Old', createdAt: t1, updatedAt: t1, deletedAt: null });
+        // New doc
+        await svc.createDoc({ _id: 'new', ownerUserId: 'u1', title: 'New', createdAt: t2, updatedAt: t2, deletedAt: null });
+
+        const modified = await svc.findModifiedSince('u1', new Date(t2 - 100));
+        expect(modified).toHaveLength(1);
+        expect(modified[0]._id).toBe('new');
+    });
   });
 });

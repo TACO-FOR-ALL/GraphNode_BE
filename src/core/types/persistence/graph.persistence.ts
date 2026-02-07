@@ -114,49 +114,29 @@ export interface GraphStatsDoc {
  * Graph Summary Document (MongoDB)
  * Collection: graph_summaries
  */
+/**
+ * Graph Summary Document (MongoDB)
+ * Collection: graph_summaries
+ * Matches structure from src/shared/dtos/ai_graph_output.ts
+ */
+import {
+  OverviewSection,
+  ClusterAnalysis,
+  Pattern,
+  ClusterConnection,
+  Recommendation,
+} from '../../../shared/dtos/ai_graph_output';
+
 export interface GraphSummaryDoc {
   id: string; // userId or uuid
   userId: string;
-  overview: {
-    total_conversations: number;
-    time_span: string;
-    primary_interests: string[];
-    conversation_style: string;
-    most_active_period: string;
-    summary_text: string;
-  };
-  clusters: Array<{
-    cluster_id: string;
-    name: string;
-    size: number;
-    density: number;
-    centrality: number;
-    recency: string;
-    top_keywords: string[];
-    key_themes: string[];
-    common_question_types: string[];
-    insight_text: string;
-    notable_conversations: string[];
-  }>;
-  patterns: Array<{
-    pattern_type: string;
-    description: string;
-    evidence: string[];
-    significance: string;
-  }>;
-  connections: Array<{
-    source_cluster: string;
-    target_cluster: string;
-    connection_strength: number;
-    bridge_keywords: string[];
-    description: string;
-  }>;
-  recommendations: Array<{
-    type: string;
-    title: string;
-    description: string;
-    related_nodes: string[];
-    priority: string;
-  }>;
-  generatedAt: string;
+
+  overview: OverviewSection;
+  clusters: ClusterAnalysis[];
+  patterns: Pattern[];
+  connections: ClusterConnection[];
+  recommendations: Recommendation[];
+
+  generatedAt: string; // Local standardized timestamp (ISO 8601)
+  detail_level: 'brief' | 'standard' | 'detailed';
 }

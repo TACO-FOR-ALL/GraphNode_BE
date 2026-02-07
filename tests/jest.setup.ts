@@ -2,27 +2,32 @@
 import { jest } from '@jest/globals';
 
 process.env.NODE_ENV = 'test';
-process.env.MYSQL_URL = 'mysql://u:p@localhost:3306/db';
-process.env.DATABASE_URL = 'mysql://u:p@localhost:3306/db';
+process.env.MYSQL_URL = 'postgresql://app:app@localhost:5432/graphnode';
+process.env.DATABASE_URL = 'postgresql://app:app@localhost:5432/graphnode';
 process.env.MONGODB_URL = 'mongodb://localhost:27017';
 process.env.REDIS_URL = 'redis://localhost:6379';
-process.env.JWT_SECRET = 'test-secret';
-process.env.OAUTH_GOOGLE_CLIENT_ID = 'id';
-process.env.OAUTH_GOOGLE_CLIENT_SECRET = 'secret';
-process.env.OAUTH_GOOGLE_REDIRECT_URI = 'http://localhost/callback';
+process.env.SESSION_SECRET = 'test-secret-very-long-secure';
+process.env.JWT_SECRET = 'test-jwt-secret';
+process.env.DEV_INSECURE_COOKIES = 'true';
+process.env.JWT_ACCESS_EXPIRY = '1h';
+process.env.JWT_REFRESH_EXPIRY = '7d';
+process.env.OAUTH_GOOGLE_CLIENT_ID = 'test-client';
+process.env.OAUTH_GOOGLE_CLIENT_SECRET = 'test-secret';
+process.env.OAUTH_GOOGLE_REDIRECT_URI = 'http://localhost:3000/auth/google/callback';
 process.env.OAUTH_APPLE_CLIENT_ID = 'id';
 process.env.OAUTH_APPLE_TEAM_ID = 'team';
 process.env.OAUTH_APPLE_KEY_ID = 'key';
 process.env.OAUTH_APPLE_PRIVATE_KEY = 'private';
 process.env.OAUTH_APPLE_REDIRECT_URI = 'http://localhost/callback';
-process.env.QDRANT_URL = 'http://localhost:6333';
-process.env.QDRANT_API_KEY = 'key';
-process.env.QDRANT_COLLECTION_NAME = 'col';
+process.env.REDIS_URL = 'redis://localhost:6379';
 process.env.SQS_REQUEST_QUEUE_URL = 'http://sqs.request';
 process.env.SQS_RESULT_QUEUE_URL = 'http://sqs.result';
 process.env.S3_PAYLOAD_BUCKET = 'bucket';
 process.env.S3_FILE_BUCKET = 'file-bucket';
-process.env.OPENAI_ASSISTANT_ID = 'asst_test';
+process.env.FIREBASE_CREDENTIALS_JSON = '{"project_id":"test-proj"}';
+process.env.FIREBASE_VAPID_VALUE = 'vapid-key';
+process.env.DATABASE_URL = 'postgresql://app:app@localhost:5432/graphnode';
+process.env.MONGODB_URL = 'mongodb://localhost:27017';
 
 // Shared Mock Redis Instance
 const mockRedisInstance = {

@@ -22,8 +22,8 @@ export class FileController {
    */
   async downloadFile(req: Request, res: Response) {
     // req.params.key 에는 '/' 문자가 포함될 수 있으므로, 라우터에서 Wildcard 처리가 필요함 (*).
-    // Express 라우터 설정: router.get('/:key(*)', ...)
-    const key = req.params.key;
+    // Express 라우터 설정: router.get('/:key(*)', ...) 또는 router.get('/(.*)', ...)
+    const key = req.params.key || req.params[0];
 
     if (!key) {
       throw new ValidationError('File key is required');

@@ -28,6 +28,8 @@ describe('GraphEmbeddingService', () => {
       deleteStats: jest.fn(),
       listNodesByCluster: jest.fn(),
       deleteEdgesByNodeIds: jest.fn(),
+      upsertGraphSummary: jest.fn(),
+      getGraphSummary: jest.fn(),
     } as unknown as jest.Mocked<GraphManagementService>;
 
     mockVectorStore = {
@@ -85,6 +87,19 @@ describe('GraphEmbeddingService', () => {
     it('should delegate to graphManagementService.listNodes', async () => {
       await service.listNodes('u1');
       expect(mockGraphService.listNodes).toHaveBeenCalledWith('u1');
+    });
+  });
+
+  describe('GraphSummary Delegation', () => {
+    it('upsertGraphSummary delegates', async () => {
+      const summary: any = { id: 'u1' };
+      await service.upsertGraphSummary('u1', summary);
+      expect(mockGraphService.upsertGraphSummary).toHaveBeenCalledWith('u1', summary);
+    });
+
+    it('getGraphSummary delegates', async () => {
+      await service.getGraphSummary('u1');
+      expect(mockGraphService.getGraphSummary).toHaveBeenCalledWith('u1');
     });
   });
 

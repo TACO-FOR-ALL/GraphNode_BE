@@ -37,11 +37,11 @@ export class GraphGenerationResultHandler implements JobHandler {
         logger.warn({ taskId, userId, error: errorMsg }, 'Graph generation failed');
 
         // 실패 알림 전송(Redis Pub/Sub & FCM)
-        await notiService.sendNotification(userId, 'GRAPH_GENERATION_FAILED', {
-          taskId,
-          error: errorMsg,
-          timestamp: new Date().toISOString(),
-        });
+        // await notiService.sendNotification(userId, 'GRAPH_GENERATION_FAILED', {
+        //   taskId,
+        //   error: errorMsg,
+        //   timestamp: new Date().toISOString(),
+        // });
         await notiService.sendFcmPushNotification(
           userId,
           'Graph Generation Failed',
@@ -89,12 +89,12 @@ export class GraphGenerationResultHandler implements JobHandler {
 
 
         // 4. 성공 알림 전송
-        await notiService.sendNotification(userId, 'GRAPH_GENERATION_COMPLETED', {
-          taskId,
-          nodeCount: snapshot.nodes.length,
-          edgeCount: snapshot.edges.length,
-          timestamp: new Date().toISOString(),
-        });
+        // await notiService.sendNotification(userId, 'GRAPH_GENERATION_COMPLETED', {
+        //   taskId,
+        //   nodeCount: snapshot.nodes.length,
+        //   edgeCount: snapshot.edges.length,
+        //   timestamp: new Date().toISOString(),
+        // });
         await notiService.sendFcmPushNotification(
           userId,
           'Graph Ready',

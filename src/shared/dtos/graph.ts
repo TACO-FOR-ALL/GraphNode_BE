@@ -1,8 +1,9 @@
 /**
- * 모듈: Graph 요청 관련 DTO들
- * 책임
- * - 외부 AI 모듈과 FE가 공통으로 사용하는 그래프 데이터를 정의한다.
- * - MongoDB 적재용 레코드 외에도 네트워크 DTO를 제공한다.
+ * 모듈: Graph 요청 관련 DTO들 (Internal/API Contract)
+ * 책임:
+ * - 백엔드 내부 로직 및 프론트엔드(API)와 통신하는 데이터 구조를 정의한다.
+ * - TypeScript/JS 컨벤션에 따라 camelCase를 사용한다.
+ * - MongoDB 적재용 인터페이스(Persistence)와는 별개로 관리되나, 구조적 유사성을 가질 수 있다.
  * 외부 의존: 없음(순수 타입)
  * 공개 인터페이스: GraphNodeDto, GraphEdgeDto, GraphClusterDto, GraphStatsDto, GraphSnapshotDto
  * 로깅: Graph 관련 API는 correlationId를 미들웨어에서 주입한다.

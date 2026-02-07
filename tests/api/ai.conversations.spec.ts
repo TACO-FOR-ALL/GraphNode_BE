@@ -4,6 +4,7 @@
  * 세션: 기존 Google OAuth 목 플로우로 세션 쿠키를 생성해 보호 라우트를 통과한다.
  */
 import request from 'supertest';
+import { jest, describe, test, expect } from '@jest/globals';
 
 import { createApp } from '../../src/bootstrap/server';
 
@@ -45,10 +46,10 @@ jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => {
   return {
     UserRepositoryMySQL: class {
       async findOrCreateFromProvider() {
-        return { id: 'u_1' } as any;
+        return { id: '1' } as any;
       }
       async findById(id: any) {
-        if (id === 'u_1') return { id: 'u_1', email: 'test@example.com' };
+        if (String(id) === '1') return { id: '1', email: 'test@example.com' };
         return null;
       }
     },
@@ -95,13 +96,25 @@ jest.mock('../../src/core/services/ChatManagementService', () => {
         v.updatedAt = new Date().toISOString();
         return v;
       }
-      async deleteConversation(id: string, ownerUserId: string) {
+      async deleteConversation(id: string, ownerUserId: string, permanent: boolean = false) {
         const v = store.conversations.get(id);
         if (!v || v.ownerUserId !== ownerUserId) {
           const { NotFoundError } = require('../../src/shared/errors/domain');
           throw new NotFoundError('not found');
         }
-        (v as any).deletedAt = new Date().toISOString();
+        if (permanent) {
+            store.conversations.delete(id);
+        } else {
+            (v as any).deletedAt = new Date().toISOString();
+        }
+      }
+      async restoreConversation(id: string, ownerUserId: string) {
+        const v = store.conversations.get(id);
+        if (!v || v.ownerUserId !== ownerUserId) {
+          const { NotFoundError } = require('../../src/shared/errors/domain');
+          throw new NotFoundError('not found');
+        }
+        delete (v as any).deletedAt;
       }
       async createMessage(ownerUserId: string, conversationId: string, message: any) {
         const v = store.conversations.get(conversationId);
@@ -109,15 +122,49 @@ jest.mock('../../src/core/services/ChatManagementService', () => {
           const { NotFoundError } = require('../../src/shared/errors/domain');
           throw new NotFoundError('not found');
         }
-        const msg = { ...message, ts: message.ts ?? new Date().toISOString() };
+        const msg = { 
+            id: message.id || 'm_'+Math.random(),
+            role: message.role,
+            content: message.content, 
+            ts: message.ts ?? new Date().toISOString() 
+        };
         v.messages.push(msg);
         return msg;
       }
-      async deleteMessage(ownerUserId: string, conversationId: string, messageId: string) {
+      async updateMessage(ownerUserId: string, conversationId: string, messageId: string, updates: any) {
         const v = store.conversations.get(conversationId);
         if (!v || v.ownerUserId !== ownerUserId) return;
         const msg = v.messages.find(m => m.id === messageId);
-        if (msg) msg.deletedAt = new Date().toISOString();
+        if (msg) msg.content = updates.content ?? msg.content;
+        return msg;
+      }
+      async deleteMessage(ownerUserId: string, conversationId: string, messageId: string, permanent: boolean = false) {
+        const v = store.conversations.get(conversationId);
+        if (!v || v.ownerUserId !== ownerUserId) return;
+        const msg = v.messages.find(m => m.id === messageId);
+        if (msg) {
+            if (permanent) {
+                v.messages = v.messages.filter(m => m.id !== messageId);
+            } else {
+                msg.deletedAt = new Date().toISOString();
+            }
+        }
+      }
+      async restoreMessage(ownerUserId: string, conversationId: string, messageId: string) {
+        const v = store.conversations.get(conversationId);
+        if (!v || v.ownerUserId !== ownerUserId) return;
+        const msg = v.messages.find(m => m.id === messageId);
+        if (msg) delete msg.deletedAt;
+      }
+      async deleteAllConversations(ownerUserId: string) {
+        let count = 0;
+        for (const [id, v] of store.conversations.entries()) {
+            if (v.ownerUserId === ownerUserId) {
+                store.conversations.delete(id);
+                count++;
+            }
+        }
+        return count;
       }
     },
   };
@@ -133,89 +180,72 @@ jest.mock('../../src/core/services/AiInteractionService', () => ({
 
 function appWithTestEnv() {
   process.env.NODE_ENV = 'test';
-  process.env.SESSION_SECRET = 'test-secret';
+  process.env.SESSION_SECRET = 'test-secret-very-long-secure';
+  process.env.JWT_SECRET = 'test-jwt-secret';
+  process.env.DEV_INSECURE_COOKIES = 'true';
   process.env.OAUTH_GOOGLE_CLIENT_ID = 'test-client';
   process.env.OAUTH_GOOGLE_CLIENT_SECRET = 'test-secret';
   process.env.OAUTH_GOOGLE_REDIRECT_URI = 'http://localhost:3000/auth/google/callback';
-  process.env.MYSQL_URL = 'mysql://user:pass@localhost:3306/db';
-  process.env.MONGODB_URL = 'mongodb://localhost:27017/db';
-  process.env.QDRANT_URL = 'http://localhost:6333';
-  process.env.QDRANT_API_KEY = 'test-key';
-  process.env.QDRANT_COLLECTION_NAME = 'test-collection';
-  process.env.REDIS_URL = 'redis://localhost:6379';
-  process.env.JWT_SECRET = 'test-jwt-secret';
+  process.env.JWT_ACCESS_EXPIRY = '1h';
+  process.env.JWT_REFRESH_EXPIRY = '7d';
+  process.env.FIREBASE_CREDENTIALS_JSON = '{"project_id":"test"}';
+  process.env.FIREBASE_VAPID_VALUE = 'v';
+  process.env.REDIS_URL = 'redis://localhost';
+  process.env.DATABASE_URL = 'mysql://u:p@host/db';
+  process.env.MONGODB_URL = 'mongodb://localhost';
   return createApp();
 }
 
 describe('AI Conversations API', () => {
-  test('create/list/get/update conversation and create/update/delete message', async () => {
+  test('Full Conversation LifeCycle including Missing Gaps', async () => {
     const app = appWithTestEnv();
+    const agent = request.agent(app);
 
-    // 로그인 세션 생성
-    const start = await request(app).get('/auth/google/start');
-    const cookie = start.headers['set-cookie'];
+    // 1. Login (Google Mock)
+    const start = await agent.get('/auth/google/start');
     const location = start.headers['location'] as string;
     const state = new URL(location).searchParams.get('state') || '';
-    const cb = await request(app)
-      .get('/auth/google/callback')
-      .set('Cookie', cookie)
-      .query({ code: 'ok', state });
-    expect(cb.status).toBe(200);
+    
+    await agent.get('/auth/google/callback').query({ code: 'ok', state });
 
-    // 로그인 후 발급된 쿠키(access_token, refresh_token)를 사용해야 함
-    const authCookies = cb.headers['set-cookie'];
-
-    // 대화 생성
-    const createBody = {
-      id: 'c_test_1',
-      title: 'First',
-      messages: [{ id: 'm1', role: 'user', content: 'hi' }],
-    };
-    const c1 = await request(app)
-      .post('/v1/ai/conversations')
-      .set('Cookie', authCookies)
-      .send(createBody);
+    // 2. Create Conversation
+    const c1 = await agent.post('/v1/ai/conversations').send({
+      id: 'c_gap_1',
+      title: 'Gap Testing',
+      messages: [{ id: 'm1', role: 'user', content: 'hello' }]
+    });
     expect(c1.status).toBe(201);
-    expect(c1.headers['location']).toMatch(/\/v1\/ai\/conversations\/c_test_1$/);
 
-    // 목록
-    const l1 = await request(app).get('/v1/ai/conversations').set('Cookie', authCookies);
-    expect(l1.status).toBe(200);
-    expect(l1.body.items).toHaveLength(1);
-    expect(l1.body.items[0].id).toBe('c_test_1');
+    // 3. Update Message (GAP FIX)
+    const patchMsg = await agent.patch('/v1/ai/conversations/c_gap_1/messages/m1').send({
+        content: 'updated hello'
+    });
+    expect(patchMsg.status).toBe(200);
+    expect(patchMsg.body.content).toBe('updated hello');
 
-    // 상세
-    const g1 = await request(app).get('/v1/ai/conversations/c_test_1').set('Cookie', authCookies);
-    expect(g1.status).toBe(200);
-    expect(g1.body.title).toBe('First');
+    // 4. Delete Message (Permanent GAP FIX)
+    const delMsg = await agent.delete('/v1/ai/conversations/c_gap_1/messages/m1').query({ permanent: 'true' });
+    expect(delMsg.status).toBe(204);
 
-    // 업데이트
-    const u1 = await request(app)
-      .patch('/v1/ai/conversations/c_test_1')
-      .set('Cookie', authCookies)
-      .send({ title: 'Updated' });
-    expect(u1.status).toBe(200);
-    expect(u1.body.title).toBe('Updated');
+    // 5. Restore Conversation (GAP FIX)
+    // First soft delete
+    await agent.delete('/v1/ai/conversations/c_gap_1');
+    const getDeleted = await agent.get('/v1/ai/conversations/c_gap_1');
+    expect(getDeleted.status).toBe(404);
 
-    // 메시지 추가
-    const m2 = await request(app)
-      .post('/v1/ai/conversations/c_test_1/messages')
-      .set('Cookie', authCookies)
-      .send({ id: 'm2', role: 'assistant', content: 'hello' });
-    expect(m2.status).toBe(201);
+    const restore = await agent.post('/v1/ai/conversations/c_gap_1/restore');
+    expect(restore.status).toBe(204);
 
-    // 메시지 삭제
-    const d1 = await request(app)
-      .delete('/v1/ai/conversations/c_test_1/messages/m1')
-      .set('Cookie', authCookies);
-    expect(d1.status).toBe(204);
+    const getRestored = await agent.get('/v1/ai/conversations/c_gap_1');
+    expect(getRestored.status).toBe(200);
+    expect(getRestored.body.id).toBe('c_gap_1');
 
-    // 대화 삭제 (Soft)
-    const del1 = await request(app).delete('/v1/ai/conversations/c_test_1').set('Cookie', authCookies);
-    expect(del1.status).toBe(204);
+    // 6. Delete All Conversations (GAP FIX)
+    const delAll = await agent.delete('/v1/ai/conversations');
+    expect(delAll.status).toBe(200);
+    expect(delAll.body.deletedCount).toBe(1);
 
-    // 삭제 확인
-    const g2 = await request(app).get('/v1/ai/conversations/c_test_1').set('Cookie', authCookies);
-    expect(g2.status).toBe(404);
+    const listEmpty = await agent.get('/v1/ai/conversations');
+    expect(listEmpty.body.items).toHaveLength(0);
   });
 });

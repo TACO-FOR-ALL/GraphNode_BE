@@ -1,5 +1,5 @@
-import { GraphSummaryResultHandler } from '../../../src/workers/handlers/GraphSummaryResultHandler';
-import { TaskType, GraphSummaryResultPayload } from '../../../src/shared/dtos/queue';
+import { GraphSummaryResultHandler } from '../../src/workers/handlers/GraphSummaryResultHandler';
+import { TaskType, GraphSummaryResultPayload } from '../../src/shared/dtos/queue';
 
 describe('GraphSummaryResultHandler', () => {
   let handler: GraphSummaryResultHandler;
@@ -19,6 +19,7 @@ describe('GraphSummaryResultHandler', () => {
     };
     mockNotiService = {
       sendNotification: jest.fn(),
+      sendFcmPushNotification: jest.fn(),
     };
 
     mockContainer = {
@@ -40,7 +41,7 @@ describe('GraphSummaryResultHandler', () => {
       },
     };
 
-    const summaryData = { overview: { summary_text: 'test' } };
+    const summaryData = { overview: { summary_text: 'test' }, generated_at: '2023-01-02T00:00:00Z' };
     mockStoragePort.downloadJson.mockResolvedValue(summaryData);
     mockGraphService.upsertGraphSummary.mockResolvedValue(undefined);
 
@@ -48,8 +49,11 @@ describe('GraphSummaryResultHandler', () => {
 
     expect(mockContainer.getAwsS3Adapter).toHaveBeenCalled();
     expect(mockStoragePort.downloadJson).toHaveBeenCalledWith('key/summary.json');
-    expect(mockGraphService.upsertGraphSummary).toHaveBeenCalledWith('user_1', summaryData);
-    expect(mockNotiService.sendNotification).toHaveBeenCalledWith('user_1', 'GRAPH_SUMMARY_COMPLETED', expect.any(Object));
+    expect(mockGraphService.upsertGraphSummary).toHaveBeenCalledWith('user_1', expect.objectContaining({
+      overview: { summary_text: 'test' },
+      generatedAt: '2023-01-02T00:00:00Z'
+    }));
+    expect(mockNotiService.sendFcmPushNotification).toHaveBeenCalledWith('user_1', 'Graph Ready', 'Your graph is ready', expect.objectContaining({ taskId: 'task_1', status: 'COMPLETED' }));
   });
 
   it('should handle FAILED status correctly', async () => {
@@ -67,6 +71,6 @@ describe('GraphSummaryResultHandler', () => {
     await handler.handle(message, mockContainer);
 
     expect(mockGraphService.upsertGraphSummary).not.toHaveBeenCalled();
-    expect(mockNotiService.sendNotification).toHaveBeenCalledWith('user_1', 'GRAPH_SUMMARY_FAILED', expect.any(Object));
+    expect(mockNotiService.sendFcmPushNotification).toHaveBeenCalledWith('user_1', 'Graph Generation Failed', expect.stringContaining('Something went wrong'), expect.objectContaining({ taskId: 'task_1', status: 'FAILED' }));
   });
 });

@@ -1,5 +1,27 @@
+import * as admin from 'firebase-admin';
 import { NotificationService } from '../../src/core/services/NotificationService';
 import { EventBusPort } from '../../src/core/ports/EventBusPort';
+import { redis } from '../../src/infra/redis/client';
+
+jest.mock('firebase-admin', () => ({
+  apps: [],
+  initializeApp: jest.fn(),
+  credential: {
+    cert: jest.fn(),
+  },
+  messaging: jest.fn().mockReturnValue({
+    sendEachForMulticast: jest.fn(),
+  }),
+}));
+
+jest.mock('../../src/infra/redis/client', () => ({
+  redis: {
+    sadd: jest.fn(),
+    srem: jest.fn(),
+    expire: jest.fn(),
+    smembers: jest.fn(),
+  },
+}));
 
 describe('NotificationService', () => {
   let service: NotificationService;
@@ -12,6 +34,7 @@ describe('NotificationService', () => {
       unsubscribe: jest.fn(),
     };
     service = new NotificationService(mockEventBus);
+    jest.clearAllMocks();
   });
 
   describe('sendNotification', () => {
@@ -30,7 +53,59 @@ describe('NotificationService', () => {
     });
   });
 
-  describe('subscribeToUserNotifications', () => {
+  describe('Device Tokens', () => {
+      it('registerDeviceToken should add token to redis', async () => {
+          await service.registerDeviceToken('u1', 't1');
+          expect(redis.sadd).toHaveBeenCalledWith('user:u1:fcm_tokens', 't1');
+          expect(redis.expire).toHaveBeenCalled();
+      });
+
+      it('unregisterDeviceToken should remove token from redis', async () => {
+          await service.unregisterDeviceToken('u1', 't1');
+          expect(redis.srem).toHaveBeenCalledWith('user:u1:fcm_tokens', 't1');
+      });
+  });
+
+  describe('sendFcmPushNotification', () => {
+    it('should send multicast message if tokens exist', async () => {
+      (redis.smembers as jest.Mock).mockResolvedValue(['token1', 'token2']);
+      (admin.messaging().sendEachForMulticast as jest.Mock).mockResolvedValue({
+        failureCount: 0,
+        responses: [],
+      });
+
+      await service.sendFcmPushNotification('user-1', 'Title', 'Body');
+
+      expect(redis.smembers).toHaveBeenCalledWith('user:user-1:fcm_tokens');
+      expect(admin.messaging().sendEachForMulticast).toHaveBeenCalledWith(expect.objectContaining({
+        tokens: ['token1', 'token2'],
+        notification: { title: 'Title', body: 'Body' },
+      }));
+    });
+
+    it('should remove invalid tokens', async () => {
+      (redis.smembers as jest.Mock).mockResolvedValue(['token1', 'invalid-token']);
+      (admin.messaging().sendEachForMulticast as jest.Mock).mockResolvedValue({
+        failureCount: 1,
+        responses: [
+          { success: true },
+          { success: false, error: { code: 'messaging/invalid-registration-token' } },
+        ],
+      });
+
+      await service.sendFcmPushNotification('user-1', 'Title', 'Body');
+
+      expect(redis.srem).toHaveBeenCalledWith('user:user-1:fcm_tokens', 'invalid-token');
+    });
+
+    it('should NOT call admin.messaging if no tokens', async () => {
+        (redis.smembers as jest.Mock).mockResolvedValue([]);
+        await service.sendFcmPushNotification('u1', 'T', 'B');
+        expect(admin.messaging().sendEachForMulticast).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Subscription', () => {
     it('should subscribe to user channel', async () => {
       const userId = 'user-1';
       const callback = jest.fn();
@@ -42,9 +117,7 @@ describe('NotificationService', () => {
         expect.any(Function)
       );
     });
-  });
 
-  describe('unsubscribeFromUserNotifications', () => {
     it('should unsubscribe from user channel', async () => {
       const userId = 'user-1';
 

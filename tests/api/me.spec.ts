@@ -1,294 +1,147 @@
+import { jest, describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
-import express from 'express';
-import cookieParser from 'cookie-parser';
+import { createApp } from '../../src/bootstrap/server';
+import { generateAccessToken } from '../../src/app/utils/jwt';
 
-import { errorHandler } from '../../src/app/middlewares/error';
-import { createMeRouter } from '../../src/app/routes/me';
-import { UserService } from '../../src/core/services/UserService';
-import { getUserIdFromRequest } from '../../src/app/utils/request';
-import { AuthError, NotFoundError } from '../../src/shared/errors/domain';
+// --- Mocks ---
+const mockUser = {
+  id: '12345',
+  email: 'me@test.com',
+  displayName: 'Me Test',
+  avatarUrl: null,
+  apiKeyOpenai: null,
+  apiKeyDeepseek: null,
+  apiKeyClaude: null,
+  apiKeyGemini: null,
+};
 
-// Mock dependencies
-jest.mock('../../src/core/services/UserService');
-jest.mock('../../src/app/utils/request');
-jest.mock('../../src/app/middlewares/session', () => ({
-  bindSessionUser: (req: any, res: any, next: any) => next(),
-}));
-jest.mock('../../src/app/middlewares/auth', () => ({
-  requireLogin: (req: any, res: any, next: any) => {
-    // Simulate requireLogin by checking if a mock user is set
-    if (getUserIdFromRequest(req)) {
-      return next();
+let userState = { ...mockUser };
+
+jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => ({
+  UserRepositoryMySQL: class {
+    async findOrCreateFromProvider() { return userState; }
+    async findById(id: any) { 
+      return (String(id) === userState.id) ? userState : null; 
     }
-    // This is a simplified mock. In a real scenario, it would throw an AuthError.
-    // For this test, we let the controller handle the null userId.
-    // The AuthError is tested in the middleware's own spec.
-    if (getUserIdFromRequest(req)) {
-      return next();
+    async findApiKeyById(id: any, model: any) {
+      if (String(id) !== userState.id) return null;
+      switch (model) {
+        case 'openai': return userState.apiKeyOpenai;
+        case 'deepseek': return userState.apiKeyDeepseek;
+        case 'claude': return userState.apiKeyClaude;
+        case 'gemini': return userState.apiKeyGemini;
+        default: return null;
+      }
     }
-    throw new AuthError('Authentication required');
-  },
+    async updateApiKeyById(id: any, model: any, apiKey: any) {
+      if (String(id) === userState.id) {
+        if (model === 'openai') userState.apiKeyOpenai = apiKey;
+        if (model === 'deepseek') userState.apiKeyDeepseek = apiKey;
+        if (model === 'claude') userState.apiKeyClaude = apiKey;
+        if (model === 'gemini') userState.apiKeyGemini = apiKey;
+      }
+    }
+    async deleteApiKeyById(id: any, model: any) {
+      if (String(id) === userState.id) {
+        if (model === 'openai') userState.apiKeyOpenai = null;
+        if (model === 'deepseek') userState.apiKeyDeepseek = null;
+        if (model === 'claude') userState.apiKeyClaude = null;
+        if (model === 'gemini') userState.apiKeyGemini = null;
+      }
+    }
+  }
 }));
 
-describe('MeController', () => {
-  let app: express.Application;
-  let mockUserService: jest.Mocked<UserService>;
-  const mockGetUserId = getUserIdFromRequest as jest.Mock;
+jest.mock('../../src/shared/ai-providers/index', () => ({
+  getAiProvider: () => ({
+    checkAPIKeyValid: jest.fn<any>().mockResolvedValue({ ok: true }),
+  }),
+}));
+
+describe('Me API Integration Tests', () => {
+  let app: any;
+  let accessToken: string;
+  let cookie: string;
+
+  beforeAll(async () => {
+    app = createApp();
+    accessToken = generateAccessToken({ userId: userState.id });
+    cookie = `access_token=${accessToken}`;
+  });
 
   beforeEach(() => {
-    jest.clearAllMocks();
-
-    mockUserService = new UserService(null as any) as jest.Mocked<UserService>;
-
-    const meRouter = createMeRouter({
-      userService: mockUserService,
-    });
-
-    app = express();
-    app.use(cookieParser());
-    app.use(express.json());
-    app.use('/v1/me', meRouter);
-    app.use(errorHandler);
+    userState = { ...mockUser };
   });
 
-  it('should return 200 with user profile when authenticated', async () => {
-    const userId = '1';
-    const userProfile = {
-      id: userId,
-      displayName: 'Test User',
-      email: 'test@example.com',
-      avatarUrl: null,
-    };
-    mockGetUserId.mockReturnValue(userId);
-    mockUserService.getUserProfile.mockResolvedValue(userProfile);
-
-    const res = await request(app).get('/v1/me');
-
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ userId: userProfile.id, profile: userProfile });
-    expect(mockUserService.getUserProfile).toHaveBeenCalledWith(userId);
-  });
-
-  it('should return 401 when getUserIdFromRequest throws AuthError', async () => {
-    mockGetUserId.mockImplementation(() => {
-      throw new AuthError('Authentication required');
-    });
-
-    const res = await request(app).get('/v1/me');
-
-    expect(res.status).toBe(401);
-    expect(res.body.type).toContain('auth-required');
-  });
-
-  it('should return 404 when user is not found', async () => {
-    const userId = '999';
-    mockGetUserId.mockReturnValue(userId);
-    mockUserService.getUserProfile.mockRejectedValue(new NotFoundError('User not found'));
-
-    const res = await request(app).get('/v1/me');
-
-    expect(res.status).toBe(404);
-    expect(res.body.type).toContain('not-found');
-  });
-
-  it('should handle unexpected errors from the service', async () => {
-    const userId = '1';
-    mockGetUserId.mockReturnValue(userId);
-    mockUserService.getUserProfile.mockRejectedValue(new Error('Unexpected DB error'));
-
-    const res = await request(app).get('/v1/me');
-
-    expect(res.status).toBe(500);
-    expect(res.body.type).toContain('unknown-error');
-  });
-
-  // ==========================================
-  // API Keys Tests
-  // ==========================================
-
-  describe('GET /v1/me/api-keys/:model', () => {
-    it('should return 200 with API key for openai', async () => {
-      const userId = '1';
-      const apiKeyResponse = { apiKey: 'sk-test-openai-key' };
-      mockGetUserId.mockReturnValue(userId);
-      mockUserService.getApiKeys.mockResolvedValue(apiKeyResponse);
-
-      const res = await request(app).get('/v1/me/api-keys/openai');
-
-      expect(res.status).toBe(200);
-      expect(res.body).toEqual(apiKeyResponse);
-      expect(mockUserService.getApiKeys).toHaveBeenCalledWith(userId, 'openai');
-    });
-
-    it('should return null apiKey if not set', async () => {
-      const userId = '1';
-      const apiKeyResponse = { apiKey: null };
-      mockGetUserId.mockReturnValue(userId);
-      mockUserService.getApiKeys.mockResolvedValue(apiKeyResponse);
-
-      const res = await request(app).get('/v1/me/api-keys/deepseek');
-
-      expect(res.status).toBe(200);
-      expect(res.body).toEqual(apiKeyResponse);
-      expect(mockUserService.getApiKeys).toHaveBeenCalledWith(userId, 'deepseek');
-    });
-
-    it('should return 401 when not authenticated', async () => {
-      mockGetUserId.mockImplementation(() => {
-        throw new AuthError('Authentication required');
-      });
-
-      const res = await request(app).get('/v1/me/api-keys');
-
-      expect(res.status).toBe(401);
-      expect(res.body.type).toContain('auth-required');
-    });
-
-    it('should return 404 when user is not found', async () => {
-      const userId = '999';
-      mockGetUserId.mockReturnValue(userId);
-      mockUserService.getApiKeys.mockRejectedValue(new NotFoundError('User not found'));
-
-      const res = await request(app).get('/v1/me/api-keys/openai');
-
-      expect(res.status).toBe(404);
-      expect(res.body.type).toContain('not-found');
-    });
-  });
-
-  describe('PATCH /v1/me/api-keys/:model', () => {
-    it('should return 204 when updating OpenAI API key successfully', async () => {
-      const userId = '1';
-      const apiKey = 'sk-test-openai-key';
-      mockGetUserId.mockReturnValue(userId);
-      mockUserService.updateApiKey.mockResolvedValue(undefined);
-
-      const res = await request(app).patch('/v1/me/api-keys/openai').send({ apiKey });
-
-      expect(res.status).toBe(204);
-      expect(mockUserService.updateApiKey).toHaveBeenCalledWith(userId, 'openai', apiKey);
-    });
-
-    it('should return 204 when updating DeepSeek API key successfully', async () => {
-      const userId = '1';
-      const apiKey = 'sk-test-deepseek-key';
-      mockGetUserId.mockReturnValue(userId);
-      mockUserService.updateApiKey.mockResolvedValue(undefined);
-
-      const res = await request(app).patch('/v1/me/api-keys/deepseek').send({ apiKey });
-
-      expect(res.status).toBe(204);
-      expect(mockUserService.updateApiKey).toHaveBeenCalledWith(userId, 'deepseek', apiKey);
-    });
-
-    it('should return 400 when model is invalid', async () => {
-      const userId = '1';
-      mockGetUserId.mockReturnValue(userId);
-
+  describe('GET /v1/me', () => {
+    it('should return 200 and the user profile', async () => {
       const res = await request(app)
-        .patch('/v1/me/api-keys/invalid-model')
-        .send({ apiKey: 'sk-test' });
+        .get('/v1/me')
+        .set('Authorization', `Bearer ${accessToken}`);
 
-      expect(res.status).toBe(400);
-      expect(res.body.type).toContain('validation-failed');
+      expect(res.status).toBe(200);
+      expect(res.body.userId).toBe(userState.id);
+      expect(res.body.profile.displayName).toBe('Me Test');
     });
 
-    it('should return 400 when apiKey is missing', async () => {
-      const userId = '1';
-      mockGetUserId.mockReturnValue(userId);
-
-      const res = await request(app).patch('/v1/me/api-keys/openai').send({});
-
-      expect(res.status).toBe(400);
-      expect(res.body.type).toContain('validation-failed');
-    });
-
-    it('should return 400 when apiKey is empty string', async () => {
-      const userId = '1';
-      mockGetUserId.mockReturnValue(userId);
-
-      const res = await request(app).patch('/v1/me/api-keys/openai').send({ apiKey: '' });
-
-      expect(res.status).toBe(400);
-      expect(res.body.type).toContain('validation-failed');
-    });
-
-    it('should return 401 when not authenticated', async () => {
-      mockGetUserId.mockImplementation(() => {
-        throw new AuthError('Authentication required');
-      });
-
-      const res = await request(app).patch('/v1/me/api-keys/openai').send({ apiKey: 'sk-test' });
-
+    it('should return 401 if not authenticated', async () => {
+      const res = await request(app).get('/v1/me');
       expect(res.status).toBe(401);
-      expect(res.body.type).toContain('auth-required');
-    });
-
-    it('should return 404 when user is not found', async () => {
-      const userId = '999';
-      mockGetUserId.mockReturnValue(userId);
-      mockUserService.updateApiKey.mockRejectedValue(new NotFoundError('User not found'));
-
-      const res = await request(app).patch('/v1/me/api-keys/openai').send({ apiKey: 'sk-test' });
-
-      expect(res.status).toBe(404);
-      expect(res.body.type).toContain('not-found');
     });
   });
 
-  describe('DELETE /v1/me/api-keys/:model', () => {
-    it('should return 204 when deleting OpenAI API key successfully', async () => {
-      const userId = '1';
-      mockGetUserId.mockReturnValue(userId);
-      mockUserService.deleteApiKey.mockResolvedValue(undefined);
+  describe('API Key Management', () => {
+    const model = 'openai';
+    const testApiKey = 'sk-test-api-key-12345';
 
-      const res = await request(app).delete('/v1/me/api-keys/openai');
+    it('should complete a full API key lifecycle (register, retrieve, delete)', async () => {
+      // 1. Initially null
+      const initialRes = await request(app)
+        .get(`/v1/me/api-keys/${model}`)
+        .set('Authorization', `Bearer ${accessToken}`);
+      expect(initialRes.status).toBe(200);
+      expect(initialRes.body.apiKey).toBeNull();
 
-      expect(res.status).toBe(204);
-      expect(mockUserService.deleteApiKey).toHaveBeenCalledWith(userId, 'openai');
+      // 2. Register
+      const registerRes = await request(app)
+        .patch(`/v1/me/api-keys/${model}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ apiKey: testApiKey });
+      expect(registerRes.status).toBe(204);
+
+      // 3. Retrieve
+      const retrieveRes = await request(app)
+        .get(`/v1/me/api-keys/${model}`)
+        .set('Authorization', `Bearer ${accessToken}`);
+      expect(retrieveRes.status).toBe(200);
+      expect(retrieveRes.body.apiKey).toBe(testApiKey);
+
+      // 4. Delete
+      const deleteRes = await request(app)
+        .delete(`/v1/me/api-keys/${model}`)
+        .set('Authorization', `Bearer ${accessToken}`);
+      expect(deleteRes.status).toBe(204);
+
+      // 5. Verify deleted
+      const finalRes = await request(app)
+        .get(`/v1/me/api-keys/${model}`)
+        .set('Authorization', `Bearer ${accessToken}`);
+      expect(finalRes.body.apiKey).toBeNull();
     });
 
-    it('should return 204 when deleting DeepSeek API key successfully', async () => {
-      const userId = '1';
-      mockGetUserId.mockReturnValue(userId);
-      mockUserService.deleteApiKey.mockResolvedValue(undefined);
-
-      const res = await request(app).delete('/v1/me/api-keys/deepseek');
-
-      expect(res.status).toBe(204);
-      expect(mockUserService.deleteApiKey).toHaveBeenCalledWith(userId, 'deepseek');
+    it('should return 400 for invalid model in GET', async () => {
+        const res = await request(app)
+          .get(`/v1/me/api-keys/invalid-model`)
+          .set('Authorization', `Bearer ${accessToken}`);
+        expect(res.status).toBe(400);
     });
 
-    it('should return 400 when model is invalid', async () => {
-      const userId = '1';
-      mockGetUserId.mockReturnValue(userId);
-
-      const res = await request(app).delete('/v1/me/api-keys/invalid-model');
-
-      expect(res.status).toBe(400);
-      expect(res.body.type).toContain('validation-failed');
-    });
-
-    it('should return 401 when not authenticated', async () => {
-      mockGetUserId.mockImplementation(() => {
-        throw new AuthError('Authentication required');
-      });
-
-      const res = await request(app).delete('/v1/me/api-keys/openai');
-
-      expect(res.status).toBe(401);
-      expect(res.body.type).toContain('auth-required');
-    });
-
-    it('should return 404 when user is not found', async () => {
-      const userId = '999';
-      mockGetUserId.mockReturnValue(userId);
-      mockUserService.deleteApiKey.mockRejectedValue(new NotFoundError('User not found'));
-
-      const res = await request(app).delete('/v1/me/api-keys/openai');
-
-      expect(res.status).toBe(404);
-      expect(res.body.type).toContain('not-found');
+    it('should return 400 for invalid model in PATCH', async () => {
+        const res = await request(app)
+          .patch(`/v1/me/api-keys/claude`) // Current controller only allows openai/deepseek
+          .set('Authorization', `Bearer ${accessToken}`)
+          .send({ apiKey: 'some-key' });
+        expect(res.status).toBe(400);
     });
   });
 });

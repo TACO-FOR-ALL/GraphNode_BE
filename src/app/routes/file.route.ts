@@ -13,7 +13,7 @@ export function createFileRouter(deps: { awsS3Adapter: AwsS3Adapter }) {
 
   // 파일 다운로드 라우트
   // :key(*) 패턴을 사용하여 슬래시가 포함된 경로(예: chat-files/uuid-image.png)를 캡처
-  router.get('/:key(*)', asyncHandler(controller.downloadFile.bind(controller)));
+  router.get(/^\/(.*)/, asyncHandler(controller.downloadFile.bind(controller)));
 
   return router;
 }

@@ -3,13 +3,16 @@ import * as admin from 'firebase-admin';
 import { redis } from '../../infra/redis/client';
 import { EventBusPort } from '../ports/EventBusPort';
 import { logger } from '../../shared/utils/logger';
+import { loadEnv } from '../../config/env';
+
+const env = loadEnv();
 
 // Initialize Firebase Admin if not already initialized
 if (admin.apps.length === 0) {
   try {
-    if (process.env.FIREBASE_CREDENTIALS_JSON) {
+    if (env.FIREBASE_CREDENTIALS_JSON) {
       // Infisical/Secrets Manager friendly: Load from JSON string
-      const serviceAccount = JSON.parse(process.env.FIREBASE_CREDENTIALS_JSON);
+      const serviceAccount = JSON.parse(env.FIREBASE_CREDENTIALS_JSON);
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
       });

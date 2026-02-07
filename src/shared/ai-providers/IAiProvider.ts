@@ -76,7 +76,7 @@ export interface IAiProvider {
     apiKey: string,
     threadId: string,
     role: 'user' | 'assistant',
-    content: string,
+    content: string | Array<any>,
     fileIds?: string[]
   ): Promise<Result<any>>;
 

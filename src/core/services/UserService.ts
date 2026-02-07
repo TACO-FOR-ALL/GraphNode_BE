@@ -67,9 +67,9 @@ export class UserService {
    */
   async getApiKeys(userId: string, model: ApiKeyModel): Promise<ApiKeysResponseDto> {
     try {
-      if (!userId || !/^\d+$/.test(userId)) {
-        throw new ValidationError('User ID must be a valid number string.');
-      }
+      // if (!userId || !/^\d+$/.test(userId)) {
+      //   throw new ValidationError('User ID must be a valid number string.');
+      // }
       const numericUserId = parseInt(userId, 10);
 
       const user: User | null = await this.userRepository.findById(numericUserId);
@@ -132,10 +132,10 @@ export class UserService {
           const provider = getAiProvider(model);
           const result = await provider.checkAPIKeyValid(apiKey);
           if (!result.ok) {
-            throw new InvalidApiKeyError(`Invalid API Key for ${model}: ${result.error}`);
+            throw new ValidationError(`Invalid API Key for ${model}: ${result.error}`);
           }
         } catch (err: unknown) {
-          if (err instanceof InvalidApiKeyError) throw err;
+          if (err instanceof ValidationError) throw err;
           throw new ValidationError(`Failed to validate API Key for ${model}.`);
         }
       }

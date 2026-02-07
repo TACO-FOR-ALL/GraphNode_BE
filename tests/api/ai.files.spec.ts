@@ -3,13 +3,14 @@
  */
 import request from 'supertest';
 import { Readable } from 'stream';
+import { jest, describe, it, beforeAll, beforeEach, expect } from '@jest/globals';
 
 import { createApp } from '../../src/bootstrap/server';
 
 // Mocks
 jest.mock('../../src/core/services/GoogleOAuthService', () => ({
   GoogleOAuthService: class {
-    buildAuthUrl() { return 'url'; }
+    buildAuthUrl() { return 'http://mock-auth-url?state=mock_state'; }
     exchangeCode() { return { access_token: 'at' }; }
     fetchUserInfo() { return { sub: 'u_1', email: 'u@e.com' }; }
   },
@@ -18,11 +19,12 @@ jest.mock('../../src/core/services/GoogleOAuthService', () => ({
 jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => ({
   UserRepositoryMySQL: class {
     async findOrCreateFromProvider() { return { id: 'u_1' }; }
+    async findById(id: any) { return { id: 'u_1', email: 'u@e.com' }; }
   },
 }));
 
 // Service Layer Mock
-const mockDownloadFile = jest.fn();
+const mockDownloadFile = jest.fn() as jest.Mock<any>;
 jest.mock('../../src/core/services/AiInteractionService', () => ({
   AiInteractionService: class {
     handleAIChat() { return {}; }
@@ -45,6 +47,7 @@ jest.mock('../../src/infra/redis/RedisEventBusAdapter', () => ({
 function appWithTestEnv() {
    process.env.NODE_ENV = 'test';
    process.env.SESSION_SECRET = 'test-secret';
+   process.env.DEV_INSECURE_COOKIES = 'true';
    // ... other envs if needed (createApp loads them)
    return createApp();
 }
@@ -55,9 +58,23 @@ describe('AI Files API', () => {
 
   beforeAll(async () => {
     app = appWithTestEnv();
-    // 로그인 Flow (세션 획득)
-    const cb = await request(app).get('/auth/google/callback').query({ code: 'ok', state: 's' });
+    const agent = request.agent(app); // Use agent to persist cookies (oauth_state)
+    
+    // 1. Start Auth (Get State Cookie)
+    const startRes = await agent.get('/auth/google/start');
+    const location = startRes.header['location'];
+    const state = new URL(location).searchParams.get('state');
+
+    // 2. Callback with correct state
+    const cb = await agent.get('/auth/google/callback').query({ code: 'ok', state });
+    // Agent stores cookies automatically, but we can extract them if needed for subsequent 'request(app)' calls
+    // However, better to use 'agent' for authenticated requests if possible.
+    // The test below uses 'request(app)', so we need to extract cookie string.
     authCookies = cb.headers['set-cookie'];
+    console.log('Auth Callback Status:', cb.status);
+    if (cb.status !== 302) {
+      console.log('Auth Callback Body:', cb.text);
+    }
   });
 
   beforeEach(() => {
@@ -75,7 +92,7 @@ describe('AI Files API', () => {
 
     const res = await request(app)
       .get(`/v1/ai/files/${encodeURIComponent(fileKey)}`)
-      .set('Cookie', authCookies);
+      .set('Cookie', authCookies || []);
 
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toBe('application/octet-stream');

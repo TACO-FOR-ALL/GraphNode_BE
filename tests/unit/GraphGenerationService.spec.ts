@@ -10,6 +10,7 @@ import { ConflictError } from '../../src/shared/errors/domain';
 import { QueuePort } from '../../src/core/ports/QueuePort';
 import { StoragePort } from '../../src/core/ports/StoragePort';
 
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 // Mock HttpClient
 jest.mock('../../src/infra/http/httpClient');
 jest.mock('../../src/shared/mappers/graph_ai_input.mapper', () => ({
@@ -36,6 +37,7 @@ describe('GraphGenerationService', () => {
 
     mockGraphEmbSvc = {
       persistSnapshot: jest.fn(),
+      getSnapshotForUser: jest.fn(), // Added default mock
     } as any;
 
     mockQueuePort = {
@@ -45,15 +47,31 @@ describe('GraphGenerationService', () => {
     } as any;
 
     mockStoragePort = {
-      uploadFile: jest.fn(),
+      upload: jest.fn(),
       downloadFile: jest.fn(),
       deleteFile: jest.fn(),
       getSignedUrl: jest.fn(),
     } as any;
 
+    // Mock upload to consume stream
+    mockStoragePort.upload.mockImplementation(async (key, body: any, contentType) => {
+      // Force consumption via resume() for Readable streams
+      if (body && typeof body.resume === 'function') {
+        body.resume();
+        await new Promise<void>((resolve, reject) => {
+            body.on('end', resolve);
+            body.on('error', reject);
+            // Also listen to close just in case
+            body.on('close', resolve);
+        });
+      } else if (body && typeof body[Symbol.asyncIterator] === 'function') {
+         for await (const chunk of body) { /* consume */ }
+      }
+    });
+
     // HttpClient mock instance
     mockHttpClient = {
-      post: jest.fn().mockImplementation(async (url, data) => {
+      post: jest.fn().mockImplementation(async (url: any, data: any) => {
         // Stream must be consumed to trigger listConversations
         // Use a more robust consumption for Readable streams
         if (data && typeof data.on === 'function') {
@@ -87,10 +105,7 @@ describe('GraphGenerationService', () => {
         items: [{ id: 'c1', title: 'T1', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), messages: [] } as any],
         nextCursor: null,
       });
-      // getMessages might not be called if messages are already in conv.messages (depending on implementation)
-      // Current implementation in streamUserData uses conv.messages:
-      // const messages: ChatMessage[] = conv.messages;
-      
+
       mockHttpClient.get.mockResolvedValueOnce({ task_id: 'task1', status: 'completed' });
       mockHttpClient.get.mockResolvedValueOnce({
         nodes: [],
@@ -136,7 +151,7 @@ describe('GraphGenerationService', () => {
     it('should request summary successfully', async () => {
       // Arrange
       const snapshot = { nodes: [{ id: 1 }] };
-      mockGraphEmbSvc.getSnapshotForUser = jest.fn().mockResolvedValue(snapshot);
+      (mockGraphEmbSvc.getSnapshotForUser as jest.Mock).mockReturnValue(Promise.resolve(snapshot));
       mockStoragePort.upload.mockResolvedValue(undefined);
       mockQueuePort.sendMessage.mockResolvedValue(undefined);
 
@@ -157,9 +172,42 @@ describe('GraphGenerationService', () => {
     });
 
     it('should throw Error if snapshot not found', async () => {
-      mockGraphEmbSvc.getSnapshotForUser = jest.fn().mockResolvedValue(null);
+      (mockGraphEmbSvc.getSnapshotForUser as jest.Mock).mockReturnValue(Promise.resolve(null));
 
       await expect(service.requestGraphSummary(userId)).rejects.toThrow();
+    });
+  });
+
+  describe('requestGraphGenerationViaQueue', () => {
+    const userId = 'user1';
+
+    it('should upload data to S3 and send SQS message', async () => {
+      // Arrange
+      mockChatSvc.listConversations.mockResolvedValue({
+        items: [{ id: 'c1', title: 'T1', messages: [] } as any],
+        nextCursor: null,
+      });
+      mockStoragePort.upload.mockResolvedValue(undefined);
+      mockQueuePort.sendMessage.mockResolvedValue(undefined);
+
+      // Act
+      const taskId = await service.requestGraphGenerationViaQueue(userId);
+
+      // Assert
+      expect(taskId).toContain('task_user1_');
+      expect(mockChatSvc.listConversations).toHaveBeenCalled();
+      expect(mockStoragePort.upload).toHaveBeenCalledWith(
+        expect.stringContaining('graph-generation/'),
+        expect.anything(),
+        'application/json'
+      );
+      expect(mockQueuePort.sendMessage).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          userId,
+          bucket: process.env.S3_PAYLOAD_BUCKET
+        })
+      );
     });
   });
 });
