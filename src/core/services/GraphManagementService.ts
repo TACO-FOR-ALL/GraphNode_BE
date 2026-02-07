@@ -24,6 +24,7 @@ import {
   GraphNodeDoc,
   GraphStatsDoc,
   GraphSubclusterDoc,
+  GraphSummaryDoc,
 } from '../types/persistence/graph.persistence';
 
 /**
@@ -447,10 +448,10 @@ export class GraphManagementService {
   /**
    * 그래프 요약/인사이트 저장
    */
-  async upsertGraphSummary(userId: string, summary: GraphSummaryDto, options?: RepoOptions): Promise<void> {
+  async upsertGraphSummary(userId: string, summary: GraphSummaryDoc, options?: RepoOptions): Promise<void> {
     try {
       this.assertUser(userId);
-      const doc: any = { ...summary, id: userId, userId };
+      const doc: GraphSummaryDoc = { ...summary, userId };
       await this.repo.upsertGraphSummary(userId, doc, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;

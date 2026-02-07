@@ -71,39 +71,7 @@ export class AiInteractionService {
     return true;
   }
 
-  /**
-   * AI 챗 메시지를 처리하는 핵심 메서드
-   *
-   * 역할:
-   * 1. 사용자의 입력 메시지를 받습니다.
-   * 2. 대화 컨텍스트(이전 메시지들)를 조회합니다.
-   * 3. AI 모델(LLM) API를 호출하여 응답을 생성합니다.
-   * 4. AI의 응답을 DB에 저장하고 반환합니다.
-   *
-   * @throws {UpstreamError} AI 서비스 호출 실패 시
-   */
-  /**
-   * 사용자 API Key 조회 및 검증
-   * @param ownerUserId 사용자 ID
-   * @param chatbody 요청 본문 (모델 정보 포함)
-   * @returns API Key (string)
-   * @throws ForbiddenError
-   */
-  private async validateAndGetApiKey(ownerUserId: string, chatbody: AIchatType): Promise<string> {
-    // 1. 사용자 API Key 조회 (UserService)
-    const apiKeyResponse = await this.userService.getApiKeys(ownerUserId, chatbody.model);
-    
-    // 2. 모델별 적절한 키 추출 (현재는 단일 필드로 가정되나, 향후 확장 가능)
-    const apiKey = apiKeyResponse.apiKey;
 
-    // 3. 검증
-    if (!apiKey) {
-      throw new ForbiddenError(
-        `API Key for model ${chatbody.model} not found. Please register it in settings.`
-      );
-    }
-    return apiKey;
-  }
 
   /**
    * AI 챗 메시지를 처리하는 핵심 메서드 (files 매개변수 추가됨)
@@ -259,30 +227,65 @@ export class AiInteractionService {
       await this.chatManagementService.updateThreadId(conversationId, ownerUserId, threadId);
     }
 
-    // 4-2. 파일 OpenAI 업로드 (Files API)
+    // 4-2. 파일 분류 및 업로드
     const openAiFileIds: string[] = [];
+    const imageContent: any[] = [];
+
     if (files && files.length > 0) {
       for (const file of files) {
-        const upRes = await provider.uploadFile(apiKey, {
-          buffer: file.buffer,
-          filename: file.filename || file.originalname,
-          mimetype: file.mimetype,
-        });
-        if (upRes.ok) {
-          openAiFileIds.push(upRes.data.fileId);
+        if (file.mimetype.startsWith('image/')) {
+           // Vision API용 이미지 업로드 (purpose: 'vision' -> actually 'assistants' for code interpreter, but for vision in thread message, we can pass file_id or url)
+           // OpenAI Assistants API currently supports images in messages via 'image_file' type.
+           // We need to upload with purpose='vision'?? No, 'assistants' purpose works for both code interpreter and retrieval?
+           // Actually, for "user" message with "content" array of "image_file", we just need the file_id.
+           // Let's standard upload.
+           const upRes = await provider.uploadFile(apiKey, {
+             buffer: file.buffer,
+             filename: file.filename || file.originalname,
+             mimetype: file.mimetype,
+           }, 'vision'); // Use 'vision' purpose if strictly needed, or 'assistants'
+           
+           if (upRes.ok) {
+             imageContent.push({
+               type: 'image_file',
+               image_file: { file_id: upRes.data.fileId },
+             });
+           } else {
+             console.warn(`Failed to upload image to OpenAI: ${upRes.error}`);
+           }
+
         } else {
-          console.warn(`Failed to upload file to OpenAI: ${upRes.error}`);
+           // 일반 파일 (Code Interpreter / File Search 용)
+           const upRes = await provider.uploadFile(apiKey, {
+             buffer: file.buffer,
+             filename: file.filename || file.originalname,
+             mimetype: file.mimetype,
+           });
+           if (upRes.ok) {
+             openAiFileIds.push(upRes.data.fileId);
+           } else {
+             console.warn(`Failed to upload file to OpenAI: ${upRes.error}`);
+           }
         }
       }
     }
 
     // 4-3. 메시지 추가
+    // 텍스트 + 이미지(Vision) 합치기
+    let messageContent: string | any[] = chatbody.chatContent;
+    if (imageContent.length > 0) {
+      messageContent = [
+        { type: 'text', text: chatbody.chatContent },
+        ...imageContent
+      ];
+    }
+
     const addMsgRes = await provider.addMessage(
       apiKey,
       threadId!,
       'user',
-      chatbody.chatContent,
-      openAiFileIds
+      messageContent,
+      openAiFileIds // non-image files attached for tools
     );
     if (!addMsgRes.ok) throw new UpstreamError(`Failed to add message to thread: ${addMsgRes.error}`);
 
@@ -389,12 +392,7 @@ export class AiInteractionService {
       await this.storageAdapter.upload(key, file.buffer, file.mimetype, { bucketType: 'file' });
 
       // TODO: Public URL 생성 방식 (현재는 단순 Key 또는 가정된 URL)
-      // 실제로는 CloudFront URL이나 Signed URL이 필요할 수 있음.
-      // 여기서는 env에서 bucket URL을 조합하거나, 프론트에서 key로 다운로드 요청하도록 설계.
-      // 우선은 key를 url 필드에 임시로 저장하거나, 다운로드 API 경로를 저장.
-      // const url = `/api/v1/files/${key}`; // 예시 경로
-      // Update: use /v1/ai/files/:key route
-      const url = `/api/v1/ai/files/${key}`;
+      const url = `${key}`;
 
       attachments.push({
         id: uuidv4(),

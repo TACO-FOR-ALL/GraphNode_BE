@@ -31,7 +31,7 @@ export function logout(req: Request, res: Response, next: NextFunction) {
  */
 export function refresh(req: Request, res: Response, next: NextFunction) {
   try {
-    const refreshToken = req.cookies['refresh_token'];
+    const refreshToken = req.signedCookies['refresh_token'];
     
     // Refresh Token이 없으면 401 Unauthorized
     if (!refreshToken) {

@@ -45,8 +45,12 @@ export class NoteRepositoryMongo implements NoteRepository {
    * @param ownerUserId 소유자 사용자 ID
    * @returns 노트 문서 또는 null
    */
-  async getNote(id: string, ownerUserId: string): Promise<NoteDoc | null> {
-    return this.notesCol().findOne({ _id: id, ownerUserId });
+  async getNote(id: string, ownerUserId: string, includeDeleted: boolean = false): Promise<NoteDoc | null> {
+    const filter: any = { _id: id, ownerUserId };
+    if (!includeDeleted) {
+      filter.deletedAt = null;
+    }
+    return this.notesCol().findOne(filter);
   }
 
   /**
@@ -56,7 +60,7 @@ export class NoteRepositoryMongo implements NoteRepository {
    * @returns 노트 문서 배열
    */
   async listNotes(ownerUserId: string, folderId: string | null): Promise<NoteDoc[]> {
-    return this.notesCol().find({ ownerUserId, folderId }).toArray();
+    return this.notesCol().find({ ownerUserId, folderId, deletedAt: null }).toArray();
   }
 
   /**
@@ -74,7 +78,7 @@ export class NoteRepositoryMongo implements NoteRepository {
     session?: ClientSession
   ): Promise<NoteDoc | null> {
     const result = await this.notesCol().findOneAndUpdate(
-      { _id: id, ownerUserId },
+      { _id: id, ownerUserId, deletedAt: null },
       { $set: updates },
       { returnDocument: 'after', session }
     );
@@ -285,15 +289,19 @@ export class NoteRepositoryMongo implements NoteRepository {
   /**
    * ID로 폴더를 조회한다.
    */
-  async getFolder(id: string, ownerUserId: string): Promise<FolderDoc | null> {
-    return this.foldersCol().findOne({ _id: id, ownerUserId });
+  async getFolder(id: string, ownerUserId: string, includeDeleted: boolean = false): Promise<FolderDoc | null> {
+    const filter: any = { _id: id, ownerUserId };
+    if (!includeDeleted) {
+      filter.deletedAt = null;
+    }
+    return this.foldersCol().findOne(filter);
   }
 
   /**
    * 특정 폴더(또는 루트)의 하위 폴더 목록을 조회한다.
    */
   async listFolders(ownerUserId: string, parentId: string | null): Promise<FolderDoc[]> {
-    return this.foldersCol().find({ ownerUserId, parentId }).toArray();
+    return this.foldersCol().find({ ownerUserId, parentId, deletedAt: null }).toArray();
   }
 
   /**
@@ -306,7 +314,7 @@ export class NoteRepositoryMongo implements NoteRepository {
     session?: ClientSession
   ): Promise<FolderDoc | null> {
     const result: WithId<FolderDoc> | null = await this.foldersCol().findOneAndUpdate(
-      { _id: id, ownerUserId },
+      { _id: id, ownerUserId, deletedAt: null },
       { $set: updates },
       { returnDocument: 'after', session }
     );

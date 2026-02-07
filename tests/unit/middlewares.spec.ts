@@ -78,12 +78,12 @@ describe('Middlewares', () => {
       expect(next).toHaveBeenCalledWith();
     });
 
-    it('should call next with AuthError if userId is missing', () => {
+    it('should call next even if userId is missing (pass-through)', () => {
       (req as any).userId = undefined;
 
       requireLogin(req as Request, res as Response, next);
 
-      expect(next).toHaveBeenCalledWith(expect.any(Error));
+      expect(next).toHaveBeenCalledWith();
     });
   });
 

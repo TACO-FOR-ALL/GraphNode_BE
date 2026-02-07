@@ -1,129 +1,145 @@
 import { UserService } from '../../src/core/services/UserService';
 import { UserRepository } from '../../src/core/ports/UserRepository';
-import { User, Provider } from '../../src/core/types/persistence/UserPersistence';
-import { NotFoundError, ValidationError } from '../../src/shared/errors/domain';
+import { User } from '../../src/core/types/persistence/UserPersistence';
+import { NotFoundError, ValidationError, InvalidApiKeyError } from '../../src/shared/errors/domain';
+import { ApiKeyModel } from '../../src/shared/dtos/me';
 
-class InMemoryUserRepo implements UserRepository {
-  private users = new Map<number, User>();
-  private nextId = 1;
-
-  async findById(id: number): Promise<User | null> {
-    return this.users.get(id) || null;
-  }
-
-  async findByProvider(provider: Provider, providerUserId: string): Promise<User | null> {
-    for (const user of this.users.values()) {
-      if (user.provider === provider && user.providerUserId === providerUserId) {
-        return user;
-      }
-    }
-    return null;
-  }
-
-  async create(data: {
-    provider: Provider;
-    providerUserId: string;
-    email?: string | null;
-    displayName?: string | null;
-    avatarUrl?: string | null;
-  }): Promise<User> {
-    const id = this.nextId++;
-    const user = new User({
-      id: String(id),
-      ...data,
-      createdAt: new Date(),
-      lastLoginAt: new Date(),
-    });
-    this.users.set(id, user);
-    return user;
-  }
-
-  async findOrCreateFromProvider(input: {
-    provider: Provider;
-    providerUserId: string;
-    email?: string | null;
-    displayName?: string | null;
-    avatarUrl?: string | null;
-  }): Promise<User> {
-    const existing = await this.findByProvider(input.provider, input.providerUserId);
-    if (existing) {
-      return existing;
-    }
-    return this.create(input);
-  }
-
-  async findApiKeyById(id: number, model: 'openai' | 'deepseek'): Promise<string | null> {
-    const user = this.users.get(id);
-    if (!user) return null;
-    if (model === 'openai') return user.apiKeyOpenai || null;
-    if (model === 'deepseek') return user.apiKeyDeepseek || null;
-    return null;
-  }
-
-  async updateApiKeyById(id: number, model: 'openai' | 'deepseek', apiKey: string): Promise<void> {
-    const user = this.users.get(id);
-    if (user) {
-      // User is immutable in this mock, so we need to replace it or hack it.
-      // Since User class has getters, we can't set properties.
-      // But for test, we can cast to any.
-      if (model === 'openai') (user as any).props.apiKeyOpenai = apiKey;
-      if (model === 'deepseek') (user as any).props.apiKeyDeepseek = apiKey;
-    }
-  }
-
-  async deleteApiKeyById(id: number, model: 'openai' | 'deepseek'): Promise<void> {
-    const user = this.users.get(id);
-    if (user) {
-      if (model === 'openai') (user as any).props.apiKeyOpenai = null;
-      if (model === 'deepseek') (user as any).props.apiKeyDeepseek = null;
-    }
-  }
-
-  // Helper
-  async seed(data: Partial<Parameters<typeof this.create>[0]>) {
-    return this.create({
-      provider: 'google',
-      providerUserId: `pid-${this.nextId}`,
-      ...data,
-    });
-  }
-}
+// Mock getAiProvider
+jest.mock('../../src/shared/ai-providers/index', () => ({
+  getAiProvider: jest.fn(),
+}));
+import { getAiProvider } from '../../src/shared/ai-providers/index';
 
 describe('UserService', () => {
-  let userService: UserService;
-  let userRepo: InMemoryUserRepo;
+  let service: UserService;
+  let mockRepo: jest.Mocked<UserRepository>;
+
+  // Create a proper User instance
+  const mockUser = new User({
+    id: '1',
+    provider: 'google',
+    providerUserId: 'google-1',
+    email: 'test@example.com',
+    displayName: 'Test User',
+    avatarUrl: 'http://example.com/avatar.jpg',
+    createdAt: new Date(),
+    lastLoginAt: new Date(),
+    apiKeyOpenai: 'sk-old',
+    apiKeyDeepseek: null,
+    apiKeyClaude: null,
+    apiKeyGemini: null,
+  });
 
   beforeEach(() => {
-    userRepo = new InMemoryUserRepo();
-    userService = new UserService(userRepo);
+    mockRepo = {
+      findById: jest.fn(),
+      findByEmail: jest.fn(),
+      create: jest.fn(),
+      findOrCreateFromProvider: jest.fn(),
+      findByProvider: jest.fn(),
+      updateApiKeyById: jest.fn(),
+      getApiKeys: jest.fn(),
+      updateOpenAiAssistantId: jest.fn(),
+      getOpenAiAssistantId: jest.fn(),
+      deleteApiKeyById: jest.fn(),
+    } as unknown as jest.Mocked<UserRepository>;
+
+    service = new UserService(mockRepo);
+    jest.clearAllMocks();
   });
 
   describe('getUserProfile', () => {
-    it('should return user profile for a valid ID', async () => {
-      const user = await userRepo.seed({ displayName: 'Test User' });
-      const userProfile = await userService.getUserProfile(user.id);
-
-      expect(userProfile).toBeDefined();
-      expect(userProfile.id).toBe(user.id);
-      expect(userProfile.displayName).toBe('Test User');
+    it('should return user profile if found', async () => {
+      mockRepo.findById.mockResolvedValue(mockUser);
+      const profile = await service.getUserProfile('1');
+      expect(profile).toEqual({
+        id: '1',
+        email: 'test@example.com',
+        displayName: 'Test User',
+        avatarUrl: 'http://example.com/avatar.jpg',
+      });
     });
 
-    it('should throw ValidationError for invalid ID format', async () => {
-      await expect(userService.getUserProfile('abc')).rejects.toThrow(ValidationError);
+    it('should throw NotFoundError if user not found', async () => {
+      mockRepo.findById.mockResolvedValue(null);
+      await expect(service.getUserProfile('1')).rejects.toThrow(NotFoundError);
     });
 
-    it('should throw NotFoundError for non-existent ID', async () => {
-      await expect(userService.getUserProfile('999')).rejects.toThrow(NotFoundError);
+    it('should throw ValidationError for invalid userId', async () => {
+      await expect(service.getUserProfile('abc')).rejects.toThrow(ValidationError);
     });
   });
 
   describe('getApiKeys', () => {
-    it('should return api key', async () => {
-      const user = await userRepo.seed({});
-      await userRepo.updateApiKeyById(Number(user.id), 'openai', 'sk-test');
+      it('should return specific api key', async () => {
+          mockRepo.findById.mockResolvedValue(mockUser);
+          const res = await service.getApiKeys('1', 'openai');
+          expect(res.apiKey).toBe('sk-old');
+      });
 
-      const result = await userService.getApiKeys(user.id, 'openai');
-      expect(result.apiKey).toBe('sk-test');
+      it('should return null if key not present', async () => {
+        mockRepo.findById.mockResolvedValue(mockUser);
+        const res = await service.getApiKeys('1', 'deepseek');
+        expect(res.apiKey).toBeNull();
+      });
+
+      it('should throw ValidationError for invalid model', async () => {
+        mockRepo.findById.mockResolvedValue(mockUser);
+        await expect(service.getApiKeys('1', 'invalid' as any)).rejects.toThrow(ValidationError);
+      });
+  });
+
+  describe('updateApiKey', () => {
+    it('should update API key if valid', async () => {
+      mockRepo.findById.mockResolvedValue(mockUser);
+      // Ensure we are in non-development to test validation logic, OR mock logic
+      // The service checks process.env.NODE_ENV !== 'development'. 
+      // Jest sets NODE_ENV to 'test'. So validation WILL run.
+      
+      const mockProvider = { checkAPIKeyValid: jest.fn().mockResolvedValue({ ok: true }) };
+      (getAiProvider as jest.Mock).mockReturnValue(mockProvider);
+
+      await service.updateApiKey('1', 'openai', 'sk-new');
+      
+      expect(getAiProvider).toHaveBeenCalledWith('openai');
+      expect(mockProvider.checkAPIKeyValid).toHaveBeenCalledWith('sk-new');
+      expect(mockRepo.updateApiKeyById).toHaveBeenCalledWith(1, 'openai', 'sk-new');
     });
+
+    it('should throw InvalidApiKeyError if validation fails', async () => {
+        const mockProvider = { checkAPIKeyValid: jest.fn().mockResolvedValue({ ok: false, error: 'Invalid' }) };
+        (getAiProvider as jest.Mock).mockReturnValue(mockProvider);
+
+        await expect(service.updateApiKey('1', 'openai', 'sk-bad')).rejects.toThrow(InvalidApiKeyError);
+    });
+
+    it('should throw ValidationError for invalid model', async () => {
+        await expect(service.updateApiKey('1', 'invalid' as any, 'key')).rejects.toThrow(ValidationError);
+    });
+    
+    it('should throw ValidationError for empty key', async () => {
+        await expect(service.updateApiKey('1', 'openai', '')).rejects.toThrow(ValidationError);
+    });
+  });
+
+  describe('deleteApiKey', () => {
+      it('should delete api key', async () => {
+          mockRepo.findById.mockResolvedValue(mockUser);
+          await service.deleteApiKey('1', 'openai');
+          expect(mockRepo.deleteApiKeyById).toHaveBeenCalledWith(1, 'openai');
+      });
+  });
+
+  describe('Assistant ID', () => {
+      it('getOpenAiAssistantId', async () => {
+          mockRepo.getOpenAiAssistantId.mockResolvedValue('asst_123');
+          const res = await service.getOpenAiAssistantId('1');
+          expect(res).toBe('asst_123');
+      });
+
+      it('updateOpenAiAssistantId', async () => {
+          await service.updateOpenAiAssistantId('1', 'asst_new');
+          expect(mockRepo.updateOpenAiAssistantId).toHaveBeenCalledWith(1, 'asst_new');
+      });
   });
 });

@@ -92,7 +92,6 @@ export const geminiProvider: IAiProvider = {
     }
   },
 
-  // TODO FIXME 
   async uploadFile() { return { ok: false, error: 'Not implemented' }; },
   async createThread() { return { ok: false, error: 'Not implemented' }; },
   async createAssistant() { return { ok: false, error: 'Not implemented' }; },

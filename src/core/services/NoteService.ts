@@ -279,7 +279,7 @@ export class NoteService {
     try {
       await session.withTransaction(async () => {
         // 1. 복구 대상 폴더 존재 확인 (삭제된 상태라도 조회됨)
-        const targetFolder: FolderDoc | null = await this.noteRepo.getFolder(folderId, userId);
+        const targetFolder: FolderDoc | null = await this.noteRepo.getFolder(folderId, userId, true);
         if (!targetFolder) {
           throw new NotFoundError(`Folder not found: ${folderId}`);
         }

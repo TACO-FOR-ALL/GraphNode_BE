@@ -156,29 +156,144 @@ class InMemoryMsgRepo implements MessageRepository {
 }
 
 describe('MessageService', () => {
-  test('CRUD operations', async () => {
-    const msgRepo = new InMemoryMsgRepo();
-    const svc = new MessageService(msgRepo);
+  let msgRepo: InMemoryMsgRepo;
+  let svc: MessageService;
 
-    // Create Doc
-    const now = Date.now();
-    const doc: MessageDoc = {
-      _id: 'm1',
-      conversationId: 'c1',
-      ownerUserId: 'u1',
-      role: 'user',
-      content: 'hi',
-      createdAt: now,
-      updatedAt: now,
-    };
-    await svc.createDoc(doc);
+  beforeEach(() => {
+      msgRepo = new InMemoryMsgRepo();
+      svc = new MessageService(msgRepo);
+  });
 
-    const found = await svc.findDocById('m1');
-    expect(found).toEqual(doc);
+  describe('External DTO Methods', () => {
+    test('createMessage returns DTO', async () => {
+      const result = await svc.createMessage('u1', 'c1', { content: 'hello', role: 'user' });
+      expect(result.content).toBe('hello');
+      expect(result.role).toBe('user');
+      expect(result.id).toBeDefined();
 
-    // Update Doc
-    await svc.updateDoc('m1', 'c1', { content: 'hello' });
-    const updated = await svc.findDocById('m1');
-    expect(updated?.content).toBe('hello');
+      const doc = await msgRepo.findById(result.id);
+      expect(doc).toBeDefined();
+    });
+
+    test('createMessage validates content', async () => {
+      await expect(svc.createMessage('u1', 'c1', { content: '', role: 'user' }))
+        .rejects.toThrow();
+    });
+
+    test('updateMessage returns DTO', async () => {
+      const created = await svc.createMessage('u1', 'c1', { content: 'old', role: 'user' });
+      const updated = await svc.updateMessage('u1', 'c1', created.id, { content: 'new' });
+      
+      expect(updated.content).toBe('new');
+      expect(updated.id).toBe(created.id);
+    });
+
+    test('updateMessage throws if not found', async () => {
+        await expect(svc.updateMessage('u1', 'c1', 'non-exist', { content: 'new' }))
+            .rejects.toThrow();
+    });
+  });
+
+  describe('Internal Doc Methods', () => {
+    test('createDoc & findDocById', async () => {
+      // Create Doc
+      const now = Date.now();
+      const doc: MessageDoc = {
+        _id: 'm1',
+        conversationId: 'c1',
+        ownerUserId: 'u1',
+        role: 'user',
+        content: 'hi',
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null
+      };
+      await svc.createDoc(doc);
+
+      const found = await svc.findDocById('m1');
+      expect(found).toEqual(doc);
+
+      // Update Doc
+      await svc.updateDoc('m1', 'c1', { content: 'hello' });
+      const updated = await svc.findDocById('m1');
+      expect(updated?.content).toBe('hello');
+    });
+
+    test('createDocs (Bulk)', async () => {
+        const docs: MessageDoc[] = [
+            { _id: 'b1', conversationId: 'c1', ownerUserId: 'u1', role: 'user', content: 'B1', createdAt: Date.now(), updatedAt: Date.now(), deletedAt: null },
+            { _id: 'b2', conversationId: 'c1', ownerUserId: 'u1', role: 'assistant', content: 'B2', createdAt: Date.now(), updatedAt: Date.now(), deletedAt: null }
+        ];
+        const result = await svc.createDocs(docs);
+        expect(result).toHaveLength(2);
+
+        const found = await svc.findDocsByConversationId('c1');
+        expect(found).toHaveLength(2);
+    });
+
+    test('deleteDoc (Soft/Hard)', async () => {
+        await svc.createMessage('u1', 'c1', { id: 'd1', content: 'del', role: 'user' });
+        
+        await svc.deleteDoc('d1', 'c1', false); // soft
+        const softDel = await svc.findDocById('d1');
+        expect(softDel?.deletedAt).not.toBeNull();
+
+        await svc.deleteDoc('d1', 'c1', true); // hard
+        const hardDel = await svc.findDocById('d1');
+        expect(hardDel).toBeNull();
+    });
+
+    test('restoreDoc', async () => {
+        await svc.createMessage('u1', 'c1', { id: 'r1', content: 'res', role: 'user' });
+        await svc.deleteDoc('r1', 'c1', false); 
+        
+        await svc.restoreDoc('r1', 'c1');
+        const restored = await svc.findDocById('r1');
+        expect(restored?.deletedAt).toBeNull();
+    });
+
+    test('deleteAllDocsByUserId', async () => {
+        await svc.createMessage('u1', 'c1', { content: 'm1', role: 'user' });
+        await svc.createMessage('u1', 'c2', { content: 'm2', role: 'user' });
+        await svc.createMessage('u2', 'c3', { content: 'm3', role: 'user' });
+
+        const count = await svc.deleteAllDocsByUserId('u1');
+        expect(count).toBe(2);
+
+        const m3 = await svc.findModifiedSince('u2', new Date(0));
+        expect(m3).toHaveLength(1);
+    });
+
+    test('Conversation Scoped Operations', async () => {
+        // Setup 3 msgs in c1
+        await svc.createMessage('u1', 'c1', { content: '1', role: 'user' });
+        await svc.createMessage('u1', 'c1', { content: '2', role: 'user' });
+        await svc.createMessage('u1', 'c1', { content: '3', role: 'user' });
+
+        // Soft Delete All
+        await svc.softDeleteAllByConversationId('c1');
+        let docs = await svc.findDocsByConversationId('c1');
+        expect(docs.every(d => d.deletedAt !== null)).toBe(true);
+
+        // Restore All
+        await svc.restoreAllByConversationId('c1');
+        docs = await svc.findDocsByConversationId('c1');
+        expect(docs.every(d => d.deletedAt === null)).toBe(true);
+
+        // Delete All
+        await svc.deleteAllByConversationId('c1');
+        docs = await svc.findDocsByConversationId('c1');
+        expect(docs).toHaveLength(0);
+    });
+
+    test('findModifiedSince', async () => {
+        const t = Date.now();
+        await svc.createDoc({ _id: 'new', conversationId: 'c', ownerUserId: 'u1', role: 'user', content: 'new', createdAt: t, updatedAt: t, deletedAt: null });
+        await svc.createDoc({ _id: 'old', conversationId: 'c', ownerUserId: 'u1', role: 'user', content: 'old', createdAt: t-1000, updatedAt: t-1000, deletedAt: null });
+
+        const modified = await svc.findModifiedSince('u1', new Date(t - 100));
+        expect(modified).toHaveLength(1);
+        expect(modified[0]._id).toBe('new');
+    });
   });
 });

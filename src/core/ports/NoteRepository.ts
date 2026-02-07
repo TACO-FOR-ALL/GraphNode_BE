@@ -30,7 +30,7 @@ export interface NoteRepository {
    * @param ownerUserId 소유자 ID
    * @returns 노트 문서 또는 null
    */
-  getNote(id: string, ownerUserId: string): Promise<NoteDoc | null>;
+  getNote(id: string, ownerUserId: string, includeDeleted?: boolean): Promise<NoteDoc | null>;
 
   /**
    * 특정 폴더(또는 루트)의 노트 목록을 조회합니다.
@@ -199,7 +199,7 @@ export interface NoteRepository {
    * @param ownerUserId 소유자 ID
    * @returns 폴더 문서 또는 null
    */
-  getFolder(id: string, ownerUserId: string): Promise<FolderDoc | null>;
+  getFolder(id: string, ownerUserId: string, includeDeleted?: boolean): Promise<FolderDoc | null>;
 
   /**
    * 특정 폴더(또는 루트)의 하위 폴더 목록을 조회합니다.

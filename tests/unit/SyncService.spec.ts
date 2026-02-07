@@ -46,10 +46,10 @@ describe('SyncService', () => {
       findFoldersModifiedSince: jest.fn(),
       createNoteDoc: jest.fn(),
       updateNoteDoc: jest.fn(),
-      findNoteDocById: jest.fn(),
+      getNoteDoc: jest.fn(),
       createFolderDoc: jest.fn(),
       updateFolderDoc: jest.fn(),
-      findFolderDocById: jest.fn(),
+      getFolderDoc: jest.fn(),
     } as any;
 
     service = new SyncService(mockConvSvc, mockMsgSvc, mockNoteSvc);
@@ -74,5 +74,48 @@ describe('SyncService', () => {
     });
   });
 
-  // Push test omitted for brevity but structure is ready
+  describe('push', () => {
+    it('should process creates for conversations', async () => {
+        const changes = {
+            conversations: [
+                { id: 'c1', title: 'New Conv', model: 'gpt-4', systemPrompt: '', temperature: 0.7, attachedFiles: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+            ],
+            lastPulledAt: new Date().toISOString()
+        };
+        
+        await service.push('u1', changes as any);
+        expect(mockConvSvc.createDoc).toHaveBeenCalled();
+    });
+
+    it('should process updates for messages', async () => {
+       const changes = {
+            messages: [
+                // Minimal DTO shape
+                { id: 'm1', conversationId: 'c1', role: 'user', content: 'Updated', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+            ],
+            lastPulledAt: new Date().toISOString()
+        };
+        
+        // Mock finding existing message for conflict check
+        mockMsgSvc.findDocById.mockResolvedValue({ id: 'm1', ownerUserId: 'u1', updatedAt: new Date(Date.now() - 10000) } as any);
+
+        await service.push('u1', changes as any);
+        expect(mockMsgSvc.updateDoc).toHaveBeenCalled();
+    });
+
+    it('should ignore stale updates (LWW)', async () => {
+         const changes = {
+            notes: [
+                { id: 'n1', title: 'Old', content: '', createdAt: new Date().toISOString(), updatedAt: new Date(Date.now() - 20000).toISOString() }
+            ],
+            lastPulledAt: new Date().toISOString()
+        };
+
+        // Existing note is newer
+        mockNoteSvc.getNoteDoc.mockResolvedValue({ id: 'n1', ownerUserId: 'u1', updatedAt: new Date(Date.now() - 5000) } as any);
+
+        await service.push('u1', changes as any);
+        expect(mockNoteSvc.updateNoteDoc).not.toHaveBeenCalled();
+    });
+  });
 });

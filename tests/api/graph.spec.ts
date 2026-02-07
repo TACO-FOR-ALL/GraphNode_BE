@@ -1,145 +1,385 @@
+/**
+ * 목적: Graph HTTP API의 동작을 실서비스(GraphEmbeddingService)와 가상 저장소(Mock Repository)를 사용하여 검증한다.
+ */
+import { jest, describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
-
 import { createApp } from '../../src/bootstrap/server';
-import { GraphEmbeddingService } from '../../src/core/services/GraphEmbeddingService';
-import { GraphNodeDto } from '../../src/shared/dtos/graph';
+import { generateAccessToken } from '../../src/app/utils/jwt';
+import { 
+    GraphNodeDoc, 
+    GraphEdgeDoc, 
+    GraphClusterDoc, 
+    GraphSubclusterDoc, 
+    GraphStatsDoc, 
+    GraphSummaryDoc 
+} from '../../src/core/types/persistence/graph.persistence';
 
-// Mock Services
-jest.mock('../../src/core/services/GraphEmbeddingService');
-jest.mock('../../src/core/services/GraphManagementService');
-jest.mock('../../src/core/services/GoogleOAuthService', () => {
-  return {
-    GoogleOAuthService: class {
-      constructor(_cfg: any) {}
-      buildAuthUrl(state: string) {
-        return `http://mock-auth?state=${state}`;
+// --- 전역 인메모리 스토어 ---
+let nodesStore = new Map<number, GraphNodeDoc>();
+let edgesStore = new Map<string, GraphEdgeDoc>();
+let clustersStore = new Map<string, GraphClusterDoc>();
+let subclustersStore = new Map<string, GraphSubclusterDoc>();
+let statsStore = new Map<string, GraphStatsDoc>();
+let summaryStore = new Map<string, GraphSummaryDoc>();
+
+// --- GraphRepository Mock ---
+jest.mock('../../src/infra/repositories/GraphRepositoryMongo', () => ({
+  GraphRepositoryMongo: class {
+    // --- Node Operations ---
+    async upsertNode(doc: GraphNodeDoc) {
+      nodesStore.set(doc.id, { ...doc });
+    }
+    async updateNode(userId: string, id: number, patch: Partial<GraphNodeDoc>) {
+      const n = nodesStore.get(id);
+      if (n && n.userId === userId) {
+        nodesStore.set(id, { ...n, ...patch, updatedAt: new Date().toISOString() });
       }
-      async exchangeCode(_code: string) {
-        return { access_token: 'at', expires_in: 3600, token_type: 'Bearer' };
+    }
+    async deleteNode(userId: string, id: number) {
+      const n = nodesStore.get(id);
+      if (n && n.userId === userId) {
+        nodesStore.delete(id);
+        // Cascade delete edges (simplified mock logic)
+        for (const [eid, e] of edgesStore.entries()) {
+            if (e.userId === userId && (e.source === id || e.target === id)) {
+                edgesStore.delete(eid);
+            }
+        }
       }
-      async fetchUserInfo(_token: any) {
-        return { sub: 'google-uid-1', email: 'u@example.com', name: 'U', picture: 'https://img' };
-      }
-    },
-  };
-});
+    }
+    async deleteNodes(userId: string, ids: number[]) {
+        for (const id of ids) await this.deleteNode(userId, id);
+    }
+    async findNode(userId: string, id: number) {
+      const n = nodesStore.get(id);
+      return (n && n.userId === userId) ? n : null;
+    }
+    async listNodes(userId: string) {
+      return Array.from(nodesStore.values()).filter(n => n.userId === userId);
+    }
+    async listNodesByCluster(userId: string, clusterId: string) {
+      return Array.from(nodesStore.values()).filter(n => n.userId === userId && n.clusterId === clusterId);
+    }
 
-// JWT Mock
-jest.mock('../../src/app/utils/jwt', () => {
-  return {
-    generateAccessToken: () => 'mock_at',
-    generateRefreshToken: () => 'mock_rt',
-    verifyToken: (token: string) => {
-      if (token === 'mock_at') return { userId: 'u_1' };
-      if (token === 'mock_rt') return { userId: 'u_1' };
-      throw new Error('Invalid token');
-    },
-    JWT_ACCESS_EXPIRY_MS: 3600000,
-    JWT_REFRESH_EXPIRY_MS: 3600000,
-  };
-});
+    // --- Edge Operations ---
+    async upsertEdge(doc: GraphEdgeDoc) {
+      edgesStore.set(doc.id, { ...doc });
+      return doc.id;
+    }
+    async deleteEdge(userId: string, edgeId: string) {
+      const e = edgesStore.get(edgeId);
+      if (e && e.userId === userId) edgesStore.delete(edgeId);
+    }
+    async deleteEdgeBetween(userId: string, source: number, target: number) {
+        for (const [id, e] of edgesStore.entries()) {
+            if (e.userId === userId && e.source === source && e.target === target) {
+                edgesStore.delete(id);
+            }
+        }
+    }
+    async deleteEdgesByNodeIds(userId: string, ids: number[]) {
+        for (const [eid, e] of edgesStore.entries()) {
+            if (e.userId === userId && (ids.includes(e.source) || ids.includes(e.target))) {
+                edgesStore.delete(eid);
+            }
+        }
+    }
+    async listEdges(userId: string) {
+      return Array.from(edgesStore.values()).filter(e => e.userId === userId);
+    }
 
-// Mock authLogin to bypass DB and ensure session is set
-jest.mock('../../src/app/utils/authLogin', () => {
-  return {
-    completeLogin: async (req: any, res: any, input: any) => {
-      const userId = 'u_1';
-      // Set JWT cookies (Mocked)
-      const common = {
-        httpOnly: true,
-        signed: true,
-        path: '/',
-        maxAge: 3600000,
-      };
-      
-      res.cookie('access_token', 'mock_at', common);
-      res.cookie('refresh_token', 'mock_rt', common);
-      res.cookie('gn-logged-in', '1');
-      
-      return { userId };
-    },
-  };
-});
+    // --- Cluster Operations ---
+    async upsertCluster(doc: GraphClusterDoc) {
+      clustersStore.set(doc.id, { ...doc });
+    }
+    async deleteCluster(userId: string, clusterId: string) {
+      const c = clustersStore.get(clusterId);
+      if (c && c.userId === userId) clustersStore.delete(clusterId);
+    }
+    async findCluster(userId: string, clusterId: string) {
+      const c = clustersStore.get(clusterId);
+      return (c && c.userId === userId) ? c : null;
+    }
+    async listClusters(userId: string) {
+      return Array.from(clustersStore.values()).filter(c => c.userId === userId);
+    }
 
-jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => {
-  return {
-    UserRepositoryMySQL: class {
-      async findOrCreateFromProvider() {
-        return { id: 'u_1' } as any;
-      }
-    },
-  };
-});
+    // --- Subclusters ---
+    async upsertSubcluster(doc: GraphSubclusterDoc) {
+        subclustersStore.set(doc.id, { ...doc });
+    }
+    async deleteSubcluster(userId: string, id: string) {
+        const s = subclustersStore.get(id);
+        if (s && s.userId === userId) subclustersStore.delete(id);
+    }
+    async listSubclusters(userId: string) {
+        return Array.from(subclustersStore.values()).filter(s => s.userId === userId);
+    }
 
-describe('Graph API', () => {
+    // --- Stats Operations ---
+    async saveStats(doc: GraphStatsDoc) {
+      statsStore.set(doc.userId, { ...doc });
+    }
+    async getStats(userId: string) {
+      return statsStore.get(userId) || null;
+    }
+    async deleteStats(userId: string) {
+      statsStore.delete(userId);
+    }
+
+    // --- Insight Summary ---
+    async upsertGraphSummary(userId: string, doc: GraphSummaryDoc) {
+        summaryStore.set(userId, { ...doc });
+    }
+    async getGraphSummary(userId: string) {
+        return summaryStore.get(userId) || null;
+    }
+  }
+}));
+
+// --- UserRepository Mock ---
+jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => ({
+  UserRepositoryMySQL: class {
+    async findById(id: any) {
+      return { id: String(id), email: 'u1@test.com' };
+    }
+  }
+}));
+
+describe('Graph API Integration Tests', () => {
   let app: any;
-  let mockGraphEmbeddingService: jest.Mocked<GraphEmbeddingService>;
+  const userId = '12345';
+  let accessToken: string;
 
-  beforeAll(async () => {
-    app = await createApp();
-    // Get the mocked instance from the container or module system if possible,
-    // but since we are mocking the class module, we can spy on prototypes or use the mock directly if we had access to the instance used by the controller.
-    // However, in integration tests with supertest, it's harder to access the exact instance inside the controller.
-    // A common pattern is to rely on the fact that the module is mocked globally.
+  beforeAll(() => {
+    process.env.SESSION_SECRET = 'test-secret';
+    app = createApp();
+    accessToken = generateAccessToken({ userId });
   });
 
   beforeEach(() => {
-    // Reset mocks
-    (GraphEmbeddingService as jest.Mock).mockClear();
-
-    // Setup mock implementation for the instance that will be created
-    mockGraphEmbeddingService = new GraphEmbeddingService(
-      {} as any
-    ) as jest.Mocked<GraphEmbeddingService>;
-
-    // We need to ensure the controller uses this mock.
-    // Since `createApp` creates a new container and new controller instances,
-    // and we mocked the class file, the controller will receive a mocked instance.
-    // We need to control the behavior of that mocked instance.
-    // The `jest.mock` above replaces the constructor.
-
-    // Let's refine the mock to return our controlled instance or methods
+    nodesStore.clear();
+    edgesStore.clear();
+    clustersStore.clear();
+    subclustersStore.clear();
+    statsStore.clear();
+    summaryStore.clear();
   });
 
-  // Since we cannot easily grab the instance created inside `createApp` without DI container access in tests,
-  // we will rely on the fact that `jest.mock` affects all imports.
-  // We will mock the prototype methods to control behavior across all instances.
+  describe('Node Operations', () => {
+    it('should create and retrieve a node', async () => {
+      const nodeData = { id: 1, origId: 'orig1', clusterId: 'c1', clusterName: 'C1', numMessages: 5 };
+      const res = await request(app)
+        .post('/v1/graph/nodes')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send(nodeData);
 
-  it('POST /v1/graph/nodes should create a node', async () => {
-    const nodeDto: GraphNodeDto = {
-      id: 1,
-      userId: 'u_1',
-      label: 'New Node',
-      origId: 'conv-1',
-      clusterId: 'cluster-1',
-      clusterName: 'Cluster 1',
-      numMessages: 0,
-      timestamp: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+      expect(res.status).toBe(201);
+      
+      const getRes = await request(app)
+        .get('/v1/graph/nodes/1')
+        .set('Authorization', `Bearer ${accessToken}`);
+      
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.origId).toBe('orig1');
+    });
 
-    // Mock implementation
-    jest.spyOn(GraphEmbeddingService.prototype, 'upsertNode').mockResolvedValue(undefined);
+    it('should list nodes', async () => {
+        nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
+        nodesStore.set(2, { id: 2, userId, origId: 'o2', clusterId: 'c2', clusterName: 'C2', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
 
-    // Login first to set session
-    const agent = request.agent(app);
-    // Simulate login by setting session directly if possible, or using a login endpoint mock
-    // Here we assume the auth middleware checks session.userId.
-    // We can use a test helper to "login" or mock the middleware.
-    // For this example, let's assume we can bypass auth or use a mock token if implemented.
-    // But since we mocked `authLogin`, let's try to hit a login endpoint if it exists, or mock the middleware.
+        const res = await request(app)
+            .get('/v1/graph/nodes')
+            .set('Authorization', `Bearer ${accessToken}`);
+        
+        expect(res.status).toBe(200);
+        expect(res.body).toHaveLength(2);
+    });
 
-    // Alternative: Mock the `isAuthenticated` middleware
-    // But `createApp` is already imported.
+    it('should list nodes by cluster', async () => {
+        nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
+        nodesStore.set(2, { id: 2, userId, origId: 'o2', clusterId: 'c2', clusterName: 'C2', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
 
-    // Let's try to use the `agent` which persists cookies.
-    // We need a way to establish a session.
-    // If we don't have a direct login endpoint for tests, we might need to mock the middleware globally.
+        const res = await request(app)
+            .get('/v1/graph/nodes')
+            .query({ clusterId: 'c1' })
+            .set('Authorization', `Bearer ${accessToken}`);
+        
+        expect(res.status).toBe(200);
+        expect(res.body).toHaveLength(1);
+        expect(res.body[0].id).toBe(1);
+    });
+
+    it('should update a node', async () => {
+        nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
+        
+        await request(app)
+            .patch('/v1/graph/nodes/1')
+            .set('Authorization', `Bearer ${accessToken}`)
+            .send({ clusterName: 'New Name' })
+            .expect(204);
+        
+        expect(nodesStore.get(1)?.clusterName).toBe('New Name');
+    });
+
+    it('should delete a node', async () => {
+        nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
+        
+        await request(app)
+            .delete('/v1/graph/nodes/1')
+            .set('Authorization', `Bearer ${accessToken}`)
+            .expect(204);
+        
+        expect(nodesStore.has(1)).toBe(false);
+    });
+
+    it('should cascade delete a node (mock logic check)', async () => {
+        nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
+        edgesStore.set('e1', { id: 'e1', userId, source: 1, target: 2, weight: 1, type: 'hard', intraCluster: true, createdAt: '', updatedAt: '' });
+
+        await request(app)
+            .delete('/v1/graph/nodes/1/cascade')
+            .set('Authorization', `Bearer ${accessToken}`)
+            .expect(204);
+        
+        expect(nodesStore.has(1)).toBe(false);
+        expect(edgesStore.has('e1')).toBe(false);
+    });
   });
 
-  // NOTE: Testing Express controllers with Supertest often requires mocking the middleware
-  // or having a "test login" endpoint.
-  // Given the current setup, let's focus on Unit Tests for Services first as requested,
-  // and maybe add API tests if we can easily mock auth.
+  describe('Edge Operations', () => {
+    it('should create and list edges', async () => {
+        const edgeData = { id: 'e1', source: 1, target: 2, weight: 1, type: 'hard', intraCluster: true };
+        await request(app)
+            .post('/v1/graph/edges')
+            .set('Authorization', `Bearer ${accessToken}`)
+            .send(edgeData)
+            .expect(201);
+        
+        const res = await request(app)
+            .get('/v1/graph/edges')
+            .set('Authorization', `Bearer ${accessToken}`);
+        
+        expect(res.status).toBe(200);
+        expect(res.body).toHaveLength(1);
+        expect(res.body[0].id).toBe('e1');
+    });
+
+    it('should delete an edge', async () => {
+        edgesStore.set('e1', { id: 'e1', userId, source: 1, target: 2, weight: 1, type: 'hard', intraCluster: true, createdAt: '', updatedAt: '' });
+        
+        await request(app)
+            .delete('/v1/graph/edges/e1')
+            .set('Authorization', `Bearer ${accessToken}`)
+            .expect(204);
+        
+        expect(edgesStore.has('e1')).toBe(false);
+    });
+  });
+
+  describe('Cluster Operations', () => {
+    it('should create and retrieve a cluster', async () => {
+        const clusterData = { id: 'c1', name: 'Cluster 1', description: 'Desc', size: 10, themes: ['T1'] };
+        await request(app)
+            .post('/v1/graph/clusters')
+            .set('Authorization', `Bearer ${accessToken}`)
+            .send(clusterData)
+            .expect(201);
+        
+        const res = await request(app)
+            .get('/v1/graph/clusters/c1')
+            .set('Authorization', `Bearer ${accessToken}`);
+        
+        expect(res.status).toBe(200);
+        expect(res.body.name).toBe('Cluster 1');
+    });
+
+    it('should list clusters', async () => {
+        clustersStore.set('c1', { id: 'c1', userId, name: 'C1', description: '', size: 1, themes: [], createdAt: '', updatedAt: '' });
+        clustersStore.set('c2', { id: 'c2', userId, name: 'C2', description: '', size: 1, themes: [], createdAt: '', updatedAt: '' });
+
+        const res = await request(app)
+            .get('/v1/graph/clusters')
+            .set('Authorization', `Bearer ${accessToken}`);
+        
+        expect(res.status).toBe(200);
+        expect(res.body).toHaveLength(2);
+    });
+
+    it('should delete a cluster', async () => {
+        clustersStore.set('c1', { id: 'c1', userId, name: 'C1', description: '', size: 1, themes: [], createdAt: '', updatedAt: '' });
+        
+        await request(app)
+            .delete('/v1/graph/clusters/c1')
+            .set('Authorization', `Bearer ${accessToken}`)
+            .expect(204);
+        
+        expect(clustersStore.has('c1')).toBe(false);
+    });
+
+    it('should cascade delete a cluster', async () => {
+        clustersStore.set('c1', { id: 'c1', userId, name: 'C1', description: '', size: 1, themes: [], createdAt: '', updatedAt: '' });
+        nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
+        edgesStore.set('e1', { id: 'e1', userId, source: 1, target: 2, weight: 1, type: 'hard', intraCluster: true, createdAt: '', updatedAt: '' });
+
+        await request(app)
+            .delete('/v1/graph/clusters/c1/cascade')
+            .set('Authorization', `Bearer ${accessToken}`)
+            .expect(204);
+        
+        expect(clustersStore.has('c1')).toBe(false);
+        expect(nodesStore.has(1)).toBe(false);
+        expect(edgesStore.has('e1')).toBe(false);
+    });
+  });
+
+  describe('Stats & Snapshot', () => {
+    it('should get stats', async () => {
+        statsStore.set(userId, { id: userId, userId, nodes: 10, edges: 20, clusters: 5, generatedAt: '', metadata: {} });
+        
+        const res = await request(app)
+            .get('/v1/graph/stats')
+            .set('Authorization', `Bearer ${accessToken}`);
+        
+        expect(res.status).toBe(200);
+        expect(res.body.nodes).toBe(10);
+    });
+
+    it('should get snapshot', async () => {
+        nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
+        edgesStore.set('e1', { id: 'e1', userId, source: 1, target: 2, weight: 1, type: 'hard', intraCluster: true, createdAt: '', updatedAt: '' });
+        clustersStore.set('c1', { id: 'c1', userId, name: 'C1', description: '', size: 1, themes: [], createdAt: '', updatedAt: '' });
+        statsStore.set(userId, { id: userId, userId, nodes: 1, edges: 1, clusters: 1, generatedAt: '', metadata: {} });
+
+        const res = await request(app)
+            .get('/v1/graph/snapshot')
+            .set('Authorization', `Bearer ${accessToken}`);
+        
+        expect(res.status).toBe(200);
+        expect(res.body.nodes).toHaveLength(1);
+        expect(res.body.edges).toHaveLength(1);
+        expect(res.body.clusters).toHaveLength(1);
+        expect(res.body.stats.nodes).toBe(1);
+    });
+
+    it('should save snapshot', async () => {
+        const snapshot = {
+            nodes: [{ id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, timestamp: null }],
+            edges: [{ id: 'e1', userId, source: 1, target: 2, weight: 1, type: 'hard', intraCluster: true }],
+            clusters: [{ id: 'c1', userId, name: 'C1', description: 'D', size: 1, themes: [] }],
+            subclusters: [],
+            stats: { nodes: 1, edges: 1, clusters: 1, generatedAt: new Date().toISOString(), metadata: {} }
+        };
+
+        await request(app)
+            .post('/v1/graph/snapshot')
+            .set('Authorization', `Bearer ${accessToken}`)
+            .send({ snapshot })
+            .expect(204);
+        
+        expect(nodesStore.size).toBe(1);
+        expect(edgesStore.size).toBe(1);
+        expect(clustersStore.size).toBe(1);
+    });
+  });
 });

@@ -73,7 +73,7 @@ function toAiInputConversation(conversation: {
 }
 
 export class GraphGenerationService {
-  private readonly httpClient: HttpClient;
+  private readonly httpClient: HttpClient; // FIXME TODO : HTTP Client 사용하지 않고 SQS로만 통신하도록 변경
   private readonly activeUserTasks = new Set<string>();
   private readonly jobQueueUrl: string;
 
@@ -85,6 +85,7 @@ export class GraphGenerationService {
   ) {
     const env = loadEnv();
     // 타임아웃 5분(300초)으로 설정
+    // FIXME TODO : HTTP Client 사용하지 않고 SQS로만 통신하도록 변경
     this.httpClient = new HttpClient('GraphAI', {
       baseURL: AI_SERVER_URI || 'https://aaejmqgtjczzbxcq.tunnel.elice.io',
       timeout: 300000,
@@ -156,6 +157,9 @@ export class GraphGenerationService {
   }
 
   /**
+   * [New] SQS 기반 그래프 요약 요청
+   * 사용자의 대화 데이터를 S3에 업로드하고, 작업 요청 메시지를 SQS에 발행합니다.
+   * @param userId 사용자 ID
    * @returns 발행된 작업의 연관 ID (TaskId)
    */
   async requestGraphSummary(userId: string): Promise<string> {
@@ -309,6 +313,7 @@ export class GraphGenerationService {
 
   /**
    * [Local] Direct mode (no SQS/S3) for add-conversation
+   * FIXME TODO : HTTP Client 사용하지 않고 SQS로만 통신하도록 변경, deprecated 써야?
    */
   async requestAddConversationDirect(userId: string, conversationId: string): Promise<string> {
     try {

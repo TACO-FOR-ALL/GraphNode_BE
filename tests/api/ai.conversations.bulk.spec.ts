@@ -105,6 +105,7 @@ function appWithTestEnv() {
   process.env.QDRANT_COLLECTION_NAME = 'test-collection';
   process.env.REDIS_URL = 'redis://localhost:6379';
   process.env.JWT_SECRET = 'test-jwt-secret';
+  process.env.DEV_INSECURE_COOKIES = 'true';
   return createApp();
 }
 

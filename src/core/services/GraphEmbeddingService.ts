@@ -9,6 +9,7 @@ import {
 import type { VectorStore } from '../ports/VectorStore';
 import { getMongo } from '../../infra/db/mongodb';
 import { GraphManagementService } from './GraphManagementService';
+import { GraphSummaryDoc } from '../types/persistence/graph.persistence';
 
 /**
  * 모듈: GraphEmbeddingService (그래프-벡터 통합 서비스)
@@ -431,7 +432,7 @@ export class GraphEmbeddingService {
   /**
    * 그래프 요약/인사이트 저장 (Delegation)
    */
-  async upsertGraphSummary(userId: string, summary: any) {
+  async upsertGraphSummary(userId: string, summary: GraphSummaryDoc) {
     return this.graphManagementService.upsertGraphSummary(userId, summary);
   }
 

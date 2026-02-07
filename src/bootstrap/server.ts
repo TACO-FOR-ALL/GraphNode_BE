@@ -29,6 +29,8 @@ import { makeNoteRouter } from './modules/note.module';
 import { makeSyncRouter } from './modules/sync.module';
 import { makeAgentRouter } from './modules/agent.module';
 import { makeNotificationRouter } from './modules/notification.module';
+import { makeFileRouter } from './modules/file.module';
+// import { createTestAgentRouter } from '../app/routes/agent.test';
 
 /**
  * Express 앱 부트스트랩.
@@ -74,6 +76,10 @@ export function createApp() {
 
   // Notification Router (SSE)
   app.use('/v1/notifications', makeNotificationRouter());
+
+  // File Router (Direct S3 Access for AI Files)
+  // AiInteractionService가 생성하는 URL(/api/v1/ai/files/...)과 일치하도록 설정
+  app.use('/api/v1/ai/files', makeFileRouter());
 
   // Auth routes
   app.use('/auth/google', authGoogleRouter);

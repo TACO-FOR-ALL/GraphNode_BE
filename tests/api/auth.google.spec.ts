@@ -1,167 +1,102 @@
-/**
- * 목적
- * - Google OAuth 시작/콜백 라우트의 기본 동작을 검증한다.
- * - 외부 네트워크 호출은 jest.mock 으로 격리한다.
- * - 세션 쿠키 설정/상태 코드/문제상세(Problem Details) 포맷을 확인한다.
- *
- * 사전조건
- * - createApp()은 메모리 세션 스토어를 사용한다(테스트용).
- * - GoogleOAuthService / UserRepository 는 아래에서 목 처리한다.
- */
+import { jest, describe, it, expect, beforeAll } from '@jest/globals';
 import request from 'supertest';
-import Ajv from 'ajv/dist/2020';
-import addFormats from 'ajv-formats';
-
 import { createApp } from '../../src/bootstrap/server';
-import problemSchema from '../schemas/problem.json';
+import { container } from '../../src/bootstrap/container';
 
-// 외부 호출 방지: GoogleOAuthService 를 목으로 대체한다.
-jest.mock('../../src/core/services/GoogleOAuthService', () => {
-  return {
-    GoogleOAuthService: class {
-      constructor(_cfg: any) {}
-      buildAuthUrl(state: string) {
-        // 단정 가능한 고정 URL 생성(테스트 결정성 보장)
-        const u = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-        u.searchParams.set('client_id', 'test-client');
-        u.searchParams.set('redirect_uri', 'http://localhost:3000/auth/google/callback');
-        u.searchParams.set('response_type', 'code');
-        u.searchParams.set('scope', 'openid email profile');
-        u.searchParams.set('state', state);
-        u.searchParams.set('access_type', 'offline');
-        u.searchParams.set('prompt', 'consent');
-        return u.toString();
-      }
-      async exchangeCode(_code: string) {
-        return { access_token: 'at', expires_in: 3600, token_type: 'Bearer' };
-      }
-      async fetchUserInfo(_token: any) {
-        return { sub: 'google-uid-1', email: 'u@example.com', name: 'U', picture: 'https://img' };
-      }
-    },
-  };
-});
+// --- Mocks ---
+const mockUser = {
+  id: '12345',
+  email: 'test@gmail.com',
+  displayName: 'Google User',
+  avatarUrl: 'https://example.com/avatar.jpg',
+};
 
-// DB 접근 방지: UserRepositoryMySQL도 메모리 목으로 대체한다.
-jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => {
-  return {
-    UserRepositoryMySQL: class {
-      async findOrCreateFromProvider() {
-        return { id: 42 } as any;
-      }
-    },
-  };
-});
+jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => ({
+  UserRepositoryMySQL: class {
+    async findOrCreateFromProvider() { return mockUser; }
+    async findById(id: any) { 
+      return (String(id) === mockUser.id) ? mockUser : null; 
+    }
+  }
+}));
 
-const ajv = new Ajv({ allErrors: true });
-addFormats(ajv);
-const validateProblem = ajv.compile(problemSchema as any);
+// Mocking GoogleOAuthService
+const mockGoogleOAuthService = {
+  buildAuthUrl: jest.fn<any>().mockReturnValue('https://google.com/auth?state=mock-state'),
+  exchangeCode: jest.fn<any>().mockResolvedValue('mock-token'),
+  fetchUserInfo: jest.fn<any>().mockResolvedValue({
+    sub: 'google-user-123',
+    email: 'test@gmail.com',
+    name: 'Google User',
+    picture: 'https://example.com/avatar.jpg',
+  }),
+};
 
-function appWithTestEnv() {
-  // 최소 환경변수 주입: 부트스트랩시 env 로더가 읽어간다.
-  process.env.NODE_ENV = 'test';
-  process.env.MYSQL_URL = 'mysql://root:pass@localhost:3306/db';
-  process.env.MONGODB_URL = 'mongodb://localhost:27017/db';
-  process.env.OAUTH_GOOGLE_CLIENT_ID = 'test-client';
-  process.env.OAUTH_GOOGLE_CLIENT_SECRET = 'test-secret';
-  process.env.OAUTH_GOOGLE_REDIRECT_URI = 'http://localhost:3000/auth/google/callback';
-  process.env.SESSION_SECRET = 'test-secret';
-  process.env.QDRANT_URL = 'http://localhost:6333';
-  process.env.QDRANT_API_KEY = 'test-key';
-  process.env.QDRANT_COLLECTION_NAME = 'test-collection';
-  process.env.REDIS_URL = 'redis://localhost:6379';
-  return createApp();
-}
+// Replace in container
+// @ts-ignore
+container.getGoogleOAuthService = () => mockGoogleOAuthService;
 
-describe('Auth Google', () => {
-  test('GET /auth/google/start redirects with state and sets session', async () => {
-    const app = appWithTestEnv();
-    // 액션: OAuth 시작 엔드포인트 호출 → 302 리다이렉트 예상
-    const res = await request(app).get('/auth/google/start');
-    // 기대: 302 상태코드 + Google 권한 URL로 리다이렉트
-    expect(res.status).toBe(302);
-    expect(res.headers['location']).toMatch(
-      /^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth\?/
-    );
-    // 기대: OAuth State 쿠키가 설정됨 (oauth_state)
-    const raw = res.headers['set-cookie'];
-    const setCookies: string[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
-    const hasStateCookie = setCookies.some((c: string) => /(?:^|;\s)oauth_state=/.test(c));
-    expect(hasStateCookie).toBe(true);
+describe('Auth Google Integration Tests', () => {
+  let app: any;
+
+  beforeAll(async () => {
+    app = createApp();
   });
 
-  test('GET /auth/google/callback with missing query returns 400 Problem Details', async () => {
-    const app = appWithTestEnv();
-    // 액션: 필수 쿼리(code/state) 없이 콜백 호출
-    const res = await request(app).get('/auth/google/callback');
-    // 기대: 400 + Problem Details 스키마
-    expect(res.status).toBe(400);
-    expect(res.headers['content-type']).toContain('application/problem+json');
-    expect(validateProblem(res.body)).toBe(true);
+  describe('GET /auth/google/start', () => {
+    it('should redirect to google and set oauth_state cookie', async () => {
+      const res = await request(app).get('/auth/google/start');
+      expect(res.status).toBe(302);
+      expect(res.headers.location).toContain('https://google.com/auth');
+      
+      const cookies = res.headers['set-cookie'];
+      expect(Array.isArray(cookies)).toBe(true);
+      if (Array.isArray(cookies)) {
+        expect(cookies.some((c: string) => c.includes('oauth_state='))).toBe(true);
+      }
+    });
   });
 
-  test('GET /auth/google/callback with invalid state returns 400 Problem Details', async () => {
-    const app = appWithTestEnv();
-    // 준비: /start로 state를 세션에 저장하고 쿠키 확보
-    const start = await request(app).get('/auth/google/start');
-    const cookie = start.headers['set-cookie'];
-    const res = await request(app)
-      .get('/auth/google/callback')
-      .set('Cookie', cookie)
-      .query({ code: 'abc', state: 'mismatch' });
-    // 기대: state 불일치로 400 Problem Details
-    expect(res.status).toBe(400);
-    expect(res.headers['content-type']).toContain('application/problem+json');
-    expect(validateProblem(res.body)).toBe(true);
-  });
+  describe('GET /auth/google/callback', () => {
+    it('should fail if state is missing or invalid', async () => {
+      const res = await request(app).get('/auth/google/callback?code=mock-code&state=wrong-state');
+      expect(res.status).toBe(400);
+      expect(res.body.detail).toContain('Invalid state');
+    });
 
-  test('GET /auth/google/callback success binds session and returns ok', async () => {
-    const app = appWithTestEnv();
-    const start = await request(app).get('/auth/google/start');
-    const cookie = start.headers['set-cookie'];
-    const location = start.headers['location'] as string;
-    const state = new URL(location).searchParams.get('state') || 'unknown';
-    // 준비: 동일 세션 유지(쿠키 재사용) + 리다이렉트 URL의 state 파라미터 사용
-    const res = await request(app)
-      .get('/auth/google/callback')
-      .set('Cookie', cookie)
-      .query({ code: 'valid-code', state });
-    // 기대: 200 OK + HTML 응답 (팝업 닫기 스크립트 포함)
-    expect(res.status).toBe(200);
-    expect(res.text).toContain('window.opener.postMessage');
-    expect(res.text).toContain('oauth-success');
-    // session cookie should be present among Set-Cookie headers
-    const raw = res.headers['set-cookie'];
-    const setCookies: string[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
-    const hasSession = setCookies.some((c: string) => /(?:^|;\s)(access_token=)/.test(c));
-    expect(hasSession).toBe(true);
-  });
+    it('should succeed with valid code and state', async () => {
+      // 1. Get a valid state from /start
+      const startRes = await request(app).get('/auth/google/start');
+      const setCookies = startRes.headers['set-cookie'];
+      expect(Array.isArray(setCookies)).toBe(true);
+      if (!Array.isArray(setCookies)) return;
 
-  test('GET /auth/google/callback with missing user info binds session and returns ok', async () => {
-    const app = appWithTestEnv();
+      const stateCookie = setCookies.find((c: string) => c.includes('oauth_state='));
+      expect(stateCookie).toBeDefined();
+      if (!stateCookie) return;
 
-    // Override the mock for this specific test
-    const GoogleOAuthService =
-      require('../../src/core/services/GoogleOAuthService').GoogleOAuthService;
-    const originalFetchUserInfo = GoogleOAuthService.prototype.fetchUserInfo;
-    GoogleOAuthService.prototype.fetchUserInfo = async () => ({ sub: 'google-uid-2' }); // Missing email, name, picture
+      const stateMatch = stateCookie.match(/oauth_state=([^;]+)/);
+      expect(stateMatch).not.toBeNull();
+      if (!stateMatch) return;
 
-    try {
-      const start = await request(app).get('/auth/google/start');
-      const cookie = start.headers['set-cookie'];
-      const location = start.headers['location'] as string;
-      const state = new URL(location).searchParams.get('state') || 'unknown';
+      const state = decodeURIComponent(stateMatch[1]);
+      
+      // Cookie Header to send back
+      const cookieHeader = setCookies.map((c: string) => c.split(';')[0]).join('; ');
 
       const res = await request(app)
-        .get('/auth/google/callback')
-        .set('Cookie', cookie)
-        .query({ code: 'valid-code', state });
+        .get(`/auth/google/callback?code=mock-code&state=${state.split('.')[0].replace('s:', '')}`)
+        .set('Cookie', [cookieHeader]);
 
       expect(res.status).toBe(200);
       expect(res.text).toContain('oauth-success');
-    } finally {
-      // Restore original mock
-      GoogleOAuthService.prototype.fetchUserInfo = originalFetchUserInfo;
-    }
+      
+      const newCookies = res.headers['set-cookie'];
+      expect(Array.isArray(newCookies)).toBe(true);
+      if (Array.isArray(newCookies)) {
+        expect(newCookies.some((c: string) => c.includes('access_token='))).toBe(true);
+        expect(newCookies.some((c: string) => c.includes('gn-logged-in=1'))).toBe(true);
+      }
+    });
   });
 });

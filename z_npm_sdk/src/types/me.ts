@@ -28,7 +28,7 @@ export interface MeResponseDto {
  * API Key 모델 타입
  * @public
  */
-export type ApiKeyModel = 'openai' | 'deepseek';
+export type ApiKeyModel = 'openai' | 'deepseek' | 'claude' | 'gemini';
 
 /**
  * GET /v1/me/api-keys 응답 DTO
