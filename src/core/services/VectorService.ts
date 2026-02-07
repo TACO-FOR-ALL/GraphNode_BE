@@ -1,4 +1,5 @@
 /**
+ * @deprecated
  * 모듈: VectorService (벡터 서비스)
  *
  * 책임:
