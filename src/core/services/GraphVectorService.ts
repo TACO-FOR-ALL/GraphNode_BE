@@ -15,14 +15,14 @@ export class GraphVectorService {
   constructor(private readonly graphVectorRepo: GraphVectorRepository) {}
 
   /**
-   * AI 파이프라인에서 생성된 그래프 특징(Features) 데이터를 저장합니다.
+   * UI/Handler에서 구성한 Vector Item 배열을 저장합니다.
    *
    * @param userId - 사용자 ID
-   * @param features - features.json 파싱 데이터
+   * @param items - 저장할 Vector Items
    */
-  async saveGraphFeatures(userId: string, features: GraphFeaturesJsonDto): Promise<void> {
-    logger.info({ userId }, 'GraphVectorService: Saving graph features');
-    await this.graphVectorRepo.saveGraphFeatures(userId, features);
+  async saveGraphFeatures(userId: string, items: any[]): Promise<void> {
+    logger.info({ userId, count: items.length }, 'GraphVectorService: Saving graph features');
+    await this.graphVectorRepo.saveGraphFeatures(userId, items);
   }
 
   /**

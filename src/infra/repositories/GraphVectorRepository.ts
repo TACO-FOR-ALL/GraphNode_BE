@@ -10,48 +10,25 @@ export class GraphVectorRepository {
   constructor(private readonly vectorStore: VectorStore) {}
 
   /**
-   * features.json 데이터를 파싱하여 Vector DB에 저장합니다.
-   * @param userId 사용자 ID
-   * @param features features.json 객체 (GraphFeaturesJsonDto)
+   * 전처리된 VectorItem 배열을 받아 Vector DB에 저장합니다.
+   * (Mapping 로직은 Handler/Service 레벨로 이동됨)
+   * 
+   * @param userId 사용자 ID (로깅용)
+   * @param items 저장할 VectorItem 배열
    */
-  async saveGraphFeatures(userId: string, features: GraphFeaturesJsonDto): Promise<void> {
+  async saveGraphFeatures(userId: string, items: GraphNodeVectorItem[]): Promise<void> {
     try {
-      const { conversations, embeddings } = features;
-
-      if (!conversations || !embeddings || conversations.length !== embeddings.length) {
-        logger.warn('Invalid features.json structure or mismatch length');
+      if (!items || items.length === 0) {
+        logger.warn({ userId }, 'No vector items to save');
         return;
       }
 
-      // 1. VectorItem으로 변환
-      const items: GraphNodeVectorItem[] = conversations.map((conv, idx) => {
-        const vector = embeddings[idx];
-        const keywordsList = conv.keywords.map((k) => k.term);
-        // Vector DB Metadata 제한(Nested Object 불가)으로 인해 상세 정보는 JSON String으로 저장
-        const keywordDetailsStr = JSON.stringify(conv.keywords);
-
-        return {
-          id: conv.orig_id, // Conversation UUID
-          vector: vector,
-          metadata: {
-            origId: conv.orig_id,
-            nodeId: conv.id,
-            userId: userId,
-            keywords: keywordsList,
-            keywordDetails: keywordDetailsStr,
-            messageCount: conv.num_messages,
-            createTime: conv.create_time,
-            updateTime: conv.update_time,
-          },
-        };
-      });
-
-      // 2. 컬렉션 확보 (Ensure)
-      // 차원은 embeddings[0]에서 가져오거나 기본값 사용
-      const dim = embeddings.length > 0 ? embeddings[0].length : 1536; // Default to OpenAI dim if empty
+      // 1. 컬렉션 확보 (Ensure)
+      // 차원은 첫 번째 아이템의 벡터 길이로 판단 (기본값 1536)
+      const dim = items[0].vector.length > 0 ? items[0].vector.length : 1536;
       await this.vectorStore.ensureCollection(this.NODE_COLLECTION, dim, 'Cosine');
 
-      // 3. 저장 (Upsert)
+      // 2. 저장 (Upsert)
       await this.vectorStore.upsert(this.NODE_COLLECTION, items);
 
       logger.info(
