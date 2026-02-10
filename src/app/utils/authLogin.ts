@@ -5,7 +5,7 @@
 import type { Request, Response } from 'express';
 
 import { UserRepositoryMySQL } from '../../infra/repositories/UserRepositoryMySQL';
-import { setHelperLoginCookies } from './sessionCookies';
+import { setHelperLoginCookies, getAuthCookieOpts } from './sessionCookies';
 import type { Provider, User } from '../../core/types/persistence/UserPersistence';
 import { bindUserIdToRequest } from './request';
 import {
@@ -52,21 +52,8 @@ export async function completeLogin(
   const accessToken = generateAccessToken({ userId: user.id });
   const refreshToken = generateRefreshToken({ userId: user.id });
 
-  // 쿠키 옵션 설정
-  // 쿠키 옵션 설정
-  // Electron 등 FE/BE 도메인이 다른 환경(CORS)을 고려하여 항상 Secure + SameSite: None을 사용합니다.
-  // 단, Secure 쿠키는 HTTPS(또는 localhost)에서만 동작하므로 개발 환경 인증서가 없으면 주의해야 합니다.
-  // 단, Secure 쿠키는 HTTPS(또는 localhost)에서만 동작하므로 개발 환경 인증서가 없으면 주의해야 합니다.
-  const secure = process.env.DEV_INSECURE_COOKIES === 'true' ? false : true;
-  const sameSite = secure ? 'none' : 'lax';
-
-  const commonCookieOpts = {
-    httpOnly: true,
-    secure,
-    sameSite: sameSite as 'none' | 'lax',
-    signed: true,
-    path: '/',
-  };
+  // 공통 쿠키 옵션 가져오기 (Secure, SameSite 등 중앙 관리)
+  const commonCookieOpts = getAuthCookieOpts();
 
   // Access Token 쿠키 (1시간)
   res.cookie('access_token', accessToken, {

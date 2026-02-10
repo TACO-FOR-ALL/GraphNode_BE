@@ -234,24 +234,32 @@ export class AiInteractionService {
     if (files && files.length > 0) {
       for (const file of files) {
         if (file.mimetype.startsWith('image/')) {
-           // Vision API용 이미지 업로드 (purpose: 'vision' -> actually 'assistants' for code interpreter, but for vision in thread message, we can pass file_id or url)
-           // OpenAI Assistants API currently supports images in messages via 'image_file' type.
-           // We need to upload with purpose='vision'?? No, 'assistants' purpose works for both code interpreter and retrieval?
-           // Actually, for "user" message with "content" array of "image_file", we just need the file_id.
-           // Let's standard upload.
-           const upRes = await provider.uploadFile(apiKey, {
+           // 1. Try 'vision' purpose first
+           let upRes = await provider.uploadFile(apiKey, {
              buffer: file.buffer,
              filename: file.filename || file.originalname,
              mimetype: file.mimetype,
-           }, 'vision'); // Use 'vision' purpose if strictly needed, or 'assistants'
+           }, 'vision');
            
+           // 2. Fallback to 'assistants' purpose if 'vision' fails (compatibility mode)
+           if (!upRes.ok) {
+             console.warn(`Vision upload failed (${upRes.error}), retrying with 'assistants' purpose...`);
+             upRes = await provider.uploadFile(apiKey, {
+                buffer: file.buffer,
+                filename: file.filename || file.originalname,
+                mimetype: file.mimetype,
+             }, 'assistants');
+           }
+
            if (upRes.ok) {
              imageContent.push({
                type: 'image_file',
                image_file: { file_id: upRes.data.fileId },
              });
            } else {
-             console.warn(`Failed to upload image to OpenAI: ${upRes.error}`);
+             // 3. Throw Error if both fail (Do not swallow error)
+             console.error(`Failed to upload image to OpenAI: ${upRes.error}`);
+             throw new UpstreamError(`Failed to upload image to OpenAI Provider: ${upRes.error}`);
            }
 
         } else {
@@ -264,7 +272,8 @@ export class AiInteractionService {
            if (upRes.ok) {
              openAiFileIds.push(upRes.data.fileId);
            } else {
-             console.warn(`Failed to upload file to OpenAI: ${upRes.error}`);
+             console.error(`Failed to upload file to OpenAI: ${upRes.error}`);
+             throw new UpstreamError(`Failed to upload file to OpenAI Provider: ${upRes.error}`);
            }
         }
       }

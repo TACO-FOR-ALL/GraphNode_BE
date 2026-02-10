@@ -3,6 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import { AuthError } from '../../shared/errors/domain';
 import { verifyToken, generateAccessToken, generateRefreshToken, JWT_ACCESS_EXPIRY_MS, JWT_REFRESH_EXPIRY_MS } from '../utils/jwt';
 import { bindUserIdToRequest } from '../utils/request';
+import { getAuthCookieOpts } from '../utils/sessionCookies';
 import { loadEnv } from '../../config/env';
 
 const env = loadEnv();
@@ -47,25 +48,18 @@ export async function authJwt(req: Request, res: Response, next: NextFunction) {
       const newRefreshToken = generateRefreshToken({ userId: payload.userId });
 
       // 새 Access Token 쿠키 설정
-      // Electron/Cross-Domain 환경 고려: 항상 Secure=true, SameSite=None
-      // Electron/Cross-Domain 환경 고려: 항상 Secure=true, SameSite=None
-      const secure = process.env.DEV_INSECURE_COOKIES === 'true' ? false : true;
-      const sameSite = secure ? 'none' : 'lax';
+      // Electron/Cross-Domain 환경 고려: 중앙 관리된 옵션 사용(getAuthCookieOpts)
+      const commonOpts = getAuthCookieOpts();
 
       res.cookie('access_token', newAccessToken, {
-        httpOnly: true,
-        secure,
-        sameSite: sameSite as 'none' | 'lax',
-        signed: true,
+        ...commonOpts,
         maxAge: JWT_ACCESS_EXPIRY_MS,
       });
 
       // 새 Refresh Token 쿠키 설정
+      // 새 Refresh Token 쿠키 설정
       res.cookie('refresh_token', newRefreshToken, {
-         httpOnly: true,
-         secure,
-         sameSite: sameSite as 'none' | 'lax',
-         signed: true,
+         ...commonOpts,
          maxAge: JWT_REFRESH_EXPIRY_MS,
       });
 

@@ -239,7 +239,7 @@ export const openAI = {
       
       const attachments = fileIds.map((fileId) => ({
         file_id: fileId,
-        tools: [{ type: 'file_search' as const }], // 기본적으로 file_search 활성화
+        // tools: [{ type: 'file_search' as const }], // REMOVED: Let the Assistant decide based on enabled tools
       }));
 
       const msg = await client.beta.threads.messages.create(threadId, {

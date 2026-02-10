@@ -4,7 +4,7 @@
  */
 import type { Request, Response, NextFunction } from 'express';
 
-import { clearHelperLoginCookies } from '../utils/sessionCookies';
+import { clearHelperLoginCookies, getAuthCookieOpts } from '../utils/sessionCookies';
 
 /**
  * POST /auth/logout — 서버 세션 파괴 및 쿠키 만료
@@ -12,8 +12,11 @@ import { clearHelperLoginCookies } from '../utils/sessionCookies';
 export function logout(req: Request, res: Response, next: NextFunction) {
   try {
     // JWT 쿠키 제거
-    res.clearCookie('access_token', { path: '/' });
-    res.clearCookie('refresh_token', { path: '/' });
+    // JWT 쿠키 제거
+    // 중요: 쿠키를 생성할 때와 동일한 옵션(Secure, SameSite, Domain 등)을 주어야 삭제됨.
+    const opts = getAuthCookieOpts();
+    res.clearCookie('access_token', opts);
+    res.clearCookie('refresh_token', opts);
 
     // 기존 세션 쿠키도 혹시 모르니 제거
     res.clearCookie('sid', { path: '/' });
@@ -48,17 +51,10 @@ export function refresh(req: Request, res: Response, next: NextFunction) {
     const newAccessToken = generateAccessToken({ userId: payload.userId });
 
     // 새로운 Access Token 쿠키 설정
-    const isProd = process.env.NODE_ENV === 'production';
-    const insecure = process.env.DEV_INSECURE_COOKIES === 'true';
-    const secure = isProd && !insecure;
-    const sameSite = secure ? 'none' : 'lax';
+    const cookieOpts = getAuthCookieOpts();
 
     res.cookie('access_token', newAccessToken, {
-      httpOnly: true,
-      secure,
-      sameSite: sameSite as 'none' | 'lax',
-      signed: true,
-      path: '/',
+      ...cookieOpts,
       maxAge: JWT_ACCESS_EXPIRY_MS,
     });
 
@@ -66,8 +62,9 @@ export function refresh(req: Request, res: Response, next: NextFunction) {
 
   } catch (e) {
     // 갱신 실패 시 쿠키 모두 삭제 -> 재로그인 유도
-    res.clearCookie('access_token', { path: '/' });
-    res.clearCookie('refresh_token', { path: '/' });
+    const opts = getAuthCookieOpts();
+    res.clearCookie('access_token', opts);
+    res.clearCookie('refresh_token', opts);
     res.status(401).json({ ok: false, error: 'Refresh failed' });
   }
 }
