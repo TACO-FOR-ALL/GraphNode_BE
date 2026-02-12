@@ -7,23 +7,52 @@ import type { Response } from 'express';
  * - HttpOnly=false (JS에서 읽기 가능해야 하므로)
  * - Max-Age: 환경변수 COOKIE_HELPER_MAX_AGE(초) 사용, 기본 0(세션 쿠키)
  */
-function cookieOpts() {
+/**
+ * 기본 쿠키 옵션 계산 (내부용)
+ * @param httpOnly 자바스크립트 접근 차단 여부
+ */
+function buildCookieOpts(httpOnly: boolean) {
   const isProd = process.env.NODE_ENV === 'production';
   const insecure = process.env.DEV_INSECURE_COOKIES === 'true';
-  const secure = isProd && !insecure;
-  const maxAgeEnv = process.env.COOKIE_HELPER_MAX_AGE;
-  const maxAge = maxAgeEnv ? Number(maxAgeEnv) * 1000 : undefined; // millis, undefined=세션쿠키
-
+  // secure: 배포환경이거나, 로컬이더라도 https/cross-site 테스트가 필요한 경우 insecure=false로 설정됨.
+  // insecure=true 설정이 있으면 http 환경으로 간주하여 secure=false.
+  const secure = isProd ? !insecure : !insecure; 
+  
   // SameSite=None requires Secure. If not secure, fallback to Lax.
   const sameSite = secure ? 'none' : 'lax';
 
-  const cookieConfig = {
-    httpOnly: false,
+  return {
+    httpOnly,
+    secure,
     sameSite: sameSite as 'none' | 'lax',
-    secure: secure,
+    path: '/',
   };
+}
 
-  return { ...cookieConfig, path: '/', ...(maxAge ? { maxAge } : {}) };
+/**
+ * 인증 토큰용 쿠키 옵션 (Access/Refresh Token)
+ * - HttpOnly: true (XSS 방지)
+ * - Signed: true (변조 방지)
+ * - Secure: true (HTTPS 필수, SameSite=None을 위해)
+ */
+export function getAuthCookieOpts() {
+  return {
+    ...buildCookieOpts(true),
+    signed: true,
+  };
+}
+
+/**
+ * 화면 표시용 쿠키 옵션 (gn-logged-in 등)
+ * - HttpOnly: false (FE JS에서 읽어야 함)
+ * - Signed: false (단순 플래그)
+ * - Secure: true (Auth 쿠키와 동일한 환경 따름)
+ */
+export function getDisplayCookieOpts() {
+  return {
+    ...buildCookieOpts(false),
+    signed: false, 
+  };
 }
 
 /**
@@ -64,7 +93,12 @@ export function setHelperLoginCookies(
     email?: string | null;
   }
 ) {
-  const opts = cookieOpts();
+  /* eslint-disable-next-line prefer-const */
+  let opts = getDisplayCookieOpts();
+  const maxAgeEnv = process.env.COOKIE_HELPER_MAX_AGE;
+  if(maxAgeEnv) {
+      (opts as any).maxAge = Number(maxAgeEnv) * 1000;
+  }
   res.cookie('gn-logged-in', '1', opts);
   if (profile) {
     const encoded = Buffer.from(JSON.stringify(profile)).toString('base64url');

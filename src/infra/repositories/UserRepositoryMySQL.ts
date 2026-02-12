@@ -2,6 +2,7 @@ import { User, Provider } from '../../core/types/persistence/UserPersistence';
 import { UserRepository } from '../../core/ports/UserRepository';
 import prisma from '../db/prisma';
 import { ApiKeyModel } from '../../shared/dtos/me';
+import { v4 as uuidv4 } from 'uuid';
 
 /**
  * UserRepository (Prisma 구현)
@@ -10,11 +11,11 @@ import { ApiKeyModel } from '../../shared/dtos/me';
 export class UserRepositoryMySQL implements UserRepository {
   /**
    * id로 단건 조회.
-   * @param id 내부 사용자 식별자 (number)
+   * @param id 내부 사용자 식별자 (string)
    */
-  async findById(id: number): Promise<User | null> {
+  async findById(id: string): Promise<User | null> {
     const user = await prisma.user.findUnique({
-      where: { id: BigInt(id) },
+      where: { id },
     });
     if (!user) return null;
     return this.mapUser(user);
@@ -23,9 +24,9 @@ export class UserRepositoryMySQL implements UserRepository {
   /**
    * 내부 사용자 식별자로 API Key 조회
    */
-  async findApiKeyById(id: number, model: ApiKeyModel): Promise<string | null> {
+  async findApiKeyById(id: string, model: ApiKeyModel): Promise<string | null> {
     const user = await prisma.user.findUnique({
-      where: { id: BigInt(id) },
+      where: { id },
     });
     if (!user) return null;
 
@@ -46,7 +47,7 @@ export class UserRepositoryMySQL implements UserRepository {
   /**
    * 내부 사용자 식별자로 API Key 업데이트
    */
-  async updateApiKeyById(id: number, model: ApiKeyModel, apiKey: string): Promise<void> {
+  async updateApiKeyById(id: string, model: ApiKeyModel, apiKey: string): Promise<void> {
     const data: any = {};
     switch (model) {
       case 'openai':
@@ -64,7 +65,7 @@ export class UserRepositoryMySQL implements UserRepository {
     }
 
     await prisma.user.update({
-      where: { id: BigInt(id) },
+      where: { id },
       data,
     });
   }
@@ -72,7 +73,7 @@ export class UserRepositoryMySQL implements UserRepository {
   /**
    * 내부 사용자 식별자로 API Key 삭제
    */
-  async deleteApiKeyById(id: number, model: ApiKeyModel): Promise<void> {
+  async deleteApiKeyById(id: string, model: ApiKeyModel): Promise<void> {
     const data: any = {};
     switch (model) {
       case 'openai':
@@ -90,7 +91,7 @@ export class UserRepositoryMySQL implements UserRepository {
     }
 
     await prisma.user.update({
-      where: { id: BigInt(id) },
+      where: { id },
       data,
     });
   }
@@ -123,6 +124,7 @@ export class UserRepositoryMySQL implements UserRepository {
   }): Promise<User> {
     const user = await prisma.user.create({
       data: {
+        id: uuidv4(),
         provider: input.provider,
         providerUserId: input.providerUserId,
         email: input.email,
@@ -151,7 +153,7 @@ export class UserRepositoryMySQL implements UserRepository {
     const existing = await this.findByProvider(input.provider, input.providerUserId);
     if (existing) {
       const updated = await prisma.user.update({
-        where: { id: BigInt(existing.id) },
+        where: { id: existing.id },
         data: { lastLoginAt: new Date() },
       });
       return this.mapUser(updated);
@@ -165,9 +167,9 @@ export class UserRepositoryMySQL implements UserRepository {
   /**
    * 사용자의 OpenAI Assistant ID 조회
    */
-  async getOpenAiAssistantId(id: number): Promise<string | null> {
+  async getOpenAiAssistantId(id: string): Promise<string | null> {
     const user = await prisma.user.findUnique({
-      where: { id: BigInt(id) },
+      where: { id },
     });
     return user?.openaiAssistantId ?? null;
   }
@@ -175,16 +177,16 @@ export class UserRepositoryMySQL implements UserRepository {
   /**
    * 사용자의 OpenAI Assistant ID 업데이트
    */
-  async updateOpenAiAssistantId(id: number, assistantId: string): Promise<void> {
+  async updateOpenAiAssistantId(id: string, assistantId: string): Promise<void> {
     await prisma.user.update({
-      where: { id: BigInt(id) },
+      where: { id },
       data: { openaiAssistantId: assistantId },
     });
   }
 
   private mapUser(pUser: any): User {
     return new User({
-      id: pUser.id.toString(),
+      id: pUser.id,
       provider: pUser.provider as Provider,
       providerUserId: pUser.providerUserId,
       email: pUser.email,

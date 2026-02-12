@@ -5,6 +5,7 @@ import { logger } from '../../shared/utils/logger';
 import { JobHandler } from './JobHandler';
 import { GraphSummary } from '../../shared/dtos/ai_graph_output';
 import { GraphSummaryDoc } from '../../core/types/persistence/graph.persistence';
+import { NotificationType } from '../notificationType';
 
 export class GraphSummaryResultHandler implements JobHandler {
   async handle(message: QueueMessage, container: Container): Promise<void> {
@@ -20,6 +21,14 @@ export class GraphSummaryResultHandler implements JobHandler {
     try {
       if (status === 'FAILED') {
         logger.error({ taskId, userId, error }, 'Graph summary generation failed');
+        
+        // 실패 notification 전달
+        await notiService.sendNotification(userId, NotificationType.GRAPH_SUMMARY_FAILED, {
+          taskId,
+          error: error || 'Unknown error',
+          timestamp: new Date().toISOString(),
+        });
+        
         await notiService.sendFcmPushNotification(
           userId,
           'Graph Generation Failed',
@@ -55,10 +64,10 @@ export class GraphSummaryResultHandler implements JobHandler {
         logger.info({ taskId, userId }, 'Graph summary persisted to DB');
 
         // 3. Send Notification
-        // await notiService.sendNotification(userId, 'GRAPH_SUMMARY_COMPLETED', {
-        //   taskId,
-        //   timestamp: new Date().toISOString(),
-        // });
+        await notiService.sendNotification(userId, NotificationType.GRAPH_SUMMARY_COMPLETED, {
+          taskId,
+          timestamp: new Date().toISOString(),
+        });
         await notiService.sendFcmPushNotification(
           userId,
           'Graph Ready',

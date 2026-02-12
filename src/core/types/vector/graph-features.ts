@@ -29,31 +29,37 @@ export interface GraphFeaturesJsonDto {
  * [Internal Metadata] Vector Payload
  * Vector DB(Chroma 등)의 'metadata' (payload) 필드에 저장될 구조입니다.
  * features.json의 conversations 항목과 1:1 매핑되어 검색 필터링에 사용됩니다.
+ * 
+ * [User Requirement] 
+ * - 키 네이밍: snake_case (Python 스타일에 맞춤)
  */
 export interface GraphNodeVectorMetadata {
-  /** 원본 대화 ID (UUID) - features.json의 'orig_id' */
-  origId: string;
-  
-  /** 생성된 그래프 내부의 노드 ID (Integer) - features.json의 'id' */
-  nodeId: number;
-  
-  /** 사용자 ID (소유자) */
-  userId: string;
-  
-  /** 키워드 목록 (검색 필터링용) - features.json의 'keywords'에서 term만 추출 */
-  keywords: string[];
+  /** 사용자 ID (필터링 필수) */
+  user_id: string;
 
-  /** 키워드 상세 정보 (Retrieve용) - term과 score를 포함한 객체 배열의 JSON 문자열 */
-  keywordDetails?: string; 
-  
-  /** 대화 내 메시지 수 - features.json의 'num_messages' */
-  messageCount?: number;
-  
-  /** 생성 시각 (Timestamp or ISO) - features.json의 'create_time' */
-  createTime?: number | string;
-  
-  /** 갱신 시각 (Timestamp or ISO) - features.json의 'update_time' */
-  updateTime?: number | string;
+  /** 백엔드 DB의 Conversation UUID (User-facing ID) */
+  conversation_id: string;
+
+  /** features.json의 'orig_id' (conversation_id와 동일) */
+  orig_id: string;
+
+  /** 생성된 그래프 내부의 노드 ID (Integer) - features.json의 'id' */
+  node_id: number; // or string if needed
+
+  /** 클러스터 ID (e.g. "cluster_1") - from graph_final.json */
+  cluster_id: string;
+
+  /** 클러스터 이름 (e.g. "Python Dev") - from graph_final.json */
+  cluster_name: string;
+
+  /** 키워드 목록 문자열 (쉼표 구분, e.g. "python,fastapi") */
+  keywords: string;
+
+  /** 생성 시각 (Epoch or ISO) */
+  create_time: number | string;
+
+  /** 메시지 수 */
+  num_messages: number;
 
   /** 그 외 확장 필드 (Index signature for flexibility) */
   [key: string]: any;

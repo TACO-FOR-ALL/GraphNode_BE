@@ -20,7 +20,7 @@ export type Provider = 'google' | 'apple' | 'dev';
  * @property apiKeyDeepseek DeepSeek API Key(선택)
  */
 export interface UserProps {
-  /** 내부 사용자 식별자(AUTO_INCREMENT 정수) */
+  /** 내부 사용자 식별자(UUID) */
   id: string;
   /** 소셜 로그인 제공자 */
   provider: Provider;

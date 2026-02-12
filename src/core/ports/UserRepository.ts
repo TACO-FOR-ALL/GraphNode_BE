@@ -16,12 +16,12 @@ export interface UserRepository {
   /**
    * 사용자 ID로 단건 조회
    *
-   * @param id 내부 사용자 식별자 (AUTO_INCREMENT)
+   * @param id 내부 사용자 식별자 (UUID)
    * @returns User 객체 또는 null
    * @example
-   * const user = await repo.findById(1);
+   * const user = await repo.findById('uuid');
    */
-  findById(id: number): Promise<User | null>;
+  findById(id: string): Promise<User | null>;
 
   /**
    * 소셜 로그인 정보로 사용자 조회
@@ -79,7 +79,7 @@ import { ApiKeyModel } from '../../shared/dtos/me';
    * @param model ApiKeyModel
    * @returns API Key 또는 null
    */
-  findApiKeyById(id: number, model: ApiKeyModel): Promise<string | null>;
+  findApiKeyById(id: string, model: ApiKeyModel): Promise<string | null>;
 
   /**
    * 내부 사용자 식별자로 API Key 업데이트
@@ -88,7 +88,7 @@ import { ApiKeyModel } from '../../shared/dtos/me';
    * @param model ApiKeyModel
    * @param apiKey API Key
    */
-  updateApiKeyById(id: number, model: ApiKeyModel, apiKey: string): Promise<void>;
+  updateApiKeyById(id: string, model: ApiKeyModel, apiKey: string): Promise<void>;
 
   /**
    * 내부 사용자 식별자로 API Key 삭제
@@ -96,15 +96,15 @@ import { ApiKeyModel } from '../../shared/dtos/me';
    * @param id 내부 사용자 식별자
    * @param model ApiKeyModel
    */
-  deleteApiKeyById(id: number, model: ApiKeyModel): Promise<void>;
+  deleteApiKeyById(id: string, model: ApiKeyModel): Promise<void>;
 
   /**
    * 사용자의 OpenAI Assistant ID 조회
    */
-  getOpenAiAssistantId(id: number): Promise<string | null>;
+  getOpenAiAssistantId(id: string): Promise<string | null>;
 
   /**
    * 사용자의 OpenAI Assistant ID 업데이트
    */
-  updateOpenAiAssistantId(id: number, assistantId: string): Promise<void>;
+  updateOpenAiAssistantId(id: string, assistantId: string): Promise<void>;
 }

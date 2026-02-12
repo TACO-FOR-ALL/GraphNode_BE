@@ -210,7 +210,10 @@ export const openAI = {
         name: 'GraphNode User Assistant',
         instructions: 'You are a helpful assistant for the GraphNode application.',
         model: 'gpt-4o', // Default model
-        tools: [{ type: 'file_search' }], // Enable RAG by default
+        tools: [
+          { type: 'file_search' },
+          { type: 'code_interpreter' },
+        ], // Enable RAG and Code Interpreter by default
       });
       return { ok: true, data: { assistantId: assistant.id } };
     } catch (e) {
@@ -239,7 +242,7 @@ export const openAI = {
       
       const attachments = fileIds.map((fileId) => ({
         file_id: fileId,
-        tools: [{ type: 'file_search' as const }], // 기본적으로 file_search 활성화
+        // tools: [{ type: 'file_search' as const }], // REMOVED: Let the Assistant decide based on enabled tools
       }));
 
       const msg = await client.beta.threads.messages.create(threadId, {

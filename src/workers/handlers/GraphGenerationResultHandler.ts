@@ -8,6 +8,7 @@ import { mapAiOutputToSnapshot } from '../../shared/mappers/ai_graph_output.mapp
 import { PersistGraphPayloadDto } from '../../shared/dtos/graph';
 import { AiGraphOutputDto } from '../../shared/dtos/ai_graph_output';
 import { GraphFeaturesJsonDto } from '../../core/types/vector/graph-features';
+import { NotificationType } from '../notificationType';
 
 /**
  * 그래프 생성 결과 처리 핸들러
@@ -37,16 +38,16 @@ export class GraphGenerationResultHandler implements JobHandler {
         logger.warn({ taskId, userId, error: errorMsg }, 'Graph generation failed');
 
         // 실패 알림 전송(Redis Pub/Sub & FCM)
-        // await notiService.sendNotification(userId, 'GRAPH_GENERATION_FAILED', {
-        //   taskId,
-        //   error: errorMsg,
-        //   timestamp: new Date().toISOString(),
-        // });
+        await notiService.sendNotification(userId, NotificationType.GRAPH_GENERATION_FAILED, {
+          taskId,
+          error: errorMsg,
+          timestamp: new Date().toISOString(),
+        });
         await notiService.sendFcmPushNotification(
           userId,
           'Graph Generation Failed',
           'Failed to generate knowledge graph. Please try again.',
-          { type: 'GRAPH_GENERATION_FAILED', taskId, error: errorMsg }
+          { type: NotificationType.GRAPH_GENERATION_FAILED, taskId, error: errorMsg }
         );
         return;
       }
@@ -72,34 +73,76 @@ export class GraphGenerationResultHandler implements JobHandler {
 
 
 
-        // 3.5. Vector DB 저장 (Features)
+        // 3.5. Vector DB 저장 (Features + Cluster Info Merge)
         if (payload.featuresS3Key) {
           try {
-            const graphVectorService = container.getGraphVectorService(); // Use Service
+            const graphVectorService = container.getGraphVectorService();
+            
+            // features.json 다운로드 (Embeddings)
             const features = await storagePort.downloadJson<GraphFeaturesJsonDto>(payload.featuresS3Key);
-            await graphVectorService.saveGraphFeatures(userId, features);
-            logger.info({ taskId, userId }, 'Graph features persisted to Vector DB via Service');
-          } catch (featureErr) {
+            
+            // graph_final.json (Nodes with Cluster Info) - 이미 aiGraphOutput에 있음
+            // Mapping: orig_id -> Node Info
+            const nodeMap = new Map<string, typeof aiGraphOutput.nodes[0]>();
+            aiGraphOutput.nodes.forEach(node => {
+              nodeMap.set(node.orig_id, node);
+            });
 
+            // Merge & Transform to Vector Items
+            const vectorItems = features.conversations.map((conv, idx) => {
+              const vector = features.embeddings[idx];
+              const nodeInfo = nodeMap.get(conv.orig_id);
+
+              // 클러스터 정보가 없으면 기본값 or 'unknown'
+              const clusterId = nodeInfo?.cluster_id || 'unknown';
+              const clusterName = nodeInfo?.cluster_name || 'Unclustered';
+
+              // Keywords: Obj Array -> String (comma separated)
+              const keywordsStr = conv.keywords.map(k => k.term).join(',');
+
+              // Construct Metadata (Snake Case)
+              const metadata = {
+                user_id: userId,
+                conversation_id: conv.orig_id,
+                orig_id: conv.orig_id,
+                node_id: conv.id,
+                cluster_id: clusterId,
+                cluster_name: clusterName,
+                keywords: keywordsStr,
+                create_time: conv.create_time || 0,
+                num_messages: conv.num_messages,
+                update_time: conv.update_time || 0
+              };
+
+              return {
+                id: `${userId}_${conv.orig_id}`, // Composite ID for Vector DB
+                vector: vector,
+                payload: metadata // 'metadata' property in interface is mapped to 'payload' in VectorItem
+              };
+            });
+
+            await graphVectorService.saveGraphFeatures(userId, vectorItems);
+            logger.info({ taskId, userId, itemCount: vectorItems.length }, 'Graph features merged and persisted to Vector DB');
+          } catch (featureErr) {
             logger.error({ err: featureErr, taskId }, 'Failed to persist graph features (Non-fatal)');
-            throw featureErr;
+            // Vector DB 저장이 실패해도 DB 저장은 성공했으므로 전체 재시도는 하지 않음 (Non-fatal)
           }
         }
 
 
 
         // 4. 성공 알림 전송
-        // await notiService.sendNotification(userId, 'GRAPH_GENERATION_COMPLETED', {
-        //   taskId,
-        //   nodeCount: snapshot.nodes.length,
-        //   edgeCount: snapshot.edges.length,
-        //   timestamp: new Date().toISOString(),
-        // });
+        await notiService.sendNotification(userId, NotificationType.GRAPH_GENERATION_COMPLETED, {
+          taskId,
+          nodeCount: snapshot.nodes.length,
+          edgeCount: snapshot.edges.length,
+          timestamp: new Date().toISOString(),
+        });
         await notiService.sendFcmPushNotification(
           userId,
           'Graph Ready',
           `Your knowledge graph (${snapshot.nodes.length} nodes) is ready!`,
-          { type: 'GRAPH_GENERATION_COMPLETED', taskId }
+          { type: NotificationType.GRAPH_GENERATION_COMPLETED, taskId }
         );
       }
     } catch (err) {

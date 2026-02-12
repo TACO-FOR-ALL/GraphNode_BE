@@ -27,24 +27,34 @@ GraphNode는 대화형 AI와 지식 그래프를 결합한 차세대 지식 관�
 
 ## 📁 Project Structure
 
-```text
-.
-├── src/
-│   ├── app/            # Web Layer (Express): Routes, Controllers, Middlewares
-│   ├── core/           # Core Layer (Business Logic): Services, Domain Models, Ports
-│   ├── infra/          # Infra Layer (Adapters): DB (MySQL/Mongo), External APIs
-│   ├── shared/         # Shared: DTOs, Error types, Logger, Utils
-│   ├── workers/        # Worker: SQS Background Consumer Logic
-│   ├── bootstrap/      # Bootstrap: App Initialization & DI
-│   └── config/         # Config: Env Schema & Zod Validation
-├── docs/               # Documentation Hub
-│   ├── api/            # OpenAPI 3.1 Spec & Examples
-│   ├── architecture/   # System Design & Architecture Guides
-│   ├── guides/         # Developer Guides & Day-logs
-│   └── schemas/        # JSON Schema definitions
-├── ecs/                # AWS ECS Task Definitions (API & Worker)
-└── prisma/             # Prisma Schema & Migrations
-```
+src/
+├── app/                  # [Presentation Layer] HTTP 요청 처리
+│   ├── controllers/      #   - 요청 검증, 서비스 호출, 응답 반환
+│   ├── middlewares/      #   - 공통 로직 (인증, 로깅, 에러 핸들링)
+│   └── routes/           #   - URL 라우팅 정의
+│
+├── core/                 # [Business Layer] 핵심 비즈니스 로직
+│   ├── services/         #   - 도메인 로직, 트랜잭션 관리
+│   ├── ports/            #   - [Port] 외부 의존성에 대한 인터페이스 (DIP)
+│   ├── types/            #   - 도메인 모델, 인터페이스 정의
+│   └── usecases/         #   - (Optional) 애플리케이션 유스케이스
+│
+├── infra/                # [Infrastructure Layer] 외부 시스템 구현
+│   ├── aws/              #   - AWS SDK (S3, SQS 등)
+│   ├── db/               #   - DB 연결 및 설정 (Prisma, Mongoose)
+│   ├── repositories/     #   - Core Port의 구현체 (DB 접근)
+│   └── external/         #   - 외부 API 클라이언트 (Axios 등)
+│
+├── shared/               # [Shared Layer] 공통 유틸리티
+│   ├── dtos/             #   - Data Transfer Objects
+│   ├── errors/           #   - 커스텀 에러 클래스
+│   └── utils/            #   - 헬퍼 함수, 로거
+│
+├── workers/              # [Worker] 백그라운드 작업 (SQS Consumer)
+│   ├── handlers/         #   - 메시지 처리 핸들러
+│   └── index.ts          #   - 워커 엔트리포인트
+│
+└── config/               # [Config] 환경 변수 및 설정
 
 더 자세한 폴더별 역할은 **[프로젝트 구조 상세 문서](docs/PROJECT_STRUCTURE.md)**를 참고하세요.
 
@@ -137,8 +147,10 @@ infisical run --env=prod -- npm start
 
 - **API Reference**: [OpenAPI Spec (YAML)](docs/api/openapi.yaml) / Swagger UI / Redoc을 통한 인터랙티브 명세
 - **TypeDoc**: 소스 코드 레벨의 클래스/함수 레퍼런스
-- **Guides**: 일일 개발 일지 및 트러블슈팅 가이드
-- **Help**: [Troubleshooting](docs/guides/TROUBLESHOOTING.md) | [Contributing](CONTRIBUTING.md)
+- **Architecture**:
+  - [Project Structure](docs/PROJECT_STRUCTURE.md) | [Database](docs/architecture/DATABASE.md) | [Ports](docs/architecture/PORTS.md)
+  - [SQS Logic](docs/architecture/LOGIC_SQS.md) | [FCM Logic](docs/architecture/LOGIC_FCM.md) | [Workers](docs/architecture/WORKERS.md)
+  - [Security](docs/architecture/SECURITY.md) | [Observability](docs/architecture/OBSERVABILITY.md) | [Audit Logs](docs/architecture/AUDIT_LOGS.md)
 
 ---
 
