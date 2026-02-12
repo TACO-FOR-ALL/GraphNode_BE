@@ -8,6 +8,7 @@ import { mapAiOutputToSnapshot } from '../../shared/mappers/ai_graph_output.mapp
 import { PersistGraphPayloadDto } from '../../shared/dtos/graph';
 import { AiGraphOutputDto } from '../../shared/dtos/ai_graph_output';
 import { GraphFeaturesJsonDto } from '../../core/types/vector/graph-features';
+import { NotificationType } from '../notificationType';
 
 /**
  * 그래프 생성 결과 처리 핸들러
@@ -37,16 +38,16 @@ export class GraphGenerationResultHandler implements JobHandler {
         logger.warn({ taskId, userId, error: errorMsg }, 'Graph generation failed');
 
         // 실패 알림 전송(Redis Pub/Sub & FCM)
-        // await notiService.sendNotification(userId, 'GRAPH_GENERATION_FAILED', {
-        //   taskId,
-        //   error: errorMsg,
-        //   timestamp: new Date().toISOString(),
-        // });
+        await notiService.sendNotification(userId, NotificationType.GRAPH_GENERATION_FAILED, {
+          taskId,
+          error: errorMsg,
+          timestamp: new Date().toISOString(),
+        });
         await notiService.sendFcmPushNotification(
           userId,
           'Graph Generation Failed',
           'Failed to generate knowledge graph. Please try again.',
-          { type: 'GRAPH_GENERATION_FAILED', taskId, error: errorMsg }
+          { type: NotificationType.GRAPH_GENERATION_FAILED, taskId, error: errorMsg }
         );
         return;
       }
@@ -131,17 +132,17 @@ export class GraphGenerationResultHandler implements JobHandler {
 
 
         // 4. 성공 알림 전송
-        // await notiService.sendNotification(userId, 'GRAPH_GENERATION_COMPLETED', {
-        //   taskId,
-        //   nodeCount: snapshot.nodes.length,
-        //   edgeCount: snapshot.edges.length,
-        //   timestamp: new Date().toISOString(),
-        // });
+        await notiService.sendNotification(userId, NotificationType.GRAPH_GENERATION_COMPLETED, {
+          taskId,
+          nodeCount: snapshot.nodes.length,
+          edgeCount: snapshot.edges.length,
+          timestamp: new Date().toISOString(),
+        });
         await notiService.sendFcmPushNotification(
           userId,
           'Graph Ready',
           `Your knowledge graph (${snapshot.nodes.length} nodes) is ready!`,
-          { type: 'GRAPH_GENERATION_COMPLETED', taskId }
+          { type: NotificationType.GRAPH_GENERATION_COMPLETED, taskId }
         );
       }
     } catch (err) {

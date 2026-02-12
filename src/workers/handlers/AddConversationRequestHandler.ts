@@ -3,6 +3,7 @@ import { Container } from '../../bootstrap/container';
 import { AddConversationRequestPayload } from '../../shared/dtos/queue';
 import { logger } from '../../shared/utils/logger';
 import { HttpClient } from '../../infra/http/httpClient';
+import { NotificationType } from '../notificationType';
 
 const AI_SERVER_URI = process.env.AI_SERVER_URI || 'http://localhost:8000';
 
@@ -126,7 +127,7 @@ export class AddConversationRequestHandler implements JobHandler {
       logger.info({ taskId, userId, conversationId }, 'Conversation added to graph successfully');
 
       // 4. 성공 알림 전송
-      await notiService.sendNotification(userId, 'ADD_CONVERSATION_COMPLETED', {
+      await notiService.sendNotification(userId, NotificationType.ADD_CONVERSATION_COMPLETED, {
         taskId,
         conversationId,
         nodeCount: aiResult.nodes.length,
@@ -134,18 +135,35 @@ export class AddConversationRequestHandler implements JobHandler {
         assignedCluster: aiResult.assignedCluster,
         timestamp: new Date().toISOString(),
       });
+      await notiService.sendFcmPushNotification(
+        userId,
+        'Conversation Added',
+        'Your conversation is added to graph',
+        {
+          taskId,
+          status: 'COMPLETED',
+        }
+      );
 
     } catch (err) {
       logger.error({ err, taskId, userId, conversationId }, 'Failed to add conversation to graph');
 
       // 실패 알림 전송
-      await notiService.sendNotification(userId, 'ADD_CONVERSATION_FAILED', {
+      await notiService.sendNotification(userId, NotificationType.ADD_CONVERSATION_FAILED, {
         taskId,
         conversationId,
         error: err instanceof Error ? err.message : String(err),
         timestamp: new Date().toISOString(),
       });
-
+      await notiService.sendFcmPushNotification(
+        userId,
+        'Conversation Added Failed',
+        'Your conversation is failed to add to graph',
+        {
+          taskId,
+          status: 'FAILED',
+        }
+      );
       throw err;
     }
   }

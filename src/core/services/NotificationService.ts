@@ -182,12 +182,12 @@ export class NotificationService {
 
     try {
       await this.eventBus.subscribe(channel, (message) => {
-        //logger.debug({ userId, channel }, 'Notification received from bus');
+        logger.debug({ userId, channel }, 'Notification received from bus');
         onMessage(message);
       });
-      //logger.info({ userId, channel }, 'Subscribed to user notifications');
+      logger.info({ userId, channel }, 'Subscribed to user notifications');
     } catch (error) {
-      //logger.error({ err: error, userId }, 'Failed to subscribe to user notifications');
+      logger.error({ err: error, userId }, 'Failed to subscribe to user notifications');
       throw error;
     }
   }
@@ -203,7 +203,7 @@ export class NotificationService {
 
     try {
       await this.eventBus.unsubscribe(channel);
-      //logger.info({ userId, channel }, 'Unsubscribed from user notifications');
+      logger.info({ userId, channel }, 'Unsubscribed from user notifications');
     } catch (error) {
       logger.error({ err: error, userId }, 'Failed to unsubscribe from user notifications');
       throw error;

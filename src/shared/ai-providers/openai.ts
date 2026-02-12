@@ -210,7 +210,10 @@ export const openAI = {
         name: 'GraphNode User Assistant',
         instructions: 'You are a helpful assistant for the GraphNode application.',
         model: 'gpt-4o', // Default model
-        tools: [{ type: 'file_search' }], // Enable RAG by default
+        tools: [
+          { type: 'file_search' },
+          { type: 'code_interpreter' },
+        ], // Enable RAG and Code Interpreter by default
       });
       return { ok: true, data: { assistantId: assistant.id } };
     } catch (e) {
