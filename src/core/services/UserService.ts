@@ -20,21 +20,21 @@ export class UserService {
   constructor(private readonly userRepository: UserRepository) {}
 
   /**
+  /**
    * 사용자 ID로 프로필 정보를 조회합니다.
-   * @param userId 조회할 사용자의 ID (문자열)
+   * @param userId 조회할 사용자의 ID (문자열 UUID)
    * @returns 사용자 프로필 DTO
-   * @throws {ValidationError} userId가 유효한 숫자 형태가 아닐 경우
+   * @throws {ValidationError} userId가 유효하지 않을 경우
    * @throws {NotFoundError} 사용자를 찾지 못한 경우
    * @throws {UpstreamError} 처리 중 예기치 않은 오류 발생 시
    */
   async getUserProfile(userId: string): Promise<UserProfileDto> {
     try {
-      if (!userId || !/^\d+$/.test(userId)) {
-        throw new ValidationError('User ID must be a valid number string.');
+      if (!userId || typeof userId !== 'string') {
+        throw new ValidationError('User ID must be a valid string.');
       }
-      const numericUserId = parseInt(userId, 10);
 
-      const user: User | null = await this.userRepository.findById(numericUserId);
+      const user: User | null = await this.userRepository.findById(userId);
 
       if (!user) {
         throw new NotFoundError(`User with id ${userId} not found`);
@@ -67,12 +67,11 @@ export class UserService {
    */
   async getApiKeys(userId: string, model: ApiKeyModel): Promise<ApiKeysResponseDto> {
     try {
-      // if (!userId || !/^\d+$/.test(userId)) {
-      //   throw new ValidationError('User ID must be a valid number string.');
-      // }
-      const numericUserId = parseInt(userId, 10);
+      if (!userId || typeof userId !== 'string') {
+         throw new ValidationError('User ID must be a valid string.');
+      }
 
-      const user: User | null = await this.userRepository.findById(numericUserId);
+      const user: User | null = await this.userRepository.findById(userId);
 
       if (!user) {
         throw new NotFoundError(`User with id ${userId} not found`);
@@ -110,8 +109,8 @@ export class UserService {
   async updateApiKey(userId: string, model: ApiKeyModel, apiKey: string): Promise<void> {
     try {
       // 입력 검증
-      if (!userId || !/^\d+$/.test(userId)) {
-        throw new ValidationError('User ID must be a valid number string.');
+      if (!userId || typeof userId !== 'string') {
+        throw new ValidationError('User ID must be a valid string.');
       }
 
       // 1. 모델 검증
@@ -140,15 +139,13 @@ export class UserService {
         }
       }
 
-      const numericUserId = parseInt(userId, 10);
-
       // 사용자 존재 확인
-      const user: User | null = await this.userRepository.findById(numericUserId);
+      const user: User | null = await this.userRepository.findById(userId);
       if (!user) {
         throw new NotFoundError(`User with id ${userId} not found`);
       }
 
-      await this.userRepository.updateApiKeyById(numericUserId, model, apiKey.trim());
+      await this.userRepository.updateApiKeyById(userId, model, apiKey.trim());
     } catch (err: unknown) {
       const e: any = err;
       if (e && typeof e.code === 'string') {
@@ -167,23 +164,21 @@ export class UserService {
    */
   async deleteApiKey(userId: string, model: ApiKeyModel): Promise<void> {
     try {
-      if (!userId || !/^\d+$/.test(userId)) {
-        throw new ValidationError('User ID must be a valid number string.');
+      if (!userId || typeof userId !== 'string') {
+        throw new ValidationError('User ID must be a valid string.');
       }
       const allowedModels: ApiKeyModel[] = ['openai', 'deepseek', 'claude', 'gemini'];
       if (!allowedModels.includes(model)) {
         throw new ValidationError('Invalid model provided.');
       }
 
-      const numericUserId = parseInt(userId, 10);
-
       // 사용자 존재 확인
-      const user: User | null = await this.userRepository.findById(numericUserId);
+      const user: User | null = await this.userRepository.findById(userId);
       if (!user) {
         throw new NotFoundError(`User with id ${userId} not found`);
       }
 
-      await this.userRepository.deleteApiKeyById(numericUserId, model);
+      await this.userRepository.deleteApiKeyById(userId, model);
     } catch (err: unknown) {
       const e: any = err;
       if (e && typeof e.code === 'string') {
@@ -197,15 +192,13 @@ export class UserService {
    * OpenAI Assistant ID 조회
    */
   async getOpenAiAssistantId(userId: string): Promise<string | null> {
-    const numericUserId = parseInt(userId, 10);
-    return this.userRepository.getOpenAiAssistantId(numericUserId);
+    return this.userRepository.getOpenAiAssistantId(userId);
   }
 
   /**
    * OpenAI Assistant ID 업데이트
    */
   async updateOpenAiAssistantId(userId: string, assistantId: string): Promise<void> {
-    const numericUserId = parseInt(userId, 10);
-    await this.userRepository.updateOpenAiAssistantId(numericUserId, assistantId);
+    await this.userRepository.updateOpenAiAssistantId(userId, assistantId);
   }
 }

@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 import { bindSessionUser } from '../middlewares/session';
 import { requireLogin } from '../middlewares/auth';
 import { getUserIdFromRequest } from '../utils/request';
+import { ApiKeyModel } from '../../shared/dtos/me';
 
 type Mode = 'chat' | 'summary' | 'note';
 type ModeHint = 'summary' | 'note' | 'auto';
@@ -26,7 +27,7 @@ type ChatStreamRequestBody = {
  * - 기능은 기존 `agent.test.ts`의 /chat/stream SSE 로직만 사용한다.
  */
 export function createAgentRouter(userRepository: {
-  findApiKeyById(userId: number, provider: string): Promise<string | null>;
+  findApiKeyById(userId: string, provider: ApiKeyModel): Promise<string | null>;
 }): Router {
   const router = Router();
 
@@ -74,7 +75,7 @@ export function createAgentRouter(userRepository: {
     }
 
     // 사용자 API 키 조회
-    const userId = Number(getUserIdFromRequest(req));
+    const userId = getUserIdFromRequest(req);
     const userApiKey = await userRepository.findApiKeyById(userId, 'openai');
 
     // API 키 검증
