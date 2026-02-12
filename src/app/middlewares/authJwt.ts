@@ -14,6 +14,7 @@ const env = loadEnv();
  * - 만료 시 Refresh Token으로 갱신 시도
  * - 실패 시 401 AuthError
  */
+// Verified compatibility of authJwt.ts with string IDs
 export async function authJwt(req: Request, res: Response, next: NextFunction) {
   try {
     // 1. Access Token 추출
