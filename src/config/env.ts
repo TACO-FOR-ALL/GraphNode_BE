@@ -80,7 +80,7 @@ const EnvSchema = z.object({
 
   //FIREBASE Notification 설정
   FIREBASE_CREDENTIALS_JSON : z.string().min(1, 'FIREBASE_CREDENTIALS_JSON required'),
-  FIREBASE_VAPID_VALUE : z.string().min(1, 'FIREBASE_VAPID_VALUE required'),
+  //FIREBASE_VAPID_VALUE : z.string().min(1, 'FIREBASE_VAPID_VALUE required'),
 
   // 쿠키 보안 설정 (개발 환경에서 HTTPS가 아닐 때 사용)
   DEV_INSECURE_COOKIES: z
