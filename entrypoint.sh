@@ -10,5 +10,9 @@ else
   echo "DATABASE_URL not set, skipping DB push."
 fi
 
+# Generate Prisma Client to ensure it matches the current schema
+echo "Regenerating Prisma Client..."
+npx prisma generate
+
 # Start the application
 exec "$@"
