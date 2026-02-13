@@ -25,7 +25,8 @@ RUN npm ci && npm cache clean --force
 # Prisma Schema 복사
 COPY prisma ./prisma
 
-# Prisma Client 생성 (런타임 전에 미리 생성)
+# Prisma Client 생성 (런타임 전에 미리 생성) 
+# 아 Github Action 설정 못봣어
 RUN npx prisma generate
 
 # 빌드 산출물 복사
