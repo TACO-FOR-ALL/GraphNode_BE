@@ -1,6 +1,7 @@
 import { RequestBuilder, type HttpResponse } from '../http-builder.js';
 import type { ApiKeyModel } from '../types/me.js';
 import type { MessageDto } from '../types/message.js';
+import { AiStreamEvent } from '../types/ai-event.js';
 
 /**
  * AI 채팅 요청 DTO
@@ -51,7 +52,7 @@ export class AiApi {
    * @param conversationId - 대화 ID
    * @param dto - 채팅 요청 데이터
    * @param files - (선택) 업로드할 파일 리스트
-   * @param onStream - (선택) 스트림 청크 수신 콜백
+   * @param onStream - (선택) 스트림 청크 수신 콜백 (AiStreamEvent.CHUNK 이벤트의 text 값)
    */
   async chat(
     conversationId: string,
@@ -136,11 +137,11 @@ export class AiApi {
             try {
               const parsed = JSON.parse(dataStr);
               
-              if (eventName === 'chunk') {
+              if (eventName === AiStreamEvent.CHUNK) {
                 if (onStream) onStream(parsed.text);
-              } else if (eventName === 'result') {
+              } else if (eventName === AiStreamEvent.RESULT) {
                 finalResult = parsed;
-              } else if (eventName === 'error') {
+              } else if (eventName === AiStreamEvent.ERROR) {
                 finalError = parsed.message;
               }
             } catch {
@@ -184,11 +185,21 @@ export class AiApi {
   }
 
   /**
-   * AI 채팅 스트림을 엽니다.
-   * @param conversationId
-   * @param dto
-   * @param onEvent
-   * @param options
+   * AI 채팅 스트림을 엽니다. (Low-level SSE 제어용)
+   * 
+   * @remarks
+   * 이 메서드는 SSE 이벤트를 직접 제어할 수 있는 저수준 API입니다.
+   * `AiStreamEvent` enum을 사용하여 이벤트 타입을 구분할 수 있습니다.
+   * - `AiStreamEvent.CHUNK` ('chunk'): 텍스트 스트림 조각 ({ text: string })
+   * - `AiStreamEvent.RESULT` ('result'): 최종 응답 DTO ({ messages: MessageDto[], ... })
+   * - `AiStreamEvent.ERROR` ('error'): 에러 발생 ({ message: string })
+   * 
+   * @param conversationId 대화 ID
+   * @param dto 채팅 요청 데이터
+   * @param files 업로드할 파일 리스트
+   * @param onEvent SSE 이벤트 수신 콜백 ({ event: string, data: any })
+   * @param options 추가 옵션 (AbortSignal 등)
+   * @returns 스트림 중단(abort) 함수
    */
   async chatStream(
     conversationId: string,
@@ -272,7 +283,7 @@ export class AiApi {
         }
       })();
     } catch (e) {
-      onEvent({ event: 'error', data: { message: String(e) } });
+      onEvent({ event: AiStreamEvent.ERROR, data: { message: String(e) } });
     }
 
     return () => controller.abort();

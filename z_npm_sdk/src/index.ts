@@ -50,6 +50,7 @@ export type {
 } from './endpoints/agent.js';
 export { openAgentChatStream } from './endpoints/agent.js';
 export type { AIChatRequestDto, AIChatResponseDto } from './endpoints/ai.js';
+export { AiStreamEvent } from './types/ai-event.js';
 export type { GraphGenerationResponseDto } from './types/graphAi.js';
 export type {
   AiInputData,

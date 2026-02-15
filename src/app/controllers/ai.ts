@@ -28,6 +28,7 @@ import { AiInteractionService } from '../../core/services/AiInteractionService';
 import { ChatThread, ChatMessage, AIChatResponseDto } from '../../shared/dtos/ai';
 import { AIchatType } from '../../shared/ai-providers/AIchatType';
 import { ValidationError } from '../../shared/errors/domain';
+import { AiStreamEvent } from '../../shared/ai-providers/AiStreamEvent';
 
 /**
  * AiController 클래스
@@ -82,6 +83,9 @@ export class AiController {
       res.setHeader('Connection', 'keep-alive');
       res.flushHeaders(); // <-- 제거: 에러 발생 시 HTTP 상태 코드 변경이 불가능해짐
 
+      // Import는 파일 상단으로 이동해야 하지만, 로컬 스코프에서 사용 가능한지 확인.
+      // TypeScript에서는 import를 최상단에 두는 것이 원칙이므로 최상단으로 옮김.
+      
       const sendEvent = (event: string, data: unknown) => {
         // 혹시라도 헤더가 아직 전송되지 않았다면(첫 데이터) 이때 전송됨
         res.write(`event: ${event}\n`);
@@ -96,12 +100,12 @@ export class AiController {
           files,
           (chunk) => {
             // 청크 전송 시 (실제 스트림 시작 후)
-            sendEvent('chunk', { text: chunk });
+            sendEvent(AiStreamEvent.CHUNK, { text: chunk });
           }
         );
 
-        sendEvent('status', { phase: 'done' });
-        sendEvent('result', result);
+        sendEvent(AiStreamEvent.STATUS, { phase: 'done' });
+        sendEvent(AiStreamEvent.RESULT, result);
         res.end();
       } catch (err) {
         // 아직 헤더가 전송되지 않았다면(스트림 시작 전 에러), 일반 JSON 에러 응답을 보낼 수 있음
@@ -113,7 +117,7 @@ export class AiController {
 
         // 이미 스트림이 시작된 후 에러 발생 시: SSE 에러 이벤트 전송 후 종료
         const message = err instanceof Error ? err.message : String(err);
-        sendEvent('error', { message });
+        sendEvent(AiStreamEvent.ERROR, { message });
         res.end();
       }
     } else {
