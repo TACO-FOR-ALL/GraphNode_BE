@@ -1,7 +1,8 @@
-// services/openai.ts
 import OpenAI from 'openai';
 
 import { ChatMessageRequest } from './ChatMessageRequest';
+import { logger } from '../../shared/utils/logger'; // Logger import added
+
 export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 
 /**
@@ -30,12 +31,16 @@ export const openAI = {
    * @returns 검사 결과 (성공 시 true, 실패 시 오류 메시지)
    */
   async checkAPIKeyValid(apiKey: string): Promise<Result<true>> {
+    logger.info({ apiKey: '***' }, 'openAI.checkAPIKeyValid called');
     const client = new OpenAI({ apiKey });
     try {
       await client.models.retrieve('gpt-4o-mini', { timeout: 3000 });
+      logger.info('openAI.checkAPIKeyValid succeeded');
       return { ok: true, data: true };
     } catch (e) {
-      return { ok: false, error: normalizeError(e) };
+      const errorMsg = normalizeError(e);
+      logger.error({ err: e, errorMsg }, 'openAI.checkAPIKeyValid failed');
+      return { ok: false, error: errorMsg };
     }
   }, //api 키 검사 있으면 정상적으로 통과 api 키에 오류가 있으면 오류 함수로 이동, async는 시간이 걸리는 작업
 
@@ -48,6 +53,7 @@ export const openAI = {
    * @returns 요청 결과
    */
   async requestWithoutStream(apiKey: string, model: string, messages: ChatMessageRequest[]) {
+    logger.info({ model, messageCount: messages.length }, 'openAI.requestWithoutStream called');
     try {
       const client = new OpenAI({ apiKey: apiKey });
       const p = await client.chat.completions.create({
@@ -55,9 +61,12 @@ export const openAI = {
         messages: messages as any, // Type casting to bypass union mismatch
       });
       //console.log('request', p);
+      logger.info('openAI.requestWithoutStream succeeded');
       return { ok: true, data: p } as Result<typeof p>;
     } catch (e) {
-      return { ok: false, error: normalizeError(e) } as Result<never>;
+      const errorMsg = normalizeError(e);
+      logger.error({ err: e, errorMsg }, 'openAI.requestWithoutStream failed');
+      return { ok: false, error: errorMsg } as Result<never>;
     }
   },
 
@@ -70,6 +79,7 @@ export const openAI = {
    * @returns 요청 결과
    */
   async request(apiKey: string, stream: boolean, model: string, messages: ChatMessageRequest[]) {
+    logger.info({ model, stream, messageCount: messages.length }, 'openAI.request called');
     try {
       const client = new OpenAI({ apiKey: apiKey });
       const p = await client.chat.completions.create({
@@ -78,8 +88,11 @@ export const openAI = {
         stream,
       });
       //console.log('request', p);
+      logger.info('openAI.request succeeded');
       return { ok: true, data: p } as Result<typeof p>;
     } catch (e) {
+      const errorMsg = normalizeError(e);
+      logger.error({ err: e, errorMsg }, 'openAI.request failed');
       return { ok: false, error: normalizeError(e) } as Result<never>;
     }
   },
@@ -92,6 +105,7 @@ export const openAI = {
     model: string,
     messages: ChatMessageRequest[]
   ): Promise<Result<AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>>> {
+    logger.info({ model, messageCount: messages.length }, 'openAI.requestStream called');
     try {
       const client = new OpenAI({ apiKey: apiKey });
       const stream = await client.chat.completions.create({
@@ -99,8 +113,11 @@ export const openAI = {
         messages: messages as any,
         stream: true,
       });
+      logger.info('openAI.requestStream succeeded');
       return { ok: true, data: stream };
     } catch (e) {
+      const errorMsg = normalizeError(e);
+      logger.error({ err: e, errorMsg }, 'openAI.requestStream failed');
       return { ok: false, error: normalizeError(e) };
     }
   },
@@ -117,6 +134,7 @@ export const openAI = {
     firstUserMessage: string,
     opts?: { timeoutMs?: number }
   ): Promise<Result<string>> {
+    logger.info({ msgLength: firstUserMessage.length }, 'openAI.requestGenerateThreadTitle called');
     try {
       const client = new OpenAI({ apiKey: apiKey });
       const p = await client.chat.completions.create({
@@ -140,13 +158,19 @@ export const openAI = {
       try {
         const { title } = JSON.parse(text);
         const t = (title as string)?.trim();
-        if (t) return { ok: true, data: t };
+        if (t) {
+            logger.info({ title: t }, 'openAI.requestGenerateThreadTitle succeeded');
+            return { ok: true, data: t };
+        }
       } catch {
         /* fallback */
       }
       const fallback = firstUserMessage.slice(0, 15) + (firstUserMessage.length > 15 ? '…' : '');
+      logger.info({ fallback }, 'openAI.requestGenerateThreadTitle fallback used');
       return { ok: true, data: fallback };
     } catch (e) {
+      const errorMsg = normalizeError(e);
+      logger.error({ err: e, errorMsg }, 'openAI.requestGenerateThreadTitle failed');
       return { ok: false, error: normalizeError(e) };
     }
   },
@@ -165,6 +189,7 @@ export const openAI = {
     file: { buffer: Buffer; filename: string; mimetype: string },
     purpose: 'assistants' | 'vision' = 'assistants'
   ): Promise<Result<{ fileId: string }>> {
+    logger.info({ filename: file.filename, mimetype: file.mimetype, purpose }, 'openAI.uploadFile called');
     try {
       const client = new OpenAI({ apiKey });
       // OpenAI expects a File object or ReadStream.
@@ -177,8 +202,11 @@ export const openAI = {
         file: fileObj,
         purpose: purpose,
       });
+      logger.info({ fileId: response.id }, 'openAI.uploadFile succeeded');
       return { ok: true, data: { fileId: response.id } };
     } catch (e) {
+      const errorMsg = normalizeError(e);
+      logger.error({ err: e, errorMsg }, 'openAI.uploadFile failed');
       return { ok: false, error: normalizeError(e) };
     }
   },
@@ -189,11 +217,15 @@ export const openAI = {
    * @returns 
    */
   async createThread(apiKey: string): Promise<Result<{ threadId: string }>> {
+    logger.info('openAI.createThread called');
     try {
       const client = new OpenAI({ apiKey });
       const thread = await client.beta.threads.create();
+      logger.info({ threadId: thread.id }, 'openAI.createThread succeeded');
       return { ok: true, data: { threadId: thread.id } };
     } catch (e) {
+      const errorMsg = normalizeError(e);
+      logger.error({ err: e, errorMsg }, 'openAI.createThread failed');
       return { ok: false, error: normalizeError(e) };
     }
   },
@@ -204,6 +236,7 @@ export const openAI = {
    * @returns 
    */
   async createAssistant(apiKey: string): Promise<Result<{ assistantId: string }>> {
+    logger.info('openAI.createAssistant called');
     try {
       const client = new OpenAI({ apiKey });
       const assistant = await client.beta.assistants.create({
@@ -215,8 +248,11 @@ export const openAI = {
           { type: 'code_interpreter' },
         ], // Enable RAG and Code Interpreter by default
       });
+      logger.info({ assistantId: assistant.id }, 'openAI.createAssistant succeeded');
       return { ok: true, data: { assistantId: assistant.id } };
     } catch (e) {
+      const errorMsg = normalizeError(e);
+      logger.error({ err: e, errorMsg }, 'openAI.createAssistant failed');
       return { ok: false, error: normalizeError(e) };
     }
   },
@@ -237,6 +273,7 @@ export const openAI = {
     content: string | Array<any>,
     fileIds: string[] = []
   ): Promise<Result<any>> {
+    logger.info({ threadId, role, fileCount: fileIds.length }, 'openAI.addMessage called');
     try {
       const client = new OpenAI({ apiKey });
       
@@ -250,8 +287,11 @@ export const openAI = {
         content: content,
         attachments: attachments.length > 0 ? attachments : undefined,
       });
+      logger.info({ msgId: msg.id }, 'openAI.addMessage succeeded');
       return { ok: true, data: msg };
     } catch (e) {
+      const errorMsg = normalizeError(e);
+      logger.error({ err: e, errorMsg }, 'openAI.addMessage failed');
       return { ok: false, error: normalizeError(e) };
     }
   },
@@ -268,14 +308,18 @@ export const openAI = {
     assistantId: string,
     threadId: string
   ): Promise<Result<AsyncIterable<any>>> {
+    logger.info({ assistantId, threadId }, 'openAI.runAssistantStream called');
     try {
       const client = new OpenAI({ apiKey });
       const stream = await client.beta.threads.runs.create(threadId, {
         assistant_id: assistantId,
         stream: true,
       });
+      logger.info('openAI.runAssistantStream succeeded (stream started)');
       return { ok: true, data: stream };
     } catch (e) {
+      const errorMsg = normalizeError(e);
+      logger.error({ err: e, errorMsg }, 'openAI.runAssistantStream failed');
       return { ok: false, error: normalizeError(e) };
     }
   },

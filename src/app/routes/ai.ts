@@ -75,6 +75,13 @@ export function createAiRouter(deps: {
   router.post(
     '/conversations/:conversationId/chat',
     upload.array('files'),
+    (req, res, next) => {
+      console.log('🔍 [DEBUG] MiddleWare Check:');
+      console.log(' - Headers Content-Type:', req.headers['content-type']);
+      console.log(' - Req.files length:', Array.isArray(req.files) ? req.files.length : 'undefined');
+      console.log(' - Req.body keys:', Object.keys(req.body));
+      next();
+    },
     asyncHandler(aiController.handleAIChat.bind(aiController))
   );
 
