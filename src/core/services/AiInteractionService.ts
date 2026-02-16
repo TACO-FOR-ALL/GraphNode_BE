@@ -239,8 +239,9 @@ export class AiInteractionService {
 
                 if (uploadRes.ok) {
                     contentParts.push({
-                        type: 'image_file',
-                        image_file: { file_id: uploadRes.data.fileId }
+                        type: 'input_image', 
+                        file_id: uploadRes.data.fileId,
+                        detail: 'auto'
                     });
                 } else {
                      throw new UpstreamError(`Image upload to OpenAI failed: ${uploadRes.error}`);
@@ -274,29 +275,28 @@ export class AiInteractionService {
     
     // Tools 및 Tool Resources 구성 (통합 처리)
     const tools: any[] = [];
-    const tool_resources: any = {};
+    // const tool_resources: any = {}; // Response API does not use tool_resources top-level
 
     if (fileIdsForTools.length > 0) {
         // 모든 파일을 두 도구 모두에 할당 (Universal approach)
-        // 1. File Search (RAG)
-        tools.push({ type: 'file_search' });
+        // 1. File Search (RAG) - Currently Disabled as vector_store creation is separate
+        // tools.push({ type: 'file_search' });
         
         // 2. Code Interpreter (Data Analysis)
-        tools.push({ type: 'code_interpreter' });
-
-        tool_resources.file_search = {
-            vector_stores: [{ file_ids: fileIdsForTools }]
-        };
-        tool_resources.code_interpreter = {
-             file_ids: fileIdsForTools
-        };
+        tools.push({ 
+            type: 'code_interpreter',
+            container: {
+                type: 'auto',
+                file_ids: fileIdsForTools
+            }
+        });
     }
 
     const res = await provider.createResponse(apiKey, {
         model: 'gpt-4o',
         input: [inputMessage],
         tools: tools.length > 0 ? tools : undefined,
-        tool_resources: Object.keys(tool_resources).length > 0 ? tool_resources : undefined,
+        // tool_resources not supported in Responses API top-level
         previous_response_id: lastResponseId
     });
 
@@ -309,14 +309,20 @@ export class AiInteractionService {
 
     for await (const chunk of res.data) {
         // OpenAI Responses API Stream Events check
-        const eventType = (chunk as any).event; // e.g., 'response.text.delta'
+        const eventType = (chunk as any).type; // Note: SDK uses 'type', not 'event' for discriminators usually, but wire format might differ. 
+                                               // SDK types say 'type': 'response.output_text.delta'. checking both just in case or type casting.
+                                               // Actually, let's use the property 'type' as seen in the d.ts definition.
         
+        // Debugging log to be sure about event structure in production/dev
+        // logger.debug({ eventType, chunkKeys: Object.keys(chunk) }, 'Stream Chunk Received');
+
         if (eventType === 'response.created') {
              newResponseId = (chunk as any).response?.id;
         }
         
-        if (eventType === 'response.text.delta') {
-             const delta = (chunk as any).delta?.value; // or content field?
+        // Correct Event Type: 'response.output_text.delta'
+        if (eventType === 'response.output_text.delta') {
+             const delta = (chunk as any).delta; // delta is string, not object
              if (delta) {
                  aiContent += delta;
                  onStream?.(delta);
@@ -328,14 +334,8 @@ export class AiInteractionService {
             if (finalId) newResponseId = finalId;
         }
 
-        // Fallback for ChatCompletion-like chunks
-        if (!eventType && (chunk as any).choices) {
-            const delta = (chunk as any).choices[0]?.delta?.content;
-            if (delta) {
-                 aiContent += delta;
-                 onStream?.(delta);
-             }
-        }
+        // Fallback or other event types (e.g. output_item.done for tools, etc.)
+        // For now, focusing on text delta.
     }
 
     // 4. 마지막 Response ID 저장 (Context Chaining)
