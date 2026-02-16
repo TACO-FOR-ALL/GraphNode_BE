@@ -219,9 +219,9 @@ export class AiInteractionService {
   ): Promise<string> {
     let aiContent = '';
 
-    // 1. 입력 컨텐츠 구성 (Text + Images)
+    // 1. 입력 컨텐츠 구성 (Text)
     const contentParts: any[] = [
-        { type: 'text', text: chatbody.chatContent }
+        { type: 'input_text', text: chatbody.chatContent }
     ];
 
     const fileIdsForTools: string[] = [];
