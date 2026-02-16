@@ -46,6 +46,8 @@ export interface UserProps {
   apiKeyGemini?: string | null;
   /** OpenAI Assistant ID(선택) */
   openaiAssistantId?: string | null;
+  /** 선호 언어(ISO 639-1) */
+  preferredLanguage?: string;
 }
 
 /**
@@ -105,6 +107,10 @@ export class User {
   get openaiAssistantId() {
     return this.props.openaiAssistantId ?? undefined;
   }
+  /** 선호 언어(기본 en) */
+  get preferredLanguage() {
+    return this.props.preferredLanguage ?? 'en';
+  }
   /**
    * 사용자 프로필 뷰로 매핑
    * @returns 사용자 프로필(컨트롤러/프레젠터에서 직렬화 용)
@@ -118,6 +124,7 @@ export class User {
       userId: this.props.id,
       displayName: this.props.displayName ?? undefined,
       avatarUrl: this.props.avatarUrl ?? undefined,
+      preferredLanguage: this.props.preferredLanguage ?? 'en',
     };
   }
 }

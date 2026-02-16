@@ -48,6 +48,22 @@ export interface IAiProvider {
     opts?: { timeoutMs?: number }
   ): Promise<Result<string>>;
 
+  /**
+   * Responses API 요청 (OpenAI Responses)
+   * @param apiKey API Key
+   * @param params 요청 파라미터 (model, input, tools, previous_response_id 등)
+   */
+  createResponse(
+    apiKey: string,
+    params: {
+      model: string;
+      input: any[];
+      tools?: any[];
+      tool_resources?: any;
+      previous_response_id?: string;
+    }
+  ): Promise<Result<AsyncIterable<any>>>;
+
   // --- Assistants API (Stateful) & File Search ---
 
   /**
@@ -56,21 +72,24 @@ export interface IAiProvider {
   uploadFile(
     apiKey: string,
     file: { buffer: Buffer; filename: string; mimetype: string },
-    purpose?: 'assistants' | 'vision'
+    purpose?: 'assistants' | 'vision' | 'responses'
   ): Promise<Result<{ fileId: string }>>;
 
   /**
    * 스레드 생성
+   * @deprecated Responses API does not use explicit threads.
    */
   createThread(apiKey: string): Promise<Result<{ threadId: string }>>;
 
   /**
    * Assistant 생성
+   * @deprecated Responses API does not use explicit assistants.
    */
   createAssistant(apiKey: string): Promise<Result<{ assistantId: string }>>;
 
   /**
    * 스레드에 메시지 추가
+   * @deprecated Responses API handles messages in input array.
    */
   addMessage(
     apiKey: string,
@@ -82,6 +101,7 @@ export interface IAiProvider {
 
   /**
    * Assistant 실행 및 스트리밍
+   * @deprecated Responses API uses createResponse.
    */
   runAssistantStream(
     apiKey: string,

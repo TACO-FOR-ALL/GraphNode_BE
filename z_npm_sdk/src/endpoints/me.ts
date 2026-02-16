@@ -1,5 +1,11 @@
 import { RequestBuilder, type HttpResponse } from '../http-builder.js';
-import type { MeResponseDto, ApiKeysResponseDto, ApiKeyModel } from '../types/me.js';
+import type {
+  MeResponseDto,
+  ApiKeysResponseDto,
+  ApiKeyModel,
+  OpenAiAssistantIdResponseDto,
+  PreferredLanguageResponseDto,
+} from '../types/me.js';
 
 /**
  * Me API (User Profile & Settings)
@@ -93,5 +99,60 @@ export class MeApi {
    */
   deleteApiKey(model: ApiKeyModel): Promise<HttpResponse<void>> {
     return this.rb.path(`/v1/me/api-keys/${model}`).delete<void>();
+  }
+
+  /**
+   * OpenAI Assistant ID를 조회합니다.
+   * @returns assistantId (없으면 null)
+   */
+  getOpenAiAssistantId(): Promise<HttpResponse<OpenAiAssistantIdResponseDto>> {
+    return this.rb.path('/v1/me/openai-assistant-id').get<OpenAiAssistantIdResponseDto>();
+  }
+
+  /**
+   * OpenAI Assistant ID를 설정/업데이트합니다.
+   * @param assistantId 설정할 Assistant ID
+   */
+  updateOpenAiAssistantId(assistantId: string): Promise<HttpResponse<void>> {
+    return this.rb.path('/v1/me/openai-assistant-id').patch<void>({ assistantId });
+  }
+
+  /**
+   * 사용자 선호 언어를 조회합니다.
+   * @returns language code (예: 'en', 'ko')
+   */
+  getPreferredLanguage(): Promise<HttpResponse<PreferredLanguageResponseDto>> {
+    return this.rb.path('/v1/me/preferred-language').get<PreferredLanguageResponseDto>();
+  }
+
+  /**
+   * 사용자 선호 언어를 설정/업데이트합니다.
+   * @param language 설정할 언어 코드
+   */
+  updatePreferredLanguage(language: string): Promise<HttpResponse<void>> {
+    return this.rb.path('/v1/me/preferred-language').patch<void>({ language });
+  }
+
+  /**
+   * 사용자 선호 언어를 'en' (영어)로 설정합니다. (Convenience Method)
+   */
+  updatePreferredLanguageToEn(): Promise<HttpResponse<void>> {
+    return this.updatePreferredLanguage('en');
+  }
+
+  /**
+   * 사용자 선호 언어를 'ko' (한국어)로 설정합니다. (Convenience Method)
+   */
+  updatePreferredLanguageToKo(): Promise<HttpResponse<void>> {
+    return this.updatePreferredLanguage('ko');
+  }
+
+  /**
+   * 사용자 선호 언어를 'cn' (중국어)로 설정합니다. (Convenience Method)
+   */
+  updatePreferredLanguageToCn(): Promise<HttpResponse<void>> {
+    // DB의 ISO 코드 표준에 따라 'zh' 또는 'cn'을 사용할 수 있으나
+    // 요청사항에 따라 'cn'으로 명시합니다.
+    return this.updatePreferredLanguage('cn');
   }
 }

@@ -55,6 +55,7 @@ export interface ChatThread {
   deletedAt?: string | null; // ISO 8601
   messages: ChatMessage[];
   externalThreadId?: string; // OpenAI Assistants API Thread ID
+  lastResponseId?: string;   // OpenAI Responses API Context ID
 }
 
 // /**

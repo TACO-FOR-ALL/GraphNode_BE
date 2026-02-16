@@ -130,6 +130,7 @@ export class UserRepositoryMySQL implements UserRepository {
         email: input.email,
         displayName: input.displayName,
         avatarUrl: input.avatarUrl,
+        preferredLanguage: 'en', // default
       },
     });
     return this.mapUser(user);
@@ -184,6 +185,16 @@ export class UserRepositoryMySQL implements UserRepository {
     });
   }
 
+  /**
+   * 사용자의 선호 언어 업데이트
+   */
+  async updatePreferredLanguage(id: string, language: string): Promise<void> {
+    await prisma.user.update({
+      where: { id },
+      data: { preferredLanguage: language },
+    });
+  }
+
   private mapUser(pUser: any): User {
     return new User({
       id: pUser.id,
@@ -199,6 +210,7 @@ export class UserRepositoryMySQL implements UserRepository {
       apiKeyClaude: pUser.apiKeyClaude,
       apiKeyGemini: pUser.apiKeyGemini,
       openaiAssistantId: pUser.openaiAssistantId,
+      preferredLanguage: pUser.preferredLanguage,
     });
   }
 }

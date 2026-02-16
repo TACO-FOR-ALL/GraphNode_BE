@@ -46,6 +46,13 @@ const client = createGraphNodeClient({
 | `client.me.getApiKeys(model)` | `GET /v1/me/api-keys/:model` | API 키 조회 | 200, 401 |
 | `client.me.updateApiKey(...)` | `PATCH /v1/me/api-keys/:model` | API 키 설정 | 204, 400 |
 | `client.me.deleteApiKey(model)` | `DELETE /v1/me/api-keys/:model` | API 키 삭제 | 204 |
+| `client.me.getOpenAiAssistantId()` | `GET /v1/me/openai-assistant-id` | Assistant ID 조회 | 200 |
+| `client.me.updateOpenAiAssistantId(...)` | `PATCH /v1/me/openai-assistant-id` | Assistant ID 설정 | 204 |
+| `client.me.getPreferredLanguage()` | `GET /v1/me/preferred-language` | 선호 언어 조회 | 200 |
+| `client.me.updatePreferredLanguage(...)` | `PATCH /v1/me/preferred-language` | 선호 언어 설정 | 204 |
+| `client.me.updatePreferredLanguageToEn()` | - | 선호 언어 변경 (영어) | 204 |
+| `client.me.updatePreferredLanguageToKo()` | - | 선호 언어 변경 (한국어) | 204 |
+| `client.me.updatePreferredLanguageToCn()` | - | 선호 언어 변경 (중국어) | 204 |
 | `client.googleAuth.startUrl()` | - | Google URL 반환 | - |
 | `client.googleAuth.login()` | - | Google 리다이렉트 | - |
 | `client.appleAuth.startUrl()` | - | Apple URL 반환 | - |
@@ -129,8 +136,66 @@ await client.me.deleteApiKey('openai');
 </details>
 
 <details>
-<summary><b>client.googleAuth.startUrl() / login()</b></summary>
+<summary><b>client.me.getOpenAiAssistantId()</b> - Assistant ID 조회</summary>
 
+- **Returns**: `Promise<HttpResponse<OpenAiAssistantIdResponseDto>>`
+  - `assistantId`: `string | null`
+- **Example**:
+```typescript
+const res = await client.me.getOpenAiAssistantId();
+console.log('Assistant ID:', res.data.assistantId);
+```
+</details>
+
+<details>
+<summary><b>client.me.updateOpenAiAssistantId(id)</b> - Assistant ID 설정</summary>
+
+- **Parameters**: `assistantId` (string)
+- **Returns**: `Promise<HttpResponse<void>>`
+- **Example**:
+```typescript
+await client.me.updateOpenAiAssistantId('asst_123...');
+```
+</details>
+
+<details>
+<summary><b>client.me.getPreferredLanguage()</b> - 선호 언어 조회</summary>
+
+- **Returns**: `Promise<HttpResponse<PreferredLanguageResponseDto>>`
+  - `language`: `string` ('en', 'ko', 'cn' 등)
+- **Example**:
+```typescript
+const res = await client.me.getPreferredLanguage();
+console.log('Language:', res.data.language);
+```
+</details>
+
+<details>
+<summary><b>client.me.updatePreferredLanguage(lang)</b> - 선호 언어 설정</summary>
+
+- **Parameters**: `language` (string)
+- **Returns**: `Promise<HttpResponse<void>>`
+- **Example**:
+```typescript
+await client.me.updatePreferredLanguage('ko');
+```
+</details>
+
+<details>
+<summary><b>client.me.updatePreferredLanguageTo{En|Ko|Cn}()</b> - 언어 변경 편의 메서드</summary>
+
+- **Description**: 자주 사용하는 언어로 즉시 변경합니다.
+- **Returns**: `Promise<HttpResponse<void>>`
+- **Example**:
+```typescript
+await client.me.updatePreferredLanguageToKo(); // 한국어로 변경
+await client.me.updatePreferredLanguageToEn(); // 영어로 변경
+await client.me.updatePreferredLanguageToCn(); // 중국어로 변경
+```
+</details>
+
+<details>
+<summary><b>client.googleAuth.startUrl() / login()</b></summary>
 - **Returns**: `string` (URL) / `void` (Redirect)
 - **Example**:
 ```typescript

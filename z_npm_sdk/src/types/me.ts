@@ -47,3 +47,35 @@ export interface ApiKeysResponseDto {
 export interface UpdateApiKeyRequestDto {
   apiKey: string;
 }
+
+/**
+ * GET /v1/me/openai-assistant-id 응답 DTO
+ * @public
+ */
+export interface OpenAiAssistantIdResponseDto {
+  assistantId: string | null;
+}
+
+/**
+ * PATCH /v1/me/openai-assistant-id 요청 DTO
+ * @public
+ */
+export interface UpdateOpenAiAssistantIdRequestDto {
+  assistantId: string;
+}
+
+/**
+ * GET /v1/me/preferred-language 응답 DTO
+ * @public
+ */
+export interface PreferredLanguageResponseDto {
+  language: string;
+}
+
+/**
+ * PATCH /v1/me/preferred-language 요청 DTO
+ * @public
+ */
+export interface UpdatePreferredLanguageRequestDto {
+  language: string;
+}

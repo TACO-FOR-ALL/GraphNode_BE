@@ -140,9 +140,9 @@ export class AiInteractionService {
 
       let aiContent = '';
 
-      // --- OpenAI Assistants API 분기 ---
+      // --- OpenAI Responses API 분기 ---
       if (chatbody.model === 'openai') {
-        aiContent = await this.handleOpenAIAssistantsChat(
+        aiContent = await this.handleOpenAIResponsesChat(
           ownerUserId,
           conversationId,
           apiKey,
@@ -203,7 +203,11 @@ export class AiInteractionService {
    * OpenAI Assistants API 전용 처리 로직
    * - Thread 생성/조회, 파일 업로드, 메시지 추가, Run 실행, 스트리밍 처리
    */
-  private async handleOpenAIAssistantsChat(
+  /**
+   * OpenAPI Responses API 전용 처리 로직
+   * - Context Chaining, 멀티모달 입력 처리
+   */
+  private async handleOpenAIResponsesChat(
     ownerUserId: string,
     conversationId: string,
     apiKey: string,
@@ -215,123 +219,132 @@ export class AiInteractionService {
   ): Promise<string> {
     let aiContent = '';
 
-    // 4-1. Thread 확인 및 생성
-    let threadId = conversation.externalThreadId;
-    if (!threadId) {
-      const tRes = await provider.createThread(apiKey);
-      if (!tRes.ok) throw new UpstreamError(`Failed to create creation: ${tRes.error}`);
-      threadId = tRes.data.threadId;
+    // 1. 입력 컨텐츠 구성 (Text + Images)
+    const contentParts: any[] = [
+        { type: 'text', text: chatbody.chatContent }
+    ];
 
-      // DB에 Thread ID 업데이트
-      conversation.externalThreadId = threadId;
-      await this.chatManagementService.updateThreadId(conversationId, ownerUserId, threadId);
-    }
+    const fileIdsForTools: string[] = [];
 
-    // 4-2. 파일 분류 및 업로드
-    const openAiFileIds: string[] = [];
-    const imageContent: any[] = [];
-
+    // 파일 처리 (OpenAI Upload)
     if (files && files.length > 0) {
-      for (const file of files) {
-        if (file.mimetype.startsWith('image/')) {
-           // 1. Try 'vision' purpose first
-           let upRes = await provider.uploadFile(apiKey, {
-             buffer: file.buffer,
-             filename: file.filename || file.originalname,
-             mimetype: file.mimetype,
-           }, 'vision');
-           
-           // 2. Fallback to 'assistants' purpose if 'vision' fails (compatibility mode)
-           if (!upRes.ok) {
-             console.warn(`Vision upload failed (${upRes.error}), retrying with 'assistants' purpose...`);
-             upRes = await provider.uploadFile(apiKey, {
-                buffer: file.buffer,
-                filename: file.filename || file.originalname,
-                mimetype: file.mimetype,
-             }, 'assistants');
-           }
+        for (const file of files) {
+            if (file.mimetype.startsWith('image/')) {
+                // 이미지 처리: purpose='vision' (Responses/Chat API에서 image_file 사용 시 호환성 확보)
+                const uploadRes = await provider.uploadFile(apiKey, {
+                    buffer: file.buffer,
+                    filename: file.filename,
+                    mimetype: file.mimetype
+                }, 'vision');
 
-           if (upRes.ok) {
-             imageContent.push({
-               type: 'image_file',
-               image_file: { file_id: upRes.data.fileId },
-             });
-           } else {
-             // 3. Throw Error if both fail (Do not swallow error)
-             console.error(`Failed to upload image to OpenAI: ${upRes.error}`);
-             throw new UpstreamError(`Failed to upload image to OpenAI Provider: ${upRes.error}`);
-           }
+                if (uploadRes.ok) {
+                    contentParts.push({
+                        type: 'image_file',
+                        image_file: { file_id: uploadRes.data.fileId }
+                    });
+                } else {
+                     throw new UpstreamError(`Image upload to OpenAI failed: ${uploadRes.error}`);
+                }
+            } else {
+                // 그 외 모든 문서/데이터 파일 -> 'assistants' purpose로 업로드
+                // File Search와 Code Interpreter 모두에게 제공하여 모델이 판단하게 함
+                const uploadRes = await provider.uploadFile(apiKey, {
+                    buffer: file.buffer,
+                    filename: file.filename,
+                    mimetype: file.mimetype
+                }, 'assistants');
 
-        } else {
-           // 일반 파일 (Code Interpreter / File Search 용)
-           const upRes = await provider.uploadFile(apiKey, {
-             buffer: file.buffer,
-             filename: file.filename || file.originalname,
-             mimetype: file.mimetype,
-           });
-           if (upRes.ok) {
-             openAiFileIds.push(upRes.data.fileId);
-           } else {
-             console.error(`Failed to upload file to OpenAI: ${upRes.error}`);
-             throw new UpstreamError(`Failed to upload file to OpenAI Provider: ${upRes.error}`);
-           }
+                if (uploadRes.ok) {
+                    fileIdsForTools.push(uploadRes.data.fileId);
+                } else {
+                    throw new UpstreamError(`File upload failed: ${uploadRes.error}`);
+                }
+            }
         }
-      }
     }
 
-    // 4-3. 메시지 추가
-    // 텍스트 + 이미지(Vision) 합치기
-    let messageContent: string | any[] = chatbody.chatContent;
-    if (imageContent.length > 0) {
-      messageContent = [
-        { type: 'text', text: chatbody.chatContent },
-        ...imageContent
-      ];
+    // 2. Responses API 호출
+    const lastResponseId = conversation.lastResponseId; // 이전 응답 ID (Context)
+    
+    // User Message 구성
+    const inputMessage = {
+        role: 'user',
+        content: contentParts
+    };
+    
+    // Tools 및 Tool Resources 구성 (통합 처리)
+    const tools: any[] = [];
+    const tool_resources: any = {};
+
+    if (fileIdsForTools.length > 0) {
+        // 모든 파일을 두 도구 모두에 할당 (Universal approach)
+        // 1. File Search (RAG)
+        tools.push({ type: 'file_search' });
+        
+        // 2. Code Interpreter (Data Analysis)
+        tools.push({ type: 'code_interpreter' });
+
+        tool_resources.file_search = {
+            vector_stores: [{ file_ids: fileIdsForTools }]
+        };
+        tool_resources.code_interpreter = {
+             file_ids: fileIdsForTools
+        };
     }
 
-    const addMsgRes = await provider.addMessage(
-      apiKey,
-      threadId!,
-      'user',
-      messageContent,
-      openAiFileIds // non-image files attached for tools
-    );
-    if (!addMsgRes.ok) throw new UpstreamError(`Failed to add message to thread: ${addMsgRes.error}`);
+    const res = await provider.createResponse(apiKey, {
+        model: 'gpt-4o',
+        input: [inputMessage],
+        tools: tools.length > 0 ? tools : undefined,
+        tool_resources: Object.keys(tool_resources).length > 0 ? tool_resources : undefined,
+        previous_response_id: lastResponseId
+    });
 
-
-    // 4-4. Run Assistant (Stream)
-    // Dynamic Assistant: 사용자 DB에 저장된 Assistant ID 사용, 없으면 생성
-    let assistantId = await this.userService.getOpenAiAssistantId(ownerUserId);
-
-    if (!assistantId) {
-      const createRes = await provider.createAssistant(apiKey);
-      if (!createRes.ok) throw new UpstreamError(`Failed to create assistant: ${createRes.error}`);
-      assistantId = createRes.data.assistantId;
-      await this.userService.updateOpenAiAssistantId(ownerUserId, assistantId);
+    if (!res.ok) {
+        throw new UpstreamError(`Responses API failed: ${res.error}`);
     }
 
-    const runRes = await provider.runAssistantStream(apiKey, assistantId!, threadId!);
-    if (!runRes.ok) {
-      if (runRes.error === 'not_found' || runRes.error === 'key_not_found') {
-        throw new UpstreamError(
-          `Failed to access Assistant (${assistantId}). This usually happens when the User API Key does not belong to the same OpenAI Organization as the Assistant.`
-        );
-      }
-      throw new UpstreamError(`Failed to run assistant: ${runRes.error}`);
+    // 3. 스트리밍 처리 및 Response ID 캡처
+    let newResponseId: string | undefined;
+
+    for await (const chunk of res.data) {
+        // OpenAI Responses API Stream Events check
+        const eventType = (chunk as any).event; // e.g., 'response.text.delta'
+        
+        if (eventType === 'response.created') {
+             newResponseId = (chunk as any).response?.id;
+        }
+        
+        if (eventType === 'response.text.delta') {
+             const delta = (chunk as any).delta?.value; // or content field?
+             if (delta) {
+                 aiContent += delta;
+                 onStream?.(delta);
+             }
+        }
+        
+        if (eventType === 'response.done') {
+            const finalId = (chunk as any).response?.id;
+            if (finalId) newResponseId = finalId;
+        }
+
+        // Fallback for ChatCompletion-like chunks
+        if (!eventType && (chunk as any).choices) {
+            const delta = (chunk as any).choices[0]?.delta?.content;
+            if (delta) {
+                 aiContent += delta;
+                 onStream?.(delta);
+             }
+        }
     }
 
-    // 4-5. 스트리밍 처리
-    // AsyncIterable<any> 이지만, 실제로는 OpenAI StreamEvent 객체들이 옴.
-    for await (const chunk of runRes.data) {
-       const event = chunk as any;
-       if (event.event === 'thread.message.delta') {
-         const delta = event.data.delta.content?.[0]?.text?.value;
-         if (delta) {
-           aiContent += delta;
-           onStream?.(delta);
-         }
-       }
+    // 4. 마지막 Response ID 저장 (Context Chaining)
+    if (newResponseId) {
+        await this.chatManagementService.updateDoc(conversationId, ownerUserId, {
+            lastResponseId: newResponseId
+        });
     }
+
     return aiContent;
   }
 

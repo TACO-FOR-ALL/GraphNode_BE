@@ -25,5 +25,22 @@ export function createMeRouter(deps: { userService: UserService }): Router {
   router.patch('/api-keys/:model', asyncHandler(meController.updateApiKey.bind(meController)));
   router.delete('/api-keys/:model', asyncHandler(meController.deleteApiKey.bind(meController)));
 
+  // OpenAI Assistant ID
+  router.get(
+    '/openai-assistant-id',
+    asyncHandler(meController.getOpenAiAssistantId.bind(meController))
+  );
+  router.patch(
+    '/openai-assistant-id',
+    asyncHandler(meController.updateOpenAiAssistantId.bind(meController))
+  );
+
+  // Preferred Language
+  router.get('/preferred-language', asyncHandler(meController.getPreferredLanguage.bind(meController)));
+  router.patch(
+    '/preferred-language',
+    asyncHandler(meController.updatePreferredLanguage.bind(meController))
+  );
+
   return router;
 }

@@ -628,11 +628,46 @@ export class ChatManagementService {
   }
 
   /**
+   * 대화 문서 직접 업데이트 (Internal Use/System Update)
+   * 예: AI 응답 후 lastResponseId 업데이트 등
+   */
+
+
+  /**
+   * 대화 문서 직접 업데이트 (System Use)
+   */
+  async updateDocWithAuth(
+    conversationId: string,
+    ownerUserId: string,
+    updates: Partial<ConversationDoc>
+  ): Promise<void> {
+     // Reuse logic
+     await this.conversationService.updateDoc(conversationId, ownerUserId, updates);
+  }
+
+  /**
    * 사용자의 모든 대화와 메시지를 삭제합니다.
    *
    * @param ownerUserId 소유자 ID
    * @returns 삭제된 대화 수
    */
+  /**
+   * 대화 문서 직접 업데이트 (System Use)
+   * 예: AI 응답 후 lastResponseId 업데이트 등
+   */
+  /**
+   * 대화 문서 직접 업데이트 (System Use)
+   * 예: AI 응답 후 lastResponseId 업데이트 등
+   */
+  async updateDoc(
+    conversationId: string,
+    ownerUserId: string,
+    updates: Partial<ConversationDoc>
+  ): Promise<void> {
+    // 내부적으로 ConversationService.updateDoc 사용 (소유권 검증 포함)
+    await this.conversationService.updateDoc(conversationId, ownerUserId, updates);
+  }
+
   async deleteAllConversations(ownerUserId: string): Promise<number> {
     const client: MongoClient = getMongo();
     const session: ClientSession = client.startSession();

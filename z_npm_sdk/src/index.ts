@@ -23,7 +23,17 @@ export { NotificationApi } from './endpoints/notification.js';
 
 // Types
 export type { ProblemDetails } from './types/problem.js';
-export type { MeResponseDto, UserProfileDto } from './types/me.js';
+export type {
+  MeResponseDto,
+  UserProfileDto,
+  ApiKeysResponseDto,
+  ApiKeyModel,
+  UpdateApiKeyRequestDto,
+  OpenAiAssistantIdResponseDto,
+  UpdateOpenAiAssistantIdRequestDto,
+  PreferredLanguageResponseDto,
+  UpdatePreferredLanguageRequestDto,
+} from './types/me.js';
 export type {
   ConversationDto,
   ConversationCreateDto,

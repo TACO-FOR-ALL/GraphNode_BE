@@ -123,6 +123,53 @@ export const openAI = {
   },
 
   /**
+   * OPENAI Responses API 요청 (OpenAI Responses)
+   */
+  async createResponse(
+    apiKey: string,
+    params: {
+      model: string;
+      input: any[];
+      tools?: any[];
+      tool_resources?: any;
+      previous_response_id?: string;
+      fileIds?: string[];
+    }
+  ): Promise<Result<AsyncIterable<any>>> {
+    logger.info({ model: params.model }, 'openAI.createResponse called');
+    try {
+      const client = new OpenAI({ apiKey });
+      
+      // OpenAI SDK v4.56.0+ should have client.responses
+      const responsesClient = client.responses;
+
+      if (!responsesClient) {
+          logger.error('OpenAI SDK does not support responses API yet');
+          return { ok: false, error: 'sdk_version_incompatible' };
+      }
+
+      const createParams: any = {
+        model: params.model,
+        input: params.input,
+        stream: true,
+      };
+
+      if (params.tools) createParams.tools = params.tools;
+      if (params.tool_resources) createParams.tool_resources = params.tool_resources;
+      if (params.previous_response_id) createParams.previous_response_id = params.previous_response_id;
+
+      const stream = await responsesClient.create(createParams);
+
+      logger.info('openAI.createResponse succeeded');
+      return { ok: true, data: stream as unknown as AsyncIterable<any> };
+    } catch (e: any) {
+      const errorMsg = normalizeError(e);
+      logger.error({ err: e, errorMsg }, 'openAI.createResponse failed');
+      return { ok: false, error: errorMsg };
+    }
+  },
+
+  /**
    * OPENAI API를 사용하여 채팅방 제목을 생성합니다.
    * @param apiKey  API Key
    * @param firstUserMessage  첫 번째 사용자 메시지
@@ -279,7 +326,10 @@ export const openAI = {
       
       const attachments = fileIds.map((fileId) => ({
         file_id: fileId,
-        // tools: [{ type: 'file_search' as const }], // REMOVED: Let the Assistant decide based on enabled tools
+        tools: [
+          { type: 'file_search' as const },
+          { type: 'code_interpreter' as const }
+        ],
       }));
 
       const msg = await client.beta.threads.messages.create(threadId, {

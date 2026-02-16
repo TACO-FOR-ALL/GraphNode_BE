@@ -100,4 +100,65 @@ export class MeController {
       next(e);
     }
   }
+  /**
+   * GET /v1/me/openai-assistant-id
+   */
+  async getOpenAiAssistantId(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = getUserIdFromRequest(req)!;
+      const assistantId = await this.userService.getOpenAiAssistantId(userId);
+      res.status(200).json({ assistantId });
+    } catch (e) {
+      next(e);
+    }
+  }
+
+  /**
+   * PATCH /v1/me/openai-assistant-id
+   */
+  async updateOpenAiAssistantId(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = getUserIdFromRequest(req)!;
+      const schema = z.object({
+        assistantId: z.string().min(1, 'Assistant ID is required'),
+      });
+      const data = schema.parse(req.body);
+
+      await this.userService.updateOpenAiAssistantId(userId, data.assistantId);
+      res.status(204).send();
+    } catch (e) {
+      next(e);
+    }
+  }
+
+  /**
+   * GET /v1/me/preferred-language
+   */
+  async getPreferredLanguage(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = getUserIdFromRequest(req)!;
+      const language = await this.userService.getPreferredLanguage(userId);
+      res.status(200).json({ language });
+    } catch (e) {
+      next(e);
+    }
+  }
+
+  /**
+   * PATCH /v1/me/preferred-language
+   */
+  async updatePreferredLanguage(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = getUserIdFromRequest(req)!;
+      const schema = z.object({
+        language: z.string().min(1).max(10),
+      });
+      const data = schema.parse(req.body);
+
+      await this.userService.updatePreferredLanguage(userId, data.language);
+      res.status(204).send();
+    } catch (e) {
+      next(e);
+    }
+  }
 }

@@ -201,4 +201,30 @@ export class UserService {
   async updateOpenAiAssistantId(userId: string, assistantId: string): Promise<void> {
     await this.userRepository.updateOpenAiAssistantId(userId, assistantId);
   }
+
+  /**
+   * 사용자 선호 언어 조회
+   */
+  async getPreferredLanguage(userId: string): Promise<string> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new NotFoundError(`User with id ${userId} not found`);
+    }
+    return user.preferredLanguage;
+  }
+
+  /**
+   * 사용자 선호 언어 업데이트
+   */
+  async updatePreferredLanguage(userId: string, language: string): Promise<void> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new NotFoundError(`User with id ${userId} not found`);
+    }
+    // Simple validation
+    if (!language || language.length > 10) {
+        throw new ValidationError('Invalid language code');
+    }
+    await this.userRepository.updatePreferredLanguage(userId, language);
+  }
 }

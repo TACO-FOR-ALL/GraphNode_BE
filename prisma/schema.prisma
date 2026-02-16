@@ -21,6 +21,7 @@ model User {
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
   lastLoginAt       DateTime? @map("last_login_at") @db.Timestamp(0)
   openaiAssistantId String?   @map("openai_assistant_id") @db.VarChar(191)
+  preferredLanguage String    @default("en") @map("preferred_language") @db.VarChar(10)
 
   @@unique([provider, providerUserId], map: "uniq_provider_user")
   @@map("users")

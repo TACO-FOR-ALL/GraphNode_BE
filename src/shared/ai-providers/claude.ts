@@ -67,6 +67,10 @@ export const claudeProvider: IAiProvider = {
     return { ok: false, error: 'not_implemented' };
   },
 
+  async createResponse() {
+    return { ok: false, error: 'not_implemented' };
+  },
+
   async requestGenerateThreadTitle(
     apiKey: string,
     firstUserMessage: string,

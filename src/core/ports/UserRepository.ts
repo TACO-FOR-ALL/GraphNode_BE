@@ -107,4 +107,9 @@ import { ApiKeyModel } from '../../shared/dtos/me';
    * 사용자의 OpenAI Assistant ID 업데이트
    */
   updateOpenAiAssistantId(id: string, assistantId: string): Promise<void>;
+
+  /**
+   * 사용자의 선호 언어 업데이트
+   */
+  updatePreferredLanguage(id: string, language: string): Promise<void>;
 }

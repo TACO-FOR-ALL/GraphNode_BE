@@ -43,6 +43,7 @@ export interface ConversationDoc {
   source?: Source;
   tags?: string[];
   externalThreadId?: string; // OpenAI Assistants API Thread ID
+  lastResponseId?: string;   // OpenAI Responses API Context ID
 }
 
 /**
