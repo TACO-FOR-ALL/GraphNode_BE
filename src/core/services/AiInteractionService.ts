@@ -10,6 +10,7 @@
  * - OpenAI SDK: 실제 AI 모델 호출
  */
 
+import { logger } from '../../shared/utils/logger';
 import { AppError } from '../../shared/errors/base';
 import 'multer'; // Ensure Multer types are loaded
 import { NotFoundError, UpstreamError, ValidationError, ForbiddenError } from '../../shared/errors/domain';
@@ -217,135 +218,142 @@ export class AiInteractionService {
     files?: Express.Multer.File[],
     onStream?: (chunk: string) => void
   ): Promise<string> {
-    let aiContent = '';
+    try {
+        let aiContent = '';
 
-    // 1. 입력 컨텐츠 구성 (Text)
-    const contentParts: any[] = [
-        { type: 'input_text', text: chatbody.chatContent }
-    ];
+        // 1. 입력 컨텐츠 구성 (Text)
+        const contentParts: any[] = [
+            { type: 'input_text', text: chatbody.chatContent }
+        ];
 
-    const fileIdsForTools: string[] = [];
+        const fileIdsForTools: string[] = [];
 
-    // 파일 처리 (OpenAI Upload)
-    if (files && files.length > 0) {
-        for (const file of files) {
-            if (file.mimetype.startsWith('image/')) {
-                // 이미지 처리: purpose='vision' (Responses/Chat API에서 image_file 사용 시 호환성 확보)
-                const uploadRes = await provider.uploadFile(apiKey, {
-                    buffer: file.buffer,
-                    filename: file.filename,
-                    mimetype: file.mimetype
-                }, 'vision');
+        // 파일 처리 (OpenAI Upload)
+        if (files && files.length > 0) {
+            for (const file of files) {
+                if (file.mimetype.startsWith('image/')) {
+                    // 이미지 처리: purpose='vision' (Responses/Chat API에서 image_file 사용 시 호환성 확보)
+                    const uploadRes = await provider.uploadFile(apiKey, {
+                        buffer: file.buffer,
+                        filename: file.originalname,
+                        mimetype: file.mimetype
+                    }, 'vision');
 
-                if (uploadRes.ok) {
-                    contentParts.push({
-                        type: 'input_image', 
-                        file_id: uploadRes.data.fileId,
-                        detail: 'auto'
-                    });
+                    if (uploadRes.ok) {
+                        contentParts.push({
+                            type: 'input_image', 
+                            file_id: uploadRes.data.fileId,
+                            detail: 'auto'
+                        });
+                    } else {
+                         throw new UpstreamError(`Image upload to OpenAI failed: ${uploadRes.error}`);
+                    }
                 } else {
-                     throw new UpstreamError(`Image upload to OpenAI failed: ${uploadRes.error}`);
-                }
-            } else {
-                // 그 외 모든 문서/데이터 파일 -> 'assistants' purpose로 업로드
-                // File Search와 Code Interpreter 모두에게 제공하여 모델이 판단하게 함
-                const uploadRes = await provider.uploadFile(apiKey, {
-                    buffer: file.buffer,
-                    filename: file.filename,
-                    mimetype: file.mimetype
-                }, 'assistants');
+                    // 그 외 모든 문서/데이터 파일 -> 'assistants' purpose로 업로드
+                    // File Search와 Code Interpreter 모두에게 제공하여 모델이 판단하게 함
+                    const uploadRes = await provider.uploadFile(apiKey, {
+                        buffer: file.buffer,
+                        filename: file.filename,
+                        mimetype: file.mimetype
+                    }, 'assistants');
 
-                if (uploadRes.ok) {
-                    fileIdsForTools.push(uploadRes.data.fileId);
-                } else {
-                    throw new UpstreamError(`File upload failed: ${uploadRes.error}`);
+                    if (uploadRes.ok) {
+                        fileIdsForTools.push(uploadRes.data.fileId);
+                    } else {
+                        throw new UpstreamError(`File upload failed: ${uploadRes.error}`);
+                    }
                 }
             }
         }
-    }
 
-    // 2. Responses API 호출
-    const lastResponseId = conversation.lastResponseId; // 이전 응답 ID (Context)
-    
-    // User Message 구성
-    const inputMessage = {
-        role: 'user',
-        content: contentParts
-    };
-    
-    // Tools 및 Tool Resources 구성 (통합 처리)
-    const tools: any[] = [];
-    // const tool_resources: any = {}; // Response API does not use tool_resources top-level
-
-    if (fileIdsForTools.length > 0) {
-        // 모든 파일을 두 도구 모두에 할당 (Universal approach)
-        // 1. File Search (RAG) - Currently Disabled as vector_store creation is separate
-        // tools.push({ type: 'file_search' });
+        // 2. Responses API 호출
+        const lastResponseId = conversation.lastResponseId; // 이전 응답 ID (Context)
         
-        // 2. Code Interpreter (Data Analysis)
-        tools.push({ 
-            type: 'code_interpreter',
-            container: {
-                type: 'auto',
-                file_ids: fileIdsForTools
+        // User Message 구성
+        const inputMessage = {
+            role: 'user',
+            content: contentParts
+        };
+        
+        // Tools 및 Tool Resources 구성 (통합 처리)
+        const tools: any[] = [];
+        // const tool_resources: any = {}; // Response API does not use tool_resources top-level
+
+        if (fileIdsForTools.length > 0) {
+            // 모든 파일을 두 도구 모두에 할당 (Universal approach)
+            // 1. File Search (RAG) - Currently Disabled as vector_store creation is separate
+            // tools.push({ type: 'file_search' });
+            
+            // 2. Code Interpreter (Data Analysis)
+            tools.push({ 
+                type: 'code_interpreter',
+                container: {
+                    type: 'auto',
+                    file_ids: fileIdsForTools
+                }
+            });
+        }
+
+        const res = await provider.createResponse(apiKey, {
+            model: 'gpt-4o',
+            input: [inputMessage],
+            tools: tools.length > 0 ? tools : undefined,
+            // tool_resources not supported in Responses API top-level
+            previous_response_id: lastResponseId
+        });
+
+        if (!res.ok) {
+            throw new UpstreamError(`Responses API failed: ${res.error}`);
+        }
+
+        // 3. 스트리밍 처리 및 Response ID 캡처
+        let newResponseId: string | undefined;
+
+        for await (const chunk of res.data) {
+            // OpenAI Responses API Stream Events check
+            const eventType = (chunk as any).type; // Note: SDK uses 'type', not 'event' for discriminators usually, but wire format might differ. 
+                                                   // SDK types say 'type': 'response.output_text.delta'. checking both just in case or type casting.
+                                                   // Actually, let's use the property 'type' as seen in the d.ts definition.
+            
+            // Debugging log to be sure about event structure in production/dev
+            // logger.debug({ eventType, chunkKeys: Object.keys(chunk) }, 'Stream Chunk Received');
+
+            if (eventType === 'response.created') {
+                 newResponseId = (chunk as any).response?.id;
             }
-        });
-    }
+            
+            // Correct Event Type: 'response.output_text.delta'
+            if (eventType === 'response.output_text.delta') {
+                 const delta = (chunk as any).delta; // delta is string, not object
+                 if (delta) {
+                     aiContent += delta;
+                     onStream?.(delta);
+                 }
+            }
+            
+            if (eventType === 'response.done') {
+                const finalId = (chunk as any).response?.id;
+                if (finalId) newResponseId = finalId;
+            }
 
-    const res = await provider.createResponse(apiKey, {
-        model: 'gpt-4o',
-        input: [inputMessage],
-        tools: tools.length > 0 ? tools : undefined,
-        // tool_resources not supported in Responses API top-level
-        previous_response_id: lastResponseId
-    });
-
-    if (!res.ok) {
-        throw new UpstreamError(`Responses API failed: ${res.error}`);
-    }
-
-    // 3. 스트리밍 처리 및 Response ID 캡처
-    let newResponseId: string | undefined;
-
-    for await (const chunk of res.data) {
-        // OpenAI Responses API Stream Events check
-        const eventType = (chunk as any).type; // Note: SDK uses 'type', not 'event' for discriminators usually, but wire format might differ. 
-                                               // SDK types say 'type': 'response.output_text.delta'. checking both just in case or type casting.
-                                               // Actually, let's use the property 'type' as seen in the d.ts definition.
-        
-        // Debugging log to be sure about event structure in production/dev
-        // logger.debug({ eventType, chunkKeys: Object.keys(chunk) }, 'Stream Chunk Received');
-
-        if (eventType === 'response.created') {
-             newResponseId = (chunk as any).response?.id;
-        }
-        
-        // Correct Event Type: 'response.output_text.delta'
-        if (eventType === 'response.output_text.delta') {
-             const delta = (chunk as any).delta; // delta is string, not object
-             if (delta) {
-                 aiContent += delta;
-                 onStream?.(delta);
-             }
-        }
-        
-        if (eventType === 'response.done') {
-            const finalId = (chunk as any).response?.id;
-            if (finalId) newResponseId = finalId;
+            // Fallback or other event types (e.g. output_item.done for tools, etc.)
+            // For now, focusing on text delta.
         }
 
-        // Fallback or other event types (e.g. output_item.done for tools, etc.)
-        // For now, focusing on text delta.
-    }
+        // 4. 마지막 Response ID 저장 (Context Chaining)
+        if (newResponseId) {
+            await this.chatManagementService.updateDoc(conversationId, ownerUserId, {
+                lastResponseId: newResponseId
+            });
+        }
 
-    // 4. 마지막 Response ID 저장 (Context Chaining)
-    if (newResponseId) {
-        await this.chatManagementService.updateDoc(conversationId, ownerUserId, {
-            lastResponseId: newResponseId
-        });
-    }
+        return aiContent;
 
-    return aiContent;
+    } catch (err: unknown) {
+        logger.error({ err, conversationId, ownerUserId }, 'handleOpenAIResponsesChat failed');
+        if (err instanceof AppError) throw err;
+        throw new UpstreamError('handleOpenAIResponsesChat failed', { cause: String(err) });
+    }
   }
 
   /**
