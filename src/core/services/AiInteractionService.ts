@@ -299,7 +299,8 @@ export class AiInteractionService {
             input: [inputMessage],
             tools: tools.length > 0 ? tools : undefined,
             // tool_resources not supported in Responses API top-level
-            previous_response_id: lastResponseId
+            previous_response_id: lastResponseId,
+            store: true  // OpenAI가 응답을 저장하여 previous_response_id로 참조 가능하게 함
         });
 
         if (!res.ok) {
@@ -310,34 +311,45 @@ export class AiInteractionService {
         let newResponseId: string | undefined;
 
         for await (const chunk of res.data) {
-            // OpenAI Responses API Stream Events check
-            const eventType = (chunk as any).type; // Note: SDK uses 'type', not 'event' for discriminators usually, but wire format might differ. 
-                                                   // SDK types say 'type': 'response.output_text.delta'. checking both just in case or type casting.
-                                                   // Actually, let's use the property 'type' as seen in the d.ts definition.
-            
-            // Debugging log to be sure about event structure in production/dev
-            // logger.debug({ eventType, chunkKeys: Object.keys(chunk) }, 'Stream Chunk Received');
+            const eventType = (chunk as any).type;
+
+            // 1. 에러 이벤트 처리 (필수)
+            if (eventType === 'response.error') {
+                const error = (chunk as any).error;
+                logger.error({ 
+                    error, 
+                    conversationId, 
+                    lastResponseId: newResponseId 
+                }, 'OpenAI Responses API stream error event received');
+                
+                throw new UpstreamError(
+                    `OpenAI streaming error: ${error.message || 'Unknown error'}`,
+                    { cause: error }
+                );
+            }
 
             if (eventType === 'response.created') {
                  newResponseId = (chunk as any).response?.id;
+                 logger.info({ newResponseId, conversationId }, 'OpenAI Response created');
             }
             
-            // Correct Event Type: 'response.output_text.delta'
             if (eventType === 'response.output_text.delta') {
-                 const delta = (chunk as any).delta; // delta is string, not object
+                 const delta = (chunk as any).delta;
                  if (delta) {
                      aiContent += delta;
                      onStream?.(delta);
                  }
             }
             
-            if (eventType === 'response.done') {
+            if (eventType === 'response.completed') {
                 const finalId = (chunk as any).response?.id;
                 if (finalId) newResponseId = finalId;
+                logger.info({ 
+                    finalId, 
+                    conversationId,
+                    contentLength: aiContent.length 
+                }, 'OpenAI Response completed successfully');
             }
-
-            // Fallback or other event types (e.g. output_item.done for tools, etc.)
-            // For now, focusing on text delta.
         }
 
         // 4. 마지막 Response ID 저장 (Context Chaining)
