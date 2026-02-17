@@ -35,7 +35,8 @@
         {"name" : "FIREBASE_CREDENTIALS_JSON", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:FIREBASE_CREDENTIALS_JSON::"},
         {"name" : "CHROMA_API_KEY", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:CHROMA_API_KEY::"},
         {"name" : "CHROMA_TENANT", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:CHROMA_TENANT::"},
-        {"name" : "CHROMA_DATABASE", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:CHROMA_DATABASE::"}
+        {"name" : "CHROMA_DATABASE", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:CHROMA_DATABASE::"},
+        {"name":"SENTRY_DSN", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:SENTRY_DSN::"}
       ],
       "essential": true,
       "image": "571721033550.dkr.ecr.ap-northeast-2.amazonaws.com/taco5/graphnode-be:latest_10",

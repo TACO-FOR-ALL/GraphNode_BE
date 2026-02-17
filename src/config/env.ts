@@ -82,6 +82,9 @@ const EnvSchema = z.object({
   FIREBASE_CREDENTIALS_JSON : z.string().min(1, 'FIREBASE_CREDENTIALS_JSON required'),
   //FIREBASE_VAPID_VALUE : z.string().min(1, 'FIREBASE_VAPID_VALUE required'),
 
+  //Sentry
+  SENTRY_DSN: z.string().min(1, 'SENTRY_DSN required'),
+
   // 쿠키 보안 설정 (개발 환경에서 HTTPS가 아닐 때 사용)
   DEV_INSECURE_COOKIES: z
     .string()

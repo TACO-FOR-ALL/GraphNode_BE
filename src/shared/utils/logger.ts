@@ -21,6 +21,19 @@ import pinoHttp from 'pino-http';
  */
 export const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
+  // 민감 정보 마스킹 (Redact)
+  redact: {
+    paths: [
+      'req.headers.authorization',
+      'req.headers.cookie',
+      'req.body.password',
+      'req.body.token',
+      'req.body.accessToken',
+      'req.body.refreshToken',
+      'err.config.headers.Authorization', // Axios 에러 내 헤더
+    ],
+    remove: true, // 값을 제거하거나 '***'로 대체 (censor: '***')
+  },
   transport:
     process.env.NODE_ENV === 'production'
       ? undefined

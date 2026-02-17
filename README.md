@@ -150,7 +150,7 @@ infisical run --env=prod -- npm start
 - **Architecture**:
   - [Project Structure](docs/PROJECT_STRUCTURE.md) | [Database](docs/architecture/DATABASE.md) | [Ports](docs/architecture/PORTS.md)
   - [SQS Logic](docs/architecture/LOGIC_SQS.md) | [FCM Logic](docs/architecture/LOGIC_FCM.md) | [Workers](docs/architecture/WORKERS.md)
-  - [Security](docs/architecture/SECURITY.md) | [Observability](docs/architecture/OBSERVABILITY.md) | [Audit Logs](docs/architecture/AUDIT_LOGS.md)
+  - [Security](docs/architecture/SECURITY.md) | [Observability](docs/architecture/OBSERVABILITY.md) | [Audit Logs](docs/architecture/AUDIT_LOGS.md) | [Sentry](docs/architecture/sentry.md)
 
 ---
 

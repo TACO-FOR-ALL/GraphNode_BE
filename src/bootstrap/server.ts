@@ -32,6 +32,10 @@ import { makeNotificationRouter } from './modules/notification.module';
 import { makeFileRouter } from './modules/file.module';
 // import { createTestAgentRouter } from '../app/routes/agent.test';
 
+import {
+  setupSentryErrorHandler,
+} from '../shared/utils/sentry';
+
 /**
  * Express 앱 부트스트랩.
  * - HTTP 계층 전용: 미들웨어/라우터/에러 핸들러 조립.
@@ -40,11 +44,15 @@ import { makeFileRouter } from './modules/file.module';
  */
 export function createApp() {
   const app = express();
+  
+  // Sentry 초기화는 index.ts 최상단에서 수행됨 (Auto-instrumentation)
+
   const env = loadEnv();
 
   const sessionSecert = process.env.SESSION_SECRET || 'dev-secret-change-me';
 
   app.set('trust proxy', 1);
+
   // app.use(helmet());
   app.use(cors({ origin: true, credentials: true }));
   app.use(express.json({ limit: '100mb' }));
@@ -91,6 +99,11 @@ export function createApp() {
   app.use((req, _res, next) => {
     next(new NotFoundError('Not Found'));
   });
+
+
+  // Sentry ErrorHandler (v8: setupExpressErrorHandler)
+  // 에러를 포착하여 Sentry로 전송 후, next(err)로 다음 에러 핸들러에게 전달함
+  setupSentryErrorHandler(app);
 
   // Central error handler (RFC 9457)
   app.use(errorHandler);

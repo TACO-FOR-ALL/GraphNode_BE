@@ -78,6 +78,8 @@
     "@aws-sdk/client-s3": "^3.971.0",
     "@aws-sdk/client-sqs": "^3.972.0",
     "@google/generative-ai": "^0.24.1",
+    "@sentry/node": "^10.39.0",
+    "@sentry/profiling-node": "^10.39.0",
     "axios": "^1.13.2",
     "chromadb": "^3.2.2",
     "cookie-parser": "^1.4.7",
