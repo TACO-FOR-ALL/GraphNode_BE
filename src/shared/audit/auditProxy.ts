@@ -10,6 +10,7 @@
 
 import { logger } from '../utils/logger';
 import { requestStore, RequestContext } from '../context/requestStore';
+import { getPostHogClient } from '../utils/posthog';
 
 /**
  * 민감한 정보를 마스킹하는 함수
@@ -97,6 +98,8 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
         const start = Date.now();
         // 현재 요청 컨텍스트(사용자 정보 등) 가져오기
         const ctx: RequestContext | undefined = requestStore.getStore();
+        
+        // 메타 데이터 정의
         const meta = {
           service: serviceName ?? (target as any).constructor?.name ?? 'UnknownService',
           method: String(prop),
@@ -110,11 +113,32 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
           logger.info({ event: 'audit.call', ...meta, args: summarizeArgs(args) }, 'audit.call');
         } catch (_) {}
 
+        // PostHog 이벤트 전송 헬퍼 함수
+        const capturePostHog = (success: boolean, durationMs: number, error?: any) => {
+          try {
+            const posthog = getPostHogClient();
+            if (posthog) {
+              posthog.capture({
+                distinctId: ctx?.userId || 'anonymous', // 수정: ctx.user.id -> ctx.userId
+                event: 'service_method_call',
+                properties: {
+                  ...meta, // service, method 등의 메타데이터를 먼저 전개
+                  duration_ms: durationMs,
+                  success,
+                  ...(error && { error: error instanceof Error ? error.message : String(error) }),
+                },
+              });
+            }
+          } catch (e) {
+            logger.error({ err: e }, 'Failed to capture PostHog event');
+          }
+        };
+
         try {
           // 2. 실제 메서드 실행
           const result = orig.apply(this, args);
 
-          // 결과가 Promise인 경우 (비동기)
+          // 결과가 Promise인 경우 (비동기 처리)
           if (result && typeof result.then === 'function') {
             return result
               .then((res: any) => {
@@ -131,6 +155,10 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
                     'audit.success'
                   );
                 } catch (_) {}
+
+                // PostHog 성공 이벤트
+                capturePostHog(true, durationMs);
+
                 return res;
               })
               .catch((err: any) => {
@@ -142,18 +170,21 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
                       event: 'audit.error',
                       ...meta,
                       durationMs,
-                      err, // 에러 객체 전체를 포함하여 상세 정보(stack, details 등) 기록
+                      err,
                     },
                     'audit.error'
                   );
                 } catch (_) {}
+
+                // PostHog 실패 이벤트
+                capturePostHog(false, durationMs, err);
+
                 throw err;
               });
           }
 
-          // 결과가 Promise가 아닌 경우 (동기)
+          // 결과가 Promise가 아닌 경우 (동기 처리)
           const durationMs = Date.now() - start;
-          // 3. 성공 로그
           try {
             logger.info(
               {
@@ -165,23 +196,30 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
               'audit.success'
             );
           } catch (_) {}
+
+          // PostHog 성공 이벤트 (동기)
+          capturePostHog(true, durationMs);
+
           return result;
         } catch (err: any) {
+          // 동기 실행 중 에러 발생
           const durationMs = Date.now() - start;
-
-          // 4. 에러 로그
           try {
             logger.error(
               {
                 event: 'audit.error',
                 ...meta,
                 durationMs,
-                err, // 에러 객체 전체를 포함하여 상세 정보(stack, details 등) 기록
+                err,
               },
               'audit.error'
             );
           } catch (_) {}
-          throw err; // 에러를 다시 던져서 상위에서 처리하게 함
+
+          // PostHog 실패 이벤트 (동기)
+          capturePostHog(false, durationMs, err);
+
+          throw err;
         }
       };
     },
