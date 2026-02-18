@@ -79,8 +79,8 @@ const EnvSchema = z.object({
 
 
   //FIREBASE Notification 설정
-  //FIREBASE_CREDENTIALS_JSON : z.string().min(1, 'FIREBASE_CREDENTIALS_JSON required'),
-  //FIREBASE_VAPID_VALUE : z.string().min(1, 'FIREBASE_VAPID_VALUE required'),
+  FIREBASE_CREDENTIALS_JSON : z.string().optional(),
+  //FIREBASE_VAPID_VALUE : z.string().optional(),
 
   //Sentry
   SENTRY_DSN: z.string().min(1, 'SENTRY_DSN required'),
