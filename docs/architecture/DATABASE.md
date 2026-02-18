@@ -4,9 +4,9 @@ GraphNode Backend는 데이터의 특성에 따라 MySQL, MongoDB, Redis, Vector
 
 ---
 
-## 1. MySQL (Relational Data)
+## 1. PostgreSQL (Relational Data)
 
-사용자 계정, 인증 정보 등 높은 정합성이 요구되는 데이터는 MySQL에 저장합니다.
+사용자 계정, 인증 정보 등 높은 정합성이 요구되는 데이터는 PostgreSQL에 저장합니다. (Prisma ORM 사용)
 
 ### **Users Table**
 - **Table Name**: `users` (managed by Prisma)
@@ -14,8 +14,8 @@ GraphNode Backend는 데이터의 특성에 따라 MySQL, MongoDB, Redis, Vector
 
 | Field | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| **id** | `Int` (Auto Inc) | Yes | 내부 사용자 고유 식별자 (PK) |
-| **provider** | `Enum` | Yes | 소셜 로그인 제공자 (`google`, `apple`, `dev`) |
+| **id** | `String` (UUID) | Yes | 내부 사용자 고유 식별자 (PK) |
+| **provider** | `String` | Yes | 소셜 로그인 제공자 (`google`, `apple`, `dev`) |
 | **providerUserId** | `String` | Yes | 제공자 측 사용자 식별자 (Subject ID) |
 | **email** | `String` | No | 사용자 이메일 (Null 가능) |
 | **displayName** | `String` | No | 표시 이름 |
@@ -27,6 +27,7 @@ GraphNode Backend는 데이터의 특성에 따라 MySQL, MongoDB, Redis, Vector
 | **apiKeyClaude** | `String` | No | (Encrypted) Claude API Key |
 | **apiKeyGemini** | `String` | No | (Encrypted) Gemini API Key |
 | **openaiAssistantId**| `String` | No | OpenAI Assistants API ID |
+| **preferredLanguage**| `String` | Yes | 선호 언어 (Default: 'en') |
 
 ---
 
@@ -48,9 +49,11 @@ GraphNode Backend는 데이터의 특성에 따라 MySQL, MongoDB, Redis, Vector
 | **updatedAt** | `Number` (Timestamp)| 마지막 업데이트 시각 |
 | **createdAt** | `Number` (Timestamp)| 생성 시각 |
 | **deletedAt** | `Number` | 삭제 시각 (Soft Delete) |
-| **provider** | `String` | 사용된 AI Provider (openai, gemini 등) |
-| **model** | `String` | 사용된 모델명 (gpt-4o 등) |
+| **provider** | `String` | 사용된 AI Provider (openai, gemini, claude 등) |
+| **model** | `String` | 사용된 모델명 (gpt-4o, claude-3-5-sonnet 등) |
 | **tags** | `Array<String>` | 태그 목록 |
+| **externalThreadId** | `String` | OpenAI Assistants API Thread ID (Optional) |
+| **lastResponseId** | `String` | OpenAI Responses API Context ID (Optional) |
 
 #### **messages** Collection
 대화 내 개별 메시지입니다.
@@ -65,6 +68,7 @@ GraphNode Backend는 데이터의 특성에 따라 MySQL, MongoDB, Redis, Vector
 | **createdAt** | `Number` | 생성 시각 |
 | **updatedAt** | `Number` | 수정 시각 |
 | **attachments** | `Array<Object>` | 첨부 파일 정보 |
+| **metadata** | `Object` | 확장 데이터 (Code Interpreter, File Search 등) |
 
 ### B. Graph Domain (Knowledge Graph)
 `src/core/types/persistence/graph.persistence.ts`
@@ -81,6 +85,7 @@ AI가 추출한 지식 그래프의 노드입니다.
 | **clusterName** | `String` | 소속 클러스터 이름 |
 | **numMessages** | `Number` | 관련 메시지 수 |
 | **embedding** | `Array<Number>` | (Optional) 384차원 벡터 임베딩 |
+| **timestamp** | `String` | 타임스탬프 |
 
 #### **graph_edges** Collection
 노드 간의 관계(엣지)입니다.
@@ -113,12 +118,12 @@ AI가 추출한 지식 그래프의 노드입니다.
 | :--- | :--- | :--- |
 | **id** | `String` | 요약 ID |
 | **userId** | `String` | 소유자 ID |
-| **type** | `String` | 요약 유형 |
 | **overview** | `Object` | 전체 개요 (text, sentiment 등) |
 | **clusters** | `Array<Object>` | 주요 클러스터 분석 |
 | **patterns** | `Array<Object>` | 발견된 패턴 |
 | **connections** | `Array<Object>` | 클러스터 간 연결성 |
 | **recommendations** | `Array<Object>`| AI 추천 사항 |
+| **detail_level** | `String` | 요약 상세 레벨 (brief, standard, detailed) |
 
 ### C. Note Domain
 `src/core/types/persistence/note.persistence.ts`
@@ -145,15 +150,16 @@ AI가 추출한 지식 그래프의 노드입니다.
 
 `src/core/types/vector/graph-features.ts`
 
-Vector DB에 저장되는 임베딩과 함께 저장되는 메타데이터(`metadata`) 필드입니다.
+Vector DB에 저장되는 임베딩과 함께 저장되는 메타데이터(`metadata`) 필드입니다. 키 네이밍은 Python 스타일(`snake_case`)을 따릅니다.
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
-| **origId** | `String` | 원본 대화 ID (UUID) |
-| **nodeId** | `Number` | 그래프 노드 ID |
-| **userId** | `String` | 소유자 ID |
-| **keywords** | `Array<String>` | 검색용 키워드 리스트 |
-| **keywordDetails** | `String` (JSON) | 키워드 상세 정보(점수 포함) 직렬화 문자열 |
-| **messageCount** | `Number` | 대화 메시지 수 |
-| **createTime** | `Number` | 생성 시각 |
-| **updateTime** | `Number` | 수정 시각 |
+| **user_id** | `String` | 사용자 ID |
+| **conversation_id** | `String` | 원본 대화 ID (UUID) |
+| **orig_id** | `String` | 원본 ID (conversation_id와 동일) |
+| **node_id** | `Number` | 그래프 노드 ID |
+| **cluster_id** | `String` | 클러스터 ID |
+| **cluster_name** | `String` | 클러스터 이름 |
+| **keywords** | `String` | 검색용 키워드 (쉼표 구분 문자열) |
+| **create_time** | `Number` | 생성 시각 |
+| **num_messages** | `Number` | 대화 메시지 수 |

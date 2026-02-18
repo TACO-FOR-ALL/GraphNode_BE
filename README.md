@@ -26,8 +26,10 @@ GraphNode는 대화형 AI와 지식 그래프를 결합한 차세대 지식 관�
 
 ---
 
+
 ## 📁 Project Structure
 
+```text
 src/
 ├── app/                  # [Presentation Layer] HTTP 요청 처리
 │   ├── controllers/      #   - 요청 검증, 서비스 호출, 응답 반환
@@ -37,14 +39,13 @@ src/
 ├── core/                 # [Business Layer] 핵심 비즈니스 로직
 │   ├── services/         #   - 도메인 로직, 트랜잭션 관리
 │   ├── ports/            #   - [Port] 외부 의존성에 대한 인터페이스 (DIP)
-│   ├── types/            #   - 도메인 모델, 인터페이스 정의
-│   └── usecases/         #   - (Optional) 애플리케이션 유스케이스
+│   └── types/            #   - 도메인 모델, 인터페이스 정의
 │
 ├── infra/                # [Infrastructure Layer] 외부 시스템 구현
 │   ├── aws/              #   - AWS SDK (S3, SQS 등)
 │   ├── db/               #   - DB 연결 및 설정 (Prisma, Mongoose)
 │   ├── repositories/     #   - Core Port의 구현체 (DB 접근)
-│   └── external/         #   - 외부 API 클라이언트 (Axios 등)
+│   └── redis/            #   - Redis 클라이언트 및 어댑터
 │
 ├── shared/               # [Shared Layer] 공통 유틸리티
 │   ├── dtos/             #   - Data Transfer Objects
@@ -55,7 +56,11 @@ src/
 │   ├── handlers/         #   - 메시지 처리 핸들러
 │   └── index.ts          #   - 워커 엔트리포인트
 │
+├── bootstrap/            # [Bootstrap] 앱 초기화 및 DI
+│   └── container.ts      #   - 의존성 주입 컨테이너
+│
 └── config/               # [Config] 환경 변수 및 설정
+```
 
 더 자세한 폴더별 역할은 **[프로젝트 구조 상세 문서](docs/PROJECT_STRUCTURE.md)**를 참고하세요.
 
@@ -68,9 +73,10 @@ src/
 | **Runtime**        | Node.js 20 (LTS+)                             |
 | **Language**       | TypeScript 5                                  |
 | **Framework**      | Express 5                                     |
-| **ORM**            | Prisma (MySQL), Mongoose (MongoDB)            |
-| **Infrastructure** | AWS (ECS, ECR, ALB, SQS, S3, Secrets Manager) |
-| **Database**       | Aiven MySQL, MongoDB Atlas, Redis Cloud       |
+| **Databases**      | MongoDB Atlas, PostgreSQL (Prisma), Redis, ChromaDB |
+| **Infrastructure** | AWS (ECS, SQS, S3), Docker                    |
+| **AI**             | Python 3.11+, OpenAI, Anthropic, Gemini       |
+| **DevOps**         | Infisical, Sentry, PostHog, GitHub Actions    |
 | **Docs**           | OpenAPI 3.1, TypeDoc, Mermaid                 |
 
 ---
@@ -146,7 +152,7 @@ infisical run --env=prod -- npm start
 
 프로젝트의 모든 문서는 내장된 **[문서 포털](docs/index.html)**을 통해 정적 웹 페이지 형태로 확인하실 수 있습니다.
 
-- **API Reference**: [OpenAPI Spec (YAML)](docs/api/openapi.yaml) / Swagger UI / Redoc을 통한 인터랙티브 명세
+- **API Reference**: [OpenAPI Spec (HTML)](docs/api/openapi.html) / Swagger UI / Redoc을 통한 인터랙티브 명세
 - **TypeDoc**: 소스 코드 레벨의 클래스/함수 레퍼런스
 - **Architecture**:
   - [Project Structure](docs/PROJECT_STRUCTURE.md) | [Database](docs/architecture/DATABASE.md) | [Ports](docs/architecture/PORTS.md)
@@ -170,6 +176,14 @@ infisical run --env=prod -- npm start
 - **Health Check**: `/healthz` 경로를 통해 서버 및 DB 상태를 확인합니다.
 - **Structured Logging**: `pino` 로거를 사용하여 CloudWatch 호환 구조화된 로그를 생성합니다.
 - **Problem Details**: [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457.html) 표준에 따라 일관된 오류 응답을 제공합니다.
+
+---
+
+## 👩‍💻 Development & Contribution
+
+개발에 참여하시거나 코드 스타일을 확인하시려면 아래 가이드를 참고하세요.
+
+- **[Code Style & Contribution Guide](docs/architecture/CODE_STYLE.md)**: 네이밍 컨벤션, 아키텍처 패턴, 에러 핸들링 규칙 등
 
 ---
 

@@ -41,7 +41,9 @@ GraphNode Backend는 **Hexagonal Architecture (Ports and Adapters)** 패턴을 �
 - **주요 메서드**:
   - `upsert(collection, items)`: 벡터 데이터 저장
   - `search(collection, queryVector)`: 유사 벡터 검색 (KNN/ANN)
-- **현재 구현체**: `ChromaVectorAdapter` (`src/infra/vector`)
+- **현재 구현체**: 
+  - `ChromaVectorAdapter` (`src/infra/vector`)
+  - `MemoryVectorStore` (`src/infra/vector`: 테스트 및 로컬 개발용)
 
 ---
 
@@ -50,15 +52,15 @@ GraphNode Backend는 **Hexagonal Architecture (Ports and Adapters)** 패턴을 �
 데이터 영속성 계층(Persistence)에 대한 인터페이스입니다.
 
 ### **UserRepository** (`src/core/ports/UserRepository.ts`)
-- **역할**: 사용자 데이터 CRUD.
-- **구현체**: `UserRepositoryMySQL` (Prisma/MySQL)
+- **역할**: 사용자 데이터 CRUD 및 API Key 관리.
+- **구현체**: `UserRepositoryMySQL` (Prisma/PostgreSQL)
 
 ### **ConversationRepository** (`src/core/ports/ConversationRepository.ts`)
 - **역할**: 대화 세션 관리.
 - **구현체**: `ConversationRepositoryMongo` (Mongoose/MongoDB)
 
 ### **MessageRepository** (`src/core/ports/MessageRepository.ts`)
-- **역할**: 개별 채팅 메시지 관리.
+- **역할**: 개별 채팅 메시지 관리 및 첨부파일 메타데이터.
 - **구현체**: `MessageRepositoryMongo` (Mongoose/MongoDB)
 
 ### **NoteRepository** (`src/core/ports/NoteRepository.ts`)
@@ -66,7 +68,7 @@ GraphNode Backend는 **Hexagonal Architecture (Ports and Adapters)** 패턴을 �
 - **구현체**: `NoteRepositoryMongo` (Mongoose/MongoDB)
 
 ### **GraphDocumentStore** (`src/core/ports/GraphDocumentStore.ts`)
-- **역할**: 지식 그래프 데이터(Node, Edge) 관리.
+- **역할**: 지식 그래프 데이터(Node, Edge, Cluster, Summary) 관리.
 - **구현체**: `GraphRepositoryMongo` (Mongoose/MongoDB)
 
 ### **GraphNeo4jStore** (`src/core/ports/GraphNeo4jStore.ts`)
