@@ -157,8 +157,14 @@ export const openAI = {
         input: params.input,
         stream: true,
         include: [
+          'file_search_call.results',
+          'web_search_call.results',
+          'web_search_call.action.sources',
+          'message.input_image.image_url',
+          'computer_call_output.output.image_url',
           'code_interpreter_call.outputs',
-          'code_interpreter_call.code',
+          'reasoning.encrypted_content',
+          'message.output_text.logprobs'
         ],
       };
 
