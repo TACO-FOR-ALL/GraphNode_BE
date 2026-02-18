@@ -95,6 +95,37 @@ if (result && typeof result.then === 'function') {
 | `user_logged_in` | 로그인 성공 | `provider` |
 | `graph_generated` | 그래프 생성 완료 (Worker) | `node_count`, `duration_ms` |
 
+---
+
+## 5. Dashboard Setup Guide (DAU/MAU 설정 가이드)
+
+PostHog 웹사이트에서 **DAU(일일 활성 사용자)**와 **MAU(월간 활성 사용자)**를 대시보드에 추가하는 방법입니다.
+
+### 5.1. API Key & Host 확인 방법
+1.  **Project Settings** (좌측 하단 톱니바퀴 아이콘) 클릭.
+2.  **Project API Key** 항목에서 `phc_...`로 시작하는 키 복사 -> `.env`의 `POSTHOG_API_KEY`에 입력.
+3.  **Instance Address** 항목 확인 (보통 `https://us.i.posthog.com`) -> `.env`의 `POSTHOG_HOST`에 입력.
+
+### 5.2. DAU (Daily Active Users) 위젯 만들기
+1.  **Product Analytics** -> **+ New insight** 클릭.
+2.  **Trends** (추세) 탭 선택.
+3.  **Series (데이터 시리즈) 설정:**
+    - Event 선택: **`service_method_call`** (또는 `All events`)
+    - Count by: **Unique users** (이것이 핵심입니다!)
+4.  **Filters (필터) 설정 (선택사항):**
+    - 특정 동작만 활성 사용자로 치고 싶다면 `service` 속성으로 필터링 (예: `service` equals `NotificationService`).
+    - 필터가 없으면 "API를 한 번이라도 호출한 모든 유저"가 됩니다.
+5.  **Breakdown (기간) 설정:**
+    - 하단 그래프 옵션에서 단위를 **Daily**로 설정.
+6.  **Save & Add to dashboard:** "DAU"라고 이름 짓고 저장.
+
+### 5.3. MAU (Monthly Active Users) 위젯 만들기
+1.  위 DAU 설정과 동일하게 Series(`service_method_call`, Unique users)를 설정합니다.
+2.  **Breakdown** 단위만 **Monthly**로 변경합니다.
+3.  "MAU"로 저장합니다.
+
+이 두 개의 위젯을 통해, 우리 데스크톱 앱의 **실질적인 성장 추세**를 한눈에 파악할 수 있습니다.
+
 ## 4. 설정 방법
 
 ### 4.1. 환경 변수

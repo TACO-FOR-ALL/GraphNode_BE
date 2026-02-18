@@ -34,7 +34,9 @@
         { "name": "CHROMA_API_KEY", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:CHROMA_API_KEY::" },
         { "name": "CHROMA_TENANT", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:CHROMA_TENANT::" },
         { "name": "CHROMA_DATABASE", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:CHROMA_DATABASE::" },
-        {"name":"SENTRY_DSN", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:SENTRY_DSN::"}
+        {"name":"SENTRY_DSN", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:SENTRY_DSN::"},
+        {"name":"POSTHOG_API_KEY", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:POSTHOG_API_KEY::"},
+        {"name":"POSTHOG_HOST", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:POSTHOG_HOST::"}
       ],
       "essential": true,
       "healthCheck": {
