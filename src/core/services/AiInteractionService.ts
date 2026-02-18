@@ -28,7 +28,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { Readable } from 'stream';
 
-interface AiHandlerResponse {
+interface OpenAIResponsesApiResult {
   content: string;
   attachments?: Attachment[];
   metadata?: any;
@@ -151,7 +151,7 @@ export class AiInteractionService {
 
       // --- OpenAI Responses API 분기 ---
       if (chatbody.model === 'openai') {
-        const response = await this.handleOpenAIResponsesChat(
+        const response: OpenAIResponsesApiResult = await this.handleOpenAIResponsesChat(
           ownerUserId,
           conversationId,
           apiKey,
@@ -233,7 +233,7 @@ export class AiInteractionService {
     chatbody: AIchatType,
     files?: Express.Multer.File[],
     onStream?: (chunk: string) => void
-  ): Promise<AiHandlerResponse> {
+  ): Promise<OpenAIResponsesApiResult> {
     try {
         let aiContent = '';
         const generatedAttachments: Attachment[] = [];
@@ -436,26 +436,8 @@ export class AiInteractionService {
             });
         }
         
-        // 5. 생성된 메타데이터 및 첨부파일을 AI Interaction 결과에 포함시키기 위해 Return 값이 아닌
-        //    createMessage 호출 시점에 주입해야 하므로, 부모 메서드(handleAIChat)에서 이를 처리하기 어렵습니다.
-        //    (handleOpenAIResponsesChat은 string만 반환하므로)
-        //    따라서 여기서 message update 혹은 createMessage를 직접 호출하거나, 
-        //    Return Type을 변경해야 합니다. 
-        //    기존 handleStandardChat과의 호환성을 위해, 여기서는 handleAIChat이 
-        //    string 반환을 기대하므로, 꼼수로 부모에게 데이터를 전달하거나
-        //    설계상 handleOpenAIResponsesChat이 직접 저장을 수행하지 않는다면,
-        //    Return Type을 { content: string, attachments: Attachment[], metadata: any } 로 변경하는 것이 옳습니다.
-        
-        //    [FIX] handleAIChat을 수정하여 객체를 반환하도록 변경하겠습니다.
-        //    하지만 interface 변경이 크므로, 여기서는 throw를 통해 data를 전달하거나,
-        //    혹은 객체를 리턴하고 handleAIChat에서 타입 체크를 하는 방식을 쓰겠습니다.
-        
-        //    일단은 string만 반환하는 구조이므로, generatedAttachments를 어딘가에 저장해야 합니다.
-        //    가장 좋은 방법은 handleAIChat에서 이 메서드의 리턴 타입을 확장하는 것입니다.
-        //    그러나 `handleStandardChat`은 string만 반환합니다.
-        
-        //    [Decision] handleOpenAIResponsesChat의 리턴 타입을 any로 바꾸고 handleAIChat에서 처리.
-        return { content: aiContent, attachments: generatedAttachments, metadata } as any;
+
+        return { content: aiContent, attachments: generatedAttachments, metadata } as OpenAIResponsesApiResult;
 
     } catch (err: unknown) {
         logger.error({ err, conversationId, ownerUserId }, 'handleOpenAIResponsesChat failed');
