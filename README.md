@@ -21,6 +21,7 @@ GraphNode는 대화형 AI와 지식 그래프를 결합한 차세대 지식 관�
 | 🌐 [시스템 전체 구조](docs/architecture/ARCHITECTURE.md)  | 전반적인 컴포넌트 구성 및 데이터 흐름      |
 | 📩 [SQS 비동기 파이프라인](docs/architecture/SQS_FLOW.md) | BE-AI 서버 간의 메시징 워크플로우          |
 | 🔐 [인증 및 보안 시스템](docs/architecture/AUTH_JWT.md)   | JWT 및 소셜(Google/Apple) 로그인 구현 방식 |
+| 📊 [사용자 행동 분석 (PostHog)](docs/architecture/posthog_analytics.md) | 사용자 활동 추적 및 이벤트 분석 가이드 |
 | 📱 [FCM 모바일 알림 구조](docs/guides/FCM-NOTIFICATION-FLOW.md) | Firebase Cloud Messaging 기반 푸시 알림 설계 |
 
 ---
@@ -150,7 +151,7 @@ infisical run --env=prod -- npm start
 - **Architecture**:
   - [Project Structure](docs/PROJECT_STRUCTURE.md) | [Database](docs/architecture/DATABASE.md) | [Ports](docs/architecture/PORTS.md)
   - [SQS Logic](docs/architecture/LOGIC_SQS.md) | [FCM Logic](docs/architecture/LOGIC_FCM.md) | [Workers](docs/architecture/WORKERS.md)
-  - [Security](docs/architecture/SECURITY.md) | [Observability](docs/architecture/OBSERVABILITY.md) | [Audit Logs](docs/architecture/AUDIT_LOGS.md)
+  - [Security](docs/architecture/SECURITY.md) | [Observability](docs/architecture/OBSERVABILITY.md) | [Audit Logs](docs/architecture/AUDIT_LOGS.md) | [Sentry](docs/architecture/sentry.md)
 
 ---
 

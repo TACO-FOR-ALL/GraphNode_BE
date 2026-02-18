@@ -134,11 +134,15 @@ export const openAI = {
       tool_resources?: any;
       previous_response_id?: string;
       fileIds?: string[];
+      store? : boolean;
     }
   ): Promise<Result<AsyncIterable<any>>> {
     logger.info({ model: params.model }, 'openAI.createResponse called');
     try {
-      const client = new OpenAI({ apiKey });
+      const client = new OpenAI(
+        { apiKey,
+          timeout: 600000,  //  10분 타임아웃
+         });
       
       // OpenAI SDK v4.56.0+ should have client.responses
       const responsesClient = client.responses;
@@ -152,11 +156,16 @@ export const openAI = {
         model: params.model,
         input: params.input,
         stream: true,
+        include: [
+          'code_interpreter_call.outputs',
+          'code_interpreter_call.code',
+        ],
       };
 
       if (params.tools) createParams.tools = params.tools;
       if (params.tool_resources) createParams.tool_resources = params.tool_resources;
       if (params.previous_response_id) createParams.previous_response_id = params.previous_response_id;
+      if (params.store !== undefined) createParams.store = params.store;
 
       const stream = await responsesClient.create(createParams);
 

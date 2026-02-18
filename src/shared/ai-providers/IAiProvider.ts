@@ -61,6 +61,7 @@ export interface IAiProvider {
       tools?: any[];
       tool_resources?: any;
       previous_response_id?: string;
+      store?: boolean;
     }
   ): Promise<Result<AsyncIterable<any>>>;
 
