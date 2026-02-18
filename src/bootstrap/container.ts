@@ -319,6 +319,7 @@ export class Container {
       const raw = new GraphGenerationService(
         this.getChatManagementService(),
         this.getGraphEmbeddingService(),
+        this.getUserService(),
         this.getAwsSqsAdapter(),
         this.getAwsS3Adapter()
       );

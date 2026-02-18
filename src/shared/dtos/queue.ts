@@ -77,6 +77,7 @@ export interface GraphSummaryRequestPayload extends BaseQueueMessage {
     graphS3Key: string; // 요약할 대상 그래프(graph_postprocessed.json) S3 키
     bucket: string;
     vectorDbS3Key?: string; //  Vector DB 경로 (Optional)
+    language?: string; // 사용자의 선호 언어 (ko, en, zh 등)
   };
 }
 
