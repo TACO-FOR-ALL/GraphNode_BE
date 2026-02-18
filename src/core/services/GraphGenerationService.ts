@@ -3,6 +3,7 @@ import { ulid } from 'ulid';
 
 import { ChatManagementService } from './ChatManagementService';
 import { GraphEmbeddingService } from './GraphEmbeddingService';
+import { UserService } from './UserService';
 import { HttpClient } from '../../infra/http/httpClient';
 import { AiInputConversation, AiInputData, AiInputMappingNode } from '../../shared/dtos/ai_input';
 import { logger } from '../../shared/utils/logger';
@@ -80,6 +81,7 @@ export class GraphGenerationService {
   constructor(
     private readonly chatManagementService: ChatManagementService,
     private readonly graphEmbeddingService: GraphEmbeddingService,
+    private readonly userService: UserService,
     private readonly queuePort: QueuePort,
     private readonly storagePort: StoragePort
   ) {
@@ -173,8 +175,11 @@ export class GraphGenerationService {
         throw new Error('Graph data not found for user. Please generate graph first.');
       }
       
-      // 3. AI 입력 포맷으로 변환 -> JSON String
-      const aiInput = mapSnapshotToAiInput(snapshot);
+      // 3. User Preferred Language 조회
+      const language = await this.userService.getPreferredLanguage(userId);
+
+      // 4. AI 입력 포맷으로 변환 -> JSON String
+      const aiInput = mapSnapshotToAiInput(snapshot, language);
       const jsonPayload = JSON.stringify(aiInput);
       const dataStream = Readable.from([jsonPayload]); // Readable Stream 생성
       
@@ -194,6 +199,7 @@ export class GraphGenerationService {
           graphS3Key: s3Key,
           bucket: bucket,
           // vectorDbS3Key: undefined // 필요 시 추가
+          language: language,
         },
         timestamp: new Date().toISOString(),
       };

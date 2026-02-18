@@ -13,7 +13,7 @@ import {
  * DB에 저장된 GraphSnapshotDto를 AI 서버(summarize.py)가 이해할 수 있는
  * AiGraphOutputDto(graph.json) 포맷으로 역변환합니다.
  */
-export function mapSnapshotToAiInput(snapshot: GraphSnapshotDto): AiGraphOutputDto {
+export function mapSnapshotToAiInput(snapshot: GraphSnapshotDto, language?: string): AiGraphOutputDto {
   const { nodes, edges, clusters, subclusters, stats } = snapshot;
 
   // 1. Nodes 변환
@@ -72,6 +72,7 @@ export function mapSnapshotToAiInput(snapshot: GraphSnapshotDto): AiGraphOutputD
       total_edges: stats?.edges || edges.length,
       total_clusters: stats?.clusters || clusters.length,
       clusters: aiClusters,
+      language: language,
     },
   };
 }

@@ -115,5 +115,6 @@ export interface AiGraphOutputDto {
     total_edges: number;
     total_clusters: number;
     clusters: Record<string, AiGraphClusterDetail>;
+    language?: string;
   };
 }

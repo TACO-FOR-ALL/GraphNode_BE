@@ -4,7 +4,6 @@ import {
   NotFoundError,
   ValidationError,
   UpstreamError,
-  InvalidApiKeyError,
 } from '../../shared/errors/domain';
 import { User } from '../types/persistence/UserPersistence';
 // import { openAI } from '../../shared/openai/index'; // Moved checkAPIKeyValid responsibility to AiProvider or just save it
