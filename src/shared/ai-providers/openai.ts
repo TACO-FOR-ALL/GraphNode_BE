@@ -388,6 +388,53 @@ export const openAI = {
       return { ok: false, error: normalizeError(e) };
     }
   },
+
+  /**
+   * OpenAI 파일 다운로드
+   * @param apiKey API Key
+   * @param fileId 파일 ID
+   */
+  async downloadFile(
+    apiKey: string,
+    fileId: string
+  ): Promise<Result<{ buffer: Buffer; filename?: string; mimeType?: string }>> {
+    logger.info({ fileId }, 'openAI.downloadFile called');
+    try {
+      const client = new OpenAI({ apiKey });
+      
+      // 1. 파일 정보 조회 (파일명 등)
+      let filename = 'unknown.bin';
+      try {
+        const fileInfo = await client.files.retrieve(fileId);
+        filename = fileInfo.filename;
+      } catch (e) {
+        logger.warn({ fileId, err: e }, 'Failed to retrieve file info, using default filename');
+      }
+
+      // 2. 파일 콘텐츠 다운로드
+      const response = await client.files.content(fileId);
+      
+      // OpenAI SDK returns a fetch-like Response object (or structured object depending on version)
+      // We assume it supports arrayBuffer() or we can get text/buffer from it.
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      
+      // MimeType 추론 (간단히 확장자 기반) or default to octet-stream
+      let mimeType = 'application/octet-stream';
+      if (filename.endsWith('.png')) mimeType = 'image/png';
+      else if (filename.endsWith('.jpg') || filename.endsWith('.jpeg')) mimeType = 'image/jpeg';
+      else if (filename.endsWith('.csv')) mimeType = 'text/csv';
+      else if (filename.endsWith('.json')) mimeType = 'application/json';
+      else if (filename.endsWith('.txt')) mimeType = 'text/plain';
+
+      logger.info({ fileId, size: buffer.length }, 'openAI.downloadFile succeeded');
+      return { ok: true, data: { buffer, filename, mimeType } };
+    } catch (e) {
+      const errorMsg = normalizeError(e);
+      logger.error({ err: e, errorMsg }, 'openAI.downloadFile failed');
+      return { ok: false, error: errorMsg };
+    }
+  },
 };
 
 export default openAI;

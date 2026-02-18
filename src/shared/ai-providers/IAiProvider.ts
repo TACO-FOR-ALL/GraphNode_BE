@@ -101,6 +101,13 @@ export interface IAiProvider {
   ): Promise<Result<any>>;
 
   /**
+   * 파일 다운로드 (Optional)
+   * @param apiKey API Key
+   * @param fileId 파일 ID
+   */
+  downloadFile?(apiKey: string, fileId: string): Promise<Result<{ buffer: Buffer; filename?: string; mimeType?: string }>>;
+
+  /**
    * Assistant 실행 및 스트리밍
    * @deprecated Responses API uses createResponse.
    */

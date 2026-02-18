@@ -40,6 +40,16 @@ export interface MessageDto {
   updatedAt?: string; // ISO 8601
   deletedAt?: string | null; // ISO 8601
   attachments?: Attachment[];
+  metadata?: {
+    toolCalls?: {
+      type: 'code_interpreter' | 'file_search';
+      input?: string;
+      logs?: string;
+      citations?: any[];
+      [key: string]: any;
+    }[];
+    [key: string]: any;
+  };
 }
 
 /**

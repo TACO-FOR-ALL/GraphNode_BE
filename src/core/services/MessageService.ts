@@ -74,6 +74,8 @@ export class MessageService {
         content: message.content,
         createdAt: now,
         updatedAt: now,
+        attachments: message.attachments,
+        metadata: message.metadata,
       };
 
       // 4. DB 저장 (DTO -> Doc 변환)

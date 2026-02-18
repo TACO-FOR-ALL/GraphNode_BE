@@ -101,6 +101,7 @@ export const geminiProvider: IAiProvider = {
   async createAssistant() { return { ok: false, error: 'Not implemented' }; },
   async addMessage() { return { ok: false, error: 'Not implemented' }; },
   async runAssistantStream() { return { ok: false, error: 'Not implemented' }; },
+  async downloadFile() { return { ok: false, error: 'Not implemented' }; },
 };
 
 function normalizeError(e: any): string {

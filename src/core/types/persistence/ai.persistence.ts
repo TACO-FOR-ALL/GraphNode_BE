@@ -68,4 +68,17 @@ export interface MessageDoc {
   updatedAt: number;
   deletedAt?: number | null;
   attachments?: Attachment[];
+  /**
+   * 확장된 메타데이터 저장소 (OpenAI Code Interpreter 로그, 검색 인용 정보 등)
+   */
+  metadata?: {
+    toolCalls?: {
+      type: 'code_interpreter' | 'file_search';
+      input?: string;
+      logs?: string;
+      citations?: any[];
+      [key: string]: any;
+    }[];
+    [key: string]: any;
+  };
 }

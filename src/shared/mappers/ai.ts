@@ -80,6 +80,8 @@ export function toMessageDoc(
     createdAt: dto.createdAt ? new Date(dto.createdAt).getTime() : now,
     updatedAt: dto.updatedAt ? new Date(dto.updatedAt).getTime() : now,
     deletedAt: dto.deletedAt ? new Date(dto.deletedAt).getTime() : null,
+    attachments: dto.attachments,
+    metadata: dto.metadata,
   };
 }
 
@@ -97,5 +99,7 @@ export function toChatMessageDto(doc: MessageDoc): ChatMessage {
     createdAt: new Date(doc.createdAt).toISOString(),
     updatedAt: new Date(doc.updatedAt).toISOString(),
     deletedAt: doc.deletedAt ? new Date(doc.deletedAt).toISOString() : null,
+    attachments: doc.attachments,
+    metadata: doc.metadata,
   };
 }
