@@ -6,12 +6,13 @@
  * - 에러 핸들링 검증
  */
 import { Readable } from 'stream';
+
 import { AiInteractionService } from '../../src/core/services/AiInteractionService';
 import { ChatManagementService } from '../../src/core/services/ChatManagementService';
 import { UserService } from '../../src/core/services/UserService';
 import { StoragePort } from '../../src/core/ports/StoragePort';
 import { ForbiddenError, ValidationError, UpstreamError, NotFoundError } from '../../src/shared/errors/domain';
-import { IAiProvider, AiResponse, Result } from '../../src/shared/ai-providers/IAiProvider';
+import { IAiProvider } from '../../src/shared/ai-providers/IAiProvider';
 
 // Mocks
 const mockChatSvc = {

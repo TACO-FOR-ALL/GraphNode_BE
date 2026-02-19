@@ -1,6 +1,6 @@
 import { GraphManagementService } from '../../src/core/services/GraphManagementService';
 import { GraphDocumentStore } from '../../src/core/ports/GraphDocumentStore';
-import { GraphNodeDto, GraphEdgeDto, GraphClusterDto } from '../../src/shared/dtos/graph';
+import { GraphNodeDto, GraphEdgeDto } from '../../src/shared/dtos/graph';
 import { ValidationError, UpstreamError } from '../../src/shared/errors/domain';
 import { GraphNodeDoc } from '../../src/core/types/persistence/graph.persistence';
 

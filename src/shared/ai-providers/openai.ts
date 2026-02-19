@@ -1,8 +1,7 @@
 import OpenAI from 'openai';
-import { v4 as uuidv4 } from 'uuid';
 import { Readable } from 'stream';
 
-import { ChatMessage, Attachment } from '../dtos/ai';
+import { Attachment } from '../dtos/ai';
 import { logger } from '../../shared/utils/logger';
 import { IAiProvider, Result, AiResponse, ChatGenerationParams } from './IAiProvider';
 import { StoragePort } from '../../core/ports/StoragePort';

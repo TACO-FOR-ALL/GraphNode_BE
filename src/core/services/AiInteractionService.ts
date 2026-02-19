@@ -10,7 +10,6 @@
  * - OpenAI SDK: 실제 AI 모델 호출
  */
 
-import { logger } from '../../shared/utils/logger';
 import { AppError } from '../../shared/errors/base';
 import 'multer'; // Ensure Multer types are loaded
 import { NotFoundError, UpstreamError, ValidationError, ForbiddenError } from '../../shared/errors/domain';
@@ -19,13 +18,11 @@ import { ChatManagementService } from './ChatManagementService';
 import { UserService } from './UserService';
 import { AIChatResponseDto, ChatMessage, ChatThread } from '../../shared/dtos/ai';
 import { AiResponse, getAiProvider, IAiProvider } from '../../shared/ai-providers/index';
-import { ChatMessageRequest } from '../../shared/ai-providers/ChatMessageRequest';
-import { loadEnv } from '../../config/env';
 import { ApiKeyModel } from '../../shared/dtos/me';
 import { Attachment } from '../../shared/dtos/ai';
 import { StoragePort } from '../ports/StoragePort';
-import { v4 as uuidv4 } from 'uuid';
 
+import { v4 as uuidv4 } from 'uuid';
 import { Readable } from 'stream';
 
 interface OpenAIResponsesApiResult {

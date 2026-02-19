@@ -1,4 +1,5 @@
 import { Router } from 'express';
+
 import { FileController } from '../controllers/file.controller';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AwsS3Adapter } from '../../infra/aws/AwsS3Adapter';

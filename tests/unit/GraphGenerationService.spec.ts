@@ -2,6 +2,8 @@
  * 목적: GraphGenerationService 유닛 테스트.
  * 접근: 외부 의존성(ChatManagementService, GraphEmbeddingService, HttpClient)을 모킹하여 로직 검증.
  */
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+
 import { GraphGenerationService } from '../../src/core/services/GraphGenerationService';
 import { ChatManagementService } from '../../src/core/services/ChatManagementService';
 import { GraphEmbeddingService } from '../../src/core/services/GraphEmbeddingService';
@@ -10,7 +12,6 @@ import { ConflictError } from '../../src/shared/errors/domain';
 import { QueuePort } from '../../src/core/ports/QueuePort';
 import { StoragePort } from '../../src/core/ports/StoragePort';
 
-import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 // Mock HttpClient
 jest.mock('../../src/infra/http/httpClient');
 jest.mock('../../src/shared/mappers/graph_ai_input.mapper', () => ({

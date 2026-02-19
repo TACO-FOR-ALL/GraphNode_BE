@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI, Content, Part } from '@google/generative-ai';
 import { Readable } from 'stream';
+
 import { IAiProvider, Result, AiResponse, ChatGenerationParams } from './IAiProvider';
-import { ChatMessageRequest } from './ChatMessageRequest';
 import { StoragePort } from '../../core/ports/StoragePort';
 import { documentProcessor } from '../utils/documentProcessor';
 import { logger } from '../../shared/utils/logger';

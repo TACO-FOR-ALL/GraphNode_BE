@@ -1,9 +1,10 @@
 /**
  * 목적: GoogleOAuthService 유닛 테스트.
  */
+import { fetch } from 'undici';
+
 import { GoogleOAuthService, GoogleTokenResponse } from '../../src/core/services/GoogleOAuthService';
 import { UpstreamError } from '../../src/shared/errors/domain';
-import { fetch } from 'undici';
 
 jest.mock('undici', () => ({
   fetch: jest.fn(),

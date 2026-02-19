@@ -8,7 +8,7 @@ import { jest, describe, it, expect, beforeAll, beforeEach, afterAll } from '@je
 import request from 'supertest';
 import { Express } from 'express';
 import nock from 'nock';
-import { ulid } from 'ulid';
+
 import { createApp } from '../../src/bootstrap/server';
 import { generateAccessToken } from '../../src/app/utils/jwt';
 import { GraphRepositoryMongo } from '../../src/infra/repositories/GraphRepositoryMongo';
