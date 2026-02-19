@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
+import * as Sentry from '@sentry/node';
 
 import { AppError, unknownToAppError } from '../../shared/errors/base';
 import { toProblem } from '../presenters/problem';
@@ -35,6 +36,18 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
 
   // 2. 응답 데이터 생성: RFC 9457 표준 포맷
   const problem = toProblem(e, req);
+
+  // [New] 중요 에러(500 이상)는 Sentry로 전송
+  if (e.httpStatus >= 500) {
+    Sentry.captureException(e, {
+      extra: {
+        code: e.code,
+        details: e.details,
+        path: req.originalUrl,
+        correlationId: (req as any).id,
+      },
+    });
+  }
 
   // 3. 로깅: 에러 코드, 상태, 경로 등을 구조화된 로그로 남김
   logger.child({ correlationId: (req as any).id }).error({
