@@ -163,7 +163,6 @@ export const openAI = {
           'message.input_image.image_url',
           'computer_call_output.output.image_url',
           'code_interpreter_call.outputs',
-          'reasoning.encrypted_content',
           'message.output_text.logprobs'
         ],
       };
