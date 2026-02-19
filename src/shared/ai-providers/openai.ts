@@ -1,14 +1,15 @@
 import OpenAI from 'openai';
+import { v4 as uuidv4 } from 'uuid';
+import { Readable } from 'stream';
 
-import { ChatMessageRequest } from './ChatMessageRequest';
-import { logger } from '../../shared/utils/logger'; // Logger import added
-
-export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
+import { ChatMessage, Attachment } from '../dtos/ai';
+import { logger } from '../../shared/utils/logger';
+import { IAiProvider, Result, AiResponse, ChatGenerationParams } from './IAiProvider';
+import { StoragePort } from '../../core/ports/StoragePort';
+import { documentProcessor } from '../utils/documentProcessor';
 
 /**
  * 오류 객체를 정규화하여 문자열로 반환합니다.
- * @param e 오류 객체
- * @returns 정규화된 오류 문자열
  */
 function normalizeError(e: any): string {
   const status = e?.status ?? e?.response?.status;
@@ -22,13 +23,27 @@ function normalizeError(e: any): string {
   if (e?.message === 'key_not_found') return 'key_not_found';
   if (e?.message === 'invalid_key_format') return 'invalid_key_format';
   return 'unknown_error';
-} // 오류 검출 코드
+}
 
-export const openAI = {
+/**
+ * 스트림을 버퍼로 변환하는 헬퍼 함수
+ * @param stream 변환할 스트림
+ * @returns 버퍼 
+ */
+async function streamToBuffer(stream: Readable): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  return new Promise((resolve, reject) => {
+    stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+    stream.on('error', (err) => reject(err));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+  });
+}
+
+export const openAI: IAiProvider = {
   /**
    * OPENAI API Key 유효성 검사
-   * @param apiKey  검사할 API Key
-   * @returns 검사 결과 (성공 시 true, 실패 시 오류 메시지)
+   * @param apiKey OpenAI API Key
+   * @returns 유효성 검사 결과
    */
   async checkAPIKeyValid(apiKey: string): Promise<Result<true>> {
     logger.info({ apiKey: '***' }, 'openAI.checkAPIKeyValid called');
@@ -42,228 +57,190 @@ export const openAI = {
       logger.error({ err: e, errorMsg }, 'openAI.checkAPIKeyValid failed');
       return { ok: false, error: errorMsg };
     }
-  }, //api 키 검사 있으면 정상적으로 통과 api 키에 오류가 있으면 오류 함수로 이동, async는 시간이 걸리는 작업
-
-  /**
-   * OPENAI API 요청
-   * @param apiKey  API Key
-   * @param stream  스트리밍 여부
-   * @param model  모델 이름
-   * @param messages  메시지 배열
-   * @returns 요청 결과
-   */
-  async requestWithoutStream(apiKey: string, model: string, messages: ChatMessageRequest[]) {
-    logger.info({ model, messageCount: messages.length }, 'openAI.requestWithoutStream called');
-    try {
-      const client = new OpenAI({ apiKey: apiKey });
-      const p = await client.chat.completions.create({
-        model,
-        messages: messages as any, // Type casting to bypass union mismatch
-      });
-      //console.log('request', p);
-      logger.info('openAI.requestWithoutStream succeeded');
-      return { ok: true, data: p } as Result<typeof p>;
-    } catch (e) {
-      const errorMsg = normalizeError(e);
-      logger.error({ err: e, errorMsg }, 'openAI.requestWithoutStream failed');
-      return { ok: false, error: errorMsg } as Result<never>;
-    }
   },
 
   /**
-   * OPENAI API 요청
-   * @param apiKey  API Key
-   * @param stream  스트리밍 여부
-   * @param model  모델 이름
-   * @param messages  메시지 배열
-   * @returns 요청 결과
+   * 통합 채팅 생성 메서드 (Stateless & Chat Completions API)
+   * - 매 요청마다 S3에서 이미지/파일을 다운로드하여 OpenAI에 주입합니다.
+   * - 이미지는 Base64로 변환하여 payload에 포함시킵니다.
+   * @param apiKey OpenAI API Key
+   * @param params 채팅 생성 파라미터
+   * @param onStream 스트리밍 콜백
+   * @param storageAdapter 스토리지 어댑터
+   * @returns 채팅 생성 결과
    */
-  async request(apiKey: string, stream: boolean, model: string, messages: ChatMessageRequest[]) {
-    logger.info({ model, stream, messageCount: messages.length }, 'openAI.request called');
-    try {
-      const client = new OpenAI({ apiKey: apiKey });
-      const p = await client.chat.completions.create({
-        model,
-        messages: messages as any,
-        stream,
-      });
-      //console.log('request', p);
-      logger.info('openAI.request succeeded');
-      return { ok: true, data: p } as Result<typeof p>;
-    } catch (e) {
-      const errorMsg = normalizeError(e);
-      logger.error({ err: e, errorMsg }, 'openAI.request failed');
-      return { ok: false, error: normalizeError(e) } as Result<never>;
-    }
-  },
-
-  /**
-   * OPENAI API 스트리밍 요청
-   */
-  async requestStream(
+  async generateChat(
     apiKey: string,
-    model: string,
-    messages: ChatMessageRequest[]
-  ): Promise<Result<AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>>> {
-    logger.info({ model, messageCount: messages.length }, 'openAI.requestStream called');
-    try {
-      const client = new OpenAI({ apiKey: apiKey });
-      const stream = await client.chat.completions.create({
-        model,
-        messages: messages as any,
-        stream: true,
-      });
-      logger.info('openAI.requestStream succeeded');
-      return { ok: true, data: stream };
-    } catch (e) {
-      const errorMsg = normalizeError(e);
-      logger.error({ err: e, errorMsg }, 'openAI.requestStream failed');
-      return { ok: false, error: normalizeError(e) };
-    }
-  },
+    params: ChatGenerationParams,
+    onStream?: (delta: string) => void,
+    storageAdapter?: StoragePort
+  ): Promise<Result<AiResponse>> {
+    const msgCount = params.messages.length;
+    logger.info({ model: params.model, msgCount }, 'openAI.generateChat called');
 
-  /**
-   * OPENAI Responses API 요청 (OpenAI Responses)
-   */
-  async createResponse(
-    apiKey: string,
-    params: {
-      model: string;
-      input: any[];
-      tools?: any[];
-      tool_resources?: any;
-      previous_response_id?: string;
-      fileIds?: string[];
-      store? : boolean;
+    if (!storageAdapter) {
+        logger.warn('StorageAdapter is not provided to OpenAI provider. Attachments cannot be processed.');
     }
-  ): Promise<Result<AsyncIterable<any>>> {
-    logger.info({ model: params.model }, 'openAI.createResponse called');
-    try {
-      const client = new OpenAI(
-        { apiKey,
-          timeout: 600000,  //  10분 타임아웃
-         });
-      
-      // OpenAI SDK v4.56.0+ should have client.responses
-      const responsesClient = client.responses;
 
-      if (!responsesClient) {
-          logger.error('OpenAI SDK does not support responses API yet');
-          return { ok: false, error: 'sdk_version_incompatible' };
+    try {
+
+      // OpenAI Client 생성
+      const client = new OpenAI({ apiKey, timeout: 600000 });
+
+      // 1. 메시지 매핑 (ChatMessage -> OpenAI Input)
+      const openAiMessages: any[] = [];
+
+      // Message 기록에 대한 루프 처리
+      for (const msg of params.messages) {
+        const role = msg.role; // 'user' | 'assistant' | 'system'
+        const contentParts: any[] = [];
+
+        // 1-1. 개별 메세지의 텍스트 처리
+        if (msg.content) {
+             if (typeof msg.content === 'string') {
+                 contentParts.push({ type: 'text', text: msg.content });
+             }             
+        }
+
+        // 1-2. 첨부파일 처리 (Unified Document Processor)
+        if (msg.attachments && msg.attachments.length > 0 && storageAdapter) {
+            for (const att of msg.attachments) {
+                try {
+                    // S3에서 파일 다운로드 (Stream -> Buffer)
+                    const stream = await storageAdapter.downloadStream(att.url, { bucketType: 'file' });
+                    const buffer = await streamToBuffer(stream as Readable);
+                    
+                    // DocumentProcessor로 처리 (이미지/텍스트/코드/문서 등)
+                    const processed = await documentProcessor.process(buffer, att.mimeType, att.name);
+                    
+                    if (processed.type === 'image') {
+                        // 이미지: Base64 URL로 추가
+                        contentParts.push({
+                            type: 'image_url',
+                            image_url: {
+                                url: `data:${att.mimeType};base64,${processed.content}`
+                            }
+                        });
+                    } else if (processed.type === 'text') {
+                        // 텍스트/문서: 텍스트 컨텐츠로 추가
+                        contentParts.push({
+                            type: 'text',
+                            text: processed.content
+                        });
+                    }
+                } catch (e) {
+                    // 처리 실패 시 에러 로그 남기고 해당 파일만 건너뜀
+                    logger.error({ err: e, fileKey: att.url, fileName: att.name }, 
+                        `Failed to process attachment ${att.id} for chat`);
+                }
+            }
+        }
+        
+        // OpenAI 포맷에 맞게 Push
+        // content가 비어있으면(이미지도 없고 텍스트도 없으면) 에러나므로 체크
+        if (contentParts.length > 0) {
+            openAiMessages.push({ role, content: contentParts });
+        }
       }
 
-      const createParams: any = {
-        model: params.model,
-        input: params.input,
+      // 모델 Fallback
+      const targetModel = params.model || 'gpt-4o-mini';
+
+      // 2. Chat Completions API 호출
+      const stream = await client.chat.completions.create({
+        model: targetModel,
+        messages: openAiMessages,
         stream: true,
-        include: [
-          'file_search_call.results',
-          'web_search_call.results',
-          'web_search_call.action.sources',
-          'message.input_image.image_url',
-          'computer_call_output.output.image_url',
-          'code_interpreter_call.outputs',
-          'message.output_text.logprobs'
-        ],
+        // tools: params.tools // 도구 사용 시 주석 해제
+      });
+
+      let aiContent = '';
+      const generatedAttachments: Attachment[] = []; // Chat Completions는 파일 생성을 직접 하지 않음 (달리/Code Interpreter 제외)
+      const metadata: any = {};
+
+      // 3. 스트림 처리
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta?.content || '';
+        if (delta) {
+            aiContent += delta;
+            onStream?.(delta);
+        }
+        // Tool Calls 처리 로직은 복잡하므로 필요 시 추가
+      }
+
+      return {
+        ok: true,
+        data: {
+          content: aiContent,
+          attachments: generatedAttachments,
+          metadata
+        }
       };
 
-      if (params.tools) createParams.tools = params.tools;
-      if (params.tool_resources) createParams.tool_resources = params.tool_resources;
-      if (params.previous_response_id) createParams.previous_response_id = params.previous_response_id;
-      if (params.store !== undefined) createParams.store = params.store;
-
-      const stream = await responsesClient.create(createParams);
-
-      logger.info('openAI.createResponse succeeded');
-      return { ok: true, data: stream as unknown as AsyncIterable<any> };
     } catch (e: any) {
       const errorMsg = normalizeError(e);
-      logger.error({ err: e, errorMsg }, 'openAI.createResponse failed');
+      logger.error({ err: e, errorMsg }, 'openAI.generateChat failed');
       return { ok: false, error: errorMsg };
     }
   },
-
+  
   /**
-   * OPENAI API를 사용하여 채팅방 제목을 생성합니다.
-   * @param apiKey  API Key
-   * @param firstUserMessage  첫 번째 사용자 메시지
-   * @param opts  옵션 (예: 타임아웃)
-   * @returns 생성된 채팅방 제목 또는 오류 메시지
+   * 사용자 메시지 기반으로 스레드 제목 생성
    */
   async requestGenerateThreadTitle(
     apiKey: string,
     firstUserMessage: string,
     opts?: { timeoutMs?: number }
   ): Promise<Result<string>> {
-    logger.info({ msgLength: firstUserMessage.length }, 'openAI.requestGenerateThreadTitle called');
     try {
-      const client = new OpenAI({ apiKey: apiKey });
-      const p = await client.chat.completions.create({
+      const client = new OpenAI({ apiKey, timeout: opts?.timeoutMs || 10000 });
+      const response = await client.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
-          {
-            role: 'system',
-            content:
-              'You are a helpful assistant that generates thread titles based on the first user message in 20 letters or less.',
-          },
-          {
-            role: 'user',
-            content:
-              `아래 메시지에 어울리는 채팅방 제목을 만들어.\n` +
-              `메시지: """${firstUserMessage}"""\n` +
-              `반드시 {"title":"..."} 형태의 JSON만 반환해.`,
-          },
+          { role: 'system', content: 'Generate a short, concise title (max 5 words) for a chat thread starting with this message. Return a JSON object with a "title" field.' },
+          { role: 'user', content: firstUserMessage },
         ],
+        response_format: { type: 'json_object' }
       });
-      const text = p.choices?.[0]?.message?.content ?? '{}';
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) return { ok: true, data: 'New Conversation' };
+
       try {
-        const { title } = JSON.parse(text);
-        const t = (title as string)?.trim();
-        if (t) {
-            logger.info({ title: t }, 'openAI.requestGenerateThreadTitle succeeded');
-            return { ok: true, data: t };
-        }
+        const parsed = JSON.parse(content);
+        return { ok: true, data: parsed.title || 'New Conversation' };
       } catch {
-        /* fallback */
+        return { ok: true, data: 'New Conversation' };
       }
-      const fallback = firstUserMessage.slice(0, 15) + (firstUserMessage.length > 15 ? '…' : '');
-      logger.info({ fallback }, 'openAI.requestGenerateThreadTitle fallback used');
-      return { ok: true, data: fallback };
     } catch (e) {
-      const errorMsg = normalizeError(e);
-      logger.error({ err: e, errorMsg }, 'openAI.requestGenerateThreadTitle failed');
-      return { ok: false, error: normalizeError(e) };
+      return { ok: true, data: 'New Conversation' }; // Fail gracefully
     }
   },
 
-  // --- Assistants API Implementation ---
-
   /**
-   * OpenAI 파일 업로드
-   * @param apiKey 
-   * @param file 
-   * @param purpose 
-   * @returns 
+   * 파일 업로드
+   * - Chat Completions API에서는 파일 업로드가 필수적이지 않음 (이미지는 Base64 전송).
+   * - 다만 Fine-tuning이나 Assistants API 혼용 시 필요할 수 있으므로 유지하되, JSDoc 보강.
+   * 
+   * @param apiKey OpenAI API Key
+   * @param file 업로드할 파일 객체 (Buffer, Filename, MimeType)
+   * @param purpose 업로드 목적 ('assistants' | 'vision' | 'fine-tune' 등)
    */
   async uploadFile(
-    apiKey: string,
+    apiKey: string, 
     file: { buffer: Buffer; filename: string; mimetype: string },
-    purpose: 'assistants' | 'vision' = 'assistants'
+    purpose: 'assistants' | 'vision' | 'assistants'
   ): Promise<Result<{ fileId: string }>> {
-    logger.info({ filename: file.filename, mimetype: file.mimetype, purpose }, 'openAI.uploadFile called');
     try {
       const client = new OpenAI({ apiKey });
-      // OpenAI expects a File object or ReadStream.
-      // We create a File-like object from buffer.
       const fileObj = await import('openai/uploads').then((m) =>
         m.toFile(file.buffer, file.filename, { type: file.mimetype })
       );
       
       const response = await client.files.create({
         file: fileObj,
-        purpose: purpose,
+        purpose: purpose as any,
       });
-      logger.info({ fileId: response.id }, 'openAI.uploadFile succeeded');
       return { ok: true, data: { fileId: response.id } };
     } catch (e) {
       const errorMsg = normalizeError(e);
@@ -273,167 +250,14 @@ export const openAI = {
   },
 
   /**
-   * OpenAI 스레드 생성
-   * @param apiKey 
-   * @returns 
+   * 파일 다운로드
+   * @deprecated Chat Completions API는 Stateless이므로 OpenAI에서 파일을 다운로드할 일이 거의 없습니다.
+   * (Code Interpreter 결과물 등은 예외지만, 현재 구조에서는 사용되지 않음)
    */
-  async createThread(apiKey: string): Promise<Result<{ threadId: string }>> {
-    logger.info('openAI.createThread called');
-    try {
-      const client = new OpenAI({ apiKey });
-      const thread = await client.beta.threads.create();
-      logger.info({ threadId: thread.id }, 'openAI.createThread succeeded');
-      return { ok: true, data: { threadId: thread.id } };
-    } catch (e) {
-      const errorMsg = normalizeError(e);
-      logger.error({ err: e, errorMsg }, 'openAI.createThread failed');
-      return { ok: false, error: normalizeError(e) };
-    }
-  },
-
-  /**
-   * OpenAI Assistant 생성
-   * @param apiKey 
-   * @returns 
-   */
-  async createAssistant(apiKey: string): Promise<Result<{ assistantId: string }>> {
-    logger.info('openAI.createAssistant called');
-    try {
-      const client = new OpenAI({ apiKey });
-      const assistant = await client.beta.assistants.create({
-        name: 'GraphNode User Assistant',
-        instructions: 'You are a helpful assistant for the GraphNode application.',
-        model: 'gpt-4o', // Default model
-        tools: [
-          { type: 'file_search' },
-          { type: 'code_interpreter' },
-        ], // Enable RAG and Code Interpreter by default
-      });
-      logger.info({ assistantId: assistant.id }, 'openAI.createAssistant succeeded');
-      return { ok: true, data: { assistantId: assistant.id } };
-    } catch (e) {
-      const errorMsg = normalizeError(e);
-      logger.error({ err: e, errorMsg }, 'openAI.createAssistant failed');
-      return { ok: false, error: normalizeError(e) };
-    }
-  },
-
-  /**
-   * 
-   * @param apiKey 
-   * @param threadId 
-   * @param role 
-   * @param content 
-   * @param fileIds 
-   * @returns 
-   */
-  async addMessage(
-    apiKey: string,
-    threadId: string,
-    role: 'user' | 'assistant',
-    content: string | Array<any>,
-    fileIds: string[] = []
-  ): Promise<Result<any>> {
-    logger.info({ threadId, role, fileCount: fileIds.length }, 'openAI.addMessage called');
-    try {
-      const client = new OpenAI({ apiKey });
-      
-      const attachments = fileIds.map((fileId) => ({
-        file_id: fileId,
-        tools: [
-          { type: 'file_search' as const },
-          { type: 'code_interpreter' as const }
-        ],
-      }));
-
-      const msg = await client.beta.threads.messages.create(threadId, {
-        role: role,
-        content: content,
-        attachments: attachments.length > 0 ? attachments : undefined,
-      });
-      logger.info({ msgId: msg.id }, 'openAI.addMessage succeeded');
-      return { ok: true, data: msg };
-    } catch (e) {
-      const errorMsg = normalizeError(e);
-      logger.error({ err: e, errorMsg }, 'openAI.addMessage failed');
-      return { ok: false, error: normalizeError(e) };
-    }
-  },
-
-  /**
-   * 
-   * @param apiKey 
-   * @param assistantId 
-   * @param threadId 
-   * @returns 
-   */
-  async runAssistantStream(
-    apiKey: string,
-    assistantId: string,
-    threadId: string
-  ): Promise<Result<AsyncIterable<any>>> {
-    logger.info({ assistantId, threadId }, 'openAI.runAssistantStream called');
-    try {
-      const client = new OpenAI({ apiKey });
-      const stream = await client.beta.threads.runs.create(threadId, {
-        assistant_id: assistantId,
-        stream: true,
-      });
-      logger.info('openAI.runAssistantStream succeeded (stream started)');
-      return { ok: true, data: stream };
-    } catch (e) {
-      const errorMsg = normalizeError(e);
-      logger.error({ err: e, errorMsg }, 'openAI.runAssistantStream failed');
-      return { ok: false, error: normalizeError(e) };
-    }
-  },
-
-  /**
-   * OpenAI 파일 다운로드
-   * @param apiKey API Key
-   * @param fileId 파일 ID
-   */
-  async downloadFile(
-    apiKey: string,
-    fileId: string
-  ): Promise<Result<{ buffer: Buffer; filename?: string; mimeType?: string }>> {
-    logger.info({ fileId }, 'openAI.downloadFile called');
-    try {
-      const client = new OpenAI({ apiKey });
-      
-      // 1. 파일 정보 조회 (파일명 등)
-      let filename = 'unknown.bin';
-      try {
-        const fileInfo = await client.files.retrieve(fileId);
-        filename = fileInfo.filename;
-      } catch (e) {
-        logger.warn({ fileId, err: e }, 'Failed to retrieve file info, using default filename');
-      }
-
-      // 2. 파일 콘텐츠 다운로드
-      const response = await client.files.content(fileId);
-      
-      // OpenAI SDK returns a fetch-like Response object (or structured object depending on version)
-      // We assume it supports arrayBuffer() or we can get text/buffer from it.
-      const arrayBuffer = await response.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      
-      // MimeType 추론 (간단히 확장자 기반) or default to octet-stream
-      let mimeType = 'application/octet-stream';
-      if (filename.endsWith('.png')) mimeType = 'image/png';
-      else if (filename.endsWith('.jpg') || filename.endsWith('.jpeg')) mimeType = 'image/jpeg';
-      else if (filename.endsWith('.csv')) mimeType = 'text/csv';
-      else if (filename.endsWith('.json')) mimeType = 'application/json';
-      else if (filename.endsWith('.txt')) mimeType = 'text/plain';
-
-      logger.info({ fileId, size: buffer.length }, 'openAI.downloadFile succeeded');
-      return { ok: true, data: { buffer, filename, mimeType } };
-    } catch (e) {
-      const errorMsg = normalizeError(e);
-      logger.error({ err: e, errorMsg }, 'openAI.downloadFile failed');
-      return { ok: false, error: errorMsg };
-    }
-  },
+  async downloadFile(apiKey: string, fileId: string): Promise<Result<{ buffer: Buffer; filename?: string; mimeType?: string }>> {
+    logger.warn('openAI.downloadFile is deprecated and should not be used in Stateless Chat flow.');
+    return { ok: false, error: 'deprecated_method' };
+  }
 };
 
 export default openAI;
