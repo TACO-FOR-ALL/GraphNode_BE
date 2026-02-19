@@ -1,5 +1,4 @@
 import { GraphVectorRepository } from '../../infra/repositories/GraphVectorRepository';
-import { GraphFeaturesJsonDto } from '../types/vector/graph-features';
 import { logger } from '../../shared/utils/logger';
 
 /**

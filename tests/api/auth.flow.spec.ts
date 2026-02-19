@@ -8,7 +8,7 @@
  * 4. Token Rotation: 만료된 Access Token 전송 -> Middleware가 Refresh Token으로 갱신 -> 200 & New Access Token
  */
 import request from 'supertest';
-import { jest, describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
+import { jest, describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import jwt from 'jsonwebtoken';
 
 // Mocks must be defined before imports that use them

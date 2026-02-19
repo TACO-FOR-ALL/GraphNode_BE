@@ -1,10 +1,11 @@
 /**
  * 목적: AppleOAuthService 유닛 테스트.
  */
-import { AppleOAuthService } from '../../src/core/services/AppleOAuthService';
-import { UpstreamError } from '../../src/shared/errors/domain';
 import jwt from 'jsonwebtoken';
 import { fetch } from 'undici';
+
+import { AppleOAuthService } from '../../src/core/services/AppleOAuthService';
+import { UpstreamError } from '../../src/shared/errors/domain';
 
 jest.mock('undici', () => ({
   fetch: jest.fn(),

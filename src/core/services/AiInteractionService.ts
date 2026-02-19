@@ -10,7 +10,6 @@
  * - OpenAI SDK: 실제 AI 모델 호출
  */
 
-import { logger } from '../../shared/utils/logger';
 import { AppError } from '../../shared/errors/base';
 import 'multer'; // Ensure Multer types are loaded
 import { NotFoundError, UpstreamError, ValidationError, ForbiddenError } from '../../shared/errors/domain';
@@ -18,14 +17,12 @@ import { AIchatType } from '../../shared/ai-providers/AIchatType';
 import { ChatManagementService } from './ChatManagementService';
 import { UserService } from './UserService';
 import { AIChatResponseDto, ChatMessage, ChatThread } from '../../shared/dtos/ai';
-import { getAiProvider, IAiProvider } from '../../shared/ai-providers/index';
-import { ChatMessageRequest } from '../../shared/ai-providers/ChatMessageRequest';
-import { loadEnv } from '../../config/env';
+import { AiResponse, getAiProvider, IAiProvider } from '../../shared/ai-providers/index';
 import { ApiKeyModel } from '../../shared/dtos/me';
 import { Attachment } from '../../shared/dtos/ai';
 import { StoragePort } from '../ports/StoragePort';
-import { v4 as uuidv4 } from 'uuid';
 
+import { v4 as uuidv4 } from 'uuid';
 import { Readable } from 'stream';
 
 interface OpenAIResponsesApiResult {
@@ -82,10 +79,15 @@ export class AiInteractionService {
 
   /**
    * AI 챗 메시지를 처리하는 핵심 메서드 (files 매개변수 추가됨)
+   * @prop ownerUserId 사용자 ID
+   * @prop chatbody AI 챗 메시지
+   * @prop conversationId 대화방 ID
+   * @prop files 첨부파일
+   * @prop onStream 스트리밍 콜백
+   * @returns AI 챗 응답
    */
   async handleAIChat(
     ownerUserId: string,
-    // FIXME: [Model Option Expansion] Provider 내 세부 모델(gpt-4, claude-3 등) 선택 로직 추가 필요
     chatbody: AIchatType,
     conversationId: string,
     files?: Express.Multer.File[],
@@ -93,9 +95,10 @@ export class AiInteractionService {
   ): Promise<AIChatResponseDto> {
     try {
       // 0. 파일 업로드 (S3 저장 및 첨부파일 메타데이터 생성)
-      const attachments = await this.handleFiles(files);
+      //    User가 보낸 파일은 먼저 우리 스토리지에 저장되어야 함.
+      const userAttachments : Attachment[] = await this.handleFiles(files);
 
-      // 1. API Key 조회
+      // 1. API Key 조회 & Provider 획득
       const apiKeyResponse = await this.userService.getApiKeys(ownerUserId, chatbody.model);
       const apiKey = apiKeyResponse.apiKey;
 
@@ -105,7 +108,6 @@ export class AiInteractionService {
         );
       }
 
-      // Provider 획득 (Factory Pattern)
       let provider: IAiProvider;
       try {
         provider = getAiProvider(chatbody.model);
@@ -113,7 +115,7 @@ export class AiInteractionService {
         throw new ValidationError(`Unsupported AI model: ${chatbody.model}`);
       }
 
-      // 2. API Key 검증 (개발 환경에서는 스킵, 추후 삭제)
+      // 2. 개발 환경 제외하고 API Key 실제 유효성 검사 (옵션)
       if (process.env.NODE_ENV !== 'development') {
         const isValid = await provider.checkAPIKeyValid(apiKey);
         if (!isValid.ok) {
@@ -131,7 +133,7 @@ export class AiInteractionService {
       } catch (err) {
         if (err instanceof NotFoundError) {
           isNewConversation = true;
-          // 제목 생성
+          // 제목 생성 (Legacy method call - safe to keep or refactor later)
           const titleRequest = await provider.requestGenerateThreadTitle(apiKey, chatbody.chatContent);
           newTitle = titleRequest.ok ? titleRequest.data : 'New Conversation';
 
@@ -145,42 +147,41 @@ export class AiInteractionService {
         }
       }
 
-      let aiContent = '';
-      let generatedAttachments: Attachment[] | undefined;
-      let generatedMetadata: any | undefined;
+      // 4. 메시지 구성 (Stateless History)
+      //    DB에서 과거 기록 조회 -> Provider용 Request 포맷 변환
+      const historyMessages :ChatMessage[] = await this.chatManagementService.getMessages(conversationId);
 
-      // --- OpenAI Responses API 분기 ---
-      if (chatbody.model === 'openai') {
-        const response: OpenAIResponsesApiResult = await this.handleOpenAIResponsesChat(
-          ownerUserId,
-          conversationId,
+
+      // 5. 현재 사용자 메시지 구성 (멀티모달 지원)
+      let currentUserChatMessage: ChatMessage = {
+        id: chatbody.id,
+        role: 'user',
+        content: chatbody.chatContent,
+        attachments: userAttachments,
+      };
+      
+      // 최종 전송 메시지 목록 = 과거 + 현재
+      const fullMessages = [...historyMessages, currentUserChatMessage];
+
+      // 6. AI Provider 호출 (Unified Interface)
+      const aiResponseResult = await provider.generateChat(
           apiKey,
-          conversation,
-          provider,
-          chatbody,
-          files,
-          onStream
-        ) as any; // Explicit cast as handleOpenAIResponsesChat returns any now
-        
-        aiContent = response.content;
-        generatedAttachments = response.attachments;
-        generatedMetadata = response.metadata;
-      } else {
-        // --- 기존 Chat Completion (Claude, Gemini, etc) ---
-        aiContent = await this.handleStandardChat(
-          conversation,
-          chatbody,
-          provider,
-          apiKey,
-          onStream
-        );
+          {
+              model: chatbody.modelName, // TODO: Map to specific model names if needed
+              messages: fullMessages,
+          },
+          onStream,
+          this.storageAdapter
+      );
+
+      if (!aiResponseResult.ok) {
+          throw new UpstreamError(`AI Generation failed: ${aiResponseResult.error}`);
       }
 
-      if (!aiContent && !onStream) {
-        throw new UpstreamError('AI response content is empty.');
-      }
+      // AI 응답 획득(Stream 처리 다 끝난 후에 DB 저장 위한 데이터)
+      const aiResponse : AiResponse = aiResponseResult.data;
 
-      // 7. 메시지 저장 (User & AI)
+      // 8. 메시지 저장 (User & AI)
       const userMessage = await this.chatManagementService.createMessage(
         ownerUserId,
         conversationId,
@@ -188,7 +189,7 @@ export class AiInteractionService {
           id: chatbody.id,
           role: 'user',
           content: chatbody.chatContent,
-          attachments: attachments,
+          attachments: userAttachments,
         }
       );
 
@@ -197,9 +198,9 @@ export class AiInteractionService {
         conversationId,
         {
           role: 'assistant',
-          content: aiContent,
-          attachments: generatedAttachments,
-          metadata: generatedMetadata,
+          content: aiResponse.content,
+          attachments: aiResponse.attachments,
+          metadata: aiResponse.metadata,
         }
       );
 
@@ -212,310 +213,6 @@ export class AiInteractionService {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('AiInteractionService.handleAIChat failed', { cause: String(err) });
     }
-  }
-
-
-
-  /**
-   * OpenAI Responses API 전용 처리 로직
-   * - Thread 생성/조회, 파일 업로드, 메시지 추가, Run 실행, 스트리밍 처리
-   */
-  /**
-   * OpenAPI Responses API 전용 처리 로직
-   * - Context Chaining, 멀티모달 입력 처리
-   */
-  private async handleOpenAIResponsesChat(
-    ownerUserId: string,
-    conversationId: string,
-    apiKey: string,
-    conversation: ChatThread,
-    provider: IAiProvider,
-    chatbody: AIchatType,
-    files?: Express.Multer.File[],
-    onStream?: (chunk: string) => void
-  ): Promise<OpenAIResponsesApiResult> {
-    try {
-        let aiContent = '';
-        const generatedAttachments: Attachment[] = [];
-        const metadata: any = { toolCalls: [] };
-
-        // 1. 입력 컨텐츠 구성 (Text)
-        const contentParts: any[] = [
-            { type: 'input_text', text: chatbody.chatContent }
-        ];
-
-        const fileIdsForTools: string[] = [];
-
-        // 파일 처리 (OpenAI Upload)
-        if (files && files.length > 0) {
-            for (const file of files) {
-                if (file.mimetype.startsWith('image/')) {
-                    // 이미지 처리: purpose='vision'
-                    const uploadRes = await provider.uploadFile(apiKey, {
-                        buffer: file.buffer,
-                        filename: file.originalname,
-                        mimetype: file.mimetype
-                    }, 'vision');
-
-                    if (uploadRes.ok) {
-                        contentParts.push({
-                            type: 'input_image', 
-                            file_id: uploadRes.data.fileId,
-                            detail: 'auto'
-                        });
-                    } else {
-                         throw new UpstreamError(`Image upload to OpenAI failed: ${uploadRes.error}`);
-                    }
-                } else {
-                    // 그 외 모든 문서/데이터 파일 -> 'assistants' purpose
-                    const uploadRes = await provider.uploadFile(apiKey, {
-                        buffer: file.buffer,
-                        filename: file.filename,
-                        mimetype: file.mimetype
-                    }, 'assistants');
-
-                    if (uploadRes.ok) {
-                        fileIdsForTools.push(uploadRes.data.fileId);
-                    } else {
-                        throw new UpstreamError(`File upload failed: ${uploadRes.error}`);
-                    }
-                }
-            }
-        }
-
-        // 2. Responses API 호출
-        const lastResponseId = conversation.lastResponseId;
-        
-        // User Message 구성
-        const inputMessage = {
-            role: 'user',
-            content: contentParts
-        };
-        
-        // Tools 및 Tool Resources 구성
-        const tools: any[] = [];
-
-        if (fileIdsForTools.length > 0) {
-            tools.push({ 
-                type: 'code_interpreter',
-                container: {
-                    type: 'auto',
-                    file_ids: fileIdsForTools
-                }
-            });
-             // tools.push({ type: 'file_search' }); // Disabled per plan
-        } else {
-            // 파일이 없어도 코드 인터프리터 등은 기본적으로 활성화하고 싶다면 여기서 추가
-            // tools.push({ type: 'code_interpreter' }); 
-        }
-
-        const res = await provider.createResponse(apiKey, {
-            model: 'gpt-4o',
-            input: [inputMessage],
-            tools: tools.length > 0 ? tools : undefined,
-            previous_response_id: lastResponseId,
-            store: true 
-        });
-
-        if (!res.ok) {
-            throw new UpstreamError(`Responses API failed: ${res.error}`);
-        }
-
-        // 3. 스트리밍 처리 및 Response ID 캡처
-        let newResponseId: string | undefined;
-
-        for await (const chunk of res.data) {
-            const eventType = (chunk as any).type;
-
-            // 1. 에러 이벤트 처리
-            if (eventType === 'response.error') {
-                const error = (chunk as any).error;
-                logger.error({ 
-                    error, 
-                    conversationId, 
-                    lastResponseId: newResponseId 
-                }, 'OpenAI Responses API stream error event received');
-                
-                throw new UpstreamError(
-                    `OpenAI streaming error: ${error.message || 'Unknown error'}`,
-                    { cause: error }
-                );
-            }
-
-            if (eventType === 'response.created') {
-                 newResponseId = (chunk as any).response?.id;
-                 logger.info({ newResponseId, conversationId }, 'OpenAI Response created');
-            }
-            
-            // 2. 텍스트 델타 처리
-            if (eventType === 'response.output_text.delta') {
-                 const delta = (chunk as any).delta;
-                 if (delta) {
-                     aiContent += delta;
-                     onStream?.(delta);
-                 }
-            }
-            
-            // 3. 완료된 항목 처리 (이미지, 도구 출력 등)
-            if (eventType === 'response.output_item.done') {
-                const item = (chunk as any).item;
-                
-                // (1) 메시지 아이템 (이미지 포함 가능)
-                if (item.type === 'message') {
-                     for (const content of item.content) {
-                         if (content.type === 'image_file') {
-                             const fileId = content.image_file.file_id;
-                             try {
-                                 const attachment = await this.processGeneratedFile(fileId, apiKey, provider);
-                                 generatedAttachments.push(attachment);
-                                 logger.info({ fileId, attachmentId: attachment.id }, 'Generated image processed');
-                             } catch (e) {
-                                 logger.error({ err: e, fileId }, 'Failed to process generated image');
-                             }
-                         }
-                         // 텍스트는 delta로 이미 처리됨
-                     }
-                }
-
-                // (2) 코드 인터프리터 호출
-                if (item.type === 'code_interpreter_call') {
-                     const callData = {
-                         type: 'code_interpreter',
-                         input: item.code_interpreter_call.code,
-                         outputs: item.code_interpreter_call.outputs, // logs, images
-                         logs: '' // 단순화된 로그 수집용
-                     };
-
-                     // Outputs 처리 (로그 수집 및 이미지 추출)
-                     if (Array.isArray(callData.outputs)) {
-                         for (const output of callData.outputs) {
-                             if (output.type === 'logs') {
-                                 callData.logs += output.logs + '\n';
-                             }
-                             if (output.type === 'image') {
-                                 const fileId = output.image.file_id;
-                                 try {
-                                     const attachment = await this.processGeneratedFile(fileId, apiKey, provider);
-                                     generatedAttachments.push(attachment);
-                                      logger.info({ fileId, attachmentId: attachment.id }, 'Code interpreter generated image processed');
-                                 } catch (e) {
-                                     logger.error({ err: e, fileId }, 'Failed to process code interpreter image');
-                                 }
-                             }
-                         }
-                     }
-                     metadata.toolCalls.push(callData);
-                }
-                
-                // (3) 파일 검색 호출 (추후 확장)
-                if (item.type === 'file_search_call') {
-                    metadata.toolCalls.push({
-                        type: 'file_search',
-                        input: item.file_search_call.query,
-                        citations: item.file_search_call.results // 포함되었는지 확인 필요 (include에 file_search_call.results 추가해야 함)
-                    });
-                }
-            }
-
-            if (eventType === 'response.completed') {
-                const finalId = (chunk as any).response?.id;
-                if (finalId) newResponseId = finalId;
-                logger.info({ 
-                    finalId, 
-                    conversationId, 
-                    contentLength: aiContent.length,
-                    attachmentsCount: generatedAttachments.length
-                }, 'OpenAI Response completed successfully');
-            }
-        }
-
-        // 4. 마지막 Response ID 저장 (Context Chaining)
-        if (newResponseId) {
-            await this.chatManagementService.updateDocWithAuth(conversationId, ownerUserId, {
-                lastResponseId: newResponseId
-            });
-        }
-        
-
-        return { content: aiContent, attachments: generatedAttachments, metadata } as OpenAIResponsesApiResult;
-
-    } catch (err: unknown) {
-        logger.error({ err, conversationId, ownerUserId }, 'handleOpenAIResponsesChat failed');
-        if (err instanceof AppError) throw err;
-        throw new UpstreamError('handleOpenAIResponsesChat failed', { cause: String(err) });
-    }
-  }
-
-  /**
-   * OpenAI 생성 파일 처리 (다운로드 -> S3 업로드 -> Attachment 생성)
-   */
-  private async processGeneratedFile(fileId: string, apiKey: string, provider: IAiProvider): Promise<Attachment> {
-      if (!provider.downloadFile) {
-          throw new UpstreamError('Provider does not support file download');
-      }
-
-      const downloadRes = await provider.downloadFile(apiKey, fileId);
-      if (!downloadRes.ok) {
-          throw new UpstreamError(`Failed to download generated file ${fileId}: ${downloadRes.error}`);
-      }
-      
-      const { buffer, filename, mimeType } = downloadRes.data;
-      const safeFilename = filename || `generated_${fileId}.bin`;
-      const key = `chat-attachments/${uuidv4()}/${safeFilename}`;
-      
-      // S3 업로드
-      await this.storageAdapter.upload(key, buffer, mimeType || 'application/octet-stream', { bucketType: 'file' });
-      
-      return {
-          id: uuidv4(),
-          type: (mimeType && mimeType.startsWith('image/')) ? 'image' : 'file',
-          url: key, // Public URL 로직 필요 시 수정
-          name: safeFilename,
-          mimeType: mimeType || 'application/octet-stream',
-          size: buffer.length
-      };
-  }
-
-  /**
-   * 표준 Chat Completion API 처리 로직 (Claude, Gemini, DeepSeek 등)
-   */
-  private async handleStandardChat(
-    conversation: ChatThread,
-    chatbody: AIchatType,
-    provider: IAiProvider,
-    apiKey: string,
-    onStream?: (chunk: string) => void
-  ): Promise<string> {
-    const history: ChatMessage[] = conversation.messages || [];
-    const messagesToSend = this.toChatMessageRequest(history);
-    messagesToSend.push({ role: 'user', content: chatbody.chatContent });
-
-    let detailedModelName = '';
-    switch (chatbody.model) {
-        case 'deepseek': detailedModelName = 'deepseek-chat'; break;
-        case 'claude': detailedModelName = 'claude-3-haiku-20240307'; break;
-        case 'gemini': detailedModelName = 'gemini-pro'; break;
-        default: detailedModelName = chatbody.model;
-    }
-
-    let aiContent = '';
-
-    if (onStream) {
-        const aiResponse = await provider.requestStream(apiKey, detailedModelName, messagesToSend);
-        if (!aiResponse.ok) throw new UpstreamError(`AI Request failed: ${aiResponse.error}`);
-        for await (const chunk of aiResponse.data) {
-            const delta = (chunk as any).choices?.[0]?.delta?.content ?? '';
-            if (delta) {
-                aiContent += delta;
-                onStream(delta);
-            }
-        }
-    } else {
-         const aiRep = await provider.requestWithoutStream(apiKey, detailedModelName, messagesToSend);
-         if (!aiRep.ok) throw new UpstreamError(aiRep.error);
-         aiContent = (aiRep.data as any).choices?.[0]?.message?.content ?? '';
-    }
-    return aiContent;
   }
 
   /**
@@ -556,35 +253,7 @@ export class AiInteractionService {
     return attachments;
   }
 
-  /**
-   * 채팅 메시지를 ChatMessageRequest로 변환
-   * @param messages 채팅 메시지 목록
-   * @returns ChatMessageRequest 목록
-   */
-  private toChatMessageRequest(messages: ChatMessage[]): ChatMessageRequest[] {
-    return messages.map((m) => {
-      // 텍스트 내용
-      let content: ChatMessageRequest['content'] = m.content;
 
-      // 첨부파일(이미지)이 있다면 멀티모달 포맷으로 변환
-      if (m.attachments && m.attachments.length > 0) {
-        const imageAttachments = m.attachments.filter((a) => a.type === 'image');
-        if (imageAttachments.length > 0) {
-          content = [
-            { type: 'text', text: m.content },
-            ...imageAttachments.map((a) => ({
-              type: 'image_url',
-              image_url: { url: a.url }, // 주의: OpenAI는 퍼블릭 URL만 접근 가능 (로컬 테스트 시 주의)
-            })),
-          ];
-        }
-      }
-
-      return {
-        role: m.role,
-        content: content,
-      };
-    });
-  }
 }
+
 

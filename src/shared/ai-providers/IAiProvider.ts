@@ -1,6 +1,31 @@
-import { ChatMessageRequest } from './ChatMessageRequest';
+import { ChatMessage, Attachment } from '../dtos/ai';
+import { StoragePort } from '../../core/ports/StoragePort';
 
 export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
+
+/**
+ * LLM에게 전달할 채팅 생성 파라미터
+ * @param model LLM 모델명
+ * @param messages 채팅 메시지 히스토리
+ */
+export interface ChatGenerationParams {
+  model?: string;
+  messages: ChatMessage[];
+}
+
+/**
+ * LLM의 응답 구조
+ * @param content LLM의 응답 내용
+ * @param attachments LLM이 생성한 첨부파일
+ * @param usage LLM의 사용량
+ * @param metadata LLM의 메타데이터
+ */
+export interface AiResponse {
+  content: string;
+  attachments: Attachment[];
+  usage?: any;
+  metadata?: any;
+}
 
 export interface IAiProvider {
   /**
@@ -9,38 +34,23 @@ export interface IAiProvider {
   checkAPIKeyValid(apiKey: string): Promise<Result<true>>;
 
   /**
-   * 스트리밍 없는 요청 (단건 응답)
+   * 통합 채팅 생성 메서드 (Stateless & Responses API / Chat Completion)
+   * 
+   * @param apiKey API Key
+   * @param params 채팅 생성 파라미터 (모델, 메시지 히스토리 등)
+   * @param onStream 스트리밍 콜백 (텍스트 델타)
+   * @param storageAdapter 파일 처리를 위한 스토리지 어댑터 (Optional)
    */
-  requestWithoutStream(
+  generateChat(
     apiKey: string,
-    model: string,
-    messages: ChatMessageRequest[]
-  ): Promise<Result<any>>;
-
-  /**
-   * 스트리밍 요청
-   */
-  request(
-    apiKey: string,
-    stream: boolean,
-    model: string,
-    messages: ChatMessageRequest[]
-  ): Promise<Result<any>>;
-
-  /**
-   * 스트리밍 요청 (AsyncGenerator 반환 권장)
-   */
-  requestStream(
-    apiKey: string,
-    model: string,
-    messages: ChatMessageRequest[]
-  ): Promise<Result<AsyncIterable<any>>>;
+    params: ChatGenerationParams,
+    onStream?: (delta: string) => void,
+    storageAdapter?: StoragePort
+  ): Promise<Result<AiResponse>>;
 
   /**
    * 사용자 메시지 기반으로 스레드 제목 생성
-   */
-  /**
-   * 사용자 메시지 기반으로 스레드 제목 생성
+   * (Legacy compatible, but could be refactored into generateChat with specific prompt)
    */
   requestGenerateThreadTitle(
     apiKey: string,
@@ -49,56 +59,14 @@ export interface IAiProvider {
   ): Promise<Result<string>>;
 
   /**
-   * Responses API 요청 (OpenAI Responses)
-   * @param apiKey API Key
-   * @param params 요청 파라미터 (model, input, tools, previous_response_id 등)
+   * 파일 업로드 (Legacy support for OpenAI Assistants/Responses API)
+   * Optional: Only required if provider supports file uploads directly
    */
-  createResponse(
-    apiKey: string,
-    params: {
-      model: string;
-      input: any[];
-      tools?: any[];
-      tool_resources?: any;
-      previous_response_id?: string;
-      store?: boolean;
-    }
-  ): Promise<Result<AsyncIterable<any>>>;
-
-  // --- Assistants API (Stateful) & File Search ---
-
-  /**
-   * 파일 업로드 (OpenAI Files API 등)
-   */
-  uploadFile(
+  uploadFile?(
     apiKey: string,
     file: { buffer: Buffer; filename: string; mimetype: string },
     purpose?: 'assistants' | 'vision' | 'responses'
   ): Promise<Result<{ fileId: string }>>;
-
-  /**
-   * 스레드 생성
-   * @deprecated Responses API does not use explicit threads.
-   */
-  createThread(apiKey: string): Promise<Result<{ threadId: string }>>;
-
-  /**
-   * Assistant 생성
-   * @deprecated Responses API does not use explicit assistants.
-   */
-  createAssistant(apiKey: string): Promise<Result<{ assistantId: string }>>;
-
-  /**
-   * 스레드에 메시지 추가
-   * @deprecated Responses API handles messages in input array.
-   */
-  addMessage(
-    apiKey: string,
-    threadId: string,
-    role: 'user' | 'assistant',
-    content: string | Array<any>,
-    fileIds?: string[]
-  ): Promise<Result<any>>;
 
   /**
    * 파일 다운로드 (Optional)
@@ -106,14 +74,4 @@ export interface IAiProvider {
    * @param fileId 파일 ID
    */
   downloadFile?(apiKey: string, fileId: string): Promise<Result<{ buffer: Buffer; filename?: string; mimeType?: string }>>;
-
-  /**
-   * Assistant 실행 및 스트리밍
-   * @deprecated Responses API uses createResponse.
-   */
-  runAssistantStream(
-    apiKey: string,
-    assistantId: string,
-    threadId: string
-  ): Promise<Result<AsyncIterable<any>>>;
 }

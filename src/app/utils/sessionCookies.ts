@@ -93,7 +93,7 @@ export function setHelperLoginCookies(
     email?: string | null;
   }
 ) {
-  /* eslint-disable-next-line prefer-const */
+   
   let opts = getDisplayCookieOpts();
   const maxAgeEnv = process.env.COOKIE_HELPER_MAX_AGE;
   if(maxAgeEnv) {

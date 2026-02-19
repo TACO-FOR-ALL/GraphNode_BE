@@ -1,8 +1,9 @@
+import { v4 as uuidv4 } from 'uuid';
+
 import { User, Provider } from '../../core/types/persistence/UserPersistence';
 import { UserRepository } from '../../core/ports/UserRepository';
 import prisma from '../db/prisma';
 import { ApiKeyModel } from '../../shared/dtos/me';
-import { v4 as uuidv4 } from 'uuid';
 
 /**
  * UserRepository (Prisma 구현)

@@ -6,14 +6,16 @@ import { AiStreamEvent } from '../types/ai-event.js';
 /**
  * AI 채팅 요청 DTO
  * @public
- * @property id FE가 만들어줄 message 용 uuid
- * @property model 사용할 AI 모델 (openai | deepseek)
- * @property chatContent 사용자 입력 메시지
+ * @prop id FE가 만들어줄 message 용 uuid
+ * @prop model AI 모델
+ * @prop chatContent AI 챗 대화 내용
+ * @prop modelName AI 모델 이름
  */
 export interface AIChatRequestDto {
   id: string;
   model: ApiKeyModel;
   chatContent: string;
+  modelName?: string;
 }
 
 /**
@@ -69,6 +71,9 @@ export class AiApi {
       formData.append('id', dto.id);
       formData.append('model', dto.model);
       formData.append('chatContent', dto.chatContent);
+      if (dto.modelName) {
+        formData.append('modelName', dto.modelName);
+      }
       files.forEach((file) => formData.append('files', file));
       body = formData;
     } else {
@@ -221,6 +226,9 @@ export class AiApi {
       formData.append('id', dto.id);
       formData.append('model', dto.model);
       formData.append('chatContent', dto.chatContent);
+      if (dto.modelName) {
+        formData.append('modelName', dto.modelName);
+      }
       files.forEach((f) => formData.append('files', f));
       body = formData;
       // Content-Type for FormData is handled by browser/fetch

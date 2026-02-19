@@ -1,5 +1,5 @@
 import { VectorStore } from '../../core/ports/VectorStore';
-import { GraphFeaturesJsonDto, GraphNodeVectorItem } from '../../core/types/vector/graph-features';
+import { GraphNodeVectorItem } from '../../core/types/vector/graph-features';
 import { UpstreamError } from '../../shared/errors/domain';
 import { logger } from '../../shared/utils/logger';
 

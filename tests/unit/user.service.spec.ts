@@ -2,7 +2,6 @@ import { UserService } from '../../src/core/services/UserService';
 import { UserRepository } from '../../src/core/ports/UserRepository';
 import { User } from '../../src/core/types/persistence/UserPersistence';
 import { NotFoundError, ValidationError, InvalidApiKeyError } from '../../src/shared/errors/domain';
-import { ApiKeyModel } from '../../src/shared/dtos/me';
 
 // Mock getAiProvider
 jest.mock('../../src/shared/ai-providers/index', () => ({

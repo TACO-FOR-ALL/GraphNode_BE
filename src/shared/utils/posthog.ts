@@ -1,4 +1,5 @@
 import { PostHog } from 'posthog-node';
+
 import { logger } from './logger';
 
 let posthogClient: PostHog | null = null;
