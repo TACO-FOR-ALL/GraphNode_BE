@@ -184,6 +184,7 @@ infisical run --env=prod -- npm start
 개발에 참여하시거나 코드 스타일을 확인하시려면 아래 가이드를 참고하세요.
 
 - **[Code Style & Contribution Guide](docs/architecture/CODE_STYLE.md)**: 네이밍 컨벤션, 아키텍처 패턴, 에러 핸들링 규칙 등
+- **[Daily Dev Logs](docs/guides/Daily)**: 일별 작업 상세 기록 (예: [2026-02-20 AI Provider Refactor](docs/guides/Daily/20260220-ai-provider-refactor.md))
 
 ---
 

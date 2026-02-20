@@ -1,5 +1,6 @@
 import request from 'supertest';
 import express from 'express';
+import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 
 import { SyncController } from '../../src/app/controllers/sync';
 import { SyncService } from '../../src/core/services/SyncService';
@@ -16,12 +17,19 @@ describe('SyncController', () => {
   let syncController: SyncController;
   let mockSyncService: jest.Mocked<SyncService>;
 
-  beforeEach(() => {
+  let server: any;
+
+  beforeEach((done) => {
     app = express();
     app.use(express.json());
 
     // Setup mocks
-    mockSyncService = new SyncService({} as any, {} as any, {} as any) as jest.Mocked<SyncService>;
+    mockSyncService = {
+      pull: jest.fn(),
+      push: jest.fn(),
+    } as any;
+    
+    // Manual controller instantiation for isolation
     syncController = new SyncController(mockSyncService);
 
     // Setup routes
@@ -33,10 +41,17 @@ describe('SyncController', () => {
 
     // Default mock implementations
     (getUserIdFromRequest as jest.Mock).mockReturnValue('user-1');
+
+    server = app.listen(0, () => done());
   });
 
-  afterEach(() => {
+  afterEach((done) => {
     jest.clearAllMocks();
+    if (server) {
+      server.close(done);
+    } else {
+      done();
+    }
   });
 
   describe('GET /v1/sync/pull', () => {

@@ -1,3 +1,4 @@
+
 /**
  * 목적: Graph HTTP API의 동작을 실서비스(GraphEmbeddingService)와 가상 저장소(Mock Repository)를 사용하여 검증한다.
  */
@@ -22,6 +23,46 @@ let clustersStore = new Map<string, GraphClusterDoc>();
 let subclustersStore = new Map<string, GraphSubclusterDoc>();
 let statsStore = new Map<string, GraphStatsDoc>();
 let summaryStore = new Map<string, GraphSummaryDoc>();
+
+// --- Infra Mocks ---
+jest.mock('../../src/infra/redis/RedisEventBusAdapter', () => ({
+  RedisEventBusAdapter: class {
+    publish() { return Promise.resolve(); }
+    subscribe() { return Promise.resolve(); }
+    unsubscribe() { return Promise.resolve(); }
+  }
+}));
+
+jest.mock('../../src/infra/aws/AwsSqsAdapter', () => ({
+  AwsSqsAdapter: class {
+    sendMessage() { return Promise.resolve(); }
+  }
+}));
+
+jest.mock('../../src/infra/aws/AwsS3Adapter', () => ({
+  AwsS3Adapter: class {
+    upload() { return Promise.resolve(); }
+    downloadStream() { return { pipe: jest.fn() }; }
+  }
+}));
+
+jest.mock('../../src/infra/vector/ChromaVectorAdapter', () => ({
+  ChromaVectorAdapter: class {
+    createCollection() { return Promise.resolve(); }
+    upsert() { return Promise.resolve(); }
+    query() { return Promise.resolve([]); }
+    delete() { return Promise.resolve(); }
+  }
+}));
+
+// --- UserRepository Mock ---
+jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => ({
+  UserRepositoryMySQL: class {
+    async findById(id: any) {
+      return { id: String(id), email: 'u1@test.com' };
+    }
+  }
+}));
 
 // --- GraphRepository Mock ---
 jest.mock('../../src/infra/repositories/GraphRepositoryMongo', () => ({
@@ -138,21 +179,12 @@ jest.mock('../../src/infra/repositories/GraphRepositoryMongo', () => ({
   }
 }));
 
-// --- UserRepository Mock ---
-jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => ({
-  UserRepositoryMySQL: class {
-    async findById(id: any) {
-      return { id: String(id), email: 'u1@test.com' };
-    }
-  }
-}));
-
 describe('Graph API Integration Tests', () => {
   let app: any;
   const userId = '12345';
   let accessToken: string;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     process.env.SESSION_SECRET = 'test-secret';
     app = createApp();
     accessToken = generateAccessToken({ userId });
@@ -364,12 +396,13 @@ describe('Graph API Integration Tests', () => {
     });
 
     it('should save snapshot', async () => {
-        const snapshot = {
+        const snapshot: any = {
             nodes: [{ id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, timestamp: null }],
             edges: [{ id: 'e1', userId, source: 1, target: 2, weight: 1, type: 'hard', intraCluster: true }],
             clusters: [{ id: 'c1', userId, name: 'C1', description: 'D', size: 1, themes: [] }],
             subclusters: [],
-            stats: { nodes: 1, edges: 1, clusters: 1, generatedAt: new Date().toISOString(), metadata: {} }
+            stats: { nodes: 1, edges: 1, clusters: 1, generatedAt: new Date().toISOString(), metadata: {} },
+            summary: { id: userId, userId, content: 'Graph Summary', generatedAt: new Date().toISOString() }
         };
 
         await request(app)

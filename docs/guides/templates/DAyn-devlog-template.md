@@ -1,86 +1,115 @@
-# Day n — <작업 주제 요약 제목>
+# 작업 상세 문서 — [작업 주제]
 
-메타
+## 📌 메타 (Meta)
+- **작성일**: 2026-XX-XX KST
+- **작성자**: [팀명/이름]
+- **버전**: v1.0
+- **관련 이슈/PR**: —
+- **스코프 태그**: [BE] [AI]
 
-- 날짜: <YYYY-MM-DD KST>
-- 작성자: <이름/팀>
-- 버전: v<n.m>
-- 관련 이슈/PR: <#123, #124 / 링크>
-- 스코프 태그: [app] [core] [infra] [db] [docs] [ops]
+---
 
-## TL;DR
+## 📝 TL;DR (핵심 요약)
+- **목표:** 
+- **결과:** 
+- **영향 범위:** 
 
-- 목표: <하루 목표 한 줄>
-- 결과: <무엇을 만들었고 어떻게 검증했는지 한 줄>
-- 영향 범위: <API/DB/런타임/문서 등>
+---
 
-## 배경/컨텍스트(왜 이 작업을 했는가)
+## 📌 배경 / 컨텍스트
 
-- <업무/사용자 스토리/리스크/의존성 요약>
+### 요구 사항
+- 
 
-## 산출물(파일/코드 변경 요약)
+### 사전 조건/선행 작업
+- 
 
-- 추가 파일
-  - <path/to/file> — <역할/이유>
-- 수정 파일
-  - <path/to/file> — <주요 변경 요약>
-- 삭제 파일
-  - <path/to/file> — <대체/사유>
+---
 
-## 메서드/클래스 변경 상세
+## 📦 산출물
 
-- 생성
-  - <symbol signature> — 역할: <…> / 예외: <AppError 코드들> / 로깅 컨텍스트: <…>
-- 수정
-  - <symbol signature> — 변경점: <시그니처/로직/에러 맵핑>
-- 제거
-  - <symbol signature> — 대체: <…>
+### 📁 추가된 파일
+- `경로/파일명` — 설명
 
-## 실행/온보딩(재현 절차)
+### 📄 수정된 파일
+- `경로/파일명` — 설명
 
-사전 준비
+### 🗑 삭제된 파일
+- `경로/파일명` — 설명
 
-- Node.js: <버전>, npm: <버전>
-- Docker Desktop: <버전> (로컬 DB 구동 전제)
-- 환경변수: `.env.example`를 `.env`로 복사 후 값 설정
+---
 
-명령어
+## 🔧 상세 변경 (Method/Component)
 
-- 의존성 설치: `npm install`
-- 로컬 DB: `npm run db:up` (종료: `npm run db:down`, 로그: `npm run db:logs`)
-- 개발 서버: `npm run dev` → http://localhost:3000/healthz
-- 빌드/실행: `npm run build` → `npm start`
+### ✨ 생성 (Created)
 
-검증
+#### `파일경로`
+- `메서드/클래스명` — 설명
 
-- 헬스체크: GET `/healthz` 200
-- 에러 포맷: 존재하지 않는 경로 404 → `application/problem+json`
-- 로그: stdout에 JSON, correlationId 포함
+### ✏ 수정 (Modified)
+- `파일경로` — 설명
 
-## 구성/가정/제약
+### 🗑 제거 (Removed)
+- `파일경로` — 설명
 
-- DB는 로컬 Docker(MySQL 8: 3307, MongoDB 7: 27018) 사용
-- 시크릿/자격증명은 ENV 주입(코드 하드코딩 금지)
-- 레이어 규칙: Controller→Service→Port, infra는 Express 비의존
-- 에러 응답은 RFC 9457 Problem Details 고정
-- <기타 운영/보안 전제>
+---
 
-## 리스크/부채/트러블슈팅
+## 🚀 재현/실행 절차 (Onboarding)
 
-- <알려진 이슈/대응/우회>
-- <성능/확장/보안 관점 메모>
+### 📌 환경
+- 
 
-## 다음 Day 목표/후속 작업(TODO)
+### 📦 설치
+```bash
+```
 
-- <다음 액션 3~5개>
-- <ADR 필요 여부 / OpenAPI 반영 필요 여부>
+### ▶ 실행
+```bash
+```
 
-## 참고/링크
+### 🧪 검증
+- 
 
-- 설계/명령문: `/.github/instructions/*` 관련 항목
-- 외부 레퍼런스: <링크들>
+---
 
-## 변경 이력
+## 🛠 구성 / 가정 / 제약
+- 
 
-- v<n.m> (<YYYY-MM-DD>): 최초 작성
-- v<n.m+1> (<YYYY-MM-DD>): <수정 요약>
+---
+
+## ⚠ 리스크 / 이슈 / 트러블슈팅
+- 
+
+---
+
+## 🔜 다음 작업 / TODO
+- 
+
+---
+
+## 📎 참고 / 링크
+- 
+
+---
+
+## 📜 변경 이력
+- v1.0 (2026-XX-XX): 최초 작성
+
+---
+
+## 📝 작성 예시 (참고용)
+
+### ✨ 생성 (Created)
+
+#### `src/shared/utils/documentProcessor.ts`
+- `process(buffer, mimetype)` — 파일 바이너리를 받아 `ProcessedDocument` (`text` | `image` + Base64)로 변환
+- 지원 포맷: PDF(`pdf-parse`), PPT(`officeparser`), Word(`mammoth`), Excel(`xlsx`), Image(`Buffer`), Code(`utf-8`)
+
+### ✏ 수정 (Modified)
+
+#### `src/core/services/AiInteractionService.ts` (`handleAIChat`)
+- **파일 파이프라인**: 
+  1. Multer 파일 → S3 업로드 
+  2. `Attachment` 메타데이터 생성 
+  3. Provider 호출 시 `storageAdapter` 전달 
+  4. Provider 내부에서 S3 다운로드 및 `DocumentProcessor` 처리

@@ -5,12 +5,52 @@
  * - NoteRepository는 인메모리 Map을 사용하는 목(mock)으로 대체하여 DB 의존성 제거.
  * - Bearer 토큰 인증 방식을 사용하여 테스트 수행.
  */
-import { jest, describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
+import { jest, describe, it, expect, beforeAll, beforeEach, afterAll } from '@jest/globals';
 import request from 'supertest';
+import mongoose from 'mongoose';
 
 import { createApp } from '../../src/bootstrap/server';
 import { generateAccessToken } from '../../src/app/utils/jwt';
 import { NoteDoc, FolderDoc } from '../../src/core/types/persistence/note.persistence';
+import { GraphRepositoryMongo } from '../../src/infra/repositories/GraphRepositoryMongo';
+import { AwsSqsAdapter } from '../../src/infra/aws/AwsSqsAdapter';
+import { AwsS3Adapter } from '../../src/infra/aws/AwsS3Adapter';
+import { RedisEventBusAdapter } from '../../src/infra/redis/RedisEventBusAdapter';
+
+// --- Infra Mocks to prevent hangs from other modules ---
+jest.mock('../../src/infra/repositories/GraphRepositoryMongo');
+jest.mock('../../src/infra/aws/AwsSqsAdapter');
+jest.mock('../../src/infra/aws/AwsS3Adapter');
+jest.mock('../../src/infra/redis/RedisEventBusAdapter');
+
+// Mock implementations
+(GraphRepositoryMongo as jest.Mock).mockImplementation(() => ({
+  upsertNode: jest.fn(),
+  listNodes: jest.fn(),
+  upsertEdge: jest.fn(),
+  listEdges: jest.fn(),
+  upsertCluster: jest.fn(),
+  listClusters: jest.fn(),
+  saveStats: jest.fn(),
+  getStats: jest.fn(),
+  getSnapshotForUser: jest.fn(),
+  upsertGraphSummary: jest.fn(),
+  getGraphSummary: jest.fn(),
+}));
+
+(AwsSqsAdapter as jest.Mock).mockImplementation(() => ({
+  sendMessage: jest.fn(),
+}));
+
+(AwsS3Adapter as jest.Mock).mockImplementation(() => ({
+  upload: jest.fn(),
+}));
+
+(RedisEventBusAdapter as jest.Mock).mockImplementation(() => ({
+  publish: jest.fn(),
+  subscribe: jest.fn(),
+  unsubscribe: jest.fn(),
+}));
 
 // --- 전역 인메모리 스토어 ---
 let notesStore = new Map<string, NoteDoc>();
@@ -234,13 +274,33 @@ jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => ({
 
 describe('Note API Integration Tests', () => {
   let app: any;
+  let server: any; // Add server variable
   const userId = '12345';
   let accessToken: string;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     process.env.SESSION_SECRET = 'test-secret';
     app = createApp();
+    await new Promise<void>((resolve) => {
+        server = app.listen(0, () => {
+            resolve();
+        });
+    });
     accessToken = generateAccessToken({ userId });
+  });
+
+import mongoose from 'mongoose';
+
+  afterAll(async () => {
+      if (server) {
+          await new Promise<void>((resolve, reject) => {
+              server.close((err: Error | undefined) => {
+                  if (err) reject(err);
+                  else resolve();
+              });
+          });
+      }
+      await mongoose.disconnect();
   });
 
   beforeEach(() => {

@@ -34,6 +34,14 @@ jest.mock('../../src/infra/db/mongodb', () => ({
     })),
 }));
 
+jest.mock('../../src/infra/redis/RedisEventBusAdapter', () => ({
+  RedisEventBusAdapter: class {
+    publish() { return Promise.resolve(); }
+    subscribe() { return Promise.resolve(); }
+    unsubscribe() { return Promise.resolve(); }
+  }
+}));
+
 describe('GraphAi API Integration Tests', () => {
     let app: Express;
     let accessToken: string;
