@@ -213,7 +213,7 @@ export class AiApi {
     onEvent: (event: any) => void,
     options: { signal?: AbortSignal; fetchImpl?: any } = {}
   ): Promise<() => void> {
-    const url = this.rb.path(`/v1/ai/conversations/${conversationId}/chat`).url();
+    const rb = this.rb.path(`/v1/ai/conversations/${conversationId}/chat`);
 
     // Body 준비
     let body: any;
@@ -231,29 +231,17 @@ export class AiApi {
       }
       files.forEach((f) => formData.append('files', f));
       body = formData;
-      // Content-Type for FormData is handled by browser/fetch
     } else {
-      headers['Content-Type'] = 'application/json';
-      body = JSON.stringify(dto);
+      body = dto;
     }
 
-    // Agent.ts의 openAgentChatStream 로직과 유사하게 구현 (여기서는 간소화된 fetch 호출)
-    // 실제로는 http-builder가 스트리밍을 직접 지원하지 않으므로, fetch를 직접 호출해야 함.
-    // this.rb의 credentials, headers 등을 재사용하고 싶지만 private임.
-    // 여기서는 간단히 global fetch 사용 가정.
-
-    const fetchImpl = options.fetchImpl || globalThis.fetch;
     const controller = new AbortController();
     const signal = options.signal || controller.signal;
 
     try {
-      const res = await fetchImpl(url, {
-        method: 'POST',
-        headers,
-        body,
-        signal,
-        credentials: 'include', // SDK 기본값 따름
-      });
+      // options.signal 전달은 RequestBuilder 구현에 따라 다를 수 있으나
+      // 현재 rb.sendRaw 인터페이스를 활용해 요청
+      const res = await rb.sendRaw('POST', body, headers);
 
       if (!res.body) return () => controller.abort();
 
