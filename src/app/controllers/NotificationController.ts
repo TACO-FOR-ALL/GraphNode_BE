@@ -98,4 +98,25 @@ export class NotificationController {
     await this.notificationService.unregisterDeviceToken(userId, token);
     res.status(200).json({ success: true });
   }
+
+  /**
+   * 테스트 알림 전송
+   * POST /v1/notifications/test
+   * 개발/테스트 용도로 SSE 알림을 직접 트리거합니다.
+   */
+  async sendTestNotification(req: Request, res: Response): Promise<void> {
+    const userId = getUserIdFromRequest(req);
+
+    if (!userId) {
+      throw new AuthError('User must be authenticated');
+    }
+
+    await this.notificationService.sendNotification(userId, 'TEST_NOTIFICATION', {
+      message: 'This is a test notification',
+      timestamp: new Date().toISOString(),
+    });
+
+    logger.info({ userId }, 'Test notification sent');
+    res.status(200).json({ success: true, message: 'Test notification sent' });
+  }
 }

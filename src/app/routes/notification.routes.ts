@@ -35,5 +35,13 @@ export function createNotificationRouter(notificationService: NotificationServic
     asyncHandler(controller.unregisterDeviceToken.bind(controller))
   );
 
+  // 테스트 알림 전송 (개발용)
+  router.post(
+    '/test',
+    bindSessionUser,
+    requireLogin,
+    asyncHandler(controller.sendTestNotification.bind(controller))
+  );
+
   return router;
 }
