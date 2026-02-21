@@ -78,6 +78,7 @@
     "@anthropic-ai/sdk": "^0.71.2",
     "@aws-sdk/client-s3": "^3.971.0",
     "@aws-sdk/client-sqs": "^3.972.0",
+    "@aws-sdk/lib-storage": "^3.995.0",
     "@google/generative-ai": "^0.24.1",
     "@sentry/node": "^10.39.0",
     "@sentry/profiling-node": "^10.39.0",

@@ -51,11 +51,6 @@ export class GraphAiController {
     const userId = getUserIdFromRequest(req);
     const summary = await this.graphGenerationService.getGraphSummary(userId!);
 
-    if (!summary) {
-      res.status(404).json({ message: 'Summary not found' });
-      return;
-    }
-
     res.status(200).json(summary);
   };
 

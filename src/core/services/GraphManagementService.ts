@@ -417,11 +417,16 @@ export class GraphManagementService {
    * @param userId 사용자 ID
    * @returns GraphStatsDto 또는 null
    */
-  async getStats(userId: string): Promise<GraphStatsDto | null> {
+  async getStats(userId: string): Promise<GraphStatsDto> {
     try {
       this.assertUser(userId);
       const doc: GraphStatsDoc | null = await this.repo.getStats(userId);
-      return doc ? toGraphStatsDto(doc) : null;
+      return doc ? toGraphStatsDto(doc) : {
+        userId,
+        nodes: 0,
+        edges: 0,
+        clusters: 0
+      };
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.getStats failed', { cause: String(err) });
@@ -462,11 +467,28 @@ export class GraphManagementService {
   /**
    * 그래프 요약/인사이트 조회
    */
-  async getGraphSummary(userId: string): Promise<GraphSummaryDto | null> {
+  async getGraphSummary(userId: string): Promise<GraphSummaryDto> {
     try {
       this.assertUser(userId);
       const doc = await this.repo.getGraphSummary(userId);
-      if (!doc) return null;
+      if (!doc) {
+        return {
+          overview: {
+            total_conversations: 0,
+            time_span: '',
+            primary_interests: [],
+            conversation_style: '',
+            most_active_period: '',
+            summary_text: ''
+          },
+          clusters: [],
+          patterns: [],
+          connections: [],
+          recommendations: [],
+          generated_at: new Date().toISOString(),
+          detail_level: 'basic'
+        };
+      }
       // Doc -> DTO (Simple cast)
       const { _id, ...rest } = doc as any;
       return rest as GraphSummaryDto;

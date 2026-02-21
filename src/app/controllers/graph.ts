@@ -17,6 +17,7 @@ import { Request, Response } from 'express';
 import { GraphEmbeddingService } from '../../core/services/GraphEmbeddingService';
 import { persistGraphPayloadSchema } from '../../shared/dtos/graph.schemas';
 import { getUserIdFromRequest } from '../utils/request';
+import { GraphSnapshotDto, GraphStatsDto } from '../../shared/dtos/graph';
 
 export class GraphController {
   constructor(private readonly graphEmbeddingService: GraphEmbeddingService) {}
@@ -283,7 +284,7 @@ export class GraphController {
     const userId = getUserIdFromRequest(req)!;
 
     // 서비스 호출 (스냅샷 조회)
-    const snapshot = await this.graphEmbeddingService.getSnapshotForUser(userId);
+    const snapshot : GraphSnapshotDto = await this.graphEmbeddingService.getSnapshotForUser(userId);
 
     res.status(200).json(snapshot);
   }

@@ -11,6 +11,8 @@ import { loadEnv } from '../../config/env';
 import { logger } from '../../shared/utils/logger';
 import { UpstreamError } from '../../shared/errors/domain';
 
+import { Upload } from '@aws-sdk/lib-storage';
+
 /**
  * AWS S3 어댑터
  *
@@ -54,16 +56,17 @@ export class AwsS3Adapter implements StoragePort {
   ): Promise<void> {
     const bucket = options?.bucketType === 'file' ? this.fileBucket : this.payloadBucket;
     try {
-      // PutObjectCommand 생성
-      const command = new PutObjectCommand({
-        Bucket: bucket,
-        Key: key,
-        Body: body,
-        ContentType: contentType,
+      const parallelUploads3 = new Upload({
+        client: this.client,
+        params: {
+          Bucket: bucket,
+          Key: key,
+          Body: body,
+          ContentType: contentType,
+        },
       });
 
-      // S3 클라이언트를 사용하여 명령 실행
-      await this.client.send(command);
+      await parallelUploads3.done();
     } catch (error) {
       logger.error({ err: error, key, bucket }, 'Failed to upload to S3');
       throw new UpstreamError('Failed to upload to S3', { originalError: error });
