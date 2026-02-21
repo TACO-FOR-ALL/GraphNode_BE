@@ -97,7 +97,7 @@ export function createApp() {
 
   // 404 fall-through → Problem Details 형식으로 응답
   app.use((req, _res, next) => {
-    next(new NotFoundError('Not Found'));
+    res.status(404).json({ message: "Not Found" });
   });
 
 
