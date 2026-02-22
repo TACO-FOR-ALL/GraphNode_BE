@@ -4,6 +4,8 @@ import { ulid } from 'ulid';
 import { ChatManagementService } from './ChatManagementService';
 import { GraphEmbeddingService } from './GraphEmbeddingService';
 import { UserService } from './UserService';
+import { NotificationService } from './NotificationService';
+import { NotificationType } from '../../workers/notificationType';
 import { HttpClient } from '../../infra/http/httpClient';
 import { AiInputConversation, AiInputData, AiInputMappingNode } from '../../shared/dtos/ai_input';
 import { logger } from '../../shared/utils/logger';
@@ -83,7 +85,8 @@ export class GraphGenerationService {
     private readonly graphEmbeddingService: GraphEmbeddingService,
     private readonly userService: UserService,
     private readonly queuePort: QueuePort,
-    private readonly storagePort: StoragePort
+    private readonly storagePort: StoragePort,
+    private readonly notificationService: NotificationService
   ) {
     const env = loadEnv();
     // 타임아웃 5분(300초)으로 설정
@@ -104,6 +107,7 @@ export class GraphGenerationService {
    * @returns 발행된 작업의 연관 ID (TaskId) - 실제 AI TaskId는 아닐 수 있음
    */
   async requestGraphGenerationViaQueue(userId: string): Promise<string> {
+    let taskId: string | undefined;
     try {
       // 1. 중복 요청 방지 확인(SQS 방식 + ALB 스케일링 때문에 판별 불가)
       // if (this.activeUserTasks.has(userId)) {
@@ -112,7 +116,7 @@ export class GraphGenerationService {
       // }
 
       // 2.TaskId 생성 (UUID 등 사용 권장, 여기서는 간단히 timestamp 기반)
-      const taskId = `task_${userId}_${ulid()}`;
+      taskId = `task_${userId}_${ulid()}`;
       const s3Key = `graph-generation/${taskId}/input.json`;
 
       //logger.info({ userId, taskId }, 'Preparing graph generation request (S3 + SQS)');
@@ -148,9 +152,24 @@ export class GraphGenerationService {
       // 여기서는 큐에 넣는 성공 여부만 확인하므로 별도 Lock을 오래 걸지 않음.
       // FIXME > taskId를 꼭 반환해야 하나?
 
+
+      // SQS에 Message 전달 완료 후에 성공 Notification 전송
+      await this.notificationService.sendNotification(userId, NotificationType.GRAPH_GENERATION_REQUESTED, {
+        taskId,
+        timestamp: new Date().toISOString(),
+      });
+
       return taskId;
     } catch (err) {
       logger.error({ err, userId }, 'Failed to enqueue graph generation request');
+
+      // 에러 발생 시 실패 Notification 전송
+      await this.notificationService.sendNotification(userId, NotificationType.GRAPH_GENERATION_REQUEST_FAILED, {
+        taskId: taskId || 'unknown',
+        error: String(err),
+        timestamp: new Date().toISOString(),
+      });
+
       if (err instanceof AppError) throw err;
       throw new UpstreamError('Failed to request graph generation via queue', {
         cause: String(err),

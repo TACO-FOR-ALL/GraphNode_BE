@@ -321,7 +321,8 @@ export class Container {
         this.getGraphEmbeddingService(),
         this.getUserService(),
         this.getAwsSqsAdapter(),
-        this.getAwsS3Adapter()
+        this.getAwsS3Adapter(),
+        this.getNotificationService()
       );
       this.graphGenerationService = createAuditProxy(raw, 'GraphGenerationService');
     }
