@@ -1,6 +1,6 @@
 import { JobHandler } from './JobHandler';
 import { Container } from '../../bootstrap/container';
-import { AddConversationRequestPayload } from '../../shared/dtos/queue';
+import { AddNodeRequestPayload } from '../../shared/dtos/queue';
 import { logger } from '../../shared/utils/logger';
 import { HttpClient } from '../../infra/http/httpClient';
 import { NotificationType } from '../notificationType';
@@ -8,14 +8,14 @@ import { NotificationType } from '../notificationType';
 const AI_SERVER_URI = process.env.AI_SERVER_URI || 'http://localhost:8000';
 
 /**
- * 단일 대화 추가 요청 처리 핸들러
+ * 단일 노드 추가 요청 처리 핸들러
  *
  * Flow:
  * 1. S3에서 conversation 데이터 다운로드
  * 2. AI 서버 /add-node 호출
  * 3. 결과(노드, 엣지)를 MongoDB에 저장
  */
-export class AddConversationRequestHandler implements JobHandler {
+export class AddNodeRequestHandler implements JobHandler {
   private readonly httpClient: HttpClient;
 
   constructor() {
@@ -25,7 +25,7 @@ export class AddConversationRequestHandler implements JobHandler {
     });
   }
 
-  async handle(message: AddConversationRequestPayload, container: Container): Promise<void> {
+  async handle(message: AddNodeRequestPayload, container: Container): Promise<void> {
     const { payload, taskId } = message;
     const { userId, conversationId, s3Key } = payload;
 
