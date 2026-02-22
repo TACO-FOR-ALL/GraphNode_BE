@@ -68,11 +68,6 @@ export class GraphGenerationResultHandler implements JobHandler {
         };
         await graphService.persistSnapshot(persistPayload);
 
-        logger.info({ taskId, userId }, 'Graph snapshot persisted to DB');
-
-
-
-
         // 3.5. Vector DB 저장 (Features + Cluster Info Merge)
         if (payload.featuresS3Key) {
           try {
@@ -122,7 +117,6 @@ export class GraphGenerationResultHandler implements JobHandler {
             });
 
             await graphVectorService.saveGraphFeatures(userId, vectorItems);
-            logger.info({ taskId, userId, itemCount: vectorItems.length }, 'Graph features merged and persisted to Vector DB');
           } catch (featureErr) {
             logger.error({ err: featureErr, taskId }, 'Failed to persist graph features (Non-fatal)');
             // Vector DB 저장이 실패해도 DB 저장은 성공했으므로 전체 재시도는 하지 않음 (Non-fatal)

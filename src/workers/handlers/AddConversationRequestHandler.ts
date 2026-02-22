@@ -37,7 +37,6 @@ export class AddConversationRequestHandler implements JobHandler {
 
     try {
       // 1. S3에서 데이터 다운로드
-      logger.info({ s3Key }, 'Downloading conversation data from S3');
       const inputData = await storagePort.downloadJson<{
         conversation: any;
         userId: string;
@@ -45,7 +44,6 @@ export class AddConversationRequestHandler implements JobHandler {
       }>(s3Key);
 
       // 2. AI 서버 /add-node 호출
-      logger.info({ conversationId }, 'Calling AI server /add-node');
       const aiResult = await this.httpClient.post<{
         nodes: any[];
         edges: any[];
@@ -58,11 +56,6 @@ export class AddConversationRequestHandler implements JobHandler {
           themes?: string[];
         };
       }>('/add-node', inputData);
-
-      logger.info(
-        { conversationId, nodeCount: aiResult.nodes.length, edgeCount: aiResult.edges.length },
-        'AI server returned result'
-      );
 
       // 3. MongoDB에 저장
       // 노드 ID 생성 (기존 노드들의 max ID + 1)
@@ -110,8 +103,6 @@ export class AddConversationRequestHandler implements JobHandler {
         const clusterName = aiResult.assignedCluster.name || 'New Cluster';
         const clusterThemes = aiResult.assignedCluster.themes || [];
 
-        logger.info({ clusterId: newClusterId, name: clusterName }, 'Creating new cluster');
-
         await graphService.upsertCluster({
           id: newClusterId,
           userId,
@@ -123,9 +114,6 @@ export class AddConversationRequestHandler implements JobHandler {
           updatedAt: new Date().toISOString(),
         });
       }
-
-      logger.info({ taskId, userId, conversationId }, 'Conversation added to graph successfully');
-
       // 4. 성공 알림 전송
       await notiService.sendNotification(userId, NotificationType.ADD_CONVERSATION_COMPLETED, {
         taskId,

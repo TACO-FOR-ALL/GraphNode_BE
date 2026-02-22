@@ -13,7 +13,7 @@ import { ChatMessage } from '../../shared/dtos/ai';
 import { AiGraphOutputDto } from '../../shared/dtos/ai_graph_output';
 import { mapAiOutputToSnapshot } from '../../shared/mappers/ai_graph_output.mapper';
 import { mapSnapshotToAiInput } from '../../shared/mappers/graph_ai_input.mapper';
-import { GraphGenRequestPayload, GraphSummaryRequestPayload, AddConversationRequestPayload, TaskType } from '../../shared/dtos/queue';
+import { GraphGenRequestPayload, GraphSummaryRequestPayload, AddNodeRequestPayload, TaskType } from '../../shared/dtos/queue';
 // Interfaces
 import { QueuePort } from '../ports/QueuePort';
 import { StoragePort } from '../ports/StoragePort';
@@ -292,9 +292,9 @@ export class GraphGenerationService {
       await this.storagePort.upload(s3Key, payloadJson, 'application/json');
 
       // 4. Send SQS message
-      const messageBody: AddConversationRequestPayload = {
+      const messageBody: AddNodeRequestPayload = {
         taskId,
-        taskType: TaskType.ADD_CONVERSATION_REQUEST,
+        taskType: TaskType.ADD_NODE_REQUEST,
         payload: {
           userId,
           conversationId,

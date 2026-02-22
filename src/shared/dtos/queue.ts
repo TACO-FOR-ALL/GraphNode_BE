@@ -14,7 +14,7 @@ export enum TaskType {
   GRAPH_GENERATION_RESULT = 'GRAPH_GENERATION_RESULT', // AI -> Worker
   GRAPH_SUMMARY_REQUEST = 'GRAPH_SUMMARY_REQUEST', // API -> AI (Summary only)
   GRAPH_SUMMARY_RESULT = 'GRAPH_SUMMARY_RESULT', // AI -> Worker (Summary result)
-  ADD_CONVERSATION_REQUEST = 'ADD_CONVERSATION_REQUEST', // API -> AI (single conversation)
+  ADD_NODE_REQUEST = 'ADD_NODE_REQUEST', // API -> AI (single conversation)
 }
 
 // 공통 메시지 베이스
@@ -102,8 +102,8 @@ export interface GraphSummaryResultPayload extends BaseQueueMessage {
  *  - s3Key: 입력 데이터가 담긴 S3 키
  *  - bucket: 버킷명 (옵션)
  */
-export interface AddConversationRequestPayload extends BaseQueueMessage {
-  taskType: TaskType.ADD_CONVERSATION_REQUEST;
+export interface AddNodeRequestPayload extends BaseQueueMessage {
+  taskType: TaskType.ADD_NODE_REQUEST;
   payload: {
     userId: string;
     conversationId: string;
@@ -117,4 +117,4 @@ export type QueueMessage =
   | GraphGenRequestPayload
   | GraphGenResultPayload
   | GraphSummaryRequestPayload
-  | GraphSummaryResultPayload | AddConversationRequestPayload;
+  | GraphSummaryResultPayload | AddNodeRequestPayload;

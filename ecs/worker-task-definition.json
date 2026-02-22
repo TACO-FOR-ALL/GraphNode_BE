@@ -47,6 +47,7 @@
         "startPeriod": 0
       },
       "image": "571721033550.dkr.ecr.ap-northeast-2.amazonaws.com/taco4/graphnode:latest_10",
+      "command": ["node", "dist/workers/index.js"],
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
