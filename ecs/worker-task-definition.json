@@ -41,11 +41,14 @@
       ],
       "essential": true,
       "healthCheck": {
-        "command": [ "CMD-SHELL", "exit 0" ],
+        "command": [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+        ],
         "interval": 30,
         "timeout": 5,
         "retries": 3,
-        "startPeriod": 0
+        "startPeriod": 60
       },
       "image": "571721033550.dkr.ecr.ap-northeast-2.amazonaws.com/taco4/graphnode:latest_10",
       "command": ["node", "dist/workers/index.js"],

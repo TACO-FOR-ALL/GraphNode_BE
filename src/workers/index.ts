@@ -9,6 +9,7 @@
 import { Consumer } from 'sqs-consumer';
 import { SQSClient } from '@aws-sdk/client-sqs';
 import * as Sentry from '@sentry/node';
+import http from 'http';
 
 import { logger } from '../shared/utils/logger';
 import { loadEnv } from '../config/env';
@@ -80,7 +81,7 @@ async function startWorker() {
         // JSON 파싱
         const body = JSON.parse(message.Body) as QueueMessage;
         const { taskType, taskId } = body;
-        const payload = (body as any).payload;
+        const payload = body.payload;
         // 컨텍스트(Context) 정보 구성
         // Worker는 HTTP 요청을 받지 않으므로, 큐 메시지 데이터를 활용하여 가상의 요청 컨텍스트를 만듭니다.
         const ctx = {
@@ -175,6 +176,30 @@ async function startWorker() {
   logger.info({ queueUrl }, 'Worker is running and polling SQS...');
 
   // -------------------------------------------------------------------------------- //
+  //  [Health Check 대상 서버 추가]
+  //  ECS Task Health Check에서 컨테이너의 생존(Event Loop 블록 방지 등)을 확인하기 위한
+  //  단순 HTTP 서버를 구동합니다. SQS 유휴 상태일 때 지표 오류를 막기 위해
+  //  /health 호출 가능 여부 자체가 가장 확실한 지표가 됩니다.
+  // -------------------------------------------------------------------------------- //
+  const healthServer = http.createServer((req, res) => {
+    if (req.url === '/health') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        status: 'healthy', 
+        uptime: process.uptime()
+      }));
+    } else {
+      res.writeHead(404);
+      res.end();
+    }
+  });
+
+  // API 서버와 포트 충돌을 피하기 위해 3001 포트 사용 (또는 기타 비어있는 포트)
+  healthServer.listen(3001, '0.0.0.0', () => {
+    logger.info('Worker health check server running on port 3001');
+  });
+
+  // -------------------------------------------------------------------------------- //
   //  [Graceful Shutdown 로직 추가]
   //  AWS Fargate 컨테이너가 1시간 시간제한, 스케일인(Scale-in) 또는 배포로 인해 꺼질 때
   //  OS가 보내는 SIGTERM 신호를 감지하고, "현재 처리 중이던 10개의 작업"이 모두
@@ -186,6 +211,11 @@ async function startWorker() {
     // app.stop()은 SQS에서 새로운 메시지 가져오는 것(Polling)을 즉시 중단합니다.
     // 단, 이미 가져와서 비동기 처리 중이던 메시지가 있다면 그것이 모두 완료될 때까지 대기(Await)합니다.
     app.stop(); 
+    
+    // Health Check 서버 닫기
+    healthServer.close(() => {
+      logger.info('Health server closed');
+    });
     
     // 타임아웃 30초 설정 (Fargate의 일반적인 강제 종료 타겟 시간)
     // 30초 내에 안 끝나면 강제 종료

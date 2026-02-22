@@ -80,3 +80,22 @@ Sentry를 100% 활용하기 위해 알아두어야 할 개념입니다.
 ### 6.3. 민감 정보 관리
 - 기본적으로 `src/shared/utils/sentry.ts`에서 Auth Header 등을 지우지만, 비즈니스 로직에서도 로깅 시 개인정보(주민번호, 비밀번호)를 `logger`나 `Sentry`에 넘기지 않도록 주의해야 합니다.
 
+## 7. 성능 모니터링 및 지표 (Performance & Metrics)
+GraphNode는 Sentry의 Tracing 및 Profiling을 통해 API 응답 속도와 병목을 실시간으로 수집합니다. Sentry 대시보드의 **Performance** 및 **Profiling** 탭에서 확인할 수 있습니다.
+
+### 7.1. 주요 측정 기능
+- **Tracing (트랜잭션 및 스팬):** `Sentry.httpIntegration()`과 `Sentry.expressIntegration()`이 각 API 요청(Transaction)과 내부 미들웨어/로직(Span)의 소요 시간을 자동 측정합니다.
+- **Profiling (프로파일링):** `nodeProfilingIntegration()`이 활용되어, 단순 소요 시간을 넘어 함수 단위(Call Stack)에서 어떤 부분의 CPU 점유율이 높은지 초정밀 병목 추적이 가능합니다.
+
+### 7.2. 대시보드 주요 지표 (Metrics) 의미
+Performance 탭에서 확인할 수 있는 핵심 지표들은 다음과 같습니다:
+- **RPM (Requests Per Minute):** 분당 API 요청 수. 현재 서버의 트래픽 부하를 나타냅니다.
+- **Failure Rate (에러율):** 전체 요청 중 5xx(서버 에러) 등 실패 응답이 차지하는 비율입니다.
+- **Apdex (Application Performance Index):** 사용자가 느끼는 응답 속도 만족도 지표입니다. (0 ~ 1 사이의 정수/소수값이며, 1에 가까울수록 속도가 쾌적함을 의미합니다)
+- **Duration (Avg, p95, p99):** API 응답 소요 시간입니다. 특히 **p95**(상위 5%의 느린 엣지 케이스 응답 시간)나 **p99**(상위 1%)를 지켜보며 극단적으로 느린 요청이 있는지 파악합니다.
+
+### 7.3. 샘플링 비율 (Sample Rate)
+성능 지표 데이터는 운영 환경(`production`) 서버에 가해지는 에이전트 부하를 막기 위해 전체 트래픽 중 일부만 선별수집됩니다.
+- 현재 `src/shared/utils/sentry.ts` 코드 상에서 운영 환경의 `tracesSampleRate`는 **0.1 (10%)**로 설정되어 있습니다. (개발 환경은 1.0)
+- Sentry는 내부적으로 이 10%의 데이터를 바탕으로 100% 분량의 트래픽 트렌드(RPM 등)를 자동으로 외삽(Extrapolate)하여 보여주므로, 샘플링 비율을 줄이더라도 전체 규모 추이 파악에는 지장이 없습니다.
+
