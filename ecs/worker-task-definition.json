@@ -30,6 +30,7 @@
         { "name": "OAUTH_APPLE_KEY_ID", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:OAUTH_APPLE_KEY_ID::" },
         { "name": "OAUTH_APPLE_CLIENT_ID", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:OAUTH_APPLE_CLIENT_ID::" },
         { "name": "OAUTH_APPLE_PRIVATE_KEY", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:OAUTH_APPLE_PRIVATE_KEY::" },
+        {"name" : "FIREBASE_CREDENTIALS_JSON", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:FIREBASE_CREDENTIALS_JSON::"},
         { "name": "NEO4J_PASSWORD", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:NEO4J_PASSWORD::" },
         { "name": "CHROMA_API_KEY", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:CHROMA_API_KEY::" },
         { "name": "CHROMA_TENANT", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:CHROMA_TENANT::" },

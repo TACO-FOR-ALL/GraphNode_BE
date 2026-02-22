@@ -155,7 +155,7 @@ infisical run --env=prod -- npm start
 - **API Reference**: [OpenAPI Spec (HTML)](docs/api/openapi.html) / Swagger UI / Redoc을 통한 인터랙티브 명세
 - **TypeDoc**: 소스 코드 레벨의 클래스/함수 레퍼런스
 - **Architecture**:
-  - [Project Structure](docs/PROJECT_STRUCTURE.md) | [Database](docs/architecture/DATABASE.md) | [Ports](docs/architecture/PORTS.md)
+  - [Project Structure](docs/PROJECT_STRUCTURE.md) | [Database](docs/architecture/DATABASE.md) | [Ports](docs/architecture/PORTS.md) | [CI/CD & AWS Deployment](docs/architecture/CI_CD_and_AWS.md)
   - [SQS Logic](docs/architecture/LOGIC_SQS.md) | [FCM Logic](docs/architecture/LOGIC_FCM.md) | [Workers](docs/architecture/WORKERS.md)
   - [Security](docs/architecture/SECURITY.md) | [Observability](docs/architecture/OBSERVABILITY.md) | [Audit Logs](docs/architecture/AUDIT_LOGS.md) | [Sentry](docs/architecture/sentry.md)
   - [AI Provider Architecture](docs/architecture/ai-provider-architecture.md)
@@ -189,6 +189,7 @@ infisical run --env=prod -- npm start
   - [2026-02-21 빈 데이터 처리 통일 및 S3 업로드 버그 수정](docs/guides/Daily/20260221-unified-empty-data-and-s3-upload-fix.md)
   - [2026-02-22 OpenAPI and FE SDK Sync](docs/guides/Daily/20260222-openapi-sdk-sync.md)
   - [2026-02-22 Worker 처리기 배포 수정 및 로깅 규격화](docs/guides/Daily/20260222-worker-logging-standardization.md)
+  - [2026-02-22 AWS ECS Task Role 기반 SQS 인증 수정](docs/guides/Daily/20260222-aws-ecs-task-role-sqs-fix.md)
 
 ---
 

@@ -60,10 +60,13 @@ async function startWorker() {
     region: env.AWS_REGION || 'ap-northeast-2', // env.ts에 region이 없다면 기본값
     sqs: new SQSClient({
       region: env.AWS_REGION || 'ap-northeast-2',
-      credentials: {
-        accessKeyId: env.AWS_ACCESS_KEY_ID || '',
-        secretAccessKey: env.AWS_SECRET_ACCESS_KEY || '',
-      },
+      credentials:
+        env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY
+          ? {
+              accessKeyId: env.AWS_ACCESS_KEY_ID,
+              secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+            }
+          : undefined, // ECS Task Role 사용 시 undefined로 두면 자동 로드
     }),
     /**
      * 메시지 처리 메인 로직 Override?
