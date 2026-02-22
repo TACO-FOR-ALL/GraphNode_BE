@@ -1,0 +1,33 @@
+{
+  "$id": "https://graphnode.dev/schemas/sync-push-request.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sync Push Request",
+  "type": "object",
+  "properties": {
+    "conversations": {
+      "type": "array",
+      "items": { "$ref": "conversation.json" }
+    },
+    "messages": {
+      "type": "array",
+      "items": {
+        "allOf": [
+          { "$ref": "message.json" },
+          {
+            "type": "object",
+            "properties": { "conversationId": { "type": "string" } },
+            "required": ["conversationId"]
+          }
+        ]
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": { "$ref": "note.json" }
+    },
+    "folders": {
+      "type": "array",
+      "items": { "$ref": "folder.json" }
+    }
+  }
+}

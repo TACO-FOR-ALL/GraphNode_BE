@@ -1663,6 +1663,119 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }
+  /v1/graph-ai/add-conversation/{conversationId}:
+    post:
+      summary: Add conversation to graph
+      description: Queues a process to add a specific conversation to the user's graph.
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string }
+      responses:
+        '202':
+          description: Add conversation queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  taskId: { type: string }
+                  status: { type: string }
+        '400':
+          description: Invalid conversationId
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '404':
+          description: Conversation not found
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+  /v1/sync/pull:
+    get:
+      summary: Pull data changes
+      parameters:
+        - in: query
+          name: since
+          required: false
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Successful pull
+          content:
+            application/json:
+              schema: { $ref: '../schemas/sync-pull-response.json' }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+  /v1/sync/push:
+    post:
+      summary: Push data changes
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '../schemas/sync-push-request.json' }
+      responses:
+        '200':
+          description: Successful push
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+        '400':
+          description: Invalid push format
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+  /v1/ai/files/{key}:
+    get:
+      summary: Download file
+      parameters:
+        - in: path
+          name: key
+          required: true
+          description: S3 object key or path
+          schema: { type: string }
+      responses:
+        '200':
+          description: File downloaded successfully
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '404':
+          description: File not found
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
 components:
   schemas:
     Problem:

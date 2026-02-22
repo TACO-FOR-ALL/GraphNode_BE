@@ -1,0 +1,26 @@
+{
+  "$id": "https://graphnode.dev/schemas/sync-pull-response.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sync Pull Response",
+  "type": "object",
+  "properties": {
+    "conversations": {
+      "type": "array",
+      "items": { "$ref": "conversation.json" }
+    },
+    "messages": {
+      "type": "array",
+      "items": { "$ref": "message.json" }
+    },
+    "notes": {
+      "type": "array",
+      "items": { "$ref": "note.json" }
+    },
+    "folders": {
+      "type": "array",
+      "items": { "$ref": "folder.json" }
+    },
+    "serverTime": { "type": "string", "format": "date-time" }
+  },
+  "required": ["conversations", "messages", "notes", "folders", "serverTime"]
+}

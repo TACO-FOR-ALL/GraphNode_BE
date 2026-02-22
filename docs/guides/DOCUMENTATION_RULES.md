@@ -48,3 +48,27 @@ AI Agent 및 개발자는 작업을 수행할 때 아래 규칙을 **System Prom
 - **언어**: 한국어(Korean)를 기본으로 작성한다.
 - **포맷**: Markdown 표준을 따르며, 가독성을 위해 적절한 헤더 및 코드 블록을 사용한다.
 - **검증**: 문서에 포함된 코드 예제나 명령어는 실제로 동작하는지 검증 후 작성한다.
+
+---
+
+## 4. FE SDK Sync (프론트엔드 SDK 동기화)
+
+**[Trigger]**
+- `src/bootstrap/server.ts` 또는 `src/app/routes/` 내의 라우터가 추가/변경/삭제되었을 때.
+- 로직 변경으로 인해 API의 **반환 타입(DTO)**, **요청 파라미터**, **에러 응답(Throw Error)**이 변경되었을 때.
+- `src/shared/dtos/` 또는 `docs/schemas/` 내부의 데이터 스키마가 변경되었을 때.
+
+**[Action: SDK 검증 및 동기화 절차]**
+1.  **SDK 메서드 최신화**: 
+    - `z_npm_sdk/src/endpoints/` 하위 파일들을 분석하여 변경된 API명세가 정확히 반영되었는지 확인하고, 누락되거나 변경된 파라미터/반환 타입을 SDK 코드에 동기화한다.
+2.  **JSDoc 주석 의무화**: 
+    - SDK의 모든 public 메서드는 한국어로 된 JSDoc을 포함해야 한다.
+    - 특히 404 등 예측 가능한 에러 상황이나 빈 배열 반환 같은 **Edge Case(예외/특수 상황)** 응답 결과를 반드시 `@example` 및 텍스트로 명확히 기록한다.
+3.  **SDK README 업데이트**: 
+    - SDK 메서드 구조가 변경된 경우 `z_npm_sdk/README.md` 내의 API Reference(표, 상세 토글 등)를 최신화하여 사용자가 코드를 보지 않고도 정확히 활용할 수 있게 한다.
+4.  **동기화 보고**: 
+    - "API 변경 사항을 FE SDK 및 SDK README 문서에 동기화 완료했습니다"라고 보고한다.
+
+**[Important Rule]**
+- API 계약이나 DTO 구조를 변경해 놓고 FE SDK(`z_npm_sdk`)를 챙기지 않는 것은 **치명적인 Contract 위반**이다.
+- 개발자가 별도로 "SDK도 수정해 줘"라고 요청하지 않아도, API 로직/타입을 수정했다면 AI Agent는 **숨쉬듯이 자연스럽게 `z_npm_sdk` 코드를 찾아가 최신 상태로 반영**해야 한다.

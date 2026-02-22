@@ -84,26 +84,42 @@ export class GraphAiApi {
   }
 
   /**
-   * Request graph summary generation (Async)
+   * 사용자 그래프에 대한 요약 생성을 요청합니다. (Async)
    *
-   * Starts a background task to generate insights and summaries for the user's graph network.
+   * 이 작업은 서버에서 비동기 백그라운드 작업으로 수행됩니다.
+   * 사용자 지식 그래프의 클러스터, 패턴 추이 분석 및 인사이트를 생성합니다.
+   * 주의: 사용자의 그래프 데이터(노드)가 하나도 없는 상태일 경우 404 (GraphNotFoundError) 에러를 반환합니다.
    *
    * **API Endpoint**: `POST /v1/graph-ai/summary`
    *
-   * @returns Verification of task acceptance
+   * @returns 작업 ID와 상태를 포함한 응답 객체 (`GraphGenerationResponseDto`)
+   *
+   * @example
+   * ```typescript
+   * const response = await client.graphAi.requestSummary();
+   * console.log(response.data);
+   * // Output: { message: "Task accepted", taskId: "summary_123", status: "queued" }
+   * ```
    */
   async requestSummary(): Promise<HttpResponse<GraphGenerationResponseDto>> {
     return this.rb.path('/summary').post();
   }
 
   /**
-   * Get generated graph summary
+   * 생성된 그래프 요약을 가져옵니다.
    *
-   * Retrieves the previously generated summary. Returns 404 if not found or not ready.
+   * 비동기로 생성 완료된 그래프 요약 정보를 조회합니다. 
+   * 요약 데이터가 아직 없거나 생성이 완료되지 않은 경우, 기본값(빈 배열 등)으로 채워진 요약 객체를 반환합니다 (404 에러가 아님).
    *
    * **API Endpoint**: `GET /v1/graph-ai/summary`
    *
-   * @returns The graph summary DTO
+   * @returns 그래프 요약 데이터 (`GraphSummaryDto`)
+   *
+   * @example
+   * ```typescript
+   * const response = await client.graphAi.getSummary();
+   * console.log(response.data.overview.total_nodes);
+   * ```
    */
   async getSummary(): Promise<HttpResponse<GraphSummaryDto>> {
     return this.rb.path('/summary').get();

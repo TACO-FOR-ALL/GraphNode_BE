@@ -216,6 +216,7 @@ client.googleAuth.login(); // 현재 창 이동
 | `client.ai.chat(...)` | `POST /v1/ai/conversations/:id/chat` | 메시지 전송 | 201, 400 |
 | `client.ai.chatStream(...)` | `POST /v1/ai/conversations/:id/chat` | 스트리밍 | 200 (Stream) |
 | `client.ai.downloadFile(key)` | `GET /v1/ai/files/:key` | 파일 다운로드 | 200 |
+| `openAgentChatStream(...)` | `POST /v1/agent/chat/stream` | 에이전트 스트리밍 | 200 (Stream) |
 
 #### **Detailed Usage**
 
@@ -259,6 +260,29 @@ const abort = await client.ai.chatStream(
   }
 );
 // abort(); // 중단 시
+```
+</details>
+
+<details>
+<summary><b>openAgentChatStream(params, onEvent, options?)</b></summary>
+
+- **Description**: 멘션 기능 등 특수 목적(agent) 채팅 스트림을 열 때 사용합니다. (클래스 메서드가 아닌 별도 export된 함수입니다.)
+- **Parameters**:
+  - `params`: `{ userMessage: string, contextText?: string, modeHint?: AgentChatModeHint }`
+  - `onEvent`: `(evt: AgentChatStreamEvent) => void`
+  - `options`: `{ signal?: AbortSignal, fetchImpl?: any }`
+- **Returns**: `Promise<() => void>` (연결 중단 함수)
+- **Example**:
+```typescript
+import { openAgentChatStream } from '@taco_tsinghua/graphnode-sdk';
+
+const cancel = await openAgentChatStream(
+  { userMessage: 'What is this?', modeHint: 'auto' },
+  (event) => {
+    if (event.event === 'chunk') console.log(event.data.text);
+    if (event.event === 'result') console.log('Mode:', event.data.mode);
+  }
+);
 ```
 </details>
 
@@ -412,6 +436,7 @@ console.log(`Nodes: ${res.data.nodes}`);
 
 - **Returns**: `Promise<HttpResponse<GraphSnapshotDto>>`
   - `nodes[]`, `edges[]`, `clusters[]`, `stats`
+  - *참고: 생성된 그래프가 없을 경우 에러 대신 전부 빈 배열(`[]`)과 `0` 통계가 반환됩니다.*
 - **Example**:
 ```typescript
 const res = await client.graph.getSnapshot();
@@ -430,7 +455,7 @@ renderGraph(res.data.nodes, res.data.edges);
 | :--- | :--- | :--- | :--- |
 | `generateGraph()` | `POST /generate` | 그래프 생성 요청 | 202 |
 | `addConversation(...)` | `POST /add...` | 대화 추가 요청 | 202 |
-| `requestSummary()` | `POST /summary` | 요약 생성 요청 | 202 |
+| `requestSummary()` | `POST /summary` | 요약 생성 요청 | 202, 404 |
 | `getSummary()` | `GET /summary` | 요약 결과 조회 | 200 |
 
 #### **Detailed Usage**
@@ -448,10 +473,28 @@ console.log('Task started:', res.data.taskId);
 </details>
 
 <details>
+<summary><b>requestSummary()</b></summary>
+
+- **Returns**: `Promise<HttpResponse<GraphGenerationResponseDto>>`
+- **Exceptions**: `404 Not Found` (GraphNotFoundError) - 사용자의 그래프 노드가 존재하지 않으면 실패합니다.
+- **Example**:
+```typescript
+try {
+  const res = await client.graphAi.requestSummary();
+} catch (error) {
+  if (error.response?.status === 404) {
+    alert("요약을 생성할 그래프 데이터가 없습니다.");
+  }
+}
+```
+</details>
+
+<details>
 <summary><b>getSummary()</b></summary>
 
 - **Returns**: `Promise<HttpResponse<GraphSummaryDto>>`
   - `overview`, `clusters[]`, `patterns[]` ...
+  - *참고: 아직 생성된 요약이 없거나 비어있는 경우, 404가 아닌 빈 배열(`[]`) 및 기본값들로 채워진 객체를 반환합니다.*
 - **Example**:
 ```typescript
 const res = await client.graphAi.getSummary();

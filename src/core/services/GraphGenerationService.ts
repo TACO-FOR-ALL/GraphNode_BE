@@ -8,7 +8,7 @@ import { HttpClient } from '../../infra/http/httpClient';
 import { AiInputConversation, AiInputData, AiInputMappingNode } from '../../shared/dtos/ai_input';
 import { logger } from '../../shared/utils/logger';
 import { GraphSnapshotDto, PersistGraphPayloadDto } from '../../shared/dtos/graph';
-import { AppError, ConflictError, UpstreamError, NotFoundError } from '../../shared/errors/domain';
+import { AppError, ConflictError, UpstreamError, NotFoundError, GraphNotFoundError } from '../../shared/errors/domain';
 import { ChatMessage } from '../../shared/dtos/ai';
 import { AiGraphOutputDto } from '../../shared/dtos/ai_graph_output';
 import { mapAiOutputToSnapshot } from '../../shared/mappers/ai_graph_output.mapper';
@@ -172,7 +172,7 @@ export class GraphGenerationService {
       // 2. 최신 그래프 스냅샷 조회 (DB에서)
       const snapshot = await this.graphEmbeddingService.getSnapshotForUser(userId);
       if (!snapshot || snapshot.nodes.length === 0) {
-        throw new Error('Graph data not found for user. Please generate graph first.');
+        throw new GraphNotFoundError('Graph data not found for user. Please generate graph first.');
       }
       
       // 3. User Preferred Language 조회

@@ -60,6 +60,14 @@ export class NotFoundError extends AppError {
 }
 
 /**
+ * 그래프 데이터 없음 (404 Not Found)
+ * - 사용자 그래프 데이터를 찾을 수 없을 때 사용합니다.
+ */
+export class GraphNotFoundError extends NotFoundError {
+  code = 'GRAPH_NOT_FOUND';
+}
+
+/**
  * 상태 충돌 (409 Conflict)
  * - 데이터의 현재 상태와 요청이 충돌할 때 사용합니다.
  * - 예: 이미 존재하는 이메일로 가입하려고 할 때.
