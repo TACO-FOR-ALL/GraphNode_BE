@@ -1116,6 +1116,7 @@ paths:
       parameters:
         - in: query
           name: since
+          required: false
           schema: { type: string, format: date-time }
           description: ISO 8601 timestamp. If omitted, returns all data.
       responses:
@@ -1123,24 +1124,7 @@ paths:
           description: Sync data
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  conversations:
-                    type: array
-                    items: { $ref: '../schemas/conversation.json' }
-                  messages:
-                    type: array
-                    items: { $ref: '../schemas/message.json' }
-                  notes:
-                    type: array
-                    items: { $ref: '../schemas/note.json' }
-                  folders:
-                    type: array
-                    items: { $ref: '../schemas/folder.json' }
-                  serverTime:
-                    type: string
-                    format: date-time
+              schema: { $ref: '../schemas/sync-pull-response.json' }
         '400':
           description: Bad Request
           content:
@@ -1155,25 +1139,16 @@ paths:
     post:
       summary: Push changes to server
       description: Applies client-side changes (creates/updates/deletes) to the server. Uses Last-Write-Wins (LWW) based on `updatedAt`.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              properties:
-                conversations:
-                  type: array
-                  items: { $ref: '../schemas/conversation.json' }
-                messages:
-                  type: array
-                  items: { $ref: '../schemas/message.json' }
-                notes:
-                  type: array
-                  items: { $ref: '../schemas/note.json' }
-                folders:
-                  type: array
-                  items: { $ref: '../schemas/folder.json' }
+            schema: { $ref: '../schemas/sync-push-request.json' }
       responses:
         '200':
           description: Push successful
@@ -1698,84 +1673,8 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }
-  /v1/sync/pull:
-    get:
-      summary: Pull data changes
-      parameters:
-        - in: query
-          name: since
-          required: false
-          schema: { type: string, format: date-time }
-      responses:
-        '200':
-          description: Successful pull
-          content:
-            application/json:
-              schema: { $ref: '../schemas/sync-pull-response.json' }
-        '401':
-          description: Not authenticated
-          content:
-            application/problem+json:
-              schema: { $ref: '../schemas/problem.json' }
-  /v1/sync/push:
-    post:
-      summary: Push data changes
-      parameters:
-        - in: header
-          name: Idempotency-Key
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '../schemas/sync-push-request.json' }
-      responses:
-        '200':
-          description: Successful push
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success: { type: boolean }
-        '400':
-          description: Invalid push format
-          content:
-            application/problem+json:
-              schema: { $ref: '../schemas/problem.json' }
-        '401':
-          description: Not authenticated
-          content:
-            application/problem+json:
-              schema: { $ref: '../schemas/problem.json' }
-  /v1/ai/files/{key}:
-    get:
-      summary: Download file
-      parameters:
-        - in: path
-          name: key
-          required: true
-          description: S3 object key or path
-          schema: { type: string }
-      responses:
-        '200':
-          description: File downloaded successfully
-          content:
-            application/octet-stream:
-              schema:
-                type: string
-                format: binary
-        '401':
-          description: Not authenticated
-          content:
-            application/problem+json:
-              schema: { $ref: '../schemas/problem.json' }
-        '404':
-          description: File not found
-          content:
-            application/problem+json:
-              schema: { $ref: '../schemas/problem.json' }
+
+
 components:
   schemas:
     Problem:
