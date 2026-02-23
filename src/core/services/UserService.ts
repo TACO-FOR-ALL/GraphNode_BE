@@ -44,6 +44,15 @@ export class UserService {
         email: user.email,
         displayName: user.displayName,
         avatarUrl: user.avatarUrl,
+        provider: user.provider,
+        providerUserId: user.providerUserId,
+        apiKeyOpenai: user.apiKeyOpenai,
+        apiKeyDeepseek: user.apiKeyDeepseek,
+        apiKeyClaude: user.apiKeyClaude,
+        apiKeyGemini: user.apiKeyGemini,
+        createdAt: user.createdAt.toISOString(),
+        lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
+        preferredLanguage: user.preferredLanguage,
       };
     } catch (err: unknown) {
       const e: any = err;

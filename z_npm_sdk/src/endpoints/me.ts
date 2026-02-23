@@ -31,7 +31,15 @@ export class MeApi {
    *      - `email` (string, optional): 이메일
    *      - `displayName` (string): 표시 이름
    *      - `avatarUrl` (string | null): 아바타 URL
+   *      - `provider` (string): 소셜 인증 제공자
+   *      - `providerUserId` (string): 제공자 ID
+   *      - `apiKeyOpenai` (string | null): OpenAI API 키
+   *      - `apiKeyDeepseek` (string | null): DeepSeek API 키
+   *      - `apiKeyClaude` (string | null): Claude API 키
+   *      - `apiKeyGemini` (string | null): Gemini API 키
    *      - `createdAt` (string): 생성 일시 (ISO 8601)
+   *      - `lastLoginAt` (string | null): 최근 로그인 일시 (ISO 8601)
+   *      - `preferredLanguage` (string): 선호 언어
    * @example
    * const response = await client.me.get();
    * console.log(response.data);
@@ -42,7 +50,11 @@ export class MeApi {
    *     id: '1...',
    *     email: 'john.doe@example.com',
    *     displayName: 'John Doe',
-   *     avatarUrl: 'https://example.com/avatar.jpg'
+   *     avatarUrl: 'https://example.com/avatar.jpg',
+   *     provider: 'google',
+   *     providerUserId: '123456789',
+   *     createdAt: '2024-01-01T00:00:00.000Z',
+   *     preferredLanguage: 'en'
    *   }
    * }
    */
@@ -127,32 +139,37 @@ export class MeApi {
 
   /**
    * 사용자 선호 언어를 설정/업데이트합니다.
-   * @param language 설정할 언어 코드
+   * @param language 설정할 언어 코드(en, ko, cn)
    */
   updatePreferredLanguage(language: string): Promise<HttpResponse<void>> {
+    
+    if (language != "en" && language != "ko" && language != "cn") {
+      throw new Error('Invalid language code. Please use "en", "ko", or "cn".');
+    }
+    
     return this.rb.path('/v1/me/preferred-language').patch<void>({ language });
   }
 
-  /**
-   * 사용자 선호 언어를 'en' (영어)로 설정합니다. (Convenience Method)
-   */
-  updatePreferredLanguageToEn(): Promise<HttpResponse<void>> {
-    return this.updatePreferredLanguage('en');
-  }
+  // /**
+  //  * 사용자 선호 언어를 'en' (영어)로 설정합니다. (Convenience Method)
+  //  */
+  // updatePreferredLanguageToEn(): Promise<HttpResponse<void>> {
+  //   return this.updatePreferredLanguage('en');
+  // }
 
-  /**
-   * 사용자 선호 언어를 'ko' (한국어)로 설정합니다. (Convenience Method)
-   */
-  updatePreferredLanguageToKo(): Promise<HttpResponse<void>> {
-    return this.updatePreferredLanguage('ko');
-  }
+  // /**
+  //  * 사용자 선호 언어를 'ko' (한국어)로 설정합니다. (Convenience Method)
+  //  */
+  // updatePreferredLanguageToKo(): Promise<HttpResponse<void>> {
+  //   return this.updatePreferredLanguage('ko');
+  // }
 
-  /**
-   * 사용자 선호 언어를 'cn' (중국어)로 설정합니다. (Convenience Method)
-   */
-  updatePreferredLanguageToCn(): Promise<HttpResponse<void>> {
-    // DB의 ISO 코드 표준에 따라 'zh' 또는 'cn'을 사용할 수 있으나
-    // 요청사항에 따라 'cn'으로 명시합니다.
-    return this.updatePreferredLanguage('cn');
-  }
+  // /**
+  //  * 사용자 선호 언어를 'cn' (중국어)로 설정합니다. (Convenience Method)
+  //  */
+  // updatePreferredLanguageToCn(): Promise<HttpResponse<void>> {
+  //   // DB의 ISO 코드 표준에 따라 'zh' 또는 'cn'을 사용할 수 있으나
+  //   // 요청사항에 따라 'cn'으로 명시합니다.
+  //   return this.updatePreferredLanguage('cn');
+  // }
 }

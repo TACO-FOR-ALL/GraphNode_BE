@@ -10,10 +10,15 @@ const mockUser = {
   email: 'me@test.com',
   displayName: 'Me Test',
   avatarUrl: null,
+  provider: 'google',
+  providerUserId: 'google-12345',
   apiKeyOpenai: null,
   apiKeyDeepseek: null,
   apiKeyClaude: null,
   apiKeyGemini: null,
+  createdAt: new Date('2024-01-01T00:00:00.000Z'),
+  lastLoginAt: new Date('2024-01-02T00:00:00.000Z'),
+  preferredLanguage: 'en',
 };
 
 let userState = { ...mockUser };
@@ -83,6 +88,9 @@ describe('Me API Integration Tests', () => {
       expect(res.status).toBe(200);
       expect(res.body.userId).toBe(userState.id);
       expect(res.body.profile.displayName).toBe('Me Test');
+      expect(res.body.profile.provider).toBe('google');
+      expect(res.body.profile.createdAt).toBe('2024-01-01T00:00:00.000Z');
+      expect(res.body.profile.preferredLanguage).toBe('en');
     });
 
     it('should return 401 if not authenticated', async () => {

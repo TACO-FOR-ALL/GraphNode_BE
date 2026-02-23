@@ -26,6 +26,42 @@ export interface UserProfileDto {
    * 이메일(선택). PII 최소화 정책에 따라 필요 시에만 포함한다.
    */
   email?: string | null;
+  /**
+   * 소셜 로그인 제공자
+   */
+  provider: string;
+  /**
+   * 제공자 측 사용자 식별자
+   */
+  providerUserId: string;
+  /**
+   * OpenAI API 키
+   */
+  apiKeyOpenai?: string | null;
+  /**
+   * DeepSeek API 키
+   */
+  apiKeyDeepseek?: string | null;
+  /**
+   * Claude API 키
+   */
+  apiKeyClaude?: string | null;
+  /**
+   * Gemini API 키
+   */
+  apiKeyGemini?: string | null;
+  /**
+   * 계정 생성 일시 (ISO 8601)
+   */
+  createdAt: string;
+  /**
+   * 최근 로그인 일시 (ISO 8601)
+   */
+  lastLoginAt?: string | null;
+  /**
+   * 선호 언어
+   */
+  preferredLanguage: string;
 }
 
 /**

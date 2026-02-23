@@ -191,6 +191,7 @@ infisical run --env=prod -- npm start
   - [2026-02-22 Worker 처리기 배포 수정 및 로깅 규격화](docs/guides/Daily/20260222-worker-logging-standardization.md)
   - [2026-02-22 AWS ECS Task Role 기반 SQS 인증 수정](docs/guides/Daily/20260222-aws-ecs-task-role-sqs-fix.md)
   - [2026-02-22 Graph 생성 SQS Message Notification 추가](docs/guides/Daily/20260222-graph-generation-notification.md)
+  - [2026-02-23 GET /v1/me 응답 데이터 확장](docs/guides/Daily/20260223-me-endpoint-profile-expansion.md)
 
 ---
 

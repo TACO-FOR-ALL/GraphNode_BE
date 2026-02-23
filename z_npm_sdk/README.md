@@ -65,13 +65,14 @@ const client = createGraphNodeClient({
 - **Parameters**: 없음
 - **Returns**: `Promise<HttpResponse<MeResponseDto>>`
   - `userId`: `string`
-  - `profile`: `{ id, email, displayName, avatarUrl }`
+  - `profile`: `{ id, email, displayName, avatarUrl, provider, providerUserId, apiKeyOpenai, apiKeyDeepseek, apiKeyClaude, apiKeyGemini, createdAt, lastLoginAt, preferredLanguage }`
 - **Example**:
 ```typescript
 const res = await client.me.get();
 if (res.isSuccess) {
   console.log(res.data.userId);
   console.log(res.data.profile?.displayName);
+  console.log(res.data.profile?.preferredLanguage);
 }
 ```
 </details>

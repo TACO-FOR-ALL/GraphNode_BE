@@ -11,11 +11,21 @@
     "profile": {
       "type": "object",
       "additionalProperties": false,
+      "required": ["id", "provider", "providerUserId", "createdAt", "preferredLanguage"],
       "properties": {
         "id": { "oneOf": [{ "type": "string" }, { "type": "integer" }] },
         "displayName": { "type": ["string", "null"] },
         "avatarUrl": { "type": ["string", "null"], "format": "uri" },
-        "email": { "type": ["string", "null"], "format": "email" }
+        "email": { "type": ["string", "null"], "format": "email" },
+        "provider": { "type": "string" },
+        "providerUserId": { "type": "string" },
+        "apiKeyOpenai": { "type": ["string", "null"] },
+        "apiKeyDeepseek": { "type": ["string", "null"] },
+        "apiKeyClaude": { "type": ["string", "null"] },
+        "apiKeyGemini": { "type": ["string", "null"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "lastLoginAt": { "type": ["string", "null"], "format": "date-time" },
+        "preferredLanguage": { "type": "string" }
       }
     }
   }

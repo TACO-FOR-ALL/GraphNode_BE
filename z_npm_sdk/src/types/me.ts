@@ -11,6 +11,15 @@ export interface UserProfileDto {
   email?: string | null;
   displayName?: string | null;
   avatarUrl?: string | null;
+  provider: string;
+  providerUserId: string;
+  apiKeyOpenai?: string | null;
+  apiKeyDeepseek?: string | null;
+  apiKeyClaude?: string | null;
+  apiKeyGemini?: string | null;
+  createdAt: string;
+  lastLoginAt?: string | null;
+  preferredLanguage: string;
 }
 
 /**
