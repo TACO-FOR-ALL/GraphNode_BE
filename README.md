@@ -23,6 +23,7 @@ GraphNode는 대화형 AI와 지식 그래프를 결합한 차세대 지식 관�
 | 🔐 [인증 및 보안 시스템](docs/architecture/AUTH_JWT.md)   | JWT 및 소셜(Google/Apple) 로그인 구현 방식 |
 | 📊 [사용자 행동 분석 (PostHog)](docs/architecture/posthog_analytics.md) | 사용자 활동 추적 및 이벤트 분석 가이드 |
 | 📱 [FCM 모바일 알림 구조](docs/guides/FCM-NOTIFICATION-FLOW.md) | Firebase Cloud Messaging 기반 푸시 알림 설계 |
+| 💳 [월정액 구독 결제 시스템](docs/architecture/subscription-payment-flow.md) | PG사 연동을 대비한 결제/구독 스캐폴딩 및 아키텍처 가이드 |
 
 ---
 
@@ -192,6 +193,7 @@ infisical run --env=prod -- npm start
   - [2026-02-22 AWS ECS Task Role 기반 SQS 인증 수정](docs/guides/Daily/20260222-aws-ecs-task-role-sqs-fix.md)
   - [2026-02-22 Graph 생성 SQS Message Notification 추가](docs/guides/Daily/20260222-graph-generation-notification.md)
   - [2026-02-23 GET /v1/me 응답 데이터 확장](docs/guides/Daily/20260223-me-endpoint-profile-expansion.md)
+  - [2026-02-24 월정액 구독 결제 스캐폴딩 및 그래프 삭제 통합 기능 구현](docs/guides/Daily/20260224-subscription-scaffolding-and-graph-delete.md)
 
 ---
 

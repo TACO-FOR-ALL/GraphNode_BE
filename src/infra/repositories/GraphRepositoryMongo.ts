@@ -120,6 +120,26 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   }
 
   /**
+   * 해당 사용자의 모든 그래프 데이터(노드, 엣지, 클러스터, 서브클러스터, 통계, 요약)를 삭제합니다.
+   * 트랜잭션 등에서 호출될 수 있습니다.
+   */
+  async deleteAllGraphData(userId: string, options?: RepoOptions): Promise<void> {
+    try {
+      const opts = { ...options, session: options?.session as any };
+      await Promise.all([
+        this.graphNodes_col().deleteMany({ userId } as any, opts),
+        this.graphEdges_col().deleteMany({ userId } as any, opts),
+        this.graphClusters_col().deleteMany({ userId } as any, opts),
+        this.graphSubclusters_col().deleteMany({ userId } as any, opts),
+        this.graphStats_col().deleteMany({ userId } as any, opts),
+        this.graphSummary_col().deleteMany({ userId } as any, opts),
+      ]);
+    } catch (err: unknown) {
+      throw new UpstreamError('GraphRepositoryMongo.deleteAllGraphData failed', { cause: String(err) });
+    }
+  }
+
+  /**
    * 특정 노드를 조회합니다.
    */
   async findNode(userId: string, id: number): Promise<GraphNodeDoc | null> {
@@ -438,6 +458,17 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
       throw new UpstreamError('GraphRepositoryMongo.getGraphSummary failed', {
         cause: String(err),
       });
+    }
+  }
+
+  async deleteGraphSummary(userId: string, options?: RepoOptions): Promise<void> {
+    try {
+      await this.graphSummary_col().deleteOne({ userId } as any, {
+        ...options,
+        session: options?.session as any,
+      });
+    } catch (err: unknown) {
+      throw new UpstreamError('GraphRepositoryMongo.deleteGraphSummary failed', { cause: String(err) });
     }
   }
 }

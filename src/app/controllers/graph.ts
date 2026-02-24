@@ -17,7 +17,7 @@ import { Request, Response } from 'express';
 import { GraphEmbeddingService } from '../../core/services/GraphEmbeddingService';
 import { persistGraphPayloadSchema } from '../../shared/dtos/graph.schemas';
 import { getUserIdFromRequest } from '../utils/request';
-import { GraphSnapshotDto, GraphStatsDto } from '../../shared/dtos/graph';
+import { GraphSnapshotDto } from '../../shared/dtos/graph';
 
 export class GraphController {
   constructor(private readonly graphEmbeddingService: GraphEmbeddingService) {}

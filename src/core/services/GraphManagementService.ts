@@ -448,6 +448,21 @@ export class GraphManagementService {
     }
   }
 
+  /**
+   * 전체 그래프 데이터 삭제
+   *
+   * @param userId 사용자 ID
+   */
+  async deleteGraph(userId: string, options?: RepoOptions): Promise<void> {
+    try {
+      this.assertUser(userId);
+      await this.repo.deleteAllGraphData(userId, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.deleteGraph failed', { cause: String(err) });
+    }
+  }
+
   // --- Insight Summary ---
 
   /**
@@ -495,6 +510,19 @@ export class GraphManagementService {
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.getGraphSummary failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 그래프 요약/인사이트 삭제
+   */
+  async deleteGraphSummary(userId: string, options?: RepoOptions): Promise<void> {
+    try {
+      this.assertUser(userId);
+      await this.repo.deleteGraphSummary(userId, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.deleteGraphSummary failed', { cause: String(err) });
     }
   }
 

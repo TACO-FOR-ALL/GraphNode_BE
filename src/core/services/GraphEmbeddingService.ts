@@ -110,9 +110,9 @@ export class GraphEmbeddingService {
   }
 
   /**
-   * 특정 노드를 삭제합니다.
+   * 특정 노드와 그 노드와 연결된 모든 엣지를 삭제합니다.
    *
-   * 이 메서드는 단일 노드만 삭제하며, 연결된 엣지는 `GraphService` 또는 `GraphRepository` 레벨에서 처리됩니다.
+   * 이 작업은 트랜잭션 내에서 실행되어 원자성을 보장합니다.
    *
    * @param userId - 작업을 요청한 사용자 ID
    * @param id - 삭제할 노드의 ID
@@ -120,8 +120,19 @@ export class GraphEmbeddingService {
    * @throws {UpstreamError} - DB 오류 발생 시
    * @see removeNodeCascade - 노드와 연결된 모든 엣지를 함께 삭제하려면 이 메서드를 사용하세요.
    */
-  deleteNode(userId: string, id: number) {
-    return this.graphManagementService.deleteNode(userId, id);
+  async deleteNode(userId: string, id: number) {
+    const mongoClient = getMongo();
+    if (!mongoClient) {
+      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
+    }
+    const session = mongoClient.startSession();
+    try {
+      await session.withTransaction(async () => {
+        await this.graphManagementService.deleteNode(userId, id, { session });
+      });
+    } finally {
+      await session.endSession();
+    }
   }
 
   /**
@@ -427,6 +438,26 @@ export class GraphEmbeddingService {
     }
   }
 
+  /**
+   * 유저의 모든 그래프 삭제 (Delegation)
+   *
+   * @param userId
+   */
+  async deleteGraph(userId: string) {
+    const mongoClient = getMongo();
+    if (!mongoClient) {
+      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
+    }
+    const session = mongoClient.startSession();
+    try {
+      await session.withTransaction(async () => {
+        await this.graphManagementService.deleteGraph(userId, { session });
+      });
+    } finally {
+      await session.endSession();
+    }
+  }
+
   // --- Insight Summary ---
 
   /**
@@ -441,5 +472,12 @@ export class GraphEmbeddingService {
    */
   async getGraphSummary(userId: string) {
     return this.graphManagementService.getGraphSummary(userId);
+  }
+
+  /**
+   * 그래프 요약/인사이트 삭제 (Delegation)
+   */
+  async deleteGraphSummary(userId: string) {
+    return this.graphManagementService.deleteGraphSummary(userId);
   }
 }

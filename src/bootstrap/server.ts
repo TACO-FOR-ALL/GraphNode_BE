@@ -19,7 +19,6 @@ import authSessionRouter from '../app/routes/auth.session';
 import { requestContext } from '../app/middlewares/request-context';
 import { httpLogger } from '../shared/utils/logger';
 import { errorHandler } from '../app/middlewares/error';
-import { NotFoundError } from '../shared/errors/domain';
 // AI 라우터 import
 import { initDatabases } from '../infra/db';
 import { makeAiRouter } from './modules/ai.module';

@@ -10,12 +10,7 @@ export function createGraphAiRouter(graphGenerationService: GraphGenerationServi
   const router = Router();
   const graphAiController = new GraphAiController(graphGenerationService);
 
-  // [테스트용] POST /v1/graph-ai/test/generate-json
-  // 공통 미들웨어 영향 안받음
-  router.post(
-    '/test/generate-json',
-    asyncHandler(graphAiController.generateGraphTest.bind(graphAiController))
-  );
+
 
   // 공통 미들웨어 적용: 세션 사용자 바인딩 및 로그인 요구
   router.use(bindSessionUser, requireLogin);
@@ -34,6 +29,12 @@ export function createGraphAiRouter(graphGenerationService: GraphGenerationServi
 
   // GET /v1/graph-ai/summary (조회)
   router.get('/summary', asyncHandler(graphAiController.getSummary.bind(graphAiController)));
+
+  // DELETE /v1/graph-ai/summary (요약 삭제)
+  router.delete('/summary', asyncHandler(graphAiController.deleteSummary.bind(graphAiController)));
+
+  // DELETE /v1/graph-ai (그래프 전체 삭제)
+  router.delete('/', asyncHandler(graphAiController.deleteGraph.bind(graphAiController)));
 
   return router;
 }

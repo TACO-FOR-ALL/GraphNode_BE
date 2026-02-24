@@ -458,6 +458,8 @@ renderGraph(res.data.nodes, res.data.edges);
 | `addConversation(...)` | `POST /add...` | 대화 추가 요청 | 202 |
 | `requestSummary()` | `POST /summary` | 요약 생성 요청 | 202, 404 |
 | `getSummary()` | `GET /summary` | 요약 결과 조회 | 200 |
+| `deleteSummary()` | `DELETE /summary` | 요약 내용 삭제 | 204 |
+| `deleteGraph()` | `DELETE /` | 그래프 전체 삭제 | 204 |
 
 #### **Detailed Usage**
 
@@ -502,6 +504,18 @@ const res = await client.graphAi.getSummary();
 if (res.isSuccess) {
   console.log('Insight:', res.data.overview.summary_text);
 }
+```
+</details>
+
+<details>
+<summary><b>deleteSummary() / deleteGraph()</b></summary>
+
+- **Returns**: `Promise<HttpResponse<void>>`
+- **Description**: 사용자의 지식 그래프 전체 또는 요약본을 삭제합니다.
+- **Example**:
+```typescript
+await client.graphAi.deleteSummary();
+await client.graphAi.deleteGraph();
 ```
 </details>
 

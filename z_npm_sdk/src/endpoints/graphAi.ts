@@ -155,4 +155,28 @@ export class GraphAiApi {
   ): Promise<HttpResponse<GraphGenerationResponseDto>> {
     return this.rb.path(`/add-conversation/${conversationId}`).post();
   }
+
+  /**
+   * 사용자 자신의 전체 그래프 데이터 삭제
+   * - 관련된 모든 노드, 엣지, 서브클러스터, 통계 등을 일괄 삭제합니다.
+   * - 성공 시 204 No Content 를 반환합니다.
+   *
+   * @example
+   * await sdk.graphAi.deleteGraph();
+   */
+  async deleteGraph(): Promise<HttpResponse<void>> {
+    return this.rb.delete<void>('/v1/graph-ai');
+  }
+
+  /**
+   * 사용자 자신의 그래프 요약 내역 삭제
+   * - 단순 서머리 도큐먼트 삭제 액션입니다.
+   * - 성공 시 204 No Content 를 반환합니다.
+   *
+   * @example
+   * await sdk.graphAi.deleteSummary();
+   */
+  async deleteSummary(): Promise<HttpResponse<void>> {
+    return this.rb.delete<void>('/v1/graph-ai/summary');
+  }
 }

@@ -1638,6 +1638,39 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }
+    delete:
+      summary: Delete graph summary
+      description: Permanently deletes the graph summary for the user.
+      responses:
+        '204':
+          description: No Content (Successfully deleted)
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '500':
+          description: Internal Server Error
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+  /v1/graph-ai:
+    delete:
+      summary: Delete all graph data
+      description: Permanently deletes all knowledge graph data (nodes, edges, clusters, subclusters, stats) for the user.
+      responses:
+        '204':
+          description: No Content (Successfully deleted)
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '500':
+          description: Internal Server Error
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
   /v1/graph-ai/add-conversation/{conversationId}:
     post:
       summary: Add conversation to graph

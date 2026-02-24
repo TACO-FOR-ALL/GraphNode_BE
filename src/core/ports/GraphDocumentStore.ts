@@ -31,6 +31,7 @@ export interface GraphDocumentStore {
   findNode(userId: string, id: number): Promise<GraphNodeDoc | null>;
   listNodes(userId: string): Promise<GraphNodeDoc[]>;
   listNodesByCluster(userId: string, clusterId: string): Promise<GraphNodeDoc[]>;
+  deleteAllGraphData(userId: string, options?: RepoOptions): Promise<void>;
 
   // --- 엣지(Edge) 관련 메서드 ---
   upsertEdge(edge: GraphEdgeDoc, options?: RepoOptions): Promise<string>;
@@ -67,4 +68,5 @@ export interface GraphDocumentStore {
   // --- Insight Summary ---
   upsertGraphSummary(userId: string, summary: GraphSummaryDoc, options?: RepoOptions): Promise<void>;
   getGraphSummary(userId: string): Promise<GraphSummaryDoc | null>;
+  deleteGraphSummary(userId: string, options?: RepoOptions): Promise<void>;
 }

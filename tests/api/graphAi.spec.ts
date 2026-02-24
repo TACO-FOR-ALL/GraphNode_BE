@@ -80,6 +80,14 @@ describe('GraphAi API Integration Tests', () => {
         })),
         upsertGraphSummary: jest.fn(async (uid: string, summary: any) => { summaryStore.set(uid, summary); }),
         getGraphSummary: jest.fn(async (uid: string) => summaryStore.get(uid) || null),
+        deleteAllGraphData: jest.fn(async (uid: string) => {
+            Array.from(nodesStore.keys()).forEach(k => { if (nodesStore.get(k).userId === uid) nodesStore.delete(k); });
+            Array.from(edgesStore.keys()).forEach(k => { if (edgesStore.get(k).userId === uid) edgesStore.delete(k); });
+            Array.from(clustersStore.keys()).forEach(k => { if (clustersStore.get(k).userId === uid) clustersStore.delete(k); });
+            statsStore.delete(uid);
+            summaryStore.delete(uid);
+        }),
+        deleteGraphSummary: jest.fn(async (uid: string) => { summaryStore.delete(uid); })
     };
 
     const mockConvRepo = {
@@ -163,6 +171,53 @@ describe('GraphAi API Integration Tests', () => {
                 .expect(200);
             
             expect(res.body.overview.summary_text).toBe('Test Summary');
+        });
+    });
+
+    describe('DELETE /v1/graph-ai/summary', () => {
+        it('should return 401 if unauthenticated', async () => {
+            await request(app)
+                .delete('/v1/graph-ai/summary')
+                .expect(401);
+        });
+
+        it('should delete the summary and return 204', async () => {
+            const summary = { overview: { summary_text: 'Test' }, clusters: [], patterns: [], connections: [], recommendations: [], generated_at: new Date().toISOString() };
+            summaryStore.set(userId, summary);
+
+            await request(app)
+                .delete('/v1/graph-ai/summary')
+                .set('Authorization', `Bearer ${accessToken}`)
+                .expect(204);
+            
+            expect(summaryStore.has(userId)).toBe(false);
+            expect(mockGraphRepo.deleteGraphSummary).toHaveBeenCalledWith(userId, undefined);
+        });
+    });
+
+    describe('DELETE /v1/graph-ai', () => {
+        it('should return 401 if unauthenticated', async () => {
+            await request(app)
+                .delete('/v1/graph-ai')
+                .expect(401);
+        });
+
+        it('should delete all graph data and return 204', async () => {
+            nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, timestamp: null });
+            clustersStore.set('c1', { id: 'c1', userId, name: 'C1', description: 'D', size: 1, themes: [] });
+            statsStore.set(userId, { nodes: 1, edges: 0, clusters: 1 });
+            summaryStore.set(userId, { overview: { summary_text: 'Test' }, clusters: [], patterns: [], connections: [], recommendations: [], generated_at: new Date().toISOString() });
+
+            await request(app)
+                .delete('/v1/graph-ai')
+                .set('Authorization', `Bearer ${accessToken}`)
+                .expect(204);
+
+            expect(nodesStore.has(1)).toBe(false);
+            expect(clustersStore.has('c1')).toBe(false);
+            expect(statsStore.has(userId)).toBe(false);
+            expect(summaryStore.has(userId)).toBe(false);
+            expect(mockGraphRepo.deleteAllGraphData).toHaveBeenCalledWith(userId, undefined);
         });
     });
 

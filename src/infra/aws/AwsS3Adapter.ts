@@ -1,17 +1,16 @@
 import {
   S3Client,
-  PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
+import { Upload } from '@aws-sdk/lib-storage';
 
 import { StoragePort } from '../../core/ports/StoragePort';
 import { loadEnv } from '../../config/env';
 import { logger } from '../../shared/utils/logger';
 import { UpstreamError } from '../../shared/errors/domain';
 
-import { Upload } from '@aws-sdk/lib-storage';
 
 /**
  * AWS S3 어댑터
