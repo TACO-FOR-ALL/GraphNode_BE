@@ -27,6 +27,7 @@ export const graphNodeSchema = z.object({
   numMessages: z.number().int().nonnegative(),
   createdAt: z.iso.datetime({ offset: true }).optional(),
   updatedAt: z.iso.datetime({ offset: true }).optional(),
+  deletedAt: z.iso.datetime({ offset: true }).optional(),
 }) satisfies z.ZodType<GraphNodeDto>;
 
 /**
@@ -42,6 +43,7 @@ export const graphEdgeSchema = z.object({
   intraCluster: z.boolean(),
   createdAt: z.iso.datetime({ offset: true }).optional(),
   updatedAt: z.iso.datetime({ offset: true }).optional(),
+  deletedAt: z.iso.datetime({ offset: true }).optional(),
 }) satisfies z.ZodType<GraphEdgeDto>;
 
 /**
@@ -56,6 +58,7 @@ export const graphClusterSchema = z.object({
   themes: z.array(z.string().min(1)).max(3),
   createdAt: z.iso.datetime({ offset: true }).optional(),
   updatedAt: z.iso.datetime({ offset: true }).optional(),
+  deletedAt: z.iso.datetime({ offset: true }).optional(),
 }) satisfies z.ZodType<GraphClusterDto>;
 
 /**

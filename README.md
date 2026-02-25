@@ -24,6 +24,7 @@ GraphNode는 대화형 AI와 지식 그래프를 결합한 차세대 지식 관�
 | 📊 [사용자 행동 분석 (PostHog)](docs/architecture/posthog_analytics.md) | 사용자 활동 추적 및 이벤트 분석 가이드 |
 | 📱 [FCM 모바일 알림 구조](docs/guides/FCM-NOTIFICATION-FLOW.md) | Firebase Cloud Messaging 기반 푸시 알림 설계 |
 | 💳 [월정액 구독 결제 시스템](docs/architecture/subscription-payment-flow.md) | PG사 연동을 대비한 결제/구독 스캐폴딩 및 아키텍처 가이드 |
+| 🗑️ [데이터 삭제 전략 (Soft/Hard Delete)](docs/architecture/soft-hard-delete-flow.md) | 안정적 데이터 관리를 위한 삭제 메커니즘 흐름 및 복구(Restore) 전략 가이드 |
 
 ---
 
@@ -159,7 +160,7 @@ infisical run --env=prod -- npm start
   - [Project Structure](docs/PROJECT_STRUCTURE.md) | [Database](docs/architecture/DATABASE.md) | [Ports](docs/architecture/PORTS.md) | [CI/CD & AWS Deployment](docs/architecture/CI_CD_and_AWS.md)
   - [SQS Logic](docs/architecture/LOGIC_SQS.md) | [FCM Logic](docs/architecture/LOGIC_FCM.md) | [Workers](docs/architecture/WORKERS.md)
   - [Security](docs/architecture/SECURITY.md) | [Observability](docs/architecture/OBSERVABILITY.md) | [Audit Logs](docs/architecture/AUDIT_LOGS.md) | [Sentry](docs/architecture/sentry.md)
-  - [AI Provider Architecture](docs/architecture/ai-provider-architecture.md)
+  - [AI Provider Architecture](docs/architecture/ai-provider-architecture.md) | [Soft/Hard_Delete](docs/architecture/soft-hard-delete-flow.md)
 
 ---
 
@@ -194,6 +195,7 @@ infisical run --env=prod -- npm start
   - [2026-02-22 Graph 생성 SQS Message Notification 추가](docs/guides/Daily/20260222-graph-generation-notification.md)
   - [2026-02-23 GET /v1/me 응답 데이터 확장](docs/guides/Daily/20260223-me-endpoint-profile-expansion.md)
   - [2026-02-24 월정액 구독 결제 스캐폴딩 및 그래프 삭제 통합 기능 구현](docs/guides/Daily/20260224-subscription-scaffolding-and-graph-delete.md)
+  - [2026-02-25 지식 그래프 Soft Delete 및 복구 기능 지원](docs/guides/Daily/20260225-graph-soft-delete-support.md)
 
 ---
 

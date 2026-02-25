@@ -739,9 +739,31 @@ paths:
           required: true
           schema:
             type: integer
+        - in: query
+          name: permanent
+          schema: { type: boolean, default: false }
+          description: If true, performs a hard delete. Otherwise, soft delete.
       responses:
         '204':
           description: Node deleted successfully.
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/nodes/{nodeId}/restore:
+    post:
+      summary: Restore a deleted graph node
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Node restored successfully.
         '401':
           description: Not authenticated.
           content:
@@ -757,6 +779,10 @@ paths:
           required: true
           schema:
             type: integer
+        - in: query
+          name: permanent
+          schema: { type: boolean, default: false }
+          description: If true, performs a hard delete. Otherwise, soft delete.
       responses:
         '204':
           description: Node and edges deleted successfully.
@@ -829,9 +855,31 @@ paths:
           required: true
           schema:
             type: string
+        - in: query
+          name: permanent
+          schema: { type: boolean, default: false }
+          description: If true, performs a hard delete. Otherwise, soft delete.
       responses:
         '204':
           description: Edge deleted successfully.
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/edges/{edgeId}/restore:
+    post:
+      summary: Restore a deleted graph edge
+      parameters:
+        - name: edgeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Edge restored successfully.
         '401':
           description: Not authenticated.
           content:
@@ -925,9 +973,31 @@ paths:
           required: true
           schema:
             type: string
+        - in: query
+          name: permanent
+          schema: { type: boolean, default: false }
+          description: If true, performs a hard delete. Otherwise, soft delete.
       responses:
         '204':
           description: Cluster deleted successfully.
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/clusters/{clusterId}/restore:
+    post:
+      summary: Restore a deleted graph cluster
+      parameters:
+        - name: clusterId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Cluster restored successfully.
         '401':
           description: Not authenticated.
           content:
@@ -1034,6 +1104,10 @@ paths:
           required: true
           schema:
             type: string
+        - in: query
+          name: permanent
+          schema: { type: boolean, default: false }
+          description: If true, performs a hard delete. Otherwise, soft delete.
       responses:
         '204':
           description: Cluster and contents deleted successfully.
@@ -1640,7 +1714,12 @@ paths:
               schema: { $ref: '../schemas/problem.json' }
     delete:
       summary: Delete graph summary
-      description: Permanently deletes the graph summary for the user.
+      description: Deletes the graph summary for the user.
+      parameters:
+        - in: query
+          name: permanent
+          schema: { type: boolean, default: false }
+          description: If true, performs a hard delete. Otherwise, soft delete.
       responses:
         '204':
           description: No Content (Successfully deleted)
@@ -1654,13 +1733,47 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }
+  /v1/graph-ai/summary/restore:
+    post:
+      summary: Restore graph summary
+      description: Restores a soft-deleted graph summary for the user.
+      responses:
+        '204':
+          description: No Content (Successfully restored)
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
   /v1/graph-ai:
     delete:
       summary: Delete all graph data
-      description: Permanently deletes all knowledge graph data (nodes, edges, clusters, subclusters, stats) for the user.
+      description: Deletes all knowledge graph data (nodes, edges, clusters, subclusters, stats) for the user.
+      parameters:
+        - in: query
+          name: permanent
+          schema: { type: boolean, default: false }
+          description: If true, performs a hard delete. Otherwise, soft delete.
       responses:
         '204':
           description: No Content (Successfully deleted)
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '500':
+          description: Internal Server Error
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+  /v1/graph-ai/restore:
+    post:
+      summary: Restore all graph data
+      description: Restores all soft-deleted knowledge graph data for the user.
+      responses:
+        '204':
+          description: No Content (Successfully restored)
         '401':
           description: Not authenticated
           content:

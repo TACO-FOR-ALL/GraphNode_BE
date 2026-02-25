@@ -352,10 +352,23 @@ await client.conversations.update('conv-1', { title: 'Changed Title' });
 <details>
 <summary><b>delete(id, permanent?)</b></summary>
 
-- **Returns**: `Promise<HttpResponse<{ ok: boolean }>>`
+- **Returns**: `Promise<HttpResponse<{ ok: true }>>`
+- **Description**: 대화를 삭제합니다. `permanent`가 `true`면 영구 삭제(Hard Delete), `false`나 생략 시 휴지통으로 이동(Soft Delete)합니다.
 - **Example**:
 ```typescript
-await client.conversations.delete('conv-1', true); // 영구 삭제
+await client.conversations.delete('conv-1', false); // 휴지통 이동 (Soft Delete)
+await client.conversations.delete('conv-1', true);  // 영구 삭제 (Hard Delete)
+```
+</details>
+
+<details>
+<summary><b>restore(id)</b></summary>
+
+- **Returns**: `Promise<HttpResponse<ConversationDto>>`
+- **Description**: 휴지통에 있는 대화를 복원합니다.
+- **Example**:
+```typescript
+const res = await client.conversations.restore('conv-1'); // 복원
 ```
 </details>
 
@@ -369,6 +382,28 @@ await client.conversations.createMessage('conv-1', {
   role: 'user',
   content: 'Manual message'
 });
+```
+</details>
+
+<details>
+<summary><b>deleteMessage(convId, msgId, permanent?)</b></summary>
+
+- **Returns**: `Promise<HttpResponse<{ ok: true }>>`
+- **Description**: 특정 메시지를 삭제합니다. `permanent` 설정에 따라 Soft/Hard Delete로 동작합니다.
+- **Example**:
+```typescript
+await client.conversations.deleteMessage('conv-1', 'msg-1', false); // Soft Delete
+```
+</details>
+
+<details>
+<summary><b>restoreMessage(convId, msgId)</b></summary>
+
+- **Returns**: `Promise<HttpResponse<MessageDto>>`
+- **Description**: 삭제된 메시지를 복원합니다.
+- **Example**:
+```typescript
+await client.conversations.restoreMessage('conv-1', 'msg-1');
 ```
 </details>
 
@@ -546,6 +581,51 @@ await client.graphAi.deleteGraph();
 await client.note.createNote({
   id: 'uuid', title: 'My Note', content: '# Hi', folderId: null
 });
+```
+</details>
+
+<details>
+<summary><b>deleteNote(id, permanent?)</b></summary>
+
+- **Returns**: `Promise<HttpResponse<void>>`
+- **Description**: 노트를 삭제합니다. `permanent`가 `true`면 영구 삭제(Hard Delete), `false`이거나 생략 시 휴지통으로 이동(Soft Delete)합니다.
+- **Example**:
+```typescript
+await client.note.deleteNote('uuid', false); // 휴지통 이동 (Soft Delete)
+await client.note.deleteNote('uuid', true);  // 영구 삭제 (Hard Delete)
+```
+</details>
+
+<details>
+<summary><b>restoreNote(id)</b></summary>
+
+- **Returns**: `Promise<HttpResponse<NoteDto>>`
+- **Description**: 삭제된 노트를 복원합니다.
+- **Example**:
+```typescript
+await client.note.restoreNote('uuid'); // 복원
+```
+</details>
+
+<details>
+<summary><b>deleteFolder(id, permanent?)</b></summary>
+
+- **Returns**: `Promise<HttpResponse<void>>`
+- **Description**: 폴더를 삭제합니다. `permanent` 방식은 Note와 동일합니다.
+- **Example**:
+```typescript
+await client.note.deleteFolder('folder-1', false); 
+```
+</details>
+
+<details>
+<summary><b>restoreFolder(id)</b></summary>
+
+- **Returns**: `Promise<HttpResponse<FolderDto>>`
+- **Description**: 삭제된 폴더를 복원합니다.
+- **Example**:
+```typescript
+await client.note.restoreFolder('folder-1'); 
 ```
 </details>
 

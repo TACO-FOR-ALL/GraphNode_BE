@@ -161,11 +161,22 @@ export class GraphAiApi {
    * - 관련된 모든 노드, 엣지, 서브클러스터, 통계 등을 일괄 삭제합니다.
    * - 성공 시 204 No Content 를 반환합니다.
    *
+   * @param options - 옵션 (`permanent`가 true이면 영구 삭제, 아니면 소프트 삭제)
    * @example
-   * await sdk.graphAi.deleteGraph();
+   * await sdk.graphAi.deleteGraph({ permanent: true });
    */
-  async deleteGraph(): Promise<HttpResponse<void>> {
-    return this.rb.delete<void>('/v1/graph-ai');
+  async deleteGraph(options?: { permanent?: boolean }): Promise<HttpResponse<void>> {
+    const q = options?.permanent ? '?permanent=true' : '';
+    return this.rb.delete<void>(`/v1/graph-ai${q}`);
+  }
+
+  /**
+   * 휴지통에 있는(소프트 삭제된) 사용자의 전체 지식 그래프 데이터를 복원합니다.
+   * @example
+   * await client.graphAi.restoreGraph();
+   */
+  async restoreGraph(): Promise<HttpResponse<void>> {
+    return this.rb.path('/restore').post<void>();
   }
 
   /**
@@ -173,10 +184,21 @@ export class GraphAiApi {
    * - 단순 서머리 도큐먼트 삭제 액션입니다.
    * - 성공 시 204 No Content 를 반환합니다.
    *
+   * @param options - 옵션 (`permanent`가 true이면 영구 삭제, 아니면 소프트 삭제)
    * @example
-   * await sdk.graphAi.deleteSummary();
+   * await sdk.graphAi.deleteSummary({ permanent: true });
    */
-  async deleteSummary(): Promise<HttpResponse<void>> {
-    return this.rb.delete<void>('/v1/graph-ai/summary');
+  async deleteSummary(options?: { permanent?: boolean }): Promise<HttpResponse<void>> {
+    const q = options?.permanent ? '?permanent=true' : '';
+    return this.rb.delete<void>(`/v1/graph-ai/summary${q}`);
+  }
+
+  /**
+   * 휴지통에 있는(소프트 삭제된) 사용자의 그래프 요약 내역을 복원합니다.
+   * @example
+   * await client.graphAi.restoreSummary();
+   */
+  async restoreSummary(): Promise<HttpResponse<void>> {
+    return this.rb.path('/summary/restore').post<void>();
   }
 }

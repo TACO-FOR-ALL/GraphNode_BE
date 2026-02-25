@@ -33,8 +33,14 @@ export function createGraphAiRouter(graphGenerationService: GraphGenerationServi
   // DELETE /v1/graph-ai/summary (요약 삭제)
   router.delete('/summary', asyncHandler(graphAiController.deleteSummary.bind(graphAiController)));
 
+  // POST /v1/graph-ai/summary/restore (요약 복구)
+  router.post('/summary/restore', asyncHandler(graphAiController.restoreSummary.bind(graphAiController)));
+
   // DELETE /v1/graph-ai (그래프 전체 삭제)
   router.delete('/', asyncHandler(graphAiController.deleteGraph.bind(graphAiController)));
+
+  // POST /v1/graph-ai/restore (그래프 전체 복구)
+  router.post('/restore', asyncHandler(graphAiController.restoreGraph.bind(graphAiController)));
 
   return router;
 }

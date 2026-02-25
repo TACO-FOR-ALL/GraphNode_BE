@@ -97,8 +97,22 @@ export class GraphAiController {
    */
   deleteGraph = async (req: Request, res: Response) => {
     const userId = getUserIdFromRequest(req);
-    await this.graphGenerationService.deleteGraph(userId!);
+    const permanent = req.query.permanent === 'true';
+    await this.graphGenerationService.deleteGraph(userId!, permanent);
     res.status(204).send();
+  };
+
+  /**
+   * POST /v1/graph-ai/restore
+   * 사용자의 모든 지식 그래프 데이터를 복구합니다.
+   *
+   * @param req Request
+   * @param res Response
+   */
+  restoreGraph = async (req: Request, res: Response) => {
+    const userId = getUserIdFromRequest(req);
+    await this.graphGenerationService.restoreGraph(userId!);
+    res.status(200).json({ message: 'Graph restored' });
   };
 
   /**
@@ -116,7 +130,21 @@ export class GraphAiController {
    */
   deleteSummary = async (req: Request, res: Response) => {
     const userId = getUserIdFromRequest(req);
-    await this.graphGenerationService.deleteGraphSummary(userId!);
+    const permanent = req.query.permanent === 'true';
+    await this.graphGenerationService.deleteGraphSummary(userId!, permanent);
     res.status(204).send();
+  };
+
+  /**
+   * POST /v1/graph-ai/summary/restore
+   * 지식 그래프 요약 정보를 복구합니다.
+   *
+   * @param req Request
+   * @param res Response
+   */
+  restoreSummary = async (req: Request, res: Response) => {
+    const userId = getUserIdFromRequest(req);
+    await this.graphGenerationService.restoreGraphSummary(userId!);
+    res.status(200).json({ message: 'Summary restored' });
   };
 }

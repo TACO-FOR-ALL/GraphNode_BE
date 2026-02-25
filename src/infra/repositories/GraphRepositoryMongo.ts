@@ -90,30 +90,58 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param userId 사용자 ID
    * @param id 삭제할 노드의 ID (number)
    */
-  async deleteNode(userId: string, id: number, options?: RepoOptions): Promise<void> {
+  async deleteNode(userId: string, id: number, permanent?: boolean, options?: RepoOptions): Promise<void> {
     try {
-      await this.graphNodes_col().deleteOne({ id, userId } as any, {
-        ...options,
-        session: options?.session as any,
-      });
-      await this.graphEdges_col().deleteMany(
-        { userId, $or: [{ source: id }, { target: id }] } as any,
-        { ...options, session: options?.session as any }
-      );
+      const opts = { ...options, session: options?.session as any };
+      if (permanent) {
+        await this.graphNodes_col().deleteOne({ id, userId } as any, opts);
+        await this.graphEdges_col().deleteMany(
+          { userId, $or: [{ source: id }, { target: id }] } as any,
+          opts
+        );
+      } else {
+        const deletedAt = Date.now();
+        await this.graphNodes_col().updateOne({ id, userId } as any, { $set: { deletedAt } }, opts);
+        await this.graphEdges_col().updateMany(
+          { userId, $or: [{ source: id }, { target: id }] } as any,
+          { $set: { deletedAt } },
+          opts
+        );
+      }
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.deleteNode failed', { cause: String(err) });
+    }
+  }
+
+  async restoreNode(userId: string, id: number, options?: RepoOptions): Promise<void> {
+    try {
+      const opts = { ...options, session: options?.session as any };
+      await this.graphNodes_col().updateOne({ id, userId } as any, { $set: { deletedAt: null } }, opts);
+      await this.graphEdges_col().updateMany(
+        { userId, $or: [{ source: id }, { target: id }] } as any,
+        { $set: { deletedAt: null } },
+        opts
+      );
+    } catch (err: unknown) {
+      throw new UpstreamError('GraphRepositoryMongo.restoreNode failed', { cause: String(err) });
     }
   }
 
   /**
    * 지정된 ID 목록에 해당하는 여러 노드를 삭제합니다.
    */
-  async deleteNodes(userId: string, ids: number[], options?: RepoOptions): Promise<void> {
+  async deleteNodes(userId: string, ids: number[], permanent?: boolean, options?: RepoOptions): Promise<void> {
     try {
-      await this.graphNodes_col().deleteMany({ id: { $in: ids }, userId } as any, {
-        ...options,
-        session: options?.session as any,
-      });
+      const opts = { ...options, session: options?.session as any };
+      if (permanent) {
+        await this.graphNodes_col().deleteMany({ id: { $in: ids }, userId } as any, opts);
+      } else {
+        await this.graphNodes_col().updateMany(
+          { id: { $in: ids }, userId } as any,
+          { $set: { deletedAt: Date.now() } },
+          opts
+        );
+      }
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.deleteNodes failed', { cause: String(err) });
     }
@@ -123,19 +151,47 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * 해당 사용자의 모든 그래프 데이터(노드, 엣지, 클러스터, 서브클러스터, 통계, 요약)를 삭제합니다.
    * 트랜잭션 등에서 호출될 수 있습니다.
    */
-  async deleteAllGraphData(userId: string, options?: RepoOptions): Promise<void> {
+  async deleteAllGraphData(userId: string, permanent?: boolean, options?: RepoOptions): Promise<void> {
+    try {
+      const opts = { ...options, session: options?.session as any };
+      if (permanent) {
+        await Promise.all([
+          this.graphNodes_col().deleteMany({ userId } as any, opts),
+          this.graphEdges_col().deleteMany({ userId } as any, opts),
+          this.graphClusters_col().deleteMany({ userId } as any, opts),
+          this.graphSubclusters_col().deleteMany({ userId } as any, opts),
+          this.graphStats_col().deleteMany({ userId } as any, opts),
+          this.graphSummary_col().deleteMany({ userId } as any, opts),
+        ]);
+      } else {
+        const deletedAt = Date.now();
+        await Promise.all([
+          this.graphNodes_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts),
+          this.graphEdges_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts),
+          this.graphClusters_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts),
+          this.graphSubclusters_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts),
+          this.graphStats_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts),
+          this.graphSummary_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts),
+        ]);
+      }
+    } catch (err: unknown) {
+      throw new UpstreamError('GraphRepositoryMongo.deleteAllGraphData failed', { cause: String(err) });
+    }
+  }
+
+  async restoreAllGraphData(userId: string, options?: RepoOptions): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
       await Promise.all([
-        this.graphNodes_col().deleteMany({ userId } as any, opts),
-        this.graphEdges_col().deleteMany({ userId } as any, opts),
-        this.graphClusters_col().deleteMany({ userId } as any, opts),
-        this.graphSubclusters_col().deleteMany({ userId } as any, opts),
-        this.graphStats_col().deleteMany({ userId } as any, opts),
-        this.graphSummary_col().deleteMany({ userId } as any, opts),
+        this.graphNodes_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts),
+        this.graphEdges_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts),
+        this.graphClusters_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts),
+        this.graphSubclusters_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts),
+        this.graphStats_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts),
+        this.graphSummary_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts),
       ]);
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.deleteAllGraphData failed', { cause: String(err) });
+      throw new UpstreamError('GraphRepositoryMongo.restoreAllGraphData failed', { cause: String(err) });
     }
   }
 
@@ -147,6 +203,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
       const doc: GraphNodeDoc | null = await this.graphNodes_col().findOne({
         id,
         userId,
+        deletedAt: { $in: [null, undefined] },
       } as any);
       return doc;
     } catch (err: unknown) {
@@ -161,6 +218,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     try {
       const cursor: FindCursor<WithId<GraphNodeDoc>> = this.graphNodes_col().find({
         userId,
+        deletedAt: { $in: [null, undefined] },
       } as any);
       return await cursor.toArray();
     } catch (err: unknown) {
@@ -176,6 +234,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
       const cursor: FindCursor<WithId<GraphNodeDoc>> = this.graphNodes_col().find({
         userId,
         clusterId,
+        deletedAt: { $in: [null, undefined] },
       } as any);
       return await cursor.toArray();
     } catch (err: unknown) {
@@ -210,12 +269,18 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   /**
    * 특정 엣지를 ID로 삭제합니다.
    */
-  async deleteEdge(userId: string, edgeId: string, options?: RepoOptions): Promise<void> {
+  async deleteEdge(userId: string, edgeId: string, permanent?: boolean, options?: RepoOptions): Promise<void> {
     try {
-      await this.graphEdges_col().deleteOne({ id: edgeId, userId } as any, {
-        ...options,
-        session: options?.session as any,
-      });
+      const opts = { ...options, session: options?.session as any };
+      if (permanent) {
+        await this.graphEdges_col().deleteOne({ id: edgeId, userId } as any, opts);
+      } else {
+        await this.graphEdges_col().updateOne(
+          { id: edgeId, userId } as any,
+          { $set: { deletedAt: Date.now() } },
+          opts
+        );
+      }
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.deleteEdge failed', { cause: String(err) });
     }
@@ -228,19 +293,23 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     userId: string,
     source: number,
     target: number,
+    permanent?: boolean,
     options?: RepoOptions
   ): Promise<void> {
     try {
-      await this.graphEdges_col().deleteMany(
-        {
-          userId,
-          $or: [
-            { source, target },
-            { source: target, target: source },
-          ],
-        } as any,
-        { ...options, session: options?.session as any }
-      );
+      const opts = { ...options, session: options?.session as any };
+      const filter = {
+        userId,
+        $or: [
+          { source, target },
+          { source: target, target: source },
+        ],
+      } as any;
+      if (permanent) {
+        await this.graphEdges_col().deleteMany(filter, opts);
+      } else {
+        await this.graphEdges_col().updateMany(filter, { $set: { deletedAt: Date.now() } }, opts);
+      }
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.deleteEdgeBetween failed', {
         cause: String(err),
@@ -254,20 +323,37 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   async deleteEdgesByNodeIds(
     userId: string,
     ids: number[],
+    permanent?: boolean,
     options?: RepoOptions
   ): Promise<void> {
     try {
-      await this.graphEdges_col().deleteMany(
-        {
-          userId,
-          $or: [{ source: { $in: ids } }, { target: { $in: ids } }],
-        } as any,
-        { ...options, session: options?.session as any }
-      );
+      const opts = { ...options, session: options?.session as any };
+      const filter = {
+        userId,
+        $or: [{ source: { $in: ids } }, { target: { $in: ids } }],
+      } as any;
+      if (permanent) {
+        await this.graphEdges_col().deleteMany(filter, opts);
+      } else {
+        await this.graphEdges_col().updateMany(filter, { $set: { deletedAt: Date.now() } }, opts);
+      }
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.deleteEdgesByNodeIds failed', {
         cause: String(err),
       });
+    }
+  }
+
+  async restoreEdge(userId: string, edgeId: string, options?: RepoOptions): Promise<void> {
+    try {
+      const opts = { ...options, session: options?.session as any };
+      await this.graphEdges_col().updateOne(
+        { id: edgeId, userId } as any,
+        { $set: { deletedAt: null } },
+        opts
+      );
+    } catch (err: unknown) {
+      throw new UpstreamError('GraphRepositoryMongo.restoreEdge failed', { cause: String(err) });
     }
   }
 
@@ -277,7 +363,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   async listEdges(userId: string): Promise<GraphEdgeDoc[]> {
     try {
       return await this.graphEdges_col()
-        .find({ userId } as any)
+        .find({ userId, deletedAt: { $in: [null, undefined] } } as any)
         .toArray();
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.listEdges failed', { cause: String(err) });
@@ -303,14 +389,33 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   /**
    * 특정 클러스터를 삭제합니다.
    */
-  async deleteCluster(userId: string, clusterId: string, options?: RepoOptions): Promise<void> {
+  async deleteCluster(userId: string, clusterId: string, permanent?: boolean, options?: RepoOptions): Promise<void> {
     try {
-      await this.graphClusters_col().deleteOne({ id: clusterId, userId } as any, {
-        ...options,
-        session: options?.session as any,
-      });
+      const opts = { ...options, session: options?.session as any };
+      if (permanent) {
+        await this.graphClusters_col().deleteOne({ id: clusterId, userId } as any, opts);
+      } else {
+        await this.graphClusters_col().updateOne(
+          { id: clusterId, userId } as any,
+          { $set: { deletedAt: Date.now() } },
+          opts
+        );
+      }
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.deleteCluster failed', { cause: String(err) });
+    }
+  }
+
+  async restoreCluster(userId: string, clusterId: string, options?: RepoOptions): Promise<void> {
+    try {
+      const opts = { ...options, session: options?.session as any };
+      await this.graphClusters_col().updateOne(
+        { id: clusterId, userId } as any,
+        { $set: { deletedAt: null } },
+        opts
+      );
+    } catch (err: unknown) {
+      throw new UpstreamError('GraphRepositoryMongo.restoreCluster failed', { cause: String(err) });
     }
   }
 
@@ -319,7 +424,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    */
   async findCluster(userId: string, clusterId: string): Promise<GraphClusterDoc | null> {
     try {
-      return await this.graphClusters_col().findOne({ id: clusterId, userId } as any);
+      return await this.graphClusters_col().findOne({ id: clusterId, userId, deletedAt: { $in: [null, undefined] } } as any);
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.findCluster failed', { cause: String(err) });
     }
@@ -331,7 +436,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   async listClusters(userId: string): Promise<GraphClusterDoc[]> {
     try {
       return await this.graphClusters_col()
-        .find({ userId } as any)
+        .find({ userId, deletedAt: { $in: [null, undefined] } } as any)
         .toArray();
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.listClusters failed', { cause: String(err) });
@@ -357,13 +462,20 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   async deleteSubcluster(
     userId: string,
     subclusterId: string,
+    permanent?: boolean,
     options?: RepoOptions
   ): Promise<void> {
     try {
-      await this.graphSubclusters_col().deleteOne({ id: subclusterId, userId } as any, {
-        ...options,
-        session: options?.session as any,
-      });
+      const opts = { ...options, session: options?.session as any };
+      if (permanent) {
+        await this.graphSubclusters_col().deleteOne({ id: subclusterId, userId } as any, opts);
+      } else {
+        await this.graphSubclusters_col().updateOne(
+          { id: subclusterId, userId } as any,
+          { $set: { deletedAt: Date.now() } },
+          opts
+        );
+      }
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.deleteSubcluster failed', {
         cause: String(err),
@@ -371,10 +483,23 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     }
   }
 
+  async restoreSubcluster(userId: string, subclusterId: string, options?: RepoOptions): Promise<void> {
+    try {
+      const opts = { ...options, session: options?.session as any };
+      await this.graphSubclusters_col().updateOne(
+        { id: subclusterId, userId } as any,
+        { $set: { deletedAt: null } },
+        opts
+      );
+    } catch (err: unknown) {
+      throw new UpstreamError('GraphRepositoryMongo.restoreSubcluster failed', { cause: String(err) });
+    }
+  }
+
   async listSubclusters(userId: string): Promise<GraphSubclusterDoc[]> {
     try {
       return await this.graphSubclusters_col()
-        .find({ userId } as any)
+        .find({ userId, deletedAt: { $in: [null, undefined] } } as any)
         .toArray();
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.listSubclusters failed', {
@@ -404,7 +529,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    */
   async getStats(userId: string): Promise<GraphStatsDoc | null> {
     try {
-      return await this.graphStats_col().findOne({ userId } as any);
+      return await this.graphStats_col().findOne({ userId, deletedAt: { $in: [null, undefined] } } as any);
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.getStats failed', { cause: String(err) });
     }
@@ -413,12 +538,18 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   /**
    * 특정 사용자의 그래프 통계를 삭제합니다.
    */
-  async deleteStats(userId: string, options?: RepoOptions): Promise<void> {
+  async deleteStats(userId: string, permanent?: boolean, options?: RepoOptions): Promise<void> {
     try {
-      await this.graphStats_col().deleteOne({ id: userId } as any, {
-        ...options,
-        session: options?.session as any,
-      });
+      const opts = { ...options, session: options?.session as any };
+      if (permanent) {
+        await this.graphStats_col().deleteOne({ id: userId } as any, opts);
+      } else {
+        await this.graphStats_col().updateOne(
+          { id: userId } as any,
+          { $set: { deletedAt: Date.now() } },
+          opts
+        );
+      }
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.deleteStats failed', { cause: String(err) });
     }
@@ -452,7 +583,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   async getGraphSummary(userId: string): Promise<GraphSummaryDoc | null> {
     try {
-      const doc = await this.graphSummary_col().findOne({ userId: userId } as any);
+      const doc = await this.graphSummary_col().findOne({ userId: userId, deletedAt: { $in: [null, undefined] } } as any);
       return doc;
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.getGraphSummary failed', {
@@ -461,14 +592,33 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     }
   }
 
-  async deleteGraphSummary(userId: string, options?: RepoOptions): Promise<void> {
+  async deleteGraphSummary(userId: string, permanent?: boolean, options?: RepoOptions): Promise<void> {
     try {
-      await this.graphSummary_col().deleteOne({ userId } as any, {
-        ...options,
-        session: options?.session as any,
-      });
+      const opts = { ...options, session: options?.session as any };
+      if (permanent) {
+        await this.graphSummary_col().deleteOne({ userId } as any, opts);
+      } else {
+        await this.graphSummary_col().updateOne(
+          { userId } as any,
+          { $set: { deletedAt: Date.now() } },
+          opts
+        );
+      }
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.deleteGraphSummary failed', { cause: String(err) });
+    }
+  }
+
+  async restoreGraphSummary(userId: string, options?: RepoOptions): Promise<void> {
+    try {
+      const opts = { ...options, session: options?.session as any };
+      await this.graphSummary_col().updateOne(
+        { userId } as any,
+        { $set: { deletedAt: null } },
+        opts
+      );
+    } catch (err: unknown) {
+      throw new UpstreamError('GraphRepositoryMongo.restoreGraphSummary failed', { cause: String(err) });
     }
   }
 }

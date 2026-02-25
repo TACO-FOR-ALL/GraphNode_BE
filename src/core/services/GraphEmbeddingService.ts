@@ -120,7 +120,7 @@ export class GraphEmbeddingService {
    * @throws {UpstreamError} - DB 오류 발생 시
    * @see removeNodeCascade - 노드와 연결된 모든 엣지를 함께 삭제하려면 이 메서드를 사용하세요.
    */
-  async deleteNode(userId: string, id: number) {
+  async deleteNode(userId: string, id: number, permanent?: boolean) {
     const mongoClient = getMongo();
     if (!mongoClient) {
       throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
@@ -128,7 +128,25 @@ export class GraphEmbeddingService {
     const session = mongoClient.startSession();
     try {
       await session.withTransaction(async () => {
-        await this.graphManagementService.deleteNode(userId, id, { session });
+        await this.graphManagementService.deleteNode(userId, id, permanent, { session });
+      });
+    } finally {
+      await session.endSession();
+    }
+  }
+
+  /**
+   * 노드 복구합니다.
+   */
+  async restoreNode(userId: string, id: number) {
+    const mongoClient = getMongo();
+    if (!mongoClient) {
+      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
+    }
+    const session = mongoClient.startSession();
+    try {
+      await session.withTransaction(async () => {
+        await this.graphManagementService.restoreNode(userId, id, { session });
       });
     } finally {
       await session.endSession();
@@ -177,8 +195,12 @@ export class GraphEmbeddingService {
    * @returns Promise<void>
    * @throws {UpstreamError} - DB 오류 발생 시
    */
-  deleteEdge(userId: string, edgeId: string) {
-    return this.graphManagementService.deleteEdge(userId, edgeId);
+  deleteEdge(userId: string, edgeId: string, permanent?: boolean) {
+    return this.graphManagementService.deleteEdge(userId, edgeId, permanent);
+  }
+
+  restoreEdge(userId: string, edgeId: string) {
+    return this.graphManagementService.restoreEdge(userId, edgeId);
   }
 
   /**
@@ -189,8 +211,8 @@ export class GraphEmbeddingService {
    * @returns Promise<void>
    * @throws {UpstreamError} - DB 오류 발생 시
    */
-  deleteEdgeBetween(userId: string, source: number, target: number) {
-    return this.graphManagementService.deleteEdgeBetween(userId, source, target);
+  deleteEdgeBetween(userId: string, source: number, target: number, permanent?: boolean) {
+    return this.graphManagementService.deleteEdgeBetween(userId, source, target, permanent);
   }
 
   /**
@@ -235,7 +257,7 @@ export class GraphEmbeddingService {
    * @throws {UpstreamError} - DB 오류 발생 시
    * @see removeClusterCascade - 클러스터와 속한 모든 노드/엣지를 삭제하려면 이 메서드를 사용하세요.
    */
-  async deleteCluster(userId: string, id: string): Promise<void> {
+  async deleteCluster(userId: string, id: string, permanent?: boolean): Promise<void> {
     const mongoClient = getMongo();
     if (!mongoClient) {
       throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
@@ -243,7 +265,25 @@ export class GraphEmbeddingService {
     const session = mongoClient.startSession();
     try {
       await session.withTransaction(async () => {
-        await this.graphManagementService.deleteCluster(userId, id, { session });
+        await this.graphManagementService.deleteCluster(userId, id, permanent, { session });
+      });
+    } finally {
+      await session.endSession();
+    }
+  }
+
+  /**
+   * 클러스터 복구
+   */
+  async restoreCluster(userId: string, id: string): Promise<void> {
+    const mongoClient = getMongo();
+    if (!mongoClient) {
+      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
+    }
+    const session = mongoClient.startSession();
+    try {
+      await session.withTransaction(async () => {
+        await this.graphManagementService.restoreCluster(userId, id, { session });
       });
     } finally {
       await session.endSession();
@@ -315,9 +355,9 @@ export class GraphEmbeddingService {
    * // 노드 5와 연결된 모든 엣지를 함께 삭제
    * await service.removeNodeCascade('u-123', 5);
    */
-  async removeNodeCascade(userId: string, id: number): Promise<void> {
+  async removeNodeCascade(userId: string, id: number, permanent?: boolean): Promise<void> {
     // GraphRepositoryMongo.deleteNode 에 이미 관련 엣지 삭제 로직이 포함되어 있음
-    await this.graphManagementService.deleteNode(userId, id);
+    await this.graphManagementService.deleteNode(userId, id, permanent);
   }
 
   /**
@@ -331,7 +371,7 @@ export class GraphEmbeddingService {
    * @returns Promise<void>
    * @throws {UpstreamError} - DB 작업 중 오류 발생 시
    */
-  async removeClusterCascade(userId: string, id: string): Promise<void> {
+  async removeClusterCascade(userId: string, id: string, permanent?: boolean): Promise<void> {
     const mongoClient = getMongo();
     if (!mongoClient) {
       throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
@@ -346,11 +386,11 @@ export class GraphEmbeddingService {
         if (nodesInCluster.length > 0) {
           const ids = nodesInCluster.map((n) => n.id);
           // 1. 클러스터에 속한 모든 노드와 관련 엣지 삭제
-          await this.graphManagementService.deleteEdgesByNodeIds(userId, ids, { session });
-          await this.graphManagementService.deleteNodes(userId, ids, { session });
+          await this.graphManagementService.deleteEdgesByNodeIds(userId, ids, permanent, { session });
+          await this.graphManagementService.deleteNodes(userId, ids, permanent, { session });
         }
         // 2. 클러스터 자체 삭제
-        await this.graphManagementService.deleteCluster(userId, id, { session });
+        await this.graphManagementService.deleteCluster(userId, id, permanent, { session });
       });
     } finally {
       await session.endSession();
@@ -377,7 +417,13 @@ export class GraphEmbeddingService {
       nodes,
       edges,
       clusters,
-      subclusters,
+      subclusters: subclusters.map(s => {
+        const { _id, deletedAt, ...rest } = s as any;
+        return {
+          ...rest,
+          ...(deletedAt != null && { deletedAt: new Date(deletedAt).toISOString() })
+        };
+      }),
       stats: stats
         ? { nodes: stats.nodes, edges: stats.edges, clusters: stats.clusters }
         : { nodes: 0, edges: 0, clusters: 0 },
@@ -417,17 +463,19 @@ export class GraphEmbeddingService {
           ...snapshot.clusters.map((cluster) =>
             this.graphManagementService.upsertCluster({ ...cluster, userId }, { session })
           ),
-          ...subclusters.map((subcluster) =>
-            this.graphManagementService.upsertSubcluster(
+          ...subclusters.map((subcluster) => {
+            const { deletedAt, ...rest } = subcluster;
+            return this.graphManagementService.upsertSubcluster(
               {
-                ...subcluster,
+                ...rest,
                 userId,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
+                ...(deletedAt != null ? { deletedAt: new Date(deletedAt).getTime() } : {})
               },
               { session }
-            )
-          ),
+            );
+          }),
           this.graphManagementService.saveStats({ ...snapshot.stats, userId }, { session }),
         ];
 
@@ -443,7 +491,7 @@ export class GraphEmbeddingService {
    *
    * @param userId
    */
-  async deleteGraph(userId: string) {
+  async deleteGraph(userId: string, permanent?: boolean) {
     const mongoClient = getMongo();
     if (!mongoClient) {
       throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
@@ -451,7 +499,22 @@ export class GraphEmbeddingService {
     const session = mongoClient.startSession();
     try {
       await session.withTransaction(async () => {
-        await this.graphManagementService.deleteGraph(userId, { session });
+        await this.graphManagementService.deleteGraph(userId, permanent, { session });
+      });
+    } finally {
+      await session.endSession();
+    }
+  }
+  
+  async restoreGraph(userId: string) {
+    const mongoClient = getMongo();
+    if (!mongoClient) {
+      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
+    }
+    const session = mongoClient.startSession();
+    try {
+      await session.withTransaction(async () => {
+        await this.graphManagementService.restoreGraph(userId, { session });
       });
     } finally {
       await session.endSession();
@@ -477,7 +540,11 @@ export class GraphEmbeddingService {
   /**
    * 그래프 요약/인사이트 삭제 (Delegation)
    */
-  async deleteGraphSummary(userId: string) {
-    return this.graphManagementService.deleteGraphSummary(userId);
+  async deleteGraphSummary(userId: string, permanent?: boolean) {
+    return this.graphManagementService.deleteGraphSummary(userId, permanent);
+  }
+
+  async restoreGraphSummary(userId: string) {
+    return this.graphManagementService.restoreGraphSummary(userId);
   }
 }

@@ -111,11 +111,25 @@ export class GraphController {
   async deleteNode(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
     const id = parseInt(req.params.id, 10);
+    const permanent = req.query.permanent === 'true';
 
     // 서비스 호출 (노드 삭제)
-    await this.graphEmbeddingService.deleteNode(userId, id);
+    await this.graphEmbeddingService.deleteNode(userId, id, permanent);
 
     res.status(204).send();
+  }
+
+  /**
+   * 노드 복구
+   * [POST] /v1/graph/nodes/:id/restore
+   */
+  async restoreNode(req: Request, res: Response) {
+    const userId = getUserIdFromRequest(req)!;
+    const id = parseInt(req.params.id, 10);
+
+    await this.graphEmbeddingService.restoreNode(userId, id);
+
+    res.status(200).json({ message: 'Node restored' });
   }
 
   /**
@@ -128,9 +142,10 @@ export class GraphController {
   async deleteNodeCascade(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
     const id = parseInt(req.params.id, 10);
+    const permanent = req.query.permanent === 'true';
 
     // 서비스 호출 (Cascade 삭제)
-    await this.graphEmbeddingService.removeNodeCascade(userId, id);
+    await this.graphEmbeddingService.removeNodeCascade(userId, id, permanent);
 
     res.status(204).send();
   }
@@ -171,11 +186,25 @@ export class GraphController {
   async deleteEdge(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
     const edgeId = req.params.edgeId;
+    const permanent = req.query.permanent === 'true';
 
     // 서비스 호출 (엣지 삭제)
-    await this.graphEmbeddingService.deleteEdge(userId, edgeId);
+    await this.graphEmbeddingService.deleteEdge(userId, edgeId, permanent);
 
     res.status(204).send();
+  }
+
+  /**
+   * 엣지 복구
+   * [POST] /v1/graph/edges/:edgeId/restore
+   */
+  async restoreEdge(req: Request, res: Response) {
+    const userId = getUserIdFromRequest(req)!;
+    const edgeId = req.params.edgeId;
+
+    await this.graphEmbeddingService.restoreEdge(userId, edgeId);
+
+    res.status(200).json({ message: 'Edge restored' });
   }
 
   // --- Cluster (클러스터/그룹) 관련 핸들러 ---
@@ -230,11 +259,25 @@ export class GraphController {
   async deleteCluster(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
     const id = req.params.id;
+    const permanent = req.query.permanent === 'true';
 
     // 서비스 호출 (클러스터 삭제)
-    await this.graphEmbeddingService.deleteCluster(userId, id);
+    await this.graphEmbeddingService.deleteCluster(userId, id, permanent);
 
     res.status(204).send();
+  }
+
+  /**
+   * 클러스터 복구
+   * [POST] /v1/graph/clusters/:id/restore
+   */
+  async restoreCluster(req: Request, res: Response) {
+    const userId = getUserIdFromRequest(req)!;
+    const id = req.params.id;
+
+    await this.graphEmbeddingService.restoreCluster(userId, id);
+
+    res.status(200).json({ message: 'Cluster restored' });
   }
 
   /**
@@ -248,9 +291,10 @@ export class GraphController {
   async deleteClusterCascade(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
     const id = req.params.id;
+    const permanent = req.query.permanent === 'true';
 
     // 서비스 호출 (Cascade 삭제)
-    await this.graphEmbeddingService.removeClusterCascade(userId, id);
+    await this.graphEmbeddingService.removeClusterCascade(userId, id, permanent);
 
     res.status(204).send();
   }

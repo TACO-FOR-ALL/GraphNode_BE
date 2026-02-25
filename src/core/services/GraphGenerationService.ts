@@ -245,8 +245,12 @@ export class GraphGenerationService {
    * @example
    * await graphGenerationService.deleteGraphSummary('u_123');
    */
-  async deleteGraphSummary(userId: string) {
-    return this.graphEmbeddingService.deleteGraphSummary(userId);
+  async deleteGraphSummary(userId: string, permanent?: boolean) {
+    return this.graphEmbeddingService.deleteGraphSummary(userId, permanent);
+  }
+
+  async restoreGraphSummary(userId: string) {
+    return this.graphEmbeddingService.restoreGraphSummary(userId);
   }
 
   /**
@@ -256,8 +260,12 @@ export class GraphGenerationService {
    * @example
    * await graphGenerationService.deleteGraph('u_123');
    */
-  async deleteGraph(userId: string) {
-    return this.graphEmbeddingService.deleteGraph(userId);
+  async deleteGraph(userId: string, permanent?: boolean) {
+    return this.graphEmbeddingService.deleteGraph(userId, permanent);
+  }
+
+  async restoreGraph(userId: string) {
+    return this.graphEmbeddingService.restoreGraph(userId);
   }
 
   /**

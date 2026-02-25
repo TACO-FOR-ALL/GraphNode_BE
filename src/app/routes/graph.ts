@@ -28,6 +28,7 @@ export function createGraphRouter(graphEmbeddingService: GraphEmbeddingService) 
   router.get('/nodes/:id', asyncHandler(graphController.getNode.bind(graphController)));
   router.patch('/nodes/:id', asyncHandler(graphController.updateNode.bind(graphController)));
   router.delete('/nodes/:id', asyncHandler(graphController.deleteNode.bind(graphController)));
+  router.post('/nodes/:id/restore', asyncHandler(graphController.restoreNode.bind(graphController)));
   router.delete(
     '/nodes/:id/cascade',
     asyncHandler(graphController.deleteNodeCascade.bind(graphController))
@@ -37,6 +38,7 @@ export function createGraphRouter(graphEmbeddingService: GraphEmbeddingService) 
   router.post('/edges', asyncHandler(graphController.createEdge.bind(graphController)));
   router.get('/edges', asyncHandler(graphController.listEdges.bind(graphController)));
   router.delete('/edges/:edgeId', asyncHandler(graphController.deleteEdge.bind(graphController)));
+  router.post('/edges/:edgeId/restore', asyncHandler(graphController.restoreEdge.bind(graphController)));
 
   // Cluster routes
   router.post('/clusters', asyncHandler(graphController.createCluster.bind(graphController)));
@@ -48,6 +50,10 @@ export function createGraphRouter(graphEmbeddingService: GraphEmbeddingService) 
   router.delete(
     '/clusters/:id',
     asyncHandler(graphController.deleteCluster.bind(graphController))
+  );
+  router.post(
+    '/clusters/:id/restore',
+    asyncHandler(graphController.restoreCluster.bind(graphController))
   );
   router.delete(
     '/clusters/:id/cascade',

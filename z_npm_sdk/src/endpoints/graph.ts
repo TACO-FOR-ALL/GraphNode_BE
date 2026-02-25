@@ -144,23 +144,37 @@ export class GraphApi {
   /**
    * 특정 노드를 삭제합니다.
    * @param nodeId - 삭제할 노드의 ID
+   * @param options - 옵션 (`permanent`가 true이면 영구 삭제, 아니면 소프트 삭제)
    * @example
-   * await client.graph.deleteNode(101);
+   * await client.graph.deleteNode(101, { permanent: true });
    * // Output: (No content)
    */
-  deleteNode(nodeId: number): Promise<HttpResponse<void>> {
-    return this.rb.path(`/nodes/${nodeId}`).delete<void>();
+  deleteNode(nodeId: number, options?: { permanent?: boolean }): Promise<HttpResponse<void>> {
+    const q = options?.permanent ? '?permanent=true' : '';
+    return this.rb.path(`/nodes/${nodeId}${q}`).delete<void>();
+  }
+
+  /**
+   * 휴지통에 있는(소프트 삭제된) 특정 노드를 복원합니다.
+   * @param nodeId - 복원할 노드의 ID
+   * @example
+   * await client.graph.restoreNode(101);
+   */
+  restoreNode(nodeId: number): Promise<HttpResponse<void>> {
+    return this.rb.path(`/nodes/${nodeId}/restore`).post<void>();
   }
 
   /**
    * 특정 노드와 연결된 모든 엣지를 함께 삭제합니다.
    * @param nodeId - 삭제할 노드의 ID
+   * @param options - 옵션 (`permanent`가 true이면 영구 삭제, 아니면 소프트 삭제)
    * @example
    * await client.graph.deleteNodeCascade(101);
    * // Output: (No content)
    */
-  deleteNodeCascade(nodeId: number): Promise<HttpResponse<void>> {
-    return this.rb.path(`/nodes/${nodeId}/cascade`).delete<void>();
+  deleteNodeCascade(nodeId: number, options?: { permanent?: boolean }): Promise<HttpResponse<void>> {
+    const q = options?.permanent ? '?permanent=true' : '';
+    return this.rb.path(`/nodes/${nodeId}/cascade${q}`).delete<void>();
   }
 
   /**
@@ -226,12 +240,24 @@ export class GraphApi {
   /**
    * 특정 엣지를 삭제합니다.
    * @param edgeId - 삭제할 엣지의 ID
+   * @param options - 옵션 (`permanent`가 true이면 영구 삭제, 아니면 소프트 삭제)
    * @example
-   * await client.graph.deleteEdge('edge-uuid-...');
+   * await client.graph.deleteEdge('edge-uuid-...', { permanent: true });
    * // Output: (No content)
    */
-  deleteEdge(edgeId: string): Promise<HttpResponse<void>> {
-    return this.rb.path(`/edges/${edgeId}`).delete<void>();
+  deleteEdge(edgeId: string, options?: { permanent?: boolean }): Promise<HttpResponse<void>> {
+    const q = options?.permanent ? '?permanent=true' : '';
+    return this.rb.path(`/edges/${edgeId}${q}`).delete<void>();
+  }
+
+  /**
+   * 휴지통에 있는(소프트 삭제된) 특정 엣지를 복원합니다.
+   * @param edgeId - 복원할 엣지의 ID
+   * @example
+   * await client.graph.restoreEdge('edge-uuid-...');
+   */
+  restoreEdge(edgeId: string): Promise<HttpResponse<void>> {
+    return this.rb.path(`/edges/${edgeId}/restore`).post<void>();
   }
 
   /**
@@ -304,12 +330,24 @@ export class GraphApi {
   /**
    * 특정 클러스터를 삭제합니다.
    * @param clusterId - 삭제할 클러스터의 ID
+   * @param options - 옵션 (`permanent`가 true이면 영구 삭제, 아니면 소프트 삭제)
    * @example
    * await client.graph.deleteCluster('cluster-a');
    * // Output: (No content)
    */
-  deleteCluster(clusterId: string): Promise<HttpResponse<void>> {
-    return this.rb.path(`/clusters/${clusterId}`).delete<void>();
+  deleteCluster(clusterId: string, options?: { permanent?: boolean }): Promise<HttpResponse<void>> {
+    const q = options?.permanent ? '?permanent=true' : '';
+    return this.rb.path(`/clusters/${clusterId}${q}`).delete<void>();
+  }
+
+  /**
+   * 휴지통에 있는(소프트 삭제된) 특정 클러스터를 복원합니다.
+   * @param clusterId - 복원할 클러스터의 ID
+   * @example
+   * await client.graph.restoreCluster('cluster-a');
+   */
+  restoreCluster(clusterId: string): Promise<HttpResponse<void>> {
+    return this.rb.path(`/clusters/${clusterId}/restore`).post<void>();
   }
 
   // --- Subclusters ---
@@ -329,12 +367,14 @@ export class GraphApi {
   /**
    * 특정 클러스터와 그 안의 모든 노드 및 엣지를 삭제합니다.
    * @param clusterId - 삭제할 클러스터의 ID
+   * @param options - 옵션 (`permanent`가 true이면 영구 삭제, 아니면 소프트 삭제)
    * @example
    * await client.graph.deleteClusterCascade('cluster-a');
    * // Output: (No content)
    */
-  deleteClusterCascade(clusterId: string): Promise<HttpResponse<void>> {
-    return this.rb.path(`/clusters/${clusterId}/cascade`).delete<void>();
+  deleteClusterCascade(clusterId: string, options?: { permanent?: boolean }): Promise<HttpResponse<void>> {
+    const q = options?.permanent ? '?permanent=true' : '';
+    return this.rb.path(`/clusters/${clusterId}/cascade${q}`).delete<void>();
   }
 
   /**

@@ -57,6 +57,8 @@ export interface GraphNodeDto {
   createdAt?: string;
   /** 갱신 시각(ISO 8601 UTC) */
   updatedAt?: string;
+  /** 삭제 시각(ISO 8601 UTC) */
+  deletedAt?: string;
 }
 
 /**
@@ -91,6 +93,8 @@ export interface GraphEdgeDto {
   createdAt?: string;
   /** 갱신 시각(ISO 8601 UTC) */
   updatedAt?: string;
+  /** 삭제 시각(ISO 8601 UTC) */
+  deletedAt?: string;
 }
 
 /**
@@ -118,6 +122,8 @@ export interface GraphClusterDto {
   createdAt?: string;
   /** 갱신 시각(ISO 8601 UTC) */
   updatedAt?: string;
+  /** 삭제 시각(ISO 8601 UTC) */
+  deletedAt?: string;
 }
 
 /**
@@ -163,6 +169,8 @@ export interface GraphSubclusterDto {
   density: number;
   /** 주요 키워드 */
   topKeywords: string[];
+  /** 삭제 시각(ISO 8601 UTC) */
+  deletedAt?: string;
 }
 
 /**
@@ -246,4 +254,5 @@ export interface GraphSummaryDto {
   }>;
   generated_at: string;
   detail_level: string;
+  deleted_at?: string;
 }

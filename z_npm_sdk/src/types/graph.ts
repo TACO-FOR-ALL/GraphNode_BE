@@ -25,6 +25,7 @@ export interface GraphNodeDto {
   numMessages: number;
   createdAt?: string;
   updatedAt?: string;
+  deletedAt?: string;
 }
 
 /**
@@ -56,6 +57,7 @@ export interface GraphEdgeDto {
   intraCluster: boolean;
   createdAt?: string;
   updatedAt?: string;
+  deletedAt?: string;
 }
 
 /**
@@ -79,6 +81,7 @@ export interface GraphClusterDto {
   themes: string[];
   createdAt?: string;
   updatedAt?: string;
+  deletedAt?: string;
 }
 
 /**
@@ -115,6 +118,7 @@ export interface GraphSubclusterDto {
   topKeywords: string[];
   createdAt?: string;
   updatedAt?: string;
+  deletedAt?: string;
 }
 
 /**
@@ -198,4 +202,5 @@ export interface GraphSummaryDto {
   }>;
   generated_at: string;
   detail_level: string;
+  deleted_at?: string;
 }

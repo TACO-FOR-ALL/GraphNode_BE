@@ -22,6 +22,7 @@ export interface GraphNodeDoc {
   embedding?: number[]; // 384-dimensional vector from AI pipeline
   createdAt: string;
   updatedAt: string;
+  deletedAt?: number | null;
 }
 
 /**
@@ -47,6 +48,7 @@ export interface GraphEdgeDoc {
   intraCluster: boolean;
   createdAt: string;
   updatedAt: string;
+  deletedAt?: number | null;
 }
 
 /**
@@ -70,6 +72,7 @@ export interface GraphClusterDoc {
   themes: string[];
   createdAt: string;
   updatedAt: string;
+  deletedAt?: number | null;
 }
 
 /**
@@ -87,6 +90,7 @@ export interface GraphSubclusterDoc {
   topKeywords: string[];
   createdAt: string;
   updatedAt: string;
+  deletedAt?: number | null;
 }
 
 /**
@@ -139,4 +143,5 @@ export interface GraphSummaryDoc {
 
   generatedAt: string; // Local standardized timestamp (ISO 8601)
   detail_level: 'brief' | 'standard' | 'detailed';
+  deletedAt?: number | null;
 }

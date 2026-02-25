@@ -14,7 +14,7 @@
   1. 유저 탈퇴나 그래프 초기화를 위한 전체/요약 그래프 삭제 기능(DELETE API)을 구현.
   2. 추후 PG사가 결정되는 즉시 연동 개발을 시작할 수 있도록 월정액 구독 결제(Skeleton) 인터페이스 및 아키텍처 문서화 진행.
 - **결과:** 
-  1. `DELETE /v1/graph-ai`, `DELETE /v1/graph-ai/summary` 엔드포인트와 해당 SDK, 관련 MongoDB トランザクション(트랜잭션)을 통한 원자적 삭제 로직 완성.
+  1. `DELETE /v1/graph-ai`, `DELETE /v1/graph-ai/summary` 엔드포인트와 해당 SDK, 관련 MongoDB 트랜잭션을 통한 원자적 삭제 로직 완성.
   2. `PaymentProvider` 포트, `SubscriptionManagementService`, `SubscriptionController` 껍데기 제작 및 아키텍처 문서(`subscription-payment-flow.md`) 작성 완료.
 - **영향 범위:** 
   - 그래프 제어 컨트롤러 및 서비스 단의 삭제 트랜잭션.
@@ -29,7 +29,6 @@
 - 추후 유저의 정기 구독 결제를 위한 비즈니스 로직 스캐폴딩이 필요(의존성 역전 구조).
 
 ### 사전 조건/선행 작업
-- 기존 SQS 바탕의 그래프 생성 파이프라인.
 - MongoDB 트랜잭션 개념 확립 및 `getMongo().startSession()` 활용 (이전 작업본에서 미비했던 삭제 트랜잭션 추가).
 
 ---

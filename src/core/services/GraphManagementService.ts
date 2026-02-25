@@ -95,14 +95,28 @@ export class GraphManagementService {
    * @param userId 사용자 ID
    * @param id 노드 ID
    */
-  async deleteNode(userId: string, id: number, options?: RepoOptions): Promise<void> {
+  async deleteNode(userId: string, id: number, permanent?: boolean, options?: RepoOptions): Promise<void> {
     try {
       this.assertUser(userId);
       const nId = this.parseId(id);
-      await this.repo.deleteNode(userId, nId, options);
+      await this.repo.deleteNode(userId, nId, permanent, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.deleteNode failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 노드 복구
+   */
+  async restoreNode(userId: string, id: number, options?: RepoOptions): Promise<void> {
+    try {
+      this.assertUser(userId);
+      const nId = this.parseId(id);
+      await this.repo.restoreNode(userId, nId, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.restoreNode failed', { cause: String(err) });
     }
   }
 
@@ -115,12 +129,13 @@ export class GraphManagementService {
   async deleteNodes(
     userId: string,
     ids: number[],
+    permanent?: boolean,
     options?: RepoOptions
   ): Promise<void> {
     try {
       this.assertUser(userId);
       const nIds = ids.map((id) => this.parseId(id));
-      await this.repo.deleteNodes(userId, nIds, options);
+      await this.repo.deleteNodes(userId, nIds, permanent, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.deleteNodes failed', { cause: String(err) });
@@ -208,14 +223,28 @@ export class GraphManagementService {
    * @param userId 사용자 ID
    * @param edgeId 엣지 ID
    */
-  async deleteEdge(userId: string, edgeId: string, options?: RepoOptions): Promise<void> {
+  async deleteEdge(userId: string, edgeId: string, permanent?: boolean, options?: RepoOptions): Promise<void> {
     try {
       this.assertUser(userId);
       if (!edgeId) throw new ValidationError('edgeId required');
-      await this.repo.deleteEdge(userId, edgeId, options);
+      await this.repo.deleteEdge(userId, edgeId, permanent, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.deleteEdge failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 엣지 복구
+   */
+  async restoreEdge(userId: string, edgeId: string, options?: RepoOptions): Promise<void> {
+    try {
+      this.assertUser(userId);
+      if (!edgeId) throw new ValidationError('edgeId required');
+      await this.repo.restoreEdge(userId, edgeId, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.restoreEdge failed', { cause: String(err) });
     }
   }
 
@@ -230,13 +259,14 @@ export class GraphManagementService {
     userId: string,
     source: number,
     target: number,
+    permanent?: boolean,
     options?: RepoOptions
   ): Promise<void> {
     try {
       this.assertUser(userId);
       const sId = this.parseId(source);
       const tId = this.parseId(target);
-      await this.repo.deleteEdgeBetween(userId, sId, tId, options);
+      await this.repo.deleteEdgeBetween(userId, sId, tId, permanent, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.deleteEdgeBetween failed', { cause: String(err) });
@@ -252,12 +282,13 @@ export class GraphManagementService {
   async deleteEdgesByNodeIds(
     userId: string,
     ids: number[],
+    permanent?: boolean,
     options?: RepoOptions
   ): Promise<void> {
     try {
       this.assertUser(userId);
       const nIds = ids.map((id) => this.parseId(id));
-      await this.repo.deleteEdgesByNodeIds(userId, nIds, options);
+      await this.repo.deleteEdgesByNodeIds(userId, nIds, permanent, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.deleteEdgesByNodeIds failed', { cause: String(err) });
@@ -304,14 +335,28 @@ export class GraphManagementService {
    * @param userId 사용자 ID
    * @param clusterId 클러스터 ID
    */
-  async deleteCluster(userId: string, clusterId: string, options?: RepoOptions): Promise<void> {
+  async deleteCluster(userId: string, clusterId: string, permanent?: boolean, options?: RepoOptions): Promise<void> {
     try {
       this.assertUser(userId);
       if (!clusterId) throw new ValidationError('clusterId required');
-      await this.repo.deleteCluster(userId, clusterId, options);
+      await this.repo.deleteCluster(userId, clusterId, permanent, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.deleteCluster failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 클러스터 복구
+   */
+  async restoreCluster(userId: string, clusterId: string, options?: RepoOptions): Promise<void> {
+    try {
+      this.assertUser(userId);
+      if (!clusterId) throw new ValidationError('clusterId required');
+      await this.repo.restoreCluster(userId, clusterId, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.restoreCluster failed', { cause: String(err) });
     }
   }
 
@@ -371,14 +416,32 @@ export class GraphManagementService {
   async deleteSubcluster(
     userId: string,
     subclusterId: string,
+    permanent?: boolean,
     options?: RepoOptions
   ): Promise<void> {
     try {
       this.assertUser(userId);
-      await this.repo.deleteSubcluster(userId, subclusterId, options);
+      await this.repo.deleteSubcluster(userId, subclusterId, permanent, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.deleteSubcluster failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 서브클러스터 복구
+   */
+  async restoreSubcluster(
+    userId: string,
+    subclusterId: string,
+    options?: RepoOptions
+  ): Promise<void> {
+    try {
+      this.assertUser(userId);
+      await this.repo.restoreSubcluster(userId, subclusterId, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.restoreSubcluster failed', { cause: String(err) });
     }
   }
 
@@ -438,10 +501,10 @@ export class GraphManagementService {
    *
    * @param userId 사용자 ID
    */
-  async deleteStats(userId: string, options?: RepoOptions): Promise<void> {
+  async deleteStats(userId: string, permanent?: boolean, options?: RepoOptions): Promise<void> {
     try {
       this.assertUser(userId);
-      await this.repo.deleteStats(userId, options);
+      await this.repo.deleteStats(userId, permanent, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.deleteStats failed', { cause: String(err) });
@@ -453,13 +516,26 @@ export class GraphManagementService {
    *
    * @param userId 사용자 ID
    */
-  async deleteGraph(userId: string, options?: RepoOptions): Promise<void> {
+  async deleteGraph(userId: string, permanent?: boolean, options?: RepoOptions): Promise<void> {
     try {
       this.assertUser(userId);
-      await this.repo.deleteAllGraphData(userId, options);
+      await this.repo.deleteAllGraphData(userId, permanent, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.deleteGraph failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 전체 그래프 데이터 복구
+   */
+  async restoreGraph(userId: string, options?: RepoOptions): Promise<void> {
+    try {
+      this.assertUser(userId);
+      await this.repo.restoreAllGraphData(userId, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.restoreGraph failed', { cause: String(err) });
     }
   }
 
@@ -516,13 +592,26 @@ export class GraphManagementService {
   /**
    * 그래프 요약/인사이트 삭제
    */
-  async deleteGraphSummary(userId: string, options?: RepoOptions): Promise<void> {
+  async deleteGraphSummary(userId: string, permanent?: boolean, options?: RepoOptions): Promise<void> {
     try {
       this.assertUser(userId);
-      await this.repo.deleteGraphSummary(userId, options);
+      await this.repo.deleteGraphSummary(userId, permanent, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.deleteGraphSummary failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 그래프 요약/인사이트 복구
+   */
+  async restoreGraphSummary(userId: string, options?: RepoOptions): Promise<void> {
+    try {
+      this.assertUser(userId);
+      await this.repo.restoreGraphSummary(userId, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.restoreGraphSummary failed', { cause: String(err) });
     }
   }
 
