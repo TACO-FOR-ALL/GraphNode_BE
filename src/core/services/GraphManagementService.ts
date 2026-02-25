@@ -143,6 +143,46 @@ export class GraphManagementService {
   }
 
   /**
+   * 원본 ID(origId) 배열 기반 연쇄 삭제
+   *
+   * @param userId 사용자 ID
+   * @param origIds 메시지 ID 등의 원본 식별자 배열
+   * @param permanent 완전 삭제 여부
+   * @param options 트랜잭션 옵션
+   */
+  async deleteNodesByOrigIds(
+    userId: string,
+    origIds: string[],
+    permanent?: boolean,
+    options?: RepoOptions
+  ): Promise<void> {
+    try {
+      this.assertUser(userId);
+      await this.repo.deleteNodesByOrigIds(userId, origIds, permanent, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.deleteNodesByOrigIds failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 원본 ID 배열 기반 연쇄 복원
+   */
+  async restoreNodesByOrigIds(
+    userId: string,
+    origIds: string[],
+    options?: RepoOptions
+  ): Promise<void> {
+    try {
+      this.assertUser(userId);
+      await this.repo.restoreNodesByOrigIds(userId, origIds, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.restoreNodesByOrigIds failed', { cause: String(err) });
+    }
+  }
+
+  /**
    * 노드 단건 조회
    *
    * @param userId 사용자 ID

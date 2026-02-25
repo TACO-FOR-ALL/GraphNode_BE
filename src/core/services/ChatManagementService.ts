@@ -3,6 +3,7 @@ import { ulid } from 'ulid';
 
 import { ConversationService } from './ConversationService';
 import { MessageService } from './MessageService';
+import { GraphManagementService } from './GraphManagementService';
 import { getMongo } from '../../infra/db/mongodb';
 import { ChatThread, ChatMessage, ChatRole } from '../../shared/dtos/ai';
 import { ConversationDoc, MessageDoc } from '../types/persistence/ai.persistence';
@@ -22,7 +23,8 @@ import { UpstreamError, ValidationError, NotFoundError } from '../../shared/erro
 export class ChatManagementService {
   constructor(
     private readonly conversationService: ConversationService,
-    private readonly messageService: MessageService
+    private readonly messageService: MessageService,
+    private readonly graphManagementService: GraphManagementService
   ) {}
 
   /**
@@ -348,11 +350,19 @@ export class ChatManagementService {
           throw new NotFoundError(`Conversation not found or delete failed: ${id}`);
         }
 
-        // 2. 메시지 삭제 (Cascade)
+        // 2. 메시지 사전 조회 및 삭제 (Cascade)
+        const messages = await this.messageService.findDocsByConversationId(id);
+        const messageIds = messages.map(m => m._id);
+
         if (permanent) {
           await this.messageService.deleteAllByConversationId(id, session);
         } else {
           await this.messageService.softDeleteAllByConversationId(id, session);
+        }
+
+        // 3. 그래프 노드/엣지 연쇄 삭제 (Cascade Graph)
+        if (messageIds.length > 0) {
+          await this.graphManagementService.deleteNodesByOrigIds(ownerUserId, messageIds, permanent, { session });
         }
       });
       return true;
@@ -382,6 +392,13 @@ export class ChatManagementService {
           throw new NotFoundError(`Conversation not found or restore failed: ${id}`);
         }
         await this.messageService.restoreAllByConversationId(id, session);
+
+        // 연쇄 복원 (Cascade Graph Restore)
+        const messages = await this.messageService.findDocsByConversationId(id);
+        const messageIds = messages.map(m => m._id);
+        if (messageIds.length > 0) {
+          await this.graphManagementService.restoreNodesByOrigIds(ownerUserId, messageIds, { session });
+        }
       });
       return true;
     } catch (err: unknown) {
@@ -551,6 +568,9 @@ export class ChatManagementService {
           { updatedAt: Date.now() },
           session
         );
+
+        // 4. 연관된 지식 그래프 연쇄 삭제
+        await this.graphManagementService.deleteNodesByOrigIds(ownerUserId, [messageId], permanent, { session });
       });
       return true;
     } catch (err: unknown) {
@@ -595,6 +615,9 @@ export class ChatManagementService {
           { updatedAt: Date.now() },
           session
         );
+
+        // 4. 연관된 지식 그래프 연쇄 복원
+        await this.graphManagementService.restoreNodesByOrigIds(ownerUserId, [messageId], { session });
       });
       return true;
     } catch (err: unknown) {
@@ -680,6 +703,9 @@ export class ChatManagementService {
 
         // 2. 모든 대화 삭제
         deletedCount = await this.conversationService.deleteAllDocs(ownerUserId, session);
+
+        // 3. 모든 그래프 연쇄 삭제 (해당 유저의 전체 데이터 삭제 문맥에 부합)
+        await this.graphManagementService.deleteGraph(ownerUserId, true, { session });
       });
       return deletedCount;
     } catch (err: unknown) {

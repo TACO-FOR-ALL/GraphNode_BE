@@ -148,6 +148,60 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   }
 
   /**
+   * 지정된 원본 ID(origId) 목록에 해당하는 노드들과 그 엣지들을 연쇄 삭제합니다.
+   */
+  async deleteNodesByOrigIds(userId: string, origIds: string[], permanent?: boolean, options?: RepoOptions): Promise<void> {
+    try {
+      const opts = { ...options, session: options?.session as any };
+      
+      // 1. 해당 origId들을 가진 노드들을 찾아 id(number)를 추출
+      const nodes = await this.graphNodes_col().find(
+        { userId, origId: { $in: origIds } } as any,
+        { ...opts, projection: { id: 1 } }
+      ).toArray();
+
+      const nodeIds = nodes.map(n => n.id);
+      
+      if (nodeIds.length === 0) return; // 지울 노드가 없음
+
+      // 2. 추출한 nodeIds로 노드와 엣지 연쇄 삭제
+      if (permanent) {
+        await this.graphNodes_col().deleteMany({ id: { $in: nodeIds }, userId } as any, opts);
+        await this.graphEdges_col().deleteMany({ userId, $or: [{ source: { $in: nodeIds } }, { target: { $in: nodeIds } }] } as any, opts);
+      } else {
+        const deletedAt = Date.now();
+        await this.graphNodes_col().updateMany({ id: { $in: nodeIds }, userId } as any, { $set: { deletedAt } }, opts);
+        await this.graphEdges_col().updateMany({ userId, $or: [{ source: { $in: nodeIds } }, { target: { $in: nodeIds } }] } as any, { $set: { deletedAt } }, opts);
+      }
+    } catch (err: unknown) {
+      throw new UpstreamError('GraphRepositoryMongo.deleteNodesByOrigIds failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 지정된 원본 ID(origId) 목록에 해당하는 노드들과 그 엣지들을 복구합니다.
+   */
+  async restoreNodesByOrigIds(userId: string, origIds: string[], options?: RepoOptions): Promise<void> {
+    try {
+      const opts = { ...options, session: options?.session as any };
+      
+      const nodes = await this.graphNodes_col().find(
+        { userId, origId: { $in: origIds } } as any,
+        { ...opts, projection: { id: 1 } }
+      ).toArray();
+
+      const nodeIds = nodes.map(n => n.id);
+      
+      if (nodeIds.length === 0) return;
+
+      await this.graphNodes_col().updateMany({ id: { $in: nodeIds }, userId } as any, { $set: { deletedAt: null } }, opts);
+      await this.graphEdges_col().updateMany({ userId, $or: [{ source: { $in: nodeIds } }, { target: { $in: nodeIds } }] } as any, { $set: { deletedAt: null } }, opts);
+    } catch (err: unknown) {
+      throw new UpstreamError('GraphRepositoryMongo.restoreNodesByOrigIds failed', { cause: String(err) });
+    }
+  }
+
+  /**
    * 해당 사용자의 모든 그래프 데이터(노드, 엣지, 클러스터, 서브클러스터, 통계, 요약)를 삭제합니다.
    * 트랜잭션 등에서 호출될 수 있습니다.
    */

@@ -28,7 +28,9 @@ export interface GraphDocumentStore {
   ): Promise<void>;
   deleteNode(userId: string, id: number, permanent?: boolean, options?: RepoOptions): Promise<void>;
   deleteNodes(userId: string, ids: number[], permanent?: boolean, options?: RepoOptions): Promise<void>;
+  deleteNodesByOrigIds(userId: string, origIds: string[], permanent?: boolean, options?: RepoOptions): Promise<void>;
   restoreNode(userId: string, id: number, options?: RepoOptions): Promise<void>;
+  restoreNodesByOrigIds(userId: string, origIds: string[], options?: RepoOptions): Promise<void>;
   findNode(userId: string, id: number): Promise<GraphNodeDoc | null>;
   listNodes(userId: string): Promise<GraphNodeDoc[]>;
   listNodesByCluster(userId: string, clusterId: string): Promise<GraphNodeDoc[]>;

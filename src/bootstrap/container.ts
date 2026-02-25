@@ -256,7 +256,8 @@ export class Container {
     if (!this.chatManagementService) {
       const raw = new ChatManagementService(
         this.getConversationService(),
-        this.getMessageService()
+        this.getMessageService(),
+        this.getGraphManagementService()
       );
       this.chatManagementService = createAuditProxy(raw, 'ChatManagementService');
     }

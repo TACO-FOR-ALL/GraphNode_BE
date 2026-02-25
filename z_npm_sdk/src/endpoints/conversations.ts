@@ -197,6 +197,7 @@ export class ConversationsApi {
 
   /**
    * 대화를 삭제합니다.
+   * 주의: 이 대화를 기반으로 생성된 지식 그래프(Graph Node/Edge) 데이터들 또한 동일한 정책에 따라 연쇄 삭제(Cascade Delete) 됩니다.
    * @param conversationId 대화 ID
    * @param permanent 영구 삭제 여부 (true: 영구 삭제, false: soft delete)
    * @example
@@ -217,6 +218,7 @@ export class ConversationsApi {
 
   /**
    * 모든 대화를 삭제합니다.
+   * 주의: 사용자의 모든 그래프 데이터 또한 연쇄 삭제됩니다.
    * @returns 삭제된 대화 수
    * @example
    * const response = await client.conversations.deleteAll();
@@ -228,6 +230,7 @@ export class ConversationsApi {
 
   /**
    * 삭제된 대화를 복구합니다.
+   * 주의: 이 대화를 기반으로 생성되었던 지식 그래프(Graph Node/Edge) 데이터들 또한 연쇄 복구(Cascade Restore) 됩니다.
    * @param conversationId 대화 ID
    * @returns 복구된 대화 정보
    * @example
@@ -313,6 +316,7 @@ export class ConversationsApi {
 
   /**
    * 메시지를 삭제합니다.
+   * 주의: 이 메시지를 기반으로 생성된 지식 그래프 노드(Graph Node) 및 연결된 엣지도 함께 연쇄 삭제됩니다.
    * @param conversationId 대화 ID
    * @param messageId 메시지 ID
    * @param permanent 영구 삭제 여부 (true: 영구 삭제, false: soft delete)
@@ -339,6 +343,7 @@ export class ConversationsApi {
 
   /**
    * 삭제된 메시지를 복구합니다.
+   * 주의: 이 메시지를 기반으로 생성되었던 지식 그래프 노드(Graph Node)도 함께 연쇄 복원됩니다.
    * @param conversationId 대화 ID
    * @param messageId 메시지 ID
    * @returns 복구된 메시지 정보
