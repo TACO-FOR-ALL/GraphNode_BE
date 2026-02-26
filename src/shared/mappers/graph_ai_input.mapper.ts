@@ -26,7 +26,8 @@ export function mapSnapshotToAiInput(snapshot: GraphSnapshotDto, language?: stri
     keywords: node.keywords || [],
     top_keywords: node.keywords?.map((k) => k.term) || [],
     timestamp: node.timestamp || (node.createdAt ? new Date(node.createdAt).toISOString() : null),
-    num_messages: node.numMessages,
+    num_sections: node.numMessages,
+    source_type: node.sourceType || 'chat',
   }));
 
   // 2. Edges 변환

@@ -32,7 +32,8 @@ export function mapAiOutputToSnapshot(output: AiGraphOutputDto, userId: string):
     clusterId: node.cluster_id,
     clusterName: node.cluster_name,
     timestamp: node.timestamp,
-    numMessages: node.num_messages,
+    numMessages: node.num_sections,
+    sourceType: node.source_type,
     createdAt: generatedAt,
     updatedAt: generatedAt,
   }));

@@ -76,7 +76,8 @@ export interface AiGraphNodeOutput {
   keywords: { term: string; score: number }[];
   top_keywords: string[];
   timestamp: string | null;
-  num_messages: number;
+  num_sections: number;
+  source_type: 'chat' | 'markdown' | 'notion';
 }
 
 export interface AiGraphEdgeOutput {
@@ -137,7 +138,9 @@ export interface AiAddNodeNodeOutput {
   origId: string; 
   clusterId: string;
   clusterName: string;
-  numMessages: number;
+  num_messages?: number;
+  num_sections?: number;
+  sourceType: 'chat' | 'markdown' | 'notion';
   embedding: number[];
   timestamp: string | null;
 }

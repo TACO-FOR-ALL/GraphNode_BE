@@ -104,7 +104,9 @@ export class GraphGenerationService {
    * @param userId 사용자 ID
    * @returns 발행된 작업의 연관 ID (TaskId) - 실제 AI TaskId는 아닐 수 있음
    */
-  async requestGraphGenerationViaQueue(userId: string): Promise<string> {
+  async requestGraphGenerationViaQueue(userId: string, options?: { 
+    includeSummary?: boolean; 
+  }): Promise<string> {
     let taskId: string | undefined;
     try {
       // 1. 중복 요청 방지 확인(SQS 방식 + ALB 스케일링 때문에 판별 불가)
@@ -128,6 +130,18 @@ export class GraphGenerationService {
       //logger.info({ userId, s3Key }, 'Uploading input data to S3');
       await this.storagePort.upload(s3Key, dataStream, 'application/json');
 
+
+      // FIXME TODO : Note들에 대해 조회하고, AI가 요구하는 양식에 맞게 변환하여 S3에 업로드해야 함
+
+      const noteS3Key = `graph-generation/${taskId}/notes.zip`;
+      // const noteStream = Readable.from(this.streamNotes(userId));
+      // await this.storagePort.upload(noteS3Key, noteStream, 'application/json');
+
+
+      // 사용자 선호 언어 획득
+      // 3. User Preferred Language 조회
+      const language = await this.userService.getPreferredLanguage(userId);
+
       // 4. SQS 메시지 전송(추후 메세지 type 확정 필요)
       const messageBody: GraphGenRequestPayload = {
         taskId,
@@ -136,6 +150,9 @@ export class GraphGenerationService {
           userId,
           s3Key,
           bucket: process.env.S3_PAYLOAD_BUCKET, // 수신측 편의를 위해 버킷명 명시 가능
+          includeSummary: options?.includeSummary ?? true, // 기본값: 요약 포함
+          summaryLanguage: language,       // 기본값: 파이프라인에서 결정(아마 ko)
+          extraS3Keys: [noteS3Key],
         },
         timestamp: new Date().toISOString(),
       };

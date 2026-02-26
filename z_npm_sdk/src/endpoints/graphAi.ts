@@ -1,5 +1,5 @@
 import { RequestBuilder, type HttpResponse } from '../http-builder.js';
-import type { GraphGenerationResponseDto } from '../types/graphAi.js';
+import type { GraphGenerationResponseDto, GenerateGraphOptions } from '../types/graphAi.js';
 import type { GraphSummaryDto } from '../types/graph.js';
 import type { AiInputData } from '../types/aiInput.js';
 
@@ -36,11 +36,12 @@ export class GraphAiApi {
    *
    * **API Endpoint**: `POST /v1/graph-ai/generate`
    *
+   * @param options - 그래프 생성 옵션 (`includeSummary` 등)
    * @returns 작업 ID와 상태를 포함한 응답 객체 (`GraphGenerationResponseDto`)
    *
    * @example
    * ```typescript
-   * const response = await client.graphAi.generateGraph();
+   * const response = await client.graphAi.generateGraph({ includeSummary: true, summaryLanguage: 'ko' });
    *
    * console.log(response.data);
    * // Output:
@@ -51,8 +52,8 @@ export class GraphAiApi {
    * }
    * ```
    */
-  async generateGraph(): Promise<HttpResponse<GraphGenerationResponseDto>> {
-    return this.rb.path('/generate').post();
+  async generateGraph(options?: GenerateGraphOptions): Promise<HttpResponse<GraphGenerationResponseDto>> {
+    return this.rb.path('/generate').post(options);
   }
 
   /**

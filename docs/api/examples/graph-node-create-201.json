@@ -6,6 +6,7 @@
   "clusterName": "Project Alpha",
   "timestamp": "2025-01-01T12:00:00Z",
   "numMessages": 5,
+  "sourceType": "chat",
   "createdAt": "2025-01-01T12:00:00Z",
   "updatedAt": "2025-01-01T12:00:00Z"
 }

@@ -44,6 +44,10 @@ export interface GraphGenRequestPayload extends BaseQueueMessage {
     userId: string;
     s3Key: string; // 입력 데이터가 담긴 S3 키
     bucket?: string; // 버킷명 (옵션)
+    includeSummary?: boolean; // 요약 파이프라인 동시 실행 여부
+    summaryLanguage?: string; // 요약 언어
+    inputType?: string; // 'chat' 
+    extraS3Keys?: string[]; // 추가 소스(마크다운 등)의 s3 키 배열
   };
 }
 
@@ -65,7 +69,9 @@ export interface GraphGenResultPayload extends BaseQueueMessage {
     status: 'COMPLETED' | 'FAILED';
     resultS3Key?: string; // 성공 시 결과 JSON이 담긴 S3 키
     featuresS3Key?: string; // 성공 시 Features JSON이 담긴 S3 키 (Vector DB용)
-    error?: string; // 실패 시 에러 메시지
+    summaryIncluded?: boolean; // 요약 파이프라인 동시 실행 결과 여부
+    summaryS3Key?: string; // 요약 데이터가 담긴 S3 키
+    error?: string; // 실패 혹은 부분 실패(요약 실패) 시 에러 메시지
   };
 }
 

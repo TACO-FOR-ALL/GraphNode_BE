@@ -14,9 +14,15 @@ export class GraphAiController {
   generateGraph = async (req: Request, res: Response) => {
     // 세션에서 사용자 ID 가져오기
     const userId = getUserIdFromRequest(req);
+    const { includeSummary, summaryLanguage, inputType, extraS3Keys } = req.body || {};
 
     // 그래프 생성 프로세스 시작 (SQS 요청)
-    const taskId = await this.graphGenerationService.requestGraphGenerationViaQueue(userId);
+    const taskId = await this.graphGenerationService.requestGraphGenerationViaQueue(userId, { 
+      includeSummary, 
+      summaryLanguage,
+      inputType,
+      extraS3Keys
+    });
 
     // 작업 id와 함께 곧바로 반환
     res.status(202).json({

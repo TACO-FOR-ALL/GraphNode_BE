@@ -1646,6 +1646,17 @@ paths:
     post:
       summary: Generate graph from text (Async)
       description: Starts an asynchronous background task to generate a graph from the user's conversation history. Returns a task ID.
+      requestBody:
+        description: Options for graph generation.
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                includeSummary:
+                  type: boolean
+                  description: Whether to also generate a graph summary (3-mode pipeline).
       responses:
         '202':
           description: Task accepted
