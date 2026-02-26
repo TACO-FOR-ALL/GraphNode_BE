@@ -25,6 +25,7 @@ GraphNode는 대화형 AI와 지식 그래프를 결합한 차세대 지식 관�
 | 📱 [FCM 모바일 알림 구조](docs/guides/FCM-NOTIFICATION-FLOW.md) | Firebase Cloud Messaging 기반 푸시 알림 설계 |
 | 💳 [월정액 구독 결제 시스템](docs/architecture/subscription-payment-flow.md) | PG사 연동을 대비한 결제/구독 스캐폴딩 및 아키텍처 가이드 |
 | 🗑️ [데이터 삭제 전략 (Soft/Hard Delete)](docs/architecture/soft-hard-delete-flow.md) | 안정적 데이터 관리를 위한 삭제 메커니즘 흐름 및 복구(Restore) 전략 가이드 |
+| 📦 [FE SDK 내부 구조](docs/architecture/fe-sdk-architecture.md) | 프론트엔드 SDK 설계 원리, http-builder, File API 동작 방식 |
 
 ---
 
@@ -198,6 +199,7 @@ infisical run --env=prod -- npm start
   - [2026-02-25 지식 그래프 Soft Delete 및 복구 기능 지원](docs/guides/Daily/20260225-graph-soft-delete-support.md)
   - [2026-02-26 대화 삭제 시 지식 그래프 연쇄 삭제 적용](docs/guides/Daily/20260226-chat-graph-cascade-delete.md)
   - [2026-02-26 AddNode Batch 처리를 위한 API 및 워커 리팩토링](docs/guides/Daily/20260226-add-node-batch.md)
+  - [2026-02-27 파일 업로드/다운로드 API 구축 및 FE SDK 파일 처리 노출](docs/guides/Daily/20260227-file-upload-sdk.md)
 
 ---
 

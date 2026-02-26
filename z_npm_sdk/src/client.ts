@@ -11,6 +11,7 @@ import { AppleAuthApi } from './endpoints/auth.apple.js';
 import { SyncApi } from './endpoints/sync.js';
 import { AiApi } from './endpoints/ai.js';
 import  { NotificationApi } from './endpoints/notification.js';
+import { FileApi } from './endpoints/file.js';
 
 /**
  * GraphNode 클라이언트 옵션
@@ -50,6 +51,7 @@ export class GraphNodeClient {
   readonly sync: SyncApi;
   readonly ai: AiApi;
   readonly notification: NotificationApi;
+  readonly file: FileApi;
 
   /**
    * HTTP 요청 빌더 인스턴스.
@@ -116,6 +118,7 @@ export class GraphNodeClient {
     this.sync = new SyncApi(this.rb);
     this.ai = new AiApi(this.rb);
     this.notification = new NotificationApi(this.rb); 
+    this.file = new FileApi(this.rb);
   }
 
   /**

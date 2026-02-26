@@ -15,6 +15,7 @@ import { UpstreamError } from '../../shared/errors/domain';
 /**
  * AWS S3 어댑터
  *
+ * StoragePort 인터페이스를 구현하여 S3와의 파일 업로드/다운로드/삭제를 제공합니다.
  */
 export class AwsS3Adapter implements StoragePort {
   private readonly client: S3Client;
@@ -113,6 +114,52 @@ export class AwsS3Adapter implements StoragePort {
     } catch (error) {
       logger.error({ err: error, key, bucket }, 'Failed to download stream from S3');
       throw new UpstreamError('Failed to download stream from S3', { originalError: error });
+    }
+  }
+
+  /**
+   * S3에서 객체를 전체 버퍼로 다운로드합니다.
+   * 메타데이터(ContentType, ContentLength)도 함께 반환합니다.
+   * stream 방식 대비 작은 파일에 적합하며, HTTP 응답에 Content-Type/Length 헤더를 온전히 설정해야 할 때 사용합니다.
+   *
+   * @param key 객체 키
+   * @param options 옵션 (bucketType)
+   * @returns 파일 버퍼, ContentType, ContentLength
+   */
+  async downloadFile(
+    key: string,
+    options?: { bucketType?: 'payload' | 'file' }
+  ): Promise<{ buffer: Buffer; contentType?: string; contentLength?: number }> {
+    const bucket = options?.bucketType === 'file' ? this.fileBucket : this.payloadBucket;
+    try {
+      const command = new GetObjectCommand({
+        Bucket: bucket,
+        Key: key,
+      });
+
+      const response = await this.client.send(command);
+
+      if (!response.Body) {
+        throw new Error(`Empty body received from S3 for key: ${key}`);
+      }
+
+      // 스트림을 버퍼로 완전히 수집 (메타데이터 동시 획득)
+      const stream = response.Body as Readable;
+      const chunks: Buffer[] = [];
+      await new Promise<void>((resolve, reject) => {
+        stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+        stream.on('error', (err) => reject(err));
+        stream.on('end', () => resolve());
+      });
+
+      return {
+        buffer: Buffer.concat(chunks),
+        contentType: response.ContentType,
+        contentLength: response.ContentLength,
+      };
+    } catch (error) {
+      logger.error({ err: error, key, bucket }, 'Failed to download file from S3');
+      throw new UpstreamError('Failed to download file from S3', { originalError: error });
     }
   }
 

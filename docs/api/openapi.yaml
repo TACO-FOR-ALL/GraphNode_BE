@@ -570,6 +570,47 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }
+  /v1/ai/files:
+    post:
+      summary: Upload files
+      description: Uploads files for AI consumption or attachments (like images or documents).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        '201':
+          description: Upload successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attachments:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        type: { type: string }
+                        url: { type: string }
+                        name: { type: string }
+                        mimeType: { type: string }
+                        size: { type: number }
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
   /v1/ai/files/{key}:
     get:
       summary: Download AI file

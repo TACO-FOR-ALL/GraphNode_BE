@@ -20,6 +20,7 @@ export { AppleAuthApi } from './endpoints/auth.apple.js';
 export { SyncApi } from './endpoints/sync.js';
 export { AiApi } from './endpoints/ai.js';
 export { NotificationApi } from './endpoints/notification.js';
+export { FileApi } from './endpoints/file.js';
 
 // Types
 export type { ProblemDetails } from './types/problem.js';
@@ -50,6 +51,7 @@ export type {
   FolderUpdateDto,
 } from './types/note.js';
 export type { SyncPushRequest, SyncPullResponse } from './types/sync.js';
+export type { FileAttachment, FileUploadResponse } from './types/file.js';
 export type {
   AgentChatMode,
   AgentChatModeHint,

@@ -6,6 +6,14 @@
 
 ---
 
+## 📖 SDK 내부 구조 가이드 (Architecture)
+
+SDK의 내부 설계 원리, 각 파일의 역할, 데이터 흐름에 대해 알고 싶다면 아래 문서를 참고하세요.
+
+- 🔧 [SDK 아키텍처 가이드 (초보자용)](docs/SDK_ARCHITECTURE.md): `http-builder.ts`, `client.ts`, `endpoints/` 등 핵심 구조 설명
+
+---
+
 ## 📦 설치 (Installation)
 
 ```bash
