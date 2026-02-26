@@ -1784,18 +1784,13 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }
-  /v1/graph-ai/add-conversation/{conversationId}:
+  /v1/graph-ai/add-node:
     post:
-      summary: Add conversation to graph
-      description: Queues a process to add a specific conversation to the user's graph.
-      parameters:
-        - in: path
-          name: conversationId
-          required: true
-          schema: { type: string }
+      summary: Add updated conversation nodes to graph (Batch)
+      description: Queues a process to batch add conversations modified since the graph's last updated time.
       responses:
         '202':
-          description: Add conversation queued
+          description: Add node batch queued
           content:
             application/json:
               schema:
@@ -1804,18 +1799,8 @@ paths:
                   message: { type: string }
                   taskId: { type: string }
                   status: { type: string }
-        '400':
-          description: Invalid conversationId
-          content:
-            application/problem+json:
-              schema: { $ref: '../schemas/problem.json' }
         '401':
           description: Not authenticated
-          content:
-            application/problem+json:
-              schema: { $ref: '../schemas/problem.json' }
-        '404':
-          description: Conversation not found
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }

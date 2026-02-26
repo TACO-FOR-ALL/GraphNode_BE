@@ -177,6 +177,7 @@ export function toGraphStatsDoc(dto: GraphStatsDto): GraphStatsDoc {
     edges: dto.edges,
     clusters: dto.clusters,
     generatedAt: dto.generatedAt ?? now,
+    updatedAt: dto.updatedAt,
     metadata: dto.metadata ?? {},
   };
 }
@@ -194,6 +195,7 @@ export function toGraphStatsDto(doc: GraphStatsDoc): GraphStatsDto {
     edges: doc.edges,
     clusters: doc.clusters,
     generatedAt: doc.generatedAt,
+    updatedAt: doc.updatedAt,
     metadata: doc.metadata,
   };
 }

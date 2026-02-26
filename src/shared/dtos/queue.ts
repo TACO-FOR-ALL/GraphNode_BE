@@ -15,6 +15,7 @@ export enum TaskType {
   GRAPH_SUMMARY_REQUEST = 'GRAPH_SUMMARY_REQUEST', // API -> AI (Summary only)
   GRAPH_SUMMARY_RESULT = 'GRAPH_SUMMARY_RESULT', // AI -> Worker (Summary result)
   ADD_NODE_REQUEST = 'ADD_NODE_REQUEST', // API -> AI (single conversation)
+  ADD_NODE_RESULT = 'ADD_NODE_RESULT', // AI -> Worker (AddNode result)
 }
 
 // 공통 메시지 베이스
@@ -112,9 +113,22 @@ export interface AddNodeRequestPayload extends BaseQueueMessage {
   };
 }
 
+// 6. AI -> Worker: AddNode 완료 결과 메시지
+export interface AddNodeResultPayload extends BaseQueueMessage {
+  taskType: TaskType.ADD_NODE_RESULT;
+  payload: {
+    userId: string;
+    status: 'COMPLETED' | 'FAILED';
+    resultS3Key?: string;
+    error?: string;
+  };
+}
+
 // 전체 메시지 유니온 타입 (확장성을 위해)
 export type QueueMessage =
   | GraphGenRequestPayload
   | GraphGenResultPayload
   | GraphSummaryRequestPayload
-  | GraphSummaryResultPayload | AddNodeRequestPayload;
+  | GraphSummaryResultPayload
+  | AddNodeRequestPayload
+  | AddNodeResultPayload;

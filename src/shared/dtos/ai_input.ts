@@ -64,7 +64,8 @@ export interface AiInputMappingNode {
  */
 export interface AiInputConversation {
   id: string;
-  conversation_id: string;
+  conversation_id: string; // Legacy Python tasks usage
+  conversationId: string;  // AddNode Python task usage
   title: string;
   create_time: number;
   update_time: number;
@@ -72,3 +73,10 @@ export interface AiInputConversation {
 }
 
 export type AiInputData = AiInputConversation[];
+
+export interface AiAddNodeBatchRequest {
+  userId: string;
+  existingClusters: any[]; // Array of existing clusters
+  conversations: AiInputConversation[];
+}
+

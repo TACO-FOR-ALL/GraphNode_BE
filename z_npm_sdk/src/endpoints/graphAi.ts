@@ -126,34 +126,31 @@ export class GraphAiApi {
   }
 
   /**
-   * 단일 대화를 기존 지식 그래프에 추가합니다.
+   * 신규 또는 업데이트된 대화들을 기존 지식 그래프에 추가/반영합니다.
    *
    * 이 작업은 서버에서 비동기 백그라운드 작업으로 수행됩니다.
-   * 대화를 분석하여 Q-A 쌍을 추출하고, 클러스터링을 수행한 뒤,
-   * 기존 노드와의 유사도를 계산하여 새로운 노드와 엣지를 생성합니다.
+   * 저장되어 있는 그래프 통계(GraphStats)의 updatedAt 시점 이후에 
+   * 변경되거나 새롭게 생성된 대화들을 모아 S3에 업로드하고 AI 서버에 요청합니다.
    *
-   * **API Endpoint**: `POST /v1/graph-ai/add-conversation/:conversationId`
+   * **API Endpoint**: `POST /v1/graph-ai/add-node`
    *
-   * @param conversationId - 그래프에 추가할 대화 ID
    * @returns 작업 ID와 상태를 포함한 응답 객체 (`GraphGenerationResponseDto`)
    *
    * @example
    * ```typescript
-   * const response = await client.graphAi.addConversation('conv-uuid-123');
+   * const response = await client.graphAi.addNode();
    *
    * console.log(response.data);
    * // Output:
    * {
-   *   message: 'Add conversation to graph queued',
-   *   taskId: 'task_add_conv_user123_01HJKM...',
+   *   message: 'Add node to graph queued',
+   *   taskId: 'task_add_node_user123_01HJKM...',
    *   status: 'queued'
    * }
    * ```
    */
-  async addConversation(
-    conversationId: string
-  ): Promise<HttpResponse<GraphGenerationResponseDto>> {
-    return this.rb.path(`/add-conversation/${conversationId}`).post();
+  async addNode(): Promise<HttpResponse<GraphGenerationResponseDto>> {
+    return this.rb.path(`/add-node`).post();
   }
 
   /**

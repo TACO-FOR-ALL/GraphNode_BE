@@ -18,10 +18,10 @@ export function createGraphAiRouter(graphGenerationService: GraphGenerationServi
   // POST /v1/graph-ai/generate
   router.post('/generate', asyncHandler(graphAiController.generateGraph.bind(graphAiController)));
 
-  // POST /v1/graph-ai/add-conversation/:conversationId
+  // POST /v1/graph-ai/add-node
   router.post(
-    '/add-conversation/:conversationId',
-    asyncHandler(graphAiController.addConversationToGraph.bind(graphAiController))
+    '/add-node',
+    asyncHandler(graphAiController.addNodeToGraph.bind(graphAiController))
   );
 
   // POST /v1/graph-ai/summary (생성 요청)

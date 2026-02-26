@@ -490,7 +490,7 @@ renderGraph(res.data.nodes, res.data.edges);
 | Method | Endpoint | Description | Status |
 | :--- | :--- | :--- | :--- |
 | `generateGraph()` | `POST /generate` | 그래프 생성 요청 | 202 |
-| `addConversation(...)` | `POST /add...` | 대화 추가 요청 | 202 |
+| `addNode()` | `POST /add-node` | 대화(배치) 추가 요청 | 202 |
 | `requestSummary()` | `POST /summary` | 요약 생성 요청 | 202, 404 |
 | `getSummary()` | `GET /summary` | 요약 결과 조회 | 200 |
 | `deleteSummary()` | `DELETE /summary` | 요약 내용 삭제 | 204 |
@@ -499,7 +499,7 @@ renderGraph(res.data.nodes, res.data.edges);
 #### **Detailed Usage**
 
 <details>
-<summary><b>generateGraph() / addConversation(id)</b></summary>
+<summary><b>generateGraph() / addNode()</b></summary>
 
 - **Returns**: `Promise<HttpResponse<GraphGenerationResponseDto>>`
   - `taskId`: string, `status`: 'queued', `message`: string
@@ -507,6 +507,9 @@ renderGraph(res.data.nodes, res.data.edges);
 ```typescript
 const res = await client.graphAi.generateGraph();
 console.log('Task started:', res.data.taskId);
+
+const res2 = await client.graphAi.addNode();
+console.log('Add node task started:', res2.data.taskId);
 ```
 </details>
 

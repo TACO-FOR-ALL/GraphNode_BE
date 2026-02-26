@@ -118,3 +118,49 @@ export interface AiGraphOutputDto {
     language?: string;
   };
 }
+
+/**
+ * AddNode (Batch) Result DTOs
+ */
+export interface AiAddNodeClusterInfo {
+  clusterId: string;
+  isNewCluster: boolean;
+  confidence: number;
+  reasoning: string;
+  name: string;
+  themes: string[];
+}
+
+export interface AiAddNodeNodeOutput {
+  id: string; // E.g., "{userId}_{conversationId}"
+  userId: string;
+  origId: string; 
+  clusterId: string;
+  clusterName: string;
+  numMessages: number;
+  embedding: number[];
+  timestamp: string | null;
+}
+
+export interface AiAddNodeEdgeOutput {
+  source: string;     // Uses record_id
+  target: string | number; // the id of the target node in DB (could be number)
+  weight: number;
+  type: string;
+  intraCluster: boolean;
+}
+
+export interface AiAddNodeResultItem {
+  conversationId: string;
+  nodes: AiAddNodeNodeOutput[];
+  edges: AiAddNodeEdgeOutput[];
+  outputDev?: any;
+  assignedCluster: AiAddNodeClusterInfo;
+}
+
+export interface AiAddNodeBatchResult {
+  userId: string;
+  processedCount: number;
+  results: AiAddNodeResultItem[];
+}
+

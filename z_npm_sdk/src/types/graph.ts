@@ -100,6 +100,7 @@ export interface GraphStatsDto {
   edges: number;
   clusters: number;
   generatedAt?: string;
+  updatedAt?: string;
   metadata?: Record<string, unknown>;
 }
 

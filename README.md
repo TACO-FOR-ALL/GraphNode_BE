@@ -197,6 +197,7 @@ infisical run --env=prod -- npm start
   - [2026-02-24 월정액 구독 결제 스캐폴딩 및 그래프 삭제 통합 기능 구현](docs/guides/Daily/20260224-subscription-scaffolding-and-graph-delete.md)
   - [2026-02-25 지식 그래프 Soft Delete 및 복구 기능 지원](docs/guides/Daily/20260225-graph-soft-delete-support.md)
   - [2026-02-26 대화 삭제 시 지식 그래프 연쇄 삭제 적용](docs/guides/Daily/20260226-chat-graph-cascade-delete.md)
+  - [2026-02-26 AddNode Batch 처리를 위한 API 및 워커 리팩토링](docs/guides/Daily/20260226-add-node-batch.md)
 
 ---
 

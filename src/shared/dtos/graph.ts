@@ -147,6 +147,8 @@ export interface GraphStatsDto {
   clusters: number;
   /** 통계를 생성한 시각(ISO 8601 UTC) */
   generatedAt?: string;
+  /** 통계를 수정(AddNode)한 시각(ISO 8601 UTC) */
+  updatedAt?: string;
   /** 추가 메타데이터 */
   metadata?: Record<string, unknown>;
 }

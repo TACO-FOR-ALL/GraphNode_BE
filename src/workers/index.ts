@@ -22,6 +22,7 @@ import { initSentry } from '../shared/utils/sentry';
 import { JobHandler } from './handlers/JobHandler';
 import { GraphGenerationResultHandler } from './handlers/GraphGenerationResultHandler';
 import { GraphSummaryResultHandler } from './handlers/GraphSummaryResultHandler';
+import { AddNodeResultHandler } from './handlers/AddNodeResultHandler';
 
 async function startWorker() {
   initSentry();
@@ -46,6 +47,7 @@ async function startWorker() {
   const handlers: Record<string, JobHandler> = {
     [TaskType.GRAPH_GENERATION_RESULT]: new GraphGenerationResultHandler(),
     [TaskType.GRAPH_SUMMARY_RESULT]: new GraphSummaryResultHandler(),
+    [TaskType.ADD_NODE_RESULT]: new AddNodeResultHandler(),
     // 추후 추가: [TaskType.OTHER_TASK]: new OtherTaskHandler(),
   };
 
