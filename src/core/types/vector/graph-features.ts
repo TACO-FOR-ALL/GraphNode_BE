@@ -19,7 +19,8 @@ export interface GraphFeaturesJsonDto {
     keywords: Array<{ term: string; score: number }>;
     create_time?: number;
     update_time?: number;
-    num_messages: number;
+    num_sections: number;
+    source_type: string;
   }>;
   embeddings: number[][]; // 2D array [index][dim]
   metadata: Record<string, any>;

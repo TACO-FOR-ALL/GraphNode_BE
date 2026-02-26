@@ -123,6 +123,17 @@ export interface AiGraphOutputDto {
 /**
  * AddNode (Batch) Result DTOs
  */
+/**
+ * AddNode 결과 내 개별 클러스터 할당/생성 정보입니다.
+ * 기존의 클러스터에 배정되었거나 새로 형성된 클러스터 정보(테마, 이유 등)를 담습니다.
+ * 
+ * @property clusterId - 할당된 클러스터 식별자
+ * @property isNewCluster - 새로운 클러스터가 생성되었는지 여부
+ * @property confidence - 클러스터 배정에 대한 확신도 (최대 1.0)
+ * @property reasoning - 배정 이유 (LLM 모델이 결정한 근거)
+ * @property name - 클러스터 명칭
+ * @property themes - 해당 클러스터의 주요 테마(키워드) 배열
+ */
 export interface AiAddNodeClusterInfo {
   clusterId: string;
   isNewCluster: boolean;
@@ -132,19 +143,42 @@ export interface AiAddNodeClusterInfo {
   themes: string[];
 }
 
+/**
+ * AI 모듈에서 반환되는 AddNode 단일 노드 결과 형식입니다.
+ * 파이썬 AI 로직의 return schema 형식을 정확히 따르며 카멜케이스(CamelCase)를 사용합니다.
+ * (임베딩 및 sourceType은 제외되어 반환됨)
+ * 
+ * @property id - DB와 호환되는 기록 고유 식별자 (예: "{userId}_{conversationId}")
+ * @property userId - 사용자 식별자
+ * @property origId - 원본 대화 식별자 (Conversation ID)
+ * @property clusterId - 속하게 될(또는 새롭게 생성된) 클러스터 식별자
+ * @property clusterName - 할당된 클러스터의 이름
+ * @property numMessages - 이 대화(노드)에 포함된 원본 메시지(Q-A)의 개수
+ * @property timestamp - 타임스탬프 (기본 null)
+ * @property createdAt - 노드(대화) 생성 시각 (기본 null)
+ * @property updatedAt - 노드(대화) 업데이트 시각 (기본 null)
+ */
 export interface AiAddNodeNodeOutput {
   id: string; // E.g., "{userId}_{conversationId}"
   userId: string;
   origId: string; 
   clusterId: string;
   clusterName: string;
-  num_messages?: number;
-  num_sections?: number;
-  sourceType: 'chat' | 'markdown' | 'notion';
-  embedding: number[];
+  numMessages: number;
   timestamp: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
 }
 
+/**
+ * AI 모듈에서 새로운 노드와 기존 노드 간 연결된 엣지를 반환하는 형태입니다.
+ * 
+ * @property source - 엣지의 시작점 (대개 새로 추가되는 대화 노드의 id)
+ * @property target - 엣지의 도착점 (클러스터 내의 후보군 기존 노드 id)
+ * @property weight - 두 노드 간의 코사인 유사도 등에 기반한 가중치
+ * @property type - 엣지 관계 유형 (e.g. "similarity")
+ * @property intraCluster - 같은 클러스터 내부인지 여부 (통상 true)
+ */
 export interface AiAddNodeEdgeOutput {
   source: string;     // Uses record_id
   target: string | number; // the id of the target node in DB (could be number)
@@ -153,6 +187,10 @@ export interface AiAddNodeEdgeOutput {
   intraCluster: boolean;
 }
 
+/**
+ * 배치 형태로 요청된 개별 대화(Conversation) 생성/분석 결과입니다.
+ * 개별 대화의 노드 배열, 엣지 배열, 클러스터 정보, 그리고 기타 디버그 정보(outputDev)를 갖습니다.
+ */
 export interface AiAddNodeResultItem {
   conversationId: string;
   nodes: AiAddNodeNodeOutput[];
@@ -161,6 +199,12 @@ export interface AiAddNodeResultItem {
   assignedCluster: AiAddNodeClusterInfo;
 }
 
+/**
+ * AddNode 컨테이너 처리의 최종 종합 결과 (Batch Result)
+ * @property userId - 사용자 ID
+ * @property processedCount - 성공적으로 처리된 대화 개수
+ * @property results - 각 대화별 처리 결과 내역 목록
+ */
 export interface AiAddNodeBatchResult {
   userId: string;
   processedCount: number;

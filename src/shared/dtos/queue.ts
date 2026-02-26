@@ -113,7 +113,6 @@ export interface AddNodeRequestPayload extends BaseQueueMessage {
   taskType: TaskType.ADD_NODE_REQUEST;
   payload: {
     userId: string;
-    conversationId: string;
     s3Key: string;
     bucket?: string;
   };

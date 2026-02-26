@@ -55,12 +55,17 @@ export interface AiInputMappingNode {
 }
 
 /**
- * AI 모듈에서 사용되는 대화 형식
- * 대화의 메타데이터와 메시지 매핑을 포함합니다.
- * - title: 대화의 제목
- * - create_time: 대화 생성 시간 (Unix 타임스탬프, 초 단위)
- * - update_time: 대화 마지막 업데이트 시간 (Unix 타임스탬프, 초 단위)
- * - mapping: 메시지 매핑 정보 (노드 ID를 키로 하는 매핑 노드 객체)
+ * AI 모듈에서 사용되는 개별 대화(Conversation) 형식.
+ * 이 구조는 AI 모듈(worker.py, add_node/call.py 등) 측에서 S3에 업로드된
+ * 전체 대화 정보(메시지 매핑, 생성 시간)를 읽어들일 때 사용합니다.
+ * 
+ * @property id - 대화의 고유 ID
+ * @property conversation_id - (Legacy) AI 측 파이썬 로직 하위호환을 위한 스네이크 케이스 ID
+ * @property conversationId - (AddNode) 신규 AddNode 파이프라인에서 이용하는 카멜 케이스 ID
+ * @property title - 대화의 제목
+ * @property create_time - 대화 생성 시간 (Unix 타임스탬프, 초 단위)
+ * @property update_time - 대화 마지막 업데이트 시간 (Unix 타임스탬프, 초 단위)
+ * @property mapping - 메시지 매핑 정보 트리 (노드 ID를 키로 하는 매핑 노드 객체)
  */
 export interface AiInputConversation {
   id: string;
@@ -74,6 +79,13 @@ export interface AiInputConversation {
 
 export type AiInputData = AiInputConversation[];
 
+/**
+ * AddNode 배치 처리를 위해 AI 큐(.py)에 전송하기 전 S3에 저장하는 Payload/JSON 양식.
+ * 
+ * @property userId - 사용자 식별자 (UUID / ULID)
+ * @property existingClusters - 현재 사용자가 보유한 기존 클러스터 정보 리스트 (clusterId, name, themes 등).
+ * @property conversations - 새롭게 추가 또는 갱신된 대화의 내용 배열. AiInputConversation 구조로 상세 내용을 포괄함.
+ */
 export interface AiAddNodeBatchRequest {
   userId: string;
   existingClusters: any[]; // Array of existing clusters

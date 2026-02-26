@@ -401,7 +401,6 @@ export class GraphGenerationService {
         taskType: TaskType.ADD_NODE_REQUEST,
         payload: {
           userId,
-          conversationId: 'batch', // batch 처리를 의미하도록
           s3Key,
           bucket: process.env.S3_PAYLOAD_BUCKET,
         },

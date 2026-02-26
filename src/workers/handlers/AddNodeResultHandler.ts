@@ -81,9 +81,9 @@ export class AddNodeResultHandler implements JobHandler {
             origId: node.origId,
             clusterId: node.clusterId,
             clusterName: node.clusterName || '',
-            numMessages: node.num_messages || node.num_sections || 0, // Fallback for ai result
-            sourceType: node.sourceType || 'chat',
-            embedding: node.embedding || [],
+            numMessages: node.numMessages || 0, // Fallback for ai result
+            sourceType: 'chat', // For AddNode, default to chat
+            embedding: [],
             timestamp: node.timestamp || null,
           });
           totalNodesAdded++;

@@ -98,7 +98,7 @@ export class GraphGenerationResultHandler implements JobHandler {
               const keywordsStr = conv.keywords.map(k => k.term).join(',');
 
               // Construct Metadata (Snake Case)
-              const metadata = {
+              const metadata: any = {
                 user_id: userId,
                 conversation_id: conv.orig_id,
                 orig_id: conv.orig_id,
@@ -107,7 +107,8 @@ export class GraphGenerationResultHandler implements JobHandler {
                 cluster_name: clusterName,
                 keywords: keywordsStr,
                 create_time: conv.create_time || 0,
-                num_messages: conv.num_messages,
+                num_messages: conv.num_sections || 0, // Fallback to 0 if undefined
+                source_type: conv.source_type || 'chat',
                 update_time: conv.update_time || 0
               };
 
