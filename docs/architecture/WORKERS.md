@@ -24,6 +24,8 @@ GraphNode Backend는 API 서버의 응답성을 보장하고, 시간이 오래 �
 | :--- | :--- | :--- |
 | **GraphGenerationResultHandler** | `GRAPH_GENERATION_RESULT` | AI 그래프 생성 결과 처리 (저장 & 알림) |
 | **GraphSummaryResultHandler** | `GRAPH_SUMMARY_RESULT` | 그래프 요약 결과 처리 |
+| **AddNodeResultHandler** | `ADD_NODE_RESULT` | 기존 지식 그래프에 단일 대화(노드/엣지) 추가 결과 처리 (저장 & 알림) |
+| **MicroscopeIngestResultHandler**| `MICROSCOPE_INGEST_RESULT` | 워크스페이스 문서 개별 처리 완료 상태 메타데이터 갱신 및 전체 완료 통지 |
 
 ## 4. SQS Message Types (`src/shared/dtos/queue.ts`)
 
@@ -45,13 +47,17 @@ interface BaseQueueMessage {
 | **GRAPH_GENERATION_RESULT** | `userId`, `status` (`COMPLETED`\|`FAILED`), `resultS3Key`, `featuresS3Key` |
 | **GRAPH_SUMMARY_REQUEST** | `userId`, `graphS3Key` |
 | **GRAPH_SUMMARY_RESULT** | `userId`, `status`, `summaryS3Key` |
+| **ADD_NODE_REQUEST** | `userId`, `s3Key`, `bucket` |
+| **ADD_NODE_RESULT** | `userId`, `status`, `resultS3Key`, `error` |
+| **MICROSCOPE_INGEST_REQUEST** | `userId`, `s3Key`, `groupId`, `type`, `metadata` |
+| **MICROSCOPE_INGEST_RESULT** | `userId`, `groupId`, `status`, `sourceId`, `error` |
 
 ## 5. Scalability
 
 - **Decoupling**: API 서버와 Worker는 SQS를 통해 느슨하게 결합되어 있어, 서로 다른 속도로 스케일링이 가능합니다.
 - **Auto Scaling**: SQS 큐의 대기 메시지 수(ApproximateNumberOfMessagesVisible)를 지표로 삼아 ECS Service의 Task 수를 자동으로 조절할 수 있습니다 (AWS CloudWatch Alarm 연동).
 
-## 5. Error Handling
+## 6. Error Handling
 
 - **Retry Policy**: 일시적인 오류(DB 연결 실패 등) 발생 시 에러를 Throw하여 SQS의 재시도 메커니즘에 위임합니다.
 - **Dead Letter Queue**: 반복적으로 실패하는 메시지는 DLQ로 이동되어 운영자가 분석할 수 있습니다.

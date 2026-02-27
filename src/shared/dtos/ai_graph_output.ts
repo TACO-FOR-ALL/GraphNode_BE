@@ -211,3 +211,25 @@ export interface AiAddNodeBatchResult {
   results: AiAddNodeResultItem[];
 }
 
+/**
+ * AI 서버의 Microscope Ingest 프로세스 완료 후 응답되는 DTO 형식입니다.
+ * 
+ * @property user_id - 요청자 ID
+ * @property group_id - 요청 그룹 ID
+ * @property status - 처리 상태 ("COMPLETED" 또는 "FAILED")
+ * @property source_id - 인제스트 후 문서에 부여된 고유 식별자
+ * @property chunks_count - 문서를 분할한 총 청크 단위 수
+ * @property ingest_stats - 저장된 개체, 관계, 청크 등의 각종 통계 정보
+ * @property error - 에러 발생 시 상세 메시지
+ */
+export interface AiMicroscopeIngestResult {
+  user_id: string;
+  group_id: string;
+  status: 'COMPLETED' | 'FAILED';
+  source_id?: string;
+  chunks_count?: number;
+  schema_name?: string;
+  ingest_stats?: Record<string, any>; // {"chunks_stored": 10, "entities_stored": 20, ...}
+  error?: string;
+}
+

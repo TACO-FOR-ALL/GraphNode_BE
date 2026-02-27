@@ -144,6 +144,33 @@ AI가 추출한 지식 그래프의 노드입니다.
 | **name** | `String` | 폴더명 |
 | **parentId** | `String` | 상위 폴더 ID (Null=Root) |
 
+### D. Microscope Domain
+`src/core/types/persistence/microscope_workspace.persistence.ts`
+
+다중 문서를 기반으로 분석하는 Microscope 파이프라인의 진행 상태 및 메타데이터를 저장합니다. 실제 추출된 지식 그래프는 Neo4j에 영속화됩니다.
+
+#### **microscope_workspaces** Collection
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| **_id** | `String` (ULID) | 워크스페이스(그룹) ID. Neo4j의 `group_id`와 매핑됨 |
+| **userId** | `String` | 소유자 ID |
+| **name** | `String` | 워크스페이스 이름 |
+| **documents** | `Array<Document>` | 업로드된 문서 목록 및 상태 (하단 참고) |
+| **createdAt** | `String` | 생성 시각 (ISO 8601) |
+| **updatedAt** | `String` | 수정 시각 (ISO 8601) |
+
+**Document Object Structure within `documents` array:**
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| **id** | `String` (ULID) | 개별 문서 고유 ID (SQS taskId로 사용됨) |
+| **s3Key** | `String` | 원본 파일 S3 경로 |
+| **fileName** | `String` | 원본 파일명 |
+| **status** | `String` | AI 워커 처리 상태 (`PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`) |
+| **sourceId** | `String` | (Optional) AI 워커 성공 시 부여되는 고유 문서 식별자 |
+| **error** | `String` | (Optional) 실패 시 에러 사유 |
+| **createdAt** | `String` | 등록 일시 |
+| **updatedAt** | `String` | 상태 변경 일시 |
+
 ---
 
 ## 3. Vector Metadata (ChromaDB)
@@ -163,3 +190,23 @@ Vector DB에 저장되는 임베딩과 함께 저장되는 메타데이터(`meta
 | **keywords** | `String` | 검색용 키워드 (쉼표 구분 문자열) |
 | **create_time** | `Number` | 생성 시각 |
 | **num_messages** | `Number` | 대화 메시지 수 |
+
+---
+
+## 4. Neo4j (Graph Database)
+
+지식 그래프 데이터를 보관하며 Cypher 쿼리를 통해 복잡한 노드 간 관계 및 경로 탐색을 지원합니다. 대화/노트 기반 지식 그래프 및 Microscope 기반 다중 분석 지식 그래프 모두 Neo4j에 영속화됩니다.
+
+### A. Graph Model
+Neo4j에 저장되는 노드(`Entity`, `Chunk`)와 엣지(`REL`)의 공통 엔티티 구조입니다. `src/core/types/neo4j.types.ts`에서 상세 구조 정의됨.
+
+- **Nodes (`Entity` / `Chunk`) 공통 속성**: 
+  - `user_id`: 소유자 격리용 키
+  - `group_id`: Microscope 워크스페이스 혹은 단일 컨텍스트(conversation Id 등) 단위의 식별자
+  - `source_id`: 데이터 추출의 기원이 되는 특정 문서(혹은 메시지) 식별자
+  - `name`: 노드의 표제어 혹은 식별 이름
+  - `description`: 세부 설명 혹은 텍스트 원본
+
+- **Edges (`REL`) 공통 속성**:
+  - `weight`: 연관성(도출된 신뢰도/비중) 표기
+  - `description`: 엣지가 나타내는 의미에 대한 설명 (문자열)

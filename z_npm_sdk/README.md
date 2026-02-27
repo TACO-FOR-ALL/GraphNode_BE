@@ -692,6 +692,56 @@ const res = await client.health.get(); // { ok: true }
 
 ---
 
+### 🔬 9. 마이크로스코프 (Microscope: `client.microscope`)
+
+#### **Summary**
+
+| Method | Endpoint | Description | Status |
+| :--- | :--- | :--- | :--- |
+| `listWorkspaces()` | `GET /v1/microscope` | 워크스페이스 목록 조회 | 200 |
+| `getWorkspace(groupId)` | `GET /v1/microscope/:groupId` | 워크스페이스 상세 조회 | 200 |
+| `createWorkspaceWithDocuments(...)`| `POST /v1/microscope` | 신규 생성 및 문서 이관 | 201 |
+| `addDocumentsToWorkspace(...)` | `POST /v1/microscope/:groupId/documents`| 문서 병합 및 처리 시작 | 202 |
+| `deleteWorkspace(groupId)` | `DELETE /v1/microscope/:groupId` | 워크스페이스(및 그래프) 파기 | 204 |
+
+#### **Detailed Usage**
+
+<details>
+<summary><b>createWorkspaceWithDocuments(name, files?, schemaName?)</b></summary>
+
+- **Returns**: `Promise<HttpResponse<MicroscopeWorkspace>>`
+- **Example**:
+```typescript
+const files = [new File(['content'], 'test.pdf')];
+const res = await client.microscope.createWorkspaceWithDocuments('Project A', files);
+console.log('Created ID:', res.data._id);
+```
+</details>
+
+<details>
+<summary><b>addDocumentsToWorkspace(groupId, files, schemaName?)</b></summary>
+
+- **Returns**: `Promise<HttpResponse<{ message: string }>>`
+- **Example**:
+```typescript
+const files = [new File(['content'], 'test2.md')];
+await client.microscope.addDocumentsToWorkspace('group_123', files);
+```
+</details>
+
+<details>
+<summary><b>deleteWorkspace(groupId)</b></summary>
+
+- **Returns**: `Promise<HttpResponse<void>>`
+- **Description**: 워크스페이스와 연관된 지식 그래프 및 메타데이터를 파기합니다.
+- **Example**:
+```typescript
+await client.microscope.deleteWorkspace('group_123');
+```
+</details>
+
+---
+
 ## 📝 라이선스 (License)
 
 This SDK is proprietary software of the TACO 4 Team.

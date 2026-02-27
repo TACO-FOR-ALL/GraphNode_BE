@@ -3,6 +3,7 @@ import { loadEnv } from '../../config/env';
 import prisma from './prisma';
 import { initRedis } from '../redis/client';
 import { initChroma } from './chroma';
+import { initNeo4j } from './neo4j';
 
 /**
  * RDB(Prisma)/MongoDB/Redis를 순차 초기화한다. ENV 유효성 검증 포함.
@@ -25,6 +26,6 @@ export async function initDatabases() {
   // FIXME TODO : ChromaDB 연결 추가 필요
   await initChroma();
 
-  // Qdrant 초기화 (스켈레톤), 현재는 사용 안하기에 우선 주석
-  // await initQdrant(env.QDRANT_URL, env.QDRANT_API_KEY);
+  // 5. Neo4j connection FIXME
+  await initNeo4j();
 }

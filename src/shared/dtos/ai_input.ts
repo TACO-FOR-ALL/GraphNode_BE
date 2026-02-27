@@ -92,3 +92,26 @@ export interface AiAddNodeBatchRequest {
   conversations: AiInputConversation[];
 }
 
+/**
+ * AI 서버 측 Microscope (RAG/문서 섭취)를 위한 Ingest 요청 DTO 형식입니다.
+ * SQS 메시지를 통해 이 양식으로 전달되면 AI의 `handle_microscope_ingest`가 실행됩니다.
+ * 
+ * @property user_id - 사용자 식별자
+ * @property group_id - 그룹 식별자 (마이크로스코프 공간 논리적 구분)
+ * @property s3_key - S3에 업로드된 대상 파일(PDF, MD, TXT 등)의 객체 키
+ * @property bucket - 대상 파일이 저장된 S3 버킷명
+ * @property file_name - 확장자를 포함한 원본 파일명 (예: document.pdf)
+ * @property schema_name - 엔티티 추출에 사용할 온톨로지 스키마 이름 (옵션)
+ */
+export interface AiMicroscopeIngestRequest {
+  user_id: string;
+  group_id: string;
+  s3_key: string;
+  bucket: string;
+  file_name: string;
+  schema_name?: string;
+  provider?: string;
+  model?: string;
+  api_key?: string;
+}
+

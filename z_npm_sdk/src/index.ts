@@ -21,6 +21,7 @@ export { SyncApi } from './endpoints/sync.js';
 export { AiApi } from './endpoints/ai.js';
 export { NotificationApi } from './endpoints/notification.js';
 export { FileApi } from './endpoints/file.js';
+export { MicroscopeApi } from './endpoints/microscope.js';
 
 // Types
 export type { ProblemDetails } from './types/problem.js';
@@ -52,6 +53,7 @@ export type {
 } from './types/note.js';
 export type { SyncPushRequest, SyncPullResponse } from './types/sync.js';
 export type { FileAttachment, FileUploadResponse } from './types/file.js';
+export type { MicroscopeDocument, MicroscopeWorkspace } from './types/microscope.js';
 export type {
   AgentChatMode,
   AgentChatModeHint,

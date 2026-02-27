@@ -25,8 +25,9 @@ graph TD
     
     subgraph "Persistence Layer"
         MySQL[(MySQL: User/Metadata)]
-        Mongo[(MongoDB: Chat History)]
+        Mongo[(MongoDB: Chat History/Workspace)]
         Redis[(Redis: Cache/Session)]
+        Neo4j[(Neo4j: Knowledge Graph)]
     end
 
     User <--> Client
@@ -36,6 +37,7 @@ graph TD
     API <--> MySQL
     API <--> Mongo
     API <--> Redis
+    API <--> Neo4j
     
     API -- "작업 요청 전송" --> SQS_Req
     SQS_Req -- "Polling" --> AI_Server
@@ -44,6 +46,8 @@ graph TD
     SQS_Res -- "Polling" --> Worker
     
     Worker -- "결과 저장" --> MySQL
+    Worker -- "상태 갱신" --> Mongo
+    Worker -- "그래프 갱신" --> Neo4j
     Worker -- "알림 발송" --> Redis
 ```
 
@@ -66,9 +70,10 @@ graph TD
 
 | 저장소 | 역할 | 이유 |
 | :--- | :--- | :--- |
-| **MySQL (Prisma)** | 사용자 정보, 그래프 노드/엣지 메타데이터 | 관계형 데이터의 무결성 및 복잡한 조인 필요 |
-| **MongoDB** | 대화 기록(Messages), 문서 데이터 | 비정형 데이터의 유연한 확장성 및 빠른 쓰기 |
-| **Redis** | 세션 정보, 실시간 알림 큐, 캐시 | 빠른 읽기/쓰기 성능 및 TTL 기반 데이터 관리 |
+| **MySQL (Prisma)** | 사용자 정보, 메타데이터 연동 제어 | 관계형 데이터의 무결성 보호 |
+| **MongoDB** | 대화/노트 데이터, Microscope 워크스페이스 구조화 상태 추적 | 비정형 문서 데이터의 유연한 확장성 확보 |
+| **Neo4j** | 대화형/문서형 지식 그래프의 노드 간 관계 맵 및 클러스터링 보관 | 지식 구조의 명시적 관계 추적 및 시각적 탐색 효율성 |
+| **Redis** | 세션 정보, 실시간 알림 큐, 캐시 | 빠른 읽기/쓰기 성능 및 TTL 기반 알림 제어 |
 
 ## 4. 확장 전략 (Scalability)
 

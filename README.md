@@ -200,6 +200,7 @@ infisical run --env=prod -- npm start
   - [2026-02-26 대화 삭제 시 지식 그래프 연쇄 삭제 적용](docs/guides/Daily/20260226-chat-graph-cascade-delete.md)
   - [2026-02-26 AddNode Batch 처리를 위한 API 및 워커 리팩토링](docs/guides/Daily/20260226-add-node-batch.md)
   - [2026-02-27 파일 업로드/다운로드 API 구축 및 FE SDK 파일 처리 노출](docs/guides/Daily/20260227-file-upload-sdk.md)
+  - [2026-02-27 Microscope REST API, 핸들러, 및 프론트엔드 SDK 통합](docs/guides/Daily/20260227-microscope-api-and-sdk.md)
 
 ---
 

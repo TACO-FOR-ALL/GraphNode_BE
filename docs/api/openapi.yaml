@@ -51,9 +51,195 @@ paths:
           content:
             application/problem+json:
               schema:
-                $ref: ../schemas/problem.json
+                $ref: '../schemas/problem.json'
               example:
                 $ref: './examples/problem-404.json'
+  /v1/microscope:
+    get:
+      summary: List all user workspaces
+      tags: [Microscope]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../schemas/microscope.json'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '500':
+          description: Internal Server Error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+    post:
+      summary: Create new workspace and upload documents
+      tags: [Microscope]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                schemaName:
+                  type: string
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+              required: [name]
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/microscope.json'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '500':
+          description: Internal Server Error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+  /v1/microscope/{groupId}:
+    get:
+      summary: Get detailed workspace status
+      tags: [Microscope]
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/microscope.json'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+    delete:
+      summary: Delete workspace and associated graph
+      tags: [Microscope]
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '500':
+          description: Internal Server Error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+  /v1/microscope/{groupId}/documents:
+    post:
+      summary: Add more documents to existing workspace
+      tags: [Microscope]
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                schemaName:
+                  type: string
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+              required: [files]
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '500':
+          description: Internal Server Error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
   /auth/google/start:
     get:
       summary: Start Google OAuth (redirects)

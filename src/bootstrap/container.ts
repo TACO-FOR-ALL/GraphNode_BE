@@ -18,14 +18,17 @@ import { NotificationService } from '../core/services/NotificationService';
 import { AiInteractionService } from '../core/services/AiInteractionService';
 import { GoogleOAuthService } from '../core/services/GoogleOAuthService';
 import { AppleOAuthService } from '../core/services/AppleOAuthService';
+import { MicroscopeManagementService } from '../core/services/MicroscopeManagementService';
 import { createAuditProxy } from '../shared/audit/auditProxy';
 import { loadEnv } from '../config/env';
 // Interfaces
 import { ConversationRepository } from '../core/ports/ConversationRepository';
 import { MessageRepository } from '../core/ports/MessageRepository';
 import { UserRepository } from '../core/ports/UserRepository';
+import { MicroscopeWorkspaceStore } from '../core/ports/MicroscopeWorkspaceStore';
+import { MicroscopeWorkspaceRepositoryMongo } from '../infra/repositories/MicroscopeWorkspaceRepositoryMongo';
 // DB / Infrastructure Adapters
-// import { Neo4jGraphAdapter } from '../infra/graph/Neo4jGraphAdapter';
+import { Neo4jGraphAdapter } from '../infra/graph/Neo4jGraphAdapter';
 import { ChromaVectorAdapter } from '../infra/vector/ChromaVectorAdapter';
 // import { QdrantClientAdapter } from '../infra/repositories/QdrantClientAdapter'; // Removed
 import { NoteRepository } from '../core/ports/NoteRepository';
@@ -59,10 +62,11 @@ export class Container {
   private userRepo: UserRepository | null = null;
   private noteRepo: NoteRepository | null = null;
   private graphRepo: GraphDocumentStore | null = null; // Renamed to Mongo Store
-  private neo4jStore: GraphNeo4jStore | null = null; // Added
-  private vectorStore: VectorStore | null = null; // Added
-  private graphVectorRepo: GraphVectorRepository | null = null; // Added
-  private graphVectorService: GraphVectorService | null = null; // Added new service
+  private neo4jStore: GraphNeo4jStore | null = null; 
+  private vectorStore: VectorStore | null = null; 
+  private graphVectorRepo: GraphVectorRepository | null = null; 
+  private graphVectorService: GraphVectorService | null = null; 
+  private microscopeWorkspaceRepo: MicroscopeWorkspaceStore | null = null;
 
   // Infra Adapters
   private queueAdapter: QueuePort | null = null;
@@ -83,6 +87,7 @@ export class Container {
   private aiInteractionService: AiInteractionService | null = null;
   private googleOAuthService: GoogleOAuthService | null = null;
   private appleOAuthService: AppleOAuthService | null = null;
+  private microscopeManagementService: MicroscopeManagementService | null = null;
 
   private constructor() {}
 
@@ -119,12 +124,12 @@ export class Container {
     return this.graphRepo;
   }
 
-  // getGraphNeo4jStore(): GraphNeo4jStore {
-  //     if (!this.neo4jStore) {
-  //         this.neo4jStore = new Neo4jGraphAdapter();
-  //     }
-  //     return this.neo4jStore;
-  // }
+  getGraphNeo4jStore(): GraphNeo4jStore {
+      if (!this.neo4jStore) {
+          this.neo4jStore = new Neo4jGraphAdapter();
+      }
+      return this.neo4jStore;
+  }
 
   getVectorStore(): VectorStore {
     if (!this.vectorStore) {
@@ -222,6 +227,16 @@ export class Container {
   getGraphRepository(): GraphDocumentStore {
     return this.getGraphDocumentStore(); // Alias for backward compatibility if needed, or better rename it fully.
     // Since we replaced usage in this file, we can just redirect.
+  }
+
+  /**
+   * MicroscopeWorkspaceRepositoryMongo 인스턴스를 반환합니다.
+   */
+  getMicroscopeWorkspaceStore(): MicroscopeWorkspaceStore {
+    if (!this.microscopeWorkspaceRepo) {
+      this.microscopeWorkspaceRepo = new MicroscopeWorkspaceRepositoryMongo();
+    }
+    return this.microscopeWorkspaceRepo;
   }
 
   // --- Services ---
@@ -403,6 +418,22 @@ export class Container {
       this.appleOAuthService = createAuditProxy(raw, 'AppleOAuthService');
     }
     return this.appleOAuthService;
+  }
+
+  /**
+   * MicroscopeManagementService 인스턴스를 반환합니다.
+   */
+  getMicroscopeManagementService(): MicroscopeManagementService {
+    if (!this.microscopeManagementService) {
+      const raw = new MicroscopeManagementService(
+        this.getMicroscopeWorkspaceStore(),
+        this.getGraphNeo4jStore(),
+        this.getAwsSqsAdapter(),
+        this.getAwsS3Adapter()
+      );
+      this.microscopeManagementService = createAuditProxy(raw, 'MicroscopeManagementService');
+    }
+    return this.microscopeManagementService;
   }
 }
 

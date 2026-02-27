@@ -4,6 +4,11 @@ import {
   GraphClusterDoc,
   GraphStatsDoc,
 } from '../types/persistence/graph.persistence';
+import {
+  MicroscopeEntityNode,
+  MicroscopeChunkNode,
+  MicroscopeRelEdge,
+} from '../types/neo4j/microscope.neo4j';
 
 export interface Neo4jOptions {
   session?: unknown; // Neo4j Session/Transaction
@@ -40,4 +45,24 @@ export interface GraphNeo4jStore {
   upsertCluster(cluster: GraphClusterDoc, options?: Neo4jOptions): Promise<void>;
   deleteCluster(userId: string, clusterId: string, options?: Neo4jOptions): Promise<void>;
   saveStats(stats: GraphStatsDoc, options?: Neo4jOptions): Promise<void>;
+
+  // --- Microscope RAG (Entity / Chunk / REL) ---
+  upsertMicroscopeEntityNode(node: MicroscopeEntityNode, options?: Neo4jOptions): Promise<void>;
+  findMicroscopeEntityNode(uuid: string, options?: Neo4jOptions): Promise<MicroscopeEntityNode | null>;
+  deleteMicroscopeEntityNode(uuid: string, options?: Neo4jOptions): Promise<void>;
+
+  upsertMicroscopeChunkNode(node: MicroscopeChunkNode, options?: Neo4jOptions): Promise<void>;
+  findMicroscopeChunkNode(uuid: string, options?: Neo4jOptions): Promise<MicroscopeChunkNode | null>;
+  deleteMicroscopeChunkNode(uuid: string, options?: Neo4jOptions): Promise<void>;
+
+  upsertMicroscopeRelEdge(edge: MicroscopeRelEdge, options?: Neo4jOptions): Promise<void>;
+  deleteMicroscopeRelEdge(uuid: string, options?: Neo4jOptions): Promise<void>;
+
+  upsertMicroscopeExtractedFromEdge(entityUuid: string, chunkUuid: string, options?: Neo4jOptions): Promise<void>;
+  deleteMicroscopeExtractedFromEdge(entityUuid: string, chunkUuid: string, options?: Neo4jOptions): Promise<void>;
+
+  /**
+   * 해당 워크스페이스(group_id)에 속한 모든 Microscope 데이터(노드 및 엣지)를 파기합니다.
+   */
+  deleteMicroscopeWorkspaceGraphs(groupId: string, options?: Neo4jOptions): Promise<void>;
 }

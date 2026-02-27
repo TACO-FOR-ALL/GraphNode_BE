@@ -85,11 +85,24 @@ FE → sendRaw('GET') → raw Response → res.blob() → HttpResponse<Blob>
 
 ---
 
+## Microscope API 설계 (`endpoints/microscope.ts`)
+
+### 다중 파일 업로드 및 워크스페이스 처리 흐름 (`createWorkspaceWithDocuments`)
+```
+FE → FormData 생성 → (files 파라미터로 여러 파일 Append) → POST /v1/microscope → 서버 multer 메모리 처리 → 개별 파일 S3 업로드 & metadata DB 생성 → SQS 전송 (AI 처리 요청) → 진행 상태가 담긴 MicroscopeWorkspace 반환
+```
+* `microscope` 네임스페이스는 다중 파일과 메타데이터(예: `schemaName`)를 한 번에 전송하기 위해 내부적으로 `FormData`를 조립하여 `RequestBuilder`에 넘깁니다.
+* 응답 수신 후, 클라이언트는 반환된 그룹 ID(`_id`)에 대해 SSE(Server-Sent Events)를 구독하여 처리 완료 알림을 대기할 수 있습니다.
+
+---
+
 ## 관련 백엔드 엔드포인트
 
 | SDK 메서드 | 백엔드 엔드포인트 | 담당 파일 |
 |------------|-----------------|-----------|
 | `file.uploadFiles()` | `POST /api/v1/ai/files` | `file.route.ts`, `file.controller.ts` |
 | `file.getFile()` | `GET /api/v1/ai/files/:key` | `file.route.ts`, `file.controller.ts` |
+| `microscope.createWorkspaceWithDocuments()` | `POST /v1/microscope` | `microscope.routes.ts`, `MicroscopeController.ts` |
+| `microscope.addDocumentsToWorkspace()` | `POST /v1/microscope/:groupId/documents` | `microscope.routes.ts`, `MicroscopeController.ts` |
 
-백엔드는 `AwsS3Adapter.uploadFile()`, `AwsS3Adapter.downloadFile()`을 통해 S3와 통신합니다.
+백엔드는 `AwsS3Adapter.uploadFile()`, `AwsS3Adapter.downloadFile()` 등을 통해 S3와 통신합니다.
