@@ -205,6 +205,9 @@ export class UserService {
 
   /**
    * OpenAI Assistant ID 업데이트
+   * @param userId 사용자 ID
+   * @param assistantId OpenAI Assistant ID
+   * @throws {NotFoundError} 사용자를 찾지 못한 경우
    */
   async updateOpenAiAssistantId(userId: string, assistantId: string): Promise<void> {
     await this.userRepository.updateOpenAiAssistantId(userId, assistantId);
@@ -212,6 +215,9 @@ export class UserService {
 
   /**
    * 사용자 선호 언어 조회
+   * @param userId 사용자 ID
+   * @returns 사용자 선호 언어
+   * @throws {NotFoundError} 사용자를 찾지 못한 경우
    */
   async getPreferredLanguage(userId: string): Promise<string> {
     const user = await this.userRepository.findById(userId);
@@ -223,6 +229,10 @@ export class UserService {
 
   /**
    * 사용자 선호 언어 업데이트
+   * @param userId 사용자 ID
+   * @param language 사용자 선호 언어
+   * @throws {NotFoundError} 사용자를 찾지 못한 경우
+   * @throws {ValidationError} 언어 코드가 유효하지 않은 경우
    */
   async updatePreferredLanguage(userId: string, language: string): Promise<void> {
     const user = await this.userRepository.findById(userId);

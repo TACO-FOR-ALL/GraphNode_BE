@@ -259,6 +259,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         userId,
         deletedAt: { $in: [null, undefined] },
       } as any);
+      
+      if (doc && !doc.sourceType) {
+        doc.sourceType = 'chat';
+        await this.graphNodes_col().updateOne({ id: doc.id, userId: doc.userId } as any, { $set: { sourceType: 'chat' } });
+      }
+      
       return doc;
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.findNode failed', { cause: String(err) });
@@ -274,7 +280,19 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         userId,
         deletedAt: { $in: [null, undefined] },
       } as any);
-      return await cursor.toArray();
+      const docs = await cursor.toArray();
+
+      const toUpdate = docs.filter(d => !d.sourceType);
+      if (toUpdate.length > 0) {
+        const ids = toUpdate.map(d => d.id);
+        await this.graphNodes_col().updateMany(
+          { id: { $in: ids }, userId } as any, 
+          { $set: { sourceType: 'chat' } }
+        );
+        toUpdate.forEach(d => { d.sourceType = 'chat'; });
+      }
+
+      return docs;
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.listNodes failed', { cause: String(err) });
     }
@@ -290,7 +308,19 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         clusterId,
         deletedAt: { $in: [null, undefined] },
       } as any);
-      return await cursor.toArray();
+      const docs = await cursor.toArray();
+
+      const toUpdate = docs.filter(d => !d.sourceType);
+      if (toUpdate.length > 0) {
+        const ids = toUpdate.map(d => d.id);
+        await this.graphNodes_col().updateMany(
+          { id: { $in: ids }, userId } as any, 
+          { $set: { sourceType: 'chat' } }
+        );
+        toUpdate.forEach(d => { d.sourceType = 'chat'; });
+      }
+
+      return docs;
     } catch (err: unknown) {
       throw new UpstreamError('GraphRepositoryMongo.listNodesByCluster failed', {
         cause: String(err),

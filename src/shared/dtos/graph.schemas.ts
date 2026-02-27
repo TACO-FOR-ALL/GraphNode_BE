@@ -25,6 +25,7 @@ export const graphNodeSchema = z.object({
   clusterName: z.string().min(1),
   timestamp: z.iso.datetime({ offset: true }).or(z.null()),
   numMessages: z.number().int().nonnegative(),
+  sourceType: z.enum(['chat', 'markdown', 'notion']).optional(),
   createdAt: z.iso.datetime({ offset: true }).optional(),
   updatedAt: z.iso.datetime({ offset: true }).optional(),
   deletedAt: z.iso.datetime({ offset: true }).optional(),

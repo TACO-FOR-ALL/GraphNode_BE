@@ -19,6 +19,7 @@ export interface GraphNodeDoc {
   clusterName: string;
   timestamp: string | null;
   numMessages: number;
+  sourceType?: 'chat' | 'markdown' | 'notion';
   embedding?: number[]; // 384-dimensional vector from AI pipeline
   createdAt: string;
   updatedAt: string;
@@ -111,6 +112,7 @@ export interface GraphStatsDoc {
   edges: number;
   clusters: number;
   generatedAt: string;
+  updatedAt?: string;
   metadata: Record<string, unknown>;
 }
 

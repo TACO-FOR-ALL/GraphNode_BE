@@ -22,7 +22,7 @@ import type {
  * @returns DB 저장을 위한 GraphSnapshotDto
  */
 export function mapAiOutputToSnapshot(output: AiGraphOutputDto, userId: string): GraphSnapshotDto {
-  const generatedAt = output.metadata.generated_at || new Date().toISOString();
+  const generatedAt = output.metadata?.generated_at || new Date().toISOString();
 
   // 1. Nodes 변환
   const nodes: GraphNodeDto[] = output.nodes.map((node) => ({
@@ -32,7 +32,8 @@ export function mapAiOutputToSnapshot(output: AiGraphOutputDto, userId: string):
     clusterId: node.cluster_id,
     clusterName: node.cluster_name,
     timestamp: node.timestamp,
-    numMessages: node.num_messages,
+    numMessages: node.num_sections,
+    sourceType: node.source_type,
     createdAt: generatedAt,
     updatedAt: generatedAt,
   }));
@@ -65,7 +66,7 @@ export function mapAiOutputToSnapshot(output: AiGraphOutputDto, userId: string):
 
   // 3. Clusters 변환
   // metadata.clusters는 Record<string, Detail> 형태이므로 배열로 변환
-  const clusters: GraphClusterDto[] = Object.entries(output.metadata.clusters).map(
+  const clusters: GraphClusterDto[] = Object.entries(output.metadata?.clusters || {}).map(
     ([clusterId, detail]) => ({
       id: clusterId,
       userId: userId,
@@ -91,9 +92,9 @@ export function mapAiOutputToSnapshot(output: AiGraphOutputDto, userId: string):
 
   // 5. Stats 변환
   const stats: Omit<GraphStatsDto, 'userId'> = {
-    nodes: output.metadata.total_nodes,
-    edges: output.metadata.total_edges,
-    clusters: output.metadata.total_clusters,
+    nodes: output.metadata?.total_nodes || output.nodes.length,
+    edges: output.metadata?.total_edges || output.edges.length,
+    clusters: output.metadata?.total_clusters || clusters.length,
     generatedAt: generatedAt,
     metadata: {
       // 원본 메타데이터의 나머지 부분도 보존하고 싶다면 여기에 추가

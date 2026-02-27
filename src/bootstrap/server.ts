@@ -29,6 +29,7 @@ import { makeSyncRouter } from './modules/sync.module';
 import { makeAgentRouter } from './modules/agent.module';
 import { makeNotificationRouter } from './modules/notification.module';
 import { makeFileRouter } from './modules/file.module';
+import { makeMicroscopeRouter } from './modules/microscope.module';
 // import { createTestAgentRouter } from '../app/routes/agent.test';
 
 import {
@@ -80,6 +81,9 @@ export function createApp() {
 
   // Sync Router
   app.use('/v1/sync', makeSyncRouter());
+
+  // Microscope Router
+  app.use('/v1/microscope', makeMicroscopeRouter());
 
   // Notification Router (SSE)
   app.use('/v1/notifications', makeNotificationRouter());

@@ -7,6 +7,7 @@
     "clusterName": "Project Alpha",
     "timestamp": "2025-01-01T12:00:00Z",
     "numMessages": 5,
+    "sourceType": "chat",
     "createdAt": "2025-01-01T12:00:00Z",
     "updatedAt": "2025-01-01T12:00:00Z"
   },
@@ -18,6 +19,7 @@
     "clusterName": "Project Alpha",
     "timestamp": "2025-01-02T14:30:00Z",
     "numMessages": 3,
+    "sourceType": "chat",
     "createdAt": "2025-01-02T14:30:00Z",
     "updatedAt": "2025-01-02T14:30:00Z"
   }

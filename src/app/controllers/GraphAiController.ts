@@ -14,9 +14,12 @@ export class GraphAiController {
   generateGraph = async (req: Request, res: Response) => {
     // 세션에서 사용자 ID 가져오기
     const userId = getUserIdFromRequest(req);
+    const { includeSummary} = req.body || {};
 
     // 그래프 생성 프로세스 시작 (SQS 요청)
-    const taskId = await this.graphGenerationService.requestGraphGenerationViaQueue(userId);
+    const taskId = await this.graphGenerationService.requestGraphGenerationViaQueue(userId, { 
+      includeSummary, 
+    });
 
     // 작업 id와 함께 곧바로 반환
     res.status(202).json({
@@ -57,26 +60,24 @@ export class GraphAiController {
 
 
   /**
-   * POST /v1/graph-ai/add-conversation/:conversationId
-   * 단일 대화를 기존 그래프에 추가합니다.
+   * POST /v1/graph-ai/add-node
+   * 신규 또는 업데이트된 대화를 기존 그래프에 추가합니다. (배치)
    */
-  addConversationToGraph = async (req: Request, res: Response) => {
+  addNodeToGraph = async (req: Request, res: Response) => {
     const userId = getUserIdFromRequest(req);
-    const { conversationId } = req.params;
 
-    // Validate conversationId format
-    if (!conversationId || typeof conversationId !== 'string') {
-      res.status(400).json({ message: 'Invalid conversationId' });
-      return;
+    const taskId = await this.graphGenerationService.requestAddNodeViaQueue(userId);
+
+    if (!taskId) {
+        res.status(200).json({
+            message: 'No updated conversations found to add',
+            status: 'skipped'
+        });
+        return;
     }
 
-    const useDirect = process.env.GRAPH_AI_DIRECT === 'true';
-    const taskId = useDirect
-      ? await this.graphGenerationService.requestAddConversationDirect(userId, conversationId)
-      : await this.graphGenerationService.requestAddConversationViaQueue(userId, conversationId);
-
     res.status(202).json({
-      message: useDirect ? 'Add conversation to graph started (Direct)' : 'Add conversation to graph queued',
+      message: 'Add node to graph queued',
       taskId: taskId,
       status: 'queued',
     });

@@ -33,10 +33,15 @@
       "description": "The timestamp of the conversation (ISO 8601) or null.",
       "oneOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }]
     },
-    "numMessages": {
-      "description": "The number of messages included in this node.",
+    "numSections": {
+      "description": "The number of messages or sections included in this node.",
       "type": "integer",
       "minimum": 0
+    },
+    "sourceType": {
+      "description": "The source type of the node data.",
+      "type": "string",
+      "enum": ["chat", "markdown", "notion"]
     },
     "createdAt": {
       "description": "Creation timestamp (ISO 8601 UTC).",

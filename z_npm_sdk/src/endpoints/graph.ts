@@ -40,7 +40,8 @@ export class GraphApi {
    *    - `clusterId` (string): 클러스터 ID
    *    - `clusterName` (string): 클러스터 이름
    *    - `timestamp` (string | null): 타임스탬프
-   *    - `numMessages` (number): 메시지 수
+   *    - `numMessages` (number): 메시지 턴 수
+   *    - `sourceType` ('chat' | 'markdown' | 'notion', optional): 출처
    * @returns 생성 또는 업데이트된 노드 정보
    * @example
    * const response = await client.graph.createNode({
@@ -50,7 +51,8 @@ export class GraphApi {
    *   clusterId: 'cluster-a',
    *   clusterName: 'Project Alpha',
    *   timestamp: new Date().toISOString(),
-   *   numMessages: 5
+   *   numMessages: 5,
+   *   sourceType: 'chat'
    * });
    *
    * console.log(response.data);
@@ -62,7 +64,8 @@ export class GraphApi {
    *   clusterId: 'cluster-a',
    *   clusterName: 'Project Alpha',
    *   timestamp: '...',
-   *   numMessages: 5
+   *   numMessages: 5,
+   *   sourceType: 'chat'
    * }
    */
   createNode(node: GraphNodeDto): Promise<HttpResponse<GraphNodeDto>> {
@@ -85,7 +88,8 @@ export class GraphApi {
    *     clusterId: 'cluster-a',
    *     clusterName: 'Project Alpha',
    *     timestamp: '...',
-   *     numMessages: 5
+   *     numMessages: 5,
+   *     sourceType: 'chat'
    *   },
    *   {
    *     id: 102,
@@ -94,7 +98,8 @@ export class GraphApi {
    *     clusterId: 'cluster-b',
    *     clusterName: 'Project Beta',
    *     timestamp: '...',
-   *     numMessages: 3
+   *     numMessages: 3,
+   *     sourceType: 'chat'
    *   }
    * ]
    */
@@ -118,7 +123,8 @@ export class GraphApi {
    *   clusterId: 'cluster-a',
    *   clusterName: 'Project Alpha',
    *   timestamp: '...',
-   *   numMessages: 5
+   *   numMessages: 5,
+   *   sourceType: 'chat'
    * }
    */
   getNode(nodeId: number): Promise<HttpResponse<GraphNodeDto>> {

@@ -1,4 +1,5 @@
 import { Readable } from 'stream';
+import { ulid } from 'ulid';
 
 import { JobHandler } from './JobHandler';
 import type { Container } from '../../bootstrap/container';
@@ -6,8 +7,9 @@ import { GraphGenResultPayload } from '../../shared/dtos/queue';
 import { logger } from '../../shared/utils/logger';
 import { mapAiOutputToSnapshot } from '../../shared/mappers/ai_graph_output.mapper';
 import { PersistGraphPayloadDto } from '../../shared/dtos/graph';
-import { AiGraphOutputDto } from '../../shared/dtos/ai_graph_output';
+import { AiGraphOutputDto, GraphSummary } from '../../shared/dtos/ai_graph_output';
 import { GraphFeaturesJsonDto } from '../../core/types/vector/graph-features';
+import { GraphSummaryDoc } from '../../core/types/persistence/graph.persistence';
 import { NotificationType } from '../notificationType';
 
 /**
@@ -96,7 +98,7 @@ export class GraphGenerationResultHandler implements JobHandler {
               const keywordsStr = conv.keywords.map(k => k.term).join(',');
 
               // Construct Metadata (Snake Case)
-              const metadata = {
+              const metadata: any = {
                 user_id: userId,
                 conversation_id: conv.orig_id,
                 orig_id: conv.orig_id,
@@ -105,7 +107,8 @@ export class GraphGenerationResultHandler implements JobHandler {
                 cluster_name: clusterName,
                 keywords: keywordsStr,
                 create_time: conv.create_time || 0,
-                num_messages: conv.num_messages,
+                num_messages: conv.num_sections || 0, // Fallback to 0 if undefined
+                source_type: conv.source_type || 'chat',
                 update_time: conv.update_time || 0
               };
 
@@ -123,7 +126,30 @@ export class GraphGenerationResultHandler implements JobHandler {
           }
         }
 
+        // 3.8. Summary DB 저장 (if included)
+        if (payload.summaryIncluded && payload.summaryS3Key) {
+          try {
+            logger.info({ taskId, userId }, 'Processing integrated graph summary from result');
+            const summaryJson = await storagePort.downloadJson<GraphSummary>(payload.summaryS3Key);
 
+            const summaryDoc: GraphSummaryDoc = {
+              id: ulid(), 
+              userId: userId,
+              overview: summaryJson.overview,
+              clusters: summaryJson.clusters,
+              patterns: summaryJson.patterns,
+              connections: summaryJson.connections,
+              recommendations: summaryJson.recommendations,
+              detail_level: summaryJson.detail_level,
+              generatedAt: summaryJson.generated_at || new Date().toISOString(), 
+            };
+
+            await graphService.upsertGraphSummary(userId, summaryDoc);
+            logger.info({ taskId, userId }, 'Integrated graph summary persisted to DB');
+          } catch (sumErr) {
+            logger.error({ err: sumErr, taskId, userId }, 'Failed to persist integrated graph summary (Non-fatal)');
+          }
+        }
 
         // 4. 성공 알림 전송
         await notiService.sendNotification(userId, NotificationType.GRAPH_GENERATION_COMPLETED, {

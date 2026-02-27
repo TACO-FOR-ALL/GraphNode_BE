@@ -18,7 +18,8 @@
  * @param clusterId - 노드가 속한 클러스터 ID
  * @param clusterName - 노드가 속한 클러스터 이름
  * @param timestamp - 대화 발생 시각(ISO 8601) 또는 null
- * @param numMessages - 노드에 포함된 메시지 수
+ * @param numMessages - 노드에 포함된 메시지 턴/섹션 수
+ * @param sourceType - 노드의 출처 ('chat' | 'markdown' | 'notion')
  * @param createdAt - 생성 시각(ISO 8601 UTC)
  * @param updatedAt - 갱신 시각(ISO 8601 UTC)
  * @remarks
@@ -45,8 +46,10 @@ export interface GraphNodeDto {
   clusterName: string;
   /** 대화 발생 시각(ISO 8601) 또는 null */
   timestamp: string | null;
-  /** 노드에 포함된 메시지 수 */
+  /** 노드에 포함된 메시지 턴 수 또는 빈도 수 */
   numMessages: number;
+  /** 노드 출처 유형 */
+  sourceType?: 'chat' | 'markdown' | 'notion';
   /** 임베딩 (선택) */
   embedding?: number[];
   
@@ -147,6 +150,8 @@ export interface GraphStatsDto {
   clusters: number;
   /** 통계를 생성한 시각(ISO 8601 UTC) */
   generatedAt?: string;
+  /** 통계를 수정(AddNode)한 시각(ISO 8601 UTC) */
+  updatedAt?: string;
   /** 추가 메타데이터 */
   metadata?: Record<string, unknown>;
 }

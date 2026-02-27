@@ -19,3 +19,14 @@ export interface GraphGenerationResponseDto {
    */
   status: string;
 }
+
+/**
+ * Options for generating a graph.
+ * @public
+ */
+export interface GenerateGraphOptions {
+  /**
+   * 그래프 생성과 함께 요약을 동시 생성할지 여부 (기본값: true)
+   */
+  includeSummary?: boolean;
+}

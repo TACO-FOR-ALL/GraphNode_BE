@@ -1,15 +1,12 @@
-/**
- * Neo4jGraphAdapter (Deferred)
- *
- * 이 파일은 현재 사용되지 않으며, 빌드 오류 방지를 위해 전체 주석 처리되었습니다.
- * 추후 Neo4j 구현 시 다시 활성화할 예정입니다.
- */
-
-/*
 import { Driver, Session, Transaction } from 'neo4j-driver';
 import { GraphNeo4jStore, Neo4jOptions } from '../../core/ports/GraphNeo4jStore';
 import { getNeo4jDriver } from '../db/neo4j';
 import { GraphNodeDoc, GraphEdgeDoc, GraphClusterDoc, GraphStatsDoc } from '../../core/types/persistence/graph.persistence';
+import { 
+  MicroscopeEntityNode, 
+  MicroscopeChunkNode, 
+  MicroscopeRelEdge 
+} from '../../core/types/neo4j/microscope.neo4j';
 import { logger } from '../../shared/utils/logger';
 import { UpstreamError } from '../../shared/errors/domain';
 
@@ -207,7 +204,193 @@ export class Neo4jGraphAdapter implements GraphNeo4jStore {
       numMessages: 0
     };
   }
-}
-*/
 
-export {};
+
+  // --- Microscope RAG (Entity / Chunk / REL) ---
+
+  /**
+   * Microscope Entity 노드를 저장하거나 업데이트합니다.
+   * 'Entity' 라벨을 기준으로 병합합니다.
+   * 
+   * @param node Entity 노드 정보 (uuid 포함 필수)
+   * @param options Transaction 등의 옵션
+   */
+  async upsertMicroscopeEntityNode(node: MicroscopeEntityNode, options?: Neo4jOptions): Promise<void> {
+    const query = `
+      MERGE (n:Entity {name: $props.name, user_id: $props.user_id, group_id: $props.group_id})
+      ON CREATE SET n.uuid = $uuid, n += $props, n.created_at = datetime(), n.updated_at = datetime()
+      ON MATCH SET n += $props, n.updated_at = datetime()
+    `;
+    const props = {
+      name: node.name,
+      types: node.types,
+      descriptions: node.descriptions,
+      chunk_ids: node.chunk_ids,
+      source_ids: node.source_ids,
+      user_id: node.user_id,
+      group_id: node.group_id,
+      // created_at is handled by DB datetime()
+    };
+    try {
+      await this.runQuery(query, { uuid: node.uuid, props }, options);
+    } catch (e) {
+      throw new UpstreamError('Neo4j upsertMicroscopeEntityNode failed', { cause: e as any });
+    }
+  }
+
+  /**
+   * 고유 식별자(uuid)로 Microscope Entity 노드를 조회합니다.
+   * 
+   * @param uuid Entity 노드의 고유 식별자
+   */
+  async findMicroscopeEntityNode(uuid: string, options?: Neo4jOptions): Promise<MicroscopeEntityNode | null> {
+    const query = `
+      MATCH (n:Entity {uuid: $uuid})
+      RETURN n
+    `;
+    const result = await this.runQuery(query, { uuid }, options);
+    if (result.records.length === 0) return null;
+    return result.records[0].get('n').properties as MicroscopeEntityNode;
+  }
+
+  /**
+   * 고유 식별자(uuid)를 기반으로 Microscope Entity 노드 및 연관된 엣지들을 모두 삭제합니다.
+   */
+  async deleteMicroscopeEntityNode(uuid: string, options?: Neo4jOptions): Promise<void> {
+    const query = `
+      MATCH (n:Entity {uuid: $uuid})
+      DETACH DELETE n
+    `;
+    await this.runQuery(query, { uuid }, options);
+  }
+
+  /**
+   * Microscope Chunk 노드를 저장하거나 업데이트합니다.
+   * 'Chunk' 라벨을 사용합니다.
+   */
+  async upsertMicroscopeChunkNode(node: MicroscopeChunkNode, options?: Neo4jOptions): Promise<void> {
+    const query = `
+      MERGE (c:Chunk {uuid: $uuid, user_id: $props.user_id, group_id: $props.group_id})
+      ON CREATE SET c += $props, c.created_at = datetime()
+      ON MATCH SET c += $props
+    `;
+    const props = {
+      text: node.text,
+      source_id: node.source_id,
+      chunk_index: node.chunk_index,
+      user_id: node.user_id,
+      group_id: node.group_id,
+      created_at: node.created_at || new Date().toISOString()
+    };
+    try {
+      await this.runQuery(query, { uuid: node.uuid, props }, options);
+    } catch (e) {
+      throw new UpstreamError('Neo4j upsertMicroscopeChunkNode failed', { cause: e as any });
+    }
+  }
+
+  /**
+   * 고유 식별자(uuid)로 Microscope Chunk 노드를 조회합니다.
+   */
+  async findMicroscopeChunkNode(uuid: string, options?: Neo4jOptions): Promise<MicroscopeChunkNode | null> {
+    const query = `
+      MATCH (c:Chunk {uuid: $uuid})
+      RETURN c
+    `;
+    const result = await this.runQuery(query, { uuid }, options);
+    if (result.records.length === 0) return null;
+    return result.records[0].get('c').properties as MicroscopeChunkNode;
+  }
+
+  /**
+   * 고유 식별자(uuid)를 기반으로 Microscope Chunk 노드를 엣지와 함께 삭제합니다.
+   */
+  async deleteMicroscopeChunkNode(uuid: string, options?: Neo4jOptions): Promise<void> {
+    const query = `
+      MATCH (c:Chunk {uuid: $uuid})
+      DETACH DELETE c
+    `;
+    await this.runQuery(query, { uuid }, options);
+  }
+
+  /**
+   * Microscope Entity 간의 'REL' 관계 엣지를 저장하거나 업데이트합니다.
+   */
+  async upsertMicroscopeRelEdge(edge: MicroscopeRelEdge, options?: Neo4jOptions): Promise<void> {
+    const query = `
+      MATCH (s:Entity {user_id: $props.user_id, group_id: $props.group_id}) WHERE s.name = $start OR s.uuid = $start
+      MATCH (t:Entity {user_id: $props.user_id, group_id: $props.group_id}) WHERE t.name = $target OR t.uuid = $target
+      MERGE (s)-[r:REL {type: $props.type, user_id: $props.user_id, group_id: $props.group_id}]->(t)
+      ON CREATE SET r.uuid = $uuid, r.weight = $props.weight, r.source_ids = $props.source_ids, r.created_at = datetime(), r.updated_at = datetime()
+      ON MATCH SET r.weight = $props.weight, r.source_ids = $props.source_ids, r.updated_at = datetime()
+    `;
+    const props = {
+      type: edge.type,
+      weight: edge.weight,
+      source_ids: edge.source_ids,
+      user_id: edge.user_id,
+      group_id: edge.group_id,
+      start: edge.start,
+      target: edge.target,
+      created_at: edge.created_at || new Date().toISOString()
+    };
+    try {
+      await this.runQuery(query, { start: edge.start, target: edge.target, uuid: edge.uuid, props }, options);
+    } catch (e) {
+      throw new UpstreamError('Neo4j upsertMicroscopeRelEdge failed', { cause: e as any });
+    }
+  }
+
+  /**
+   * Microscope Entity 간의 'REL' 엣지를 삭제합니다.
+   */
+  async deleteMicroscopeRelEdge(uuid: string, options?: Neo4jOptions): Promise<void> {
+    const query = `
+      MATCH ()-[r:REL {uuid: $uuid}]-()
+      DELETE r
+    `;
+    await this.runQuery(query, { uuid }, options);
+  }
+
+  /**
+   * Entity가 추출된 원래의 Chunk와의 연결고리('EXTRACTED_FROM' 엣지)를 저장합니다.
+   * 
+   * @param entityUuid 출처가 된 Entity의 uuid
+   * @param chunkUuid 연관된 Chunk의 uuid
+   */
+  async upsertMicroscopeExtractedFromEdge(entityUuid: string, chunkUuid: string, options?: Neo4jOptions): Promise<void> {
+    const query = `
+      MATCH (e:Entity {uuid: $entityUuid})
+      MATCH (c:Chunk {uuid: $chunkUuid})
+      MERGE (e)-[r:EXTRACTED_FROM]->(c)
+    `;
+    try {
+      await this.runQuery(query, { entityUuid, chunkUuid }, options);
+    } catch (e) {
+      throw new UpstreamError('Neo4j upsertMicroscopeExtractedFromEdge failed', { cause: e as any });
+    }
+  }
+
+  /**
+   * Microscope Entity <-> Chunk 간의 'EXTRACTED_FROM' 엣지를 삭제합니다.
+   */
+  async deleteMicroscopeExtractedFromEdge(entityUuid: string, chunkUuid: string, options?: Neo4jOptions): Promise<void> {
+    const query = `
+      MATCH (e:Entity {uuid: $entityUuid})-[r:EXTRACTED_FROM]->(c:Chunk {uuid: $chunkUuid})
+      DELETE r
+    `;
+    await this.runQuery(query, { entityUuid, chunkUuid }, options);
+  }
+
+  /**
+   * 해당 워크스페이스(group_id)에 속한 모든 Microscope 데이터를 파기합니다. (Cascade Delete용)
+   * Entity와 Chunk 노드를 지우면 연결된 엣지도 함께(DETACH) 삭제됩니다.
+   */
+  async deleteMicroscopeWorkspaceGraphs(groupId: string, options?: Neo4jOptions): Promise<void> {
+    const query = `
+      MATCH (n {group_id: $groupId})
+      DETACH DELETE n
+    `;
+    await this.runQuery(query, { groupId }, options);
+  }
+}

@@ -11,7 +11,8 @@
  * @property clusterId 클러스터 ID
  * @property clusterName 클러스터 이름
  * @property timestamp 타임스탬프 (ISO 8601, null 가능)
- * @property numMessages 메시지 수
+ * @property numMessages 노드에 포함된 메시지 턴 수 (채팅/마크다운 문단)
+ * @property sourceType 노드의 출처 ('chat' | 'markdown' | 'notion')
  * @property createdAt 생성 일시 (ISO 8601)
  * @property updatedAt 수정 일시 (ISO 8601)
  */
@@ -23,6 +24,7 @@ export interface GraphNodeDto {
   clusterName: string;
   timestamp: string | null;
   numMessages: number;
+  sourceType?: 'chat' | 'markdown' | 'notion';
   createdAt?: string;
   updatedAt?: string;
   deletedAt?: string;
@@ -100,6 +102,7 @@ export interface GraphStatsDto {
   edges: number;
   clusters: number;
   generatedAt?: string;
+  updatedAt?: string;
   metadata?: Record<string, unknown>;
 }
 

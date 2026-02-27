@@ -14,8 +14,6 @@
         { "name": "SQS_RESULT_QUEUE_URL", "value": "https://sqs.ap-northeast-2.amazonaws.com/571721033550/taco-graphnode-response-graph-sqs" },
         { "name": "S3_PAYLOAD_BUCKET", "value": "taco5-graphnode-graphdata-s3" },
         { "name": "S3_FILE_BUCKET", "value": "taco5-graphnode-filedata-chat-and-note-s3" },
-        { "name": "NEO4J_URI", "value": "bolt://localhost:7687" },
-        { "name": "NEO4J_USERNAME", "value": "neo4j" },
         { "name": "CHROMA_API_URL", "value": "http://localhost:8000" }
       ],
       "secrets": [
@@ -31,6 +29,8 @@
         { "name": "OAUTH_APPLE_CLIENT_ID", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:OAUTH_APPLE_CLIENT_ID::" },
         { "name": "OAUTH_APPLE_PRIVATE_KEY", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:OAUTH_APPLE_PRIVATE_KEY::" },
         {"name" : "FIREBASE_CREDENTIALS_JSON", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:FIREBASE_CREDENTIALS_JSON::"},
+        {"name" : "NEO4J_URI", "valueFrom" : "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:NEO4J_URI::"},
+        {"name" : "NEO4J_USERNAME", "valueFrom" : "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:NEO4J_USERNAME::"},
         { "name": "NEO4J_PASSWORD", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:NEO4J_PASSWORD::" },
         { "name": "CHROMA_API_KEY", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:CHROMA_API_KEY::" },
         { "name": "CHROMA_TENANT", "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:CHROMA_TENANT::" },

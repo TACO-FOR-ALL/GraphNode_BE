@@ -72,6 +72,10 @@ GraphNode Backend는 **Hexagonal Architecture (Ports and Adapters)** 패턴을 �
 - **구현체**: `GraphRepositoryMongo` (Mongoose/MongoDB)
 
 ### **GraphNeo4jStore** (`src/core/ports/GraphNeo4jStore.ts`)
-- **역할**: 그래프 분석 및 시각화용 데이터 저장 (Optional).
+- **역할**: 대화형 지식 그래프 및 다중 문서(Microscope) 기반 복합 그래프 노드/엣지 데이터 영속화.
 - **구현체**: `Neo4jGraphAdapter` (Neo4j Driver)
-- **비고**: 현재는 MongoDB 기반의 `GraphDocumentStore`가 메인 저장소이며, Neo4j는 분석용 보조 저장소로 사용됩니다.
+- **비고**: Cypher 쿼리 기반의 복잡한 연관 데이터 탐색과 시각화를 위해 지식 그래프의 메인 저장소로서 기능합니다.
+
+### **MicroscopeWorkspaceStore** (`src/core/ports/MicroscopeWorkspaceStore.ts`)
+- **역할**: 다중 문서 기반 지식 그래프 생성을 위한 워크스페이스(그룹) 및 개별 문서 리소스/분석 상태 관리.
+- **구현체**: `MicroscopeWorkspaceRepositoryMongo` (Mongoose/MongoDB)

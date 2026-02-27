@@ -22,6 +22,8 @@ import { initSentry } from '../shared/utils/sentry';
 import { JobHandler } from './handlers/JobHandler';
 import { GraphGenerationResultHandler } from './handlers/GraphGenerationResultHandler';
 import { GraphSummaryResultHandler } from './handlers/GraphSummaryResultHandler';
+import { AddNodeResultHandler } from './handlers/AddNodeResultHandler';
+import { MicroscopeIngestResultHandler } from './handlers/MicroscopeIngestResultHandler';
 
 async function startWorker() {
   initSentry();
@@ -46,7 +48,8 @@ async function startWorker() {
   const handlers: Record<string, JobHandler> = {
     [TaskType.GRAPH_GENERATION_RESULT]: new GraphGenerationResultHandler(),
     [TaskType.GRAPH_SUMMARY_RESULT]: new GraphSummaryResultHandler(),
-    // 추후 추가: [TaskType.OTHER_TASK]: new OtherTaskHandler(),
+    [TaskType.ADD_NODE_RESULT]: new AddNodeResultHandler(),
+    [TaskType.MICROSCOPE_INGEST_RESULT]: new MicroscopeIngestResultHandler(),
   };
 
   const queueUrl = env.SQS_RESULT_QUEUE_URL || '';
@@ -84,9 +87,12 @@ async function startWorker() {
         const payload = body.payload;
         // 컨텍스트(Context) 정보 구성
         // Worker는 HTTP 요청을 받지 않으므로, 큐 메시지 데이터를 활용하여 가상의 요청 컨텍스트를 만듭니다.
+
+        const userId = (payload as any)?.userId || (payload as any)?.user_id;
+
         const ctx = {
           correlationId: taskId,     // 로그 추적 시 이 작업을 식별하기 위한 고유 ID (Trace ID 역할)
-          userId: payload?.userId,   // 작업을 요청한 사용자 ID
+          userId: userId,   // 작업을 요청한 사용자 ID
         };
 
         /**
@@ -117,7 +123,8 @@ async function startWorker() {
           return Sentry.withIsolationScope(async (isolationScope) => {
             // 이 스코프 안에서 발생하는 모든 에러/로그에는 현재 작업의 타입과 사용자 정보가 자동으로 태그(Tagging)됩니다.
             isolationScope.setTag('task_type', taskType);
-            if (payload?.userId) isolationScope.setUser({ id: payload.userId });
+            const p: any = payload;
+            if (p?.userId || p?.user_id) isolationScope.setUser({ id: p.userId || p.user_id });
 
             /**
              * 3. Sentry.startSpan(..., callback)

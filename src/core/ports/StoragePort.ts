@@ -30,6 +30,14 @@ export interface StoragePort {
   downloadStream(key: string, options?: { bucketType?: 'payload' | 'file' }): Promise<Readable>;
 
   /**
+   * 스토리지에서 전체 객체를 다운로드합니다 (메타데이터 포함).
+   * @param key 객체 키
+   * @param options 옵션 (bucketType)
+   * @returns 파일 버퍼와 메타데이터
+   */
+  downloadFile(key: string, options?: { bucketType?: 'payload' | 'file' }): Promise<{ buffer: Buffer; contentType?: string; contentLength?: number }>;
+
+  /**
    * 스토리지에서 JSON 파일을 다운로드하여 파싱된 객체로 반환합니다.
    * @param key 파일 키
    * @param options 추가 옵션 (예: bucketType)

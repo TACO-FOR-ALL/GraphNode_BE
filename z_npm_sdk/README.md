@@ -6,6 +6,14 @@
 
 ---
 
+## 📖 SDK 내부 구조 가이드 (Architecture)
+
+SDK의 내부 설계 원리, 각 파일의 역할, 데이터 흐름에 대해 알고 싶다면 아래 문서를 참고하세요.
+
+- 🔧 [SDK 아키텍처 가이드 (초보자용)](docs/SDK_ARCHITECTURE.md): `http-builder.ts`, `client.ts`, `endpoints/` 등 핵심 구조 설명
+
+---
+
 ## 📦 설치 (Installation)
 
 ```bash
@@ -490,7 +498,7 @@ renderGraph(res.data.nodes, res.data.edges);
 | Method | Endpoint | Description | Status |
 | :--- | :--- | :--- | :--- |
 | `generateGraph()` | `POST /generate` | 그래프 생성 요청 | 202 |
-| `addConversation(...)` | `POST /add...` | 대화 추가 요청 | 202 |
+| `addNode()` | `POST /add-node` | 대화(배치) 추가 요청 | 202 |
 | `requestSummary()` | `POST /summary` | 요약 생성 요청 | 202, 404 |
 | `getSummary()` | `GET /summary` | 요약 결과 조회 | 200 |
 | `deleteSummary()` | `DELETE /summary` | 요약 내용 삭제 | 204 |
@@ -499,7 +507,7 @@ renderGraph(res.data.nodes, res.data.edges);
 #### **Detailed Usage**
 
 <details>
-<summary><b>generateGraph() / addConversation(id)</b></summary>
+<summary><b>generateGraph() / addNode()</b></summary>
 
 - **Returns**: `Promise<HttpResponse<GraphGenerationResponseDto>>`
   - `taskId`: string, `status`: 'queued', `message`: string
@@ -507,6 +515,9 @@ renderGraph(res.data.nodes, res.data.edges);
 ```typescript
 const res = await client.graphAi.generateGraph();
 console.log('Task started:', res.data.taskId);
+
+const res2 = await client.graphAi.addNode();
+console.log('Add node task started:', res2.data.taskId);
 ```
 </details>
 
@@ -676,6 +687,56 @@ console.log('New Messages:', res.data.messages.length);
 - **Example**:
 ```typescript
 const res = await client.health.get(); // { ok: true }
+```
+</details>
+
+---
+
+### 🔬 9. 마이크로스코프 (Microscope: `client.microscope`)
+
+#### **Summary**
+
+| Method | Endpoint | Description | Status |
+| :--- | :--- | :--- | :--- |
+| `listWorkspaces()` | `GET /v1/microscope` | 워크스페이스 목록 조회 | 200 |
+| `getWorkspace(groupId)` | `GET /v1/microscope/:groupId` | 워크스페이스 상세 조회 | 200 |
+| `createWorkspaceWithDocuments(...)`| `POST /v1/microscope` | 신규 생성 및 문서 이관 | 201 |
+| `addDocumentsToWorkspace(...)` | `POST /v1/microscope/:groupId/documents`| 문서 병합 및 처리 시작 | 202 |
+| `deleteWorkspace(groupId)` | `DELETE /v1/microscope/:groupId` | 워크스페이스(및 그래프) 파기 | 204 |
+
+#### **Detailed Usage**
+
+<details>
+<summary><b>createWorkspaceWithDocuments(name, files?, schemaName?)</b></summary>
+
+- **Returns**: `Promise<HttpResponse<MicroscopeWorkspace>>`
+- **Example**:
+```typescript
+const files = [new File(['content'], 'test.pdf')];
+const res = await client.microscope.createWorkspaceWithDocuments('Project A', files);
+console.log('Created ID:', res.data._id);
+```
+</details>
+
+<details>
+<summary><b>addDocumentsToWorkspace(groupId, files, schemaName?)</b></summary>
+
+- **Returns**: `Promise<HttpResponse<{ message: string }>>`
+- **Example**:
+```typescript
+const files = [new File(['content'], 'test2.md')];
+await client.microscope.addDocumentsToWorkspace('group_123', files);
+```
+</details>
+
+<details>
+<summary><b>deleteWorkspace(groupId)</b></summary>
+
+- **Returns**: `Promise<HttpResponse<void>>`
+- **Description**: 워크스페이스와 연관된 지식 그래프 및 메타데이터를 파기합니다.
+- **Example**:
+```typescript
+await client.microscope.deleteWorkspace('group_123');
 ```
 </details>
 

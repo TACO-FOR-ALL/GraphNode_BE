@@ -41,6 +41,7 @@ export function toGraphNodeDoc(dto: GraphNodeDto): GraphNodeDoc {
     clusterName: dto.clusterName,
     timestamp: dto.timestamp,
     numMessages: dto.numMessages,
+    sourceType: dto.sourceType,
     embedding: dto.embedding,
     createdAt: dto.createdAt ?? now,
     updatedAt: dto.updatedAt ?? now,
@@ -62,6 +63,7 @@ export function toGraphNodeDto(doc: GraphNodeDoc): GraphNodeDto {
     clusterName: doc.clusterName,
     timestamp: doc.timestamp,
     numMessages: doc.numMessages,
+    sourceType: doc.sourceType,
     embedding: doc.embedding,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
@@ -177,6 +179,7 @@ export function toGraphStatsDoc(dto: GraphStatsDto): GraphStatsDoc {
     edges: dto.edges,
     clusters: dto.clusters,
     generatedAt: dto.generatedAt ?? now,
+    updatedAt: dto.updatedAt,
     metadata: dto.metadata ?? {},
   };
 }
@@ -194,6 +197,7 @@ export function toGraphStatsDto(doc: GraphStatsDoc): GraphStatsDto {
     edges: doc.edges,
     clusters: doc.clusters,
     generatedAt: doc.generatedAt,
+    updatedAt: doc.updatedAt,
     metadata: doc.metadata,
   };
 }

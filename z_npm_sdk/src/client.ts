@@ -10,7 +10,9 @@ import { NoteApi } from './endpoints/note.js';
 import { AppleAuthApi } from './endpoints/auth.apple.js';
 import { SyncApi } from './endpoints/sync.js';
 import { AiApi } from './endpoints/ai.js';
-import  { NotificationApi } from './endpoints/notification.js';
+import { NotificationApi } from './endpoints/notification.js';
+import { FileApi } from './endpoints/file.js';
+import { MicroscopeApi } from './endpoints/microscope.js';
 
 /**
  * GraphNode 클라이언트 옵션
@@ -37,6 +39,9 @@ export interface GraphNodeClientOptions extends Omit<BuilderOptions, 'baseUrl' |
  * @property appleAuth 애플 인증 API
  * @property sync 데이터 동기화 API
  * @property ai AI 채팅 API
+ * @property notification SSE 알림 API
+ * @property file 파일 업로드/다운로드 API
+ * @property microscope 마이크로스코프 API
  */
 export class GraphNodeClient {
   readonly health: HealthApi;
@@ -50,6 +55,8 @@ export class GraphNodeClient {
   readonly sync: SyncApi;
   readonly ai: AiApi;
   readonly notification: NotificationApi;
+  readonly file: FileApi;
+  readonly microscope: MicroscopeApi;
 
   /**
    * HTTP 요청 빌더 인스턴스.
@@ -116,6 +123,8 @@ export class GraphNodeClient {
     this.sync = new SyncApi(this.rb);
     this.ai = new AiApi(this.rb);
     this.notification = new NotificationApi(this.rb); 
+    this.file = new FileApi(this.rb);
+    this.microscope = new MicroscopeApi(this.rb);
   }
 
   /**

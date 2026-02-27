@@ -51,9 +51,195 @@ paths:
           content:
             application/problem+json:
               schema:
-                $ref: ../schemas/problem.json
+                $ref: '../schemas/problem.json'
               example:
                 $ref: './examples/problem-404.json'
+  /v1/microscope:
+    get:
+      summary: List all user workspaces
+      tags: [Microscope]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../schemas/microscope.json'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '500':
+          description: Internal Server Error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+    post:
+      summary: Create new workspace and upload documents
+      tags: [Microscope]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                schemaName:
+                  type: string
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+              required: [name]
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/microscope.json'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '500':
+          description: Internal Server Error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+  /v1/microscope/{groupId}:
+    get:
+      summary: Get detailed workspace status
+      tags: [Microscope]
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/microscope.json'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+    delete:
+      summary: Delete workspace and associated graph
+      tags: [Microscope]
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '500':
+          description: Internal Server Error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+  /v1/microscope/{groupId}/documents:
+    post:
+      summary: Add more documents to existing workspace
+      tags: [Microscope]
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                schemaName:
+                  type: string
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+              required: [files]
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '500':
+          description: Internal Server Error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
   /auth/google/start:
     get:
       summary: Start Google OAuth (redirects)
@@ -567,6 +753,47 @@ paths:
               schema: { $ref: ../schemas/problem.json }
         '502':
           description: Upstream error (AI provider failure)
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+  /v1/ai/files:
+    post:
+      summary: Upload files
+      description: Uploads files for AI consumption or attachments (like images or documents).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        '201':
+          description: Upload successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attachments:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        type: { type: string }
+                        url: { type: string }
+                        name: { type: string }
+                        mimeType: { type: string }
+                        size: { type: number }
+        '400':
+          description: Bad Request
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }
@@ -1646,6 +1873,17 @@ paths:
     post:
       summary: Generate graph from text (Async)
       description: Starts an asynchronous background task to generate a graph from the user's conversation history. Returns a task ID.
+      requestBody:
+        description: Options for graph generation.
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                includeSummary:
+                  type: boolean
+                  description: Whether to also generate a graph summary (3-mode pipeline).
       responses:
         '202':
           description: Task accepted
@@ -1784,18 +2022,13 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }
-  /v1/graph-ai/add-conversation/{conversationId}:
+  /v1/graph-ai/add-node:
     post:
-      summary: Add conversation to graph
-      description: Queues a process to add a specific conversation to the user's graph.
-      parameters:
-        - in: path
-          name: conversationId
-          required: true
-          schema: { type: string }
+      summary: Add updated conversation nodes to graph (Batch)
+      description: Queues a process to batch add conversations modified since the graph's last updated time.
       responses:
         '202':
-          description: Add conversation queued
+          description: Add node batch queued
           content:
             application/json:
               schema:
@@ -1804,18 +2037,8 @@ paths:
                   message: { type: string }
                   taskId: { type: string }
                   status: { type: string }
-        '400':
-          description: Invalid conversationId
-          content:
-            application/problem+json:
-              schema: { $ref: '../schemas/problem.json' }
         '401':
           description: Not authenticated
-          content:
-            application/problem+json:
-              schema: { $ref: '../schemas/problem.json' }
-        '404':
-          description: Conversation not found
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }

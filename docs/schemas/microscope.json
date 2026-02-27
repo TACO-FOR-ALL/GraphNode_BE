@@ -1,0 +1,52 @@
+{
+  "$id": "https://graphnode.dev/schemas/microscope.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["_id", "userId", "name", "documents", "createdAt", "updatedAt"],
+  "properties": {
+    "_id": { "type": "string" },
+    "userId": { "type": "string" },
+    "name": { "type": "string" },
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "s3Key", "fileName", "status", "createdAt", "updatedAt"],
+        "properties": {
+          "id": { "type": "string" },
+          "s3Key": { "type": "string" },
+          "fileName": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["PENDING", "PROCESSING", "COMPLETED", "FAILED"]
+          },
+          "sourceId": { "type": "string" },
+          "error": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false,
+  "example": {
+    "_id": "group_123",
+    "userId": "user_456",
+    "name": "Project A",
+    "documents": [
+      {
+        "id": "doc_789",
+        "s3Key": "microscope/user_456/group_123/doc_789_file.pdf",
+        "fileName": "file.pdf",
+        "status": "COMPLETED",
+        "sourceId": "source_abc",
+        "createdAt": "2024-01-01T00:00:00Z",
+        "updatedAt": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "createdAt": "2024-01-01T00:00:00Z",
+    "updatedAt": "2024-01-01T00:00:00Z"
+  }
+}
