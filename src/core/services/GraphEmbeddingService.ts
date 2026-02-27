@@ -425,8 +425,8 @@ export class GraphEmbeddingService {
         };
       }),
       stats: stats
-        ? { nodes: stats.nodes, edges: stats.edges, clusters: stats.clusters }
-        : { nodes: 0, edges: 0, clusters: 0 },
+        ? { nodes: stats.nodes, edges: stats.edges, clusters: stats.clusters, status: stats.status }
+        : { nodes: 0, edges: 0, clusters: 0, status: 'NOT_CREATED' },
     };
   }
 

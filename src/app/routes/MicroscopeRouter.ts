@@ -17,6 +17,9 @@ export function createMicroscopeRouter(controller: MicroscopeController): Router
   // 단일 워크스페이스 상세 조회
   router.get('/:groupId', requireLogin, controller.getWorkspace);
 
+  // 워크스페이스 실제 그래프(Nodes & Edges) 조회 (FIXME TODO 수정 필요)
+  router.get('/:groupId/graph', requireLogin, controller.getWorkspaceGraph);
+
   // 기존 워크스페이스에 문서 추가 업로드
   router.post('/:groupId/documents', requireLogin, upload.array('files'), controller.addDocumentsToWorkspace);
 

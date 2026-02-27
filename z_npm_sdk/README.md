@@ -433,7 +433,7 @@ await client.conversations.restoreMessage('conv-1', 'msg-1');
 | `deleteEdge(id)` | `DELETE /edges/:id` | 엣지 삭제 | 204 |
 | `listClusters()` | `GET /clusters` | 클러스터 전체 | 200 |
 | `getCluster(id)` | `GET /clusters/:id` | 클러스터 상세 | 200 |
-| `getStats()` | `GET /stats` | 그래프 통계 | 200 |
+| `getStats()` | `GET /stats` | 그래프 통계 및 상태 | 200 |
 | `getSnapshot()` | `GET /snapshot` | 전체 덤프 | 200 |
 
 #### **Detailed Usage**
@@ -467,7 +467,7 @@ await client.graph.createEdge({ source: 1, target: 2, type: 'hard', weight: 1 })
 <summary><b>getStats()</b></summary>
 
 - **Returns**: `Promise<HttpResponse<GraphStatsDto>>`
-  - `nodes`: number, `edges`: number, `clusters`: number
+  - `nodes`: number, `edges`: number, `clusters`: number, `status`: string ('NOT_CREATED' | 'CREATING' | 'CREATED' | 'UPDATING' | 'UPDATED')
 - **Example**:
 ```typescript
 const res = await client.graph.getStats();
@@ -507,16 +507,19 @@ renderGraph(res.data.nodes, res.data.edges);
 #### **Detailed Usage**
 
 <details>
-<summary><b>generateGraph() / addNode()</b></summary>
+<summary><b>generateGraph(options?) / addNode(options?)</b></summary>
 
+- **Parameters**: 
+  - `options`: `GenerateGraphOptions` (선택 사항)
+    - `includeSummary`: boolean (기본값: true). 그래프 생성 또는 추가 작업 완료 후 요약을 자동으로 생성할 지 여부를 결정합니다.
 - **Returns**: `Promise<HttpResponse<GraphGenerationResponseDto>>`
   - `taskId`: string, `status`: 'queued', `message`: string
 - **Example**:
 ```typescript
-const res = await client.graphAi.generateGraph();
+const res = await client.graphAi.generateGraph({ includeSummary: true });
 console.log('Task started:', res.data.taskId);
 
-const res2 = await client.graphAi.addNode();
+const res2 = await client.graphAi.addNode({ includeSummary: false });
 console.log('Add node task started:', res2.data.taskId);
 ```
 </details>

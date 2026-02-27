@@ -187,7 +187,10 @@ infisical run --env=prod -- npm start
 개발에 참여하시거나 코드 스타일을 확인하시려면 아래 가이드를 참고하세요.
 
 - **[Code Style & Contribution Guide](docs/architecture/CODE_STYLE.md)**: 네이밍 컨벤션, 아키텍처 패턴, 에러 핸들링 규칙 등
-- **[Daily Dev Logs](docs/guides/Daily)**: 일별 작업 상세 기록 
+- **[Daily Dev Logs](docs/guides/Daily)**: 일별 작업 상세 기록
+  - [2026-02-28 Graph Status Tracking](docs/guides/Daily/20260228-graph-status-tracking.md)
+  - [2026-02-28 FE SDK Graph Status](docs/guides/Daily/20260228-fe-sdk-graph-status.md)
+  - [2026-02-27 Microscope Architecture](docs/guides/Daily/20260227-microscope-architecture.md)
   - [2026-02-20 AI Provider Refactor](docs/guides/Daily/20260220-ai-provider-refactor.md)
   - [2026-02-21 빈 데이터 처리 통일 및 S3 업로드 버그 수정](docs/guides/Daily/20260221-unified-empty-data-and-s3-upload-fix.md)
   - [2026-02-22 OpenAPI and FE SDK Sync](docs/guides/Daily/20260222-openapi-sdk-sync.md)

@@ -309,7 +309,10 @@ export class GraphController {
     const userId = getUserIdFromRequest(req)!;
 
     // 서비스 호출 (통계 조회)
-    const stats = await this.graphEmbeddingService.getStats(userId);
+    let stats = await this.graphEmbeddingService.getStats(userId);
+    if (!stats) {
+      stats = { userId, nodes: 0, edges: 0, clusters: 0, status: 'NOT_CREATED', generatedAt: new Date().toISOString() };
+    }
 
     res.status(200).json(stats);
   }

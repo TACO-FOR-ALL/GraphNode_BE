@@ -57,13 +57,28 @@ export class MicroscopeController {
 
   /**
    * 단일 워크스페이스 상세 정보를 조회합니다.
-   * FIXME : 이후 workspace의 실제 Graph 가져오는 api 따로 구분되게 구축해야 함
    */
   getWorkspace = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { groupId } = req.params;
       const workspace = await this.microscopeService.getWorkspaceActivity(getUserIdFromRequest(req)!, groupId);
       res.status(200).json(workspace);
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  /**
+   * 워크스페이스의 실제 그래프 데이터(Nodes & Edges)를 조회합니다.
+   * FIXME TODO : Neo4j에서 groupId에 해당하는 실제 그래프 데이터를 반환하는 로직 구현 필요
+   */
+  getWorkspaceGraph = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { groupId } = req.params;
+      // const userId = getUserIdFromRequest(req)!;
+      // const graphData = await this.microscopeService.getWorkspaceGraph(userId, groupId);
+      // res.status(200).json(graphData);
+      res.status(501).json({ message: 'Not Implemented' });
     } catch (err) {
       next(err);
     }

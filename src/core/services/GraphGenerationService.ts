@@ -119,6 +119,16 @@ export class GraphGenerationService {
       taskId = `task_${userId}_${ulid()}`;
       const s3Key = `graph-generation/${taskId}/input.json`;
 
+      // 상태 변경: CREATING
+      await this.graphEmbeddingService.saveStats({
+        userId,
+        nodes: 0,
+        edges: 0,
+        clusters: 0,
+        status: 'CREATING',
+        generatedAt: new Date().toISOString(),
+      });
+
       //logger.info({ userId, taskId }, 'Preparing graph generation request (S3 + SQS)');
 
       // 3. 데이터 수집 및 S3 업로드
@@ -392,6 +402,10 @@ export class GraphGenerationService {
       // 5. Upload to S3
       const payloadJson = JSON.stringify(batchPayload);
       await this.storagePort.upload(s3Key, payloadJson, 'application/json');
+
+      // 상태 변경: UPDATING
+      stats.status = 'UPDATING';
+      await this.graphEmbeddingService.saveStats(stats);
 
       // 6. Send SQS message (AddNodeRequestPayload 변경점에 유의)
       // 현재 AddNodeRequestPayload 규격에 맞춥니다 (conversationId는 dummy 값 혹은 첫번째 값)

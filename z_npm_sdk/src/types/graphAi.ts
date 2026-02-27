@@ -21,8 +21,10 @@ export interface GraphGenerationResponseDto {
 }
 
 /**
- * Options for generating a graph.
+ * Options for generating or updating a graph.
  * @public
+ * @property includeSummary - 그래프 처리(생성 또는 노드 추가) 완료 후 요약(Summary) 단계를 연달아 수행할지 여부를 결정합니다. 기본값은 true입니다.
+ * 이 값이 true일 경우, 백엔드에서 그래프 생성이 성공적으로 완료되면 백그라운드 워커가 자동으로 Summary 작업을 대기열(Queue)에 추가합니다.
  */
 export interface GenerateGraphOptions {
   /**

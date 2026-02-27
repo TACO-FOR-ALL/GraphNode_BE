@@ -57,6 +57,17 @@ export class MicroscopeApi {
   }
 
   /**
+   * 워크스페이스의 실제 그래프 데이터(Nodes & Edges)를 조회합니다.
+   * FIXME TODO: Neo4j에서 groupId에 해당하는 실제 그래프 데이터를 반환하는 로직 구현 필요
+   * 
+   * @param groupId 조회할 워크스페이스 ID
+   * @returns {Promise<HttpResponse<any[]>>} 데이터 연동 시 Any 타입 구체화 필요
+   */
+  async getWorkspaceGraph(groupId: string): Promise<HttpResponse<any[]>> {
+    return this.rb.path(`/${groupId}/graph`).get<any[]>();
+  }
+
+  /**
    * 기존 워크스페이스에 새로운 파일들을 추가 업로드하여 처리합니다.
    *
    * @param groupId 문서를 추가할 워크스페이스 ID

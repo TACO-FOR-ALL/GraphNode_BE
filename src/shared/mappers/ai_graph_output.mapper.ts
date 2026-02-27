@@ -95,10 +95,11 @@ export function mapAiOutputToSnapshot(output: AiGraphOutputDto, userId: string):
     nodes: output.metadata?.total_nodes || output.nodes.length,
     edges: output.metadata?.total_edges || output.edges.length,
     clusters: output.metadata?.total_clusters || clusters.length,
+    status: 'CREATED',
     generatedAt: generatedAt,
     metadata: {
       // 원본 메타데이터의 나머지 부분도 보존하고 싶다면 여기에 추가
-      source_generated_at: output.metadata.generated_at,
+      source_generated_at: output.metadata?.generated_at,
     },
   };
 

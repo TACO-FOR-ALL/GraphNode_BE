@@ -102,6 +102,7 @@ export interface GraphSubclusterDoc {
  * @property nodes 노드 수
  * @property edges 엣지 수
  * @property clusters 클러스터 수
+ * @property status 현재 상태
  * @property generatedAt 생성 일시
  * @property metadata 메타데이터
  */
@@ -111,6 +112,7 @@ export interface GraphStatsDoc {
   nodes: number;
   edges: number;
   clusters: number;
+  status: 'NOT_CREATED' | 'CREATING' | 'CREATED' | 'UPDATING' | 'UPDATED';
   generatedAt: string;
   updatedAt?: string;
   metadata: Record<string, unknown>;
