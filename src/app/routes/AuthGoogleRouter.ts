@@ -4,7 +4,7 @@
  */
 import { Router } from 'express';
 
-import * as ctrl from '../controllers/auth.google';
+import * as ctrl from '../controllers/AuthGoogle';
 
 /**
  * 라우터 인스턴스.

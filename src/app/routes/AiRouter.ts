@@ -9,7 +9,7 @@ import multer from 'multer';
 const upload = multer({ storage: multer.memoryStorage() });
 
 import type { ChatManagementService } from '../../core/services/ChatManagementService';
-import { AiController } from '../controllers/ai';
+import { AiController } from '../controllers/AiController';
 import { asyncHandler } from '../utils/asyncHandler';
 import { bindSessionUser } from '../middlewares/session';
 import { requireLogin } from '../middlewares/auth';

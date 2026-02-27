@@ -4,7 +4,7 @@
  */
 import type { Router } from 'express';
 
-import { createAiRouter } from '../../app/routes/ai';
+import { createAiRouter } from '../../app/routes/AiRouter';
 import { container } from '../container';
 
 export function makeAiRouter(): Router {

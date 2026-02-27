@@ -4,7 +4,7 @@
  */
 import type { Router } from 'express';
 
-import { createGraphRouter } from '../../app/routes/graph';
+import { createGraphRouter } from '../../app/routes/GraphRouter';
 import { container } from '../container';
 
 export function makeGraphRouter(): Router {

@@ -1,6 +1,6 @@
 import type { Router } from 'express';
 
-import { createAgentRouter } from '../../app/routes/agent';
+import { createAgentRouter } from '../../app/routes/AgentRouter';
 import { container } from '../container';
 
 /**

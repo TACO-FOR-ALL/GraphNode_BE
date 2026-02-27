@@ -57,6 +57,7 @@ export class MicroscopeController {
 
   /**
    * 단일 워크스페이스 상세 정보를 조회합니다.
+   * FIXME : 이후 workspace의 실제 Graph 가져오는 api 따로 구분되게 구축해야 함
    */
   getWorkspace = async (req: Request, res: Response, next: NextFunction) => {
     try {

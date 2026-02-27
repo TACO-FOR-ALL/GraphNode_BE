@@ -4,7 +4,7 @@
  */
 import type { Router } from 'express';
 
-import { createMeRouter } from '../../app/routes/me';
+import { createMeRouter } from '../../app/routes/MeRouter';
 import { container } from '../container';
 
 /**

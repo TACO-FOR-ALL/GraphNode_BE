@@ -4,7 +4,7 @@
  */
 import type { Router } from 'express';
 
-import { createSyncRouter } from '../../app/routes/sync';
+import { createSyncRouter } from '../../app/routes/SyncRouter';
 import { container } from '../container';
 
 export function makeSyncRouter(): Router {

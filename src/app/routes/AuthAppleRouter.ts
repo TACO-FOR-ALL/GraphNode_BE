@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import * as ctrl from '../controllers/auth.apple';
+import * as ctrl from '../controllers/AuthApple';
 
 /**
  * 라우터 인스턴스.

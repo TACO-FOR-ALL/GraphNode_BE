@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 
-import { FileController } from '../controllers/file.controller';
+import { FileController } from '../controllers/FileController';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AwsS3Adapter } from '../../infra/aws/AwsS3Adapter';
 

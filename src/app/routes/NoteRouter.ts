@@ -1,7 +1,7 @@
 import { Router } from 'express';
 
 import { NoteService } from '../../core/services/NoteService';
-import { NoteController } from '../controllers/note.controller';
+import { NoteController } from '../controllers/NoteController';
 import { asyncHandler } from '../utils/asyncHandler';
 import { bindSessionUser } from '../middlewares/session';
 import { requireLogin } from '../middlewares/auth';

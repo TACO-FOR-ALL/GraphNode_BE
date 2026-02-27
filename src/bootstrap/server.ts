@@ -10,12 +10,12 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 // import { AddressInfo } from 'net';
 
-import healthRouter from '../app/routes/health';
+import healthRouter from '../app/routes/HealthRouter';
 import { loadEnv } from '../config/env';
-import authGoogleRouter from '../app/routes/auth.google';
-import authAppleRouter from '../app/routes/auth.apple';
+import authGoogleRouter from '../app/routes/AuthGoogleRouter';
+import authAppleRouter from '../app/routes/AuthAppleRouter';
 import { makeMeRouter } from './modules/user.module';
-import authSessionRouter from '../app/routes/auth.session';
+import authSessionRouter from '../app/routes/AuthSessionRouter';
 import { requestContext } from '../app/middlewares/request-context';
 import { httpLogger } from '../shared/utils/logger';
 import { errorHandler } from '../app/middlewares/error';
