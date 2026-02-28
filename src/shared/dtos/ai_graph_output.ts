@@ -233,3 +233,40 @@ export interface AiMicroscopeIngestResult {
   error?: string;
 }
 
+/**
+ * AI 서버의 standardized.json 다운로드 결과 내 개별 청크(배치) 그래프 구조입니다.
+ * 긴 문서를 처리할 때 배열로 분할(chunking)하여 각각의 구간에서 추출된 graph 쌍이 리스트 요소로 응답됩니다.
+ * (AI 모델이 식별자 id를 부여하지 않기 때문에 id 필드는 존재하지 않습니다.)
+ * 
+ * @property nodes - 해당 청크에서 추출되고 규격화된 노드 배열
+ *   - name: 노드명
+ *   - type: 메타데이터 타입 (예: Paper, Method, Tool 등)
+ *   - description: 개념에 대한 AI의 요약 설명
+ *   - source_chunk_id: 이 노드가 추출된 원본 문서의 청크 인덱스 (0부터 시작)
+ * @property edges - 해당 청크에서 추출되고 규격화된 엣지 배열
+ *   - start: 엣지 출발 노드명 (name과 일치)
+ *   - target: 엣지 도착 노드명 (name과 일치)
+ *   - type: 엣지 관의 관계 타입 (예: uses, defines 등)
+ *   - description: AI가 포착한 두 노드 관계의 설명
+ *   - source_chunk_id: 이 엣지가 추출된 원본 문서의 청크 인덱스
+ *   - evidence: 관계에 대한 구체적인 본문 근거 문장 (옵션)
+ *   - confidence: 관계 추출에 대한 AI의 확신도 (옵션)
+ */
+export interface AiMicroscopeIngestResultItem {
+  nodes: {
+    name: string;
+    type: string;
+    description: string;
+    source_chunk_id: number | null;
+  }[];
+  edges: {
+    start: string;
+    target: string;
+    type: string;
+    description: string;
+    source_chunk_id?: number | null;
+    evidence?: string;
+    confidence?: number;
+  }[];
+}
+

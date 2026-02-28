@@ -188,8 +188,12 @@ infisical run --env=prod -- npm start
 
 - **[Code Style & Contribution Guide](docs/architecture/CODE_STYLE.md)**: 네이밍 컨벤션, 아키텍처 패턴, 에러 핸들링 규칙 등
 - **[Daily Dev Logs](docs/guides/Daily)**: 일별 작업 상세 기록
+  - [2026-02-28 Microscope API Node-based Ingest 전환 및 FE SDK 갱신](docs/guides/Daily/20260228-microscope-node-api-refactoring.md)
+  - [2026-02-28 Microscope 조회 아키텍처 리팩토링 (Mongo Payload 활용)](docs/guides/Daily/20260228-microscope-mongo-payload-refactoring.md)
+  - [2026-02-28 Microscope 조회 아키텍처 리팩토링 (Neo4j -> S3 JSON)](docs/guides/Daily/20260228-microscope-s3-json-refactoring.md)
   - [2026-02-28 Graph Status Tracking](docs/guides/Daily/20260228-graph-status-tracking.md)
   - [2026-02-28 FE SDK Graph Status](docs/guides/Daily/20260228-fe-sdk-graph-status.md)
+  - [2026-02-28 Microscope API 타입 정합성 복구 및 배열 매핑 버그 수정](docs/guides/Daily/20260228-microscope-api-integrity-fix.md)
   - [2026-02-27 Microscope Architecture](docs/guides/Daily/20260227-microscope-architecture.md)
   - [2026-02-20 AI Provider Refactor](docs/guides/Daily/20260220-ai-provider-refactor.md)
   - [2026-02-21 빈 데이터 처리 통일 및 S3 업로드 버그 수정](docs/guides/Daily/20260221-unified-empty-data-and-s3-upload-fix.md)

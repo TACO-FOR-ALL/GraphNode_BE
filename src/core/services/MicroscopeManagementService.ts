@@ -1,13 +1,20 @@
 import { ulid } from 'ulid';
+import { MongoClient, ClientSession } from 'mongodb';
 
-import { MicroscopeWorkspaceMetaDoc, MicroscopeDocumentMetaDoc } from '../types/persistence/microscope_workspace.persistence';
+import { getMongo } from '../../infra/db/mongodb';
+import { AppError } from '../../shared/errors/base';
+import { MicroscopeWorkspaceMetaDoc, MicroscopeDocumentMetaDoc, MicroscopeGraphPayloadDoc, MicroscopeGraphNodeDoc, MicroscopeGraphEdgeDoc } from '../types/persistence/microscope_workspace.persistence';
 import { MicroscopeWorkspaceStore } from '../ports/MicroscopeWorkspaceStore';
 import { GraphNeo4jStore } from '../ports/GraphNeo4jStore';
 import { QueuePort } from '../ports/QueuePort';
 import { StoragePort } from '../ports/StoragePort';
-import { TaskType, MicroscopeIngestQueuePayload } from '../../shared/dtos/queue';
-import { UpstreamError, NotFoundError, ForbiddenError } from '../../shared/errors/domain';
+import { MicroscopeGraphDataDto} from '../../shared/dtos/microscope';
+import { TaskType, MicroscopeIngestFromNodeQueuePayload } from '../../shared/dtos/queue';
+import { UpstreamError, NotFoundError, ForbiddenError, ValidationError } from '../../shared/errors/domain';
 import { logger } from '../../shared/utils/logger';
+import { ConversationRepository } from '../ports/ConversationRepository';
+import { NoteRepository } from '../ports/NoteRepository';
+import { AiMicroscopeIngestResultItem } from '../../shared/dtos/ai_graph_output';
 
 /**
  * Microscope 기능(지식 그래프 분석, RAG 파이프라인)의 전반적인 메타데이터 관리와 작업 요청을 조율하는 서비스 객체.
@@ -26,12 +33,16 @@ export class MicroscopeManagementService {
    * @param graphNeo4jStore Neo4j 저장소 포트. 실제 지식 그래프(Entity/Chunk/Relation) 보관을 담당합니다.
    * @param queuePort 비동기 워커 통신을 위한 AWS SQS 포트.
    * @param storagePort 파일 업로드를 위한 AWS S3 스토리지 포트.
+   * @param conversationRepo Conversation 조회를 위한 레포지토리.
+   * @param noteRepo Note 조회를 위한 레포지토리.
    */
   constructor(
     private readonly microscopeWorkspaceStore: MicroscopeWorkspaceStore,
     private readonly graphNeo4jStore: GraphNeo4jStore,
     private readonly queuePort: QueuePort,
     private readonly storagePort: StoragePort,
+    private readonly conversationRepo: ConversationRepository,
+    private readonly noteRepo: NoteRepository,
   ) {
     // SQS Request URL for AI tasks (Microscope 워커 요청 큐)
     this.jobQueueUrl = process.env.SQS_REQUEST_QUEUE_URL || 'TO_BE_CONFIGURED';
@@ -121,128 +132,113 @@ export class MicroscopeManagementService {
       throw new ForbiddenError('You do not have permission to delete this workspace');
     }
 
+    const client: MongoClient = getMongo();
+    const session: ClientSession = client.startSession();
+
     try {
-      // 1. Neo4j의 관련 노드 및 엣지 전부 파기 (Cascade DETACH DELETE)
-      // Neo4j는 쿼리 한 줄(`MATCH ... DETACH DELETE n`)로 진행되므로 이 호출은 통으로 롤백/반영됩니다.
-      await this.graphNeo4jStore.deleteMicroscopeWorkspaceGraphs(groupId);
+      // 1. Neo4j의 관련 코드 우선 폐기
+      // await this.graphNeo4jStore.deleteMicroscopeWorkspaceGraphs(groupId);
       
-      // 2. MongoDB의 상태 메타데이터 파기
-      // Neo4j가 먼저 오류를 뱉으면 이 코드는 실행되지 않아 상태 데이터는 무사합니다.
-      await this.microscopeWorkspaceStore.deleteWorkspace(groupId);
+      await session.withTransaction(async () => {
+        // 2. MongoDB의 상태 메타데이터 파기
+        // Neo4j가 먼저 오류를 뱉으면 이 코드는 실행되지 않아 상태 데이터는 무사합니다.
+        await this.microscopeWorkspaceStore.deleteWorkspace(groupId, session);
+        
+        // 3. MongoDB의 페이로드 연계 데이터들도 파기
+        await this.microscopeWorkspaceStore.deleteGraphPayloadsByGroupId(groupId, session);
+      });
       
-      logger.info({ userId, groupId }, 'Deleted Microscope workspace and its Neo4j graph data');
-    } catch (err) {
+      logger.info({ userId, groupId }, 'Deleted Microscope workspace, payloads and its Neo4j graph data');
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
       logger.error({ err, userId, groupId }, 'Failed to delete Microscope workspace');
       throw new UpstreamError('Failed to delete Microscope workspace', { cause: String(err) });
+    } finally {
+      await session.endSession();
     }
   }
 
   /**
-   * Microscope Graph 새로운 생성 또는 기존 Graph에 다중 파일 문서 추가 분석 요청.
-   * 지정된 워크스페이스에 복수의 문서 버퍼를 인자로 받아 S3 업로드, 메타데이터 기록, SQS INGEST 발행 작업을 일괄 처리합니다.
+   * Microscope Graph 새로운 생성 분석 요청 (Node 방식).
+   * 지정된 노드(Note/Conversation)를 대상으로 SQS INGEST 발행 작업을 처리합니다.
    * 
    * @param userId 유저 고유 ID (인증자)
-   * @param groupId 대상 워크스페이스 ID (사전에 만들어져 있어야 합니다.)
-   * @param files S3에 업로드 될 실제 파일 버퍼와 파일명의 배열
+   * @param nodeId 대상 노드 ID (Conversation 또는 Note _id)
+   * @param nodeType 노드 타입 ('note' | 'conversation')
    * @param schemaName (선택) 엔티티 추출 제약사항. AI 모델이 참조할 스키마 명칭
-   * @returns 상태 변경 추적을 위해 등록된 내부 문서 식별자 목록 객체 배열
-   * @throws {NotFoundError} MICRO_WORKSPACE_NOT_FOUND 대상 groupId가 존재하지 않을 때
-   * @throws {ForbiddenError} MICRO_FORBIDDEN 요청자가 소유자가 아닐 때
-   * @throws {UpstreamError} 파일 업로드 실패, DB 연결 실패, 혹은 큐 인입 실패 시 처리 에러
-   * @remarks
-   * - 파일의 용량이 클 수 있으므로 각 요소의 상태 변경만 안전하게 배열에 Push합니다 (PENDING).
-   * - 실패하더라도 큐 발행이 안 된 것일 뿐 개별 처리 모듈로 분산되므로 Mongo에는 남아 잉여 데이터가 남을 수 있습니다(크론 잡을 통한 재시도 지원 가능).
+   * @returns 생성된 워크스페이스의 메타데이터 전체
+   * @throws {NotFoundError} 해당 대상 데이터가 없을 때
+   * @throws {ForbiddenError} 권한 불일치
    */
-  async addDocumentsToExistingWorkspace(
+  async createWorkspaceAndMicroscopeIngestFromNode(
     userId: string,
-    groupId: string,
-    files: { buffer: Buffer; fileName: string; mimeType: string }[],
-    schemaName?: string
-  ): Promise<MicroscopeDocumentMetaDoc[]> {
-    const workspace = await this.microscopeWorkspaceStore.findById(groupId);
-    if (!workspace) {
-      throw new NotFoundError(`Workspace ${groupId} not found`);
-    }
-    if (workspace.userId !== userId) {
-      throw new ForbiddenError('You do not have permission to add documents to this workspace');
-    }
-
-    const payloadBucket = process.env.S3_PAYLOAD_BUCKET || 'graph-node-payloads';
-    const addedDocs: MicroscopeDocumentMetaDoc[] = [];
-
-    for (const file of files) {
-      const docId = `task_microscope_add_document_${userId}_${ulid()}`;
-      const now = new Date().toISOString();
-      // 유니크한 S3 키 생성
-      const s3Key = `microscope/${userId}/${groupId}/${docId}_${file.fileName}`;
-
-      const newDocument: MicroscopeDocumentMetaDoc = {
-        id: docId,
-        s3Key,
-        fileName: file.fileName,
-        status: 'PENDING',
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      try {
-        // 1. S3 업로드
-        await this.storagePort.upload(s3Key, file.buffer, file.mimeType, { bucketType: 'payload' });
-        
-        // 2. MongoDB 상태 트리커 등록 (PENDING 상태)
-        await this.microscopeWorkspaceStore.addDocument(groupId, newDocument);
-
-        // 3. AI 서버 처리를 위한 SQS 큐 발송
-        const messageBody: MicroscopeIngestQueuePayload = {
-          taskId: docId, // 문서 처리 고유 ID를 Correlation ID로 활용
-          taskType: TaskType.MICROSCOPE_INGEST_REQUEST,
-          payload: {
-            user_id: userId,
-            group_id: groupId,
-            s3_key: s3Key,
-            bucket: payloadBucket,
-            file_name: file.fileName,
-            schema_name: schemaName,
-          },
-          timestamp: new Date().toISOString(),
-        };
-
-        await this.queuePort.sendMessage(this.jobQueueUrl, messageBody);
-        
-        addedDocs.push(newDocument);
-        logger.info({ userId, groupId, s3Key, taskId: docId }, 'Enqueued Microscope Ingest Task via SQS');
-      } catch (err) {
-        // 업로드 또는 SQS 실패 시 다음 파일을 계속 처리할지, 즉시 Throw할지 설계 선택: 통상 단건 롤백이 불가하므로 예외를 발생시킵니다.
-        logger.error({ err, userId, groupId, s3Key }, 'Failed to add a particular document to Microscope workspace');
-        throw new UpstreamError(`Failed to process document ${file.fileName}`, { cause: String(err) });
-      }
-    }
-
-    return addedDocs;
-  }
-
-  /**
-   * 한 번에 워크스페이스를 신규 생성하고 문서를 다중 첨부 분석하는 통합 Convenience 함수.
-   * 
-   * @param userId 요청 유저
-   * @param workspaceName 생성할 워크스페이스 제목명
-   * @param files 분석할 파일 버퍼 배열
-   * @param schemaName 추출 스키마명
-   * @returns 워크스페이스 전체 메타데이터
-   * @remarks 성공적으로 등록된 직후의 워크스페이스 상태(PENDING)들을 즉시 리턴합니다.
-   */
-  async createWorkspaceWithDocuments(
-    userId: string,
-    workspaceName: string,
-    files: { buffer: Buffer; fileName: string; mimeType: string }[],
+    nodeId: string,
+    nodeType: 'note' | 'conversation',
     schemaName?: string
   ): Promise<MicroscopeWorkspaceMetaDoc> {
-    const workspace = await this.createWorkspace(userId, workspaceName);
-    const addedDocs = await this.addDocumentsToExistingWorkspace(userId, workspace._id, files, schemaName);
     
-    // 리턴 결과물 병합 (메모리상)
-    workspace.documents = addedDocs;
-    return workspace;
+    // 1. 원본 데이터 검증 및 타이틀 추출
+    let workspaceTitle = '';
+    if (nodeType === 'note') {
+      const note = await this.noteRepo.getNote(nodeId, userId);
+      if (!note) {
+        throw new NotFoundError(`Note ${nodeId} not found or you do not have permission`);
+      }
+      workspaceTitle = note.title || `Note ${nodeId}`;
+    } else if (nodeType === 'conversation') {
+      const conv = await this.conversationRepo.findById(nodeId, userId);
+      if (!conv) {
+        throw new NotFoundError(`Conversation ${nodeId} not found or you do not have permission`);
+      }
+      workspaceTitle = conv.title || `Conversation ${nodeId}`;
+    } else {
+      throw new ValidationError(`Invalid node type: ${nodeType}`);
+    }
+
+    // 2. 워크스페이스 신규 생성
+    const workspace = await this.createWorkspace(userId, workspaceTitle);
+    const groupId = workspace._id;
+
+    const docId = `task_microscope_node_${userId}_${ulid()}`;
+    const now = new Date().toISOString();
+
+    const newDocument: MicroscopeDocumentMetaDoc = {
+      id: docId,
+      s3Key: '', // Node 방식이므로 s3Key 불필요, 빈 문자열 삽입
+      fileName: `${nodeId}.md`,
+      status: 'PENDING',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    try {
+      // 3. MongoDB 상태 트리거 등록
+      await this.microscopeWorkspaceStore.addDocument(groupId, newDocument);
+
+      // 4. AI 서버 처리를 위한 SQS 큐 발송 (MICROSCOPE_INGEST_FROM_NODE_REQUEST)
+      const messageBody = {
+        taskId: docId,
+        taskType: TaskType.MICROSCOPE_INGEST_FROM_NODE_REQUEST,
+        payload: {
+          user_id: userId,
+          node_id: nodeId,
+          node_type: nodeType,
+          group_id: groupId,
+          schema_name: schemaName,
+        },
+        timestamp: new Date().toISOString(),
+      };
+
+      await this.queuePort.sendMessage(this.jobQueueUrl, messageBody);
+      
+      workspace.documents.push(newDocument);
+      logger.info({ userId, groupId, nodeId, nodeType, taskId: docId }, 'Enqueued Microscope Ingest From Node Task via SQS');
+      
+      return workspace;
+    } catch (err) {
+      logger.error({ err, userId, groupId, nodeId }, 'Failed to process node for Microscope workspace, createWorkspaceAndMicroscopeIngestFromNode');
+      throw new UpstreamError(`Failed to process node ${nodeId}`, { cause: String(err) });
+    }
   }
 
   /**
@@ -253,6 +249,7 @@ export class MicroscopeManagementService {
    * @param docId 상태를 변경할 대상 문서의 고유 ID
    * @param status 변경될 최종 상태 (COMPLETED, FAILED 등)
    * @param sourceId (옵션) 파싱 성공 시 발행된 Neo4j Source Node ID
+   * @param downloadedGraphData (옵션) 파싱 성공 시 반환받은 그래프 데이터
    * @param error (옵션) 실패 시 반환받은 에러 메시지
    * @returns 상태 변경이 반영된 최신화된 전체 워크스페이스 객체를 반환합니다.
    * @throws {NotFoundError} 워크스페이스가 없거나 docId가 존재하지 않을 때
@@ -268,28 +265,152 @@ export class MicroscopeManagementService {
     docId: string,
     status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED',
     sourceId?: string,
+    downloadedGraphData?: AiMicroscopeIngestResultItem[],
     error?: string,
   ): Promise<MicroscopeWorkspaceMetaDoc> {
+    
+    // 1. 워크스페이스 존재 여부 확인
     const workspace = await this.microscopeWorkspaceStore.findById(groupId);
     if (!workspace) {
       throw new NotFoundError(`Workspace ${groupId} not found`);
     }
-    // SQS에서 날아온 데이터가 정말 워크스페이스 소유자인지 검증.
+    // 2. 소유권 확인
     if (workspace.userId !== userId) {
       throw new ForbiddenError('You do not have permission to modify this workspace');
     }
 
     try {
-      await this.microscopeWorkspaceStore.updateDocumentStatus(groupId, docId, status, sourceId, error);
+      let graphPayloadId: string | undefined = undefined;
+      
+      // 3. 그래프 데이터 저장
+      if (downloadedGraphData && status === 'COMPLETED') {
+        graphPayloadId = `ply_microscope_${ulid()}`;
+
+        let allNodes: MicroscopeGraphNodeDoc[] = [];
+        let allEdges: MicroscopeGraphEdgeDoc[] = [];
+
+        if (Array.isArray(downloadedGraphData)) {
+          downloadedGraphData.forEach(item => {
+            if (item.nodes) {
+              allNodes.push(...item.nodes.map(node => ({
+                id: `node_${ulid()}`,
+                ...node,
+              } as MicroscopeGraphNodeDoc)));
+            }
+            if (item.edges) {
+              allEdges.push(...item.edges.map(edge => ({
+                id: `edge_${ulid()}`,
+                ...edge,
+              } as MicroscopeGraphEdgeDoc)));
+            }
+          });
+        }
+
+        const graphData = {
+          nodes: allNodes,
+          edges: allEdges,
+        };
+
+        await this.microscopeWorkspaceStore.saveGraphPayload({
+          _id: graphPayloadId,
+          groupId,
+          taskId: docId,
+          userId,
+          graphData,
+          createdAt: new Date().toISOString()
+        });
+        logger.info({ userId, groupId, docId, graphPayloadId }, 'Saved Microscope graph payload to MongoDB');
+      }
+
+      // 4. 문서 상태 업데이트
+      await this.microscopeWorkspaceStore.updateDocumentStatus(groupId, docId, status, sourceId, graphPayloadId, error);
       logger.info({ userId, groupId, docId, status }, `Microscope document status updated to ${status}`);
       
-      // 업데이트 후 최신 상태 반환 (Handler에서 전체 문서 중 마지막인지 여부 파악 용도)
+      // 5. 업데이트 후 최신 상태 반환 (Handler에서 전체 문서 중 마지막인지 여부 파악 용도)
       const updatedWorkspace = await this.microscopeWorkspaceStore.findById(groupId);
       return updatedWorkspace as MicroscopeWorkspaceMetaDoc;
     } catch (err) {
       if (err instanceof NotFoundError) throw err;
-      logger.error({ err, userId, groupId, docId }, 'Failed to update document status');
+      logger.error({ err, userId, groupId, docId }, 'Failed to update document status, updateDocumentStatus');
       throw new UpstreamError('Failed to update document status', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 워크스페이스 내 모든 문서의 그래프 데이터를 취합하여 반환합니다.
+   * @param userId 유저 ID (소유권 확인용)
+   * @param workspaceId 워크스페이스 ID
+   * @returns 취합된 그래프 데이터
+   * @throws {NotFoundError} 워크스페이스가 없거나 docId가 존재하지 않을 때
+   * @throws {ForbiddenError} 권한 부족 시
+   */
+  async getWorkspaceGraph(userId: string, workspaceId: string): Promise<MicroscopeGraphDataDto[]> {
+    const workspace : MicroscopeWorkspaceMetaDoc | null = await this.microscopeWorkspaceStore.findById(workspaceId);
+    
+    // 1. 워크스페이스 존재 여부 확인
+    if (!workspace) {
+      throw new NotFoundError(`Workspace ${workspaceId} not found`);
+    }
+    // 2. 소유권 확인
+    if (workspace.userId !== userId) {
+      throw new ForbiddenError('You do not have permission to access graph of this workspace');
+    }
+
+    try {
+      // 1. COMPLETED 상태이고 graphPayloadId가 있는 문서들 확인
+      const payloadIds : string[] = workspace.documents
+        .filter(doc => doc.status === 'COMPLETED' && doc.graphPayloadId)
+        .map(doc => doc.graphPayloadId as string);
+
+      if (payloadIds.length === 0) {
+        return [{ nodes: [], edges: [] }];
+      }
+
+      // 2. Mongo DB Payload 컬렉션에서 데이터 로드
+      const microscopeGraphs : MicroscopeGraphPayloadDoc[] = await this.microscopeWorkspaceStore.findGraphPayloadsByIds(payloadIds);
+
+      // 3. 하나의 통일된 Graph Data(MicroscopeGraphDataDto)로 병합
+      const mergedNodes: MicroscopeGraphNodeDoc[] = [];
+      const mergedEdges: MicroscopeGraphEdgeDoc[] = [];
+
+      for (const payload of microscopeGraphs) {
+        if (!payload.graphData) continue;
+        
+        // 방어적 코드: 혹시 배열이 아니라 단일 객체일 경우를 대비
+        const items = Array.isArray(payload.graphData) ? payload.graphData : [payload.graphData];
+        
+        // items는 MicroscopeGraphDataDto[] 타입임
+        for (const item of items) {
+
+          // item.nodes는 MicroscopeGraphNodeDoc[] 타입임
+          if (item.nodes && Array.isArray(item.nodes)) {
+
+            // node는 MicroscopeGraphNodeDoc 타입임
+            for (const node of item.nodes) {
+              mergedNodes.push(node as MicroscopeGraphNodeDoc);
+            }
+          }
+
+          // item.edges는 MicroscopeGraphEdgeDoc[] 타입임
+          if (item.edges && Array.isArray(item.edges)) {
+
+            // edge는 MicroscopeGraphEdgeDoc 타입임
+            for (const edge of item.edges) {
+              mergedEdges.push(edge as MicroscopeGraphEdgeDoc);
+            }
+          }
+        }
+      }
+
+      logger.info({ userId, workspaceId, totalFiles: payloadIds.length }, 'Successfully aggregated workspace graph data from Mongo');
+
+      return [{
+        nodes: mergedNodes,
+        edges: mergedEdges
+      }];
+    } catch (err) {
+      logger.error({ err, userId, workspaceId }, 'Failed to fetch and aggregate workspace graph data from Mongo');
+      throw new UpstreamError('Failed to fetch workspace graph data from Mongo', { cause: String(err) });
     }
   }
 }

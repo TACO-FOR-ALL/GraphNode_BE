@@ -1,5 +1,5 @@
 import { RequestBuilder, type HttpResponse } from '../http-builder.js';
-import type { MicroscopeWorkspace } from '../types/microscope.js';
+import type { MicroscopeWorkspace, MicroscopeGraphData } from '../types/microscope.js';
 
 /**
  * Microscope API
@@ -19,79 +19,87 @@ export class MicroscopeApi {
   }
 
   /**
-   * 워크스페이스를 생성하고 여러 문서를 업로드하여 분석(Graph Ingest) 파이프라인을 비동기로 시작합니다.
+   * 노트(Note) 데이터를 기반으로 지식 그래프 구축(Ingest) 파이프라인을 비동기로 시작합니다.
+   * 백엔드에서는 전달된 노트의 제목을 기반으로 새로운 워크스페이스를 생성하며, 
+   * 상태(PENDING $\rightarrow$ COMPLETED) 추적이 가능합니다.
    *
-   * @param name 워크스페이스 이름
-   * @param files 업로드할 File 또는 Blob 객체 배열 (옵션)
-   * @param schemaName 추출에 사용할 엔티티 스키마 명칭 (옵션)
-   * @returns {Promise<HttpResponse<MicroscopeWorkspace>>}
+   * @param noteId 분석을 요청할 노트의 고유 ID
+   * @param schemaName 추출에 사용할 커스텀 엔티티 스키마 명칭 (옵션)
+   * @returns {Promise<HttpResponse<MicroscopeWorkspace>>} 생성된 워크스페이스 메타데이터 반환
+   * @example
+   * const res = await sdk.microscope.ingestFromNote('note_123');
+   * console.log(res.data._id); // 워크스페이스(그룹) ID
    */
-  async createWorkspaceWithDocuments(name: string, files?: File[] | Blob[], schemaName?: string): Promise<HttpResponse<MicroscopeWorkspace>> {
-    const formData = new FormData();
-    formData.append('name', name);
-    if (schemaName) formData.append('schemaName', schemaName);
-    
-    if (files && files.length > 0) {
-      files.forEach((file) => formData.append('files', file));
-    }
-
-    return this.rb.post<MicroscopeWorkspace>(formData);
+  async ingestFromNote(noteId: string, schemaName?: string): Promise<HttpResponse<MicroscopeWorkspace>> {
+    return this.rb.path('/nodes/ingest').post<MicroscopeWorkspace>({
+      nodeId: noteId,
+      nodeType: 'note',
+      schemaName
+    });
   }
 
   /**
-   * 유저의 모든 현존 워크스페이스 목록을 조회합니다.
-   * @returns {Promise<HttpResponse<MicroscopeWorkspace[]>>}
+   * 대화(Conversation) 데이터를 기반으로 지식 그래프 구축(Ingest) 파이프라인을 비동기로 시작합니다.
+   * 백엔드에서는 전달된 대화의 제목을 기반으로 새로운 워크스페이스를 생성합니다.
+   *
+   * @param conversationId 분석을 요청할 대화의 고유 ID
+   * @param schemaName 추출에 사용할 커스텀 엔티티 스키마 명칭 (옵션)
+   * @returns {Promise<HttpResponse<MicroscopeWorkspace>>} 생성된 워크스페이스 메타데이터 반환
+   * @example
+   * const res = await sdk.microscope.ingestFromConversation('conv_456', 'code_schema');
+   */
+  async ingestFromConversation(conversationId: string, schemaName?: string): Promise<HttpResponse<MicroscopeWorkspace>> {
+    return this.rb.path('/nodes/ingest').post<MicroscopeWorkspace>({
+      nodeId: conversationId,
+      nodeType: 'conversation',
+      schemaName
+    });
+  }
+
+  /**
+   * 유저의 모든 현존 워크스페이스(Workspace) 메타데이터 목록을 조회합니다.
+   * 이 메서드는 사이드바 등에서 지식 그래프(Microscope) 목록을 보여주기 위한 용도로 사용됩니다.
+   * 반환된 목록의 객체들은 그래프 노드/엣지를 포함하지 않는 '메타데이터' 전용 객체입니다.
+   * 
+   * @returns {Promise<HttpResponse<MicroscopeWorkspace[]>>} 워크스페이스 메타데이터 배열
    */
   async listWorkspaces(): Promise<HttpResponse<MicroscopeWorkspace[]>> {
     return this.rb.get<MicroscopeWorkspace[]>();
   }
 
   /**
-   * 단일 워크스페이스 상세 정보를 조회합니다.
+   * 단일 워크스페이스의 상세 상태와 메타데이터(예: 진행률, 에러 상태 등)를 조회합니다.
+   * 이 메서드는 Ingest 진행 과정 등을 파악하기 위해 사용되며, 
+   * 실제 그래프 데이터 요소를 반환하지 않습니다.
    *
-   * @param groupId 조회할 워크스페이스 ID
-   * @returns {Promise<HttpResponse<MicroscopeWorkspace>>}
+   * @param microscopeWorkspaceId 조회할 microscope 워크스페이스 ID
+   * @returns {Promise<HttpResponse<MicroscopeWorkspace>>} 워크스페이스 메타데이터
    */
-  async getWorkspace(groupId: string): Promise<HttpResponse<MicroscopeWorkspace>> {
-    return this.rb.path(`/${groupId}`).get<MicroscopeWorkspace>();
+  async getWorkspace(microscopeWorkspaceId: string): Promise<HttpResponse<MicroscopeWorkspace>> {
+    return this.rb.path(`/${microscopeWorkspaceId}`).get<MicroscopeWorkspace>();
   }
 
   /**
-   * 워크스페이스의 실제 그래프 데이터(Nodes & Edges)를 조회합니다.
-   * FIXME TODO: Neo4j에서 groupId에 해당하는 실제 그래프 데이터를 반환하는 로직 구현 필요
+   * 워크스페이스의 실제 구체적인 세부 "지식 그래프(Microscope) 데이터(Nodes & Edges)"를 조회합니다.
+   * `listWorkspaces`나 `getWorkspace`와 달리 이 메서드는 화면 가운데 그려질 메인 시각화용 
+   * 그래프 데이터를 가져오기 위한 목적으로 사용됩니다.
    * 
-   * @param groupId 조회할 워크스페이스 ID
-   * @returns {Promise<HttpResponse<any[]>>} 데이터 연동 시 Any 타입 구체화 필요
+   * @param microscopeWorkspaceId 조회할 microscope 워크스페이스 ID
+   * @returns {Promise<HttpResponse<MicroscopeGraphData[]>>} 실제 그래프 데이터
    */
-  async getWorkspaceGraph(groupId: string): Promise<HttpResponse<any[]>> {
-    return this.rb.path(`/${groupId}/graph`).get<any[]>();
+  async getWorkspaceGraph(microscopeWorkspaceId: string): Promise<HttpResponse<MicroscopeGraphData[]>> {
+    return this.rb.path(`/${microscopeWorkspaceId}/graph`).get<MicroscopeGraphData[]>();
   }
 
-  /**
-   * 기존 워크스페이스에 새로운 파일들을 추가 업로드하여 처리합니다.
-   *
-   * @param groupId 문서를 추가할 워크스페이스 ID
-   * @param files 업로드할 File 또는 Blob 배열
-   * @param schemaName (옵션) 추출 스키마명
-   * @returns {Promise<HttpResponse<{ message: string }>>}
-   */
-  async addDocumentsToWorkspace(groupId: string, files: File[] | Blob[], schemaName?: string): Promise<HttpResponse<{ message: string }>> {
-    const formData = new FormData();
-    if (schemaName) {
-      formData.append('schemaName', schemaName);
-    }
-    files.forEach((file) => formData.append('files', file));
 
-    return this.rb.path(`/${groupId}/documents`).post<{ message: string }>(formData);
-  }
 
   /**
    * 워크스페이스를 삭제합니다. 연관된 Neo4j 그래프와 메타데이터가 파기됩니다.
    *
-   * @param groupId 삭제할 워크스페이스 ID
+   * @param microscopeWorkspaceId 삭제할 microscope 워크스페이스 ID
    * @returns {Promise<HttpResponse<void>>}
    */
-  async deleteWorkspace(groupId: string): Promise<HttpResponse<void>> {
-    return this.rb.path(`/${groupId}`).delete<void>();
+  async deleteWorkspace(microscopeWorkspaceId: string): Promise<HttpResponse<void>> {
+    return this.rb.path(`/${microscopeWorkspaceId}`).delete<void>();
   }
 }
