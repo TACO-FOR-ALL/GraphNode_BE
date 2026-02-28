@@ -71,6 +71,12 @@ export interface GraphNodeDto {
 export type GraphEdgeType = 'hard' | 'insight';
 
 /**
+ * 그래프 백엔드 처리 상태.
+ * @public
+ */
+export type GraphStatus = 'NOT_CREATED' | 'CREATING' | 'CREATED' | 'UPDATING' | 'UPDATED';
+
+/**
  * 그래프 엣지 DTO.
  */
 export interface GraphEdgeDto {
@@ -136,6 +142,7 @@ export interface GraphClusterDto {
  * @param nodes - 전체 노드 개수
  * @param edges - 전체 엣지 개수
  * @param clusters - 전체 클러스터 개수
+ * @param status - 현재 그래프 상태
  * @param generatedAt - 통계를 생성한 시각(ISO 8601 UTC)
  * @param metadata - 추가 메타데이터
  */
@@ -148,6 +155,8 @@ export interface GraphStatsDto {
   edges: number;
   /** 전체 클러스터 개수 */
   clusters: number;
+  /** 현재 그래프 상태 */
+  status: GraphStatus;
   /** 통계를 생성한 시각(ISO 8601 UTC) */
   generatedAt?: string;
   /** 통계를 수정(AddNode)한 시각(ISO 8601 UTC) */

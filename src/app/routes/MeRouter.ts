@@ -2,7 +2,7 @@ import { Router } from 'express';
 
 import { bindSessionUser } from '../middlewares/session';
 import { requireLogin } from '../middlewares/auth';
-import { MeController } from '../controllers/me';
+import { MeController } from '../controllers/MeController';
 import { UserService } from '../../core/services/UserService';
 import { asyncHandler } from '../utils/asyncHandler';
 

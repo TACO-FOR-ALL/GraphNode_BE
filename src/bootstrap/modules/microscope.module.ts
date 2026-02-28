@@ -4,7 +4,7 @@
  */
 import type { Router } from 'express';
 
-import { createMicroscopeRouter } from '../../app/routes/microscope.routes';
+import { createMicroscopeRouter } from '../../app/routes/MicroscopeRouter';
 import { MicroscopeController } from '../../app/controllers/MicroscopeController';
 import { container } from '../container';
 

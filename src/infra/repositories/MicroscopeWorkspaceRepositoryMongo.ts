@@ -1,29 +1,45 @@
 import { UpstreamError, NotFoundError } from '../../shared/errors/domain';
-import { MicroscopeWorkspaceMetaDoc, MicroscopeDocumentMetaDoc } from '../../core/types/persistence/microscope_workspace.persistence';
+import { MicroscopeWorkspaceMetaDoc, MicroscopeDocumentMetaDoc, MicroscopeGraphPayloadDoc } from '../../core/types/persistence/microscope_workspace.persistence';
 import { MicroscopeWorkspaceStore } from '../../core/ports/MicroscopeWorkspaceStore';
 import { getMongo } from '../db/mongodb';
+import { Db, ClientSession } from 'mongodb'; // Import Db type
 
 /**
  * MongoDB를 저장소로 활용하는 Microscope 워크스페이스 리포지토리 구현체.
  * Microscope 워크스페이스의 메타데이터와 각각의 문서 진행 상태를 저장하고 갱신합니다.
  */
 export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceStore {
+  private mongodb: Db; // Add this property
+
+  constructor() {
+    const mongo = getMongo();
+    if (!mongo) throw new Error('Mongo client not initialized');
+    this.mongodb = mongo.db();
+  }
+
   /**
    * MongoDB 인스턴스를 가져옵니다. 
    * 앱 실행 시 커넥션 풀을 보장받은 객체를 사용합니다.
    * @throws {Error} DB 초기화 전 호출 시
    */
-  private db() {
-    const mongo = getMongo();
-    if (!mongo) throw new Error('Mongo client not initialized');
-    return mongo.db();
-  }
+  // private db() { // This method is no longer needed if `this.mongodb` is used directly
+  //   const mongo = getMongo();
+  //   if (!mongo) throw new Error('Mongo client not initialized');
+  //   return mongo.db();
+  // }
 
   /**
    * Microscope Workspace 메타데이터가 저장되는 MongoDB Collection.
    */
   private microscope_workspaces_collection() {
-    return this.db().collection<MicroscopeWorkspaceMetaDoc>('microscope_workspaces');
+    return this.mongodb.collection<MicroscopeWorkspaceMetaDoc>('microscope_workspaces');
+  }
+
+  /**
+   * MongoDB Collection getter for graph payloads
+   */
+  private microscope_graph_payloads_collection() {
+    return this.mongodb.collection<MicroscopeGraphPayloadDoc>('microscope_graph_payloads');
   }
 
   /**
@@ -34,9 +50,9 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
    * @example
    * await repo.createWorkspace({ _id: "uuid1", userId: "user1", ... });
    */
-  async createWorkspace(workspace: MicroscopeWorkspaceMetaDoc): Promise<void> {
+  async createWorkspace(workspace: MicroscopeWorkspaceMetaDoc, session?: ClientSession): Promise<void> {
     try {
-      await this.microscope_workspaces_collection().insertOne(workspace as any);
+      await this.microscope_workspaces_collection().insertOne(workspace as any, { session });
     } catch (err: unknown) {
       throw new UpstreamError('MicroscopeWorkspaceRepositoryMongo.createWorkspace failed', { cause: String(err) });
     }
@@ -49,9 +65,9 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
    * @returns 조회된 워크스페이스 또는 존재하지 않을 경우 null
    * @throws {UpstreamError} MICRO_WORKSPACE_READ_FAIL DB 읽기 실패 시
    */
-  async findById(groupId: string): Promise<MicroscopeWorkspaceMetaDoc | null> {
+  async findById(groupId: string, session?: ClientSession): Promise<MicroscopeWorkspaceMetaDoc | null> {
     try {
-      const doc = await this.microscope_workspaces_collection().findOne({ _id: groupId } as any);
+      const doc = await this.microscope_workspaces_collection().findOne({ _id: groupId } as any, { session });
       return doc ? (doc as unknown as MicroscopeWorkspaceMetaDoc) : null;
     } catch (err: unknown) {
       throw new UpstreamError('MicroscopeWorkspaceRepositoryMongo.findById failed', { cause: String(err) });
@@ -65,9 +81,9 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
    * @returns 워크스페이스 배열 (최신순 정렬)
    * @throws {UpstreamError} MICRO_WORKSPACE_READ_FAIL DB 읽기 실패 시
    */
-  async findByUserId(userId: string): Promise<MicroscopeWorkspaceMetaDoc[]> {
+  async findByUserId(userId: string, session?: ClientSession): Promise<MicroscopeWorkspaceMetaDoc[]> {
     try {
-      const docs = await this.microscope_workspaces_collection().find({ userId }).sort({ createdAt: -1 }).toArray();
+      const docs = await this.microscope_workspaces_collection().find({ userId }, { session }).sort({ createdAt: -1 }).toArray();
       return docs as unknown as MicroscopeWorkspaceMetaDoc[];
     } catch (err: unknown) {
       throw new UpstreamError('MicroscopeWorkspaceRepositoryMongo.findByUserId failed', { cause: String(err) });
@@ -83,9 +99,9 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
    * @remarks 
    * - 서비스 계층에서 Neo4j 그래프 데이터를 지운 뒤 호출하는 것이 안전합니다.
    */
-  async deleteWorkspace(groupId: string): Promise<void> {
+  async deleteWorkspace(groupId: string, session?: ClientSession): Promise<void> {
     try {
-      await this.microscope_workspaces_collection().deleteOne({ _id: groupId } as any);
+      await this.microscope_workspaces_collection().deleteOne({ _id: groupId } as any, { session });
     } catch (err: unknown) {
       throw new UpstreamError('MicroscopeWorkspaceRepositoryMongo.deleteWorkspace failed', { cause: String(err) });
     }
@@ -102,14 +118,15 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
    * - $push 연산자를 사용하여 DB 레벨에서 원자적으로 Array 요소가 추가됩니다.
    * - 워크스페이스 자체의 updatedAt 도 함께 갱신됩니다.
    */
-  async addDocument(groupId: string, doc: MicroscopeDocumentMetaDoc): Promise<void> {
+  async addDocument(groupId: string, doc: MicroscopeDocumentMetaDoc, session?: ClientSession): Promise<void> {
     try {
       const result = await this.microscope_workspaces_collection().updateOne(
         { _id: groupId } as any,
         {
           $push: { documents: doc } as any,
           $set: { updatedAt: new Date().toISOString() }
-        }
+        },
+        { session }
       );
       if (result.matchedCount === 0) {
         throw new NotFoundError(`Microscope workspace ${groupId} not found`);
@@ -140,7 +157,9 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
     docId: string,
     status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED',
     sourceId?: string,
+    graphPayloadId?: string,
     error?: string,
+    session?: ClientSession
   ): Promise<void> {
     try {
       const updateFields: any = {
@@ -152,13 +171,17 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
       if (sourceId) {
         updateFields['documents.$.sourceId'] = sourceId;
       }
+      if (graphPayloadId) {
+        updateFields['documents.$.graphPayloadId'] = graphPayloadId;
+      }
       if (error) {
         updateFields['documents.$.error'] = error;
       }
 
       const result = await this.microscope_workspaces_collection().updateOne(
         { _id: groupId, 'documents.id': docId } as any,
-        { $set: updateFields }
+        { $set: updateFields },
+        { session }
       );
 
       if (result.matchedCount === 0) {
@@ -167,6 +190,47 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
     } catch (err: unknown) {
       if (err instanceof NotFoundError) throw err;
       throw new UpstreamError('MicroscopeWorkspaceRepositoryMongo.updateDocumentStatus failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * AI가 추출한 대용량 그래프 JSON 페이로드를 별도 컬렉션에 저장합니다.\
+   * @param payload 그래프 페이로드
+   */
+  async saveGraphPayload(payload: MicroscopeGraphPayloadDoc, session?: ClientSession): Promise<void> {
+    try {
+      await this.microscope_graph_payloads_collection().insertOne(payload as any, { session });
+    } catch (err: unknown) {
+      throw new UpstreamError('MicroscopeWorkspaceRepositoryMongo.saveGraphPayload failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 페이로드 ID 배열을 기반으로 다수의 그래프 JSON 데이터를 조회합니다.
+   * @param payloadIds 페이로드 ID 배열
+   * @returns 그래프 페이로드 배열
+   */
+  async findGraphPayloadsByIds(payloadIds: string[], session?: ClientSession): Promise<MicroscopeGraphPayloadDoc[]> {
+    if (!payloadIds || payloadIds.length === 0) return [];
+    try {
+      const docs = await this.microscope_graph_payloads_collection()
+        .find({ _id: { $in: payloadIds } } as any, { session })
+        .toArray();
+      return docs as unknown as MicroscopeGraphPayloadDoc[];
+    } catch (err: unknown) {
+      throw new UpstreamError('MicroscopeWorkspaceRepositoryMongo.findGraphPayloadsByIds failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 워크스페이스 삭제 시 연관된 모든 페이로드 데이터를 Cascade 삭제합니다.
+   * @param groupId 워크스페이스 ID
+   */
+  async deleteGraphPayloadsByGroupId(groupId: string, session?: ClientSession): Promise<void> {
+    try {
+      await this.microscope_graph_payloads_collection().deleteMany({ groupId } as any, { session });
+    } catch (err: unknown) {
+      throw new UpstreamError('MicroscopeWorkspaceRepositoryMongo.deleteGraphPayloadsByGroupId failed', { cause: String(err) });
     }
   }
 }

@@ -37,6 +37,12 @@ export interface GraphNodeDto {
 export type GraphEdgeType = 'hard' | 'insight';
 
 /**
+ * 그래프 백엔드 처리 상태.
+ * @public
+ */
+export type GraphStatus = 'NOT_CREATED' | 'CREATING' | 'CREATED' | 'UPDATING' | 'UPDATED';
+
+/**
  * 그래프 엣지 DTO
  * @public
  * @property userId 사용자 ID
@@ -93,6 +99,7 @@ export interface GraphClusterDto {
  * @property nodes 노드 수
  * @property edges 엣지 수
  * @property clusters 클러스터 수
+ * @property status 그래프 백엔드 처리 상태
  * @property generatedAt 생성 일시 (ISO 8601)
  * @property metadata 추가 메타데이터
  */
@@ -101,6 +108,7 @@ export interface GraphStatsDto {
   nodes: number;
   edges: number;
   clusters: number;
+  status: GraphStatus;
   generatedAt?: string;
   updatedAt?: string;
   metadata?: Record<string, unknown>;

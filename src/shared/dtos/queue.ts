@@ -16,8 +16,8 @@ export enum TaskType {
   GRAPH_SUMMARY_RESULT = 'GRAPH_SUMMARY_RESULT', // AI -> Worker (Summary result)
   ADD_NODE_REQUEST = 'ADD_NODE_REQUEST', // API -> AI (single conversation)
   ADD_NODE_RESULT = 'ADD_NODE_RESULT', // AI -> Worker (AddNode result)
-  MICROSCOPE_INGEST_REQUEST = 'MICROSCOPE_INGEST_REQUEST', // API -> AI (Microscope document ingest)
-  MICROSCOPE_INGEST_RESULT = 'MICROSCOPE_INGEST_RESULT', // AI -> Worker (Microscope ingest result)
+  MICROSCOPE_INGEST_FROM_NODE_REQUEST = 'MICROSCOPE_INGEST_FROM_NODE_REQUEST', // API -> AI (Microscope document ingest)
+  MICROSCOPE_INGEST_FROM_NODE_RESULT = 'MICROSCOPE_INGEST_FROM_NODE_RESULT', // AI -> Worker (Microscope ingest result)
 }
 
 // 공통 메시지 베이스
@@ -171,8 +171,8 @@ export interface AddNodeResultPayload extends BaseQueueMessage {
  *  - file_name: AI 워커가 문서 파싱 및 시각화를 위해 활용하는 원본 파일명 (예: 'policy.pdf')
  *  - schema_name: (옵션) 추출에 사용할 특정 ER 스키마 제약사항 명칭
  */
-export interface MicroscopeIngestQueuePayload extends BaseQueueMessage {
-  taskType: TaskType.MICROSCOPE_INGEST_REQUEST;
+export interface MicroscopeIngestFromNodeQueuePayload extends BaseQueueMessage {
+  taskType: TaskType.MICROSCOPE_INGEST_FROM_NODE_REQUEST;
   payload: {
     /** Python 런타임 호환을 위한 snake_case 유저 식별자 */
     user_id: string; 
@@ -204,8 +204,8 @@ export interface MicroscopeIngestQueuePayload extends BaseQueueMessage {
  *  - ingest_stats: (선택 사항) AI 파이프라인 처리에 소요된 상세 통계 객체 (토큰, 메타데이터 등)
  *  - error: (실패 시) 발생한 치명적 파이프라인 에러 메세지
  */
-export interface MicroscopeIngestResultQueuePayload extends BaseQueueMessage {
-  taskType: TaskType.MICROSCOPE_INGEST_RESULT;
+export interface MicroscopeIngestFromNodeResultQueuePayload extends BaseQueueMessage {
+  taskType: TaskType.MICROSCOPE_INGEST_FROM_NODE_RESULT;
   payload: {
     /** Python 런타임 호환을 위한 snake_case 유저 식별자 */
     user_id: string; 
@@ -221,6 +221,8 @@ export interface MicroscopeIngestResultQueuePayload extends BaseQueueMessage {
     schema_name?: string;
     /** (선택 사항) AI 파이프라인 처리에 소요된 상세 통계 객체 (토큰, 메타데이터 등) */
     ingest_stats?: any;
+    /** (성공 시) S3에 저장된 표준 JSON 파일 키 */
+    standardized_s3_key?: string;
     /** (실패 시) 발생한 치명적 파이프라인 에러 메세지 */
     error?: string;
   };
@@ -234,6 +236,6 @@ export type QueueMessage =
   | GraphSummaryResultPayload
   | AddNodeRequestPayload
   | AddNodeResultPayload
-  | MicroscopeIngestQueuePayload
-  | MicroscopeIngestResultQueuePayload;
+  | MicroscopeIngestFromNodeQueuePayload
+  | MicroscopeIngestFromNodeResultQueuePayload;
 

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import { createGraphAiRouter } from '../../app/routes/graphAi.routes';
+import { createGraphAiRouter } from '../../app/routes/GraphAiRouter';
 import { container } from '../container';
 
 export function makeGraphAiRouter(): Router {

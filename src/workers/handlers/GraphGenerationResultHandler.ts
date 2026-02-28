@@ -39,6 +39,13 @@ export class GraphGenerationResultHandler implements JobHandler {
         const errorMsg = error || 'Unknown error from AI server';
         logger.warn({ taskId, userId, error: errorMsg }, 'Graph generation failed');
 
+        // 실패 알림 전송 전에 상태 롤백
+        const stats = await graphService.getStats(userId);
+        if (stats) {
+          stats.status = 'NOT_CREATED';
+          await graphService.saveStats(stats);
+        }
+
         // 실패 알림 전송(Redis Pub/Sub & FCM)
         await notiService.sendNotification(userId, NotificationType.GRAPH_GENERATION_FAILED, {
           taskId,

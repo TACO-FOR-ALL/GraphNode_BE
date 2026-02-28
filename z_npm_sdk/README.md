@@ -433,7 +433,7 @@ await client.conversations.restoreMessage('conv-1', 'msg-1');
 | `deleteEdge(id)` | `DELETE /edges/:id` | 엣지 삭제 | 204 |
 | `listClusters()` | `GET /clusters` | 클러스터 전체 | 200 |
 | `getCluster(id)` | `GET /clusters/:id` | 클러스터 상세 | 200 |
-| `getStats()` | `GET /stats` | 그래프 통계 | 200 |
+| `getStats()` | `GET /stats` | 그래프 통계 및 상태 | 200 |
 | `getSnapshot()` | `GET /snapshot` | 전체 덤프 | 200 |
 
 #### **Detailed Usage**
@@ -467,7 +467,7 @@ await client.graph.createEdge({ source: 1, target: 2, type: 'hard', weight: 1 })
 <summary><b>getStats()</b></summary>
 
 - **Returns**: `Promise<HttpResponse<GraphStatsDto>>`
-  - `nodes`: number, `edges`: number, `clusters`: number
+  - `nodes`: number, `edges`: number, `clusters`: number, `status`: string ('NOT_CREATED' | 'CREATING' | 'CREATED' | 'UPDATING' | 'UPDATED')
 - **Example**:
 ```typescript
 const res = await client.graph.getStats();
@@ -507,16 +507,19 @@ renderGraph(res.data.nodes, res.data.edges);
 #### **Detailed Usage**
 
 <details>
-<summary><b>generateGraph() / addNode()</b></summary>
+<summary><b>generateGraph(options?) / addNode(options?)</b></summary>
 
+- **Parameters**: 
+  - `options`: `GenerateGraphOptions` (선택 사항)
+    - `includeSummary`: boolean (기본값: true). 그래프 생성 또는 추가 작업 완료 후 요약을 자동으로 생성할 지 여부를 결정합니다.
 - **Returns**: `Promise<HttpResponse<GraphGenerationResponseDto>>`
   - `taskId`: string, `status`: 'queued', `message`: string
 - **Example**:
 ```typescript
-const res = await client.graphAi.generateGraph();
+const res = await client.graphAi.generateGraph({ includeSummary: true });
 console.log('Task started:', res.data.taskId);
 
-const res2 = await client.graphAi.addNode();
+const res2 = await client.graphAi.addNode({ includeSummary: false });
 console.log('Add node task started:', res2.data.taskId);
 ```
 </details>
@@ -698,34 +701,68 @@ const res = await client.health.get(); // { ok: true }
 
 | Method | Endpoint | Description | Status |
 | :--- | :--- | :--- | :--- |
-| `listWorkspaces()` | `GET /v1/microscope` | 워크스페이스 목록 조회 | 200 |
-| `getWorkspace(groupId)` | `GET /v1/microscope/:groupId` | 워크스페이스 상세 조회 | 200 |
-| `createWorkspaceWithDocuments(...)`| `POST /v1/microscope` | 신규 생성 및 문서 이관 | 201 |
-| `addDocumentsToWorkspace(...)` | `POST /v1/microscope/:groupId/documents`| 문서 병합 및 처리 시작 | 202 |
+| `listWorkspaces()` | `GET /v1/microscope` | 워크스페이스(메타데이터) 목록 조회 | 200 |
+| `getWorkspace(groupId)` | `GET /v1/microscope/:groupId` | 단일 워크스페이스 상태/진행도 조회 | 200 |
+| `getWorkspaceGraph(groupId)` | `GET /v1/microscope/:groupId/graph` | 실제 지식 그래프(Microscope) 데이터 조회 | 200 |
+| `ingestFromNote(...)`| `POST /v1/microscope/nodes/ingest` | 노트를 기반으로 신규 그래프 분석 시작 | 201 |
+| `ingestFromConversation(...)`| `POST /v1/microscope/nodes/ingest` | 대화를 기반으로 신규 그래프 분석 시작 | 201 |
 | `deleteWorkspace(groupId)` | `DELETE /v1/microscope/:groupId` | 워크스페이스(및 그래프) 파기 | 204 |
+
+> ℹ️ **Workspace vs Microscope Workspace Graph**
+> - **Workspace (메타데이터)**: 지식 그래프 생성을 위한 하나의 작업 단위를 뜻합니다. 상태(진행도), 에러, 파일/데이터 출처 등에 대한 **메타데이터**만을 포함합니다.
+>   - `listWorkspaces()`: 사용자가 가진 전체 워크스페이스 목록을 가져옵니다. **사이드바 등에서 목록을 나열할 때 사용**합니다. 노드나 엣지는 포함되지 않으므로 가볍습니다.
+>   - `getWorkspace()`: 특정 작업의 Ingest 진행률 상태나 에러 메시지 등을 파악하기 위해 조회합니다.
+> - **Workspace Graph (실제 노드/엣지 데이터)**: 
+>   - `getWorkspaceGraph()`를 통해 반환되는 실제 구체적인 세부 지식 그래프 시각화 데이터입니다. UI 메인 화면에 그래프를 렌더링하기 위한 데이터를 가져오는 데에 사용해야 합니다.
 
 #### **Detailed Usage**
 
 <details>
-<summary><b>createWorkspaceWithDocuments(name, files?, schemaName?)</b></summary>
+<summary><b>ingestFromNote(noteId, schemaName?)</b></summary>
 
 - **Returns**: `Promise<HttpResponse<MicroscopeWorkspace>>`
+- **Description**: 기존 작성된 `noteId` 데이터를 기반으로 지식 그래프 생성을 비동기로 요청합니다.
 - **Example**:
 ```typescript
-const files = [new File(['content'], 'test.pdf')];
-const res = await client.microscope.createWorkspaceWithDocuments('Project A', files);
-console.log('Created ID:', res.data._id);
+const res = await client.microscope.ingestFromNote('note_123');
+console.log('Created Workspace ID:', res.data._id);
 ```
 </details>
 
 <details>
-<summary><b>addDocumentsToWorkspace(groupId, files, schemaName?)</b></summary>
+<summary><b>ingestFromConversation(conversationId, schemaName?)</b></summary>
 
-- **Returns**: `Promise<HttpResponse<{ message: string }>>`
+- **Returns**: `Promise<HttpResponse<MicroscopeWorkspace>>`
+- **Description**: 기존 나눈 `conversationId` 대화 데이터를 바탕으로 지식 그래프 생성을 비동기로 요청합니다.
 - **Example**:
 ```typescript
-const files = [new File(['content'], 'test2.md')];
-await client.microscope.addDocumentsToWorkspace('group_123', files);
+const res = await client.microscope.ingestFromConversation('conv_456', 'OptionalSchema');
+console.log('Created Workspace ID:', res.data._id);
+```
+</details>
+
+<details>
+<summary><b>listWorkspaces() & getWorkspace(groupId)</b></summary>
+
+- **Returns**: `Promise<HttpResponse<MicroscopeWorkspace[] | MicroscopeWorkspace>>`
+- **Description**: 그래프 목록이나 특정 작업의 메타데이터(상태)를 조회합니다.
+- **Example**:
+```typescript
+const list = await client.microscope.listWorkspaces();
+const pendingWorkspace = await client.microscope.getWorkspace('group_123');
+console.log(pendingWorkspace.data.documents[0].status); // 'PENDING' | 'COMPLETED' 등
+```
+</details>
+
+<details>
+<summary><b>getWorkspaceGraph(groupId)</b></summary>
+
+- **Returns**: `Promise<HttpResponse<any[]>>` // TODO: 구체적인 반환타입 업데이트
+- **Description**: 메인 화면 시각화에 쓰일 실제 그래프(노드, 엣지 등) 데이터를 반환합니다.
+- **Example**:
+```typescript
+const graphData = await client.microscope.getWorkspaceGraph('group_123');
+renderD3Graph(graphData.data);
 ```
 </details>
 

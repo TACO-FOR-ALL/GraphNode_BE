@@ -119,6 +119,16 @@ export class GraphGenerationService {
       taskId = `task_${userId}_${ulid()}`;
       const s3Key = `graph-generation/${taskId}/input.json`;
 
+      // 상태 변경: CREATING
+      await this.graphEmbeddingService.saveStats({
+        userId,
+        nodes: 0,
+        edges: 0,
+        clusters: 0,
+        status: 'CREATING',
+        generatedAt: new Date().toISOString(),
+      });
+
       //logger.info({ userId, taskId }, 'Preparing graph generation request (S3 + SQS)');
 
       // 3. 데이터 수집 및 S3 업로드
@@ -393,6 +403,10 @@ export class GraphGenerationService {
       const payloadJson = JSON.stringify(batchPayload);
       await this.storagePort.upload(s3Key, payloadJson, 'application/json');
 
+      // 상태 변경: UPDATING
+      stats.status = 'UPDATING';
+      await this.graphEmbeddingService.saveStats(stats);
+
       // 6. Send SQS message (AddNodeRequestPayload 변경점에 유의)
       // 현재 AddNodeRequestPayload 규격에 맞춥니다 (conversationId는 dummy 값 혹은 첫번째 값)
       // 향후 queue.ts 의 AddNodeRequestPayload 도 batch 용으로 수정이 필요할 수 있습니다.
@@ -415,6 +429,82 @@ export class GraphGenerationService {
       logger.error({ err, userId }, 'Failed to queue add node request');
       if (err instanceof AppError) throw err;
       throw new UpstreamError('Failed to request add node via queue', {
+        cause: String(err),
+      });
+    }
+  }
+
+  /**
+   * 로컬/클라우드 통신 테스트 전용 (DB 상태 반영 없이 S3, SQS 플로우만 실행).
+   */
+  async testRequestAddNodeViaQueue(userId: string): Promise<string> {
+    try {
+      const taskId = `test-add-node-${ulid()}`;
+      const s3Key = `payloads/graph-ai/${userId}/${taskId}.json`;
+
+      // 1. Mock conversations 생성
+      const mockConversations = [
+        {
+          id: 'test-conv-1',
+          conversation_id: 'test-conv-1',
+          conversationId: 'test-conv-1',
+          title: 'Test Conversation 1',
+          create_time: Math.floor(Date.now() / 1000) - 3600,
+          update_time: Math.floor(Date.now() / 1000),
+          mapping: {
+            "test-msg-1": {
+              "role": "user",
+              "content": "이것은 단일 테스트 유저 메시지입니다."
+            },
+            "test-msg-2": {
+              "role": "assistant",
+              "content": "이것은 테스트 어시스턴트 메시지입니다."
+            }
+          }
+        }
+      ];
+
+      // 2. 임의의 기존 클러스터(Mock) 정보 구성
+      const mockClusters = [
+        {
+          "title": "테스트용 기존 클러스터",
+          "summary": "테스트를 위한 클러스터 정보입니다.",
+          "contents": [
+            "기존 내용 1", "기존 내용 2"
+          ]
+        }
+      ];
+
+      const batchPayload = {
+        userId: userId,
+        existingClusters: mockClusters,
+        conversations: mockConversations
+      };
+
+      // 3. Upload to S3
+      const payloadJson = JSON.stringify(batchPayload);
+      await this.storagePort.upload(s3Key, payloadJson, 'application/json');
+
+      // 4. Send SQS message (DB 업데이트 제외)
+      const messageBody: AddNodeRequestPayload = {
+        taskId,
+        taskType: TaskType.ADD_NODE_REQUEST,
+        payload: {
+          userId,
+          s3Key,
+          bucket: process.env.S3_PAYLOAD_BUCKET,
+        },
+        timestamp: new Date().toISOString(),
+      };
+
+      logger.info({ userId, taskId }, 'Sending TEST add node job to SQS');
+      await this.queuePort.sendMessage(this.jobQueueUrl, messageBody);
+
+      return taskId;
+    } catch (err) {
+      logger.error({ err, userId }, 'Failed to queue TEST add node request');
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('Failed to request test add node via queue', {
         cause: String(err),
       });
     }

@@ -42,6 +42,7 @@
     "nodes": 1,
     "edges": 1,
     "clusters": 1,
+    "status": "CREATED",
     "generatedAt": "2025-01-03T09:00:00Z",
     "metadata": {
       "version": "1.0"

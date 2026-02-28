@@ -11,6 +11,8 @@ import { HttpClient } from '../../src/infra/http/httpClient';
 import { ConflictError } from '../../src/shared/errors/domain';
 import { QueuePort } from '../../src/core/ports/QueuePort';
 import { StoragePort } from '../../src/core/ports/StoragePort';
+import { UserService } from '../../src/core/services/UserService';
+import { NotificationService } from '../../src/core/services/NotificationService';
 
 // Mock HttpClient
 jest.mock('../../src/infra/http/httpClient');
@@ -25,10 +27,13 @@ describe('GraphGenerationService', () => {
   let mockHttpClient: jest.Mocked<HttpClient>;
   let mockQueuePort: jest.Mocked<QueuePort>;
   let mockStoragePort: jest.Mocked<StoragePort>;
+  let mockUserSvc: jest.Mocked<UserService>;
+  let mockNotificationSvc: jest.Mocked<NotificationService>;
 
   beforeEach(() => {
     // Reset mocks
     jest.clearAllMocks();
+
 
     // Create mocks
     mockChatSvc = {
@@ -39,6 +44,19 @@ describe('GraphGenerationService', () => {
     mockGraphEmbSvc = {
       persistSnapshot: jest.fn(),
       getSnapshotForUser: jest.fn(), // Added default mock
+      getStats: jest.fn(),
+      saveStats: jest.fn(),
+    } as any;
+
+    mockUserSvc = {
+      findById: jest.fn(),
+      getPreferredLanguage: jest.fn<any>().mockResolvedValue('ko'),
+    } as any;
+
+    mockNotificationSvc = {
+      sendTaskCompleted: jest.fn(),
+      sendTaskFailed: jest.fn(),
+      sendNotification: jest.fn(),
     } as any;
 
     mockQueuePort = {
@@ -55,18 +73,15 @@ describe('GraphGenerationService', () => {
     } as any;
 
     // Mock upload to consume stream
-    mockStoragePort.upload.mockImplementation(async (key, body: any, contentType) => {
-      // Force consumption via resume() for Readable streams
-      if (body && typeof body.resume === 'function') {
-        body.resume();
+    mockStoragePort.upload.mockImplementation(async (key: any, body: any, contentType: any) => {
+      // Force consumption for Readable streams
+      if (body && typeof body.on === 'function') {
+        body.on('data', () => {}); // Consume stream
         await new Promise<void>((resolve, reject) => {
             body.on('end', resolve);
             body.on('error', reject);
-            // Also listen to close just in case
             body.on('close', resolve);
         });
-      } else if (body && typeof body[Symbol.asyncIterator] === 'function') {
-         for await (const chunk of body) { /* consume */ }
       }
     });
 
@@ -87,7 +102,14 @@ describe('GraphGenerationService', () => {
     } as any;
     (HttpClient as jest.Mock).mockImplementation(() => mockHttpClient);
 
-    service = new GraphGenerationService(mockChatSvc, mockGraphEmbSvc, mockQueuePort, mockStoragePort);
+    service = new GraphGenerationService(
+      mockChatSvc,
+      mockGraphEmbSvc,
+      mockUserSvc,
+      mockQueuePort,
+      mockStoragePort,
+      mockNotificationSvc
+    );
 
     // Use fake timers to control polling
     jest.useFakeTimers();
@@ -95,55 +117,6 @@ describe('GraphGenerationService', () => {
 
   afterEach(() => {
     jest.useRealTimers();
-  });
-
-  describe('generateGraphForUser', () => {
-    const userId = 'user1';
-
-    it('should fetch conversations, transform data, and send to AI server', async () => {
-      // Arrange
-      mockChatSvc.listConversations.mockResolvedValueOnce({
-        items: [{ id: 'c1', title: 'T1', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), messages: [] } as any],
-        nextCursor: null,
-      });
-
-      mockHttpClient.get.mockResolvedValueOnce({ task_id: 'task1', status: 'completed' });
-      mockHttpClient.get.mockResolvedValueOnce({
-        nodes: [],
-        edges: [],
-        metadata: { clusters: {}, generated_at: new Date().toISOString(), total_nodes: 0, total_edges: 0, total_clusters: 0 }
-      }); // Result
-
-      // Act
-      const taskId = await service.generateGraphForUser(userId);
-
-      // Assert
-      expect(taskId).toBe('task1');
-      expect(mockChatSvc.listConversations).toHaveBeenCalled();
-      expect(mockHttpClient.post).toHaveBeenCalledWith(
-        '/analysis',
-        expect.any(Object)
-      );
-
-      // Fast-forward time to trigger polling
-      jest.runOnlyPendingTimers();
-
-      // Verify polling happened
-      expect(mockHttpClient.get).toHaveBeenCalledWith('/status/task1');
-    });
-
-    it('should throw ConflictError if task is already in progress', async () => {
-      // Arrange
-      mockChatSvc.listConversations.mockResolvedValue({ items: [], nextCursor: null });
-      mockHttpClient.post.mockResolvedValue({ task_id: 'task1', status: 'processing' });
-
-      // Act
-      await service.generateGraphForUser(userId); // First call
-
-      // Assert
-      await expect(service.generateGraphForUser(userId)) // Second call
-        .rejects.toThrow(ConflictError);
-    });
   });
 
   describe('requestGraphSummary', () => {
@@ -188,8 +161,8 @@ describe('GraphGenerationService', () => {
         items: [{ id: 'c1', title: 'T1', messages: [] } as any],
         nextCursor: null,
       });
-      mockStoragePort.upload.mockResolvedValue(undefined);
       mockQueuePort.sendMessage.mockResolvedValue(undefined);
+      mockGraphEmbSvc.saveStats.mockResolvedValue(undefined);
 
       // Act
       const taskId = await service.requestGraphGenerationViaQueue(userId);
@@ -205,9 +178,14 @@ describe('GraphGenerationService', () => {
       expect(mockQueuePort.sendMessage).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
-          userId,
-          bucket: process.env.S3_PAYLOAD_BUCKET
+          payload: expect.objectContaining({
+            userId,
+            bucket: process.env.S3_PAYLOAD_BUCKET
+          })
         })
+      );
+      expect(mockGraphEmbSvc.saveStats).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'CREATING' })
       );
     });
   });

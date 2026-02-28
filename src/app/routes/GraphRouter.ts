@@ -8,7 +8,7 @@ import { Router } from 'express';
 import type { GraphEmbeddingService } from '../../core/services/GraphEmbeddingService';
 import { internalOrSession } from '../middlewares/internal';
 import { asyncHandler } from '../utils/asyncHandler';
-import { GraphController } from '../controllers/graph';
+import { GraphController } from '../controllers/GraphController';
 
 /**
  * 라우터 팩토리 함수

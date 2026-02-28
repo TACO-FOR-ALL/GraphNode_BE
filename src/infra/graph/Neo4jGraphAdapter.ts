@@ -7,6 +7,10 @@ import {
   MicroscopeChunkNode, 
   MicroscopeRelEdge 
 } from '../../core/types/neo4j/microscope.neo4j';
+import type { 
+  MicroscopeGraphDataDto, 
+ 
+} from '../../shared/dtos/microscope';
 import { logger } from '../../shared/utils/logger';
 import { UpstreamError } from '../../shared/errors/domain';
 
@@ -14,6 +18,10 @@ export class Neo4jGraphAdapter implements GraphNeo4jStore {
   private getDriver(): Driver {
     return getNeo4jDriver();
   }
+
+
+  //FIXME TODO -> Neo4j 접근하는 관련 구현체 코드 전부다 수정 요망
+  // 추후 AI 서버 코드 및 개발자와의 협의진행 요망
 
   // Helper to run query with optional transaction
   private async runQuery(query: string, params: any = {}, options?: Neo4jOptions) {
@@ -35,6 +43,7 @@ export class Neo4jGraphAdapter implements GraphNeo4jStore {
   }
 
   // --- Node Methods ---
+
 
   async upsertNode(node: GraphNodeDoc, options?: Neo4jOptions): Promise<void> {
     const query = `
@@ -393,4 +402,55 @@ export class Neo4jGraphAdapter implements GraphNeo4jStore {
     `;
     await this.runQuery(query, { groupId }, options);
   }
+
+  /**
+   * 해당 워크스페이스(group_id)에 속한 모든 Microscope 데이터(노드 및 엣지)를 조회하여 FE 포맷으로 반환합니다.
+   */
+  async getMicroscopeWorkspaceGraph(groupId: string, options?: Neo4jOptions): Promise<MicroscopeGraphDataDto> {
+    const nodesQuery = `
+      MATCH (n:Entity {group_id: $groupId})
+      RETURN n
+    `;
+    const edgesQuery = `
+      MATCH (s:Entity {group_id: $groupId})-[r:REL {group_id: $groupId}]->(t:Entity {group_id: $groupId})
+      RETURN r, s.name as start, t.name as target
+    `;
+
+    // //Node/Edge에 대한 Type 정의 필요?
+    const nodesResult = await this.runQuery(nodesQuery, { groupId }, options);
+    const edgesResult = await this.runQuery(edgesQuery, { groupId }, options);
+
+    // //NodeResult에 대한 Type 정의 필요?
+    // const nodes: MicroscopeGraphNodeDto[] = [];
+    // nodesResult.records.forEach((record) => {
+    //   const props = record.get('n').properties;
+    //   nodes.push({
+    //     id: props.uuid,
+    //     name: props.name,
+    //     type: props.types && props.types.length > 0 ? props.types[0] : 'Unknown',
+    //     description: props.descriptions && props.descriptions.length > 0 ? props.descriptions[0] : '',
+    //     source_chunk_id: props.chunk_ids && props.chunk_ids.length > 0 ? props.chunk_ids[0] : null
+    //   });
+    // });
+
+    // //EdgeResult에 대한 Type 정의 필요?
+    // const edges: MicroscopeGraphEdgeDto[] = [];
+    // edgesResult.records.forEach((record) => {
+    //   const props = record.get('r').properties;
+    //   const start = record.get('start');
+    //   const target = record.get('target');
+    //   edges.push({
+    //     id: props.uuid || `edge_${Math.random().toString(36).substr(2, 9)}`,
+    //     start: start,
+    //     target: target,
+    //     type: props.type,
+    //     description: props.description || props.type || '',
+    //     evidence: props.evidence || '',
+    //     confidence: props.weight || 1.0
+    //   });
+    // });
+
+    return { nodes: [], edges: [] };
+  }
 }
+

@@ -28,6 +28,13 @@ export class AddNodeResultHandler implements JobHandler {
 
     if (status === 'FAILED' || error) {
       logger.error({ taskId, userId, error }, 'AddNode task failed from AI Server');
+      
+      const stats = await graphService.getStats(userId);
+      if (stats) {
+        stats.status = 'CREATED';
+        await graphService.saveStats(stats);
+      }
+
       await notiService.sendNotification(userId, NotificationType.ADD_CONVERSATION_FAILED, {
         taskId,
         error: error || 'Unknown AI error',
@@ -120,6 +127,7 @@ export class AddNodeResultHandler implements JobHandler {
       const stats = await graphService.getStats(userId);
       if (stats) {
           stats.updatedAt = new Date().toISOString();
+          stats.status = 'UPDATED';
           await graphService.saveStats(stats);
       }
 

@@ -84,6 +84,22 @@ export class GraphAiController {
   };
 
   /**
+   * GET /v1/graph-ai/test-add-node
+   * 로컬/클라우드 테스트를 위해 실제 DB 연동 없이 mock 데이터로 SQS(Add Node) 플로우만 트리거합니다.
+   */
+  testAddNodeToGraph = async (req: Request, res: Response) => {
+    const userId = getUserIdFromRequest(req);
+
+    const taskId = await this.graphGenerationService.testRequestAddNodeViaQueue(userId!);
+
+    res.status(202).json({
+      message: 'Test add node to graph queued (mock payload sent to SQS)',
+      taskId: taskId,
+      status: 'queued',
+    });
+  };
+
+  /**
    * DELETE /v1/graph-ai
    * 사용자의 모든 지식 그래프 데이터를 영구 삭제합니다.
    *

@@ -429,7 +429,9 @@ export class Container {
         this.getMicroscopeWorkspaceStore(),
         this.getGraphNeo4jStore(),
         this.getAwsSqsAdapter(),
-        this.getAwsS3Adapter()
+        this.getAwsS3Adapter(),
+        this.getConversationRepository(),
+        this.getNoteRepository()
       );
       this.microscopeManagementService = createAuditProxy(raw, 'MicroscopeManagementService');
     }

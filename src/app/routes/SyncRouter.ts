@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import { SyncController } from '../controllers/sync';
+import { SyncController } from '../controllers/SyncController';
 import type { SyncService } from '../../core/services/SyncService';
 import { requireLogin } from '../middlewares/auth';
 import { bindSessionUser } from '../middlewares/session';

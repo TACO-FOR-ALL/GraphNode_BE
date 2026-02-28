@@ -9,7 +9,7 @@
 
 import { Router } from 'express';
 
-import { createNoteRouter } from '../../app/routes/note.routes';
+import { createNoteRouter } from '../../app/routes/NoteRouter';
 import { container } from '../container';
 
 /**

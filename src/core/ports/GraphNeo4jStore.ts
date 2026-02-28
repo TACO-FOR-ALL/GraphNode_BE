@@ -4,6 +4,7 @@ import {
   GraphClusterDoc,
   GraphStatsDoc,
 } from '../types/persistence/graph.persistence';
+import type { MicroscopeGraphDataDto } from '../../shared/dtos/microscope';
 import {
   MicroscopeEntityNode,
   MicroscopeChunkNode,
@@ -65,4 +66,9 @@ export interface GraphNeo4jStore {
    * 해당 워크스페이스(group_id)에 속한 모든 Microscope 데이터(노드 및 엣지)를 파기합니다.
    */
   deleteMicroscopeWorkspaceGraphs(groupId: string, options?: Neo4jOptions): Promise<void>;
+
+  /**
+   * 해당 워크스페이스(group_id)에 속한 모든 Microscope 데이터(노드 및 엣지)를 조회하여 FE 포맷으로 반환합니다.
+   */
+  getMicroscopeWorkspaceGraph(groupId: string, options?: Neo4jOptions): Promise<MicroscopeGraphDataDto>;
 }

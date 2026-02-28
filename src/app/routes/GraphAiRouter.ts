@@ -24,6 +24,12 @@ export function createGraphAiRouter(graphGenerationService: GraphGenerationServi
     asyncHandler(graphAiController.addNodeToGraph.bind(graphAiController))
   );
 
+  // GET /v1/graph-ai/test-add-node
+  router.get(
+    '/test-add-node',
+    asyncHandler(graphAiController.testAddNodeToGraph.bind(graphAiController))
+  );
+
   // POST /v1/graph-ai/summary (생성 요청)
   router.post('/summary', asyncHandler(graphAiController.summarizeGraph.bind(graphAiController)));
 

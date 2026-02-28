@@ -1,8 +1,10 @@
 import { JobHandler } from './JobHandler';
 import type { Container } from '../../bootstrap/container';
-import { MicroscopeIngestResultQueuePayload } from '../../shared/dtos/queue';
+import { MicroscopeIngestFromNodeResultQueuePayload } from '../../shared/dtos/queue';
 import { logger } from '../../shared/utils/logger';
 import { NotificationType } from '../notificationType';
+import { AiMicroscopeIngestResultItem } from '../../shared/dtos/ai_graph_output';
+import { MicroscopeWorkspaceMetaDoc } from '../../core/types/persistence/microscope_workspace.persistence';
 
 /**
  * Microscope 문서 분석(Ingest) 결과 처리 핸들러
@@ -14,7 +16,7 @@ import { NotificationType } from '../notificationType';
  * 4. 대상 워크스페이스 내 모든 문서 처리가 완료되었는지 확인하고 합산 통계(개수)와 함께 "전체 종료" 알림 발송
  */
 export class MicroscopeIngestResultHandler implements JobHandler {
-  async handle(message: MicroscopeIngestResultQueuePayload, container: Container): Promise<void> {
+  async handle(message: MicroscopeIngestFromNodeResultQueuePayload, container: Container): Promise<void> {
     const { payload, taskId } = message;
     const { user_id, group_id, status, source_id, chunks_count, error } = payload;
 
@@ -22,6 +24,7 @@ export class MicroscopeIngestResultHandler implements JobHandler {
     const userId = user_id;
     const groupId = group_id;
     const sourceId = source_id;
+    const standardizedS3Key = payload.standardized_s3_key;
     
     // Envelope의 taskId를 통해 문서 ID 식별
     const docId = taskId;
@@ -31,15 +34,30 @@ export class MicroscopeIngestResultHandler implements JobHandler {
     // 의존성 획득
     const microscopeService = container.getMicroscopeManagementService();
     const notiService = container.getNotificationService();
+    const storagePort = container.getAwsS3Adapter();
 
     try {
-      // 1. 서비스 호출을 통한 개별 문서 진행상태 갱신 및 전체 문서 상태 진단
-      const updatedWorkspace = await microscopeService.updateDocumentStatus(
+      let downloadedGraphData: any = undefined;
+
+      // 1. S3에서 그래프 데이터 다운로드
+      if (status === 'COMPLETED' && standardizedS3Key) {
+        try {
+          downloadedGraphData = await storagePort.downloadJson<AiMicroscopeIngestResultItem[]>(standardizedS3Key, { bucketType: 'payload' });
+          logger.info({ taskId, standardizedS3Key }, 'Successfully downloaded standardized graph JSON from S3');
+        } catch (downloadErr) {
+          logger.error({ err: downloadErr, taskId, standardizedS3Key }, 'Failed to download graph JSON from S3');
+          // S3 다운로드 실패 시 상태를 FAILED로 간주해야 할 수도 있으나 현재는 에러만 로깅
+        }
+      }
+
+      // 1. 서비스 호출을 통한 개별 문서 진행상태 갱신 및 Mongo 페이로드 저장
+      const updatedWorkspace : MicroscopeWorkspaceMetaDoc = await microscopeService.updateDocumentStatus(
         userId,
         groupId,
         docId,
         status,
         sourceId,
+        downloadedGraphData,
         error
       );
 

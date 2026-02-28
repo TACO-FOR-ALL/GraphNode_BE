@@ -70,7 +70,9 @@ export const graphStatsSchema = z.object({
   nodes: z.number().int().nonnegative(),
   edges: z.number().int().nonnegative(),
   clusters: z.number().int().nonnegative(),
+  status: z.enum(['NOT_CREATED', 'CREATING', 'CREATED', 'UPDATING', 'UPDATED']),
   generatedAt: z.iso.datetime({ offset: true }).optional(),
+  updatedAt: z.iso.datetime({ offset: true }).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 }) satisfies z.ZodType<GraphStatsDto>;
 
@@ -85,7 +87,9 @@ export const graphSnapshotSchema = z.object({
     nodes: z.number().int().nonnegative(),
     edges: z.number().int().nonnegative(),
     clusters: z.number().int().nonnegative(),
+    status: z.enum(['NOT_CREATED', 'CREATING', 'CREATED', 'UPDATING', 'UPDATED']),
     generatedAt: z.iso.datetime({ offset: true }).optional(),
+    updatedAt: z.iso.datetime({ offset: true }).optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),
   }),
 }) satisfies z.ZodType<GraphSnapshotDto>;

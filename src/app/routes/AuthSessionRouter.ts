@@ -9,7 +9,7 @@
 import { Router } from 'express';
 
 // no-op imports (session cookies handled in controllers where needed)
-import * as ctrl from '../controllers/auth.session';
+import * as ctrl from '../controllers/AuthSession';
 
 const router = Router();
 

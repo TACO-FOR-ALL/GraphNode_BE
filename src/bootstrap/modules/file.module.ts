@@ -9,7 +9,7 @@
 
 import { Router } from 'express';
 
-import { createFileRouter } from '../../app/routes/file.route';
+import { createFileRouter } from '../../app/routes/FileRouter';
 import { container } from '../container';
 import { AwsS3Adapter } from '../../infra/aws/AwsS3Adapter';
 

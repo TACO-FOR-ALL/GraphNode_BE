@@ -25,6 +25,11 @@
       "type": "integer",
       "minimum": 0
     },
+    "status": {
+      "description": "The current status of the graph (e.g., NOT_CREATED, CREATING, CREATED, UPDATING, UPDATED).",
+      "type": "string",
+      "enum": ["NOT_CREATED", "CREATING", "CREATED", "UPDATING", "UPDATED"]
+    },
     "generatedAt": {
       "description": "Timestamp when the stats were generated (ISO 8601 UTC).",
       "type": "string",
@@ -36,5 +41,5 @@
       "additionalProperties": true
     }
   },
-  "required": ["userId", "nodes", "edges", "clusters"]
+  "required": ["userId", "nodes", "edges", "clusters", "status"]
 }
