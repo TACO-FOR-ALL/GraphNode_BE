@@ -164,8 +164,7 @@ export class GraphAiApi {
    * await sdk.graphAi.deleteGraph({ permanent: true });
    */
   async deleteGraph(options?: { permanent?: boolean }): Promise<HttpResponse<void>> {
-    const q = options?.permanent ? '?permanent=true' : '';
-    return this.rb.delete<void>(`/v1/graph-ai${q}`);
+    return this.rb.query(options?.permanent ? { permanent: true } : undefined).delete<void>();
   }
 
   /**
@@ -187,8 +186,7 @@ export class GraphAiApi {
    * await sdk.graphAi.deleteSummary({ permanent: true });
    */
   async deleteSummary(options?: { permanent?: boolean }): Promise<HttpResponse<void>> {
-    const q = options?.permanent ? '?permanent=true' : '';
-    return this.rb.delete<void>(`/v1/graph-ai/summary${q}`);
+    return this.rb.path('/summary').query(options?.permanent ? { permanent: true } : undefined).delete<void>();
   }
 
   /**

@@ -27,5 +27,5 @@ export async function initDatabases() {
   await initChroma();
 
   // 5. Neo4j connection FIXME
-  await initNeo4j();
+  // await initNeo4j();
 }
