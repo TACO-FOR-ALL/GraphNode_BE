@@ -173,8 +173,34 @@ export class GraphGenerationResultHandler implements JobHandler {
         );
       }
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Processing failed internally';
       logger.error({ err, taskId, userId }, 'Error processing graph generation result');
+      
+      try {
+        const stats = await graphService.getStats(userId);
+        if (stats) {
+          stats.status = 'NOT_CREATED';
+          await graphService.saveStats(stats);
+        }
+
+        // 실패 알림 전송 (에러 발생 시점)
+        await notiService.sendNotification(userId, NotificationType.GRAPH_GENERATION_FAILED, {
+          taskId,
+          error: errorMsg,
+          timestamp: new Date().toISOString(),
+        });
+        await notiService.sendFcmPushNotification(
+          userId,
+          'Graph Generation Failed',
+          'Failed to generate knowledge graph. Please try again.',
+          { type: NotificationType.GRAPH_GENERATION_FAILED, taskId, error: errorMsg }
+        );
+      } catch (fallbackErr) {
+        logger.error({ err: fallbackErr, taskId, userId }, 'Failed to send fallback error notification');
+      }
+
       // 여기서 에러를 던지면 sqs-consumer가 메시지를 삭제하지 않고 재시도 처리함 (설정에 따라 DLQ 이동)
+      // Sentry 로깅 등을 연동할 수 있도록 상위로 전파
       throw err;
     }
   }
