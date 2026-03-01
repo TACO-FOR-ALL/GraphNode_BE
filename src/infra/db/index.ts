@@ -26,6 +26,6 @@ export async function initDatabases() {
   // FIXME TODO : ChromaDB 연결 추가 필요
   await initChroma();
 
-  // 5. Neo4j connection FIXME
+  // 5. Neo4j connection FIXME(Connection 시 인증 오류 발생, PW 확인 필요)
   // await initNeo4j();
 }
