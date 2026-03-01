@@ -42,7 +42,7 @@ export type {
   ConversationUpdateDto,
   ConversationBulkCreateDto,
 } from './types/conversation.js';
-export type { MessageDto, MessageCreateDto, MessageUpdateDto } from './types/message.js';
+export type { MessageDto, MessageCreateDto, MessageUpdateDto, Attachment } from './types/message.js';
 export type {
   NoteDto,
   NoteCreateDto,
@@ -53,7 +53,19 @@ export type {
 } from './types/note.js';
 export type { SyncPushRequest, SyncPullResponse } from './types/sync.js';
 export type { FileAttachment, FileUploadResponse } from './types/file.js';
-export type { MicroscopeDocument, MicroscopeWorkspace } from './types/microscope.js';
+export type { MicroscopeDocument, MicroscopeWorkspace, MicroscopeGraphNode, MicroscopeGraphEdge, MicroscopeGraphData } from './types/microscope.js';
+export type {
+  GraphNodeDto,
+  GraphEdgeDto,
+  GraphClusterDto,
+  GraphStatsDto,
+  GraphSnapshotDto,
+  GraphSubclusterDto,
+  GraphSummaryDto,
+  CreateEdgeResponse,
+  UpdateNodePayload,
+  GraphStatus,
+} from './types/graph.js';
 export type {
   AgentChatMode,
   AgentChatModeHint,
@@ -65,7 +77,7 @@ export type {
 export { openAgentChatStream } from './endpoints/agent.js';
 export type { AIChatRequestDto, AIChatResponseDto } from './endpoints/ai.js';
 export { AiStreamEvent } from './types/ai-event.js';
-export type { GraphGenerationResponseDto } from './types/graphAi.js';
+export type { GraphGenerationResponseDto, GenerateGraphOptions } from './types/graphAi.js';
 export type {
   AiInputData,
   AiInputMappingNode,
