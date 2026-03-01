@@ -207,6 +207,8 @@ export class MicroscopeManagementService {
       s3Key: '', // Node 방식이므로 s3Key 불필요, 빈 문자열 삽입
       fileName: `${nodeId}.md`,
       status: 'PENDING',
+      nodeId,
+      nodeType,
       createdAt: now,
       updatedAt: now,
     };

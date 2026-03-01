@@ -5,6 +5,8 @@
  * @param s3Key S3 키 > 안씀
  * @param fileName 파일 이름
  * @param status 문서 상태
+ * @param nodeId 원본 노드 ID
+ * @param nodeType 원본 노드 타입
  * @param sourceId 소스 ID
  * @param graphPayloadId Microscope Graph 획득용 ID
  * @param error 에러
@@ -16,6 +18,8 @@ export interface MicroscopeDocument {
   s3Key: string;
   fileName: string;
   status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  nodeId?: string;
+  nodeType?: 'note' | 'conversation';
   sourceId?: string;
   graphPayloadId?: string;
   error?: string;

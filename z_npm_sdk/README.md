@@ -750,7 +750,9 @@ console.log('Created Workspace ID:', res.data._id);
 ```typescript
 const list = await client.microscope.listWorkspaces();
 const pendingWorkspace = await client.microscope.getWorkspace('group_123');
-console.log(pendingWorkspace.data.documents[0].status); // 'PENDING' | 'COMPLETED' 등
+const doc = pendingWorkspace.data.documents[0];
+console.log(doc.status); // 'PENDING' | 'COMPLETED' 등
+console.log(doc.nodeId, doc.nodeType); // 원본 노드 정보
 ```
 </details>
 
