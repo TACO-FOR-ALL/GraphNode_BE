@@ -84,7 +84,9 @@ describe('DocumentProcessor', () => {
         const result = await processor.process(buffer, 'application/javascript', 'test.js');
 
         expect(result.type).toBe('text');
-        expect(result.content).toBe(code);
+        expect(result.content).toContain('[File: test.js]');
+        expect(result.content).toContain('```js');
+        expect(result.content).toContain(code);
         expect(result.metadata?.parser).toBe('text');
     });
 
@@ -94,6 +96,7 @@ describe('DocumentProcessor', () => {
         const result = await processor.process(buffer, 'application/unknown', 'test.unknown');
 
         expect(result.type).toBe('text');
-        expect(result.content).toBe(content); // Tries to read as UTF-8
+        expect(result.content).toContain('[File: test.unknown]');
+        expect(result.content).toContain(content);
     });
 });

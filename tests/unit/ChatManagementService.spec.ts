@@ -2,6 +2,7 @@
  * 목적: ChatManagementService 유닛 테스트.
  * 접근: 포트 인터페이스(ConversationRepository, MessageRepository)를 인메모리 스텁으로 구현하여 서비스 로직만 검증.
  */
+import { jest, describe, it, expect, beforeEach, beforeAll, afterAll, test } from '@jest/globals';
 import { ClientSession } from 'mongodb';
 
 import { ConversationService } from '../../src/core/services/ConversationService';
@@ -20,7 +21,7 @@ jest.mock('../../src/infra/db/mongodb', () => ({
       commitTransaction: jest.fn(),
       abortTransaction: jest.fn(),
       endSession: jest.fn(),
-      withTransaction: jest.fn(async (cb) => await cb()),
+      withTransaction: jest.fn(async (cb: any) => await cb()),
     }),
   }),
 }));
@@ -262,7 +263,10 @@ describe('ChatManagementService', () => {
     msgRepo = new InMemoryMsgRepo();
     convSvc = new ConversationService(convRepo);
     msgSvc = new MessageService(msgRepo);
-    chatSvc = new ChatManagementService(convSvc, msgSvc);
+    chatSvc = new ChatManagementService(convSvc, msgSvc, { 
+      deleteAllGraphData: jest.fn(),
+      deleteNodesByOrigIds: jest.fn(),
+    } as any);
   });
 
   describe('createConversation', () => {

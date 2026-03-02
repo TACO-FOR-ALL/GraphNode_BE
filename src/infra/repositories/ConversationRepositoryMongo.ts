@@ -20,7 +20,7 @@ import {
 import { ConversationRepository } from '../../core/ports/ConversationRepository';
 import { getMongo } from '../db/mongodb';
 import type { ConversationDoc } from '../../core/types/persistence/ai.persistence';
-import { NotFoundError } from '../../shared/errors/domain';
+import { NotFoundError, UpstreamError } from '../../shared/errors/domain';
 
 /**
  * ConversationRepositoryMongo 클래스
@@ -48,9 +48,13 @@ export class ConversationRepositoryMongo implements ConversationRepository {
    * @returns 저장된 대화 문서
    */
   async create(doc: ConversationDoc, session?: ClientSession): Promise<ConversationDoc> {
-    // insertOne: 문서 하나를 컬렉션에 추가합니다.
-    await this.col().insertOne(doc, { session });
-    return doc;
+    try {
+      // insertOne: 문서 하나를 컬렉션에 추가합니다.
+      await this.col().insertOne(doc, { session });
+      return doc;
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.create', err);
+    }
   }
 
   /**
@@ -61,12 +65,16 @@ export class ConversationRepositoryMongo implements ConversationRepository {
    * @returns 저장된 대화 문서 배열
    */
   async createMany(docs: ConversationDoc[], session?: ClientSession): Promise<ConversationDoc[]> {
-    if (docs.length === 0) {
-      return [];
+    try {
+      if (docs.length === 0) {
+        return [];
+      }
+      // insertMany: 여러 문서를 한 번에 추가합니다.
+      await this.col().insertMany(docs, { session });
+      return docs;
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.createMany', err);
     }
-    // insertMany: 여러 문서를 한 번에 추가합니다.
-    await this.col().insertMany(docs, { session });
-    return docs;
   }
 
   /**
@@ -82,8 +90,12 @@ export class ConversationRepositoryMongo implements ConversationRepository {
     ownerUserId: string,
     session?: ClientSession
   ): Promise<ConversationDoc | null> {
-    // findOne: 조건에 맞는 문서 하나를 찾습니다.
-    return await this.col().findOne({ _id: id, ownerUserId }, { session });
+    try {
+      // findOne: 조건에 맞는 문서 하나를 찾습니다.
+      return await this.col().findOne({ _id: id, ownerUserId }, { session });
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.findById', err);
+    }
   }
 
   /**
@@ -139,18 +151,22 @@ export class ConversationRepositoryMongo implements ConversationRepository {
     updates: Partial<ConversationDoc>,
     session?: ClientSession
   ): Promise<ConversationDoc | null> {
-    // findOneAndUpdate: 찾아서 수정하고 결과를 반환합니다.
-    const result: ModifyResult<ConversationDoc> = await this.col().findOneAndUpdate(
-      { _id: id, ownerUserId }, // 조건
-      { $set: { ...updates, updatedAt: Date.now() } }, // 수정 내용 ($set 연산자 사용)
-      { returnDocument: 'after', includeResultMetadata: true, session } // 옵션: 수정 후 문서 반환
-    );
+    try {
+      // findOneAndUpdate: 찾아서 수정하고 결과를 반환합니다.
+      const result: ModifyResult<ConversationDoc> = await this.col().findOneAndUpdate(
+        { _id: id, ownerUserId }, // 조건
+        { $set: { ...updates, updatedAt: Date.now() } }, // 수정 내용 ($set 연산자 사용)
+        { returnDocument: 'after', includeResultMetadata: true, session } // 옵션: 수정 후 문서 반환
+      );
 
-    if (!result || !result.value) {
-      return null;
+      if (!result || !result.value) {
+        return null;
+      }
+
+      return result.value;
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.update', err);
     }
-
-    return result.value;
   }
 
   /**
@@ -163,50 +179,86 @@ export class ConversationRepositoryMongo implements ConversationRepository {
    * @throws {NotFoundError} 삭제할 대상을 찾지 못한 경우
    */
   async delete(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
-    // deleteOne: 조건에 맞는 문서 하나를 삭제합니다.
-    const result: DeleteResult = await this.col().deleteOne({ _id: id, ownerUserId }, { session });
+    try {
+      // deleteOne: 조건에 맞는 문서 하나를 삭제합니다.
+      const result: DeleteResult = await this.col().deleteOne({ _id: id, ownerUserId }, { session });
 
-    // 삭제된 문서가 없으면 에러 발생
-    if (result.deletedCount === 0) {
-      throw new NotFoundError(`Conversation with id ${id} not found for user ${ownerUserId}`);
+      // 삭제된 문서가 없으면 에러 발생
+      if (result.deletedCount === 0) {
+        throw new NotFoundError(`Conversation with id ${id} not found for user ${ownerUserId}`);
+      }
+      return true;
+    } catch (err: unknown) {
+      if (err instanceof NotFoundError) throw err;
+      this.handleError('ConversationRepositoryMongo.delete', err);
     }
-    return true;
   }
 
   async softDelete(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
-    const result: UpdateResult<ConversationDoc> = await this.col().updateOne(
-      { _id: id, ownerUserId },
-      { $set: { deletedAt: Date.now(), updatedAt: Date.now() } },
-      { session }
-    );
-    return result.modifiedCount > 0;
+    try {
+      const result: UpdateResult<ConversationDoc> = await this.col().updateOne(
+        { _id: id, ownerUserId },
+        { $set: { deletedAt: Date.now(), updatedAt: Date.now() } },
+        { session }
+      );
+      return result.modifiedCount > 0;
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.softDelete', err);
+    }
   }
 
   async hardDelete(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
-    const result: DeleteResult = await this.col().deleteOne({ _id: id, ownerUserId }, { session });
-    return result.deletedCount > 0;
+    try {
+      const result: DeleteResult = await this.col().deleteOne({ _id: id, ownerUserId }, { session });
+      return result.deletedCount > 0;
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.hardDelete', err);
+    }
   }
 
   async restore(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
-    const result = await this.col().updateOne(
-      { _id: id, ownerUserId },
-      { $set: { deletedAt: null, updatedAt: Date.now() } },
-      { session }
-    );
-    return result.modifiedCount > 0;
+    try {
+      const result = await this.col().updateOne(
+        { _id: id, ownerUserId },
+        { $set: { deletedAt: null, updatedAt: Date.now() } },
+        { session }
+      );
+      return result.modifiedCount > 0;
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.restore', err);
+    }
   }
 
   async deleteAll(ownerUserId: string, session?: ClientSession): Promise<number> {
-    const result = await this.col().deleteMany({ ownerUserId }, { session });
-    return result.deletedCount;
+    try {
+      const result = await this.col().deleteMany({ ownerUserId }, { session });
+      return result.deletedCount;
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.deleteAll', err);
+    }
   }
 
   async findModifiedSince(ownerUserId: string, since: Date): Promise<ConversationDoc[]> {
-    return this.col()
-      .find({
-        ownerUserId,
-        updatedAt: { $gte: since.getTime() },
-      })
-      .toArray();
+    try {
+      return this.col()
+        .find({
+          ownerUserId,
+          updatedAt: { $gte: since.getTime() },
+        })
+        .toArray();
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.findModifiedSince', err);
+    }
+  }
+
+  private handleError(methodName: string, err: unknown): never {
+    if (
+      err instanceof Error &&
+      ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+        (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+    ) {
+      throw err;
+    }
+    throw new UpstreamError(`${methodName} failed`, { cause: String(err) });
   }
 }

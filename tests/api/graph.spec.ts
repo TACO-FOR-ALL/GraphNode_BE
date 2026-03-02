@@ -368,7 +368,7 @@ describe('Graph API Integration Tests', () => {
 
   describe('Stats & Snapshot', () => {
     it('should get stats', async () => {
-        statsStore.set(userId, { id: userId, userId, nodes: 10, edges: 20, clusters: 5, generatedAt: '', metadata: {} });
+        statsStore.set(userId, { id: userId, userId, nodes: 10, edges: 20, clusters: 5, status: 'CREATED', generatedAt: '', metadata: {} });
         
         const res = await request(app)
             .get('/v1/graph/stats')
@@ -382,7 +382,7 @@ describe('Graph API Integration Tests', () => {
         nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
         edgesStore.set('e1', { id: 'e1', userId, source: 1, target: 2, weight: 1, type: 'hard', intraCluster: true, createdAt: '', updatedAt: '' });
         clustersStore.set('c1', { id: 'c1', userId, name: 'C1', description: '', size: 1, themes: [], createdAt: '', updatedAt: '' });
-        statsStore.set(userId, { id: userId, userId, nodes: 1, edges: 1, clusters: 1, generatedAt: '', metadata: {} });
+        statsStore.set(userId, { id: userId, userId, nodes: 1, edges: 1, clusters: 1, status: 'CREATED', generatedAt: '', metadata: {} });
 
         const res = await request(app)
             .get('/v1/graph/snapshot')
@@ -401,7 +401,7 @@ describe('Graph API Integration Tests', () => {
             edges: [{ id: 'e1', userId, source: 1, target: 2, weight: 1, type: 'hard', intraCluster: true }],
             clusters: [{ id: 'c1', userId, name: 'C1', description: 'D', size: 1, themes: [] }],
             subclusters: [],
-            stats: { nodes: 1, edges: 1, clusters: 1, generatedAt: new Date().toISOString(), metadata: {} },
+            stats: { id: userId, userId, nodes: 1, edges: 1, clusters: 1, status: 'CREATED', generatedAt: new Date().toISOString(), metadata: {} },
             summary: { id: userId, userId, content: 'Graph Summary', generatedAt: new Date().toISOString() }
         };
 

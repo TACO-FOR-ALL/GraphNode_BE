@@ -20,6 +20,8 @@
             "type": "string",
             "enum": ["PENDING", "PROCESSING", "COMPLETED", "FAILED"]
           },
+          "nodeId": { "type": "string" },
+          "nodeType": { "type": "string", "enum": ["note", "conversation"] },
           "sourceId": { "type": "string" },
           "error": { "type": "string" },
           "createdAt": { "type": "string", "format": "date-time" },
@@ -41,6 +43,8 @@
         "s3Key": "microscope/user_456/group_123/doc_789_file.pdf",
         "fileName": "file.pdf",
         "status": "COMPLETED",
+        "nodeId": "conv_123",
+        "nodeType": "conversation",
         "sourceId": "source_abc",
         "createdAt": "2024-01-01T00:00:00Z",
         "updatedAt": "2024-01-01T00:00:00Z"

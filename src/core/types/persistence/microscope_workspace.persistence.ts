@@ -24,6 +24,8 @@ export interface MicroscopeDocumentMetaDoc {
   s3Key: string;
   fileName: string;
   status: MicroscopeDocumentStatus;
+  nodeId?: string;
+  nodeType?: 'note' | 'conversation';
   sourceId?: string;
   graphPayloadId?: string;
   error?: string;

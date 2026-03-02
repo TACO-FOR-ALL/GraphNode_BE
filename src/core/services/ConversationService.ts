@@ -80,6 +80,13 @@ export class ConversationService {
 
       return toChatThreadDto(convDoc, []);
     } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       const e: any = err;
       if (e && typeof e.code === 'string') throw err;
       throw new UpstreamError('Failed to create conversation', { cause: err as any });
@@ -105,6 +112,13 @@ export class ConversationService {
 
       return toChatThreadDto(convDoc, []);
     } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       const e: any = err;
       if (e && typeof e.code === 'string') throw err;
       throw new UpstreamError('Failed to fetch conversation', { cause: err as any });
@@ -132,6 +146,13 @@ export class ConversationService {
       const items: ChatThread[] = docs.map((doc) => toChatThreadDto(doc, []));
       return { items, nextCursor };
     } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       const e: any = err;
       if (e && typeof e.code === 'string') throw err;
       throw new UpstreamError('Failed to list conversations', { cause: err as any });
@@ -191,6 +212,13 @@ export class ConversationService {
       );
       return updatedDoc;
     } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       const e: any = err;
       if (e && typeof e.code === 'string') throw err;
       throw new UpstreamError('Failed to update conversation', { cause: err as any });
@@ -222,6 +250,13 @@ export class ConversationService {
         return await this.conversationRepo.softDelete(id, ownerUserId, session);
       }
     } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       const e: any = err;
       if (e && typeof e.code === 'string') throw err;
       throw new UpstreamError('Failed to delete conversation', { cause: err as any });
@@ -242,6 +277,13 @@ export class ConversationService {
       }
       return await this.conversationRepo.restore(id, ownerUserId, session);
     } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       const e: any = err;
       if (e && typeof e.code === 'string') throw err;
       throw new UpstreamError('Failed to restore conversation', { cause: err as any });

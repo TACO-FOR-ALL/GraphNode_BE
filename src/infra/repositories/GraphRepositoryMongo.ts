@@ -52,7 +52,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         { upsert: true, ...options, session: options?.session as any }
       );
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.upsertNode failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.upsertNode', err);
     }
   }
 
@@ -81,7 +81,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
       if (res.matchedCount === 0) throw new NotFoundError('Graph node not found');
     } catch (err: unknown) {
       if (err instanceof NotFoundError) throw err;
-      throw new UpstreamError('GraphRepositoryMongo.updateNode failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.updateNode', err);
     }
   }
 
@@ -109,7 +109,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         );
       }
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.deleteNode failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.deleteNode', err);
     }
   }
 
@@ -123,7 +123,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         opts
       );
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.restoreNode failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.restoreNode', err);
     }
   }
 
@@ -143,7 +143,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         );
       }
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.deleteNodes failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.deleteNodes', err);
     }
   }
 
@@ -174,7 +174,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         await this.graphEdges_col().updateMany({ userId, $or: [{ source: { $in: nodeIds } }, { target: { $in: nodeIds } }] } as any, { $set: { deletedAt } }, opts);
       }
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.deleteNodesByOrigIds failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.deleteNodesByOrigIds', err);
     }
   }
 
@@ -197,7 +197,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
       await this.graphNodes_col().updateMany({ id: { $in: nodeIds }, userId } as any, { $set: { deletedAt: null } }, opts);
       await this.graphEdges_col().updateMany({ userId, $or: [{ source: { $in: nodeIds } }, { target: { $in: nodeIds } }] } as any, { $set: { deletedAt: null } }, opts);
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.restoreNodesByOrigIds failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.restoreNodesByOrigIds', err);
     }
   }
 
@@ -209,43 +209,37 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     try {
       const opts = { ...options, session: options?.session as any };
       if (permanent) {
-        await Promise.all([
-          this.graphNodes_col().deleteMany({ userId } as any, opts),
-          this.graphEdges_col().deleteMany({ userId } as any, opts),
-          this.graphClusters_col().deleteMany({ userId } as any, opts),
-          this.graphSubclusters_col().deleteMany({ userId } as any, opts),
-          this.graphStats_col().deleteMany({ userId } as any, opts),
-          this.graphSummary_col().deleteMany({ userId } as any, opts),
-        ]);
+        await this.graphNodes_col().deleteMany({ userId } as any, opts);
+        await this.graphEdges_col().deleteMany({ userId } as any, opts);
+        await this.graphClusters_col().deleteMany({ userId } as any, opts);
+        await this.graphSubclusters_col().deleteMany({ userId } as any, opts);
+        await this.graphStats_col().deleteMany({ userId } as any, opts);
+        await this.graphSummary_col().deleteMany({ userId } as any, opts);
       } else {
         const deletedAt = Date.now();
-        await Promise.all([
-          this.graphNodes_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts),
-          this.graphEdges_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts),
-          this.graphClusters_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts),
-          this.graphSubclusters_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts),
-          this.graphStats_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts),
-          this.graphSummary_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts),
-        ]);
+        await this.graphNodes_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts);
+        await this.graphEdges_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts);
+        await this.graphClusters_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts);
+        await this.graphSubclusters_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts);
+        await this.graphStats_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts);
+        await this.graphSummary_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts);
       }
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.deleteAllGraphData failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.deleteAllGraphData', err);
     }
   }
 
   async restoreAllGraphData(userId: string, options?: RepoOptions): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
-      await Promise.all([
-        this.graphNodes_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts),
-        this.graphEdges_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts),
-        this.graphClusters_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts),
-        this.graphSubclusters_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts),
-        this.graphStats_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts),
-        this.graphSummary_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts),
-      ]);
+      await this.graphNodes_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts);
+      await this.graphEdges_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts);
+      await this.graphClusters_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts);
+      await this.graphSubclusters_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts);
+      await this.graphStats_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts);
+      await this.graphSummary_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts);
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.restoreAllGraphData failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.restoreAllGraphData', err);
     }
   }
 
@@ -267,7 +261,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
       
       return doc;
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.findNode failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.findNode', err);
     }
   }
 
@@ -294,7 +288,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
       return docs;
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.listNodes failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.listNodes', err);
     }
   }
 
@@ -322,9 +316,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
       return docs;
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.listNodesByCluster failed', {
-        cause: String(err),
-      });
+      this.handleError('GraphRepositoryMongo.listNodesByCluster', err);
     }
   }
 
@@ -346,7 +338,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
       return edge.id;
     } catch (err: unknown) {
       if (err instanceof ValidationError) throw err;
-      throw new UpstreamError('GraphRepositoryMongo.upsertEdge failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.upsertEdge', err);
     }
   }
 
@@ -366,7 +358,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         );
       }
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.deleteEdge failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.deleteEdge', err);
     }
   }
 
@@ -395,9 +387,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         await this.graphEdges_col().updateMany(filter, { $set: { deletedAt: Date.now() } }, opts);
       }
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.deleteEdgeBetween failed', {
-        cause: String(err),
-      });
+      this.handleError('GraphRepositoryMongo.deleteEdgeBetween', err);
     }
   }
 
@@ -422,9 +412,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         await this.graphEdges_col().updateMany(filter, { $set: { deletedAt: Date.now() } }, opts);
       }
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.deleteEdgesByNodeIds failed', {
-        cause: String(err),
-      });
+      this.handleError('GraphRepositoryMongo.deleteEdgesByNodeIds', err);
     }
   }
 
@@ -437,7 +425,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         opts
       );
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.restoreEdge failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.restoreEdge', err);
     }
   }
 
@@ -450,7 +438,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         .find({ userId, deletedAt: { $in: [null, undefined] } } as any)
         .toArray();
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.listEdges failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.listEdges', err);
     }
   }
 
@@ -466,7 +454,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         { upsert: true, ...options, session: options?.session as any }
       );
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.upsertCluster failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.upsertCluster', err);
     }
   }
 
@@ -486,7 +474,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         );
       }
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.deleteCluster failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.deleteCluster', err);
     }
   }
 
@@ -499,7 +487,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         opts
       );
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.restoreCluster failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.restoreCluster', err);
     }
   }
 
@@ -510,7 +498,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     try {
       return await this.graphClusters_col().findOne({ id: clusterId, userId, deletedAt: { $in: [null, undefined] } } as any);
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.findCluster failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.findCluster', err);
     }
   }
 
@@ -523,7 +511,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         .find({ userId, deletedAt: { $in: [null, undefined] } } as any)
         .toArray();
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.listClusters failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.listClusters', err);
     }
   }
 
@@ -537,9 +525,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         { upsert: true, ...options, session: options?.session as any }
       );
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.upsertSubcluster failed', {
-        cause: String(err),
-      });
+      this.handleError('GraphRepositoryMongo.upsertSubcluster', err);
     }
   }
 
@@ -561,9 +547,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         );
       }
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.deleteSubcluster failed', {
-        cause: String(err),
-      });
+      this.handleError('GraphRepositoryMongo.deleteSubcluster', err);
     }
   }
 
@@ -576,7 +560,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         opts
       );
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.restoreSubcluster failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.restoreSubcluster', err);
     }
   }
 
@@ -586,9 +570,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         .find({ userId, deletedAt: { $in: [null, undefined] } } as any)
         .toArray();
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.listSubclusters failed', {
-        cause: String(err),
-      });
+      this.handleError('GraphRepositoryMongo.listSubclusters', err);
     }
   }
 
@@ -604,7 +586,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         { upsert: true, ...options, session: options?.session as any }
       );
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.saveStats failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.saveStats', err);
     }
   }
 
@@ -615,7 +597,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     try {
       return await this.graphStats_col().findOne({ userId, deletedAt: { $in: [null, undefined] } } as any);
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.getStats failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.getStats', err);
     }
   }
 
@@ -635,7 +617,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         );
       }
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.deleteStats failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.deleteStats', err);
     }
   }
 
@@ -659,9 +641,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         session: options?.session as any,
       });
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.upsertGraphSummary failed', {
-        cause: String(err),
-      });
+      this.handleError('GraphRepositoryMongo.upsertGraphSummary', err);
     }
   }
 
@@ -670,9 +650,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
       const doc = await this.graphSummary_col().findOne({ userId: userId, deletedAt: { $in: [null, undefined] } } as any);
       return doc;
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.getGraphSummary failed', {
-        cause: String(err),
-      });
+      this.handleError('GraphRepositoryMongo.getGraphSummary', err);
     }
   }
 
@@ -689,7 +667,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         );
       }
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.deleteGraphSummary failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.deleteGraphSummary', err);
     }
   }
 
@@ -702,7 +680,18 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         opts
       );
     } catch (err: unknown) {
-      throw new UpstreamError('GraphRepositoryMongo.restoreGraphSummary failed', { cause: String(err) });
+      this.handleError('GraphRepositoryMongo.restoreGraphSummary', err);
     }
+  }
+
+  private handleError(methodName: string, err: unknown): never {
+    if (
+      err instanceof Error &&
+      ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+        (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+    ) {
+      throw err;
+    }
+    throw new UpstreamError(`${methodName} failed`, { cause: String(err) });
   }
 }

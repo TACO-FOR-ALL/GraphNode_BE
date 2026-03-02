@@ -76,7 +76,7 @@ describe('GraphAi API Integration Tests', () => {
             nodes: Array.from(nodesStore.values()).filter(n => n.userId === uid),
             edges: Array.from(edgesStore.values()).filter(e => e.userId === uid),
             clusters: Array.from(clustersStore.values()).filter(c => c.userId === uid),
-            stats: statsStore.get(uid) || { nodes: 0, edges: 0, clusters: 0 }
+            stats: statsStore.get(uid) || { id: uid, userId: uid, nodes: 0, edges: 0, clusters: 0, status: 'NOT_CREATED', generatedAt: '', metadata: {} }
         })),
         upsertGraphSummary: jest.fn(async (uid: string, summary: any) => { summaryStore.set(uid, summary); }),
         getGraphSummary: jest.fn(async (uid: string) => summaryStore.get(uid) || null),
@@ -205,7 +205,7 @@ describe('GraphAi API Integration Tests', () => {
         it('should delete all graph data and return 204', async () => {
             nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, timestamp: null });
             clustersStore.set('c1', { id: 'c1', userId, name: 'C1', description: 'D', size: 1, themes: [] });
-            statsStore.set(userId, { nodes: 1, edges: 0, clusters: 1 });
+            statsStore.set(userId, { id: userId, userId, nodes: 1, edges: 0, clusters: 1, status: 'CREATED', generatedAt: '', metadata: {} });
             summaryStore.set(userId, { overview: { summary_text: 'Test' }, clusters: [], patterns: [], connections: [], recommendations: [], generated_at: new Date().toISOString() });
 
             await request(app)
@@ -233,7 +233,7 @@ describe('GraphAi API Integration Tests', () => {
         it('should queue summary generation if graph data exists', async () => {
             nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, timestamp: null });
             clustersStore.set('c1', { id: 'c1', userId, name: 'C1', description: 'D', size: 1, themes: [] });
-            statsStore.set(userId, { nodes: 1, edges: 1, clusters: 1 });
+            statsStore.set(userId, { id: userId, userId, nodes: 1, edges: 1, clusters: 1, status: 'CREATED', generatedAt: '', metadata: {} });
 
             const res = await request(app)
                 .post('/v1/graph-ai/summary')

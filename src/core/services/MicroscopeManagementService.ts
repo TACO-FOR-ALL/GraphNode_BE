@@ -150,6 +150,13 @@ export class MicroscopeManagementService {
       
       logger.info({ userId, groupId }, 'Deleted Microscope workspace, payloads and its Neo4j graph data');
     } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       if (err instanceof AppError) throw err;
       logger.error({ err, userId, groupId }, 'Failed to delete Microscope workspace');
       throw new UpstreamError('Failed to delete Microscope workspace', { cause: String(err) });
@@ -207,6 +214,8 @@ export class MicroscopeManagementService {
       s3Key: '', // Node 방식이므로 s3Key 불필요, 빈 문자열 삽입
       fileName: `${nodeId}.md`,
       status: 'PENDING',
+      nodeId,
+      nodeType,
       createdAt: now,
       updatedAt: now,
     };
@@ -329,7 +338,14 @@ export class MicroscopeManagementService {
       // 5. 업데이트 후 최신 상태 반환 (Handler에서 전체 문서 중 마지막인지 여부 파악 용도)
       const updatedWorkspace = await this.microscopeWorkspaceStore.findById(groupId);
       return updatedWorkspace as MicroscopeWorkspaceMetaDoc;
-    } catch (err) {
+    } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       if (err instanceof NotFoundError) throw err;
       logger.error({ err, userId, groupId, docId }, 'Failed to update document status, updateDocumentStatus');
       throw new UpstreamError('Failed to update document status', { cause: String(err) });
@@ -408,7 +424,14 @@ export class MicroscopeManagementService {
         nodes: mergedNodes,
         edges: mergedEdges
       }];
-    } catch (err) {
+    } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       logger.error({ err, userId, workspaceId }, 'Failed to fetch and aggregate workspace graph data from Mongo');
       throw new UpstreamError('Failed to fetch workspace graph data from Mongo', { cause: String(err) });
     }

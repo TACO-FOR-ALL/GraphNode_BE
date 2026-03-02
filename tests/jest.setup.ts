@@ -27,7 +27,9 @@ process.env.S3_FILE_BUCKET = 'file-bucket';
 process.env.FIREBASE_CREDENTIALS_JSON = '{"project_id":"test-proj"}';
 process.env.FIREBASE_VAPID_VALUE = 'vapid-key';
 process.env.DATABASE_URL = 'postgresql://app:app@localhost:5432/graphnode';
-process.env.MONGODB_URL = 'mongodb://localhost:27017';
+process.env.SENTRY_DSN = 'https://test@sentry.io/1';
+process.env.POSTHOG_API_KEY = 'test-key';
+process.env.POSTHOG_HOST = 'https://app.posthog.com';
 
 // Shared Mock Redis Instance
 const mockRedisInstance = {

@@ -19,6 +19,7 @@ export interface ProcessedDocument {
     filename: string;
     mimeType: string;
     pageCount?: number;
+    parser?: string;
   };
 }
 
@@ -64,7 +65,7 @@ export class DocumentProcessor {
       return { 
         type: 'text', 
         content: `[File: ${filename}]\n\`\`\`${ext}\n${buffer.toString('utf-8')}\n\`\`\``,
-        metadata: { filename, mimeType: mimetype }
+        metadata: { filename, mimeType: mimetype, parser: 'text' }
       };
     }
 
@@ -75,7 +76,7 @@ export class DocumentProcessor {
         return {
           type: 'text',
           content: `[File: ${filename} (PDF)]\n${data.text}`,
-          metadata: { filename, mimeType: mimetype, pageCount: data.numpages }
+          metadata: { filename, mimeType: mimetype, pageCount: data.numpages, parser: 'pdf-parse' }
         };
       } catch (e) {
         throw new Error(`Failed to parse PDF: ${e}`);
@@ -92,7 +93,7 @@ export class DocumentProcessor {
         return {
           type: 'text',
           content: `[File: ${filename} (Sheet: ${sheetName})]\n\`\`\`csv\n${csv}\n\`\`\``,
-          metadata: { filename, mimeType: mimetype }
+          metadata: { filename, mimeType: mimetype, parser: 'xlsx' }
         };
       } catch (e) {
          throw new Error(`Failed to parse Spreadsheet: ${e}`);
@@ -106,7 +107,7 @@ export class DocumentProcessor {
          return {
            type: 'text',
            content: `[File: ${filename} (Word)]\n${result.value}`,
-           metadata: { filename, mimeType: mimetype }
+           metadata: { filename, mimeType: mimetype, parser: 'mammoth' }
          };
        } catch (e) {
           throw new Error(`Failed to parse Word document: ${e}`);
@@ -131,7 +132,7 @@ export class DocumentProcessor {
                 return {
                     type: 'text',
                     content: `[File: ${filename} (Slide)]\n${text}`,
-                    metadata: { filename, mimeType: mimetype }
+                    metadata: { filename, mimeType: mimetype, parser: 'officeparser' }
                 };
              } finally {
                  // 임시 파일 삭제
@@ -151,7 +152,7 @@ export class DocumentProcessor {
       return {
         type: 'image',
         content: buffer.toString('base64'),
-        metadata: { filename, mimeType: mimetype }
+        metadata: { filename, mimeType: mimetype, parser: 'image' }
       };
     }
 
@@ -166,13 +167,13 @@ export class DocumentProcessor {
              return {
                  type: 'text',
                  content: `[File: ${filename}]\n(Binary file content not displayed)`,
-                 metadata: { filename, mimeType: mimetype }
+                 metadata: { filename, mimeType: mimetype, parser: 'text' }
              };
         }
         return {
             type: 'text',
             content: `[File: ${filename}]\n\`\`\`\n${text}\n\`\`\``,
-            metadata: { filename, mimeType: mimetype }
+            metadata: { filename, mimeType: mimetype, parser: 'text' }
         };
     } catch {
          return {

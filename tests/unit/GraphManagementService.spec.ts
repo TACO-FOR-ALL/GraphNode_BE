@@ -1,6 +1,7 @@
+import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { GraphManagementService } from '../../src/core/services/GraphManagementService';
 import { GraphDocumentStore } from '../../src/core/ports/GraphDocumentStore';
-import { GraphNodeDto, GraphEdgeDto } from '../../src/shared/dtos/graph';
+import { GraphNodeDto, GraphEdgeDto, GraphStatsDto } from '../../src/shared/dtos/graph';
 import { ValidationError, UpstreamError } from '../../src/shared/errors/domain';
 import { GraphNodeDoc } from '../../src/core/types/persistence/graph.persistence';
 
@@ -170,7 +171,7 @@ describe('GraphManagementService', () => {
       it('upsertEdge calls repo', async () => {
           mockRepo.upsertEdge.mockResolvedValue('e1');
           await service.upsertEdge(edge);
-          expect(mockRepo.upsertEdge).toHaveBeenCalledWith(expect.objectContaining(edge), undefined);
+          expect(mockRepo.upsertEdge).toHaveBeenCalledWith(expect.objectContaining(edge as any), undefined);
       });
       
       it('upsertEdge throws if validation fails', async () => {
@@ -238,13 +239,13 @@ describe('GraphManagementService', () => {
   // --- Stats Tests ---
   describe('Stats', () => {
       it('saveStats calls repo', async () => {
-          const stats = { userId: 'u1', nodes: 10, edges: 5, clusters: 2 };
+          const stats: GraphStatsDto = { userId: 'u1', nodes: 10, edges: 5, clusters: 2, status: 'CREATED' };
           await service.saveStats(stats);
-          expect(mockRepo.saveStats).toHaveBeenCalledWith(expect.objectContaining(stats), undefined);
+          expect(mockRepo.saveStats).toHaveBeenCalledWith(expect.objectContaining(stats as any), undefined);
       });
 
       it('getStats calls repo', async () => {
-          mockRepo.getStats.mockResolvedValue({ id: 'u1', userId: 'u1', nodes: 10, edges: 5, clusters: 2, generatedAt: new Date().toISOString(), metadata: {} });
+          mockRepo.getStats.mockResolvedValue({ id: 'u1', userId: 'u1', nodes: 10, edges: 5, clusters: 2, status: 'CREATED', generatedAt: new Date().toISOString(), metadata: {} });
           const res = await service.getStats('u1');
           expect(res).toBeDefined();
           expect(res?.nodes).toBe(10);
