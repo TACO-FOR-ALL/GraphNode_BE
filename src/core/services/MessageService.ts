@@ -85,6 +85,13 @@ export class MessageService {
       // 5. 결과 반환
       return toChatMessageDto(createdDoc);
     } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('MessageService.create failed', { cause: String(err) });
     }
@@ -125,6 +132,13 @@ export class MessageService {
 
       return toChatMessageDto(updatedDoc);
     } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('MessageService.update failed', { cause: String(err) });
     }
@@ -176,6 +190,13 @@ export class MessageService {
 
       return success;
     } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('MessageService.delete failed', { cause: String(err) });
     }
@@ -201,6 +222,13 @@ export class MessageService {
       const success = await this.messageRepo.restore(messageId, conversationId, session);
       return success;
     } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('MessageService.restore failed', { cause: String(err) });
     }

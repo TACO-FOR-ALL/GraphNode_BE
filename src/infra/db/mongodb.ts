@@ -76,5 +76,9 @@ async function ensureIndexes() {
   // Graph Stats: 사용자당 하나이므로 userId 인덱스
   await db.collection('graph_stats').createIndex({ userId: 1 }, { unique: true });
 
+  // Missing indexes: graph_subclusters, graph_summaries
+  await db.collection('graph_subclusters').createIndex({ userId: 1 });
+  await db.collection('graph_summaries').createIndex({ userId: 1 });
+
   logger.info({ event: 'db.migrations_checked' }, 'DB indexes ensured');
 }

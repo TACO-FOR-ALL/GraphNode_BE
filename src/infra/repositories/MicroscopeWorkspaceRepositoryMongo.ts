@@ -9,12 +9,10 @@ import { Db, ClientSession } from 'mongodb'; // Import Db type
  * Microscope 워크스페이스의 메타데이터와 각각의 문서 진행 상태를 저장하고 갱신합니다.
  */
 export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceStore {
-  private mongodb: Db; // Add this property
-
-  constructor() {
+  private db(): Db {
     const mongo = getMongo();
     if (!mongo) throw new Error('Mongo client not initialized');
-    this.mongodb = mongo.db();
+    return mongo.db();
   }
 
   /**
@@ -32,14 +30,14 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
    * Microscope Workspace 메타데이터가 저장되는 MongoDB Collection.
    */
   private microscope_workspaces_collection() {
-    return this.mongodb.collection<MicroscopeWorkspaceMetaDoc>('microscope_workspaces');
+    return this.db().collection<MicroscopeWorkspaceMetaDoc>('microscope_workspaces');
   }
 
   /**
    * MongoDB Collection getter for graph payloads
    */
   private microscope_graph_payloads_collection() {
-    return this.mongodb.collection<MicroscopeGraphPayloadDoc>('microscope_graph_payloads');
+    return this.db().collection<MicroscopeGraphPayloadDoc>('microscope_graph_payloads');
   }
 
   /**
@@ -54,7 +52,7 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
     try {
       await this.microscope_workspaces_collection().insertOne(workspace as any, { session });
     } catch (err: unknown) {
-      throw new UpstreamError('MicroscopeWorkspaceRepositoryMongo.createWorkspace failed', { cause: String(err) });
+      this.handleError('MicroscopeWorkspaceRepositoryMongo.createWorkspace', err);
     }
   }
 
@@ -70,7 +68,7 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
       const doc = await this.microscope_workspaces_collection().findOne({ _id: groupId } as any, { session });
       return doc ? (doc as unknown as MicroscopeWorkspaceMetaDoc) : null;
     } catch (err: unknown) {
-      throw new UpstreamError('MicroscopeWorkspaceRepositoryMongo.findById failed', { cause: String(err) });
+      this.handleError('MicroscopeWorkspaceRepositoryMongo.findById', err);
     }
   }
 
@@ -86,7 +84,7 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
       const docs = await this.microscope_workspaces_collection().find({ userId }, { session }).sort({ createdAt: -1 }).toArray();
       return docs as unknown as MicroscopeWorkspaceMetaDoc[];
     } catch (err: unknown) {
-      throw new UpstreamError('MicroscopeWorkspaceRepositoryMongo.findByUserId failed', { cause: String(err) });
+      this.handleError('MicroscopeWorkspaceRepositoryMongo.findByUserId', err);
     }
   }
 
@@ -103,7 +101,7 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
     try {
       await this.microscope_workspaces_collection().deleteOne({ _id: groupId } as any, { session });
     } catch (err: unknown) {
-      throw new UpstreamError('MicroscopeWorkspaceRepositoryMongo.deleteWorkspace failed', { cause: String(err) });
+      this.handleError('MicroscopeWorkspaceRepositoryMongo.deleteWorkspace', err);
     }
   }
 
@@ -133,7 +131,7 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
       }
     } catch (err: unknown) {
       if (err instanceof NotFoundError) throw err;
-      throw new UpstreamError('MicroscopeWorkspaceRepositoryMongo.addDocument failed', { cause: String(err) });
+      this.handleError('MicroscopeWorkspaceRepositoryMongo.addDocument', err);
     }
   }
 
@@ -189,7 +187,7 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
       }
     } catch (err: unknown) {
       if (err instanceof NotFoundError) throw err;
-      throw new UpstreamError('MicroscopeWorkspaceRepositoryMongo.updateDocumentStatus failed', { cause: String(err) });
+      this.handleError('MicroscopeWorkspaceRepositoryMongo.updateDocumentStatus', err);
     }
   }
 
@@ -201,7 +199,7 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
     try {
       await this.microscope_graph_payloads_collection().insertOne(payload as any, { session });
     } catch (err: unknown) {
-      throw new UpstreamError('MicroscopeWorkspaceRepositoryMongo.saveGraphPayload failed', { cause: String(err) });
+      this.handleError('MicroscopeWorkspaceRepositoryMongo.saveGraphPayload', err);
     }
   }
 
@@ -218,7 +216,7 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
         .toArray();
       return docs as unknown as MicroscopeGraphPayloadDoc[];
     } catch (err: unknown) {
-      throw new UpstreamError('MicroscopeWorkspaceRepositoryMongo.findGraphPayloadsByIds failed', { cause: String(err) });
+      this.handleError('MicroscopeWorkspaceRepositoryMongo.findGraphPayloadsByIds', err);
     }
   }
 
@@ -230,7 +228,18 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
     try {
       await this.microscope_graph_payloads_collection().deleteMany({ groupId } as any, { session });
     } catch (err: unknown) {
-      throw new UpstreamError('MicroscopeWorkspaceRepositoryMongo.deleteGraphPayloadsByGroupId failed', { cause: String(err) });
+      this.handleError('MicroscopeWorkspaceRepositoryMongo.deleteGraphPayloadsByGroupId', err);
     }
+  }
+
+  private handleError(methodName: string, err: unknown): never {
+    if (
+      err instanceof Error &&
+      ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+        (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+    ) {
+      throw err;
+    }
+    throw new UpstreamError(`${methodName} failed`, { cause: String(err) });
   }
 }

@@ -12,6 +12,7 @@ import { Collection, ClientSession, UpdateResult, DeleteResult, ModifyResult } f
 import { MessageRepository } from '../../core/ports/MessageRepository';
 import { getMongo } from '../db/mongodb';
 import type { MessageDoc } from '../../core/types/persistence/ai.persistence';
+import { UpstreamError } from '../../shared/errors/domain';
 
 /**
  * MessageRepositoryMongo 클래스
@@ -36,8 +37,12 @@ export class MessageRepositoryMongo implements MessageRepository {
    * @returns 저장된 메시지 문서
    */
   async create(doc: MessageDoc, session?: ClientSession): Promise<MessageDoc> {
-    await this.col().insertOne(doc, { session });
-    return doc;
+    try {
+      await this.col().insertOne(doc, { session });
+      return doc;
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.create', err);
+    }
   }
 
   /**
@@ -48,12 +53,16 @@ export class MessageRepositoryMongo implements MessageRepository {
    * @returns 저장된 메시지 문서 배열
    */
   async createMany(docs: MessageDoc[], session?: ClientSession): Promise<MessageDoc[]> {
-    if (docs.length === 0) {
-      return [];
+    try {
+      if (docs.length === 0) {
+        return [];
+      }
+      // insertMany: 여러 문서를 한 번에 추가합니다.
+      await this.col().insertMany(docs, { session });
+      return docs;
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.createMany', err);
     }
-    // insertMany: 여러 문서를 한 번에 추가합니다.
-    await this.col().insertMany(docs, { session });
-    return docs;
   }
 
   /**
@@ -63,7 +72,11 @@ export class MessageRepositoryMongo implements MessageRepository {
    * @returns 조회된 메시지 문서 또는 null
    */
   async findById(id: string): Promise<MessageDoc | null> {
-    return this.col().findOne({ _id: id });
+    try {
+      return this.col().findOne({ _id: id });
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.findById', err);
+    }
   }
 
   /**
@@ -73,9 +86,13 @@ export class MessageRepositoryMongo implements MessageRepository {
    * @returns 해당 대화방의 모든 메시지 문서 배열 (시간순 정렬)
    */
   async findAllByConversationId(conversationId: string): Promise<MessageDoc[]> {
-    // find: 조건에 맞는 문서를 찾습니다.
-    // sort({ ts: 1 }): 타임스탬프(ts) 오름차순(과거->미래)으로 정렬합니다.
-    return await this.col().find({ conversationId }).sort({ ts: 1 }).toArray();
+    try {
+      // find: 조건에 맞는 문서를 찾습니다.
+      // sort({ ts: 1 }): 타임스탬프(ts) 오름차순(과거->미래)으로 정렬합니다.
+      return await this.col().find({ conversationId }).sort({ ts: 1 }).toArray();
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.findAllByConversationId', err);
+    }
   }
 
   /**
@@ -85,8 +102,12 @@ export class MessageRepositoryMongo implements MessageRepository {
    * @returns 삭제된 메시지 수
    */
   async deleteAllByUserId(ownerUserId: string, session?: ClientSession): Promise<number> {
-    const result = await this.col().deleteMany({ ownerUserId }, { session });
-    return result.deletedCount;
+    try {
+      const result = await this.col().deleteMany({ ownerUserId }, { session });
+      return result.deletedCount;
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.deleteAllByUserId', err);
+    }
   }
 
   /**
@@ -104,19 +125,23 @@ export class MessageRepositoryMongo implements MessageRepository {
     updates: Partial<MessageDoc>,
     session?: ClientSession
   ): Promise<MessageDoc | null> {
-    // 업데이트 시 updatedAt 필드도 현재 시간으로 갱신합니다.
-    const partialDoc: Partial<MessageDoc> = { ...updates, updatedAt: Date.now() };
+    try {
+      // 업데이트 시 updatedAt 필드도 현재 시간으로 갱신합니다.
+      const partialDoc: Partial<MessageDoc> = { ...updates, updatedAt: Date.now() };
 
-    const result: ModifyResult<MessageDoc> = await this.col().findOneAndUpdate(
-      { _id: id, conversationId },
-      { $set: partialDoc },
-      { returnDocument: 'after', includeResultMetadata: true, session }
-    );
+      const result: ModifyResult<MessageDoc> = await this.col().findOneAndUpdate(
+        { _id: id, conversationId },
+        { $set: partialDoc },
+        { returnDocument: 'after', includeResultMetadata: true, session }
+      );
 
-    if (!result || !result.value) {
-      return null;
+      if (!result || !result.value) {
+        return null;
+      }
+      return result.value;
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.update', err);
     }
-    return result.value;
   }
 
   /**
@@ -128,12 +153,16 @@ export class MessageRepositoryMongo implements MessageRepository {
    * @returns 삭제 성공 여부
    */
   async delete(id: string, conversationId: string, session?: ClientSession): Promise<boolean> {
-    const result: DeleteResult = await this.col().deleteOne(
-      { _id: id, conversationId },
-      { session }
-    );
-    // deletedCount가 1이면 성공적으로 삭제된 것입니다.
-    return result.deletedCount === 1;
+    try {
+      const result: DeleteResult = await this.col().deleteOne(
+        { _id: id, conversationId },
+        { session }
+      );
+      // deletedCount가 1이면 성공적으로 삭제된 것입니다.
+      return result.deletedCount === 1;
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.delete', err);
+    }
   }
 
   /**
@@ -146,12 +175,16 @@ export class MessageRepositoryMongo implements MessageRepository {
    * @returns 삭제(업데이트) 성공 여부
    */
   async softDelete(id: string, conversationId: string, session?: ClientSession): Promise<boolean> {
-    const result: UpdateResult<MessageDoc> = await this.col().updateOne(
-      { _id: id, conversationId },
-      { $set: { deletedAt: Date.now(), updatedAt: Date.now() } },
-      { session }
-    );
-    return result.modifiedCount > 0;
+    try {
+      const result: UpdateResult<MessageDoc> = await this.col().updateOne(
+        { _id: id, conversationId },
+        { $set: { deletedAt: Date.now(), updatedAt: Date.now() } },
+        { session }
+      );
+      return result.modifiedCount > 0;
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.softDelete', err);
+    }
   }
 
   /**
@@ -164,11 +197,15 @@ export class MessageRepositoryMongo implements MessageRepository {
    * @returns 삭제 성공 여부
    */
   async hardDelete(id: string, conversationId: string, session?: ClientSession): Promise<boolean> {
-    const result: DeleteResult = await this.col().deleteOne(
-      { _id: id, conversationId },
-      { session }
-    );
-    return result.deletedCount > 0;
+    try {
+      const result: DeleteResult = await this.col().deleteOne(
+        { _id: id, conversationId },
+        { session }
+      );
+      return result.deletedCount > 0;
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.hardDelete', err);
+    }
   }
 
   /**
@@ -180,12 +217,16 @@ export class MessageRepositoryMongo implements MessageRepository {
    * @returns 복구 성공 여부
    */
   async restore(id: string, conversationId: string, session?: ClientSession): Promise<boolean> {
-    const result = await this.col().updateOne(
-      { _id: id, conversationId },
-      { $set: { deletedAt: null, updatedAt: Date.now() } },
-      { session }
-    );
-    return result.modifiedCount > 0;
+    try {
+      const result = await this.col().updateOne(
+        { _id: id, conversationId },
+        { $set: { deletedAt: null, updatedAt: Date.now() } },
+        { session }
+      );
+      return result.modifiedCount > 0;
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.restore', err);
+    }
   }
 
   /**
@@ -197,12 +238,16 @@ export class MessageRepositoryMongo implements MessageRepository {
    * @returns 변경된 메시지 문서 목록
    */
   async findModifiedSince(ownerUserId: string, since: Date): Promise<MessageDoc[]> {
-    return this.col()
-      .find({
-        ownerUserId,
-        updatedAt: { $gte: since.getTime() },
-      })
-      .toArray();
+    try {
+      return this.col()
+        .find({
+          ownerUserId,
+          updatedAt: { $gte: since.getTime() },
+        })
+        .toArray();
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.findModifiedSince', err);
+    }
   }
 
   /**
@@ -217,12 +262,16 @@ export class MessageRepositoryMongo implements MessageRepository {
     conversationId: string,
     session?: ClientSession
   ): Promise<number> {
-    const result: UpdateResult<MessageDoc> = await this.col().updateMany(
-      { conversationId },
-      { $set: { deletedAt: Date.now(), updatedAt: Date.now() } },
-      { session }
-    );
-    return result.modifiedCount;
+    try {
+      const result: UpdateResult<MessageDoc> = await this.col().updateMany(
+        { conversationId },
+        { $set: { deletedAt: Date.now(), updatedAt: Date.now() } },
+        { session }
+      );
+      return result.modifiedCount;
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.softDeleteAllByConversationId', err);
+    }
   }
 
   /**
@@ -236,8 +285,12 @@ export class MessageRepositoryMongo implements MessageRepository {
     conversationId: string,
     session?: ClientSession
   ): Promise<number> {
-    const result: DeleteResult = await this.col().deleteMany({ conversationId }, { session });
-    return result.deletedCount;
+    try {
+      const result: DeleteResult = await this.col().deleteMany({ conversationId }, { session });
+      return result.deletedCount;
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.hardDeleteAllByConversationId', err);
+    }
   }
 
   /**
@@ -251,9 +304,13 @@ export class MessageRepositoryMongo implements MessageRepository {
     conversationId: string,
     session?: ClientSession
   ): Promise<number> {
-    // deleteMany: 조건에 맞는 모든 문서를 삭제합니다.
-    const result: DeleteResult = await this.col().deleteMany({ conversationId }, { session });
-    return result.deletedCount;
+    try {
+      // deleteMany: 조건에 맞는 모든 문서를 삭제합니다.
+      const result: DeleteResult = await this.col().deleteMany({ conversationId }, { session });
+      return result.deletedCount;
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.deleteAllByConversationId', err);
+    }
   }
 
   /**
@@ -267,11 +324,26 @@ export class MessageRepositoryMongo implements MessageRepository {
     conversationId: string,
     session?: ClientSession
   ): Promise<number> {
-    const result = await this.col().updateMany(
-      { conversationId },
-      { $set: { deletedAt: null, updatedAt: Date.now() } },
-      { session }
-    );
-    return result.modifiedCount;
+    try {
+      const result = await this.col().updateMany(
+        { conversationId },
+        { $set: { deletedAt: null, updatedAt: Date.now() } },
+        { session }
+      );
+      return result.modifiedCount;
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.restoreAllByConversationId', err);
+    }
+  }
+
+  private handleError(methodName: string, err: unknown): never {
+    if (
+      err instanceof Error &&
+      ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+        (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+    ) {
+      throw err;
+    }
+    throw new UpstreamError(`${methodName} failed`, { cause: String(err) });
   }
 }

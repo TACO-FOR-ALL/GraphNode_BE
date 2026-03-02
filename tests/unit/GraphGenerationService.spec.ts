@@ -8,7 +8,6 @@ import { GraphGenerationService } from '../../src/core/services/GraphGenerationS
 import { ChatManagementService } from '../../src/core/services/ChatManagementService';
 import { GraphEmbeddingService } from '../../src/core/services/GraphEmbeddingService';
 import { HttpClient } from '../../src/infra/http/httpClient';
-import { ConflictError } from '../../src/shared/errors/domain';
 import { QueuePort } from '../../src/core/ports/QueuePort';
 import { StoragePort } from '../../src/core/ports/StoragePort';
 import { UserService } from '../../src/core/services/UserService';

@@ -188,6 +188,7 @@ infisical run --env=prod -- npm start
 
 - **[Code Style & Contribution Guide](docs/architecture/CODE_STYLE.md)**: 네이밍 컨벤션, 아키텍처 패턴, 에러 핸들링 규칙 등
 - **[Daily Dev Logs](docs/guides/Daily)**: 일별 작업 상세 기록
+  - [2026-03-02 MongoDB 트랜잭션 에러 전파 및 안정성 개선](docs/guides/Daily/20260302-mongodb-transaction-error-refactor.md)
   - [2026-03-01 FE Graph Generating UI Refactor](docs/guides/Daily/20260301-fe-graph-generating-ui-refactor.md)
   - [2026-03-01 GraphAi SDK 딜리트 API JSON 파싱 버그 수정](docs/guides/Daily/20260301-graph-sdk-delete-fix.md)
   - [2026-02-28 Microscope API Node-based Ingest 전환 및 FE SDK 갱신](docs/guides/Daily/20260228-microscope-node-api-refactoring.md)

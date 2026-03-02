@@ -97,6 +97,13 @@ export class ChatManagementService {
       });
       return result!;
     } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('ChatService.createConversation failed', { cause: String(err) });
     } finally {
@@ -193,6 +200,13 @@ export class ChatManagementService {
 
         results.push(...transactionResult);
       } catch (err: unknown) {
+        if (
+          err instanceof Error &&
+          ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+            (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+        ) {
+          throw err;
+        }
         // 청크 처리 중 에러 발생 시, 해당 청크는 롤백되지만 이전 청크들은 이미 커밋됨.
         // 여기서는 에러를 다시 던져서 클라이언트에게 알림 (Partial Success 상태가 됨)
         if (err instanceof AppError) throw err;
@@ -229,6 +243,13 @@ export class ChatManagementService {
 
       return toChatThreadDto(convDoc, messageDocs);
     } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('ChatService.getConversation failed', { cause: String(err) });
     }
@@ -292,6 +313,13 @@ export class ChatManagementService {
       const messageDocs = await this.messageService.findDocsByConversationId(id);
       return toChatThreadDto(updatedDoc, messageDocs);
     } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('ChatService.updateConversation failed', { cause: String(err) });
     }
@@ -367,6 +395,13 @@ export class ChatManagementService {
       });
       return true;
     } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('ChatService.deleteConversation failed', { cause: String(err) });
     } finally {
@@ -402,6 +437,13 @@ export class ChatManagementService {
       });
       return true;
     } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('ChatService.restoreConversation failed', { cause: String(err) });
     } finally {
@@ -462,6 +504,13 @@ export class ChatManagementService {
       });
       return result!;
     } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('ChatService.createMessage failed', { cause: String(err) });
     } finally {
@@ -520,6 +569,13 @@ export class ChatManagementService {
       });
       return result!;
     } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('ChatService.updateMessage failed', { cause: String(err) });
     } finally {
@@ -574,6 +630,13 @@ export class ChatManagementService {
       });
       return true;
     } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('ChatService.deleteMessage failed', { cause: String(err) });
     } finally {
@@ -621,6 +684,13 @@ export class ChatManagementService {
       });
       return true;
     } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('ChatService.restoreMessage failed', { cause: String(err) });
     } finally {
@@ -709,6 +779,13 @@ export class ChatManagementService {
       });
       return deletedCount;
     } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('ChatService.deleteAllConversations failed', { cause: String(err) });
     } finally {

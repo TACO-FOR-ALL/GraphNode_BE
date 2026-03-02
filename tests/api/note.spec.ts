@@ -288,8 +288,6 @@ describe('Note API Integration Tests', () => {
     accessToken = generateAccessToken({ userId });
   });
 
-import mongoose from 'mongoose';
-
   afterAll(async () => {
       if (server) {
           await new Promise<void>((resolve, reject) => {
@@ -299,7 +297,6 @@ import mongoose from 'mongoose';
               });
           });
       }
-      await mongoose.disconnect();
   });
 
   beforeEach(() => {

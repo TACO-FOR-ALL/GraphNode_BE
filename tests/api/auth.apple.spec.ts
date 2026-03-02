@@ -1,8 +1,9 @@
+import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
 
 
-import * as appleController from '../../src/app/controllers/auth.apple';
+import * as appleController from '../../src/app/controllers/AuthApple';
 import { AppleOAuthService } from '../../src/core/services/AppleOAuthService';
 import * as authLogin from '../../src/app/utils/authLogin';
 import { errorHandler } from '../../src/app/middlewares/error';
@@ -91,7 +92,7 @@ describe('Apple Auth Controller', () => {
 
       appleServiceMock.exchangeCode.mockResolvedValue(mockTokenSet as any);
       appleServiceMock.parseIdToken.mockReturnValue(mockInfo as any);
-      (authLogin.completeLogin as jest.Mock).mockResolvedValue({ userId: 'u_1' });
+      (authLogin.completeLogin as jest.Mock<any>).mockResolvedValue({ userId: 'u_1' });
 
       const res = await request(app)
         .post('/auth/apple/callback')
@@ -125,7 +126,7 @@ describe('Apple Auth Controller', () => {
 
       appleServiceMock.exchangeCode.mockResolvedValue(mockTokenSet as any);
       appleServiceMock.parseIdToken.mockReturnValue(mockInfo as any);
-      (authLogin.completeLogin as jest.Mock).mockResolvedValue({ userId: 'u_1' });
+      (authLogin.completeLogin as jest.Mock<any>).mockResolvedValue({ userId: 'u_1' });
 
       const res = await request(app)
         .post('/auth/apple/callback')

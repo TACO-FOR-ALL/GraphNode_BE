@@ -1,5 +1,5 @@
 
-import { initSentry } from './shared/utils/sentry';
+import './shared/utils/sentryInstrument'; // Sentry 초기화 (가장 먼저 로드되어야 함)
 import { bootstrap } from './bootstrap/server';
 import { logger } from './shared/utils/logger';
 
@@ -10,9 +10,6 @@ import { logger } from './shared/utils/logger';
  */
 (async () => {
   try {
-    // Sentry 초기화 (가장 먼저 실행되어야 함)
-    // Node.js 프로세스 시작 시점에 바로 로드하여 Auto-instrumentation이 동작하도록 함
-    initSentry();
     const { app } = await bootstrap();
 
     const port = Number(process.env.PORT) || 3000;
@@ -24,7 +21,6 @@ import { logger } from './shared/utils/logger';
         'Server is running'
       );
     });
-
 
     server.keepAliveTimeout = 600000; // 10분
     server.headersTimeout = 610000; // 10분 10초

@@ -20,9 +20,9 @@ jest.mock('../../src/app/middlewares/auth', () => ({
 
 // Mock Services
 const mockAiService = {
-  downloadFile: jest.fn(),
-  handleAIChat: jest.fn(),
-  checkApiKey: jest.fn().mockResolvedValue(true),
+  downloadFile: jest.fn<any>(),
+  handleAIChat: jest.fn<any>(),
+  checkApiKey: jest.fn<any>().mockResolvedValue(true),
 };
 
 const mockGoogleService = {
@@ -48,12 +48,7 @@ describe('AI File Download API', () => {
   let app: any;
 
   beforeAll(async () => {
-    process.env.NODE_ENV = 'test';
-    process.env.SESSION_SECRET = 'test-secret';
-    // Dummy values for google auth initialization
-    process.env.OAUTH_GOOGLE_CLIENT_ID = 'id';
-    process.env.OAUTH_GOOGLE_CLIENT_SECRET = 'secret';
-    process.env.OAUTH_GOOGLE_REDIRECT_URI = 'uri';
+    // Rely on jest.setup.ts for environment constants
 
     // Spy on container to inject mocks
     jest.spyOn(container, 'getAiInteractionService').mockReturnValue(mockAiService as any);

@@ -11,7 +11,7 @@ import {
 import { Note, Folder } from '../../shared/dtos/note';
 import { NoteDoc, FolderDoc } from '../types/persistence/note.persistence';
 import { getMongo } from '../../infra/db/mongodb';
-import { NotFoundError } from '../../shared/errors/domain';
+import { NotFoundError, UpstreamError } from '../../shared/errors/domain';
 import { toNoteDto, toFolderDto } from '../../shared/mappers/note';
 
 /**
@@ -258,6 +258,16 @@ export class NoteService {
         // 5. 폴더들 일괄 삭제 (Soft)
         await this.noteRepo.softDeleteFolders(allFolderIdsToDelete, userId, session);
       });
+    } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
+      if (err instanceof NotFoundError) throw err;
+      throw new UpstreamError('NoteService.deleteFolder failed', { cause: String(err) });
     } finally {
       await session.endSession();
     }
@@ -299,6 +309,16 @@ export class NoteService {
         // 5. 폴더들 일괄 복구
         await this.noteRepo.restoreFolders(allFolderIdsToRestore, userId, session);
       });
+    } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
+      if (err instanceof NotFoundError) throw err;
+      throw new UpstreamError('NoteService.restoreFolder failed', { cause: String(err) });
     } finally {
       await session.endSession();
     }
@@ -431,6 +451,15 @@ export class NoteService {
         deletedFolders = await this.noteRepo.deleteAllFolders(userId, session);
       });
       return deletedFolders;
+    } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
+      throw new UpstreamError('NoteService.deleteAllFolders failed', { cause: String(err) });
     } finally {
       await session.endSession();
     }

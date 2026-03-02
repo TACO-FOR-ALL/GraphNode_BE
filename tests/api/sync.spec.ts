@@ -2,7 +2,7 @@ import request from 'supertest';
 import express from 'express';
 import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 
-import { SyncController } from '../../src/app/controllers/sync';
+import { SyncController } from '../../src/app/controllers/SyncController';
 import { SyncService } from '../../src/core/services/SyncService';
 import { getUserIdFromRequest } from '../../src/app/utils/request';
 import { errorHandler } from '../../src/app/middlewares/error';
