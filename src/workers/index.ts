@@ -151,8 +151,11 @@ async function startWorker() {
 
                   // 정상 처리 완료 시 메시지 반환 -> SQS Consumer가 삭제(ACK) 수행
                   return message;
-                } catch (err) {
-                  Sentry.captureException(err);
+                } catch (err: any) {
+                  // 500 미만(400번대) 에러는 Sentry로 전송하지 않음
+                  if (!(err.httpStatus && err.httpStatus < 500)) {
+                    Sentry.captureException(err);
+                  }
                   throw err;
                 }
               }

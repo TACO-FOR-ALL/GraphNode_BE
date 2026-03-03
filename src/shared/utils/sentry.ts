@@ -52,6 +52,14 @@ export function initSentry() {
  * - 모든 라우트/미들웨어 등록 후, Global Error Handler 직전에 호출해야 함
  */
 export function setupSentryErrorHandler(app: Express) {
-  Sentry.setupExpressErrorHandler(app);
+  Sentry.setupExpressErrorHandler(app, {
+    shouldHandleError(error) {
+      // 500 미만(400번대) 에러는 Sentry로 전송하지 않음
+      if (error && (error as any).httpStatus < 500) {
+        return false;
+      }
+      return true;
+    },
+  });
 }
 

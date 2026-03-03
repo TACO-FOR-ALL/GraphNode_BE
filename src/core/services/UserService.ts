@@ -122,10 +122,7 @@ export class UserService {
       }
 
       // 1. 모델 검증
-      const allowedModels: ApiKeyModel[] = ['openai', 'deepseek', 'claude', 'gemini'];
-      if (!allowedModels.includes(model)) {
-        throw new ValidationError('Model must be one of: ' + allowedModels.join(', '));
-      }
+      this.validateModel(model);
 
       // 2. API Key 검증
       if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
@@ -175,10 +172,7 @@ export class UserService {
       if (!userId || typeof userId !== 'string') {
         throw new ValidationError('User ID must be a valid string.');
       }
-      const allowedModels: ApiKeyModel[] = ['openai', 'deepseek', 'claude', 'gemini'];
-      if (!allowedModels.includes(model)) {
-        throw new ValidationError('Invalid model provided.');
-      }
+      this.validateModel(model);
 
       // 사용자 존재 확인
       const user: User | null = await this.userRepository.findById(userId);
@@ -245,4 +239,18 @@ export class UserService {
     }
     await this.userRepository.updatePreferredLanguage(userId, language);
   }
+
+
+  /**
+   * API Key 모델 유효성 검사
+   * @param model API Key 모델
+   * @throws {ValidationError} 모델이 유효하지 않은 경우
+   */
+  private validateModel(model: string): void {
+    const allowedModels: ApiKeyModel[] = ['openai', 'deepseek', 'claude', 'gemini'];
+    if (!allowedModels.includes(model as ApiKeyModel)) {
+      throw new ValidationError('Invalid model provided.');
+    }
+  }
+
 }

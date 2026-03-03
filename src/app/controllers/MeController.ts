@@ -42,11 +42,7 @@ export class MeController {
       const userId = getUserIdFromRequest(req)!;
       const { model } = req.params;
 
-      // 모델 검증
-      const allowedModels: ApiKeyModel[] = ['openai', 'deepseek', 'claude', 'gemini'];
-      if (!allowedModels.includes(model as ApiKeyModel)) {
-        throw new ValidationError('Invalid model provided.');
-      }
+
 
       const apiKey = await this.userService.getApiKeys(userId, model as ApiKeyModel);
       res.status(200).json(apiKey);
@@ -63,10 +59,7 @@ export class MeController {
       const userId = getUserIdFromRequest(req)!;
       const { model } = req.params;
 
-      // 모델 검증
-      if (model !== 'openai' && model !== 'deepseek') {
-        throw new ValidationError('Model must be either "openai" or "deepseek".');
-      }
+
 
       // 요청 바디 검증
       const schema = z.object({
@@ -89,10 +82,7 @@ export class MeController {
       const userId = getUserIdFromRequest(req)!;
       const { model } = req.params;
 
-      // 모델 검증
-      if (model !== 'openai' && model !== 'deepseek') {
-        throw new ValidationError('Model must be either "openai" or "deepseek".');
-      }
+
 
       await this.userService.deleteApiKey(userId, model as ApiKeyModel);
       res.status(204).send();
