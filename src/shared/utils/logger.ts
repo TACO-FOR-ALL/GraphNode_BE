@@ -55,6 +55,13 @@ export const logger = pino({
  */
 export const httpLogger = pinoHttp({
   logger,
+  // AWS ELB 등 상태 확인(Healthcheck) 요청에 대한 자동 로깅 제외
+  autoLogging: {
+    ignore: (req) => {
+      const url = req.url || '';
+      return url === '/healthz' || url === '/v1/healthz';
+    },
+  },
   customProps: (req, res) => ({
     correlationId: (req as any).id, // 요청 고유 ID (추적용)
     path: req.url, // 요청 경로
