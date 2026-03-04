@@ -73,7 +73,7 @@ export class MessageRepositoryMongo implements MessageRepository {
    */
   async findById(id: string): Promise<MessageDoc | null> {
     try {
-      return this.col().findOne({ _id: id });
+      return this.col().findOne({ _id: id, deletedAt: null });
     } catch (err: unknown) {
       this.handleError('MessageRepositoryMongo.findById', err);
     }
@@ -87,11 +87,31 @@ export class MessageRepositoryMongo implements MessageRepository {
    */
   async findAllByConversationId(conversationId: string): Promise<MessageDoc[]> {
     try {
-      // find: 조건에 맞는 문서를 찾습니다.
-      // sort({ ts: 1 }): 타임스탬프(ts) 오름차순(과거->미래)으로 정렬합니다.
-      return await this.col().find({ conversationId }).sort({ ts: 1 }).toArray();
+      // find: 조건에 맞는 문서를 찾습니다. (삭제되지 않은 메시지만)
+      // sort({ createdAt: 1 }): 생성일(createdAt) 오름차순(과거->미래)으로 정렬합니다.
+      return await this.col()
+        .find({ conversationId, deletedAt: null })
+        .sort({ createdAt: 1 })
+        .toArray();
     } catch (err: unknown) {
       this.handleError('MessageRepositoryMongo.findAllByConversationId', err);
+    }
+  }
+
+  /**
+   * 여러 대화방에 속한 모든 메시지를 한 번에 조회합니다. (N+1 최적화)
+   * @param conversationIds 대화방 ID 배열
+   * @returns 메시지 문서 배열
+   */
+  async findAllByConversationIds(conversationIds: string[]): Promise<MessageDoc[]> {
+    try {
+      if (conversationIds.length === 0) return [];
+      return await this.col()
+        .find({ conversationId: { $in: conversationIds }, deletedAt: null })
+        .sort({ createdAt: 1 })
+        .toArray();
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.findAllByConversationIds', err);
     }
   }
 

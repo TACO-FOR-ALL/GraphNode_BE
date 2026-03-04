@@ -62,8 +62,8 @@ export function getMongo(): MongoClient {
 async function ensureIndexes() {
   const db = getMongo().db();
 
-  // conversations 컬렉션: 소유자 ID로 조회하는 경우가 많으므로 인덱스 생성
-  await db.collection('conversations').createIndex({ ownerUserId: 1, _id: 1 });
+  // conversations 컬렉션: 소유자 ID로 조회하며 최신순 정렬 및 페이징을 위해 updatedAt 인덱스 추가
+  await db.collection('conversations').createIndex({ ownerUserId: 1, deletedAt: 1, updatedAt: -1, _id: 1 });
 
   // messages 컬렉션: 대화방 ID로 메시지 목록을 조회하므로 인덱스 생성
   await db.collection('messages').createIndex({ conversationId: 1, _id: 1 });

@@ -34,6 +34,7 @@
   "devDependencies": {
     "@prisma/client": "^5.22.0",
     "@testcontainers/mysql": "^11.8.1",
+    "@types/async-retry": "^1.4.9",
     "@types/cookie-parser": "^1.4.9",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",

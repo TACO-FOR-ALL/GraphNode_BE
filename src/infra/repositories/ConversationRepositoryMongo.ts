@@ -92,7 +92,7 @@ export class ConversationRepositoryMongo implements ConversationRepository {
   ): Promise<ConversationDoc | null> {
     try {
       // findOne: 조건에 맞는 문서 하나를 찾습니다.
-      return await this.col().findOne({ _id: id, ownerUserId }, { session });
+      return await this.col().findOne({ _id: id, ownerUserId, deletedAt: null }, { session });
     } catch (err: unknown) {
       this.handleError('ConversationRepositoryMongo.findById', err);
     }
@@ -111,8 +111,8 @@ export class ConversationRepositoryMongo implements ConversationRepository {
     limit: number,
     cursor?: string
   ): Promise<{ items: ConversationDoc[]; nextCursor?: string | null }> {
-    // 기본 쿼리: 해당 사용자의 대화만 조회
-    const query: any = { ownerUserId };
+    // 기본 쿼리: 해당 사용자의 대화 중 삭제되지 않은 데이터만 조회
+    const query: any = { ownerUserId, deletedAt: null };
 
     // 커서가 있다면, 그 커서(시간)보다 이전의 데이터만 조회 (최신순 정렬이므로)
     if (cursor) {

@@ -7,6 +7,7 @@ import { JobHandler } from './JobHandler';
 import { GraphSummary } from '../../shared/dtos/ai_graph_output';
 import { GraphSummaryDoc } from '../../core/types/persistence/graph.persistence';
 import { NotificationType } from '../notificationType';
+import { withRetry } from '../../shared/utils/retry';
 
 export class GraphSummaryResultHandler implements JobHandler {
   async handle(message: QueueMessage, container: Container): Promise<void> {
@@ -44,7 +45,10 @@ export class GraphSummaryResultHandler implements JobHandler {
 
       if (status === 'COMPLETED' && summaryS3Key) {
         // 1. Download summary.json
-        const summaryJson = await storagePort.downloadJson<GraphSummary>(summaryS3Key);
+        const summaryJson = await withRetry(
+          async () => await storagePort.downloadJson<GraphSummary>(summaryS3Key),
+          { label: 'GraphSummaryResultHandler.downloadJson.summary' }
+        );
 
         // 2. Persist to DB
         // Map snake_case contract to internal CamelCase persistence doc
@@ -57,7 +61,7 @@ export class GraphSummaryResultHandler implements JobHandler {
           connections: summaryJson.connections,
           recommendations: summaryJson.recommendations,
           detail_level: summaryJson.detail_level,
-          generatedAt: summaryJson.generated_at || new Date().toISOString(), // Map snake_case to camelCase
+          generatedAt: (summaryJson as any).generated_at || new Date().toISOString(), // Map snake_case to camelCase
         };
 
         await graphService.upsertGraphSummary(userId, summaryDoc);

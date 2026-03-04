@@ -150,6 +150,14 @@ export interface MessageRepository {
   hardDeleteAllByConversationId(conversationId: string, session?: ClientSession): Promise<number>;
 
   /**
+   * 여러 대화방에 속한 모든 메시지를 한 번에 조회합니다.
+   *
+   * @param conversationIds 대화방 ID 배열
+   * @returns 메시지 문서 배열
+   */
+  findAllByConversationIds(conversationIds: string[]): Promise<MessageDoc[]>;
+
+  /**
    * 특정 대화방에 속한 모든 메시지를 삭제합니다.
    * (대화방 삭제 시 함께 호출됨)
    *

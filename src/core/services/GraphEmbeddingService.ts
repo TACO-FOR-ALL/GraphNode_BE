@@ -10,6 +10,7 @@ import type { VectorStore } from '../ports/VectorStore';
 import { getMongo } from '../../infra/db/mongodb';
 import { GraphManagementService } from './GraphManagementService';
 import { GraphSummaryDoc } from '../types/persistence/graph.persistence';
+import { withRetry } from '../../shared/utils/retry';
 
 /**
  * 모듈: GraphEmbeddingService (그래프-벡터 통합 서비스)
@@ -127,9 +128,14 @@ export class GraphEmbeddingService {
     }
     const session = mongoClient.startSession();
     try {
-      await session.withTransaction(async () => {
-        await this.graphManagementService.deleteNode(userId, id, permanent, { session });
-      });
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            await this.graphManagementService.deleteNode(userId, id, permanent, { session });
+          });
+        },
+        { label: 'GraphEmbeddingService.deleteNode.transaction' }
+      );
     } finally {
       await session.endSession();
     }
@@ -145,9 +151,14 @@ export class GraphEmbeddingService {
     }
     const session = mongoClient.startSession();
     try {
-      await session.withTransaction(async () => {
-        await this.graphManagementService.restoreNode(userId, id, { session });
-      });
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            await this.graphManagementService.restoreNode(userId, id, { session });
+          });
+        },
+        { label: 'GraphEmbeddingService.restoreNode.transaction' }
+      );
     } finally {
       await session.endSession();
     }
@@ -241,9 +252,14 @@ export class GraphEmbeddingService {
     }
     const session = mongoClient.startSession();
     try {
-      await session.withTransaction(async () => {
-        await this.graphManagementService.upsertCluster(cluster, { session });
-      });
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            await this.graphManagementService.upsertCluster(cluster, { session });
+          });
+        },
+        { label: 'GraphEmbeddingService.upsertCluster.transaction' }
+      );
     } finally {
       await session.endSession();
     }
@@ -264,9 +280,14 @@ export class GraphEmbeddingService {
     }
     const session = mongoClient.startSession();
     try {
-      await session.withTransaction(async () => {
-        await this.graphManagementService.deleteCluster(userId, id, permanent, { session });
-      });
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            await this.graphManagementService.deleteCluster(userId, id, permanent, { session });
+          });
+        },
+        { label: 'GraphEmbeddingService.deleteCluster.transaction' }
+      );
     } finally {
       await session.endSession();
     }
@@ -282,9 +303,14 @@ export class GraphEmbeddingService {
     }
     const session = mongoClient.startSession();
     try {
-      await session.withTransaction(async () => {
-        await this.graphManagementService.restoreCluster(userId, id, { session });
-      });
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            await this.graphManagementService.restoreCluster(userId, id, { session });
+          });
+        },
+        { label: 'GraphEmbeddingService.restoreCluster.transaction' }
+      );
     } finally {
       await session.endSession();
     }
@@ -378,20 +404,25 @@ export class GraphEmbeddingService {
     }
     const session = mongoClient.startSession();
     try {
-      await session.withTransaction(async () => {
-        const nodesInCluster = await this.graphManagementService.listNodesByCluster(
-          userId,
-          id
-        );
-        if (nodesInCluster.length > 0) {
-          const ids = nodesInCluster.map((n) => n.id);
-          // 1. 클러스터에 속한 모든 노드와 관련 엣지 삭제
-          await this.graphManagementService.deleteEdgesByNodeIds(userId, ids, permanent, { session });
-          await this.graphManagementService.deleteNodes(userId, ids, permanent, { session });
-        }
-        // 2. 클러스터 자체 삭제
-        await this.graphManagementService.deleteCluster(userId, id, permanent, { session });
-      });
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            const nodesInCluster = await this.graphManagementService.listNodesByCluster(
+              userId,
+              id
+            );
+            if (nodesInCluster.length > 0) {
+              const ids = nodesInCluster.map((n) => n.id);
+              // 1. 클러스터에 속한 모든 노드와 관련 엣지 삭제
+              await this.graphManagementService.deleteEdgesByNodeIds(userId, ids, permanent, { session });
+              await this.graphManagementService.deleteNodes(userId, ids, permanent, { session });
+            }
+            // 2. 클러스터 자체 삭제
+            await this.graphManagementService.deleteCluster(userId, id, permanent, { session });
+          });
+        },
+        { label: 'GraphEmbeddingService.removeClusterCascade.transaction' }
+      );
     } finally {
       await session.endSession();
     }
@@ -447,40 +478,45 @@ export class GraphEmbeddingService {
     }
     const session = mongoClient.startSession();
     try {
-      await session.withTransaction(async () => {
-        const { userId, snapshot } = payload;
-        
-        // subclusters가 undefined일 경우 빈 배열로 처리
-        const subclusters = snapshot.subclusters || [];
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            const { userId, snapshot } = payload;
+            
+            // subclusters가 undefined일 경우 빈 배열로 처리
+            const subclusters = snapshot.subclusters || [];
 
-        const upsertPromises = [
-          ...snapshot.nodes.map((node) =>
-            this.graphManagementService.upsertNode({ ...node, userId }, { session })
-          ),
-          ...snapshot.edges.map((edge) =>
-            this.graphManagementService.upsertEdge({ ...edge, userId }, { session })
-          ),
-          ...snapshot.clusters.map((cluster) =>
-            this.graphManagementService.upsertCluster({ ...cluster, userId }, { session })
-          ),
-          ...subclusters.map((subcluster) => {
-            const { deletedAt, ...rest } = subcluster;
-            return this.graphManagementService.upsertSubcluster(
-              {
-                ...rest,
-                userId,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                ...(deletedAt != null ? { deletedAt: new Date(deletedAt).getTime() } : {})
-              },
-              { session }
-            );
-          }),
-          this.graphManagementService.saveStats({ ...snapshot.stats, userId }, { session }),
-        ];
+            const upsertPromises = [
+              ...snapshot.nodes.map((node) =>
+                this.graphManagementService.upsertNode({ ...node, userId }, { session })
+              ),
+              ...snapshot.edges.map((edge) =>
+                this.graphManagementService.upsertEdge({ ...edge, userId }, { session })
+              ),
+              ...snapshot.clusters.map((cluster) =>
+                this.graphManagementService.upsertCluster({ ...cluster, userId }, { session })
+              ),
+              ...subclusters.map((subcluster) => {
+                const { deletedAt, ...rest } = subcluster;
+                return this.graphManagementService.upsertSubcluster(
+                  {
+                    ...rest,
+                    userId,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    ...(deletedAt != null ? { deletedAt: new Date(deletedAt).getTime() } : {})
+                  },
+                  { session }
+                );
+              }),
+              this.graphManagementService.saveStats({ ...snapshot.stats, userId }, { session }),
+            ];
 
-        await Promise.all(upsertPromises);
-      });
+            await Promise.all(upsertPromises);
+          });
+        },
+        { label: 'GraphEmbeddingService.persistSnapshot.transaction' }
+      );
     } finally {
       await session.endSession();
     }
@@ -498,9 +534,14 @@ export class GraphEmbeddingService {
     }
     const session = mongoClient.startSession();
     try {
-      await session.withTransaction(async () => {
-        await this.graphManagementService.deleteGraph(userId, permanent, { session });
-      });
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            await this.graphManagementService.deleteGraph(userId, permanent, { session });
+          });
+        },
+        { label: 'GraphEmbeddingService.deleteGraph.transaction' }
+      );
     } finally {
       await session.endSession();
     }
@@ -513,9 +554,14 @@ export class GraphEmbeddingService {
     }
     const session = mongoClient.startSession();
     try {
-      await session.withTransaction(async () => {
-        await this.graphManagementService.restoreGraph(userId, { session });
-      });
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            await this.graphManagementService.restoreGraph(userId, { session });
+          });
+        },
+        { label: 'GraphEmbeddingService.restoreGraph.transaction' }
+      );
     } finally {
       await session.endSession();
     }

@@ -11,6 +11,7 @@ import { AiGraphOutputDto, GraphSummary } from '../../shared/dtos/ai_graph_outpu
 import { GraphFeaturesJsonDto } from '../../core/types/vector/graph-features';
 import { GraphSummaryDoc } from '../../core/types/persistence/graph.persistence';
 import { NotificationType } from '../notificationType';
+import { withRetry } from '../../shared/utils/retry';
 
 /**
  * 그래프 생성 결과 처리 핸들러
@@ -65,7 +66,10 @@ export class GraphGenerationResultHandler implements JobHandler {
       if (status === 'COMPLETED' && resultS3Key) {
         // 1. S3에서 결과 JSON 다운로드
         const aiGraphOutput: AiGraphOutputDto =
-          await storagePort.downloadJson<AiGraphOutputDto>(resultS3Key);
+          await withRetry(
+            async () => await storagePort.downloadJson<AiGraphOutputDto>(resultS3Key),
+            { label: 'GraphGenerationResultHandler.downloadJson.graph' }
+          );
 
         // 2. Mapper를 통해 DTO 변환
         const snapshot = mapAiOutputToSnapshot(aiGraphOutput, userId);
@@ -83,13 +87,18 @@ export class GraphGenerationResultHandler implements JobHandler {
             const graphVectorService = container.getGraphVectorService();
             
             // features.json 다운로드 (Embeddings)
-            const features = await storagePort.downloadJson<GraphFeaturesJsonDto>(payload.featuresS3Key);
+            const features = await withRetry(
+              async () => await storagePort.downloadJson<GraphFeaturesJsonDto>(payload.featuresS3Key!),
+              { label: 'GraphGenerationResultHandler.downloadJson.features' }
+            );
             
             // graph_final.json (Nodes with Cluster Info) - 이미 aiGraphOutput에 있음
             // Mapping: orig_id -> Node Info
             const nodeMap = new Map<string, typeof aiGraphOutput.nodes[0]>();
             aiGraphOutput.nodes.forEach(node => {
-              nodeMap.set(node.orig_id, node);
+              if (node.orig_id) {
+                nodeMap.set(node.orig_id, node);
+              }
             });
 
             // Merge & Transform to Vector Items
@@ -126,7 +135,10 @@ export class GraphGenerationResultHandler implements JobHandler {
               };
             });
 
-            await graphVectorService.saveGraphFeatures(userId, vectorItems);
+            await withRetry(
+              async () => await graphVectorService.saveGraphFeatures(userId, vectorItems),
+              { label: 'GraphVectorService.saveGraphFeatures' }
+            );
           } catch (featureErr) {
             logger.error({ err: featureErr, taskId }, 'Failed to persist graph features (Non-fatal)');
             // Vector DB 저장이 실패해도 DB 저장은 성공했으므로 전체 재시도는 하지 않음 (Non-fatal)
@@ -137,7 +149,10 @@ export class GraphGenerationResultHandler implements JobHandler {
         if (payload.summaryIncluded && payload.summaryS3Key) {
           try {
             logger.info({ taskId, userId }, 'Processing integrated graph summary from result');
-            const summaryJson = await storagePort.downloadJson<GraphSummary>(payload.summaryS3Key);
+            const summaryJson = await withRetry(
+              async () => await storagePort.downloadJson<GraphSummary>(payload.summaryS3Key!),
+              { label: 'GraphGenerationResultHandler.downloadJson.summary' }
+            );
 
             const summaryDoc: GraphSummaryDoc = {
               id: ulid(), 
@@ -148,7 +163,7 @@ export class GraphGenerationResultHandler implements JobHandler {
               connections: summaryJson.connections,
               recommendations: summaryJson.recommendations,
               detail_level: summaryJson.detail_level,
-              generatedAt: summaryJson.generated_at || new Date().toISOString(), 
+              generatedAt: (summaryJson as any).generated_at || new Date().toISOString(), 
             };
 
             await graphService.upsertGraphSummary(userId, summaryDoc);

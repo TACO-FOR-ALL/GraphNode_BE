@@ -177,15 +177,16 @@ export const claudeProvider: IAiProvider = {
     }
   },
 
-  // --- Legacy Methods (Deprecated) ---
-  
   async requestGenerateThreadTitle(
     apiKey: string,
     firstUserMessage: string,
-    opts?: { timeoutMs?: number }
+    opts?: { timeoutMs?: number; language?: string }
   ): Promise<Result<string>> {
     try {
-      const prompt = `You are a helpful assistant. Generate a thread title based on the message below in 20 letters or less. Return ONLY the JSON object {"title": "..."}. Message: "${firstUserMessage}"`;
+      const languageInstruction = opts?.language 
+        ? ` The title MUST be in ${opts.language}.`
+        : '';
+      const prompt = `You are a helpful assistant. Generate a thread title based on the message below in 20 letters or less.${languageInstruction} Return ONLY the JSON object {"title": "..."}. Message: "${firstUserMessage}"`;
       const client = new Anthropic({ apiKey });
       const response = await client.messages.create({
         model: 'claude-3-haiku-20240307',
@@ -205,3 +206,5 @@ export const claudeProvider: IAiProvider = {
     }
   },
 };
+
+export default claudeProvider;

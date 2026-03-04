@@ -10,8 +10,11 @@
  * - OpenAI SDK: 실제 AI 모델 호출
  */
 
-import { AppError } from '../../shared/errors/base';
 import 'multer'; // Ensure Multer types are loaded
+import { v4 as uuidv4 } from 'uuid';
+import { Readable } from 'stream';
+
+import { AppError } from '../../shared/errors/base';
 import { NotFoundError, UpstreamError, ValidationError, ForbiddenError } from '../../shared/errors/domain';
 import { AIchatType } from '../../shared/ai-providers/AIchatType';
 import { ChatManagementService } from './ChatManagementService';
@@ -21,9 +24,7 @@ import { AiResponse, getAiProvider, IAiProvider } from '../../shared/ai-provider
 import { ApiKeyModel } from '../../shared/dtos/me';
 import { Attachment } from '../../shared/dtos/ai';
 import { StoragePort } from '../ports/StoragePort';
-
-import { v4 as uuidv4 } from 'uuid';
-import { Readable } from 'stream';
+import { withRetry } from '../../shared/utils/retry';
 
 interface OpenAIResponsesApiResult {
   content: string;
@@ -67,7 +68,9 @@ export class AiInteractionService {
     }
 
     // API Key 검증
-    const isValid = await provider.checkAPIKeyValid(apiKey);
+    const isValid = await withRetry(async () => await provider.checkAPIKeyValid(apiKey), {
+      label: 'AiProvider.checkAPIKeyValid',
+    });
     if (!isValid.ok) {
       throw new ValidationError(`Invalid API Key for ${model}: ${isValid.error}`);
     }
@@ -117,7 +120,9 @@ export class AiInteractionService {
 
       // 2. 개발 환경 제외하고 API Key 실제 유효성 검사 (옵션)
       if (process.env.NODE_ENV !== 'development') {
-        const isValid = await provider.checkAPIKeyValid(apiKey);
+        const isValid = await withRetry(async () => await provider.checkAPIKeyValid(apiKey), {
+          label: 'AiProvider.checkAPIKeyValid',
+        });
         if (!isValid.ok) {
           throw new ValidationError(`Invalid API Key for ${chatbody.model}: ${isValid.error}`);
         }
@@ -133,8 +138,14 @@ export class AiInteractionService {
       } catch (err) {
         if (err instanceof NotFoundError) {
           isNewConversation = true;
-          // 제목 생성 (Legacy method call - safe to keep or refactor later)
-          const titleRequest = await provider.requestGenerateThreadTitle(apiKey, chatbody.chatContent);
+          // [Localization] 사용자 선호 언어 조회
+          const preferredLanguage : string = await this.userService.getPreferredLanguage(ownerUserId);
+
+          // 제목 생성
+          const titleRequest = await withRetry(
+            async () => await provider.requestGenerateThreadTitle(apiKey, chatbody.chatContent, { language: preferredLanguage }),
+            { label: 'AiProvider.requestGenerateThreadTitle' }
+          );
           newTitle = titleRequest.ok ? titleRequest.data : 'New Conversation';
 
           conversation = await this.chatManagementService.createConversation(
@@ -164,14 +175,18 @@ export class AiInteractionService {
       const fullMessages = [...historyMessages, currentUserChatMessage];
 
       // 6. AI Provider 호출 (Unified Interface)
-      const aiResponseResult = await provider.generateChat(
-          apiKey,
-          {
+      const aiResponseResult = await withRetry(
+        async () =>
+          await provider.generateChat(
+            apiKey,
+            {
               model: chatbody.modelName, // TODO: Map to specific model names if needed
               messages: fullMessages,
-          },
-          onStream,
-          this.storageAdapter
+            },
+            onStream,
+            this.storageAdapter
+          ),
+        { label: 'AiProvider.generateChat' }
       );
 
       if (!aiResponseResult.ok) {
@@ -221,7 +236,10 @@ export class AiInteractionService {
    * @returns 파일 스트림
    */
   async downloadFile(key: string): Promise<Readable> {
-    return this.storageAdapter.downloadStream(key, { bucketType: 'file' });
+    return withRetry(
+      async () => await this.storageAdapter.downloadStream(key, { bucketType: 'file' }),
+      { label: 'Storage.downloadStream' }
+    );
   }
 
   /**
@@ -236,7 +254,10 @@ export class AiInteractionService {
     for (const file of files) {
       const key = `chat-files/${uuidv4()}-${file.originalname}`;
       // S3 File Bucket에 업로드
-      await this.storageAdapter.upload(key, file.buffer, file.mimetype, { bucketType: 'file' });
+      await withRetry(
+        async () => await this.storageAdapter.upload(key, file.buffer, file.mimetype, { bucketType: 'file' }),
+        { label: 'Storage.upload' }
+      );
 
       // TODO: Public URL 생성 방식 (현재는 단순 Key 또는 가정된 URL)
       const url = `${key}`;
@@ -252,8 +273,4 @@ export class AiInteractionService {
     }
     return attachments;
   }
-
-
 }
-
-

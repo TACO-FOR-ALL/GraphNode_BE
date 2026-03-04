@@ -110,7 +110,8 @@ export class Container {
    */
   getAwsSqsAdapter(): QueuePort {
     if (!this.queueAdapter) {
-      this.queueAdapter = new AwsSqsAdapter();
+      const raw = new AwsSqsAdapter();
+      this.queueAdapter = createAuditProxy(raw, 'AwsSqsAdapter');
     }
     return this.queueAdapter;
   }
@@ -126,14 +127,16 @@ export class Container {
 
   getGraphNeo4jStore(): GraphNeo4jStore {
       if (!this.neo4jStore) {
-          this.neo4jStore = new Neo4jGraphAdapter();
+          const raw = new Neo4jGraphAdapter();
+          this.neo4jStore = createAuditProxy(raw, 'Neo4jGraphAdapter');
       }
       return this.neo4jStore;
   }
 
   getVectorStore(): VectorStore {
     if (!this.vectorStore) {
-      this.vectorStore = new ChromaVectorAdapter();
+      const raw = new ChromaVectorAdapter();
+      this.vectorStore = createAuditProxy(raw, 'ChromaVectorAdapter');
     }
     return this.vectorStore;
   }
@@ -147,7 +150,8 @@ export class Container {
 
   getGraphVectorService(): GraphVectorService {
     if (!this.graphVectorService) {
-      this.graphVectorService = new GraphVectorService(this.getGraphVectorRepository());
+      const raw = new GraphVectorService(this.getGraphVectorRepository());
+      this.graphVectorService = createAuditProxy(raw, 'GraphVectorService');
     }
     return this.graphVectorService;
   }
@@ -158,7 +162,8 @@ export class Container {
    */
   getAwsS3Adapter(): StoragePort {
     if (!this.storageAdapter) {
-      this.storageAdapter = new AwsS3Adapter();
+      const raw = new AwsS3Adapter();
+      this.storageAdapter = createAuditProxy(raw, 'AwsS3Adapter');
     }
     return this.storageAdapter;
   }
@@ -169,7 +174,8 @@ export class Container {
    */
   getRedisEventBusAdapter(): EventBusPort {
     if (!this.eventBusAdapter) {
-      this.eventBusAdapter = new RedisEventBusAdapter();
+      const raw = new RedisEventBusAdapter();
+      this.eventBusAdapter = createAuditProxy(raw, 'RedisEventBusAdapter');
     }
     return this.eventBusAdapter;
   }

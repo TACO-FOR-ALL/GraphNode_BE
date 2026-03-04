@@ -1,6 +1,6 @@
 # 💾 Database Architecture (Detailed)
 
-GraphNode Backend는 데이터의 특성에 따라 MySQL, MongoDB, Redis, Vector DB를 혼용하는 **Polyglot Persistence** 전략을 사용합니다. 본 문서는 각 데이터베이스의 스키마와 필드 정의를 상세히 기술합니다.
+GraphNode Backend는 데이터의 특성에 따라 MySQL, MongoDB, Redis, Vector DB를 혼용하는 **Polyglot Persistence** 전략을 사용합니다. 본 문서는 각 데이터베이스의 스키마와 필드 정의를 상세히 기술합니다. 클라우드 기반 DB의 안정성을 위해 지수 백오프 기반의 [재시도 정책](retry-policy.md)이 전 계층에 적용되어 있습니다.
 
 ---
 
@@ -147,7 +147,7 @@ AI가 추출한 지식 그래프의 노드입니다.
 ### D. Microscope Domain
 `src/core/types/persistence/microscope_workspace.persistence.ts`
 
-다중 문서를 기반으로 분석하는 Microscope 파이프라인의 진행 상태 및 메타데이터를 저장합니다. 실제 추출된 지식 그래프는 Neo4j에 영속화됩니다.
+다중 문서를 기반으로 분석하는 Microscope 파이프라인의 진행 상태 및 메타데이터를 저장합니다. 추출된 지식 그래프 데이터는 분석 완료 후 S3에 JSON 형태로 영속화되며, 웹 클라이언트에서 필요한 시점에 다운로드하여 시각화합니다. (Neo4j 의존성 제거됨)
 
 #### **microscope_workspaces** Collection
 | Field | Type | Description |
@@ -193,20 +193,11 @@ Vector DB에 저장되는 임베딩과 함께 저장되는 메타데이터(`meta
 
 ---
 
-## 4. Neo4j (Graph Database)
+## 4. Object Storage (S3 JSON)
 
-지식 그래프 데이터를 보관하며 Cypher 쿼리를 통해 복잡한 노드 간 관계 및 경로 탐색을 지원합니다. 대화/노트 기반 지식 그래프 및 Microscope 기반 다중 분석 지식 그래프 모두 Neo4j에 영속화됩니다.
+대용량 그래프 데이터 및 AI 분석 결과는 S3 버킷에 JSON 파일로 보관됩니다.
 
-### A. Graph Model
-Neo4j에 저장되는 노드(`Entity`, `Chunk`)와 엣지(`REL`)의 공통 엔티티 구조입니다. `src/core/types/neo4j.types.ts`에서 상세 구조 정의됨.
+- **Payload Bucket**: AI 서버의 최종 분석 결과 (`standardized.json`, `graph_final.json` 등)
+- **Log/Debug**: 파이프라인 진행 과정의 중간 산출물
 
-- **Nodes (`Entity` / `Chunk`) 공통 속성**: 
-  - `user_id`: 소유자 격리용 키
-  - `group_id`: Microscope 워크스페이스 혹은 단일 컨텍스트(conversation Id 등) 단위의 식별자
-  - `source_id`: 데이터 추출의 기원이 되는 특정 문서(혹은 메시지) 식별자
-  - `name`: 노드의 표제어 혹은 식별 이름
-  - `description`: 세부 설명 혹은 텍스트 원본
-
-- **Edges (`REL`) 공통 속성**:
-  - `weight`: 연관성(도출된 신뢰도/비중) 표기
-  - `description`: 엣지가 나타내는 의미에 대한 설명 (문자열)
+분석 결과 데이터는 `MicroscopeManagementService` 또는 `GraphGenerationService`를 통해 사용자별로 관리되며, 클라우드 환경의 네트워크 지연에 대비해 `withRetry` 유틸리티를 통한 재시도가 적용됩니다.

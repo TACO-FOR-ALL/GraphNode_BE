@@ -4,6 +4,7 @@ import { redis } from '../../infra/redis/client';
 import { EventBusPort } from '../ports/EventBusPort';
 import { logger } from '../../shared/utils/logger';
 import { loadEnv } from '../../config/env';
+import { withRetry } from '../../shared/utils/retry';
 
 const env = loadEnv();
 
@@ -62,9 +63,14 @@ export class NotificationService {
   async registerDeviceToken(userId: string, token: string): Promise<void> {
     const key = this.getFcmTokenKey(userId);
     try {
-      await redis.sadd(key, token);
-      // TTL 60일 설정 (앱 실행 시마다 갱신되므로 충분)
-      await redis.expire(key, 60 * 60 * 24 * 60);
+      await withRetry(
+        async () => {
+          await redis.sadd(key, token);
+          // TTL 60일 설정 (앱 실행 시마다 갱신되므로 충분)
+          await redis.expire(key, 60 * 60 * 24 * 60);
+        },
+        { label: 'NotificationService.registerDeviceToken.redis' }
+      );
       logger.info({ userId }, 'FCM token registered');
     } catch (error) {
       logger.error({ err: error, userId }, 'Failed to register FCM token');
@@ -78,7 +84,10 @@ export class NotificationService {
   async unregisterDeviceToken(userId: string, token: string): Promise<void> {
     const key = this.getFcmTokenKey(userId);
     try {
-      await redis.srem(key, token);
+      await withRetry(
+        async () => await redis.srem(key, token),
+        { label: 'NotificationService.unregisterDeviceToken.redis' }
+      );
     } catch (error) {
       logger.error({ err: error, userId }, 'Failed to unregister FCM token');
       throw error; // 혹은 무시
@@ -103,7 +112,10 @@ export class NotificationService {
     let tokens: string[] = [];
 
     try {
-      tokens = await redis.smembers(key);
+      tokens = await withRetry(
+        async () => await redis.smembers(key),
+        { label: 'NotificationService.sendFcmPushNotification.smembers' }
+      );
     } catch (error) {
       logger.error({ err: error, userId }, 'Failed to fetch FCM tokens from Redis');
       return;
@@ -115,11 +127,14 @@ export class NotificationService {
     }
 
     try {
-      const response = await admin.messaging().sendEachForMulticast({
-        tokens,
-        notification: { title, body },
-        data,
-      });
+      const response = await withRetry(
+        async () => await admin.messaging().sendEachForMulticast({
+          tokens,
+          notification: { title, body },
+          data,
+        }),
+        { label: 'NotificationService.sendFcmPushNotification.multicast' }
+      );
 
       // 전송 실패한 토큰 정리 (Invalid/Expired)
       if (response.failureCount > 0) {
@@ -137,7 +152,10 @@ export class NotificationService {
         });
 
         if (failedTokens.length > 0) {
-          await redis.srem(key, ...failedTokens);
+          await withRetry(
+            async () => await redis.srem(key, ...failedTokens),
+            { label: 'NotificationService.sendFcmPushNotification.sremFailed' }
+          );
           logger.info({ userId, count: failedTokens.length }, 'Removed invalid FCM tokens');
         }
       }
@@ -160,7 +178,10 @@ export class NotificationService {
     const message = { type, payload, timestamp: new Date().toISOString() };
 
     try {
-      await this.eventBus.publish(channel, message);
+      await withRetry(
+        async () => await this.eventBus.publish(channel, message),
+        { label: 'NotificationService.sendNotification.publish' }
+      );
     } catch (error) {
       logger.error({ err: error, userId, type }, 'Failed to publish notification');
       throw error;
@@ -181,10 +202,13 @@ export class NotificationService {
     const channel = this.getUserChannel(userId);
 
     try {
-      await this.eventBus.subscribe(channel, (message) => {
-        logger.debug({ userId, channel }, 'Notification received from bus');
-        onMessage(message);
-      });
+      await withRetry(
+        async () => await this.eventBus.subscribe(channel, (message) => {
+          logger.debug({ userId, channel }, 'Notification received from bus');
+          onMessage(message);
+        }),
+        { label: 'NotificationService.subscribe.subscribe' }
+      );
       logger.info({ userId, channel }, 'Subscribed to user notifications');
     } catch (error) {
       logger.error({ err: error, userId }, 'Failed to subscribe to user notifications');
@@ -202,7 +226,10 @@ export class NotificationService {
     const channel = this.getUserChannel(userId);
 
     try {
-      await this.eventBus.unsubscribe(channel);
+      await withRetry(
+        async () => await this.eventBus.unsubscribe(channel),
+        { label: 'NotificationService.unsubscribe.unsubscribe' }
+      );
       logger.info({ userId, channel }, 'Unsubscribed from user notifications');
     } catch (error) {
       logger.error({ err: error, userId }, 'Failed to unsubscribe from user notifications');

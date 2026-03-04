@@ -189,14 +189,21 @@ export const openAI: IAiProvider = {
   async requestGenerateThreadTitle(
     apiKey: string,
     firstUserMessage: string,
-    opts?: { timeoutMs?: number }
+    opts?: { timeoutMs?: number; language?: string }
   ): Promise<Result<string>> {
     try {
       const client = new OpenAI({ apiKey, timeout: opts?.timeoutMs || 10000 });
+      const languageInstruction = opts?.language 
+        ? ` The title MUST be in ${opts.language}.`
+        : '';
+
       const response = await client.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
-          { role: 'system', content: 'Generate a short, concise title (max 5 words) for a chat thread starting with this message. Return a JSON object with a "title" field.' },
+          { 
+            role: 'system', 
+            content: `Generate a short, concise title (max 5 words) for a chat thread starting with this message.${languageInstruction} Return a JSON object with a "title" field.` 
+          },
           { role: 'user', content: firstUserMessage },
         ],
         response_format: { type: 'json_object' }

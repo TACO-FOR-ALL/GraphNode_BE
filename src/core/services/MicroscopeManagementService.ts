@@ -15,6 +15,7 @@ import { logger } from '../../shared/utils/logger';
 import { ConversationRepository } from '../ports/ConversationRepository';
 import { NoteRepository } from '../ports/NoteRepository';
 import { AiMicroscopeIngestResultItem } from '../../shared/dtos/ai_graph_output';
+import { withRetry } from '../../shared/utils/retry';
 
 /**
  * Microscope 기능(지식 그래프 분석, RAG 파이프라인)의 전반적인 메타데이터 관리와 작업 요청을 조율하는 서비스 객체.
@@ -139,14 +140,19 @@ export class MicroscopeManagementService {
       // 1. Neo4j의 관련 코드 우선 폐기
       // await this.graphNeo4jStore.deleteMicroscopeWorkspaceGraphs(groupId);
       
-      await session.withTransaction(async () => {
-        // 2. MongoDB의 상태 메타데이터 파기
-        // Neo4j가 먼저 오류를 뱉으면 이 코드는 실행되지 않아 상태 데이터는 무사합니다.
-        await this.microscopeWorkspaceStore.deleteWorkspace(groupId, session);
-        
-        // 3. MongoDB의 페이로드 연계 데이터들도 파기
-        await this.microscopeWorkspaceStore.deleteGraphPayloadsByGroupId(groupId, session);
-      });
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            // 2. MongoDB의 상태 메타데이터 파기
+            // Neo4j가 먼저 오류를 뱉으면 이 코드는 실행되지 않아 상태 데이터는 무사합니다.
+            await this.microscopeWorkspaceStore.deleteWorkspace(groupId, session);
+
+            // 3. MongoDB의 페이로드 연계 데이터들도 파기
+            await this.microscopeWorkspaceStore.deleteGraphPayloadsByGroupId(groupId, session);
+          });
+        },
+        { label: 'MicroscopeManagementService.deleteWorkspace.transaction' }
+      );
       
       logger.info({ userId, groupId }, 'Deleted Microscope workspace, payloads and its Neo4j graph data');
     } catch (err: unknown) {
@@ -238,7 +244,10 @@ export class MicroscopeManagementService {
         timestamp: new Date().toISOString(),
       };
 
-      await this.queuePort.sendMessage(this.jobQueueUrl, messageBody);
+      await withRetry(
+        async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody),
+        { label: 'QueuePort.sendMessage' }
+      );
       
       workspace.documents.push(newDocument);
       logger.info({ userId, groupId, nodeId, nodeType, taskId: docId }, 'Enqueued Microscope Ingest From Node Task via SQS');

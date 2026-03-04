@@ -4,6 +4,7 @@ import { AddNodeResultPayload } from '../../shared/dtos/queue';
 import { AiAddNodeBatchResult } from '../../shared/dtos/ai_graph_output';
 import { logger } from '../../shared/utils/logger';
 import { NotificationType } from '../notificationType';
+import { withRetry } from '../../shared/utils/retry';
 
 /**
  * AddNode (배치) 결과 처리 핸들러
@@ -49,7 +50,10 @@ export class AddNodeResultHandler implements JobHandler {
 
     try {
       // 1. S3에서 결과 다운로드
-      const batchResult = await storagePort.downloadJson<AiAddNodeBatchResult>(resultS3Key);
+      const batchResult = await withRetry(
+        async () => await storagePort.downloadJson<AiAddNodeBatchResult>(resultS3Key),
+        { label: 'AddNodeResultHandler.downloadJson.batch' }
+      );
 
       // 2. DB 저장 (클러스터 생성, 노드 및 엣지 반영)
       const existingNodes = await graphService.listNodes(userId);

@@ -55,7 +55,7 @@ export interface IAiProvider {
   requestGenerateThreadTitle(
     apiKey: string,
     firstUserMessage: string,
-    opts?: { timeoutMs?: number }
+    opts?: { timeoutMs?: number; language?: string }
   ): Promise<Result<string>>;
 
   /**

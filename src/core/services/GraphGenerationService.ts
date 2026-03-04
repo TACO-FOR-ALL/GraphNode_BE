@@ -17,6 +17,7 @@ import { GraphGenRequestPayload, GraphSummaryRequestPayload, AddNodeRequestPaylo
 import { QueuePort } from '../ports/QueuePort';
 import { StoragePort } from '../ports/StoragePort';
 import { loadEnv } from '../../config/env';
+import { withRetry } from '../../shared/utils/retry';
 
 // TODO: 이 설정은 설정 파일이나 환경 변수로 이동해야 합니다.
 // 데모를 위해 AI 서버 URI를 하드코딩.
@@ -120,14 +121,18 @@ export class GraphGenerationService {
       const s3Key = `graph-generation/${taskId}/input.json`;
 
       // 상태 변경: CREATING
-      await this.graphEmbeddingService.saveStats({
-        userId,
-        nodes: 0,
-        edges: 0,
-        clusters: 0,
-        status: 'CREATING',
-        generatedAt: new Date().toISOString(),
-      });
+      await withRetry(
+        async () =>
+          await this.graphEmbeddingService.saveStats({
+            userId,
+            nodes: 0,
+            edges: 0,
+            clusters: 0,
+            status: 'CREATING',
+            generatedAt: new Date().toISOString(),
+          }),
+        { label: 'GraphEmbeddingService.saveStats' }
+      );
 
       //logger.info({ userId, taskId }, 'Preparing graph generation request (S3 + SQS)');
 
@@ -138,7 +143,10 @@ export class GraphGenerationService {
 
       // S3 업로드
       //logger.info({ userId, s3Key }, 'Uploading input data to S3');
-      await this.storagePort.upload(s3Key, dataStream, 'application/json');
+      await withRetry(
+        async () => await this.storagePort.upload(s3Key, dataStream, 'application/json'),
+        { label: 'Storage.upload.input' }
+      );
 
 
       // FIXME TODO : Note들에 대해 조회하고, AI가 요구하는 양식에 맞게 변환하여 S3에 업로드해야 함
@@ -150,7 +158,10 @@ export class GraphGenerationService {
 
       // 사용자 선호 언어 획득
       // 3. User Preferred Language 조회
-      const language = await this.userService.getPreferredLanguage(userId);
+      const language = await withRetry(
+        async () => await this.userService.getPreferredLanguage(userId),
+        { label: 'UserService.getPreferredLanguage' }
+      );
 
       // 4. SQS 메시지 전송(추후 메세지 type 확정 필요)
       const messageBody: GraphGenRequestPayload = {
@@ -168,7 +179,10 @@ export class GraphGenerationService {
       };
 
       logger.info({ userId, queueUrl: this.jobQueueUrl }, 'Sending job to SQS');
-      await this.queuePort.sendMessage(this.jobQueueUrl, messageBody);
+      await withRetry(
+        async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody),
+        { label: 'QueuePort.sendMessage.GraphGen' }
+      );
 
       // 5. 상태 관리 (선택 사항: 워커가 완료 알림을 줄 때까지 활성 상태 유지할지 정책 결정 필요)
       // 비동기 처리이므로 여기서는 activeUserTasks에 영원히 잡아두면 안됨(서버 재시작 시 꼬임).
@@ -214,7 +228,10 @@ export class GraphGenerationService {
       const taskId = `summary_${userId}_${ulid()}`;
       
       // 2. 최신 그래프 스냅샷 조회 (DB에서)
-      const snapshot = await this.graphEmbeddingService.getSnapshotForUser(userId);
+      const snapshot = await withRetry(
+        async () => await this.graphEmbeddingService.getSnapshotForUser(userId),
+        { label: 'GraphEmbeddingService.getSnapshotForUser' }
+      );
       if (!snapshot || snapshot.nodes.length === 0) {
         throw new GraphNotFoundError('Graph data not found for user. Please generate graph first.');
       }
@@ -232,7 +249,10 @@ export class GraphGenerationService {
       const bucket = process.env.S3_PAYLOAD_BUCKET || 'graph-node-payloads';
       
       //logger.info({ userId, s3Key }, 'Uploading graph data for summary');
-      await this.storagePort.upload(s3Key, dataStream, 'application/json');
+      await withRetry(
+        async () => await this.storagePort.upload(s3Key, dataStream, 'application/json'),
+        { label: 'Storage.upload.summary' }
+      );
       
       // 5. SQS 메시지 전송 (GRAPH_SUMMARY_REQUEST)
       const messageBody: GraphSummaryRequestPayload = {
@@ -249,7 +269,10 @@ export class GraphGenerationService {
       };
       
       logger.info({ userId, taskId, queue: this.jobQueueUrl }, 'Sending Summary Request to SQS');
-      await this.queuePort.sendMessage(this.jobQueueUrl, messageBody);
+      await withRetry(
+        async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody),
+        { label: 'QueuePort.sendMessage.Summary' }
+      );
       
       return taskId;
     } catch (err) {
@@ -314,7 +337,10 @@ export class GraphGenerationService {
       logger.info({ userId, taskId }, 'Preparing add node request');
 
       // 1. 기존 GraphStats 조회하여 마지막 업데이트 시점(updatedAt) 획득
-      const stats = await this.graphEmbeddingService.getStats(userId);
+      const stats = await withRetry(
+        async () => await this.graphEmbeddingService.getStats(userId),
+        { label: 'GraphEmbeddingService.getStats' }
+      );
       if (!stats) {
         throw new GraphNotFoundError('Graph statistics not found. Please generate graph first.');
       }
@@ -324,14 +350,20 @@ export class GraphGenerationService {
       // 2. lastGraphUpdatedAt 이후에 업데이트/생성된 대화 목록 조회
       // limit을 높게 잡거나 pagination을 모두 순회하여 변경된 항목을 전부 수집합니다.
       // 편의상 우선 한번에 많이 가져옵니다 (최대 100개 등, 필요시 조정)
-      const listResult = await this.chatManagementService.listConversations(userId, 100);
+      const listResult = await withRetry(
+        async () => await this.chatManagementService.listConversations(userId, 100),
+        { label: 'ChatManagementService.listConversations.initial' }
+      );
       let allConversations = listResult.items;
       
-      let cursor = listResult.nextCursor;
-      while(cursor) {
-        const nextResult = await this.chatManagementService.listConversations(userId, 100, cursor);
+      let cursor = listResult.nextCursor ?? undefined;
+      while(cursor !== null && cursor !== undefined) {
+        const nextResult = await withRetry(
+          async () => await this.chatManagementService.listConversations(userId, 100, cursor),
+          { label: 'ChatManagementService.listConversations.loop' }
+        );
         allConversations = allConversations.concat(nextResult.items);
-        cursor = nextResult.nextCursor;
+        cursor = nextResult.nextCursor ?? undefined;
       }
 
       // updatedAt 기준으로 필터링
@@ -422,7 +454,10 @@ export class GraphGenerationService {
       };
 
       logger.info({ userId, updatedCount: updatedConversations.length, taskId }, 'Sending add node job to SQS');
-      await this.queuePort.sendMessage(this.jobQueueUrl, messageBody);
+      await withRetry(
+        async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody),
+        { label: 'QueuePort.sendMessage.AddNode' }
+      );
 
       return taskId;
     } catch (err) {
@@ -536,16 +571,21 @@ export class GraphGenerationService {
 
     while (true) {
       // [Batch Processing] DB에서 데이터를 조금씩(Pagination) 가져옵니다.
-      const result = await this.chatManagementService.listConversations(userId, BATCH_SIZE, cursor);
+      const result = await withRetry(
+        async () => await this.chatManagementService.listConversations(userId, BATCH_SIZE, cursor),
+        { label: 'ChatManagementService.listConversations.stream' }
+      );
       const batchConversations = result.items;
 
       for (const conv of batchConversations) {
-        const messages: ChatMessage[] = conv.messages;
+        // [Optimization] ChatManagementService.listConversations에서 이미 N+1 최적화된 메시지 목록을 가져옵니다.
+        // 메시지가 0개인 대화도 포함하여 AI 서버에 전달합니다.
+        const messages: ChatMessage[] = conv.messages || [];
         const mapping: Record<string, AiInputMappingNode> = {};
 
         let prevMsgId: string | null = null;
 
-        // 메시지 정렬 (createdAt 기준)
+        // DB 레벨에서 이미 정렬되어 있으나, 데이터 정합성을 위해 재정렬 수행
         messages.sort((a, b) => {
           const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
           const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -594,7 +634,7 @@ export class GraphGenerationService {
       if (!result.nextCursor) {
         break;
       }
-      cursor = result.nextCursor;
+      cursor = result.nextCursor ?? undefined;
     }
 
     yield ']'; // JSON 종료

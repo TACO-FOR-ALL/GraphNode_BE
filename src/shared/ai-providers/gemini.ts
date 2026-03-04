@@ -116,7 +116,7 @@ export const geminiProvider: IAiProvider = {
                            });
                        }
                   } catch (e) {
-                      logger.error({ err: e, fileKey: att.url }, `Failed to process attachment ${att.id} for gemini`);
+                       logger.error({ err: e, fileKey: att.url }, `Failed to process attachment ${att.id} for gemini`);
                   }
               }
           }
@@ -176,17 +176,18 @@ export const geminiProvider: IAiProvider = {
     }
   },
 
-  // --- Legacy Methods (Deprecated) ---
-
   async requestGenerateThreadTitle(
     apiKey: string,
     firstUserMessage: string,
-    opts?: { timeoutMs?: number }
+    opts?: { timeoutMs?: number; language?: string }
   ): Promise<Result<string>> {
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
-      const prompt = `Generate a thread title based on the message below in 20 letters or less. Return ONLY the JSON object {"title": "..."}. Message: "${firstUserMessage}"`;
+      const languageInstruction = opts?.language 
+        ? ` The title MUST be in ${opts.language}.`
+        : '';
+      const prompt = `Generate a thread title based on the message below in 20 letters or less.${languageInstruction} Return ONLY the JSON object {"title": "..."}. Message: "${firstUserMessage}"`;
       const result = await model.generateContent(prompt);
       const text = result.response.text();
       try {
@@ -200,3 +201,5 @@ export const geminiProvider: IAiProvider = {
     }
   },
 };
+
+export default geminiProvider;

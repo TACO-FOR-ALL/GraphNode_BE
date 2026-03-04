@@ -10,6 +10,7 @@ import { ConversationDoc, MessageDoc } from '../types/persistence/ai.persistence
 import { toChatThreadDto, toChatMessageDto } from '../../shared/mappers/ai';
 import { AppError } from '../../shared/errors/base';
 import { UpstreamError, ValidationError, NotFoundError } from '../../shared/errors/domain';
+import { withRetry } from '../../shared/utils/retry';
 
 /**
  * 모듈: ChatManagementService (채팅 통합 서비스)
@@ -47,54 +48,59 @@ export class ChatManagementService {
 
     try {
       let result: ChatThread;
-      await session.withTransaction(async () => {
-        // 1. 대화방 생성 (ConversationService 위임)
-        if (!title || title.trim().length === 0) {
-          throw new ValidationError('Title cannot be empty');
-        }
-
-        const finalThreadId: string = threadId.trim();
-        const now = new Date();
-
-        const convDoc: ConversationDoc = {
-          _id: finalThreadId,
-          ownerUserId,
-          title,
-          createdAt: now.getTime(),
-          updatedAt: now.getTime(),
-          deletedAt: null,
-        };
-
-        await this.conversationService.createDoc(convDoc, session);
-
-        // 2. 초기 메시지 생성
-        const createdMessageDocs: MessageDoc[] = [];
-        if (messages && messages.length > 0) {
-          for (const m of messages) {
-            if (!m.content || m.content.trim().length === 0) {
-              throw new ValidationError('Message content cannot be empty');
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            // 1. 대화방 생성 (ConversationService 위임)
+            if (!title || title.trim().length === 0) {
+              throw new ValidationError('Title cannot be empty');
             }
-            const role: ChatRole = m.role || 'user';
-            const msgId = m.id?.trim() ? m.id : ulid();
 
-            const msgDoc: MessageDoc = {
-              _id: msgId,
-              ownerUserId: ownerUserId,
-              conversationId: finalThreadId,
-              role,
-              content: m.content,
-              createdAt: now.getTime(), // 대화방 생성 시간과 동일하게 설정
+            const finalThreadId: string = threadId.trim();
+            const now = new Date();
+
+            const convDoc: ConversationDoc = {
+              _id: finalThreadId,
+              ownerUserId,
+              title,
+              createdAt: now.getTime(),
               updatedAt: now.getTime(),
               deletedAt: null,
             };
 
-            const createdMsg = await this.messageService.createDoc(msgDoc, session);
-            createdMessageDocs.push(createdMsg);
-          }
-        }
+            await this.conversationService.createDoc(convDoc, session);
 
-        result = toChatThreadDto(convDoc, createdMessageDocs);
-      });
+            // 2. 초기 메시지 생성
+            const createdMessageDocs: MessageDoc[] = [];
+            if (messages && messages.length > 0) {
+              for (const m of messages) {
+                if (!m.content || m.content.trim().length === 0) {
+                  throw new ValidationError('Message content cannot be empty');
+                }
+                const role: ChatRole = m.role || 'user';
+                const msgId = m.id?.trim() ? m.id : ulid();
+
+                const msgDoc: MessageDoc = {
+                  _id: msgId,
+                  ownerUserId: ownerUserId,
+                  conversationId: finalThreadId,
+                  role,
+                  content: m.content,
+                  createdAt: now.getTime(), // 대화방 생성 시간과 동일하게 설정
+                  updatedAt: now.getTime(),
+                  deletedAt: null,
+                };
+
+                const createdMsg = await this.messageService.createDoc(msgDoc, session);
+                createdMessageDocs.push(createdMsg);
+              }
+            }
+
+            result = toChatThreadDto(convDoc, createdMessageDocs);
+          });
+        },
+        { label: 'ChatManagementService.createConversation.transaction' }
+      );
       return result!;
     } catch (err: unknown) {
       if (
@@ -137,66 +143,71 @@ export class ChatManagementService {
       const session: ClientSession = client.startSession();
 
       try {
-        const transactionResult = await session.withTransaction(async () => {
-          const convDocs: ConversationDoc[] = [];
-          const allMsgDocs: MessageDoc[] = [];
-          const chunkResults: ChatThread[] = [];
-          const now = new Date();
+        const transactionResult = await withRetry(
+          async () => {
+            return await session.withTransaction(async () => {
+              const convDocs: ConversationDoc[] = [];
+              const allMsgDocs: MessageDoc[] = [];
+              const chunkResults: ChatThread[] = [];
+              const now = new Date();
 
-          // 1. 문서 객체 준비 (메모리 상에서 변환)
-          for (const thread of chunk) {
-            if (!thread.title || thread.title.trim().length === 0) continue;
+              // 1. 문서 객체 준비 (메모리 상에서 변환)
+              for (const thread of chunk) {
+                if (!thread.title || thread.title.trim().length === 0) continue;
 
-            // const finalThreadId: string = thread.id?.trim() ? thread.id : ulid();
-            const finalThreadId: string = thread.id;
+                // const finalThreadId: string = thread.id?.trim() ? thread.id : ulid();
+                const finalThreadId: string = thread.id;
 
-            // Conversation Doc 준비
-            const convDoc: ConversationDoc = {
-              _id: finalThreadId,
-              ownerUserId,
-              title: thread.title,
-              createdAt: now.getTime(),
-              updatedAt: now.getTime(),
-              deletedAt: null,
-            };
-            convDocs.push(convDoc);
-
-            // Message Docs 준비
-            const threadMsgDocs: MessageDoc[] = [];
-            if (thread.messages && thread.messages.length > 0) {
-              for (const m of thread.messages) {
-                if (!m.content || m.content.trim().length === 0) continue;
-
-                const msgDoc: MessageDoc = {
-                  _id: m.id?.trim() ? m.id : ulid(),
-                  ownerUserId: ownerUserId,
-                  conversationId: finalThreadId,
-                  role: m.role || 'user',
-                  content: m.content,
+                // Conversation Doc 준비
+                const convDoc: ConversationDoc = {
+                  _id: finalThreadId,
+                  ownerUserId,
+                  title: thread.title,
                   createdAt: now.getTime(),
                   updatedAt: now.getTime(),
                   deletedAt: null,
                 };
-                allMsgDocs.push(msgDoc);
-                threadMsgDocs.push(msgDoc);
+                convDocs.push(convDoc);
+
+                // Message Docs 준비
+                const threadMsgDocs: MessageDoc[] = [];
+                if (thread.messages && thread.messages.length > 0) {
+                  for (const m of thread.messages) {
+                    if (!m.content || m.content.trim().length === 0) continue;
+
+                    const msgDoc: MessageDoc = {
+                      _id: m.id?.trim() ? m.id : ulid(),
+                      ownerUserId: ownerUserId,
+                      conversationId: finalThreadId,
+                      role: m.role || 'user',
+                      content: m.content,
+                      createdAt: now.getTime(),
+                      updatedAt: now.getTime(),
+                      deletedAt: null,
+                    };
+                    allMsgDocs.push(msgDoc);
+                    threadMsgDocs.push(msgDoc);
+                  }
+                }
+
+                // 결과 DTO 생성
+                chunkResults.push(toChatThreadDto(convDoc, threadMsgDocs));
               }
-            }
 
-            // 결과 DTO 생성
-            chunkResults.push(toChatThreadDto(convDoc, threadMsgDocs));
-          }
+              // 2. DB 일괄 저장 (Bulk Insert)
+              // 빈 배열일 경우 createDocs 내부에서 처리됨
+              if (convDocs.length > 0) {
+                await this.conversationService.createDocs(convDocs, session);
+              }
+              if (allMsgDocs.length > 0) {
+                await this.messageService.createDocs(allMsgDocs, session);
+              }
 
-          // 2. DB 일괄 저장 (Bulk Insert)
-          // 빈 배열일 경우 createDocs 내부에서 처리됨
-          if (convDocs.length > 0) {
-            await this.conversationService.createDocs(convDocs, session);
-          }
-          if (allMsgDocs.length > 0) {
-            await this.messageService.createDocs(allMsgDocs, session);
-          }
-
-          return chunkResults;
-        });
+              return chunkResults;
+            });
+          },
+          { label: 'ChatManagementService.bulkCreateConversations.chunkTransaction' }
+        );
 
         results.push(...transactionResult);
       } catch (err: unknown) {
@@ -228,7 +239,10 @@ export class ChatManagementService {
   async getConversation(id: string, ownerUserId: string): Promise<ChatThread> {
     try {
       // 1. 대화방 조회 (Doc)
-      const convDoc = await this.conversationService.findDocById(id, ownerUserId);
+      const convDoc = await withRetry(
+        async () => await this.conversationService.findDocById(id, ownerUserId),
+        { label: 'ConversationService.findDocById' }
+      );
       if (!convDoc) {
         throw new NotFoundError(`Conversation not found: ${id}`);
       }
@@ -239,7 +253,10 @@ export class ChatManagementService {
       }
 
       // 2. 메시지 목록 조회 (Docs)
-      const messageDocs = await this.messageService.findDocsByConversationId(id);
+      const messageDocs = await withRetry(
+        async () => await this.messageService.findDocsByConversationId(id),
+        { label: 'MessageService.findDocsByConversationId' }
+      );
 
       return toChatThreadDto(convDoc, messageDocs);
     } catch (err: unknown) {
@@ -259,7 +276,10 @@ export class ChatManagementService {
    * 대화방의 메시지 목록을 조회합니다.
    */
   async getMessages(conversationId: string): Promise<ChatMessage[]> {
-    const messageDocs = await this.messageService.findDocsByConversationId(conversationId);
+    const messageDocs = await withRetry(
+      async () => await this.messageService.findDocsByConversationId(conversationId),
+      { label: 'MessageService.findDocsByConversationId' }
+    );
     return messageDocs.map(toChatMessageDto);
   }
 
@@ -276,15 +296,32 @@ export class ChatManagementService {
     limit: number,
     cursor?: string
   ): Promise<{ items: ChatThread[]; nextCursor?: string | null }> {
-    const result = await this.conversationService.listDocsByOwner(ownerUserId, limit, cursor);
-
-    // 각 대화방에 대한 메시지 목록을 병렬로 조회하여 DTO에 포함
-    const items = await Promise.all(
-      result.items.map(async (doc) => {
-        const messageDocs = await this.messageService.findDocsByConversationId(doc._id);
-        return toChatThreadDto(doc, messageDocs);
-      })
+    const result = await withRetry(
+      async () => await this.conversationService.listDocsByOwner(ownerUserId, limit, cursor),
+      { label: 'ConversationService.listDocsByOwner' }
     );
+
+    // [Optimization] N+1 문제를 해결하기 위해 모든 대화방의 메시지를 한 번에 조회합니다.
+    const conversationIds : string[] = result.items.map((doc) => doc._id);
+    const allMessageDocs : MessageDoc[] = await withRetry(
+      async () => await this.messageService.findDocsByConversationIds(conversationIds),
+      { label: 'MessageService.findDocsByConversationIds' }
+    );
+
+    // 대화방 ID별로 메시지를 그룹화합니다.
+    const messagesByConvId = allMessageDocs.reduce((acc, doc) => {
+      if (!acc[doc.conversationId]) {
+        acc[doc.conversationId] = [];
+      }
+      acc[doc.conversationId].push(doc);
+      return acc;
+    }, {} as Record<string, MessageDoc[]>);
+
+    // 각 대화방 문서와 해당 메시지 그룹을 합쳐서 DTO로 변환합니다.
+    const items : ChatThread[] = result.items.map((doc) => {
+      const messageDocs = messagesByConvId[doc._id] || [];
+      return toChatThreadDto(doc, messageDocs);
+    });
 
     return { items, nextCursor: result.nextCursor };
   }
@@ -304,13 +341,19 @@ export class ChatManagementService {
   ): Promise<ChatThread> {
     try {
       // 1. 업데이트 수행 (Doc)
-      const updatedDoc = await this.conversationService.updateDoc(id, ownerUserId, updates);
+      const updatedDoc = await withRetry(
+        async () => await this.conversationService.updateDoc(id, ownerUserId, updates),
+        { label: 'ConversationService.updateDoc' }
+      );
       if (!updatedDoc) {
         throw new NotFoundError(`Conversation not found: ${id}`);
       }
 
       // 2. 메시지 조회 (반환용)
-      const messageDocs = await this.messageService.findDocsByConversationId(id);
+      const messageDocs = await withRetry(
+        async () => await this.messageService.findDocsByConversationId(id),
+        { label: 'MessageService.findDocsByConversationId' }
+      );
       return toChatThreadDto(updatedDoc, messageDocs);
     } catch (err: unknown) {
       if (
@@ -341,7 +384,10 @@ export class ChatManagementService {
      const client: MongoClient = getMongo();
      const session: ClientSession = client.startSession();
      try {
-       await this.conversationService.updateDoc(id, ownerUserId, { externalThreadId }, session);
+       await withRetry(
+         async () => await this.conversationService.updateDoc(id, ownerUserId, { externalThreadId }, session),
+         { label: 'ConversationService.updateDoc.externalThreadId' }
+       );
      } finally {
        await session.endSession();
      }
@@ -366,33 +412,38 @@ export class ChatManagementService {
     const session: ClientSession = client.startSession();
 
     try {
-      await session.withTransaction(async () => {
-        // 1. 대화방 삭제
-        const success = await this.conversationService.deleteDoc(
-          id,
-          ownerUserId,
-          permanent,
-          session
-        );
-        if (!success) {
-          throw new NotFoundError(`Conversation not found or delete failed: ${id}`);
-        }
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            // 1. 대화방 삭제
+            const success = await this.conversationService.deleteDoc(
+              id,
+              ownerUserId,
+              permanent,
+              session
+            );
+            if (!success) {
+              throw new NotFoundError(`Conversation not found or delete failed: ${id}`);
+            }
 
-        // 2. 메시지 사전 조회 및 삭제 (Cascade)
-        const messages = await this.messageService.findDocsByConversationId(id);
-        const messageIds = messages.map(m => m._id);
+            // 2. 메시지 사전 조회 및 삭제 (Cascade)
+            const messages = await this.messageService.findDocsByConversationId(id);
+            const messageIds = messages.map(m => m._id);
 
-        if (permanent) {
-          await this.messageService.deleteAllByConversationId(id, session);
-        } else {
-          await this.messageService.softDeleteAllByConversationId(id, session);
-        }
+            if (permanent) {
+              await this.messageService.deleteAllByConversationId(id, session);
+            } else {
+              await this.messageService.softDeleteAllByConversationId(id, session);
+            }
 
-        // 3. 그래프 노드/엣지 연쇄 삭제 (Cascade Graph)
-        if (messageIds.length > 0) {
-          await this.graphManagementService.deleteNodesByOrigIds(ownerUserId, messageIds, permanent, { session });
-        }
-      });
+            // 3. 그래프 노드/엣지 연쇄 삭제 (Cascade Graph)
+            if (messageIds.length > 0) {
+              await this.graphManagementService.deleteNodesByOrigIds(ownerUserId, messageIds, permanent, { session });
+            }
+          });
+        },
+        { label: 'ChatManagementService.deleteConversation.transaction' }
+      );
       return true;
     } catch (err: unknown) {
       if (
@@ -421,20 +472,25 @@ export class ChatManagementService {
     const session: ClientSession = client.startSession();
 
     try {
-      await session.withTransaction(async () => {
-        const success = await this.conversationService.restoreDoc(id, ownerUserId, session);
-        if (!success) {
-          throw new NotFoundError(`Conversation not found or restore failed: ${id}`);
-        }
-        await this.messageService.restoreAllByConversationId(id, session);
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            const success = await this.conversationService.restoreDoc(id, ownerUserId, session);
+            if (!success) {
+              throw new NotFoundError(`Conversation not found or restore failed: ${id}`);
+            }
+            await this.messageService.restoreAllByConversationId(id, session);
 
-        // 연쇄 복원 (Cascade Graph Restore)
-        const messages = await this.messageService.findDocsByConversationId(id);
-        const messageIds = messages.map(m => m._id);
-        if (messageIds.length > 0) {
-          await this.graphManagementService.restoreNodesByOrigIds(ownerUserId, messageIds, { session });
-        }
-      });
+            // 연쇄 복원 (Cascade Graph Restore)
+            const messages = await this.messageService.findDocsByConversationId(id);
+            const messageIds = messages.map(m => m._id);
+            if (messageIds.length > 0) {
+              await this.graphManagementService.restoreNodesByOrigIds(ownerUserId, messageIds, { session });
+            }
+          });
+        },
+        { label: 'ChatManagementService.restoreConversation.transaction' }
+      );
       return true;
     } catch (err: unknown) {
       if (
@@ -471,37 +527,42 @@ export class ChatManagementService {
 
     try {
       let result: ChatMessage;
-      await session.withTransaction(async () => {
-        // 1. 소유권 확인
-        await this.validateConversationOwner(conversationId, ownerUserId);
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            // 1. 소유권 확인
+            await this.validateConversationOwner(conversationId, ownerUserId);
 
-        // 2. 메시지 생성
-        const msgId = message.id?.trim() ? message.id : ulid();
-        const now = new Date();
+            // 2. 메시지 생성
+            const msgId = message.id?.trim() ? message.id : ulid();
+            const now = new Date();
 
-        const msgDoc: MessageDoc = {
-          _id: msgId,
-          conversationId,
-          ownerUserId,
-          role: message.role,
-          content: message.content,
-          createdAt: now.getTime(),
-          updatedAt: now.getTime(),
-          deletedAt: null,
-        };
+            const msgDoc: MessageDoc = {
+              _id: msgId,
+              conversationId,
+              ownerUserId,
+              role: message.role,
+              content: message.content,
+              createdAt: now.getTime(),
+              updatedAt: now.getTime(),
+              deletedAt: null,
+            };
 
-        const createdDoc = await this.messageService.createDoc(msgDoc, session);
+            const createdDoc = await this.messageService.createDoc(msgDoc, session);
 
-        // 3. 대화방 타임스탬프 갱신
-        await this.conversationService.updateDoc(
-          conversationId,
-          ownerUserId,
-          { updatedAt: createdDoc.updatedAt },
-          session
-        );
+            // 3. 대화방 타임스탬프 갱신
+            await this.conversationService.updateDoc(
+              conversationId,
+              ownerUserId,
+              { updatedAt: createdDoc.updatedAt },
+              session
+            );
 
-        result = toChatMessageDto(createdDoc);
-      });
+            result = toChatMessageDto(createdDoc);
+          });
+        },
+        { label: 'ChatManagementService.createMessage.transaction' }
+      );
       return result!;
     } catch (err: unknown) {
       if (
@@ -538,35 +599,40 @@ export class ChatManagementService {
 
     try {
       let result: ChatMessage;
-      await session.withTransaction(async () => {
-        // 1. 소유권 확인
-        await this.validateConversationOwner(conversationId, ownerUserId);
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            // 1. 소유권 확인
+            await this.validateConversationOwner(conversationId, ownerUserId);
 
-        // 2. 메시지 업데이트
-        const createdAt = new Date(updates.createdAt || Date.now()).getTime();
-        const deletedAt = new Date(updates.deletedAt || 0).getTime() || null;
-        const updatePayload = { ...updates, updatedAt: Date.now(), createdAt, deletedAt };
-        const updatedDoc = await this.messageService.updateDoc(
-          messageId,
-          conversationId,
-          updatePayload,
-          session
-        );
+            // 2. 메시지 업데이트
+            const createdAt = new Date(updates.createdAt || Date.now()).getTime();
+            const deletedAt = new Date(updates.deletedAt || 0).getTime() || null;
+            const updatePayload = { ...updates, updatedAt: Date.now(), createdAt, deletedAt };
+            const updatedDoc = await this.messageService.updateDoc(
+              messageId,
+              conversationId,
+              updatePayload,
+              session
+            );
 
-        if (!updatedDoc) {
-          throw new NotFoundError(`Message not found: ${messageId}`);
-        }
+            if (!updatedDoc) {
+              throw new NotFoundError(`Message not found: ${messageId}`);
+            }
 
-        // 3. 대화방 타임스탬프 갱신
-        await this.conversationService.updateDoc(
-          conversationId,
-          ownerUserId,
-          { updatedAt: updatedDoc.updatedAt },
-          session
-        );
+            // 3. 대화방 타임스탬프 갱신
+            await this.conversationService.updateDoc(
+              conversationId,
+              ownerUserId,
+              { updatedAt: updatedDoc.updatedAt },
+              session
+            );
 
-        result = toChatMessageDto(updatedDoc);
-      });
+            result = toChatMessageDto(updatedDoc);
+          });
+        },
+        { label: 'ChatManagementService.updateMessage.transaction' }
+      );
       return result!;
     } catch (err: unknown) {
       if (
@@ -602,32 +668,37 @@ export class ChatManagementService {
     const session: ClientSession = client.startSession();
 
     try {
-      await session.withTransaction(async () => {
-        // 1. 소유권 확인
-        await this.validateConversationOwner(conversationId, ownerUserId);
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            // 1. 소유권 확인
+            await this.validateConversationOwner(conversationId, ownerUserId);
 
-        // 2. 메시지 삭제
-        const success = await this.messageService.deleteDoc(
-          messageId,
-          conversationId,
-          permanent,
-          session
-        );
-        if (!success) {
-          throw new NotFoundError(`Message not found: ${messageId}`);
-        }
+            // 2. 메시지 삭제
+            const success = await this.messageService.deleteDoc(
+              messageId,
+              conversationId,
+              permanent,
+              session
+            );
+            if (!success) {
+              throw new NotFoundError(`Message not found: ${messageId}`);
+            }
 
-        // 3. 대화방 타임스탬프 갱신
-        await this.conversationService.updateDoc(
-          conversationId,
-          ownerUserId,
-          { updatedAt: Date.now() },
-          session
-        );
+            // 3. 대화방 타임스탬프 갱신
+            await this.conversationService.updateDoc(
+              conversationId,
+              ownerUserId,
+              { updatedAt: Date.now() },
+              session
+            );
 
-        // 4. 연관된 지식 그래프 연쇄 삭제
-        await this.graphManagementService.deleteNodesByOrigIds(ownerUserId, [messageId], permanent, { session });
-      });
+            // 4. 연관된 지식 그래프 연쇄 삭제
+            await this.graphManagementService.deleteNodesByOrigIds(ownerUserId, [messageId], permanent, { session });
+          });
+        },
+        { label: 'ChatManagementService.deleteMessage.transaction' }
+      );
       return true;
     } catch (err: unknown) {
       if (
@@ -661,27 +732,32 @@ export class ChatManagementService {
     const session: ClientSession = client.startSession();
 
     try {
-      await session.withTransaction(async () => {
-        // 1. 소유권 확인
-        await this.validateConversationOwner(conversationId, ownerUserId);
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            // 1. 소유권 확인
+            await this.validateConversationOwner(conversationId, ownerUserId);
 
-        // 2. 메시지 복구
-        const success = await this.messageService.restoreDoc(messageId, conversationId, session);
-        if (!success) {
-          throw new NotFoundError(`Message not found: ${messageId}`);
-        }
+            // 2. 메시지 복구
+            const success = await this.messageService.restoreDoc(messageId, conversationId, session);
+            if (!success) {
+              throw new NotFoundError(`Message not found: ${messageId}`);
+            }
 
-        // 3. 대화방 타임스탬프 갱신
-        await this.conversationService.updateDoc(
-          conversationId,
-          ownerUserId,
-          { updatedAt: Date.now() },
-          session
-        );
+            // 3. 대화방 타임스탬프 갱신
+            await this.conversationService.updateDoc(
+              conversationId,
+              ownerUserId,
+              { updatedAt: Date.now() },
+              session
+            );
 
-        // 4. 연관된 지식 그래프 연쇄 복원
-        await this.graphManagementService.restoreNodesByOrigIds(ownerUserId, [messageId], { session });
-      });
+            // 4. 연관된 지식 그래프 연쇄 복원
+            await this.graphManagementService.restoreNodesByOrigIds(ownerUserId, [messageId], { session });
+          });
+        },
+        { label: 'ChatManagementService.restoreMessage.transaction' }
+      );
       return true;
     } catch (err: unknown) {
       if (
@@ -767,16 +843,21 @@ export class ChatManagementService {
 
     try {
       let deletedCount = 0;
-      await session.withTransaction(async () => {
-        // 1. 모든 메시지 삭제
-        await this.messageService.deleteAllDocsByUserId(ownerUserId, session);
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            // 1. 모든 메시지 삭제
+            await this.messageService.deleteAllDocsByUserId(ownerUserId, session);
 
-        // 2. 모든 대화 삭제
-        deletedCount = await this.conversationService.deleteAllDocs(ownerUserId, session);
+            // 2. 모든 대화 삭제
+            deletedCount = await this.conversationService.deleteAllDocs(ownerUserId, session);
 
-        // 3. 모든 그래프 연쇄 삭제 (해당 유저의 전체 데이터 삭제 문맥에 부합)
-        await this.graphManagementService.deleteGraph(ownerUserId, true, { session });
-      });
+            // 3. 모든 그래프 연쇄 삭제 (해당 유저의 전체 데이터 삭제 문맥에 부합)
+            await this.graphManagementService.deleteGraph(ownerUserId, true, { session });
+          });
+        },
+        { label: 'ChatManagementService.deleteAllConversations.transaction' }
+      );
       return deletedCount;
     } catch (err: unknown) {
       if (

@@ -5,6 +5,7 @@ import { logger } from '../../shared/utils/logger';
 import { NotificationType } from '../notificationType';
 import { AiMicroscopeIngestResultItem } from '../../shared/dtos/ai_graph_output';
 import { MicroscopeWorkspaceMetaDoc } from '../../core/types/persistence/microscope_workspace.persistence';
+import { withRetry } from '../../shared/utils/retry';
 
 /**
  * Microscope 문서 분석(Ingest) 결과 처리 핸들러
@@ -42,7 +43,10 @@ export class MicroscopeIngestResultHandler implements JobHandler {
       // 1. S3에서 그래프 데이터 다운로드
       if (status === 'COMPLETED' && standardizedS3Key) {
         try {
-          downloadedGraphData = await storagePort.downloadJson<AiMicroscopeIngestResultItem[]>(standardizedS3Key, { bucketType: 'payload' });
+          downloadedGraphData = await withRetry(
+            async () => await storagePort.downloadJson<AiMicroscopeIngestResultItem[]>(standardizedS3Key, { bucketType: 'payload' }),
+            { label: 'MicroscopeIngestResultHandler.downloadJson.graph' }
+          );
           logger.info({ taskId, standardizedS3Key }, 'Successfully downloaded standardized graph JSON from S3');
         } catch (downloadErr) {
           logger.error({ err: downloadErr, taskId, standardizedS3Key }, 'Failed to download graph JSON from S3');

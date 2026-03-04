@@ -244,6 +244,15 @@ export class MessageService {
   }
 
   /**
+   * 여러 대화방의 모든 메시지를 한 번에 조회합니다. (N+1 최적화용)
+   * @param conversationIds 대화방 ID 배열
+   * @returns 메시지 문서 배열
+   */
+  async findDocsByConversationIds(conversationIds: string[]): Promise<MessageDoc[]> {
+    return this.messageRepo.findAllByConversationIds(conversationIds);
+  }
+
+  /**
    * 특정 대화방의 모든 메시지를 삭제합니다. (Internal Use)
    * @param conversationId 대화방 ID
    * @param session MongoDB 클라이언트 세션 (선택 사항)
