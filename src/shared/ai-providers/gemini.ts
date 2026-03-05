@@ -7,10 +7,34 @@ import { documentProcessor } from '../utils/documentProcessor';
 import { logger } from '../../shared/utils/logger';
 
 function normalizeError(e: any): string {
-  // GoogleGenerativeAI Error Mapping (간소화)
   const msg = e.message || '';
+  const status = e.status || (e.response?.status);
+  
+  // Log full error for internal diagnostics (Critical for "unknown_error" debugging)
+  logger.error({ 
+    err: e, 
+    message: msg, 
+    status,
+    stack: e.stack,
+    details: e.details || e.response?.data?.error?.details
+  }, 'Gemini Provider Error caught');
+
+  // GoogleGenerativeAI Error Mapping
   if (msg.includes('API key not valid')) return 'unauthorized_key';
-  if (msg.includes('429')) return 'rate_limited';
+  if (msg.includes('Location not supported')) return 'unsupported_location';
+  if (msg.includes('429') || msg.includes('quota')) return 'rate_limited';
+  
+  // Status code based mapping
+  if (status === 401) return 'unauthorized_key';
+  if (status === 403) return 'forbidden';
+  if (status === 404) return 'model_not_found';
+  
+  // String matching for other common codes
+  if (msg.includes('PERMISSION_DENIED')) return 'forbidden';
+  if (msg.includes('UNAUTHENTICATED')) return 'unauthorized_key';
+  if (msg.includes('RESOURCE_EXHAUSTED')) return 'rate_limited';
+  if (msg.includes('INVALID_ARGUMENT')) return 'bad_request';
+
   return 'unknown_error';
 }
 
@@ -28,9 +52,13 @@ async function streamToBuffer(stream: Readable): Promise<Buffer> {
 
 export const geminiProvider: IAiProvider = {
   async checkAPIKeyValid(apiKey: string): Promise<Result<true>> {
+    if (!apiKey || apiKey.trim().length === 0) {
+      return { ok: false, error: 'empty_api_key' };
+    }
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: 'gemini-pro' }); // or gemini-1.5-flash
+      // Using gemini-1.5-flash as it's the current recommended fast/capable model
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
       await model.generateContent('Hi');
       return { ok: true, data: true };
     } catch (e: any) {
@@ -141,7 +169,7 @@ export const geminiProvider: IAiProvider = {
       // If last message is 'model', we might have an issue, but standard chat flow ends with user.
       
       const model = genAI.getGenerativeModel({ 
-          model: params.model || 'gemini-pro',
+          model: params.model || 'gemini-1.5-flash',
           systemInstruction: systemInstruction 
       });
 
@@ -183,7 +211,7 @@ export const geminiProvider: IAiProvider = {
   ): Promise<Result<string>> {
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
       const languageInstruction = opts?.language 
         ? ` The title MUST be in ${opts.language}.`
         : '';
