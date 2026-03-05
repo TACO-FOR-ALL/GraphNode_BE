@@ -381,6 +381,39 @@ export class MicroscopeManagementService {
       throw new ForbiddenError('You do not have permission to access graph of this workspace');
     }
 
+    return this.aggregateGraphFromWorkspace(userId, workspace);
+  }
+
+  /**
+   * 특정 노드 ID에 대응되는 가장 최신의 Microscope 지식 그래프 데이터를 조회합니다.
+   * FE에서 단일 노드(노트/대화)와 매핑된 그래프를 즉시 가져오기 위해 사용됩니다.
+   * 
+   * @param userId 유저 ID
+   * @param nodeId 대상 노드 ID
+   * @returns 최신 그래프 데이터 (MicroscopeGraphDataDto 단일 객체)
+   */
+  async getLatestGraphByNodeId(userId: string, nodeId: string): Promise<MicroscopeGraphDataDto> {
+    // 1. 해당 유저의 특정 노드 ID가 포함된 가장 최근 워크스페이스 조회
+    const workspace = await this.microscopeWorkspaceStore.findLatestWorkspaceByNodeId(userId, nodeId);
+    
+    if (!workspace) {
+      logger.info({ userId, nodeId }, 'No microscope workspace found for node');
+      return { nodes: [], edges: [] };
+    }
+
+    // 2. 해당 워크스페이스 내의 모든 COMPLETED 그래프 데이터 취합
+    const graphDataList = await this.aggregateGraphFromWorkspace(userId, workspace);
+    
+    // 리스트 중 첫 번째(통합된) 객체 반환
+    return graphDataList[0] || { nodes: [], edges: [] };
+  }
+
+  /**
+   * 워크스페이스 메타데이터를 기반으로 내부의 모든 그래프 페이로드를 읽어와 하나의 DTO로 병합합니다.
+   * @private
+   */
+  private async aggregateGraphFromWorkspace(userId: string, workspace: MicroscopeWorkspaceMetaDoc): Promise<MicroscopeGraphDataDto[]> {
+    const workspaceId = workspace._id;
     try {
       // 1. COMPLETED 상태이고 graphPayloadId가 있는 문서들 확인
       const payloadIds : string[] = workspace.documents
@@ -401,25 +434,16 @@ export class MicroscopeManagementService {
       for (const payload of microscopeGraphs) {
         if (!payload.graphData) continue;
         
-        // 방어적 코드: 혹시 배열이 아니라 단일 객체일 경우를 대비
         const items = Array.isArray(payload.graphData) ? payload.graphData : [payload.graphData];
         
-        // items는 MicroscopeGraphDataDto[] 타입임
         for (const item of items) {
-
-          // item.nodes는 MicroscopeGraphNodeDoc[] 타입임
           if (item.nodes && Array.isArray(item.nodes)) {
-
-            // node는 MicroscopeGraphNodeDoc 타입임
             for (const node of item.nodes) {
               mergedNodes.push(node as MicroscopeGraphNodeDoc);
             }
           }
 
-          // item.edges는 MicroscopeGraphEdgeDoc[] 타입임
           if (item.edges && Array.isArray(item.edges)) {
-
-            // edge는 MicroscopeGraphEdgeDoc 타입임
             for (const edge of item.edges) {
               mergedEdges.push(edge as MicroscopeGraphEdgeDoc);
             }

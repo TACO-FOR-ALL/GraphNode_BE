@@ -89,6 +89,27 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
   }
 
   /**
+   * 특정 유저가 소유한 특정 노드 ID와 연관된 가장 최신 워크스페이스를 조회합니다.
+   * updatedAt 기준 내림차순 정렬하여 가장 최근에 갱신된 내역을 가져옵니다.
+   * 
+   * @param userId 유저 ID
+   * @param nodeId 대상 노드 ID (Note/Conversation ID)
+   * @returns 조회된 워크스페이스 또는 null
+   */
+  async findLatestWorkspaceByNodeId(userId: string, nodeId: string, session?: ClientSession): Promise<MicroscopeWorkspaceMetaDoc | null> {
+    try {
+      const doc = await this.microscope_workspaces_collection()
+        .findOne(
+          { userId, 'documents.nodeId': nodeId } as any,
+          { sort: { updatedAt: -1 }, session }
+        );
+      return doc ? (doc as unknown as MicroscopeWorkspaceMetaDoc) : null;
+    } catch (err: unknown) {
+      this.handleError('MicroscopeWorkspaceRepositoryMongo.findLatestWorkspaceByNodeId', err);
+    }
+  }
+
+  /**
    * 워크스페이스를 삭제(Hard Delete)합니다.
    * 워크스페이스 하위의 문서 및 진행 상태(documents 배열)도 함께 소멸됩니다.
    * 
