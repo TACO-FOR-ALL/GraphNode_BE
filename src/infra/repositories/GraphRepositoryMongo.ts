@@ -90,24 +90,15 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param userId 사용자 ID
    * @param id 삭제할 노드의 ID (number)
    */
-  async deleteNode(userId: string, id: number, permanent?: boolean, options?: RepoOptions): Promise<void> {
+  async deleteNode(userId: string, id: number, _permanent?: boolean, options?: RepoOptions): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
-      if (permanent) {
-        await this.graphNodes_col().deleteOne({ id, userId } as any, opts);
-        await this.graphEdges_col().deleteMany(
-          { userId, $or: [{ source: id }, { target: id }] } as any,
-          opts
-        );
-      } else {
-        const deletedAt = Date.now();
-        await this.graphNodes_col().updateOne({ id, userId } as any, { $set: { deletedAt } }, opts);
-        await this.graphEdges_col().updateMany(
-          { userId, $or: [{ source: id }, { target: id }] } as any,
-          { $set: { deletedAt } },
-          opts
-        );
-      }
+      // [Hard Delete Enforced] Always remove from DB
+      await this.graphNodes_col().deleteOne({ id, userId } as any, opts);
+      await this.graphEdges_col().deleteMany(
+        { userId, $or: [{ source: id }, { target: id }] } as any,
+        opts
+      );
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.deleteNode', err);
     }
@@ -133,15 +124,10 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   async deleteNodes(userId: string, ids: number[], permanent?: boolean, options?: RepoOptions): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
-      if (permanent) {
-        await this.graphNodes_col().deleteMany({ id: { $in: ids }, userId } as any, opts);
-      } else {
-        await this.graphNodes_col().updateMany(
-          { id: { $in: ids }, userId } as any,
-          { $set: { deletedAt: Date.now() } },
-          opts
-        );
-      }
+      // [Hard Delete Enforced]
+      await this.graphNodes_col().deleteMany({ id: { $in: ids }, userId } as any, opts);
+      // Edges connected to these nodes should also be hard deleted
+      await this.graphEdges_col().deleteMany({ userId, $or: [{ source: { $in: ids } }, { target: { $in: ids } }] } as any, opts);
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.deleteNodes', err);
     }
@@ -181,66 +167,33 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   /**
    * 지정된 원본 ID(origId) 목록에 해당하는 노드들과 그 엣지들을 복구합니다.
    */
-  async restoreNodesByOrigIds(userId: string, origIds: string[], options?: RepoOptions): Promise<void> {
-    try {
-      const opts = { ...options, session: options?.session as any };
-      
-      const nodes = await this.graphNodes_col().find(
-        { userId, origId: { $in: origIds } } as any,
-        { ...opts, projection: { id: 1 } }
-      ).toArray();
-
-      const nodeIds = nodes.map(n => n.id);
-      
-      if (nodeIds.length === 0) return;
-
-      await this.graphNodes_col().updateMany({ id: { $in: nodeIds }, userId } as any, { $set: { deletedAt: null } }, opts);
-      await this.graphEdges_col().updateMany({ userId, $or: [{ source: { $in: nodeIds } }, { target: { $in: nodeIds } }] } as any, { $set: { deletedAt: null } }, opts);
-    } catch (err: unknown) {
-      this.handleError('GraphRepositoryMongo.restoreNodesByOrigIds', err);
-    }
+  async restoreNodesByOrigIds(_userId: string, _origIds: string[], _options?: RepoOptions): Promise<void> {
+    // [Hard Delete Policy] Restore is no longer supported
+    throw new UpstreamError('Restore is not supported in hard-delete only mode');
   }
 
   /**
    * 해당 사용자의 모든 그래프 데이터(노드, 엣지, 클러스터, 서브클러스터, 통계, 요약)를 삭제합니다.
    * 트랜잭션 등에서 호출될 수 있습니다.
    */
-  async deleteAllGraphData(userId: string, permanent?: boolean, options?: RepoOptions): Promise<void> {
+  async deleteAllGraphData(userId: string, _permanent?: boolean, options?: RepoOptions): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
-      if (permanent) {
-        await this.graphNodes_col().deleteMany({ userId } as any, opts);
-        await this.graphEdges_col().deleteMany({ userId } as any, opts);
-        await this.graphClusters_col().deleteMany({ userId } as any, opts);
-        await this.graphSubclusters_col().deleteMany({ userId } as any, opts);
-        await this.graphStats_col().deleteMany({ userId } as any, opts);
-        await this.graphSummary_col().deleteMany({ userId } as any, opts);
-      } else {
-        const deletedAt = Date.now();
-        await this.graphNodes_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts);
-        await this.graphEdges_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts);
-        await this.graphClusters_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts);
-        await this.graphSubclusters_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts);
-        await this.graphStats_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts);
-        await this.graphSummary_col().updateMany({ userId } as any, { $set: { deletedAt } }, opts);
-      }
+      // [Hard Delete Enforced] Always remove all graph data from DB
+      await this.graphNodes_col().deleteMany({ userId } as any, opts);
+      await this.graphEdges_col().deleteMany({ userId } as any, opts);
+      await this.graphClusters_col().deleteMany({ userId } as any, opts);
+      await this.graphSubclusters_col().deleteMany({ userId } as any, opts);
+      await this.graphStats_col().deleteMany({ userId } as any, opts);
+      await this.graphSummary_col().deleteMany({ userId } as any, opts);
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.deleteAllGraphData', err);
     }
   }
 
-  async restoreAllGraphData(userId: string, options?: RepoOptions): Promise<void> {
-    try {
-      const opts = { ...options, session: options?.session as any };
-      await this.graphNodes_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts);
-      await this.graphEdges_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts);
-      await this.graphClusters_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts);
-      await this.graphSubclusters_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts);
-      await this.graphStats_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts);
-      await this.graphSummary_col().updateMany({ userId } as any, { $set: { deletedAt: null } }, opts);
-    } catch (err: unknown) {
-      this.handleError('GraphRepositoryMongo.restoreAllGraphData', err);
-    }
+  async restoreAllGraphData(_userId: string, _options?: RepoOptions): Promise<void> {
+    // [Hard Delete Policy] Restore is not supported in hard-delete only mode
+    throw new UpstreamError('Restore is not supported in hard-delete only mode');
   }
 
   /**
@@ -345,18 +298,11 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   /**
    * 특정 엣지를 ID로 삭제합니다.
    */
-  async deleteEdge(userId: string, edgeId: string, permanent?: boolean, options?: RepoOptions): Promise<void> {
+  async deleteEdge(userId: string, edgeId: string, _permanent?: boolean, options?: RepoOptions): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
-      if (permanent) {
-        await this.graphEdges_col().deleteOne({ id: edgeId, userId } as any, opts);
-      } else {
-        await this.graphEdges_col().updateOne(
-          { id: edgeId, userId } as any,
-          { $set: { deletedAt: Date.now() } },
-          opts
-        );
-      }
+      // [Hard Delete Enforced]
+      await this.graphEdges_col().deleteOne({ id: edgeId, userId } as any, opts);
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.deleteEdge', err);
     }
@@ -461,18 +407,11 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   /**
    * 특정 클러스터를 삭제합니다.
    */
-  async deleteCluster(userId: string, clusterId: string, permanent?: boolean, options?: RepoOptions): Promise<void> {
+  async deleteCluster(userId: string, clusterId: string, _permanent?: boolean, options?: RepoOptions): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
-      if (permanent) {
-        await this.graphClusters_col().deleteOne({ id: clusterId, userId } as any, opts);
-      } else {
-        await this.graphClusters_col().updateOne(
-          { id: clusterId, userId } as any,
-          { $set: { deletedAt: Date.now() } },
-          opts
-        );
-      }
+      // [Hard Delete Enforced]
+      await this.graphClusters_col().deleteOne({ id: clusterId, userId } as any, opts);
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.deleteCluster', err);
     }
@@ -532,20 +471,13 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   async deleteSubcluster(
     userId: string,
     subclusterId: string,
-    permanent?: boolean,
+    _permanent?: boolean,
     options?: RepoOptions
   ): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
-      if (permanent) {
-        await this.graphSubclusters_col().deleteOne({ id: subclusterId, userId } as any, opts);
-      } else {
-        await this.graphSubclusters_col().updateOne(
-          { id: subclusterId, userId } as any,
-          { $set: { deletedAt: Date.now() } },
-          opts
-        );
-      }
+      // [Hard Delete Enforced]
+      await this.graphSubclusters_col().deleteOne({ id: subclusterId, userId } as any, opts);
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.deleteSubcluster', err);
     }
@@ -604,18 +536,11 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   /**
    * 특정 사용자의 그래프 통계를 삭제합니다.
    */
-  async deleteStats(userId: string, permanent?: boolean, options?: RepoOptions): Promise<void> {
+  async deleteStats(userId: string, _permanent?: boolean, options?: RepoOptions): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
-      if (permanent) {
-        await this.graphStats_col().deleteOne({ userId } as any, opts);
-      } else {
-        await this.graphStats_col().updateOne(
-          { userId } as any,
-          { $set: { deletedAt: Date.now() } },
-          opts
-        );
-      }
+      // [Hard Delete Enforced]
+      await this.graphStats_col().deleteOne({ userId } as any, opts);
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.deleteStats', err);
     }
@@ -654,34 +579,19 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     }
   }
 
-  async deleteGraphSummary(userId: string, permanent?: boolean, options?: RepoOptions): Promise<void> {
+  async deleteGraphSummary(userId: string, _permanent?: boolean, options?: RepoOptions): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
-      if (permanent) {
-        await this.graphSummary_col().deleteOne({ userId } as any, opts);
-      } else {
-        await this.graphSummary_col().updateOne(
-          { userId } as any,
-          { $set: { deletedAt: Date.now() } },
-          opts
-        );
-      }
+      // [Hard Delete Enforced]
+      await this.graphSummary_col().deleteOne({ userId } as any, opts);
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.deleteGraphSummary', err);
     }
   }
 
-  async restoreGraphSummary(userId: string, options?: RepoOptions): Promise<void> {
-    try {
-      const opts = { ...options, session: options?.session as any };
-      await this.graphSummary_col().updateOne(
-        { userId } as any,
-        { $set: { deletedAt: null } },
-        opts
-      );
-    } catch (err: unknown) {
-      this.handleError('GraphRepositoryMongo.restoreGraphSummary', err);
-    }
+  async restoreGraphSummary(_userId: string, _options?: RepoOptions): Promise<void> {
+    // [Hard Delete Policy] Restore is no longer supported
+    throw new UpstreamError('Restore is not supported in hard-delete only mode');
   }
 
   private handleError(methodName: string, err: unknown): never {

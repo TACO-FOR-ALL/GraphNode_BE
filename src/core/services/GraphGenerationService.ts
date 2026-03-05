@@ -297,11 +297,11 @@ export class GraphGenerationService {
    * await graphGenerationService.deleteGraphSummary('u_123');
    */
   async deleteGraphSummary(userId: string, permanent?: boolean) {
-    return this.graphEmbeddingService.deleteGraphSummary(userId, permanent);
+    return this.graphEmbeddingService.deleteGraphSummary(userId, true);
   }
 
-  async restoreGraphSummary(userId: string) {
-    return this.graphEmbeddingService.restoreGraphSummary(userId);
+  async restoreGraphSummary(_userId: string) {
+    throw new UpstreamError('Restore is not supported in hard-delete only mode');
   }
 
   /**
@@ -311,12 +311,12 @@ export class GraphGenerationService {
    * @example
    * await graphGenerationService.deleteGraph('u_123');
    */
-  async deleteGraph(userId: string, permanent?: boolean) {
-    return this.graphEmbeddingService.deleteGraph(userId, permanent);
+  async deleteGraph(userId: string, _permanent?: boolean) {
+    return this.graphEmbeddingService.deleteGraph(userId, true);
   }
 
   async restoreGraph(userId: string) {
-    return this.graphEmbeddingService.restoreGraph(userId);
+    throw new UpstreamError('Restore is not supported in hard-delete only mode');
   }
 
   /**

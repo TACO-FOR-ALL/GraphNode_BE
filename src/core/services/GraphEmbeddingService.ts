@@ -11,6 +11,7 @@ import { getMongo } from '../../infra/db/mongodb';
 import { GraphManagementService } from './GraphManagementService';
 import { GraphSummaryDoc } from '../types/persistence/graph.persistence';
 import { withRetry } from '../../shared/utils/retry';
+import { UpstreamError } from '../../shared/errors/domain';
 
 /**
  * 모듈: GraphEmbeddingService (그래프-벡터 통합 서비스)
@@ -547,24 +548,9 @@ export class GraphEmbeddingService {
     }
   }
   
-  async restoreGraph(userId: string) {
-    const mongoClient = getMongo();
-    if (!mongoClient) {
-      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
-    }
-    const session = mongoClient.startSession();
-    try {
-      await withRetry(
-        async () => {
-          await session.withTransaction(async () => {
-            await this.graphManagementService.restoreGraph(userId, { session });
-          });
-        },
-        { label: 'GraphEmbeddingService.restoreGraph.transaction' }
-      );
-    } finally {
-      await session.endSession();
-    }
+  async restoreGraph(_userId: string) {
+    // [Hard Delete Policy] Restore is no longer supported
+    throw new UpstreamError('Restore is not supported in hard-delete only mode');
   }
 
   // --- Insight Summary ---
@@ -590,7 +576,8 @@ export class GraphEmbeddingService {
     return this.graphManagementService.deleteGraphSummary(userId, permanent);
   }
 
-  async restoreGraphSummary(userId: string) {
-    return this.graphManagementService.restoreGraphSummary(userId);
+  async restoreGraphSummary(_userId: string) {
+    // [Hard Delete Policy] Restore is no longer supported
+    throw new UpstreamError('Restore is not supported in hard-delete only mode');
   }
 }
