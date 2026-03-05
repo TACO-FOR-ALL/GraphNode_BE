@@ -9,7 +9,7 @@ import { GraphNeo4jStore } from '../ports/GraphNeo4jStore';
 import { QueuePort } from '../ports/QueuePort';
 import { StoragePort } from '../ports/StoragePort';
 import { MicroscopeGraphDataDto} from '../../shared/dtos/microscope';
-import { TaskType, MicroscopeIngestFromNodeQueuePayload } from '../../shared/dtos/queue';
+import { TaskType } from '../../shared/dtos/queue';
 import { UpstreamError, NotFoundError, ForbiddenError, ValidationError } from '../../shared/errors/domain';
 import { logger } from '../../shared/utils/logger';
 import { ConversationRepository } from '../ports/ConversationRepository';

@@ -64,3 +64,11 @@ export interface Folder {
   /** 삭제 일시 (ISO 8601 문자열, null이면 활성) */
   deletedAt?: string | null;
 }
+
+/**
+ * 휴지통 목록 응답 DTO
+ */
+export interface TrashListResponse {
+  notes: Note[];
+  folders: Folder[];
+}

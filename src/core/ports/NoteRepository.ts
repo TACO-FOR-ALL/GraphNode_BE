@@ -129,6 +129,30 @@ export interface NoteRepository {
   findFoldersModifiedSince(ownerUserId: string, since: Date): Promise<FolderDoc[]>;
 
   /**
+   * 여러 폴더에 속한 노트들을 조회합니다.
+   * @param folderIds 폴더 ID 목록
+   * @param ownerUserId 소유자 ID
+   * @param includeDeleted 삭제된 노트 포함 여부
+   */
+  listNotesByFolderIds(
+    folderIds: string[],
+    ownerUserId: string,
+    includeDeleted?: boolean
+  ): Promise<NoteDoc[]>;
+
+  /**
+   * 휴지통 항목 조회: 삭제된 노트 목록을 조회합니다.
+   * @param ownerUserId 소유자 ID
+   */
+  listTrashNotes(ownerUserId: string): Promise<NoteDoc[]>;
+
+  /**
+   * 휴지통 항목 조회: 삭제된 폴더 목록을 조회합니다.
+   * @param ownerUserId 소유자 ID
+   */
+  listTrashFolders(ownerUserId: string): Promise<FolderDoc[]>;
+
+  /**
    * 여러 폴더에 속한 노트들을 일괄 삭제합니다. (폴더 삭제 시 사용) - Deprecated: Use soft/hard variants
    * @param folderIds 삭제할 폴더 ID 목록
    * @param ownerUserId 소유자 ID

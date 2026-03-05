@@ -90,15 +90,24 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param userId 사용자 ID
    * @param id 삭제할 노드의 ID (number)
    */
-  async deleteNode(userId: string, id: number, _permanent?: boolean, options?: RepoOptions): Promise<void> {
+  async deleteNode(userId: string, id: number, permanent: boolean = false, options?: RepoOptions): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
-      // [Hard Delete Enforced] Always remove from DB
-      await this.graphNodes_col().deleteOne({ id, userId } as any, opts);
-      await this.graphEdges_col().deleteMany(
-        { userId, $or: [{ source: id }, { target: id }] } as any,
-        opts
-      );
+      if (permanent) {
+        await this.graphNodes_col().deleteOne({ id, userId } as any, opts);
+        await this.graphEdges_col().deleteMany(
+          { userId, $or: [{ source: id }, { target: id }] } as any,
+          opts
+        );
+      } else {
+        const deletedAt = Date.now();
+        await this.graphNodes_col().updateOne({ id, userId } as any, { $set: { deletedAt } }, opts);
+        await this.graphEdges_col().updateMany(
+          { userId, $or: [{ source: id }, { target: id }] } as any,
+          { $set: { deletedAt } },
+          opts
+        );
+      }
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.deleteNode', err);
     }
@@ -121,13 +130,17 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   /**
    * 지정된 ID 목록에 해당하는 여러 노드를 삭제합니다.
    */
-  async deleteNodes(userId: string, ids: number[], permanent?: boolean, options?: RepoOptions): Promise<void> {
+  async deleteNodes(userId: string, ids: number[], permanent: boolean = false, options?: RepoOptions): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
-      // [Hard Delete Enforced]
-      await this.graphNodes_col().deleteMany({ id: { $in: ids }, userId } as any, opts);
-      // Edges connected to these nodes should also be hard deleted
-      await this.graphEdges_col().deleteMany({ userId, $or: [{ source: { $in: ids } }, { target: { $in: ids } }] } as any, opts);
+      if (permanent) {
+        await this.graphNodes_col().deleteMany({ id: { $in: ids }, userId } as any, opts);
+        await this.graphEdges_col().deleteMany({ userId, $or: [{ source: { $in: ids } }, { target: { $in: ids } }] } as any, opts);
+      } else {
+        const deletedAt = Date.now();
+        await this.graphNodes_col().updateMany({ id: { $in: ids }, userId } as any, { $set: { deletedAt } }, opts);
+        await this.graphEdges_col().updateMany({ userId, $or: [{ source: { $in: ids } }, { target: { $in: ids } }] } as any, { $set: { deletedAt } }, opts);
+      }
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.deleteNodes', err);
     }
@@ -167,9 +180,34 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   /**
    * 지정된 원본 ID(origId) 목록에 해당하는 노드들과 그 엣지들을 복구합니다.
    */
-  async restoreNodesByOrigIds(_userId: string, _origIds: string[], _options?: RepoOptions): Promise<void> {
-    // [Hard Delete Policy] Restore is no longer supported
-    throw new UpstreamError('Restore is not supported in hard-delete only mode');
+  async restoreNodesByOrigIds(userId: string, origIds: string[], options?: RepoOptions): Promise<void> {
+    try {
+      const opts = { ...options, session: options?.session as any };
+      
+      // 1. 해당 origId들을 가진 노드들을 찾아 id(number)를 추출 (삭제된 노드 포함)
+      const nodes = await this.graphNodes_col().find(
+        { userId, origId: { $in: origIds } } as any,
+        { ...opts, projection: { id: 1 } }
+      ).toArray();
+
+      const nodeIds = nodes.map(n => n.id);
+      
+      if (nodeIds.length === 0) return;
+
+      // 2. 노드 및 관련 엣지 복구 (deletedAt = null)
+      await this.graphNodes_col().updateMany(
+        { id: { $in: nodeIds }, userId } as any,
+        { $set: { deletedAt: null } },
+        opts
+      );
+      await this.graphEdges_col().updateMany(
+        { userId, $or: [{ source: { $in: nodeIds } }, { target: { $in: nodeIds } }] } as any,
+        { $set: { deletedAt: null } },
+        opts
+      );
+    } catch (err: unknown) {
+      this.handleError('GraphRepositoryMongo.restoreNodesByOrigIds', err);
+    }
   }
 
   /**

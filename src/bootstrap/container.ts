@@ -301,7 +301,7 @@ export class Container {
    */
   getNoteService(): NoteService {
     if (!this.noteService) {
-      const raw = new NoteService(this.getNoteRepository());
+      const raw = new NoteService(this.getNoteRepository(), this.getGraphManagementService());
       this.noteService = createAuditProxy(raw, 'NoteService');
     }
     return this.noteService;

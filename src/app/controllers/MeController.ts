@@ -4,7 +4,6 @@ import { z } from 'zod';
 import { getUserIdFromRequest } from '../utils/request';
 import { UserService } from '../../core/services/UserService';
 import { MeResponseDto, ApiKeyModel } from '../../shared/dtos/me';
-import { ValidationError } from '../../shared/errors/domain';
 
 /**
  * /v1/me 엔드포인트의 컨트롤러 클래스.

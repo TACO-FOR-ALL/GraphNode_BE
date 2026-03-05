@@ -6,6 +6,7 @@ import type {
   FolderDto,
   FolderCreateDto,
   FolderUpdateDto,
+  TrashListResponseDto,
 } from '../types/note.js';
 
 /**
@@ -182,6 +183,18 @@ export class NoteApi {
    */
   async deleteAllNotes(): Promise<HttpResponse<{ deletedCount: number }>> {
     return this.rb.path('/notes').delete<{ deletedCount: number }>();
+  }
+
+  /**
+   * 휴지통(Trash) 목록을 조회합니다.
+   * @returns 삭제된 노트 및 폴더 목록
+   * @example
+   * const response = await client.note.listTrash();
+   * console.log(response.data.notes);
+   * console.log(response.data.folders);
+   */
+  listTrash(): Promise<HttpResponse<TrashListResponseDto>> {
+    return this.rb.path('/notes/trash').get<TrashListResponseDto>();
   }
 
   /**

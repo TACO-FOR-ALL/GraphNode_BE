@@ -80,15 +80,7 @@ export class ConversationService {
 
       return toChatThreadDto(convDoc, []);
     } catch (err: unknown) {
-      if (
-        err instanceof Error &&
-        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
-          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
-      ) {
-        throw err;
-      }
-      const e: any = err;
-      if (e && typeof e.code === 'string') throw err;
+      this.checkTransactionError(err);
       throw new UpstreamError('Failed to create conversation', { cause: err as any });
     }
   }
@@ -112,15 +104,7 @@ export class ConversationService {
 
       return toChatThreadDto(convDoc, []);
     } catch (err: unknown) {
-      if (
-        err instanceof Error &&
-        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
-          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
-      ) {
-        throw err;
-      }
-      const e: any = err;
-      if (e && typeof e.code === 'string') throw err;
+      this.checkTransactionError(err);
       throw new UpstreamError('Failed to fetch conversation', { cause: err as any });
     }
   }
@@ -146,16 +130,34 @@ export class ConversationService {
       const items: ChatThread[] = docs.map((doc) => toChatThreadDto(doc, []));
       return { items, nextCursor };
     } catch (err: unknown) {
-      if (
-        err instanceof Error &&
-        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
-          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
-      ) {
-        throw err;
-      }
-      const e: any = err;
-      if (e && typeof e.code === 'string') throw err;
+      this.checkTransactionError(err);
       throw new UpstreamError('Failed to list conversations', { cause: err as any });
+    }
+  }
+
+  /**
+   * 휴지통(Trash) 목록을 조회합니다. (삭제된 대화 조회)
+   * @param ownerUserId 소유자 ID
+   * @param limit 페이지당 항목 수
+   * @param cursor 페이지네이션 커서
+   * @returns ChatThread 객체 배열과 다음 페이지 커서
+   */
+  async listTrashByOwner(
+    ownerUserId: string,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: ChatThread[]; nextCursor?: string | null }> {
+    try {
+      const { items: docs, nextCursor } = await this.conversationRepo.listTrashByOwner(
+        ownerUserId,
+        limit,
+        cursor
+      );
+      const items: ChatThread[] = docs.map((doc) => toChatThreadDto(doc, []));
+      return { items, nextCursor };
+    } catch (err: unknown) {
+      this.checkTransactionError(err);
+      throw new UpstreamError('Failed to list trash conversations', { cause: err as any });
     }
   }
 
@@ -174,8 +176,7 @@ export class ConversationService {
     try {
       return await this.conversationRepo.listByOwner(ownerUserId, limit, cursor);
     } catch (err: unknown) {
-      const e: any = err;
-      if (e && typeof e.code === 'string') throw err;
+      this.checkTransactionError(err);
       throw new UpstreamError('Failed to list conversation docs', { cause: err as any });
     }
   }
@@ -212,15 +213,7 @@ export class ConversationService {
       );
       return updatedDoc;
     } catch (err: unknown) {
-      if (
-        err instanceof Error &&
-        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
-          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
-      ) {
-        throw err;
-      }
-      const e: any = err;
-      if (e && typeof e.code === 'string') throw err;
+      this.checkTransactionError(err);
       throw new UpstreamError('Failed to update conversation', { cause: err as any });
     }
   }
@@ -250,15 +243,7 @@ export class ConversationService {
         return await this.conversationRepo.softDelete(id, ownerUserId, session);
       }
     } catch (err: unknown) {
-      if (
-        err instanceof Error &&
-        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
-          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
-      ) {
-        throw err;
-      }
-      const e: any = err;
-      if (e && typeof e.code === 'string') throw err;
+      this.checkTransactionError(err);
       throw new UpstreamError('Failed to delete conversation', { cause: err as any });
     }
   }
@@ -277,15 +262,7 @@ export class ConversationService {
       }
       return await this.conversationRepo.restore(id, ownerUserId, session);
     } catch (err: unknown) {
-      if (
-        err instanceof Error &&
-        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
-          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
-      ) {
-        throw err;
-      }
-      const e: any = err;
-      if (e && typeof e.code === 'string') throw err;
+      this.checkTransactionError(err);
       throw new UpstreamError('Failed to restore conversation', { cause: err as any });
     }
   }
@@ -329,4 +306,22 @@ export class ConversationService {
   async deleteAllDocs(ownerUserId: string, session?: ClientSession): Promise<number> {
     return this.conversationRepo.deleteAll(ownerUserId, session);
   }
+
+
+  /**
+   * 트랜잭션 관련 에러를 체크합니다.
+   * @param err 에러
+   */
+  private checkTransactionError(err: unknown): void {
+    if (
+      err instanceof Error &&
+      ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+        (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+    ) {
+      throw err;
+    }
+    const e: any = err;
+    if (e && typeof e.code === 'string') throw err;
+  }
+
 }

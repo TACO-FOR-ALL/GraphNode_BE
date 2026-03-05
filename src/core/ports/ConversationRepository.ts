@@ -135,4 +135,16 @@ export interface ConversationRepository {
    * @param since 기준 시각
    */
   findModifiedSince(ownerUserId: string, since: Date): Promise<ConversationDoc[]>;
+
+  /**
+   * 휴지통 항목 조회: 삭제된 대화 목록을 조회합니다.
+   * @param ownerUserId 소유자 ID
+   * @param limit 가져올 개수
+   * @param cursor 페이징 커서
+   */
+  listTrashByOwner(
+    ownerUserId: string,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: ConversationDoc[]; nextCursor?: string | null }>;
 }

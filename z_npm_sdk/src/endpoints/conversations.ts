@@ -140,6 +140,25 @@ export class ConversationsApi {
   }
 
   /**
+   * 삭제된 대화(휴지통) 목록을 조회합니다.
+   * @param limit - 한 번에 가져올 개수 (기본값 50)
+   * @param cursor - 다음 페이지를 위한 커서
+   * @returns 삭제된 대화 목록 및 다음 커서
+   * @example
+   * const response = await client.conversations.listTrash(20);
+   * console.log(response.data.items);
+   */
+  listTrash(
+    limit?: number,
+    cursor?: string
+  ): Promise<HttpResponse<{ items: ConversationDto[]; nextCursor?: string | null }>> {
+    return this.rb
+      .path('/v1/ai/conversations/trash')
+      .query({ limit, cursor })
+      .get<{ items: ConversationDto[]; nextCursor?: string | null }>();
+  }
+
+  /**
    * 특정 대화를 조회합니다.
    * @param conversationId 대화 ID
    * @returns 대화 상세 정보

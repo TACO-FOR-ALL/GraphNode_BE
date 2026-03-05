@@ -2,13 +2,14 @@ import { ulid } from 'ulid';
 import { MongoClient, ClientSession } from 'mongodb';
 
 import { NoteRepository } from '../ports/NoteRepository';
+import { GraphManagementService } from './GraphManagementService';
 import {
   CreateNoteRequest,
   UpdateNoteRequest,
   CreateFolderRequest,
   UpdateFolderRequest,
 } from '../../shared/dtos/note.schemas';
-import { Note, Folder } from '../../shared/dtos/note';
+import { Note, Folder, TrashListResponse } from '../../shared/dtos/note';
 import { NoteDoc, FolderDoc } from '../types/persistence/note.persistence';
 import { getMongo } from '../../infra/db/mongodb';
 import { NotFoundError, UpstreamError } from '../../shared/errors/domain';
@@ -24,7 +25,10 @@ import { toNoteDto, toFolderDto } from '../../shared/mappers/note';
  * - DTO(Data Transfer Object)와 DB 문서(Doc) 간의 변환을 수행합니다.
  */
 export class NoteService {
-  constructor(private noteRepo: NoteRepository) {}
+  constructor(
+    private noteRepo: NoteRepository,
+    private graphManagementService: GraphManagementService
+  ) {}
 
   // --- 노트(Note) 관련 서비스 ---
 
@@ -116,13 +120,14 @@ export class NoteService {
 
     if (permanent) {
       deleted = await this.noteRepo.hardDeleteNote(noteId, userId);
-    }
-
-    if (!permanent) {
+    } else {
       deleted = await this.noteRepo.softDeleteNote(noteId, userId);
     }
 
     if (!deleted) throw new NotFoundError(`Note not found: ${noteId}`);
+
+    // 연관된 지식 그래프 연쇄 삭제 (Linked Deletion)
+    await this.graphManagementService.deleteNodesByOrigIds(userId, [noteId], permanent);
   }
 
   /**
@@ -135,6 +140,26 @@ export class NoteService {
   async restoreNote(userId: string, noteId: string): Promise<void> {
     const restored = await this.noteRepo.restoreNote(noteId, userId);
     if (!restored) throw new NotFoundError(`Note not found: ${noteId}`);
+
+    // 연관된 지식 그래프 연쇄 복원 (Linked Restoration)
+    await this.graphManagementService.restoreNodesByOrigIds(userId, [noteId]);
+  }
+
+  /**
+   * 휴지통(Trash) 목록을 조회합니다.
+   * @param userId 사용자 ID
+   * @returns 노트 및 폴더 목록
+   */
+  async listTrash(userId: string): Promise<TrashListResponse> {
+    const [notes, folders] = await Promise.all([
+      this.noteRepo.listTrashNotes(userId),
+      this.noteRepo.listTrashFolders(userId),
+    ]);
+
+    return {
+      notes: notes.map((doc: NoteDoc) => toNoteDto(doc)),
+      folders: folders.map((doc: FolderDoc) => toFolderDto(doc)),
+    };
   }
 
   // --- 폴더(Folder) 관련 서비스 ---
@@ -244,19 +269,36 @@ export class NoteService {
         const allFolderIdsToDelete: string[] = [folderId, ...descendantIds];
 
         if (permanent) {
-          // 4. 해당 폴더들에 속한 모든 노트 일괄 삭제 (Hard)
+          // 4. 해당 폴더들에 속한 모든 노트 ID 조회
+          const notesToHardDelete: NoteDoc[] = await this.noteRepo.listNotesByFolderIds(allFolderIdsToDelete, userId, true);
+          const noteIdsToHardDelete = notesToHardDelete.map((n: NoteDoc) => n._id);
+
+          // 5. 해당 폴더들에 속한 모든 노트 일괄 삭제 (Hard)
           await this.noteRepo.hardDeleteNotesByFolderIds(allFolderIdsToDelete, userId, session);
 
-          // 5. 폴더들 일괄 삭제 (Hard)
+          // 6. 폴더들 일괄 삭제 (Hard)
           await this.noteRepo.hardDeleteFolders(allFolderIdsToDelete, userId, session);
+
+          // 7. 연쇄 그래프 삭제
+          if (noteIdsToHardDelete.length > 0) {
+            await this.graphManagementService.deleteNodesByOrigIds(userId, noteIdsToHardDelete, true, { session });
+          }
           return;
         }
 
         // 4. 해당 폴더들에 속한 모든 노트 일괄 삭제 (Soft)
+        const notesToSoftDelete: NoteDoc[] = await this.noteRepo.listNotesByFolderIds(allFolderIdsToDelete, userId);
+        const noteIdsToSoftDelete = notesToSoftDelete.map((n: NoteDoc) => n._id);
+
         await this.noteRepo.softDeleteNotesByFolderIds(allFolderIdsToDelete, userId, session);
 
         // 5. 폴더들 일괄 삭제 (Soft)
         await this.noteRepo.softDeleteFolders(allFolderIdsToDelete, userId, session);
+
+        // 6. 연쇄 그래프 삭제
+        if (noteIdsToSoftDelete.length > 0) {
+          await this.graphManagementService.deleteNodesByOrigIds(userId, noteIdsToSoftDelete, false, { session });
+        }
       });
     } catch (err: unknown) {
       if (
@@ -304,10 +346,18 @@ export class NoteService {
         const allFolderIdsToRestore: string[] = [folderId, ...descendantIds];
 
         // 4. 해당 폴더들에 속한 모든 노트 일괄 복구
+        const notesToRestore: NoteDoc[] = await this.noteRepo.listNotesByFolderIds(allFolderIdsToRestore, userId, true);
+        const noteIdsToRestore = notesToRestore.map((n: NoteDoc) => n._id);
+        
         await this.noteRepo.restoreNotesByFolderIds(allFolderIdsToRestore, userId, session);
 
         // 5. 폴더들 일괄 복구
         await this.noteRepo.restoreFolders(allFolderIdsToRestore, userId, session);
+
+        // 6. 연쇄 그래프 복구
+        if (noteIdsToRestore.length > 0) {
+          await this.graphManagementService.restoreNodesByOrigIds(userId, noteIdsToRestore, { session });
+        }
       });
     } catch (err: unknown) {
       if (

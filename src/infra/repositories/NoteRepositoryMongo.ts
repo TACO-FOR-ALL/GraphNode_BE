@@ -244,6 +244,48 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
+   * 여러 폴더에 속한 노트들을 조회합니다.
+   */
+  async listNotesByFolderIds(
+    folderIds: string[],
+    ownerUserId: string,
+    includeDeleted?: boolean
+  ): Promise<NoteDoc[]> {
+    try {
+      if (folderIds.length === 0) return [];
+      const query: any = { folderId: { $in: folderIds }, ownerUserId };
+      if (!includeDeleted) {
+        query.deletedAt = null;
+      }
+      return await this.notesCol().find(query).toArray();
+    } catch (err: unknown) {
+      this.handleError('NoteRepositoryMongo.listNotesByFolderIds', err);
+    }
+  }
+
+  /**
+   * 휴지통 항목 조회: 삭제된 노트 목록을 조회합니다.
+   */
+  async listTrashNotes(ownerUserId: string): Promise<NoteDoc[]> {
+    try {
+      return this.notesCol().find({ ownerUserId, deletedAt: { $ne: null } }).toArray();
+    } catch (err: unknown) {
+      this.handleError('NoteRepositoryMongo.listTrashNotes', err);
+    }
+  }
+
+  /**
+   * 휴지통 항목 조회: 삭제된 폴더 목록을 조회합니다.
+   */
+  async listTrashFolders(ownerUserId: string): Promise<FolderDoc[]> {
+    try {
+      return this.foldersCol().find({ ownerUserId, deletedAt: { $ne: null } }).toArray();
+    } catch (err: unknown) {
+      this.handleError('NoteRepositoryMongo.listTrashFolders', err);
+    }
+  }
+
+  /**
    * 여러 폴더에 속한 노트들을 일괄 삭제한다.
    * @param folderIds 폴더 ID 배열
    * @param ownerUserId 소유자 사용자 ID

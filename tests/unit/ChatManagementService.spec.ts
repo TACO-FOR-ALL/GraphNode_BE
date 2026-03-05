@@ -2,7 +2,7 @@
  * 목적: ChatManagementService 유닛 테스트.
  * 접근: 포트 인터페이스(ConversationRepository, MessageRepository)를 인메모리 스텁으로 구현하여 서비스 로직만 검증.
  */
-import { jest, describe, it, expect, beforeEach, beforeAll, afterAll, test } from '@jest/globals';
+import { jest, describe, it, expect, beforeEach, test } from '@jest/globals';
 import { ClientSession } from 'mongodb';
 
 import { ConversationService } from '../../src/core/services/ConversationService';

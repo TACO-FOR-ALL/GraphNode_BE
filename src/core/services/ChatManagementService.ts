@@ -327,6 +327,16 @@ export class ChatManagementService {
   }
 
   /**
+   * 휴지통 항목 조회 (삭제된 대화 목록)
+   * @param ownerUserId 소유자 ID
+   * @param limit 페이지당 항목 수
+   * @param cursor 페이징 커서
+   */
+  async listTrashByOwner(ownerUserId: string, limit: number, cursor?: string) {
+    return this.conversationService.listTrashByOwner(ownerUserId, limit, cursor);
+  }
+
+  /**
    * 대화 정보를 업데이트합니다.
    *
    * @param id 대화 ID

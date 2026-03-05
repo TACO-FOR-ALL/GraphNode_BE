@@ -9,7 +9,7 @@ import {
   updateFolderSchema,
 } from '../../shared/dtos/note.schemas';
 import { getUserIdFromRequest } from '../utils/request';
-import { Note, Folder } from '../../shared/dtos/note';
+import type { Note, Folder } from '../../shared/dtos/note';
 
 /**
  * 모듈: NoteController
@@ -202,5 +202,15 @@ export class NoteController {
     const userId: string = getUserIdFromRequest(req)!;
     const count = await this.noteService.deleteAllFolders(userId);
     res.status(200).json({ deletedCount: count });
+  }
+
+  /**
+   * 휴지통 항목 조회 핸들러
+   * GET /v1/notes/trash
+   */
+  async listTrash(req: Request, res: Response) {
+    const userId: string = getUserIdFromRequest(req)!;
+    const trash = await this.noteService.listTrash(userId);
+    res.json(trash);
   }
 }

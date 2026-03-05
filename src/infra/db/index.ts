@@ -3,7 +3,6 @@ import { loadEnv } from '../../config/env';
 import prisma from './prisma';
 import { initRedis } from '../redis/client';
 import { initChroma } from './chroma';
-import { initNeo4j } from './neo4j';
 
 /**
  * RDB(Prisma)/MongoDB/Redis를 순차 초기화한다. ENV 유효성 검증 포함.

@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { getUserIdFromRequest } from '../utils/request';
 import { MicroscopeManagementService } from '../../core/services/MicroscopeManagementService';
-import { logger } from '../../shared/utils/logger';
 import { MicroscopeWorkspaceMetaDoc } from '../../core/types/persistence/microscope_workspace.persistence';
 
 export class MicroscopeController {

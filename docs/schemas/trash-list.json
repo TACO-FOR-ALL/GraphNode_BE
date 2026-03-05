@@ -1,0 +1,17 @@
+{
+  "$id": "https://graphnode.dev/schemas/trash-list.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Trash List",
+  "type": "object",
+  "properties": {
+    "notes": {
+      "type": "array",
+      "items": { "$ref": "note.json" }
+    },
+    "folders": {
+      "type": "array",
+      "items": { "$ref": "folder.json" }
+    }
+  },
+  "required": ["notes", "folders"]
+}

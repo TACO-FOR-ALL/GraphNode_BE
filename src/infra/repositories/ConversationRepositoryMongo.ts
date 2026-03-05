@@ -251,6 +251,37 @@ export class ConversationRepositoryMongo implements ConversationRepository {
     }
   }
 
+  /**
+   * 휴지통 항목 조회: 삭제된 대화 목록을 조회합니다.
+   */
+  async listTrashByOwner(
+    ownerUserId: string,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: ConversationDoc[]; nextCursor?: string | null }> {
+    try {
+      const query: any = { ownerUserId, deletedAt: { $ne: null } };
+
+      if (cursor) {
+        query.updatedAt = { $lt: parseInt(cursor, 10) };
+      }
+
+      const items: ConversationDoc[] = await this.col()
+        .find(query)
+        .sort({ updatedAt: -1 })
+        .limit(limit)
+        .toArray();
+
+      const last = items[items.length - 1];
+      const nextCursor = (items.length === limit && last?.updatedAt) ? String(last.updatedAt) : null;
+
+      return { items, nextCursor };
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.listTrashByOwner', err);
+    }
+  }
+
+
   private handleError(methodName: string, err: unknown): never {
     if (
       err instanceof Error &&

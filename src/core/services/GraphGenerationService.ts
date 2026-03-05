@@ -9,7 +9,7 @@ import { NotificationType } from '../../workers/notificationType';
 import { HttpClient } from '../../infra/http/httpClient';
 import { AiInputConversation, AiInputMappingNode } from '../../shared/dtos/ai_input';
 import { logger } from '../../shared/utils/logger';
-import { AppError, UpstreamError, NotFoundError, GraphNotFoundError } from '../../shared/errors/domain';
+import { AppError, UpstreamError, GraphNotFoundError } from '../../shared/errors/domain';
 import { ChatMessage } from '../../shared/dtos/ai';
 import { mapSnapshotToAiInput } from '../../shared/mappers/graph_ai_input.mapper';
 import { GraphGenRequestPayload, GraphSummaryRequestPayload, AddNodeRequestPayload, TaskType } from '../../shared/dtos/queue';

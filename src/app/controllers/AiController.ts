@@ -456,4 +456,17 @@ export class AiController {
 
     stream.pipe(res);
   }
+
+  /**
+   * 휴지통 항목 조회 핸들러 (삭제된 대화 목록)
+   * GET /v1/ai/conversations/trash
+   */
+  async listTrashConversations(req: Request, res: Response) {
+    const ownerUserId = getUserIdFromRequest(req)!;
+    const limit = parseInt((req.query.limit as string) || '50', 10);
+    const cursor = req.query.cursor as string | undefined;
+
+    const result = await this.chatManagementService.listTrashByOwner(ownerUserId, limit, cursor);
+    res.status(200).json(result);
+  }
 }

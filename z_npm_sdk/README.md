@@ -305,6 +305,7 @@ const cancel = await openAgentChatStream(
 | :--- | :--- | :--- | :--- |
 | `create(dto)` | `POST /conversations` | 생성 | 201 |
 | `list()` | `GET /conversations` | 목록 | 200 |
+| `listTrash(limit, cur)` | `GET /conversations/trash` | 휴지통 목록 | 200 |
 | `get(id)` | `GET /conversations/:id` | 상세 | 200 |
 | `update(id, patch)` | `PATCH /conversations/:id` | 수정 | 200 |
 | `delete(id)` | `DELETE /conversations/:id` | 삭제 | 200 |
@@ -333,6 +334,21 @@ const res = await client.conversations.create({ title: 'New Chat' });
 ```typescript
 const res = await client.conversations.list();
 res.data.forEach(c => console.log(c.title));
+```
+</details>
+
+<details>
+<summary><b>listTrash(limit?, cursor?)</b></summary>
+
+- **Parameters**: 
+  - `limit`: number (선택)
+  - `cursor`: string (선택)
+- **Returns**: `Promise<HttpResponse<{ items: ConversationDto[], nextCursor?: string | null }>>`
+- **Description**: 휴지통(Soft Deleted)에 있는 대화 목록을 페이징하여 가져옵니다.
+- **Example**:
+```typescript
+const res = await client.conversations.listTrash(20);
+console.log('Trash Count:', res.data.items.length);
 ```
 </details>
 
@@ -578,6 +594,7 @@ await client.graphAi.deleteGraph();
 | :--- | :--- | :--- | :--- |
 | `createNote(dto)` | `POST /notes` | 생성 | 201 |
 | `listNotes()` | `GET /notes` | 목록 | 200 |
+| `listTrash()` | `GET /notes/trash` | 휴지통 목록 | 200 |
 | `getNote(id)` | `GET /notes/:id` | 상세 | 200 |
 | `updateNote(...)` | `PATCH /notes/:id` | 수정 | 200 |
 | `deleteNote(...)` | `DELETE /notes/:id` | 삭제 | 200 |
@@ -595,6 +612,20 @@ await client.graphAi.deleteGraph();
 await client.note.createNote({
   id: 'uuid', title: 'My Note', content: '# Hi', folderId: null
 });
+```
+</details>
+
+<details>
+<summary><b>listTrash()</b></summary>
+
+- **Returns**: `Promise<HttpResponse<TrashListResponseDto>>`
+  - `notes`: `NoteDto[]`
+  - `folders`: `FolderDto[]`
+- **Description**: 삭제된(휴지통에 있는) 모든 노트와 폴더를 가져옵니다.
+- **Example**:
+```typescript
+const res = await client.note.listTrash();
+console.log('Trashed Notes:', res.data.notes.length);
 ```
 </details>
 

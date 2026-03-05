@@ -11,7 +11,6 @@ import type {
   MicroscopeGraphDataDto, 
  
 } from '../../shared/dtos/microscope';
-import { logger } from '../../shared/utils/logger';
 import { UpstreamError } from '../../shared/errors/domain';
 
 export class Neo4jGraphAdapter implements GraphNeo4jStore {

@@ -87,3 +87,14 @@ export interface FolderUpdateDto {
   name?: string;
   parentId?: string | null;
 }
+
+/**
+ * Trash List Response DTO
+ * @public
+ * @property notes 삭제된 노트 목록
+ * @property folders 삭제된 폴더 목록
+ */
+export interface TrashListResponseDto {
+  notes: NoteDto[];
+  folders: FolderDto[];
+}
