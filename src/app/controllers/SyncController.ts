@@ -36,6 +36,34 @@ export class SyncController {
   }
 
   /**
+   * 대환 및 메시지 조회 (Pull Conversations)
+   */
+  async pullConversations(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = getUserIdFromRequest(req)!;
+      const since = req.query.since as string | undefined;
+      const result = await this.syncService.pullConversations(userId, since);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * 노트 및 폴더 조회 (Pull Notes)
+   */
+  async pullNotes(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = getUserIdFromRequest(req)!;
+      const since = req.query.since as string | undefined;
+      const result = await this.syncService.pullNotes(userId, since);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
    * 변경사항 반영 (Push) 핸들러
    * POST /v1/sync/push
    */

@@ -14,6 +14,8 @@ export function createSyncRouter(deps: { syncService: SyncService }) {
   router.use(bindSessionUser, requireLogin);
 
   router.get('/pull', asyncHandler(syncController.pull.bind(syncController)));
+  router.get('/pull/conversations', asyncHandler(syncController.pullConversations.bind(syncController)));
+  router.get('/pull/notes', asyncHandler(syncController.pullNotes.bind(syncController)));
   router.post('/push', asyncHandler(syncController.push.bind(syncController)));
 
   return router;
