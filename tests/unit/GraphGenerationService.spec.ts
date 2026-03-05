@@ -11,6 +11,7 @@ import { HttpClient } from '../../src/infra/http/httpClient';
 import { QueuePort } from '../../src/core/ports/QueuePort';
 import { StoragePort } from '../../src/core/ports/StoragePort';
 import { UserService } from '../../src/core/services/UserService';
+import { NoteService } from '../../src/core/services/NoteService';
 import { NotificationService } from '../../src/core/services/NotificationService';
 
 // Mock HttpClient
@@ -27,6 +28,7 @@ describe('GraphGenerationService', () => {
   let mockQueuePort: jest.Mocked<QueuePort>;
   let mockStoragePort: jest.Mocked<StoragePort>;
   let mockUserSvc: jest.Mocked<UserService>;
+  let mockNoteSvc: jest.Mocked<NoteService>;
   let mockNotificationSvc: jest.Mocked<NotificationService>;
 
   beforeEach(() => {
@@ -50,6 +52,10 @@ describe('GraphGenerationService', () => {
     mockUserSvc = {
       findById: jest.fn(),
       getPreferredLanguage: jest.fn<any>().mockResolvedValue('ko'),
+    } as any;
+
+    mockNoteSvc = {
+      findNotesModifiedSince: jest.fn<any>().mockResolvedValue([]),
     } as any;
 
     mockNotificationSvc = {
@@ -104,6 +110,7 @@ describe('GraphGenerationService', () => {
     service = new GraphGenerationService(
       mockChatSvc,
       mockGraphEmbSvc,
+      mockNoteSvc,
       mockUserSvc,
       mockQueuePort,
       mockStoragePort,
@@ -185,6 +192,44 @@ describe('GraphGenerationService', () => {
       );
       expect(mockGraphEmbSvc.saveStats).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'CREATING' })
+      );
+    });
+
+    it('should include note data S3 key if notes exist', async () => {
+      // Arrange
+      mockChatSvc.listConversations.mockResolvedValue({
+        items: [],
+        nextCursor: null,
+      });
+      mockNoteSvc.findNotesModifiedSince.mockResolvedValue([
+        {
+          _id: 'n1',
+          title: 'Note 1',
+          content: 'Content 1',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        } as any
+      ]);
+      mockQueuePort.sendMessage.mockResolvedValue(undefined);
+      mockGraphEmbSvc.saveStats.mockResolvedValue(undefined);
+
+      // Act
+      await service.requestGraphGenerationViaQueue(userId);
+
+      // Assert
+      expect(mockNoteSvc.findNotesModifiedSince).toHaveBeenCalled();
+      expect(mockStoragePort.upload).toHaveBeenCalledWith(
+        expect.stringContaining('notes.json'),
+        expect.anything(),
+        'application/json'
+      );
+      expect(mockQueuePort.sendMessage).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            extraS3Keys: expect.arrayContaining([expect.stringContaining('notes.json')])
+          })
+        })
       );
     });
   });

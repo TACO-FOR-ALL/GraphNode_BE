@@ -189,6 +189,8 @@ infisical run --env=prod -- npm start
 
 - **[Code Style & Contribution Guide](docs/architecture/CODE_STYLE.md)**: 네이밍 컨벤션, 아키텍처 패턴, 에러 핸들링 규칙 등
 - **[Daily Dev Logs](docs/guides/Daily)**: 일별 작업 상세 기록
+  - [2026-03-06 그래프 생성 시 노트(Markdown) 데이터 통합 (BE)](docs/guides/Daily/20260306-be-graph-generation-note-integration.md)
+  - [2026-03-06 Worker 노트(Markdown) 처리 및 파이프라인 연동 (AI)](docs/guides/Daily/20260306-ai-worker-note-processing-update.md)
   - [2026-03-05 휴지통(Trash) 관리 및 연쇄 삭제 백엔드 구현](docs/guides/Daily/20260305-be-trash-management.md)
   - [2026-03-05 FE SDK 휴지통 조회 및 삭제 옵션 업데이트](docs/guides/Daily/20260305-fe-sdk-trash-restoration.md)
   - [2026-03-05 외부 연동 안정성 강화를 위한 재시도 정책(Retry) 통합](docs/guides/Daily/20260305-retry-policy-implementation.md)
