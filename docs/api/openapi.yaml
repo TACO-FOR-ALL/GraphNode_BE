@@ -501,9 +501,7 @@ paths:
               examples:
                 default:
                   externalValue: ./examples/ai-conversation-list-200.json
-              examples:
-                default:
-                  externalValue: ./examples/ai-conversation-list-200.json
+
     delete:
       summary: Delete all conversations
       description: Deletes all conversations and messages for the authenticated user.
