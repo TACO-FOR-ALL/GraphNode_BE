@@ -581,7 +581,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   async saveStats(stats: GraphStatsDoc, options?: RepoOptions): Promise<void> {
     try {
       await this.graphStats_col().updateOne(
-        { id: stats.userId } as any,
+        { userId: stats.userId } as any,
         { $set: stats },
         { upsert: true, ...options, session: options?.session as any }
       );
@@ -608,10 +608,10 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     try {
       const opts = { ...options, session: options?.session as any };
       if (permanent) {
-        await this.graphStats_col().deleteOne({ id: userId } as any, opts);
+        await this.graphStats_col().deleteOne({ userId } as any, opts);
       } else {
         await this.graphStats_col().updateOne(
-          { id: userId } as any,
+          { userId } as any,
           { $set: { deletedAt: Date.now() } },
           opts
         );

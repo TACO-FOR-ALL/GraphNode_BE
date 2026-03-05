@@ -173,6 +173,15 @@ export class GraphGenerationResultHandler implements JobHandler {
           }
         }
 
+        // 3.9. 상태 변경: CREATED
+        const stats = await graphService.getStats(userId);
+        if (stats) {
+          stats.status = 'CREATED';
+          stats.updatedAt = new Date().toISOString();
+          await graphService.saveStats(stats);
+          logger.info({ taskId, userId }, 'Graph status updated to CREATED');
+        }
+
         // 4. 성공 알림 전송
         await notiService.sendNotification(userId, NotificationType.GRAPH_GENERATION_COMPLETED, {
           taskId,
@@ -188,6 +197,7 @@ export class GraphGenerationResultHandler implements JobHandler {
         );
       }
     } catch (err) {
+      // 에러 발생 시 상태 롤백 및 알림 전송
       const errorMsg = err instanceof Error ? err.message : 'Processing failed internally';
       logger.error({ err, taskId, userId }, 'Error processing graph generation result');
       

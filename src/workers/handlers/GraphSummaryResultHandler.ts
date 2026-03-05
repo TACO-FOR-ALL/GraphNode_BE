@@ -66,6 +66,14 @@ export class GraphSummaryResultHandler implements JobHandler {
 
         await graphService.upsertGraphSummary(userId, summaryDoc);
 
+        // 2.5. 상태 변경: CREATED (생성 중이었다면 완료로 변경)
+        const stats = await graphService.getStats(userId);
+        if (stats && stats.status === 'CREATING') {
+          stats.status = 'CREATED';
+          stats.updatedAt = new Date().toISOString();
+          await graphService.saveStats(stats);
+        }
+
         logger.info({ taskId, userId }, 'Graph summary persisted to DB');
 
         // 3. Send Notification

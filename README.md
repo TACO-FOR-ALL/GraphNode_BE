@@ -189,6 +189,8 @@ infisical run --env=prod -- npm start
 
 - **[Code Style & Contribution Guide](docs/architecture/CODE_STYLE.md)**: 네이밍 컨벤션, 아키텍처 패턴, 에러 핸들링 규칙 등
 - **[Daily Dev Logs](docs/guides/Daily)**: 일별 작업 상세 기록
+  - [2026-03-05 외부 연동 안정성 강화를 위한 재시도 정책(Retry) 통합](docs/guides/Daily/20260305-retry-policy-implementation.md)
+  - [2026-03-05 사용자 선호 언어 기반 AI 대화 제목 현지화 적용](docs/guides/Daily/20260305-ai-title-localization.md)
   - [2026-03-04 그래프 생성 최적화 및 Soft Delete 일관성 보장](docs/guides/Daily/20260304-graph-generation-optimization.md)
   - [2026-03-03 Sentry 알림 우선순위 최적화 (4xx 에러 필터링)](docs/guides/Daily/20260303-sentry-alert-priority-optimization.md)
   - [2026-03-02 MongoDB 트랜잭션 에러 전파 및 안정성 개선](docs/guides/Daily/20260302-mongodb-transaction-error-refactor.md)

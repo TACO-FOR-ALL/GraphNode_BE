@@ -23,13 +23,16 @@ export class AddNodeResultHandler implements JobHandler {
 
     logger.info({ taskId, userId, status }, 'Handling AddNode result');
 
+    // 의존성 획득
     const storagePort = container.getAwsS3Adapter();
     const graphService = container.getGraphEmbeddingService();
     const notiService = container.getNotificationService();
 
+    // 상태에 따른 처리, FAILED 시에
     if (status === 'FAILED' || error) {
       logger.error({ taskId, userId, error }, 'AddNode task failed from AI Server');
       
+      // 실패 알림 전송 전에 상태 롤백
       const stats = await graphService.getStats(userId);
       if (stats) {
         stats.status = 'CREATED';
