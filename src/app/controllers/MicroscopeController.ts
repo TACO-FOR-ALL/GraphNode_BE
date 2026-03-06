@@ -76,6 +76,20 @@ export class MicroscopeController {
   };
 
   /**
+   * (신규) 특정 노드 ID와 연계된 가장 최신의 Microscope 그래프 데이터를 조회합니다.
+   */
+  getLatestGraphByNodeId = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { nodeId } = req.params;
+      const userId = getUserIdFromRequest(req)!;
+      const graphData = await this.microscopeService.getLatestGraphByNodeId(userId, nodeId);
+      res.status(200).json(graphData);
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  /**
    * 워크스페이스 삭제
    */
   deleteWorkspace = async (req: Request, res: Response, next: NextFunction) => {

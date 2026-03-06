@@ -15,3 +15,15 @@ export interface SyncPullResponse {
   folders: Folder[];
   serverTime: string; // ISO 8601
 }
+
+export interface SyncPullConversationsResponse {
+  conversations: ChatThread[];
+  messages: ChatMessage[];
+  serverTime: string;
+}
+
+export interface SyncPullNotesResponse {
+  notes: Note[];
+  folders: Folder[];
+  serverTime: string;
+}

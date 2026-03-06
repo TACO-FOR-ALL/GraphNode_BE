@@ -33,3 +33,23 @@ export interface SyncPullResponse {
   folders: FolderDto[];
   serverTime: string; // ISO 8601
 }
+
+/**
+ * 대화 동기화 풀 응답 DTO
+ * @public
+ */
+export interface SyncPullConversationsResponse {
+  conversations: ConversationDto[];
+  messages: MessageDto[];
+  serverTime: string;
+}
+
+/**
+ * 노트 동기화 풀 응답 DTO
+ * @public
+ */
+export interface SyncPullNotesResponse {
+  notes: NoteDto[];
+  folders: FolderDto[];
+  serverTime: string;
+}

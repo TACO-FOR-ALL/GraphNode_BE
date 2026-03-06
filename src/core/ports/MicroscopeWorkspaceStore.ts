@@ -26,6 +26,13 @@ export interface MicroscopeWorkspaceStore {
   findByUserId(userId: string, session?: ClientSession): Promise<MicroscopeWorkspaceMetaDoc[]>;
 
   /**
+   * 특정 노드 ID와 연관된 가장 최신 워크스페이스를 조회합니다.
+   * @param userId 유저 고유 식별자
+   * @param nodeId 대상 노드 ID
+   */
+  findLatestWorkspaceByNodeId(userId: string, nodeId: string, session?: ClientSession): Promise<MicroscopeWorkspaceMetaDoc | null>;
+
+  /**
    * 특정 워크스페이스와 하위 문서 트래킹 기록을 데이터베이스에서 삭제합니다.
    * @param groupId 워크스페이스 고유 식별자
    */

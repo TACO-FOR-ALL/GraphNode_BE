@@ -91,6 +91,25 @@ export class MicroscopeApi {
     return this.rb.path(`/${microscopeWorkspaceId}/graph`).get<MicroscopeGraphData[]>();
   }
 
+  /**
+   * 특정 노드(Note/Conversation) ID와 연계된 가장 최신의 Microscope 지식 그래프 데이터를 조회합니다.
+   * 
+   * @remarks
+   * 이 메서드는 현재 FE 개발 편의성을 위해 추가되었습니다. 
+   * 백엔드 및 AI 워커는 내부적으로 여러 노드를 하나의 워크스페이스(Workspace)로 묶어 관리할 수 있는 구조를 갖추고 있으나, 
+   * 현재 FE 시각화 테스트 코드가 "1개 노드 = 1개 Microscope" 매핑을 가정하고 있는 점을 고려하여, 
+   * 해당 노드가 포함된 가장 최근의 워크스페이스 결과물을 단일 객체로 반환하도록 구현되었습니다.
+   * 
+   * @param nodeId 조회할 대상 노드(노트/대화)의 고유 ID
+   * @returns {Promise<HttpResponse<MicroscopeGraphData>>} 최신 그래프 데이터
+   * @example
+   * const res = await sdk.microscope.getLatestGraphByNodeId('note_123');
+   * const { nodes, edges } = res.data;
+   */
+  async getLatestGraphByNodeId(nodeId: string): Promise<HttpResponse<MicroscopeGraphData>> {
+    return this.rb.path(`/nodes/${nodeId}/latest-graph`).get<MicroscopeGraphData>();
+  }
+
 
 
   /**

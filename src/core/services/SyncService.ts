@@ -3,7 +3,12 @@ import { MongoClient, ClientSession } from 'mongodb';
 import { ConversationService } from './ConversationService';
 import { MessageService } from './MessageService';
 import { NoteService } from './NoteService';
-import { SyncPushRequest, SyncPullResponse } from '../../shared/dtos/sync';
+import {
+  SyncPushRequest,
+  SyncPullResponse,
+  SyncPullConversationsResponse,
+  SyncPullNotesResponse,
+} from '../../shared/dtos/sync';
 import {
   toChatThreadDto,
   toChatMessageDto,
@@ -37,45 +42,91 @@ export class SyncService {
    * 변경사항 조회 (Pull)
    *
    * 클라이언트가 요청한 시점(since) 이후에 서버에서 변경된 모든 데이터(대화, 메시지, 노트, 폴더)를 조회합니다.
+   * 활성 데이터(deletedAt이 null)만 반환합니다.
    *
    * @param ownerUserId 요청한 사용자 ID
-   * @param sinceInput 동기화 기준 시각 (ISO 8601 문자열 또는 Date 객체). 없으면 전체 데이터를 반환합니다.
-   * @returns 변경된 데이터 목록과 현재 서버 시각을 포함한 SyncPullResponse
-   * @throws {ValidationError} since 파라미터 형식이 올바르지 않은 경우
+   * @param sinceInput 동기화 기준 시각
+   * @returns 변경된 데이터 목록과 현재 서버 시각
    */
   async pull(ownerUserId: string, sinceInput?: string | Date): Promise<SyncPullResponse> {
-    let since: Date = new Date(0); // 기본값: 처음부터 동기화
+    const since = this.parseSince(sinceInput);
 
-    if (sinceInput instanceof Date) {
-      since = sinceInput;
-    }
-
-    if (typeof sinceInput === 'string') {
-      since = new Date(sinceInput);
-      if (isNaN(since.getTime())) {
-        throw new ValidationError('Invalid since parameter');
-      }
-    }
-
-    const [convDocs, msgDocs, noteDocs, folderDocs]: [
-      ConversationDoc[],
-      MessageDoc[],
-      NoteDoc[],
-      FolderDoc[],
-    ] = await Promise.all([
+    const [convDocs, msgDocs, noteDocs, folderDocs] = await Promise.all([
       this.conversationService.findModifiedSince(ownerUserId, since),
       this.messageService.findModifiedSince(ownerUserId, since),
       this.noteService.findNotesModifiedSince(ownerUserId, since),
       this.noteService.findFoldersModifiedSince(ownerUserId, since),
     ]);
 
+    // 필터링: deletedAt이 없는(활성) 데이터만 반환
     return {
-      conversations: convDocs.map((doc) => toChatThreadDto(doc, [])),
-      messages: msgDocs.map(toChatMessageDto),
-      notes: noteDocs.map(toNoteDto),
-      folders: folderDocs.map(toFolderDto),
+      conversations: convDocs
+        .filter((doc) => !doc.deletedAt)
+        .map((doc) => toChatThreadDto(doc, [])),
+      messages: msgDocs.filter((doc) => !doc.deletedAt).map(toChatMessageDto),
+      notes: noteDocs.filter((doc) => !doc.deletedAt).map(toNoteDto),
+      folders: folderDocs.filter((doc) => !doc.deletedAt).map(toFolderDto),
       serverTime: new Date().toISOString(),
     };
+  }
+
+  /**
+   * 대화 및 메시지 변경사항 조회 (Pull Conversations)
+   * 활성 데이터만 반환합니다.
+   */
+  async pullConversations(
+    ownerUserId: string,
+    sinceInput?: string | Date
+  ): Promise<SyncPullConversationsResponse> {
+    const since = this.parseSince(sinceInput);
+
+    const [convDocs, msgDocs] = await Promise.all([
+      this.conversationService.findModifiedSince(ownerUserId, since),
+      this.messageService.findModifiedSince(ownerUserId, since),
+    ]);
+
+    return {
+      conversations: convDocs
+        .filter((doc) => !doc.deletedAt)
+        .map((doc) => toChatThreadDto(doc, [])),
+      messages: msgDocs.filter((doc) => !doc.deletedAt).map(toChatMessageDto),
+      serverTime: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * 노트 및 폴더 변경사항 조회 (Pull Notes)
+   * 활성 데이터만 반환합니다.
+   */
+  async pullNotes(
+    ownerUserId: string,
+    sinceInput?: string | Date
+  ): Promise<SyncPullNotesResponse> {
+    const since = this.parseSince(sinceInput);
+
+    const [noteDocs, folderDocs] = await Promise.all([
+      this.noteService.findNotesModifiedSince(ownerUserId, since),
+      this.noteService.findFoldersModifiedSince(ownerUserId, since),
+    ]);
+
+    return {
+      notes: noteDocs.filter((doc) => !doc.deletedAt).map(toNoteDto),
+      folders: folderDocs.filter((doc) => !doc.deletedAt).map(toFolderDto),
+      serverTime: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * since 파라미터 파싱 헬퍼
+   */
+  private parseSince(sinceInput?: string | Date): Date {
+    if (!sinceInput) return new Date(0);
+    if (sinceInput instanceof Date) return sinceInput;
+    const date = new Date(sinceInput);
+    if (isNaN(date.getTime())) {
+      throw new ValidationError('Invalid since parameter');
+    }
+    return date;
   }
 
   /**

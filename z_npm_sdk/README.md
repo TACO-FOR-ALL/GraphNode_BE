@@ -737,6 +737,7 @@ const res = await client.health.get(); // { ok: true }
 | `getWorkspaceGraph(groupId)` | `GET /v1/microscope/:groupId/graph` | 실제 지식 그래프(Microscope) 데이터 조회 | 200 |
 | `ingestFromNote(...)`| `POST /v1/microscope/nodes/ingest` | 노트를 기반으로 신규 그래프 분석 시작 | 201 |
 | `ingestFromConversation(...)`| `POST /v1/microscope/nodes/ingest` | 대화를 기반으로 신규 그래프 분석 시작 | 201 |
+| `getLatestGraphByNodeId(id)`| `GET /nodes/:id/latest-graph` | 노드 ID 기반 최신 그래프 데이터 조회 | 200 |
 | `deleteWorkspace(groupId)` | `DELETE /v1/microscope/:groupId` | 워크스페이스(및 그래프) 파기 | 204 |
 
 > ℹ️ **Workspace vs Microscope Workspace Graph**
@@ -796,6 +797,21 @@ console.log(doc.nodeId, doc.nodeType); // 원본 노드 정보
 ```typescript
 const graphData = await client.microscope.getWorkspaceGraph('group_123');
 renderD3Graph(graphData.data);
+```
+</details>
+
+<details>
+<summary><b>getLatestGraphByNodeId(nodeId)</b></summary>
+
+- **Returns**: `Promise<HttpResponse<MicroscopeGraphData>>`
+- **Description**: 특정 노드(Note/Conversation) ID와 연관된 가장 최근의 Microscope 그래프 데이터를 즉시 조회합니다. FE 시각화 테스트 호환성을 위해 제공됩니다.
+- **Example**:
+```typescript
+const res = await client.microscope.getLatestGraphByNodeId('note_123');
+if (res.isSuccess) {
+  const { nodes, edges } = res.data;
+  renderGraph(nodes, edges);
+}
 ```
 </details>
 
