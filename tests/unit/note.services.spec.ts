@@ -1,7 +1,4 @@
-/**
- * 목적: NoteService 유닛 테스트
- * 접근: NoteRepository를 인메모리 스텁으로 구현하여 서비스 로직만 검증한다.
- */
+import { jest, describe, it, expect, beforeEach, test } from '@jest/globals';
 import { ClientSession } from 'mongodb';
 
 import { NoteService } from '../../src/core/services/NoteService';
@@ -29,9 +26,15 @@ class InMemoryNoteRepo implements NoteRepository {
     return doc;
   }
 
-  async getNote(id: string, ownerUserId: string): Promise<NoteDoc | null> {
+  async createNotes(docs: NoteDoc[], session?: ClientSession): Promise<NoteDoc[]> {
+    docs.forEach(doc => this.notes.set(doc._id, doc));
+    return docs;
+  }
+
+  async getNote(id: string, ownerUserId: string, includeDeleted?: boolean): Promise<NoteDoc | null> {
     const doc = this.notes.get(id);
     if (!doc || doc.ownerUserId !== ownerUserId) return null;
+    if (!includeDeleted && doc.deletedAt) return null;
     return doc;
   }
 
@@ -105,10 +108,18 @@ class InMemoryNoteRepo implements NoteRepository {
     return true;
   }
 
-  async restoreNote(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
+  async restoreNote(
+    id: string,
+    ownerUserId: string,
+    newParentId?: string | null,
+    session?: ClientSession
+  ): Promise<boolean> {
     const doc = this.notes.get(id);
     if (!doc || doc.ownerUserId !== ownerUserId) return false;
     doc.deletedAt = null;
+    if (newParentId !== undefined) {
+      doc.folderId = newParentId as string | null;
+    }
     return true;
   }
 
@@ -171,15 +182,30 @@ class InMemoryNoteRepo implements NoteRepository {
     return count;
   }
 
+  async listNotesByFolderIds(
+    folderIds: string[],
+    ownerUserId: string,
+    includeDeleted?: boolean
+  ): Promise<NoteDoc[]> {
+    return Array.from(this.notes.values()).filter(
+      (n) =>
+        n.ownerUserId === ownerUserId &&
+        n.folderId !== null &&
+        folderIds.includes(n.folderId) &&
+        (includeDeleted || !n.deletedAt)
+    );
+  }
+
   // --- Folder Operations ---
   async createFolder(doc: FolderDoc, session?: ClientSession): Promise<FolderDoc> {
     this.folders.set(doc._id, doc);
     return doc;
   }
 
-  async getFolder(id: string, ownerUserId: string): Promise<FolderDoc | null> {
+  async getFolder(id: string, ownerUserId: string, includeDeleted?: boolean): Promise<FolderDoc | null> {
     const doc = this.folders.get(id);
     if (!doc || doc.ownerUserId !== ownerUserId) return null;
+    if (!includeDeleted && doc.deletedAt) return null;
     return doc;
   }
 
@@ -268,13 +294,18 @@ class InMemoryNoteRepo implements NoteRepository {
   async restoreFolders(
     ids: string[],
     ownerUserId: string,
-    session?: ClientSession
+    session?: ClientSession,
+    targetFolderId?: string,
+    newParentId?: string | null
   ): Promise<number> {
     let count = 0;
     for (const id of ids) {
       const doc = this.folders.get(id);
       if (doc && doc.ownerUserId === ownerUserId) {
         doc.deletedAt = null;
+        if (id === targetFolderId && newParentId !== undefined) {
+          doc.parentId = newParentId;
+        }
         count++;
       }
     }
@@ -286,6 +317,50 @@ class InMemoryNoteRepo implements NoteRepository {
       (f) => f.ownerUserId === ownerUserId && f.updatedAt >= since
     );
   }
+
+  async listTrashNotes(ownerUserId: string): Promise<NoteDoc[]> {
+    return Array.from(this.notes.values()).filter(
+      (n) => n.ownerUserId === ownerUserId && n.deletedAt !== null
+    );
+  }
+
+  async listTrashFolders(ownerUserId: string): Promise<FolderDoc[]> {
+    return Array.from(this.folders.values()).filter(
+      (f) => f.ownerUserId === ownerUserId && f.deletedAt !== null
+    );
+  }
+
+  async hardDeleteExpiredNotes(expiredBefore: Date): Promise<number> {
+    let count = 0;
+    const items = await this.findExpiredNotes(expiredBefore);
+    for (const item of items) {
+      this.notes.delete(item._id);
+      count++;
+    }
+    return count;
+  }
+
+  async hardDeleteExpiredFolders(expiredBefore: Date): Promise<number> {
+    let count = 0;
+    const items = await this.findExpiredFolders(expiredBefore);
+    for (const item of items) {
+      this.folders.delete(item._id);
+      count++;
+    }
+    return count;
+  }
+
+  async findExpiredNotes(expiredBefore: Date): Promise<NoteDoc[]> {
+    return Array.from(this.notes.values()).filter(
+      (n) => n.deletedAt !== null && n.deletedAt !== undefined && n.deletedAt <= expiredBefore
+    );
+  }
+
+  async findExpiredFolders(expiredBefore: Date): Promise<FolderDoc[]> {
+    return Array.from(this.folders.values()).filter(
+      (f) => f.deletedAt !== null && f.deletedAt !== undefined && f.deletedAt <= expiredBefore
+    );
+  }
 }
 
 describe('NoteService', () => {
@@ -294,7 +369,10 @@ describe('NoteService', () => {
 
   beforeEach(() => {
     repo = new InMemoryNoteRepo();
-    service = new NoteService(repo);
+    service = new NoteService(repo, {
+      deleteNodesByOrigIds: jest.fn(),
+      restoreNodesByOrigIds: jest.fn(),
+    } as any);
   });
 
   test('createNote creates a note and returns DTO', async () => {
@@ -439,7 +517,7 @@ describe('NoteService', () => {
     });
 
     const folder = await service.createFolder('u1', { name: 'F' });
-    await expect(service.deleteFolder('u1', folder.id, true)).rejects.toThrow('Tx Failed');
+    await expect(service.deleteFolder('u1', folder.id, true)).rejects.toThrow('NoteService.deleteFolder failed');
 
     // Restore mock
     require('../../src/infra/db/mongodb').getMongo = () => originalGetMongo;

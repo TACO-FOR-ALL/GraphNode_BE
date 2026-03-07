@@ -32,6 +32,41 @@ export class NoteService {
     private graphManagementService: GraphManagementService
   ) {}
 
+  /**
+   * 만료된(소프트 삭제 후 30일 경과) 노트와 폴더들을 찾아 영구 삭제합니다.
+   * 폴더 삭제 시 하위 항목들도 연쇄적으로 영구 삭제됩니다.
+   * @param expiredBefore 기준 시각 (이 시각 이전에 소프트 삭제된 항목 대상)
+   * @returns 처리된 항목(노트+폴더) 수
+   */
+  async cleanupExpiredNotesAndFolders(expiredBefore: Date): Promise<number> {
+    const expiredNotes = await this.noteRepo.findExpiredNotes(expiredBefore);
+    const expiredFolders = await this.noteRepo.findExpiredFolders(expiredBefore);
+
+    let successCount = 0;
+
+    // 1. 만료된 노트 삭제
+    for (const note of expiredNotes) {
+      try {
+        await this.deleteNote(note.ownerUserId, note._id, true);
+        successCount++;
+      } catch (err: unknown) {
+        console.error(`Failed to cleanup expired note ${note._id}:`, err);
+      }
+    }
+
+    // 2. 만료된 폴더 삭제 (Cascade)
+    for (const folder of expiredFolders) {
+      try {
+        await this.deleteFolder(folder.ownerUserId, folder._id, true);
+        successCount++;
+      } catch (err: unknown) {
+        console.error(`Failed to cleanup expired folder ${folder._id}:`, err);
+      }
+    }
+
+    return successCount;
+  }
+
   // --- 노트(Note) 관련 서비스 ---
 
   /**
@@ -205,14 +240,31 @@ export class NoteService {
 
   /**
    * 노트를 복구합니다.
-   *
+   * 
    * @param userId 소유자 ID
    * @param noteId 노트 ID
    * @throws {NotFoundError} 노트가 존재하지 않을 경우
+   * @remarks 
+   * - 부모 폴더가 삭제된 상태라면 루트(parentId: null)로 이동시켜 고아 데이터가 되는 것을 방지합니다.
+   * - 연관된 지식 그래프 데이터도 함께 복구합니다.
    */
   async restoreNote(userId: string, noteId: string): Promise<void> {
+    // 1. 복구 전 노트 정보 확인
+    const note = await this.noteRepo.getNote(noteId, userId, true);
+    if (!note) throw new NotFoundError(`Note not found: ${noteId}`);
+
+    // 2. 부모 폴더 유효성 체크 (부모가 삭제된 상태면 루트로 이동)
+    let parentId = note.folderId;
+    if (parentId) {
+      const parentFolder = await this.noteRepo.getFolder(parentId, userId, true);
+      if (!parentFolder || parentFolder.deletedAt !== null) {
+        parentId = null;
+      }
+    }
+
+    // 3. 복구 수행 (부모 ID 업데이트 포함)
     const restored = await withRetry(
-      async () => await this.noteRepo.restoreNote(noteId, userId),
+      async () => await this.noteRepo.restoreNote(noteId, userId, parentId),
       { label: 'NoteService.restoreNote' }
     );
     if (!restored) throw new NotFoundError(`Note not found: ${noteId}`);
@@ -412,13 +464,14 @@ export class NoteService {
   }
 
   /**
-   * 폴더 복구 (Cascade Restore)
-   *
-   * - 해당 폴더와 하위 폴더, 노트들을 모두 복구합니다.
-   *
+   * 폴더를 복구합니다 (Cascade Restore).
+   * 
    * @param userId 소유자 ID
    * @param folderId 복구할 폴더 ID
    * @throws {NotFoundError} 폴더가 존재하지 않을 경우
+   * @remarks 
+   * - 부모 폴더가 삭제된 상태라면 루트(parentId: null)로 이동시킵니다.
+   * - 하위 폴더 및 노트들을 재귀적으로 모두 복구합니다.
    */
   async restoreFolder(userId: string, folderId: string): Promise<void> {
     const client: MongoClient = getMongo();
@@ -428,31 +481,40 @@ export class NoteService {
       await withRetry(
         async () => {
           await session.withTransaction(async () => {
-            // 1. 복구 대상 폴더 존재 확인 (삭제된 상태라도 조회됨)
+            // 1. 복구 대상 폴더 존재 확인
             const targetFolder: FolderDoc | null = await this.noteRepo.getFolder(folderId, userId, true);
             if (!targetFolder) {
               throw new NotFoundError(`Folder not found: ${folderId}`);
             }
 
-            // 2. 모든 하위 폴더 ID 조회
+            // 2. 부모 폴더 유효성 체크
+            let parentId = targetFolder.parentId;
+            if (parentId) {
+              const parentFolder = await this.noteRepo.getFolder(parentId, userId, true);
+              if (!parentFolder || parentFolder.deletedAt !== null) {
+                parentId = null;
+              }
+            }
+
+            // 3. 모든 하위 폴더 ID 조회
             const descendantIds: string[] = await this.noteRepo.findDescendantFolderIds(
               folderId,
               userId
             );
 
-            // 3. 복구할 모든 폴더 ID 목록 구성 (타겟 폴더 포함)
+            // 4. 복구할 모든 폴더 ID 목록 구성 (타겟 폴더 포함)
             const allFolderIdsToRestore: string[] = [folderId, ...descendantIds];
 
-            // 4. 해당 폴더들에 속한 모든 노트 일괄 복구
+            // 5. 해당 폴더들에 속한 모든 노트 일괄 복구
             const notesToRestore: NoteDoc[] = await this.noteRepo.listNotesByFolderIds(allFolderIdsToRestore, userId, true);
             const noteIdsToRestore = notesToRestore.map((n: NoteDoc) => n._id);
             
             await this.noteRepo.restoreNotesByFolderIds(allFolderIdsToRestore, userId, session);
 
-            // 5. 폴더들 일괄 복구
-            await this.noteRepo.restoreFolders(allFolderIdsToRestore, userId, session);
+            // 6. 폴더들 일괄 복구 (타겟 폴더의 parentId 업데이트 포함)
+            await this.noteRepo.restoreFolders(allFolderIdsToRestore, userId, session, folderId, parentId);
 
-            // 6. 연쇄 그래프 복구
+            // 7. 연쇄 그래프 복구
             if (noteIdsToRestore.length > 0) {
               await this.graphManagementService.restoreNodesByOrigIds(userId, noteIdsToRestore, { session });
             }
@@ -478,8 +540,8 @@ export class NoteService {
   // --- SyncService 지원 메서드 ---
 
   /**
-   * 특정 시점 이후에 변경된 노트 목록을 조회합니다. (동기화용)
-   *
+   * 특정 시점 이후에 변경된 노트 목록을 조회합니다 (동기화용).
+   * 
    * @param userId 소유자 ID
    * @param since 기준 시각
    * @returns 변경된 노트 문서 목록
@@ -520,7 +582,8 @@ export class NoteService {
   }
 
   /**
-   * 특정 폴더를 ID로 조회합니다. (동기화용)
+   * 특정 폴더를 ID로 조회합니다 (동기화용).
+   * 
    * @param folderId 폴더 ID
    * @param userId 소유자 ID
    * @returns 폴더 문서 또는 null
@@ -565,8 +628,9 @@ export class NoteService {
     );
   }
 
-  /**|
-   * 특정 폴더를 생성합니다. (동기화용)
+  /**
+   * 특정 폴더를 생성합니다 (동기화용).
+   * 
    * @param doc 생성할 폴더 문서
    * @param session MongoDB 클라이언트 세션 (선택 사항)
    * @returns 생성된 폴더 문서

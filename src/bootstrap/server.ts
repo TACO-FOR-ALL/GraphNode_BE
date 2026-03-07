@@ -30,6 +30,7 @@ import { makeAgentRouter } from './modules/agent.module';
 import { makeNotificationRouter } from './modules/notification.module';
 import { makeFileRouter } from './modules/file.module';
 import { makeMicroscopeRouter } from './modules/microscope.module';
+import { CleanupCron } from '../infra/cron/CleanupCron';
 // import { createTestAgentRouter } from '../app/routes/agent.test';
 
 import {
@@ -120,6 +121,9 @@ export function createApp() {
 export async function bootstrap() {
   const database = await initDatabases();
   const app = createApp();
+
+  // 오래된 삭제된 항목 자동 정리 크론 시작
+  CleanupCron.start();
 
   return { app, database };
 }

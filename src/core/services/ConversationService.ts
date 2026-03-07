@@ -278,6 +278,15 @@ export class ConversationService {
   }
 
   /**
+   * 소프트 삭제된 지 오래되어 만료된 대화 목록을 조회합니다 (자동 정리용).
+   * @param expiredBefore 기준 시각
+   * @returns 만료된 대화 문서 배열
+   */
+  async findExpiredConversations(expiredBefore: Date): Promise<ConversationDoc[]> {
+    return this.conversationRepo.findExpiredConversations(expiredBefore);
+  }
+
+  /**
    * 대화 생성 (Internal Use - Doc 직접 생성)
    * @param doc 생성할 대화 문서
    * @param session MongoDB 클라이언트 세션 (선택 사항)

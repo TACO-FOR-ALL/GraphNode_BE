@@ -194,6 +194,13 @@ export class ConversationRepositoryMongo implements ConversationRepository {
     }
   }
 
+  /**
+   * 대화를 소프트 삭제합니다 (휴지통으로 이동).
+   * @param id 대화 ID
+   * @param ownerUserId 소유자 사용자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 수정 성공 여부
+   */
   async softDelete(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
     try {
       const result: UpdateResult<ConversationDoc> = await this.col().updateOne(
@@ -207,6 +214,13 @@ export class ConversationRepositoryMongo implements ConversationRepository {
     }
   }
 
+  /**
+   * 대화를 영구 삭제(Hard Delete)합니다.
+   * @param id 대화 ID
+   * @param ownerUserId 소유자 사용자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제 성공 여부
+   */
   async hardDelete(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
     try {
       const result: DeleteResult = await this.col().deleteOne({ _id: id, ownerUserId }, { session });
@@ -216,6 +230,13 @@ export class ConversationRepositoryMongo implements ConversationRepository {
     }
   }
 
+  /**
+   * 소프트 삭제된 대화를 복구합니다.
+   * @param id 대화 ID
+   * @param ownerUserId 소유자 사용자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 복구 성공 여부
+   */
   async restore(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
     try {
       const result = await this.col().updateOne(
@@ -229,6 +250,12 @@ export class ConversationRepositoryMongo implements ConversationRepository {
     }
   }
 
+  /**
+   * 사용자의 모든 대화를 영구 삭제합니다.
+   * @param ownerUserId 소유자 사용자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제된 대화 수
+   */
   async deleteAll(ownerUserId: string, session?: ClientSession): Promise<number> {
     try {
       const result = await this.col().deleteMany({ ownerUserId }, { session });
@@ -238,6 +265,12 @@ export class ConversationRepositoryMongo implements ConversationRepository {
     }
   }
 
+  /**
+   * 특정 시점 이후에 변경된 대화 목록을 조회합니다 (동기화용).
+   * @param ownerUserId 소유자 사용자 ID
+   * @param since 기준 시각
+   * @returns 대화 문서 배열
+   */
   async findModifiedSince(ownerUserId: string, since: Date): Promise<ConversationDoc[]> {
     try {
       return this.col()
@@ -252,7 +285,11 @@ export class ConversationRepositoryMongo implements ConversationRepository {
   }
 
   /**
-   * 휴지통 항목 조회: 삭제된 대화 목록을 조회합니다.
+   * 휴지통에 있는 대화 목록을 조회합니다 (페이징 지원).
+   * @param ownerUserId 소유자 사용자 ID
+   * @param limit 가져올 개수
+   * @param cursor 페이징 커서
+   * @returns 대화 문서 목록과 다음 커서
    */
   async listTrashByOwner(
     ownerUserId: string,
@@ -281,7 +318,44 @@ export class ConversationRepositoryMongo implements ConversationRepository {
     }
   }
 
+  /**
+   * 소프트 삭제된 지 오래되어 만료된 대화들을 영구 삭제합니다 (자동 정리용).
+   * @param expiredBefore 기준 시각
+   * @returns 삭제된 대화 수
+   */
+  async hardDeleteExpired(expiredBefore: Date): Promise<number> {
+    try {
+      const result = await this.col().deleteMany({
+        deletedAt: { $ne: null, $lt: expiredBefore.getTime() },
+      });
+      return result.deletedCount;
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.hardDeleteExpired', err);
+    }
+  }
 
+  /**
+   * 소프트 삭제된 지 오래되어 만료된 대화 목록을 조회합니다 (자동 정리용).
+   * @param expiredBefore 기준 시각
+   * @returns 만료된 대화 문서 배열
+   */
+  async findExpiredConversations(expiredBefore: Date): Promise<ConversationDoc[]> {
+    try {
+      return await this.col()
+        .find({
+          deletedAt: { $ne: null, $lt: expiredBefore.getTime() },
+        })
+        .toArray();
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.findExpiredConversations', err);
+    }
+  }
+
+  /**
+   * 공통 에러 핸들러
+   * @param methodName 호출한 메서드 이름
+   * @param err 에러 객체
+   */
   private handleError(methodName: string, err: unknown): never {
     if (
       err instanceof Error &&

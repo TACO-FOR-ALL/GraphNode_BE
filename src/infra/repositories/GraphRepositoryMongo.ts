@@ -87,8 +87,11 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 특정 노드와 그 노드에 연결된 모든 엣지를 삭제합니다.
+   *
    * @param userId 사용자 ID
-   * @param id 삭제할 노드의 ID (number)
+   * @param id 삭제할 노드 ID
+   * @param permanent 영구 삭제 여부 (true: Hard Delete, false: Soft Delete)
+   * @param options (선택) 트랜잭션 옵션
    */
   async deleteNode(userId: string, id: number, permanent: boolean = false, options?: RepoOptions): Promise<void> {
     try {
@@ -113,6 +116,13 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     }
   }
 
+  /**
+   * 삭제된 노드 및 관련 엣지를 복구합니다.
+   *
+   * @param userId 사용자 ID
+   * @param id 노드 ID
+   * @param options (선택) 트랜잭션 옵션
+   */
   async restoreNode(userId: string, id: number, options?: RepoOptions): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
@@ -229,6 +239,11 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     }
   }
 
+  /**
+   * 전체 그래프 데이터 복구 (현재 Hard Delete 정책으로 인해 미지원)
+   * 
+   * @throws {UpstreamError} 복구가 지원되지 않음을 알림
+   */
   async restoreAllGraphData(_userId: string, _options?: RepoOptions): Promise<void> {
     // [Hard Delete Policy] Restore is not supported in hard-delete only mode
     throw new UpstreamError('Restore is not supported in hard-delete only mode');
@@ -400,6 +415,13 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     }
   }
 
+  /**
+   * 삭제된 엣지를 복구합니다.
+   * 
+   * @param userId 사용자 ID
+   * @param edgeId 엣지 ID
+   * @param options (선택) 트랜잭션 옵션
+   */
   async restoreEdge(userId: string, edgeId: string, options?: RepoOptions): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
@@ -455,6 +477,13 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     }
   }
 
+  /**
+   * 삭제된 클러스터를 복구합니다.
+   * 
+   * @param userId 사용자 ID
+   * @param clusterId 클러스터 ID
+   * @param options (선택) 트랜잭션 옵션
+   */
   async restoreCluster(userId: string, clusterId: string, options?: RepoOptions): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
@@ -494,6 +523,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
 
 
+  /**
+   * 서브클러스터 생성 또는 업데이트 (upsert)
+   * 
+   * @param subcluster 저장할 서브클러스터 문서
+   * @param options (선택) 트랜잭션 옵션
+   */
   async upsertSubcluster(subcluster: GraphSubclusterDoc, options?: RepoOptions): Promise<void> {
     try {
       await this.graphSubclusters_col().updateOne(
@@ -506,6 +541,14 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     }
   }
 
+  /**
+   * 서브클러스터를 삭제합니다.
+   * 
+   * @param userId 사용자 ID
+   * @param subclusterId 서브클러스터 ID
+   * @param permanent 영구 삭제 여부
+   * @param options (선택) 트랜잭션 옵션
+   */
   async deleteSubcluster(
     userId: string,
     subclusterId: string,
@@ -521,6 +564,13 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     }
   }
 
+  /**
+   * 삭제된 서브클러스터를 복구합니다.
+   * 
+   * @param userId 사용자 ID
+   * @param subclusterId 서브클러스터 ID
+   * @param options (선택) 트랜잭션 옵션
+   */
   async restoreSubcluster(userId: string, subclusterId: string, options?: RepoOptions): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
@@ -534,6 +584,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     }
   }
 
+  /**
+   * 사용자의 모든 서브클러스터 목록을 조회합니다.
+   * 
+   * @param userId 사용자 ID
+   * @returns 서브클러스터 문서 배열
+   */
   async listSubclusters(userId: string): Promise<GraphSubclusterDoc[]> {
     try {
       return await this.graphSubclusters_col()
@@ -627,6 +683,11 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     }
   }
 
+  /**
+   * 삭제된 그래프 요약/인사이트를 복구합니다 (현재 Hard Delete 정책으로 인해 미지원).
+   * 
+   * @throws {UpstreamError} 복구가 지원되지 않음을 알림
+   */
   async restoreGraphSummary(_userId: string, _options?: RepoOptions): Promise<void> {
     // [Hard Delete Policy] Restore is no longer supported
     throw new UpstreamError('Restore is not supported in hard-delete only mode');

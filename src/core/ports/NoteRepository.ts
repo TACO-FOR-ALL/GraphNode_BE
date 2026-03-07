@@ -113,10 +113,16 @@ export interface NoteRepository {
    *
    * @param id 노트 ID
    * @param ownerUserId 소유자 ID
+   * @param newParentId 복구 시 이동할 부모 폴더 ID (null이면 루트로 이동, undefined면 기존 유지)
    * @param session MongoDB 세션
    * @returns 복구 성공 여부
    */
-  restoreNote(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean>;
+  restoreNote(
+    id: string,
+    ownerUserId: string,
+    newParentId?: string | null,
+    session?: ClientSession
+  ): Promise<boolean>;
 
   /**
    * 동기화용: 특정 시점 이후 변경된(삭제 포함) 노트를 조회합니다.
@@ -302,9 +308,17 @@ export interface NoteRepository {
    * @param ids 복구할 폴더 ID 목록
    * @param ownerUserId 소유자 ID
    * @param session MongoDB 세션
+   * @param targetFolderId 기준 폴더 ID (부모 변경 대상)
+   * @param newParentId 기준 폴더의 새 부모 폴더 ID
    * @returns 복구된 폴더 수
    */
-  restoreFolders(ids: string[], ownerUserId: string, session?: ClientSession): Promise<number>;
+  restoreFolders(
+    ids: string[],
+    ownerUserId: string,
+    session?: ClientSession,
+    targetFolderId?: string,
+    newParentId?: string | null
+  ): Promise<number>;
 
   /**
    * 특정 사용자의 모든 폴더를 삭제합니다.
@@ -313,4 +327,30 @@ export interface NoteRepository {
    * @returns 삭제된 폴더 수
    */
   deleteAllFolders(ownerUserId: string, session?: ClientSession): Promise<number>;
+
+  /**
+   * 오래된 소프트 삭제된 노트들을 영구 삭제합니다 (자동 정리용).
+   * @param expiredBefore 기준 시각
+   */
+  hardDeleteExpiredNotes(expiredBefore: Date): Promise<number>;
+
+  /**
+   * 오래된 소프트 삭제된 폴더들을 영구 삭제합니다 (자동 정리용).
+   * @param expiredBefore 기준 시각
+   */
+  hardDeleteExpiredFolders(expiredBefore: Date): Promise<number>;
+
+  /**
+   * 소프트 삭제된 지 오래되어 만료된 노트 목록을 조회합니다.
+   * @param expiredBefore 기준 시각
+   * @returns 만료된 노트 문서 배열
+   */
+  findExpiredNotes(expiredBefore: Date): Promise<NoteDoc[]>;
+
+  /**
+   * 소프트 삭제된 지 오래되어 만료된 폴더 목록을 조회합니다.
+   * @param expiredBefore 기준 시각
+   * @returns 만료된 폴더 문서 배열
+   */
+  findExpiredFolders(expiredBefore: Date): Promise<FolderDoc[]>;
 }

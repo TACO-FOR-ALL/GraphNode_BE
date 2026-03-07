@@ -115,6 +115,33 @@ class InMemoryConvRepo implements ConversationRepository {
       (v) => v.ownerUserId === ownerUserId && v.updatedAt >= since.getTime()
     );
   }
+
+  async listTrashByOwner(
+    ownerUserId: string,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: ConversationDoc[]; nextCursor?: string | null }> {
+    const items = Array.from(this.data.values())
+      .filter((v) => v.ownerUserId === ownerUserId && v.deletedAt !== null && v.deletedAt !== undefined)
+      .slice(0, limit);
+    return { items, nextCursor: null };
+  }
+
+  async hardDeleteExpired(expiredBefore: Date): Promise<number> {
+    let count = 0;
+    const items = await this.findExpiredConversations(expiredBefore);
+    for (const item of items) {
+      this.data.delete(item._id);
+      count++;
+    }
+    return count;
+  }
+
+  async findExpiredConversations(expiredBefore: Date): Promise<ConversationDoc[]> {
+    return Array.from(this.data.values()).filter(
+      (v) => v.deletedAt !== null && v.deletedAt !== undefined && v.deletedAt <= expiredBefore.getTime()
+    );
+  }
 }
 
 class InMemoryMsgRepo implements MessageRepository {
@@ -249,6 +276,14 @@ class InMemoryMsgRepo implements MessageRepository {
     }
     return result;
   }
+
+  async findAllByConversationIds(conversationIds: string[]): Promise<MessageDoc[]> {
+    const result: MessageDoc[] = [];
+    for (const cid of conversationIds) {
+      result.push(...(this.msgs.get(cid) || []));
+    }
+    return result;
+  }
 }
 
 describe('ChatManagementService', () => {
@@ -266,6 +301,8 @@ describe('ChatManagementService', () => {
     chatSvc = new ChatManagementService(convSvc, msgSvc, { 
       deleteAllGraphData: jest.fn(),
       deleteNodesByOrigIds: jest.fn(),
+      restoreNodesByOrigIds: jest.fn(),
+      deleteGraph: jest.fn(),
     } as any);
   });
 
