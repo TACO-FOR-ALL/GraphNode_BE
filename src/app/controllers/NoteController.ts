@@ -7,6 +7,9 @@ import {
   updateNoteSchema,
   createFolderSchema,
   updateFolderSchema,
+  bulkCreateNotesSchema,
+  UpdateFolderRequest,
+  BulkCreateNotesRequest,
 } from '../../shared/dtos/note.schemas';
 import { getUserIdFromRequest } from '../utils/request';
 import type { Note, Folder } from '../../shared/dtos/note';
@@ -34,6 +37,24 @@ export class NoteController {
     const data: z.infer<typeof createNoteSchema> = createNoteSchema.parse(req.body);
     const note: Note = await this.noteService.createNote(userId, data);
     res.status(201).json(note);
+  }
+
+  /**
+   * 여러 개의 노트를 일괄 생성합니다.
+   * POST /v1/notes/bulk
+   */
+  async bulkCreateNotes(req: Request, res: Response) {
+    const userId: string = getUserIdFromRequest(req)!;
+    try {
+      const dto = bulkCreateNotesSchema.parse(req.body);
+      const result = await this.noteService.bulkCreateNotes(userId, dto);
+      res.status(201).json(result);
+    } catch (err: any) {
+      if (err.name === 'ZodError' || err.code === 'VALIDATION_FAILED') {
+        process.stdout.write(`\nDEBUG_VALIDATION_ERROR: ${JSON.stringify(err.issues || err.details?.issues, null, 2)}\n`);
+      }
+      throw err;
+    }
   }
 
   /**

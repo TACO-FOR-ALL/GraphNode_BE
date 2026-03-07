@@ -58,9 +58,6 @@ const client = createGraphNodeClient({
 | `client.me.updateOpenAiAssistantId(...)` | `PATCH /v1/me/openai-assistant-id` | Assistant ID 설정 | 204 |
 | `client.me.getPreferredLanguage()` | `GET /v1/me/preferred-language` | 선호 언어 조회 | 200 |
 | `client.me.updatePreferredLanguage(...)` | `PATCH /v1/me/preferred-language` | 선호 언어 설정 | 204 |
-| `client.me.updatePreferredLanguageToEn()` | - | 선호 언어 변경 (영어) | 204 |
-| `client.me.updatePreferredLanguageToKo()` | - | 선호 언어 변경 (한국어) | 204 |
-| `client.me.updatePreferredLanguageToCn()` | - | 선호 언어 변경 (중국어) | 204 |
 | `client.googleAuth.startUrl()` | - | Google URL 반환 | - |
 | `client.googleAuth.login()` | - | Google 리다이렉트 | - |
 | `client.appleAuth.startUrl()` | - | Apple URL 반환 | - |
@@ -182,24 +179,11 @@ console.log('Language:', res.data.language);
 <details>
 <summary><b>client.me.updatePreferredLanguage(lang)</b> - 선호 언어 설정</summary>
 
-- **Parameters**: `language` (string)
+- **Parameters**: `language` (string) - `'en'`, `'ko'`, `'cn'` 중 하나
 - **Returns**: `Promise<HttpResponse<void>>`
 - **Example**:
 ```typescript
 await client.me.updatePreferredLanguage('ko');
-```
-</details>
-
-<details>
-<summary><b>client.me.updatePreferredLanguageTo{En|Ko|Cn}()</b> - 언어 변경 편의 메서드</summary>
-
-- **Description**: 자주 사용하는 언어로 즉시 변경합니다.
-- **Returns**: `Promise<HttpResponse<void>>`
-- **Example**:
-```typescript
-await client.me.updatePreferredLanguageToKo(); // 한국어로 변경
-await client.me.updatePreferredLanguageToEn(); // 영어로 변경
-await client.me.updatePreferredLanguageToCn(); // 중국어로 변경
 ```
 </details>
 
@@ -304,11 +288,13 @@ const cancel = await openAgentChatStream(
 | Method | Endpoint | Description | Status |
 | :--- | :--- | :--- | :--- |
 | `create(dto)` | `POST /conversations` | 생성 | 201 |
+| `bulkCreate(dto)` | `POST /conversations/bulk` | 일괄 생성 | 201 |
 | `list()` | `GET /conversations` | 목록 | 200 |
 | `listTrash(limit, cur)` | `GET /conversations/trash` | 휴지통 목록 | 200 |
 | `get(id)` | `GET /conversations/:id` | 상세 | 200 |
 | `update(id, patch)` | `PATCH /conversations/:id` | 수정 | 200 |
-| `delete(id)` | `DELETE /conversations/:id` | 삭제 | 200 |
+| `delete(id, permanent)` | `DELETE /conversations/:id` | 삭제 | 200 |
+| `deleteAll()` | `DELETE /conversations` | 전체 삭제 | 200 |
 | `createMessage(...)` | `POST /.../messages` | 메시지 추가 | 201 |
 | `updateMessage(...)` | `PATCH /.../messages/:id` | 메시지 수정 | 200 |
 | `deleteMessage(...)` | `DELETE /.../messages/:id` | 메시지 삭제 | 200 |
@@ -318,12 +304,39 @@ const cancel = await openAgentChatStream(
 <details>
 <summary><b>create({ title, messages? })</b></summary>
 
+- **Parameters**:
+  - `title`: string (대화 제목)
+  - `id`: string (선택, 클라이언트 생성 ID)
+  - `messages`: `MessageCreateDto[]` (선택, 초기 메시지 목록)
 - **Returns**: `Promise<HttpResponse<ConversationDto>>`
-  - `id`: string, `title`: string, `messages`: []
 - **Example**:
 ```typescript
-const res = await client.conversations.create({ title: 'New Chat' });
+const res = await client.conversations.create({ 
+  title: 'New Chat',
+  messages: [{ role: 'user', content: 'Hello' }]
+});
 ```
+</details>
+
+<details>
+<summary><b>bulkCreate({ conversations })</b> - 대화 일괄 생성</summary>
+
+- **Parameters**: 
+  - `conversations`: `ConversationCreateDto[]`
+    - `id`: string (선택, 클라이언트 생성 ID 권장)
+    - `title`: string
+    - `messages`: `MessageCreateDto[]`
+- **Returns**: `Promise<HttpResponse<{ conversations: ConversationDto[] }>>`
+- **Example**:
+```typescript
+const res = await client.conversations.bulkCreate({
+  conversations: [
+    { id: 'ulid-1', title: 'Chat 1', messages: [{ role: 'user', content: 'Hi' }] },
+    { id: 'ulid-2', title: 'Chat 2', messages: [{ role: 'user', content: 'Hello' }] }
+  ]
+});
+```
+- **Note**: `id`를 생략하면 서버에서 자동으로 ULID를 생성하지만, 오프라인 동기화(Sync) 정합성을 위해 클라이언트에서 생성하여 전달하는 것을 권장합니다.
 </details>
 
 <details>
@@ -382,6 +395,18 @@ await client.conversations.update('conv-1', { title: 'Changed Title' });
 ```typescript
 await client.conversations.delete('conv-1', false); // 휴지통 이동 (Soft Delete)
 await client.conversations.delete('conv-1', true);  // 영구 삭제 (Hard Delete)
+```
+</details>
+
+<details>
+<summary><b>deleteAll()</b> - 모든 대화 삭제</summary>
+
+- **Returns**: `Promise<HttpResponse<{ deletedCount: number }>>`
+- **Description**: 사용자의 모든 대화와 관련 그래프 데이터를 삭제합니다.
+- **Example**:
+```typescript
+const res = await client.conversations.deleteAll();
+console.log('Deleted:', res.data.deletedCount);
 ```
 </details>
 
@@ -593,19 +618,27 @@ await client.graphAi.deleteGraph();
 | Method | Endpoint | Description | Status |
 | :--- | :--- | :--- | :--- |
 | `createNote(dto)` | `POST /notes` | 생성 | 201 |
+| `bulkCreate(dto)` | `POST /notes/bulk` | 일괄 생성 | 201 |
 | `listNotes()` | `GET /notes` | 목록 | 200 |
 | `listTrash()` | `GET /notes/trash` | 휴지통 목록 | 200 |
 | `getNote(id)` | `GET /notes/:id` | 상세 | 200 |
 | `updateNote(...)` | `PATCH /notes/:id` | 수정 | 200 |
 | `deleteNote(...)` | `DELETE /notes/:id` | 삭제 | 200 |
+| `deleteAllNotes()` | `DELETE /notes` | 전체 노트 삭제 | 200 |
 | `createFolder(...)` | `POST /folders` | 폴더 생성 | 201 |
 | `listFolders()` | `GET /folders` | 폴더 목록 | 200 |
+| `deleteAllFolders()` | `DELETE /folders` | 전체 폴더 삭제 | 200 |
 
 #### **Detailed Usage**
 
 <details>
 <summary><b>createNote({ id, title, content, folderId })</b></summary>
 
+- **Parameters**: 
+  - `id`: string (클라이언트 생성 ID)
+  - `title`: string (선택, 제목 없으면 내용 기반 자동 생성)
+  - `content`: string (마크다운 내용)
+  - `folderId`: string | null (선택)
 - **Returns**: `Promise<HttpResponse<NoteDto>>`
 - **Example**:
 ```typescript
@@ -613,6 +646,29 @@ await client.note.createNote({
   id: 'uuid', title: 'My Note', content: '# Hi', folderId: null
 });
 ```
+</details>
+
+<details>
+<summary><b>bulkCreate({ notes })</b> - 노트 일괄 생성</summary>
+
+- **Parameters**: 
+  - `notes`: `NoteCreateDto[]`
+    - `id`: string (선택, 클라이언트 생성 ID 권장)
+    - `title`: string (선택, 없으면 content 기반 자동 생성)
+    - `content`: string
+    - `folderId`: string | null (선택)
+- **Returns**: `Promise<HttpResponse<{ notes: NoteDto[] }>>`
+- **Example**:
+```typescript
+const res = await client.note.bulkCreate({
+  notes: [
+    { id: 'ulid-1', title: 'Note 1', content: 'Content 1' },
+    { id: 'ulid-2', content: 'Content 2' } // 제목 자동 생성됨
+  ]
+});
+```
+- **Note**: `id`를 생략하면 서버에서 ULID를 생성합니다. 동기화 로직을 사용하는 경우 클라이언트 ID 생성을 권장합니다.
+- **Note**: `title`이 없으면 `content`의 첫 줄(최대 10자)을 제목으로 사용합니다.
 </details>
 
 <details>
@@ -638,6 +694,16 @@ console.log('Trashed Notes:', res.data.notes.length);
 ```typescript
 await client.note.deleteNote('uuid', false); // 휴지통 이동 (Soft Delete)
 await client.note.deleteNote('uuid', true);  // 영구 삭제 (Hard Delete)
+```
+</details>
+
+<details>
+<summary><b>deleteAllNotes()</b> - 모든 노트 삭제</summary>
+
+- **Returns**: `Promise<HttpResponse<{ deletedCount: number }>>`
+- **Example**:
+```typescript
+await client.note.deleteAllNotes();
 ```
 </details>
 
@@ -674,6 +740,17 @@ await client.note.restoreFolder('folder-1');
 ```
 </details>
 
+<details>
+<summary><b>deleteAllFolders()</b> - 모든 폴더 삭제</summary>
+
+- **Returns**: `Promise<HttpResponse<{ deletedCount: number }>>`
+- **Description**: 사용자의 모든 폴더와 그 안의 노트를 삭제합니다.
+- **Example**:
+```typescript
+await client.note.deleteAllFolders();
+```
+</details>
+
 ---
 
 ### 🔄 7. 동기화 (Sync: `client.sync`)
@@ -683,20 +760,25 @@ await client.note.restoreFolder('folder-1');
 | Method | Endpoint | Description | Status |
 | :--- | :--- | :--- | :--- |
 | `pull(since?)` | `GET /pull` | 변경사항 수신 | 200 |
+| `pullConversations(since?)` | `GET /pull/conversations` | 대화 변경사항 수신 | 200 |
+| `pullNotes(since?)` | `GET /pull/notes` | 노트 변경사항 수신 | 200 |
 | `push(data)` | `POST /push` | 변경사항 송신 | 200 |
 
 #### **Detailed Usage**
 
 <details>
-<summary><b>pull(since?)</b></summary>
+<summary><b>pull(since?) / pullConversations(since?) / pullNotes(since?)</b></summary>
 
-- **Parameters**: `since` (ISO 8601 string)
-- **Returns**: `Promise<HttpResponse<SyncPullResponse>>`
-  - `conversations[]`, `messages[]`, `notes[]`, `folders[]`, `serverTime`
+- **Parameters**: `since` (ISO 8601 string or Date)
+- **Returns**: `Promise<HttpResponse<...>>`
+- **Description**: 
+  - `pull`: 전체(대화, 메시지, 노트, 폴더) 변경사항
+  - `pullConversations`: 대화 및 메시지 변경사항
+  - `pullNotes`: 노트 및 폴더 변경사항
 - **Example**:
 ```typescript
-const res = await client.sync.pull('2024-01-01T00:00:00Z');
-console.log('New Messages:', res.data.messages.length);
+const res = await client.sync.pull(new Date('2024-01-01'));
+console.log('Server Time:', res.data.serverTime);
 ```
 </details>
 

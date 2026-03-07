@@ -25,6 +25,7 @@ export function createNoteRouter(deps: { noteService: NoteService }) {
 
   // --- Notes ---
   router.post('/notes', asyncHandler(controller.createNote.bind(controller)));
+  router.post('/notes/bulk', asyncHandler(controller.bulkCreateNotes.bind(controller)));
   router.get('/notes/trash', asyncHandler(controller.listTrash.bind(controller)));
   router.get('/notes', asyncHandler(controller.listNotes.bind(controller)));
   router.delete('/notes', asyncHandler(controller.deleteAllNotes.bind(controller)));

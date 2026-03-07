@@ -10,9 +10,9 @@ import { z } from 'zod';
  */
 export const createNoteSchema = z.object({
   /** 노트 ID (선택). 생략 시 서버 생성 */
-  id: z.uuid().optional(),
+  id: z.string().min(1).optional(),
   /** 노트 제목 (선택). 생략 시 내용의 첫 줄이나 기본값 사용 */
-  title: z.string().min(1).optional(),
+  title: z.string().optional(),
   /** 노트 내용 (필수). Markdown 형식 */
   content: z.string().min(1, 'Content is required'),
   /** 소속 폴더 ID (선택). 생략 또는 null 시 최상위 */
@@ -24,7 +24,7 @@ export const createNoteSchema = z.object({
  */
 export const updateNoteSchema = z.object({
   /** 변경할 제목 (선택) */
-  title: z.string().min(1).optional(),
+  title: z.string().optional(),
   /** 변경할 내용 (선택) */
   content: z.string().min(1).optional(),
   /** 이동할 폴더 ID (선택). null로 설정 시 최상위로 이동 */
@@ -36,7 +36,7 @@ export const updateNoteSchema = z.object({
  */
 export const createFolderSchema = z.object({
   /** 폴더 ID (선택). 생략 시 서버 생성 */
-  id: z.uuid().optional(),
+  id: z.string().min(1).optional(),
   /** 폴더 이름 (필수) */
   name: z.string().min(1, 'Folder name is required'),
   /** 상위 폴더 ID (선택). 생략 또는 null 시 최상위 */
@@ -55,8 +55,20 @@ export const updateFolderSchema = z.object({
 
 // --- Type Inference ---
 
+/**
+ * 노트 대량 생성 요청 스키마
+ */
+export const bulkCreateNotesSchema = z.object({
+  notes: z.array(createNoteSchema),
+});
+
+// --- Type Inference ---
+
 /** 노트 생성 요청 타입 */
 export type CreateNoteRequest = z.infer<typeof createNoteSchema>;
+
+/** 노트 대량 생성 요청 타입 */
+export type BulkCreateNotesRequest = z.infer<typeof bulkCreateNotesSchema>;
 
 /** 노트 수정 요청 타입 */
 export type UpdateNoteRequest = z.infer<typeof updateNoteSchema>;

@@ -1503,6 +1503,66 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }
+  /v1/notes/bulk:
+    post:
+      tags:
+        - Notes
+      summary: Bulk Create Notes
+      description: Creates multiple new notes in a single request.
+      operationId: bulkCreateNotes
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - notes
+              properties:
+                notes:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - id
+                      - content
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                        description: Client-generated UUID for the note
+                      title:
+                        type: string
+                        minLength: 1
+                        description: Title of the note
+                      content:
+                        type: string
+                        description: Note content in Markdown format
+                      folderId:
+                        type: string
+                        format: uuid
+                        nullable: true
+                        description: ID of the parent folder (null for root)
+      responses:
+        '201':
+          description: Notes bulk created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Note'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /v1/notes:
     post:
       summary: Create a note

@@ -3,6 +3,7 @@ import type {
   NoteDto,
   NoteCreateDto,
   NoteUpdateDto,
+  NoteBulkCreateDto,
   FolderDto,
   FolderCreateDto,
   FolderUpdateDto,
@@ -18,6 +19,7 @@ import type {
  * 주요 기능:
  * - 노트 관리 (생성, 조회, 수정, 삭제) (`createNote`, `listNotes`, `getNote`, `updateNote`, `deleteNote`)
  * - 폴더 관리 (생성, 조회, 수정, 삭제) (`createFolder`, `listFolders`, `getFolder`, `updateFolder`, `deleteFolder`)
+ * - 여러 노트 일괄 생성 (`bulkCreate`)
  *
  * @public
  */
@@ -57,16 +59,37 @@ export class NoteApi {
    * // Output:
    * {
    *   id: '550e8400-e29b-41d4-a716-446655440000',
-   *   title: 'Meeting Notes',
-   *   content: '# Weekly Sync...',
-   *   folderId: null,
-   *   createdAt: '2023-10-27T10:00:00Z',
-   *   updatedAt: '2023-10-27T10:00:00Z',
-   *   ownerUserId: 'user-123'
+   *   title: 'Meeting Notes', ...
    * }
    */
   createNote(dto: NoteCreateDto): Promise<HttpResponse<NoteDto>> {
     return this.rb.path('/notes').post<NoteDto>(dto);
+  }
+
+  /**
+   * 여러 개의 노트를 일괄 생성합니다.
+   * @param dto - 일괄 생성할 노트 목록
+   *    - `notes` (NoteCreateDto[]): 생성할 노트 데이터 배열
+   * @returns 생성된 노트 목록
+   * @example
+   * const response = await client.note.bulkCreate({
+   *   notes: [
+   *     {
+   *       id: '550e8400-e29b-41d4-a716-446655440001',
+   *       title: 'Note 1',
+   *       content: 'First note content'
+   *     },
+   *     {
+   *       id: '550e8400-e29b-41d4-a716-446655440002',
+   *       title: 'Note 2',
+   *       content: 'Second note content'
+   *     }
+   *   ]
+   * });
+   * console.log(response.data.notes);
+   */
+  bulkCreate(dto: NoteBulkCreateDto): Promise<HttpResponse<{ notes: NoteDto[] }>> {
+    return this.rb.path('/notes/bulk').post<{ notes: NoteDto[] }>(dto);
   }
 
   /**

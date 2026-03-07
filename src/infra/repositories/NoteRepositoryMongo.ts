@@ -45,6 +45,29 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
+   * 여러 노트를 일괄 생성한다.
+   * @param docs 생성할 노트 문서 배열
+   * @param session (선택) 트랜잭션 세션
+   * @returns 생성된 노트 문서 배열
+   */
+  async createNotes(docs: NoteDoc[], session?: ClientSession): Promise<NoteDoc[]> {
+    try {
+      if (docs.length === 0) return [];
+      
+      // insertMany는 { acknowledged: true, insertedIds: { '0': ..., '1': ... } } 를 반환
+      const result = await this.notesCol().insertMany(docs, { session });
+      
+      // insertedIds 길이와 docs 길이가 같다고 가정 (에러가 나지 않았다면)
+      if (result.acknowledged) {
+        return docs;
+      }
+      return [];
+    } catch (err: unknown) {
+      this.handleError('NoteRepositoryMongo.createNotes', err);
+    }
+  }
+
+  /**
    * ID로 노트를 조회한다.
    * @param id 노트 ID
    * @param ownerUserId 소유자 사용자 ID

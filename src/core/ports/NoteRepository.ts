@@ -25,6 +25,14 @@ export interface NoteRepository {
   createNote(doc: NoteDoc, session?: ClientSession): Promise<NoteDoc>;
 
   /**
+   * 노트를 다량 생성합니다.
+   * @param docs 저장할 노트 문서 배열
+   * @param session MongoDB 세션 (트랜잭션용)
+   * @returns 저장된 노트 문서 배열
+   */
+  createNotes(docs: NoteDoc[], session?: ClientSession): Promise<NoteDoc[]>;
+
+  /**
    * ID로 노트를 조회합니다.
    * @param id 노트 ID
    * @param ownerUserId 소유자 ID

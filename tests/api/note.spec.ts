@@ -21,6 +21,18 @@ jest.mock('../../src/infra/repositories/GraphRepositoryMongo');
 jest.mock('../../src/infra/aws/AwsSqsAdapter');
 jest.mock('../../src/infra/aws/AwsS3Adapter');
 jest.mock('../../src/infra/redis/RedisEventBusAdapter');
+jest.mock('../../src/infra/db/mongodb', () => ({
+  getMongo: jest.fn().mockReturnValue({
+    startSession: jest.fn().mockReturnValue({
+      withTransaction: async (fn: any) => await fn(),
+      endSession: jest.fn(),
+    }),
+  }),
+  initMongo: jest.fn(),
+}));
+jest.mock('../../src/infra/db', () => ({
+  initDatabases: jest.fn(),
+}));
 
 // Mock implementations
 (GraphRepositoryMongo as jest.Mock).mockImplementation(() => ({
@@ -59,9 +71,15 @@ let foldersStore = new Map<string, FolderDoc>();
 jest.mock('../../src/infra/repositories/NoteRepositoryMongo', () => ({
   NoteRepositoryMongo: class {
     // --- Note Operations ---
-    async createNote(doc: NoteDoc) {
+    async createNote(doc: NoteDoc, _session?: any) {
       notesStore.set(doc._id, { ...doc });
       return doc;
+    }
+    async createNotes(docs: NoteDoc[], _session?: any) {
+      for (const doc of docs) {
+        notesStore.set(doc._id, { ...doc });
+      }
+      return docs;
     }
     async getNote(id: string, ownerUserId: string, includeDeleted: boolean = false) {
       const n = notesStore.get(id);
@@ -74,7 +92,7 @@ jest.mock('../../src/infra/repositories/NoteRepositoryMongo', () => ({
         (n) => n.ownerUserId === ownerUserId && n.folderId === folderId && !n.deletedAt
       );
     }
-    async updateNote(id: string, ownerUserId: string, updates: Partial<NoteDoc>) {
+    async updateNote(id: string, ownerUserId: string, updates: Partial<NoteDoc>, _session?: any) {
       const n = notesStore.get(id);
       if (!n || n.ownerUserId !== ownerUserId || n.deletedAt) return null;
       const updated = { ...n, ...updates, updatedAt: new Date() };
@@ -115,7 +133,13 @@ jest.mock('../../src/infra/repositories/NoteRepositoryMongo', () => ({
       }
       return count;
     }
-    async deleteAllNotesInFolders(ownerUserId: string) {
+    async listTrashNotes(ownerUserId: string) {
+      return Array.from(notesStore.values()).filter((n) => n.ownerUserId === ownerUserId && n.deletedAt !== null);
+    }
+    async listTrashFolders(ownerUserId: string) {
+      return Array.from(foldersStore.values()).filter((f) => f.ownerUserId === ownerUserId && f.deletedAt !== null);
+    }
+    async deleteAllNotesInFolders(ownerUserId: string, _session?: any) {
       let count = 0;
       const toDelete: string[] = [];
       for (const n of notesStore.values()) {
@@ -138,6 +162,11 @@ jest.mock('../../src/infra/repositories/NoteRepositoryMongo', () => ({
         }
         toDelete.forEach(id => notesStore.delete(id));
         return count;
+    }
+    async listNotesByFolderIds(folderIds: string[], ownerUserId: string, includeDeleted = false) {
+        return Array.from(notesStore.values()).filter(
+            (n) => n.ownerUserId === ownerUserId && n.folderId && folderIds.includes(n.folderId) && (includeDeleted || !n.deletedAt)
+        );
     }
     async softDeleteNotesByFolderIds(folderIds: string[], ownerUserId: string) {
         let count = 0;
@@ -167,7 +196,7 @@ jest.mock('../../src/infra/repositories/NoteRepositoryMongo', () => ({
     }
 
     // --- Folder Operations ---
-    async createFolder(doc: FolderDoc) {
+    async createFolder(doc: FolderDoc, _session?: any) {
       foldersStore.set(doc._id, { ...doc });
       return doc;
     }
@@ -182,7 +211,7 @@ jest.mock('../../src/infra/repositories/NoteRepositoryMongo', () => ({
         (f) => f.ownerUserId === ownerUserId && f.parentId === parentId && !f.deletedAt
       );
     }
-    async updateFolder(id: string, ownerUserId: string, updates: Partial<FolderDoc>) {
+    async updateFolder(id: string, ownerUserId: string, updates: Partial<FolderDoc>, _session?: any) {
       const f = foldersStore.get(id);
       if (!f || f.ownerUserId !== ownerUserId || f.deletedAt) return null;
       const updated = { ...f, ...updates, updatedAt: new Date() };
@@ -246,7 +275,7 @@ jest.mock('../../src/infra/repositories/NoteRepositoryMongo', () => ({
       }
       return count;
     }
-    async deleteAllFolders(ownerUserId: string) {
+    async deleteAllFolders(ownerUserId: string, _session?: any) {
       let count = 0;
       for (const [id, f] of foldersStore.entries()) {
         if (f.ownerUserId === ownerUserId) {
@@ -396,7 +425,7 @@ describe('Note API Integration Tests', () => {
         const createRes = await request(app)
           .post('/v1/folders')
           .set('Authorization', `Bearer ${accessToken}`)
-          .send({ name: 'Permanent' });
+          .send({ name: 'Hard Delete' });
         const folderId = createRes.body.id;
 
         await request(app)
@@ -439,6 +468,43 @@ describe('Note API Integration Tests', () => {
       
       expect(getRes.status).toBe(200);
       expect(getRes.body.content).toBe('C1');
+    });
+
+    it('should bulk create notes', async () => {
+      const res = await request(app)
+        .post('/v1/notes/bulk')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          notes: [
+            { id: '12345678-1234-1234-1234-123456789012', title: 'Bulk T1', content: 'Bulk C1' },
+            { id: '12345678-1234-1234-1234-123456789013', title: '', content: 'Bulk C2 Content' },
+          ]
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.notes).toHaveLength(2);
+      expect(res.body.notes[0].title).toBe('Bulk T1');
+      expect(res.body.notes[0].content).toBe('Bulk C1');
+      expect(res.body.notes[1].title).toBe('Bulk C2 li...'); // Title auto-generation test
+
+      // Check if they were actually saved
+      expect(notesStore.has('12345678-1234-1234-1234-123456789012')).toBe(true);
+      expect(notesStore.has('12345678-1234-1234-1234-123456789013')).toBe(true);
+    });
+
+    it('should bulk create without generated title if content is empty', async () => {
+      const res = await request(app)
+        .post('/v1/notes/bulk')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          notes: [
+            { id: '12345678-1234-1234-1234-123456789014', title: '', content: '' },
+          ]
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.notes).toHaveLength(1);
+      expect(res.body.notes[0].title).toBe('Untitled'); // Title default fallback
     });
 
     it('should update a note', async () => {
