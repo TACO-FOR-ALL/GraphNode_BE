@@ -100,6 +100,9 @@ export function createApp() {
 
   // 404 fall-through → Problem Details 형식으로 응답
   app.use((req, res, next) => {
+    if ((req as any).log) {
+      (req as any).log.level = 'silent';
+    }
     res.status(404).json({ message: "Not Found" });
   });
 
