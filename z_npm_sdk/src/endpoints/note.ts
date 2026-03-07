@@ -179,22 +179,23 @@ export class NoteApi {
   }
 
   /**
-   * 특정 노트를 삭제합니다.
+   * 특정 노트를 소프트 삭제합니다 (휴지통으로 이동).
    * @param id - 삭제할 노트의 ID
-   * @param permanent - 영구 삭제 여부 (true: 영구 삭제, false/undefined: 휴지통 이동)
-   * @returns 성공 시 빈 응답
    * @example
-   * // 휴지통으로 이동 (Soft Delete)
-   * const response = await client.note.deleteNote('550e8400-e29b-41d4-a716-446655440000');
-   *
-   * console.log(response.data);
-   * // Output:
-   * {
-   *   ok: true
-   * }
+   * await client.note.softDeleteNote('550e8400-e29b-41d4-a716-446655440000');
    */
-  deleteNote(id: string, permanent?: boolean): Promise<HttpResponse<void>> {
-    return this.rb.path(`/notes/${id}`).query({ permanent }).delete<void>();
+  softDeleteNote(id: string): Promise<HttpResponse<void>> {
+    return this.rb.path(`/notes/${id}`).query({ permanent: false }).delete<void>();
+  }
+
+  /**
+   * 특정 노트를 영구 삭제합니다.
+   * @param id - 삭제할 노트의 ID
+   * @example
+   * await client.note.hardDeleteNote('550e8400-e29b-41d4-a716-446655440000');
+   */
+  hardDeleteNote(id: string): Promise<HttpResponse<void>> {
+    return this.rb.path(`/notes/${id}`).query({ permanent: true }).delete<void>();
   }
 
   /**
@@ -351,15 +352,23 @@ export class NoteApi {
   }
 
   /**
-   * 특정 폴더를 삭제합니다.
+   * 특정 폴더를 소프트 삭제합니다 (휴지통으로 이동).
    * @param id - 삭제할 폴더의 ID
-   * @param permanent - 영구 삭제 여부 (true: 영구 삭제, false/undefined: 휴지통 이동)
-   * @returns 성공 시 빈 응답
    * @example
-   * await client.note.deleteFolder('folder-123');
+   * await client.note.softDeleteFolder('folder-123');
    */
-  deleteFolder(id: string, permanent?: boolean): Promise<HttpResponse<void>> {
-    return this.rb.path(`/folders/${id}`).query({ permanent }).delete<void>();
+  softDeleteFolder(id: string): Promise<HttpResponse<void>> {
+    return this.rb.path(`/folders/${id}`).query({ permanent: false }).delete<void>();
+  }
+
+  /**
+   * 특정 폴더를 영구 삭제합니다.
+   * @param id - 삭제할 폴더의 ID
+   * @example
+   * await client.note.hardDeleteFolder('folder-123');
+   */
+  hardDeleteFolder(id: string): Promise<HttpResponse<void>> {
+    return this.rb.path(`/folders/${id}`).query({ permanent: true }).delete<void>();
   }
 
   /**

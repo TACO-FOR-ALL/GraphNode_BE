@@ -215,23 +215,29 @@ export class ConversationsApi {
   }
 
   /**
-   * 대화를 삭제합니다.
-   * 주의: 이 대화를 기반으로 생성된 지식 그래프(Graph Node/Edge) 데이터들 또한 동일한 정책에 따라 연쇄 삭제(Cascade Delete) 됩니다.
+   * 대화를 소프트 삭제합니다 (휴지통으로 이동).
    * @param conversationId 대화 ID
-   * @param permanent 영구 삭제 여부 (true: 영구 삭제, false: soft delete)
    * @example
-   * const response = await client.conversations.delete('conv-123');
-   *
-   * console.log(response.data);
-   * // Output:
-   * {
-   *   ok: true
-   * }
+   * await client.conversations.softDelete('conv-123');
    */
-  delete(conversationId: string, permanent?: boolean): Promise<HttpResponse<{ ok: true }>> {
+  softDelete(conversationId: string): Promise<HttpResponse<{ ok: true }>> {
     return this.rb
       .path(`/v1/ai/conversations/${conversationId}`)
-      .query({ permanent })
+      .query({ permanent: false })
+      .delete<{ ok: true }>();
+  }
+
+  /**
+   * 대화를 영구 삭제합니다.
+   * 주의: 이 대화를 기반으로 생성된 지식 그래프(Graph Node/Edge) 데이터들 또한 연쇄 영구 삭제됩니다.
+   * @param conversationId 대화 ID
+   * @example
+   * await client.conversations.hardDelete('conv-123');
+   */
+  hardDelete(conversationId: string): Promise<HttpResponse<{ ok: true }>> {
+    return this.rb
+      .path(`/v1/ai/conversations/${conversationId}`)
+      .query({ permanent: true })
       .delete<{ ok: true }>();
   }
 
@@ -334,29 +340,37 @@ export class ConversationsApi {
   }
 
   /**
-   * 메시지를 삭제합니다.
-   * 주의: 이 메시지를 기반으로 생성된 지식 그래프 노드(Graph Node) 및 연결된 엣지도 함께 연쇄 삭제됩니다.
+   * 메시지를 소프트 삭제합니다 (휴지통으로 이동).
    * @param conversationId 대화 ID
    * @param messageId 메시지 ID
-   * @param permanent 영구 삭제 여부 (true: 영구 삭제, false: soft delete)
-   * @returns 성공 시 빈 응답
    * @example
-   * const response = await client.conversations.deleteMessage('conv-123', 'msg-999');
-   *
-   * console.log(response.data);
-   * // Output:
-   * {
-   *   ok: true
-   * }
+   * await client.conversations.softDeleteMessage('conv-123', 'msg-999');
    */
-  deleteMessage(
+  softDeleteMessage(
     conversationId: string,
-    messageId: string,
-    permanent?: boolean
+    messageId: string
   ): Promise<HttpResponse<{ ok: true }>> {
     return this.rb
       .path(`/v1/ai/conversations/${conversationId}/messages/${messageId}`)
-      .query({ permanent })
+      .query({ permanent: false })
+      .delete<{ ok: true }>();
+  }
+
+  /**
+   * 메시지를 영구 삭제합니다.
+   * 주의: 이 메시지를 기반으로 생성된 지식 그래프 노드(Graph Node) 및 연결된 엣지도 함께 연속 영구 삭제됩니다.
+   * @param conversationId 대화 ID
+   * @param messageId 메시지 ID
+   * @example
+   * await client.conversations.hardDeleteMessage('conv-123', 'msg-999');
+   */
+  hardDeleteMessage(
+    conversationId: string,
+    messageId: string
+  ): Promise<HttpResponse<{ ok: true }>> {
+    return this.rb
+      .path(`/v1/ai/conversations/${conversationId}/messages/${messageId}`)
+      .query({ permanent: true })
       .delete<{ ok: true }>();
   }
 
