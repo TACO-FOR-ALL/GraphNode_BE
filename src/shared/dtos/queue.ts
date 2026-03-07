@@ -48,6 +48,7 @@ export interface GraphGenRequestPayload extends BaseQueueMessage {
     bucket?: string; // 버킷명 (옵션)
     includeSummary?: boolean; // 요약 파이프라인 동시 실행 여부
     summaryLanguage?: string; // 요약 언어
+    language? : string // Cluster 이름 언어(사용자 선호 언어)
     inputType?: string; // 'chat' 
     extraS3Keys?: string[]; // 추가 소스(마크다운 등)의 s3 키 배열
   };

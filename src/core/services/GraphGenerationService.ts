@@ -113,6 +113,7 @@ export class GraphGenerationService {
           bucket: process.env.S3_PAYLOAD_BUCKET,
           includeSummary: options?.includeSummary ?? true,
           summaryLanguage: language,
+          language : language,
           extraS3Keys: [noteS3Key], // 통합된 노트 데이터 S3 키 전달
         },
         timestamp: new Date().toISOString(),
