@@ -19,7 +19,7 @@ import { z } from 'zod';
  */
 export const createConversationSchema = z.object({
   id: z.string().min(1, 'ID는 필수입니다'), // 서버 생성 지원
-  title: z.string().min(1, '제목은 필수입니다').max(200, '제목은 200자를 넘을 수 없습니다'),
+  title: z.string().max(200, '제목은 200자를 넘을 수 없습니다').optional().nullable(),
   messages: z
     .array(
       z.object({

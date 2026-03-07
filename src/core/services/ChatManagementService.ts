@@ -40,7 +40,7 @@ export class ChatManagementService {
   async createConversation(
     ownerUserId: string,
     threadId: string,
-    title: string,
+    title?: string | null,
     messages?: Partial<ChatMessage>[]
   ): Promise<ChatThread> {
     const client: MongoClient = getMongo();
@@ -52,7 +52,8 @@ export class ChatManagementService {
         async () => {
           await session.withTransaction(async () => {
             // 1. 대화방 생성 (ConversationService 위임)
-            if (!title || title.trim().length === 0) {
+            const finalTitle = title || '';
+            if (finalTitle.trim().length === 0) {
               throw new ValidationError('Title cannot be empty');
             }
 
@@ -62,7 +63,7 @@ export class ChatManagementService {
             const convDoc: ConversationDoc = {
               _id: finalThreadId,
               ownerUserId,
-              title,
+              title: finalTitle,
               createdAt: now.getTime(),
               updatedAt: now.getTime(),
               deletedAt: null,
@@ -128,7 +129,7 @@ export class ChatManagementService {
    */
   async bulkCreateConversations(
     ownerUserId: string,
-    threads: { id: string; title: string; messages?: Partial<ChatMessage>[] }[]
+    threads: { id: string; title?: string | null; messages?: Partial<ChatMessage>[] }[]
   ): Promise<ChatThread[]> {
     // TODO: [Refactor] 현재는 생성된 모든 대화/메시지 객체를 반환하고 있어 대용량(100MB+) 처리 시 OOM 및 이벤트 루프 차단 위험이 있음.
     // 추후 생성된 리소스의 ID 배열만 반환하거나 요약 정보만 반환하도록 변경 필요.
@@ -153,7 +154,16 @@ export class ChatManagementService {
 
               // 1. 문서 객체 준비 (메모리 상에서 변환)
               for (const thread of chunk) {
-                if (!thread.title || thread.title.trim().length === 0) continue;
+                let threadTitle = thread.title || '';
+                if (threadTitle.trim().length === 0) {
+                  const firstMsg = thread.messages && thread.messages.length > 0 ? thread.messages[0] : null;
+                  if (firstMsg && firstMsg.content && firstMsg.content.trim().length > 0) {
+                    const content = firstMsg.content.trim();
+                    threadTitle = content.length > 10 ? content.substring(0, 10) + '...' : content;
+                  } else {
+                    threadTitle = 'New Conversation';
+                  }
+                }
 
                 // const finalThreadId: string = thread.id?.trim() ? thread.id : ulid();
                 const finalThreadId: string = thread.id;
@@ -162,7 +172,7 @@ export class ChatManagementService {
                 const convDoc: ConversationDoc = {
                   _id: finalThreadId,
                   ownerUserId,
-                  title: thread.title,
+                  title: threadTitle,
                   createdAt: now.getTime(),
                   updatedAt: now.getTime(),
                   deletedAt: null,
