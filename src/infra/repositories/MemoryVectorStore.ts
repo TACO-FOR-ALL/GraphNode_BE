@@ -7,7 +7,7 @@
  * scalability. In production, configure a real vector DB (Qdrant, FAISS, etc.)
  * and ensure `initQdrant` is called during bootstrap.
  */
-import { VectorStore, VectorItem } from '../../core/ports/VectorStore';
+import { VectorStore, VectorItem, MacroNodeSearchResult } from '../../core/ports/VectorStore';
 
 type Collection = { items: Map<string, VectorItem>; dims?: number };
 
@@ -43,10 +43,10 @@ export class MemoryVectorStore implements VectorStore {
     collection: string,
     queryVector: number[],
     opts?: { filter?: Record<string, any>; limit?: number }
-  ): Promise<Array<{ id: string; score: number; payload?: any }>> {
+  ): Promise<MacroNodeSearchResult[]> {
     const col = this.collections.get(collection);
     if (!col) return [];
-    const results: Array<{ id: string; score: number; payload?: any }> = [];
+    const results: MacroNodeSearchResult[] = [];
     const qnorm = this.norm(queryVector) || 1;
     for (const it of col.items.values()) {
       if (opts?.filter) {
@@ -60,7 +60,16 @@ export class MemoryVectorStore implements VectorStore {
         if (!ok) continue;
       }
       const score = this.dot(queryVector, it.vector) / (qnorm * (this.norm(it.vector) || 1));
-      results.push({ id: it.id, score, payload: it.payload });
+      results.push({
+        id: it.id,
+        score,
+        payload: {
+          user_id: it.payload?.user_id || '',
+          conversation_id: it.payload?.conversation_id || '',
+          orig_id: it.payload?.orig_id || '',
+          ...it.payload,
+        } as any,
+      });
     }
     results.sort((a, b) => b.score - a.score);
     const limit = opts?.limit ?? 10;

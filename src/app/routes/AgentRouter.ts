@@ -277,11 +277,11 @@ export function createAgentRouter(deps: {
           return JSON.stringify({
             message: `${searchResults.length}개의 관련 대화/노드를 찾았습니다.`,
             conversations: searchResults.map((result) => ({
-              id: result.id,
-              title: result.payload?.title || result.payload?.label || '제목 없음',
-              content: result.payload?.content?.slice(0, 200) || '',
+              id: result.node.origId,
+              title: result.node.label || result.node.clusterName || '제목 없음',
+              content: result.node.summary || '',
               similarity: result.score,
-              clusterId: result.payload?.clusterId,
+              clusterId: result.node.clusterId,
             })),
           });
         }
