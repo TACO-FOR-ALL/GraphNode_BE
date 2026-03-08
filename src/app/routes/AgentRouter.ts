@@ -221,7 +221,7 @@ export function createAgentRouter(deps: {
           const limit = (args.limit as number) || 5;
 
           // 모든 노트를 가져와서 키워드로 필터링 (간단한 구현)
-          const allNotes = await noteService.listNotes(userId, null);
+          const { items: allNotes } = await noteService.listNotes(userId, null, 10000);
           const filtered = allNotes
             .filter(
               (note) =>
@@ -247,7 +247,7 @@ export function createAgentRouter(deps: {
 
         case 'get_recent_notes': {
           const limit = (args.limit as number) || 5;
-          const notes = await noteService.listNotes(userId, null);
+          const { items: notes } = await noteService.listNotes(userId, null, limit);
           const recent = notes
             .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
             .slice(0, limit);

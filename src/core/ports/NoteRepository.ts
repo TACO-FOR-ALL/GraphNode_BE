@@ -44,9 +44,16 @@ export interface NoteRepository {
    * 특정 폴더(또는 루트)의 노트 목록을 조회합니다.
    * @param ownerUserId 소유자 ID
    * @param folderId 폴더 ID (null이면 루트 폴더)
-   * @returns 노트 문서 목록
+   * @param limit 가져올 개수
+   * @param cursor 페이징 커서 (updatedAt 기준)
+   * @returns 노트 문서 목록과 다음 커서
    */
-  listNotes(ownerUserId: string, folderId: string | null): Promise<NoteDoc[]>;
+  listNotes(
+    ownerUserId: string,
+    folderId: string | null,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: NoteDoc[]; nextCursor: string | null }>;
 
   /**
    * 노트를 수정합니다.
@@ -155,16 +162,30 @@ export interface NoteRepository {
   ): Promise<NoteDoc[]>;
 
   /**
-   * 휴지통 항목 조회: 삭제된 노트 목록을 조회합니다.
+   * 휴지통 항목 조회: 삭제된 노트 목록을 조회합니다 (페이징 지원).
    * @param ownerUserId 소유자 ID
+   * @param limit 가져올 개수
+   * @param cursor 페이징 커서
+   * @returns 삭제된 노트 문서 목록과 다음 커서
    */
-  listTrashNotes(ownerUserId: string): Promise<NoteDoc[]>;
+  listTrashNotes(
+    ownerUserId: string,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: NoteDoc[]; nextCursor: string | null }>;
 
   /**
-   * 휴지통 항목 조회: 삭제된 폴더 목록을 조회합니다.
+   * 휴지통 항목 조회: 삭제된 폴더 목록을 조회합니다 (페이징 지원).
    * @param ownerUserId 소유자 ID
+   * @param limit 가져올 개수
+   * @param cursor 페이징 커서
+   * @returns 삭제된 폴더 문서 목록과 다음 커서
    */
-  listTrashFolders(ownerUserId: string): Promise<FolderDoc[]>;
+  listTrashFolders(
+    ownerUserId: string,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: FolderDoc[]; nextCursor: string | null }>;
 
   /**
    * 여러 폴더에 속한 노트들을 일괄 삭제합니다. (폴더 삭제 시 사용) - Deprecated: Use soft/hard variants
@@ -243,9 +264,16 @@ export interface NoteRepository {
    * 특정 폴더(또는 루트)의 하위 폴더 목록을 조회합니다.
    * @param ownerUserId 소유자 ID
    * @param parentId 상위 폴더 ID (null이면 루트)
-   * @returns 폴더 문서 목록
+   * @param limit 가져올 개수
+   * @param cursor 페이징 커서 (updatedAt 기준)
+   * @returns 폴더 문서 목록과 다음 커서
    */
-  listFolders(ownerUserId: string, parentId: string | null): Promise<FolderDoc[]>;
+  listFolders(
+    ownerUserId: string,
+    parentId: string | null,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: FolderDoc[]; nextCursor: string | null }>;
 
   /**
    * 폴더를 수정합니다.

@@ -66,9 +66,25 @@ export interface Folder {
 }
 
 /**
- * 휴지통 목록 응답 DTO
+ * 페이징된 노트 응답 DTO
+ */
+export interface PaginatedNoteResponse {
+  items: Note[];
+  nextCursor: string | null;
+}
+
+/**
+ * 페이징된 폴더 응답 DTO
+ */
+export interface PaginatedFolderResponse {
+  items: Folder[];
+  nextCursor: string | null;
+}
+
+/**
+ * 휴지통 목록 응답 DTO (페이징 지원)
  */
 export interface TrashListResponse {
-  notes: Note[];
-  folders: Folder[];
+  notes: PaginatedNoteResponse;
+  folders: PaginatedFolderResponse;
 }

@@ -192,6 +192,8 @@ infisical run --env=prod -- npm start
 
 - **[Code Style & Contribution Guide](docs/architecture/CODE_STYLE.md)**: 네이밍 컨벤션, 아키텍처 패턴, 에러 핸들링 규칙 등
 - **[Daily Dev Logs](docs/guides/Daily)**: 일별 작업 상세 기록
+  - [2026-03-08 FE SDK 재귀적 페이징 처리 리팩토링](docs/guides/Daily/20260308-fe-sdk-pagination-refactor.md)
+  - [2026-03-08 서버 커서 기반 페이징 구현 (Note/Folder)](docs/guides/Daily/20260308-be-cursor-pagination-implementation.md)
   - [2026-03-08 Gemini SDK 마이그레이션 (@google/genai) 및 기본 모델 변경](docs/guides/Daily/20260308-gemini-sdk-migration.md)
   - [2026-03-07 FE SDK 삭제 메서드 분리 (Soft/Hard Delete)](docs/guides/Daily/20260307-sdk-delete-refactor.md)
   - [2026-03-07 BE 소프트 삭제 항목 30일 경과 자동 정리 기능 구현](docs/guides/Daily/20260307-be-cleanup-cron.md)

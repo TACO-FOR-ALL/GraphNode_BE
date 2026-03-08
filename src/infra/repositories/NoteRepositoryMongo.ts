@@ -89,11 +89,34 @@ export class NoteRepositoryMongo implements NoteRepository {
    * 특정 폴더(또는 루트)의 노트 목록을 조회한다.
    * @param ownerUserId 소유자 사용자 ID
    * @param folderId 폴더 ID (null이면 루트 폴더)
-   * @returns 노트 문서 배열
+   * @param limit 가져올 개수
+   * @param cursor 페이징 커서 (updatedAt 기준)
+   * @returns 노트 문서 목록과 다음 커서
    */
-  async listNotes(ownerUserId: string, folderId: string | null): Promise<NoteDoc[]> {
+  async listNotes(
+    ownerUserId: string,
+    folderId: string | null,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: NoteDoc[]; nextCursor: string | null }> {
     try {
-      return this.notesCol().find({ ownerUserId, folderId, deletedAt: null }).toArray();
+      const query: any = { ownerUserId, folderId, deletedAt: null };
+      if (cursor) {
+        query.updatedAt = { $lt: new Date(parseInt(cursor, 10)) };
+      }
+
+      const items: NoteDoc[] = await this.notesCol()
+        .find(query)
+        .sort({ updatedAt: -1 })
+        .limit(limit)
+        .toArray();
+
+      const last = items[items.length - 1];
+      const nextCursor = (items.length === limit && last?.updatedAt)
+        ? String(last.updatedAt.getTime())
+        : null;
+
+      return { items, nextCursor };
     } catch (err: unknown) {
       this.handleError('NoteRepositoryMongo.listNotes', err);
     }
@@ -301,11 +324,33 @@ export class NoteRepositoryMongo implements NoteRepository {
   /**
    * 휴지통에 있는 모든 노트 목록을 조회합니다.
    * @param ownerUserId 소유자 사용자 ID
-   * @returns 삭제된 노트 문서 배열
+   * @param limit 가져올 개수
+   * @param cursor 페이징 커서
+   * @returns 삭제된 노트 문서 목록과 다음 커서
    */
-  async listTrashNotes(ownerUserId: string): Promise<NoteDoc[]> {
+  async listTrashNotes(
+    ownerUserId: string,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: NoteDoc[]; nextCursor: string | null }> {
     try {
-      return this.notesCol().find({ ownerUserId, deletedAt: { $ne: null } }).toArray();
+      const query: any = { ownerUserId, deletedAt: { $ne: null } };
+      if (cursor) {
+        query.updatedAt = { $lt: new Date(parseInt(cursor, 10)) };
+      }
+
+      const items: NoteDoc[] = await this.notesCol()
+        .find(query)
+        .sort({ updatedAt: -1 })
+        .limit(limit)
+        .toArray();
+
+      const last = items[items.length - 1];
+      const nextCursor = (items.length === limit && last?.updatedAt)
+        ? String(last.updatedAt.getTime())
+        : null;
+
+      return { items, nextCursor };
     } catch (err: unknown) {
       this.handleError('NoteRepositoryMongo.listTrashNotes', err);
     }
@@ -314,11 +359,33 @@ export class NoteRepositoryMongo implements NoteRepository {
   /**
    * 휴지통에 있는 모든 폴더 목록을 조회합니다.
    * @param ownerUserId 소유자 사용자 ID
-   * @returns 삭제된 폴더 문서 배열
+   * @param limit 가져올 개수
+   * @param cursor 페이징 커서
+   * @returns 삭제된 폴더 문서 목록과 다음 커서
    */
-  async listTrashFolders(ownerUserId: string): Promise<FolderDoc[]> {
+  async listTrashFolders(
+    ownerUserId: string,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: FolderDoc[]; nextCursor: string | null }> {
     try {
-      return this.foldersCol().find({ ownerUserId, deletedAt: { $ne: null } }).toArray();
+      const query: any = { ownerUserId, deletedAt: { $ne: null } };
+      if (cursor) {
+        query.updatedAt = { $lt: new Date(parseInt(cursor, 10)) };
+      }
+
+      const items: FolderDoc[] = await this.foldersCol()
+        .find(query)
+        .sort({ updatedAt: -1 })
+        .limit(limit)
+        .toArray();
+
+      const last = items[items.length - 1];
+      const nextCursor = (items.length === limit && last?.updatedAt)
+        ? String(last.updatedAt.getTime())
+        : null;
+
+      return { items, nextCursor };
     } catch (err: unknown) {
       this.handleError('NoteRepositoryMongo.listTrashFolders', err);
     }
@@ -462,11 +529,34 @@ export class NoteRepositoryMongo implements NoteRepository {
    * 특정 부모 폴더 내의 하위 폴더 목록을 조회합니다.
    * @param ownerUserId 소유자 사용자 ID
    * @param parentId 부모 폴더 ID (null이면 루트)
-   * @returns 폴더 문서 배열
+   * @param limit 가져올 개수
+   * @param cursor 페이징 커서 (updatedAt 기준)
+   * @returns 폴더 문서 목록과 다음 커서
    */
-  async listFolders(ownerUserId: string, parentId: string | null): Promise<FolderDoc[]> {
+  async listFolders(
+    ownerUserId: string,
+    parentId: string | null,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: FolderDoc[]; nextCursor: string | null }> {
     try {
-      return this.foldersCol().find({ ownerUserId, parentId, deletedAt: null }).toArray();
+      const query: any = { ownerUserId, parentId, deletedAt: null };
+      if (cursor) {
+        query.updatedAt = { $lt: new Date(parseInt(cursor, 10)) };
+      }
+
+      const items: FolderDoc[] = await this.foldersCol()
+        .find(query)
+        .sort({ updatedAt: -1 })
+        .limit(limit)
+        .toArray();
+
+      const last = items[items.length - 1];
+      const nextCursor = (items.length === limit && last?.updatedAt)
+        ? String(last.updatedAt.getTime())
+        : null;
+
+      return { items, nextCursor };
     } catch (err: unknown) {
       this.handleError('NoteRepositoryMongo.listFolders', err);
     }

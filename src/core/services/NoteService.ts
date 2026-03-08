@@ -10,7 +10,7 @@ import {
   UpdateFolderRequest,
   BulkCreateNotesRequest,
 } from '../../shared/dtos/note.schemas';
-import { Note, Folder, TrashListResponse } from '../../shared/dtos/note';
+import { Note, Folder, TrashListResponse, PaginatedNoteResponse, PaginatedFolderResponse } from '../../shared/dtos/note';
 import { NoteDoc, FolderDoc } from '../types/persistence/note.persistence';
 import { getMongo } from '../../infra/db/mongodb';
 import { NotFoundError, UpstreamError } from '../../shared/errors/domain';
@@ -172,14 +172,24 @@ export class NoteService {
    *
    * @param userId 소유자 ID
    * @param folderId 폴더 ID (null이면 루트 폴더의 노트 조회)
-   * @returns 노트 DTO 목록
+   * @param limit 가져올 개수
+   * @param cursor 페이징 커서
+   * @returns 페이징된 노트 DTO 목록
    */
-  async listNotes(userId: string, folderId: string | null): Promise<Note[]> {
-    const docs: NoteDoc[] = await withRetry(
-      async () => await this.noteRepo.listNotes(userId, folderId),
+  async listNotes(
+    userId: string,
+    folderId: string | null,
+    limit: number = 20,
+    cursor?: string
+  ): Promise<PaginatedNoteResponse> {
+    const { items, nextCursor } = await withRetry(
+      async () => await this.noteRepo.listNotes(userId, folderId, limit, cursor),
       { label: 'NoteService.listNotes' }
     );
-    return docs.map((doc) => toNoteDto(doc));
+    return {
+      items: items.map((doc) => toNoteDto(doc)),
+      nextCursor,
+    };
   }
 
   /**
@@ -276,20 +286,34 @@ export class NoteService {
   /**
    * 휴지통(Trash) 목록을 조회합니다.
    * @param userId 사용자 ID
-   * @returns 노트 및 폴더 목록
+   * @param limit 가져올 개수
+   * @param notesCursor 노트 페이징 커서
+   * @param foldersCursor 폴더 페이징 커서
+   * @returns 페이징된 노트 및 폴더 목록
    */
-  async listTrash(userId: string): Promise<TrashListResponse> {
-    const [notes, folders] = await withRetry(
+  async listTrash(
+    userId: string,
+    limit: number = 20,
+    notesCursor?: string,
+    foldersCursor?: string
+  ): Promise<TrashListResponse> {
+    const [notesRes, foldersRes] = await withRetry(
       async () => await Promise.all([
-        this.noteRepo.listTrashNotes(userId),
-        this.noteRepo.listTrashFolders(userId),
+        this.noteRepo.listTrashNotes(userId, limit, notesCursor),
+        this.noteRepo.listTrashFolders(userId, limit, foldersCursor),
       ]),
       { label: 'NoteService.listTrash' }
     );
 
     return {
-      notes: notes.map((doc: NoteDoc) => toNoteDto(doc)),
-      folders: folders.map((doc: FolderDoc) => toFolderDto(doc)),
+      notes: {
+        items: notesRes.items.map((doc: NoteDoc) => toNoteDto(doc)),
+        nextCursor: notesRes.nextCursor,
+      },
+      folders: {
+        items: foldersRes.items.map((doc: FolderDoc) => toFolderDto(doc)),
+        nextCursor: foldersRes.nextCursor,
+      },
     };
   }
 
@@ -342,14 +366,24 @@ export class NoteService {
    *
    * @param userId 소유자 ID
    * @param parentId 상위 폴더 ID (null이면 루트 폴더의 하위 폴더 조회)
-   * @returns 폴더 DTO 목록
+   * @param limit 가져올 개수
+   * @param cursor 페이징 커서
+   * @returns 페이징된 폴더 DTO 목록
    */
-  async listFolders(userId: string, parentId: string | null): Promise<Folder[]> {
-    const docs: FolderDoc[] = await withRetry(
-      async () => await this.noteRepo.listFolders(userId, parentId),
+  async listFolders(
+    userId: string,
+    parentId: string | null,
+    limit: number = 20,
+    cursor?: string
+  ): Promise<PaginatedFolderResponse> {
+    const { items, nextCursor } = await withRetry(
+      async () => await this.noteRepo.listFolders(userId, parentId, limit, cursor),
       { label: 'NoteService.listFolders' }
     );
-    return docs.map((doc) => toFolderDto(doc));
+    return {
+      items: items.map((doc) => toFolderDto(doc)),
+      nextCursor,
+    };
   }
 
   /**

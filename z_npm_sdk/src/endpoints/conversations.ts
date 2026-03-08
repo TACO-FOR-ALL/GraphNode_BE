@@ -1,4 +1,4 @@
-import { RequestBuilder, type HttpResponse } from '../http-builder.js';
+import { RequestBuilder, type HttpResponse, type HttpResponseError } from '../http-builder.js';
 import type {
   ConversationDto,
   ConversationCreateDto,
@@ -111,51 +111,67 @@ export class ConversationsApi {
   }
 
   /**
-   * 대화 목록을 조회합니다.
+   * 대화 목록을 조회합니다. (모든 페이지 자동 조회)
    * @returns 대화 목록 (ConversationDto 배열)
    * @example
    * const response = await client.conversations.list();
-   *
-   * console.log(response.data);
-   * // Output:
-   * [
-   *   {
-   *     id: 'conv-123',
-   *     title: 'Project Brainstorming',
-   *     messages: [],
-   *     createdAt: '2023-10-27T10:00:00Z',
-   *     updatedAt: '2023-10-27T10:00:00Z'
-   *   },
-   *   {
-   *     id: 'conv-124',
-   *     title: 'Another Chat',
-   *     messages: [],
-   *     createdAt: '2023-10-28T10:00:00Z',
-   *     updatedAt: '2023-10-28T10:00:00Z'
-   *   }
-   * ]
+   * console.log(response.data); // 모든 대화 목록
    */
-  list(): Promise<HttpResponse<ConversationDto[]>> {
-    return this.rb.path('/v1/ai/conversations').get<ConversationDto[]>();
+  async list(): Promise<HttpResponse<ConversationDto[]>> {
+    const allItems: ConversationDto[] = [];
+    let cursor: string | null = null;
+
+    do {
+      const res: HttpResponse<{ items: ConversationDto[]; nextCursor: string | null }> = await this.rb
+        .path('/v1/ai/conversations')
+        .query({ limit: 100, cursor: cursor || undefined })
+        .get<{ items: ConversationDto[]; nextCursor: string | null }>();
+
+      if (!res.isSuccess) {
+        return res as HttpResponseError;
+      }
+
+      allItems.push(...res.data.items);
+      cursor = res.data.nextCursor;
+    } while (cursor);
+
+    return {
+      isSuccess: true,
+      statusCode: 200,
+      data: allItems,
+    };
   }
 
   /**
-   * 삭제된 대화(휴지통) 목록을 조회합니다.
-   * @param limit - 한 번에 가져올 개수 (기본값 50)
-   * @param cursor - 다음 페이지를 위한 커서
-   * @returns 삭제된 대화 목록 및 다음 커서
+   * 삭제된 대화(휴지통) 목록을 조회합니다. (모든 페이지 자동 조회)
+   * @returns 삭제된 대화 목록 (ConversationDto 배열)
    * @example
-   * const response = await client.conversations.listTrash(20);
-   * console.log(response.data.items);
+   * const response = await client.conversations.listTrash();
+   * console.log(response.data); // 모든 삭제된 대화 목록
    */
-  listTrash(
-    limit?: number,
-    cursor?: string
-  ): Promise<HttpResponse<{ items: ConversationDto[]; nextCursor?: string | null }>> {
-    return this.rb
-      .path('/v1/ai/conversations/trash')
-      .query({ limit, cursor })
-      .get<{ items: ConversationDto[]; nextCursor?: string | null }>();
+  async listTrash(): Promise<HttpResponse<ConversationDto[]>> {
+    const allItems: ConversationDto[] = [];
+    let cursor: string | null = null;
+
+    do {
+      const res: HttpResponse<{ items: ConversationDto[]; nextCursor: string | null }> = await this.rb
+        .path('/v1/ai/conversations/trash')
+        .query({ limit: 100, cursor: cursor || undefined })
+        .get<{ items: ConversationDto[]; nextCursor: string | null }>();
+
+      if (!res.isSuccess) {
+        return res as HttpResponseError;
+      }
+
+      allItems.push(...res.data.items);
+      cursor = res.data.nextCursor;
+    } while (cursor);
+
+    return {
+      isSuccess: true,
+      statusCode: 200,
+      data: allItems,
+    };
   }
 
   /**

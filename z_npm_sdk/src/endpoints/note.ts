@@ -1,4 +1,4 @@
-import { RequestBuilder, type HttpResponse } from '../http-builder.js';
+import { RequestBuilder, type HttpResponse, type HttpResponseError } from '../http-builder.js';
 import type {
   NoteDto,
   NoteCreateDto,
@@ -93,36 +93,36 @@ export class NoteApi {
   }
 
   /**
-   * 사용자의 모든 노트를 가져옵니다.
+   * 사용자의 모든 노트를 가져옵니다. (모든 페이지 자동 조회)
+   * @param folderId - 특정 폴더 ID로 필터링 (선택)
    * @returns 노트 목록 (NoteDto 배열)
    * @example
    * const response = await client.note.listNotes();
-   *
-   * console.log(response.data);
-   * // Output:
-   * [
-   *   {
-   *     id: '550e8400-e29b-41d4-a716-446655440000',
-   *     title: 'Meeting Notes',
-   *     content: '...',
-   *     folderId: null,
-   *     createdAt: '...',
-   *     updatedAt: '...',
-   *     ownerUserId: 'user-123'
-   *   },
-   *   {
-   *     id: '661f9511-f30c-52e5-b827-557766551111',
-   *     title: 'Ideas',
-   *     content: '...',
-   *     folderId: 'folder-123',
-   *     createdAt: '...',
-   *     updatedAt: '...',
-   *     ownerUserId: 'user-123'
-   *   }
-   * ]
+   * console.log(response.data); // 모든 노트 목록
    */
-  listNotes(): Promise<HttpResponse<NoteDto[]>> {
-    return this.rb.path('/notes').get<NoteDto[]>();
+  async listNotes(folderId?: string): Promise<HttpResponse<NoteDto[]>> {
+    const allItems: NoteDto[] = [];
+    let cursor: string | null = null;
+
+    do {
+      const res: HttpResponse<{ items: NoteDto[]; nextCursor: string | null }> = await this.rb
+        .path('/notes')
+        .query({ folderId, limit: 100, cursor: cursor || undefined })
+        .get<{ items: NoteDto[]; nextCursor: string | null }>();
+
+      if (!res.isSuccess) {
+        return res as HttpResponseError;
+      }
+
+      allItems.push(...res.data.items);
+      cursor = res.data.nextCursor;
+    } while (cursor);
+
+    return {
+      isSuccess: true,
+      statusCode: 200,
+      data: allItems,
+    };
   }
 
   /**
@@ -210,15 +210,57 @@ export class NoteApi {
   }
 
   /**
-   * 휴지통(Trash) 목록을 조회합니다.
+   * 휴지통(Trash) 목록을 조회합니다. (모든 페이지 자동 조회)
    * @returns 삭제된 노트 및 폴더 목록
    * @example
    * const response = await client.note.listTrash();
-   * console.log(response.data.notes);
-   * console.log(response.data.folders);
+   * console.log(response.data.notes); // 모든 삭제된 노트
+   * console.log(response.data.folders); // 모든 삭제된 폴더
    */
-  listTrash(): Promise<HttpResponse<TrashListResponseDto>> {
-    return this.rb.path('/notes/trash').get<TrashListResponseDto>();
+  async listTrash(): Promise<HttpResponse<TrashListResponseDto>> {
+    const allNotes: NoteDto[] = [];
+    const allFolders: FolderDto[] = [];
+    let notesCursor: string | null = null;
+    let foldersCursor: string | null = null;
+    let hasMore = true;
+
+    while (hasMore) {
+      const res: HttpResponse<{
+        notes: { items: NoteDto[]; nextCursor: string | null };
+        folders: { items: FolderDto[]; nextCursor: string | null };
+      }> = await this.rb
+        .path('/notes/trash')
+        .query({
+          limit: 100,
+          notesCursor: notesCursor || undefined,
+          foldersCursor: foldersCursor || undefined,
+        })
+        .get<{
+          notes: { items: NoteDto[]; nextCursor: string | null };
+          folders: { items: FolderDto[]; nextCursor: string | null };
+        }>();
+
+      if (!res.isSuccess) {
+        return res as HttpResponseError;
+      }
+
+      allNotes.push(...res.data.notes.items);
+      allFolders.push(...res.data.folders.items);
+
+      notesCursor = res.data.notes.nextCursor;
+      foldersCursor = res.data.folders.nextCursor;
+
+      hasMore = !!(notesCursor || foldersCursor);
+    }
+
+    return {
+      isSuccess: true,
+      statusCode: 200,
+      data: {
+        notes: allNotes,
+        folders: allFolders,
+      },
+    };
   }
 
   /**
@@ -280,34 +322,36 @@ export class NoteApi {
   }
 
   /**
-   * 사용자의 모든 폴더를 가져옵니다.
+   * 사용자의 모든 폴더를 가져옵니다. (모든 페이지 자동 조회)
+   * @param parentId - 상위 폴더 ID로 필터링 (선택)
    * @returns 폴더 목록 (FolderDto 배열)
    * @example
    * const response = await client.note.listFolders();
-   *
-   * console.log(response.data);
-   * // Output:
-   * [
-   *   {
-   *     id: 'folder-123',
-   *     name: 'Work Projects',
-   *     parentId: null,
-   *     createdAt: '...',
-   *     updatedAt: '...',
-   *     ownerUserId: 'user-123'
-   *   },
-   *   {
-   *     id: 'folder-124',
-   *     name: 'Personal',
-   *     parentId: null,
-   *     createdAt: '...',
-   *     updatedAt: '...',
-   *     ownerUserId: 'user-123'
-   *   }
-   * ]
+   * console.log(response.data); // 모든 폴더 목록
    */
-  listFolders(): Promise<HttpResponse<FolderDto[]>> {
-    return this.rb.path('/folders').get<FolderDto[]>();
+  async listFolders(parentId?: string): Promise<HttpResponse<FolderDto[]>> {
+    const allItems: FolderDto[] = [];
+    let cursor: string | null = null;
+
+    do {
+      const res: HttpResponse<{ items: FolderDto[]; nextCursor: string | null }> = await this.rb
+        .path('/folders')
+        .query({ parentId, limit: 100, cursor: cursor || undefined })
+        .get<{ items: FolderDto[]; nextCursor: string | null }>();
+
+      if (!res.isSuccess) {
+        return res as HttpResponseError;
+      }
+
+      allItems.push(...res.data.items);
+      cursor = res.data.nextCursor;
+    } while (cursor);
+
+    return {
+      isSuccess: true,
+      statusCode: 200,
+      data: allItems,
+    };
   }
 
   /**

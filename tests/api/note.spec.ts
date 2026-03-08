@@ -38,6 +38,7 @@ jest.mock('../../src/infra/db', () => ({
 (GraphRepositoryMongo as jest.Mock).mockImplementation(() => ({
   upsertNode: jest.fn(),
   listNodes: jest.fn(),
+  deleteNodesByOrigIds: jest.fn().mockResolvedValue(undefined),
   upsertEdge: jest.fn(),
   listEdges: jest.fn(),
   upsertCluster: jest.fn(),
@@ -87,10 +88,12 @@ jest.mock('../../src/infra/repositories/NoteRepositoryMongo', () => ({
       if (!includeDeleted && n.deletedAt) return null;
       return n;
     }
-    async listNotes(ownerUserId: string, folderId: string | null) {
-      return Array.from(notesStore.values()).filter(
+    async listNotes(ownerUserId: string, folderId: string | null, limit: number = 20, cursor?: string) {
+      const all = Array.from(notesStore.values()).filter(
         (n) => n.ownerUserId === ownerUserId && n.folderId === folderId && !n.deletedAt
       );
+      const items = all.slice(0, limit);
+      return { items, nextCursor: all.length > limit ? 'next' : null };
     }
     async updateNote(id: string, ownerUserId: string, updates: Partial<NoteDoc>, _session?: any) {
       const n = notesStore.get(id);
@@ -133,11 +136,13 @@ jest.mock('../../src/infra/repositories/NoteRepositoryMongo', () => ({
       }
       return count;
     }
-    async listTrashNotes(ownerUserId: string) {
-      return Array.from(notesStore.values()).filter((n) => n.ownerUserId === ownerUserId && n.deletedAt !== null);
+    async listTrashNotes(ownerUserId: string, limit: number = 20, cursor?: string) {
+      const all = Array.from(notesStore.values()).filter((n) => n.ownerUserId === ownerUserId && n.deletedAt !== null);
+      return { items: all.slice(0, limit), nextCursor: all.length > limit ? 'next' : null };
     }
-    async listTrashFolders(ownerUserId: string) {
-      return Array.from(foldersStore.values()).filter((f) => f.ownerUserId === ownerUserId && f.deletedAt !== null);
+    async listTrashFolders(ownerUserId: string, limit: number = 20, cursor?: string) {
+      const all = Array.from(foldersStore.values()).filter((f) => f.ownerUserId === ownerUserId && f.deletedAt !== null);
+      return { items: all.slice(0, limit), nextCursor: all.length > limit ? 'next' : null };
     }
     async deleteAllNotesInFolders(ownerUserId: string, _session?: any) {
       let count = 0;
@@ -206,10 +211,12 @@ jest.mock('../../src/infra/repositories/NoteRepositoryMongo', () => ({
       if (!includeDeleted && f.deletedAt) return null;
       return f;
     }
-    async listFolders(ownerUserId: string, parentId: string | null) {
-      return Array.from(foldersStore.values()).filter(
+    async listFolders(ownerUserId: string, parentId: string | null, limit: number = 20, cursor?: string) {
+      const all = Array.from(foldersStore.values()).filter(
         (f) => f.ownerUserId === ownerUserId && f.parentId === parentId && !f.deletedAt
       );
+      const items = all.slice(0, limit);
+      return { items, nextCursor: all.length > limit ? 'next' : null };
     }
     async updateFolder(id: string, ownerUserId: string, updates: Partial<FolderDoc>, _session?: any) {
       const f = foldersStore.get(id);
@@ -387,8 +394,8 @@ describe('Note API Integration Tests', () => {
           .set('Authorization', `Bearer ${accessToken}`);
 
         expect(listRes.status).toBe(200);
-        expect(listRes.body).toHaveLength(1);
-        expect(listRes.body[0].name).toBe('Child');
+        expect(listRes.body.items).toHaveLength(1);
+        expect(listRes.body.items[0].name).toBe('Child');
     });
 
     it('should soft delete and restore a folder', async () => {
@@ -485,7 +492,7 @@ describe('Note API Integration Tests', () => {
       expect(res.body.notes).toHaveLength(2);
       expect(res.body.notes[0].title).toBe('Bulk T1');
       expect(res.body.notes[0].content).toBe('Bulk C1');
-      expect(res.body.notes[1].title).toBe('Bulk C2 li...'); // Title auto-generation test
+      expect(res.body.notes[1].title).toBe('Bulk C2 Co...'); // Title auto-generation test
 
       // Check if they were actually saved
       expect(notesStore.has('12345678-1234-1234-1234-123456789012')).toBe(true);
@@ -538,8 +545,8 @@ describe('Note API Integration Tests', () => {
           .set('Authorization', `Bearer ${accessToken}`);
 
         expect(listRes.status).toBe(200);
-        expect(listRes.body).toHaveLength(1);
-        expect(listRes.body[0].folderId).toBe(folderId);
+        expect(listRes.body.items).toHaveLength(1);
+        expect(listRes.body.items[0].folderId).toBe(folderId);
     });
 
     it('should soft delete and restore a note', async () => {

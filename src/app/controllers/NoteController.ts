@@ -70,14 +70,17 @@ export class NoteController {
 
   /**
    * 노트 목록 조회 핸들러
-   * GET /v1/notes?folderId=...
+   * GET /v1/notes?folderId=...&limit=...&cursor=...
    */
   async listNotes(req: Request, res: Response) {
     const userId: string = getUserIdFromRequest(req)!;
     const folderId: string | null =
       typeof req.query.folderId === 'string' ? req.query.folderId : null;
-    const notes: Note[] = await this.noteService.listNotes(userId, folderId);
-    res.json(notes);
+    const limit = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : 20;
+    const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : undefined;
+
+    const result = await this.noteService.listNotes(userId, folderId, limit, cursor);
+    res.json(result);
   }
 
   /**
@@ -145,14 +148,17 @@ export class NoteController {
 
   /**
    * 폴더 목록 조회 핸들러
-   * GET /v1/folders?parentId=...
+   * GET /v1/folders?parentId=...&limit=...&cursor=...
    */
   async listFolders(req: Request, res: Response) {
     const userId: string = getUserIdFromRequest(req)!;
     const parentId: string | null =
       typeof req.query.parentId === 'string' ? req.query.parentId : null;
-    const folders: Folder[] = await this.noteService.listFolders(userId, parentId);
-    res.json(folders);
+    const limit = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : 20;
+    const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : undefined;
+
+    const result = await this.noteService.listFolders(userId, parentId, limit, cursor);
+    res.json(result);
   }
 
   /**
@@ -227,11 +233,15 @@ export class NoteController {
 
   /**
    * 휴지통 항목 조회 핸들러
-   * GET /v1/notes/trash
+   * GET /v1/notes/trash?limit=...&notesCursor=...&foldersCursor=...
    */
   async listTrash(req: Request, res: Response) {
     const userId: string = getUserIdFromRequest(req)!;
-    const trash = await this.noteService.listTrash(userId);
+    const limit = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : 20;
+    const notesCursor = typeof req.query.notesCursor === 'string' ? req.query.notesCursor : undefined;
+    const foldersCursor = typeof req.query.foldersCursor === 'string' ? req.query.foldersCursor : undefined;
+
+    const trash = await this.noteService.listTrash(userId, limit, notesCursor, foldersCursor);
     res.json(trash);
   }
 }

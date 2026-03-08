@@ -1607,15 +1607,28 @@ paths:
           name: folderId
           schema: { type: string, format: uuid }
           description: Filter by folder ID
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - in: query
+          name: cursor
+          schema: { type: string, description: Pagination cursor }
       responses:
         '200':
           description: List of notes
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: ../schemas/note.json
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: ../schemas/note.json
+                  nextCursor:
+                    oneOf:
+                      - { type: string }
+                      - { type: 'null' }
               examples:
                 default:
                   $ref: '#/components/examples/noteList200'
@@ -1642,6 +1655,16 @@ paths:
     get:
       summary: List deleted notes and folders (Trash)
       tags: [Note]
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - in: query
+          name: notesCursor
+          schema: { type: string, description: Cursor for notes pagination }
+        - in: query
+          name: foldersCursor
+          schema: { type: string, description: Cursor for folders pagination }
       responses:
         '200':
           description: OK
@@ -1800,15 +1823,28 @@ paths:
           name: parentId
           schema: { type: string, format: uuid }
           description: Filter by parent folder ID
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - in: query
+          name: cursor
+          schema: { type: string, description: Pagination cursor }
       responses:
         '200':
           description: List of folders
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: ../schemas/folder.json
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: ../schemas/folder.json
+                  nextCursor:
+                    oneOf:
+                      - { type: string }
+                      - { type: 'null' }
               examples:
                 default:
                   $ref: '#/components/examples/folderList200'

@@ -14,7 +14,7 @@ export const createNoteSchema = z.object({
   /** 노트 제목 (선택). 생략 시 내용의 첫 줄이나 기본값 사용 */
   title: z.string().optional(),
   /** 노트 내용 (필수). Markdown 형식 */
-  content: z.string().min(1, 'Content is required'),
+  content: z.string(),
   /** 소속 폴더 ID (선택). 생략 또는 null 시 최상위 */
   folderId: z.string().nullable().optional(),
 });
