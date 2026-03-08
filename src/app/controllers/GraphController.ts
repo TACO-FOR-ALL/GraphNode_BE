@@ -15,12 +15,38 @@
 import { Request, Response } from 'express';
 
 import { GraphEmbeddingService } from '../../core/services/GraphEmbeddingService';
+import { GraphVectorService } from '../../core/services/GraphVectorService';
 import { persistGraphPayloadSchema } from '../../shared/dtos/graph.schemas';
 import { getUserIdFromRequest } from '../utils/request';
 import { GraphSnapshotDto } from '../../shared/dtos/graph';
 
 export class GraphController {
-  constructor(private readonly graphEmbeddingService: GraphEmbeddingService) {}
+  constructor(
+    private readonly graphEmbeddingService: GraphEmbeddingService,
+    private readonly graphVectorService: GraphVectorService
+  ) {}
+
+  /**
+   * 질의 벡터 기반 유사 노드 검색
+   * [POST] /v1/graph/search
+   */
+  async searchNodes(req: Request, res: Response) {
+    const { queryVector, limit } = req.body;
+    const userId = getUserIdFromRequest(req)!;
+
+    if (!queryVector || !Array.isArray(queryVector)) {
+      return res.status(400).json({
+        type: 'about:blank',
+        title: 'Bad Request',
+        status: 400,
+        detail: 'queryVector is required and must be an array of numbers',
+        instance: req.originalUrl,
+      });
+    }
+
+    const results = await this.graphVectorService.searchNodes(userId, queryVector, limit);
+    res.json(results);
+  }
 
   // --- Node (노드) 관련 핸들러 ---
 

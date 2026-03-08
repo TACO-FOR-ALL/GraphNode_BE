@@ -868,6 +868,49 @@ paths:
             application/problem+json:
               schema:
                 $ref: ../schemas/problem.json
+  /v1/graph/search:
+    post:
+      summary: Search similar graph nodes using vector
+      tags: [Graph]
+      description: Performs a similarity search in ChromaDB using the provided query vector and enriches results with full node data from MongoDB.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [queryVector]
+              properties:
+                queryVector:
+                  type: array
+                  items: { type: number }
+                  description: The embedding vector to search with.
+                limit:
+                  type: integer
+                  default: 5
+                  description: Maximum number of results to return.
+      responses:
+        '200':
+          description: A list of enriched similar nodes.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    node: { $ref: '../schemas/graph-node.json' }
+                    score: { type: number }
+        '400':
+          description: Bad Request.
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
   /v1/graph/nodes:
     post:
       summary: Create or update a graph node

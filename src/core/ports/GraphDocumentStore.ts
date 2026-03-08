@@ -32,6 +32,7 @@ export interface GraphDocumentStore {
   restoreNode(userId: string, id: number, options?: RepoOptions): Promise<void>;
   restoreNodesByOrigIds(userId: string, origIds: string[], options?: RepoOptions): Promise<void>;
   findNode(userId: string, id: number): Promise<GraphNodeDoc | null>;
+  findNodesByOrigIds(userId: string, origIds: string[]): Promise<GraphNodeDoc[]>;
   listNodes(userId: string): Promise<GraphNodeDoc[]>;
   listNodesByCluster(userId: string, clusterId: string): Promise<GraphNodeDoc[]>;
   deleteAllGraphData(userId: string, permanent?: boolean, options?: RepoOptions): Promise<void>;

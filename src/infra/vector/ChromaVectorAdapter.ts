@@ -1,4 +1,4 @@
-import { VectorStore, VectorItem } from '../../core/ports/VectorStore';
+import { VectorStore, VectorItem, MacroNodeSearchResult } from '../../core/ports/VectorStore';
 import { getChromaClient } from '../db/chroma';
 import { logger } from '../../shared/utils/logger';
 import { UpstreamError } from '../../shared/errors/domain';
@@ -66,25 +66,30 @@ export class ChromaVectorAdapter implements VectorStore {
   }
 
   /**
-   * 유사 벡터 검색
+   * MacroGraph의 Node 에 대응되는 Embedding Vector에 대한 유사 벡터 검색
+   * 
+   * @param collectionName 컬렉션 이름
+   * @param queryVector 검색할 질의 벡터
+   * @param opts 검색 옵션 (필터, 개수 제한)
+   * @returns 검색 결과 배열 (MacroNodeSearchResult 형식 준수)
    */
   async search(
     collectionName: string,
     queryVector: number[],
     opts?: { filter?: Record<string, any>; limit?: number }
-  ): Promise<Array<{ id: string; score: number; payload?: any }>> {
+  ): Promise<MacroNodeSearchResult[]> {
     try {
       const client = getChromaClient();
       const collection = await client.getCollection({ name: collectionName });
 
       const limit = opts?.limit || 10;
-      const where = opts?.filter || undefined; // ChromaDB filter format (e.g. { "userId": "..." })
+      const where = opts?.filter || undefined; // ChromaDB filter format (e.g. { "user_id": "..." })
 
       const result = await collection.query({
         queryEmbeddings: [queryVector],
         nResults: limit,
         where: where,
-        include: ['metadatas', 'distances'] as any, // Bypass strict enum checks if needed
+        include: ['metadatas', 'distances'] as any,
       });
 
       // 결과 매핑
@@ -92,13 +97,15 @@ export class ChromaVectorAdapter implements VectorStore {
       const distances = result.distances?.[0] || [];
       const metadatas = result.metadatas?.[0] || [];
 
-      const mapped = ids.map((id, idx) => ({
+      return ids.map((id, idx) => ({
         id,
-        score: distances[idx] ?? 0, // Handle null/undefined score
-        payload: metadatas[idx] || undefined,
+        score: distances[idx] ?? 0,
+        payload: (metadatas[idx] as any) || {
+          user_id: '',
+          conversation_id: '',
+          orig_id: '',
+        },
       }));
-
-      return mapped;
     } catch (err) {
       throw new UpstreamError('Failed to search vectors in ChromaDB', { cause: err as any });
     }

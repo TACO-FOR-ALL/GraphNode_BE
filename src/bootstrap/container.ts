@@ -3,7 +3,6 @@ import { MessageRepositoryMongo } from '../infra/repositories/MessageRepositoryM
 import { UserRepositoryMySQL } from '../infra/repositories/UserRepositoryMySQL';
 import { NoteRepositoryMongo } from '../infra/repositories/NoteRepositoryMongo';
 import { GraphRepositoryMongo } from '../infra/repositories/GraphRepositoryMongo';
-import { GraphVectorRepository } from '../infra/repositories/GraphVectorRepository';
 import { GraphVectorService } from '../core/services/GraphVectorService';
 import { ConversationService } from '../core/services/ConversationService';
 import { MessageService } from '../core/services/MessageService';
@@ -64,7 +63,6 @@ export class Container {
   private graphRepo: GraphDocumentStore | null = null; // Renamed to Mongo Store
   private neo4jStore: GraphNeo4jStore | null = null; 
   private vectorStore: VectorStore | null = null; 
-  private graphVectorRepo: GraphVectorRepository | null = null; 
   private graphVectorService: GraphVectorService | null = null; 
   private microscopeWorkspaceRepo: MicroscopeWorkspaceStore | null = null;
 
@@ -141,16 +139,9 @@ export class Container {
     return this.vectorStore;
   }
 
-  getGraphVectorRepository(): GraphVectorRepository {
-    if (!this.graphVectorRepo) {
-      this.graphVectorRepo = new GraphVectorRepository(this.getVectorStore());
-    }
-    return this.graphVectorRepo;
-  }
-
   getGraphVectorService(): GraphVectorService {
     if (!this.graphVectorService) {
-      const raw = new GraphVectorService(this.getGraphVectorRepository());
+      const raw = new GraphVectorService(this.getVectorStore(), this.getGraphManagementService());
       this.graphVectorService = createAuditProxy(raw, 'GraphVectorService');
     }
     return this.graphVectorService;

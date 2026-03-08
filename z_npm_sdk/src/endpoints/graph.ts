@@ -8,6 +8,7 @@ import type {
   GraphSubclusterDto,
   CreateEdgeResponse,
   UpdateNodePayload,
+  SearchNodesResponse,
 } from '../types/graph.js';
 
 /**
@@ -29,6 +30,19 @@ export class GraphApi {
 
   constructor(rb: RequestBuilder) {
     this.rb = rb.path('/v1/graph');
+  }
+
+  /**
+   * 벡터 유사도를 기반으로 노드를 검색합니다.
+   * @param queryVector - 검색할 벡터 (number[])
+   * @param limit - 검색 결과 개수 (기본값: 5)
+   * @returns 검색된 노드와 유사도 점수 목록 (SearchNodesResponse)
+   * @example
+   * const response = await client.graph.searchNodes([0.1, 0.2, ...], 5);
+   * console.log(response.data[0].node.id);
+   */
+  searchNodes(queryVector: number[], limit?: number): Promise<HttpResponse<SearchNodesResponse>> {
+    return this.rb.path('/search').post<SearchNodesResponse>({ queryVector, limit });
   }
 
   /**

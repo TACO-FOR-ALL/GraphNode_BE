@@ -210,6 +210,24 @@ export class GraphManagementService {
   }
 
   /**
+   * 원본 ID 목록 기반 여러 노드 조회
+   *
+   * @param userId 사용자 ID
+   * @param origIds 원본 식별자 배열
+   * @returns GraphNodeDto 배열
+   */
+  async findNodesByOrigIds(userId: string, origIds: string[]): Promise<GraphNodeDto[]> {
+    try {
+      this.assertUser(userId);
+      const docs = await this.repo.findNodesByOrigIds(userId, origIds);
+      return docs.map((doc) => toGraphNodeDto(doc));
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.findNodesByOrigIds failed', { cause: String(err) });
+    }
+  }
+
+  /**
    * 전체 노드 목록 조회
    *
    * @param userId 사용자 ID

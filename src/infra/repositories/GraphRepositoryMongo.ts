@@ -272,6 +272,40 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   }
 
   /**
+   * 원본 ID(origId) 목록에 해당하는 노드들을 조회합니다.
+   * 
+   * @param userId 사용자 ID
+   * @param origIds 원본 ID 목록
+   * @returns 조회된 노드 문서 배열
+   */
+  async findNodesByOrigIds(userId: string, origIds: string[]): Promise<GraphNodeDoc[]> {
+    try {
+      const cursor: FindCursor<WithId<GraphNodeDoc>> = this.graphNodes_col().find({
+        userId,
+        origId: { $in: origIds },
+        deletedAt: { $in: [null, undefined] },
+      } as any);
+      const docs = await cursor.toArray();
+
+      const toUpdate = docs.filter((d) => !d.sourceType);
+      if (toUpdate.length > 0) {
+        const ids = toUpdate.map((d) => d.id);
+        await this.graphNodes_col().updateMany(
+          { id: { $in: ids }, userId } as any,
+          { $set: { sourceType: 'chat' } }
+        );
+        toUpdate.forEach((d) => {
+          d.sourceType = 'chat';
+        });
+      }
+
+      return docs;
+    } catch (err: unknown) {
+      this.handleError('GraphRepositoryMongo.findNodesByOrigIds', err);
+    }
+  }
+
+  /**
    * 특정 사용자의 모든 노드 목록을 조회합니다.
    */
   async listNodes(userId: string): Promise<GraphNodeDoc[]> {
