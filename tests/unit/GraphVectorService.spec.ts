@@ -1,47 +1,73 @@
+import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { GraphVectorService } from '../../src/core/services/GraphVectorService';
-import { GraphVectorRepository } from '../../src/infra/repositories/GraphVectorRepository';
-
-// Mock GraphVectorRepository
-jest.mock('../../src/infra/repositories/GraphVectorRepository');
+import { VectorStore } from '../../src/core/ports/VectorStore';
+import { GraphManagementService } from '../../src/core/services/GraphManagementService';
 
 describe('GraphVectorService', () => {
   let service: GraphVectorService;
-  let mockRepo: jest.Mocked<GraphVectorRepository>;
+  let mockVectorStore: jest.Mocked<VectorStore>;
+  let mockGraphMgmtService: jest.Mocked<GraphManagementService>;
 
   beforeEach(() => {
-    mockRepo = {
-      saveGraphFeatures: jest.fn(),
-      searchNodes: jest.fn(),
-    } as unknown as jest.Mocked<GraphVectorRepository>;
+    mockVectorStore = {
+      ensureCollection: jest.fn(),
+      upsert: jest.fn(),
+      search: jest.fn(),
+      deleteByFilter: jest.fn(),
+    } as unknown as jest.Mocked<VectorStore>;
 
-    service = new GraphVectorService(mockRepo);
+    mockGraphMgmtService = {
+      findNodesByOrigIds: jest.fn(),
+    } as unknown as jest.Mocked<GraphManagementService>;
+
+    service = new GraphVectorService(mockVectorStore, mockGraphMgmtService);
   });
 
   describe('saveGraphFeatures', () => {
-    it('should delegate to repo.saveGraphFeatures', async () => {
+    it('should delegate to vectorStore.upsert', async () => {
       const userId = 'user1';
-      const features: any = { some: 'data' };
+      const items: any[] = [{ id: '1', vector: [0.1] }];
       
-      await service.saveGraphFeatures(userId, features);
+      await service.saveGraphFeatures(userId, items);
       
-      expect(mockRepo.saveGraphFeatures).toHaveBeenCalledWith(userId, features);
+      expect(mockVectorStore.upsert).toHaveBeenCalledWith(expect.any(String), items);
     });
   });
 
   describe('searchNodes', () => {
-    it('should delegate to repo.searchNodes', async () => {
+    it('should perform vector search and enrich results with graph nodes', async () => {
       const userId = 'user1';
-      const query = [1, 2, 3];
-      const limit = 10;
-      
-      await service.searchNodes(userId, query, limit);
-      
-      expect(mockRepo.searchNodes).toHaveBeenCalledWith(userId, query, limit);
+      const queryVector = [0.1, 0.2];
+      const mockVectorResults = [
+        { score: 0.9, payload: { orig_id: 'conv1' } },
+        { score: 0.8, payload: { orig_id: 'conv2' } },
+      ];
+      const mockNodes = [
+        { id: 1, origId: 'conv1', userId, clusterId: 'c1', clusterName: 'C1' },
+        { id: 2, origId: 'conv2', userId, clusterId: 'c1', clusterName: 'C1' },
+      ];
+
+      (mockVectorStore.search as any).mockResolvedValue(mockVectorResults);
+      (mockGraphMgmtService.findNodesByOrigIds as any).mockResolvedValue(mockNodes);
+
+      const results = await service.searchNodes(userId, queryVector, 2);
+
+      expect(mockVectorStore.search).toHaveBeenCalledWith(
+        expect.any(String),
+        queryVector,
+        expect.objectContaining({ filter: { user_id: userId }, limit: 2 })
+      );
+      expect(mockGraphMgmtService.findNodesByOrigIds).toHaveBeenCalledWith(userId, ['conv1', 'conv2']);
+      expect(results).toHaveLength(2);
+      expect(results[0].node.origId).toBe('conv1');
+      expect(results[0].score).toBe(0.9);
     });
 
-    it('should use default limit if not provided', async () => {
-        await service.searchNodes('u1', [1]);
-        expect(mockRepo.searchNodes).toHaveBeenCalledWith('u1', [1], 5);
+    it('should return empty if no vectors found', async () => {
+      (mockVectorStore.search as any).mockResolvedValue([]);
+      const results = await service.searchNodes('u1', [0]);
+      expect(results).toHaveLength(0);
+      expect(mockGraphMgmtService.findNodesByOrigIds).not.toHaveBeenCalled();
     });
   });
 });

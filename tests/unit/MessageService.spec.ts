@@ -2,6 +2,7 @@
  * 목적: MessageService 유닛 테스트.
  * 접근: 포트 인터페이스(MessageRepository)를 인메모리 스텁으로 구현하여 서비스 로직만 검증.
  */
+import { jest, describe, it, expect, beforeEach, test } from '@jest/globals';
 import { ClientSession } from 'mongodb';
 
 import { MessageService } from '../../src/core/services/MessageService';
@@ -16,7 +17,7 @@ jest.mock('../../src/infra/db/mongodb', () => ({
       commitTransaction: jest.fn(),
       abortTransaction: jest.fn(),
       endSession: jest.fn(),
-      withTransaction: jest.fn(async (cb) => await cb()),
+      withTransaction: jest.fn(async (cb: any) => await cb()),
     }),
   }),
 }));
@@ -50,6 +51,14 @@ class InMemoryMsgRepo implements MessageRepository {
 
   async findAllByConversationId(conversationId: string): Promise<MessageDoc[]> {
     return this.msgs.get(conversationId) || [];
+  }
+
+  async findAllByConversationIds(conversationIds: string[]): Promise<MessageDoc[]> {
+    const result: MessageDoc[] = [];
+    for (const cid of conversationIds) {
+      result.push(...(this.msgs.get(cid) || []));
+    }
+    return result;
   }
 
   async update(

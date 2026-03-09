@@ -59,6 +59,10 @@ jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => {
           email: input.email,
           displayName: input.displayName,
           avatarUrl: input.avatarUrl,
+          provider: 'google',
+          providerUserId: input.providerUserId || 'mock-id',
+          preferredLanguage: 'en',
+          createdAt: new Date(),
         };
       }
       async findById(id: any) {
@@ -68,6 +72,10 @@ jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => {
             email: 'test@example.com',
             displayName: 'Test User',
             avatarUrl: 'https://example.com/avatar.jpg',
+            provider: 'google',
+            providerUserId: 'google-uid-1',
+            preferredLanguage: 'en',
+            createdAt: new Date(),
           };
         }
         return null;

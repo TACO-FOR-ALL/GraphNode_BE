@@ -59,8 +59,8 @@ describe('Utils Unit Tests', () => {
           expect.objectContaining({
             path: '/',
             httpOnly: false,
-            sameSite: 'lax',
-            secure: false,
+            sameSite: 'none',
+            secure: true,
           })
         );
       });

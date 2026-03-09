@@ -33,7 +33,16 @@ describe('GraphManagementService', () => {
       deleteStats: jest.fn(),
       upsertGraphSummary: jest.fn(),
       getGraphSummary: jest.fn(),
+      deleteGraphSummary: jest.fn(),
+      restoreGraphSummary: jest.fn(),
       upsertSubcluster: jest.fn(),
+      deleteSubcluster: jest.fn(),
+      restoreSubcluster: jest.fn(),
+      listSubclusters: jest.fn(),
+      deleteAllGraphData: jest.fn(),
+      restoreAllGraphData: jest.fn(),
+      deleteNodesByOrigIds: jest.fn(),
+      restoreNodesByOrigIds: jest.fn(),
     } as unknown as jest.Mocked<GraphDocumentStore>;
 
     service = new GraphManagementService(mockRepo);
@@ -101,14 +110,14 @@ describe('GraphManagementService', () => {
   describe('deleteNode', () => {
     it('should call repo.deleteNode', async () => {
       await service.deleteNode('user-1', 1);
-      expect(mockRepo.deleteNode).toHaveBeenCalledWith('user-1', 1, undefined);
+      expect(mockRepo.deleteNode).toHaveBeenCalledWith('user-1', 1, undefined, undefined);
     });
   });
   
   describe('deleteNodes', () => {
     it('should call repo.deleteNodes', async () => {
       await service.deleteNodes('user-1', [1, 2]);
-      expect(mockRepo.deleteNodes).toHaveBeenCalledWith('user-1', [1, 2], undefined);
+      expect(mockRepo.deleteNodes).toHaveBeenCalledWith('user-1', [1, 2], undefined, undefined);
     });
   });
 
@@ -181,17 +190,17 @@ describe('GraphManagementService', () => {
 
       it('deleteEdge calls repo', async () => {
           await service.deleteEdge('u1', 'e1');
-          expect(mockRepo.deleteEdge).toHaveBeenCalledWith('u1', 'e1', undefined);
+          expect(mockRepo.deleteEdge).toHaveBeenCalledWith('u1', 'e1', undefined, undefined);
       });
 
       it('deleteEdgeBetween calls repo', async () => {
           await service.deleteEdgeBetween('u1', 1, 2);
-          expect(mockRepo.deleteEdgeBetween).toHaveBeenCalledWith('u1', 1, 2, undefined);
+          expect(mockRepo.deleteEdgeBetween).toHaveBeenCalledWith('u1', 1, 2, undefined, undefined);
       });
 
       it('deleteEdgesByNodeIds calls repo', async () => {
           await service.deleteEdgesByNodeIds('u1', [1, 2]);
-          expect(mockRepo.deleteEdgesByNodeIds).toHaveBeenCalledWith('u1', [1, 2], undefined);
+          expect(mockRepo.deleteEdgesByNodeIds).toHaveBeenCalledWith('u1', [1, 2], undefined, undefined);
       });
 
       it('listEdges calls repo', async () => {
@@ -221,7 +230,7 @@ describe('GraphManagementService', () => {
 
       it('deleteCluster calls repo', async () => {
           await service.deleteCluster('u1', 'c1');
-          expect(mockRepo.deleteCluster).toHaveBeenCalledWith('u1', 'c1', undefined);
+          expect(mockRepo.deleteCluster).toHaveBeenCalledWith('u1', 'c1', undefined, undefined);
       });
 
       it('findCluster calls repo', async () => {
@@ -254,7 +263,7 @@ describe('GraphManagementService', () => {
 
       it('deleteStats calls repo', async () => {
           await service.deleteStats('u1');
-          expect(mockRepo.deleteStats).toHaveBeenCalledWith('u1', undefined);
+          expect(mockRepo.deleteStats).toHaveBeenCalledWith('u1', undefined, undefined);
       });
   });
 
@@ -286,10 +295,11 @@ describe('GraphManagementService', () => {
         // check if _id is removed if it existed, though our mockSummary doesn't have _id
       });
 
-      it('should return null if not found', async () => {
+      it('should return default summary if not found', async () => {
         mockRepo.getGraphSummary.mockResolvedValue(null);
         const result = await service.getGraphSummary('user-1');
-        expect(result).toBeNull();
+        expect(result).toBeDefined();
+        expect(result.overview.total_conversations).toBe(0);
       });
     });
   });

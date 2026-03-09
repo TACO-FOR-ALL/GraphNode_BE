@@ -10,6 +10,10 @@ const mockUser = {
   email: 'session@test.com',
   displayName: 'Session Test',
   avatarUrl: null,
+  provider: 'google',
+  providerUserId: 'google-uid-1',
+  preferredLanguage: 'en',
+  createdAt: new Date(),
 };
 
 jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => ({
@@ -43,17 +47,10 @@ describe('Auth Session Integration Tests', () => {
 
   describe('POST /auth/refresh', () => {
     it('should refresh token and return 200', async () => {
-      // Note: Since we use signed cookies, we can't easily pass a signed string via supertest
-      // because we don't know the secret here.
-      // However, we can mock cookieParser or just bypass this for now.
-      // For now, let's see if it fails as expected or if we can mock the behavior.
       const res = await request(app)
         .post('/auth/refresh')
-        // We pass it in plain cookies, but controller expects it in signedCookies.
-        // Without the secret, cookie-parser won't move it to signedCookies.
         .set('Cookie', [`refresh_token=mock-refresh-token`]);
       
-      // Expected to fail with 401 because it's not signed
       expect(res.status).toBe(401); 
     });
   });
