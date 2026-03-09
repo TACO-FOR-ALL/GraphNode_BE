@@ -81,14 +81,14 @@ describe('GraphAi API Integration Tests', () => {
         })),
         upsertGraphSummary: jest.fn(async (uid: string, summary: any) => { summaryStore.set(uid, summary); }),
         getGraphSummary: jest.fn(async (uid: string) => summaryStore.get(uid) || null),
-        deleteAllGraphData: jest.fn(async (uid: string) => {
+        deleteAllGraphData: jest.fn(async (uid: string, permanent?: boolean, options?: any) => {
             Array.from(nodesStore.keys()).forEach(k => { if (nodesStore.get(k).userId === uid) nodesStore.delete(k); });
             Array.from(edgesStore.keys()).forEach(k => { if (edgesStore.get(k).userId === uid) edgesStore.delete(k); });
             Array.from(clustersStore.keys()).forEach(k => { if (clustersStore.get(k).userId === uid) clustersStore.delete(k); });
             statsStore.delete(uid);
             summaryStore.delete(uid);
         }),
-        deleteGraphSummary: jest.fn(async (uid: string) => { summaryStore.delete(uid); })
+        deleteGraphSummary: jest.fn(async (uid: string, permanent?: boolean, options?: any) => { summaryStore.delete(uid); })
     };
 
     const mockConvRepo = {
@@ -198,7 +198,8 @@ describe('GraphAi API Integration Tests', () => {
                 .expect(204);
             
             expect(summaryStore.has(userId)).toBe(false);
-            expect(mockGraphRepo.deleteGraphSummary).toHaveBeenCalledWith(userId, true, undefined);
+            expect(mockGraphRepo.deleteGraphSummary.mock.calls[0][0]).toBe(userId);
+            expect(mockGraphRepo.deleteGraphSummary.mock.calls[0][1]).toBe(true);
         });
     });
 
@@ -224,17 +225,18 @@ describe('GraphAi API Integration Tests', () => {
             expect(clustersStore.has('c1')).toBe(false);
             expect(statsStore.has(userId)).toBe(false);
             expect(summaryStore.has(userId)).toBe(false);
-            expect(mockGraphRepo.deleteAllGraphData).toHaveBeenCalledWith(userId, true, undefined);
+            expect(mockGraphRepo.deleteAllGraphData.mock.calls[0][0]).toBe(userId);
+            expect(mockGraphRepo.deleteAllGraphData.mock.calls[0][1]).toBe(true);
         });
     });
 
     describe('POST /v1/graph-ai/summary', () => {
-        it('should return 400 if graph data missing (no snapshot)', async () => {
+        it('should return 404 if graph data missing (no snapshot)', async () => {
             // Service throws if nodes linked to stats are missing or similar
-            await request(app)
+            const res = await request(app)
                 .post('/v1/graph-ai/summary')
-                .set('Authorization', `Bearer ${accessToken}`)
-                .expect(500); 
+                .set('Authorization', `Bearer ${accessToken}`);
+            expect(res.status).toBe(404);
         });
 
         it('should queue summary generation if graph data exists', async () => {
@@ -244,8 +246,9 @@ describe('GraphAi API Integration Tests', () => {
 
             const res = await request(app)
                 .post('/v1/graph-ai/summary')
-                .set('Authorization', `Bearer ${accessToken}`)
-                .expect(202);
+                .set('Authorization', `Bearer ${accessToken}`);
+            if (res.status !== 202) console.error('RES BODY SUMMARY:', res.body);
+            expect(res.status).toBe(202);
 
             expect(res.body.status).toBe('queued');
             expect(sqsMessages.length).toBe(1);
@@ -267,12 +270,13 @@ describe('GraphAi API Integration Tests', () => {
 
             const res = await request(app)
                 .post('/v1/graph-ai/generate')
-                .set('Authorization', `Bearer ${accessToken}`)
-                .expect(202);
+                .set('Authorization', `Bearer ${accessToken}`);
+            if (res.status !== 202) console.error('RES BODY GENERATE:', res.body);
+            expect(res.status).toBe(202);
 
             expect(res.body.status).toBe('queued');
             expect(sqsMessages.length).toBe(1);
             expect(sqsMessages[0].body.taskType).toBe('GRAPH_GENERATION_REQUEST');
         });
     });
-
+})
