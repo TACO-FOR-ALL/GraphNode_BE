@@ -208,6 +208,8 @@ client.googleAuth.login(); // 현재 창 이동
 | :--- | :--- | :--- | :--- |
 | `client.ai.chat(...)` | `POST /v1/ai/conversations/:id/chat` | 메시지 전송 | 201, 400 |
 | `client.ai.chatStream(...)` | `POST /v1/ai/conversations/:id/chat` | 스트리밍 | 200 (Stream) |
+| `client.ai.ragChat(...)` | `POST /v1/ai/conversations/:id/rag-chat` | RAG 메시지 전송 | 201, 400 |
+| `client.ai.ragChatStream(...)` | `POST /v1/ai/conversations/:id/rag-chat` | RAG 스트리밍 | 200 (Stream) |
 | `client.ai.downloadFile(key)` | `GET /v1/ai/files/:key` | 파일 다운로드 | 200 |
 | `openAgentChatStream(...)` | `POST /v1/agent/chat/stream` | 에이전트 스트리밍 | 200 (Stream) |
 
@@ -253,6 +255,51 @@ const abort = await client.ai.chatStream(
   }
 );
 // abort(); // 중단 시
+```
+</details>
+
+<details>
+<summary><b>client.ai.ragChat(conversationId, dto, files?, onStream?)</b></summary>
+
+- **Description**: 프론트엔드에서 검색한 맥락(`retrievedContext`)을 포함하여 AI 채팅을 요청합니다.
+- **Parameters**:
+  - `conversationId`: `string`
+  - `dto`: `{ id, model, chatContent, retrievedContext: MessageDto[], recentMessages: MessageDto[] }`
+  - `files`: `File[]` (선택)
+  - `onStream`: `(chunk: string) => void` (선택)
+- **Returns**: `Promise<HttpResponse<AIChatResponseDto>>`
+- **Example**:
+```typescript
+const res = await client.ai.ragChat(
+  'conv-1',
+  { 
+    id: 'msg-1', 
+    model: 'openai', 
+    chatContent: '이 문서 내용을 요약해줘',
+    retrievedContext: [/* 검색된 메시지 조각들 */],
+    recentMessages: [/* 최근 대화 내역 */]
+  }
+);
+```
+</details>
+
+<details>
+<summary><b>client.ai.ragChatStream(conversationId, dto, files?, onEvent)</b></summary>
+
+- **Description**: RAG 기반 채팅을 스트리밍(SSE)으로 요청합니다.
+- **Parameters**:
+  - `onEvent`: `(evt: { event: string, data: any }) => void`
+- **Returns**: `Promise<() => void>` (중단 함수)
+- **Example**:
+```typescript
+const abort = await client.ai.ragChatStream(
+  'conv-1',
+  { ...ragDto },
+  [],
+  ({ event, data }) => {
+    if (event === 'chunk') console.log(data.text);
+  }
+);
 ```
 </details>
 

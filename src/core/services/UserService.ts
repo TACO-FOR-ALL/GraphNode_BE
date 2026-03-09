@@ -4,6 +4,7 @@ import {
   NotFoundError,
   ValidationError,
   UpstreamError,
+  InvalidApiKeyError,
 } from '../../shared/errors/domain';
 import { User } from '../types/persistence/UserPersistence';
 // import { openAI } from '../../shared/openai/index'; // Moved checkAPIKeyValid responsibility to AiProvider or just save it
@@ -136,11 +137,11 @@ export class UserService {
           const provider = getAiProvider(model);
           const result = await provider.checkAPIKeyValid(apiKey);
           if (!result.ok) {
-            throw new ValidationError(`Invalid API Key for ${model}: ${result.error}`);
+            throw new InvalidApiKeyError(`Invalid API Key for ${model}: ${result.error}`);
           }
         } catch (err: unknown) {
-          if (err instanceof ValidationError) throw err;
-          throw new ValidationError(`Failed to validate API Key for ${model}.`);
+          if (err instanceof InvalidApiKeyError) throw err;
+          throw new InvalidApiKeyError(`Failed to validate API Key for ${model}.`);
         }
       }
 

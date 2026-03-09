@@ -1,7 +1,4 @@
-/**
- * 목적: ConversationService 유닛 테스트.
- * 접근: 포트 인터페이스(ConversationRepository)를 인메모리 스텁으로 구현하여 서비스 로직만 검증.
- */
+import { jest, describe, it, expect, beforeEach, test } from '@jest/globals';
 import { ClientSession } from 'mongodb';
 
 import { ConversationService } from '../../src/core/services/ConversationService';
@@ -16,7 +13,7 @@ jest.mock('../../src/infra/db/mongodb', () => ({
       commitTransaction: jest.fn(),
       abortTransaction: jest.fn(),
       endSession: jest.fn(),
-      withTransaction: jest.fn(async (cb) => await cb()),
+      withTransaction: jest.fn(async (cb: any) => await cb()),
     }),
   }),
 }));
@@ -111,6 +108,16 @@ class InMemoryConvRepo implements ConversationRepository {
     return Array.from(this.data.values()).filter(
       (v) => v.ownerUserId === ownerUserId && v.updatedAt >= since.getTime()
     );
+  }
+
+  async listTrashByOwner(): Promise<{ items: any[]; nextCursor?: string | null }> {
+    return { items: [], nextCursor: null };
+  }
+  async hardDeleteExpired(): Promise<number> {
+    return 0;
+  }
+  async findExpiredConversations(): Promise<any[]> {
+    return [];
   }
 }
 

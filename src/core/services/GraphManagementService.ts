@@ -18,6 +18,8 @@ import {
   toGraphStatsDoc,
   toGraphStatsDto,
 } from '../../shared/mappers/graph';
+import { toGraphSummaryDto, createEmptyGraphSummaryDto } from '../../shared/mappers/graph_summary.mapper';
+
 import {
   GraphClusterDoc,
   GraphEdgeDoc,
@@ -646,32 +648,25 @@ export class GraphManagementService {
 
   /**
    * 그래프 요약/인사이트 조회
+   *
+   * @param userId 사용자 ID
+   * @returns GraphSummaryDto (FE SDK 호환 형식). Summary가 없으면 빈 기본값 반환.
+   * @throws {ValidationError} userId 미제공 시
+   * @throws {UpstreamError} DB 조회 실패 시
+   * @remarks
+   * - DB 저장 필드(total_source_nodes, generatedAt)를 FE 기대 필드(total_conversations, generated_at)로 변환
+   * - 변환 로직은 `graph_summary.mapper.ts`의 `toGraphSummaryDto`에 위임
    */
   async getGraphSummary(userId: string): Promise<GraphSummaryDto> {
     try {
       this.assertUser(userId);
       const doc = await this.repo.getGraphSummary(userId);
       if (!doc) {
-        return {
-          overview: {
-            total_conversations: 0,
-            time_span: '',
-            primary_interests: [],
-            conversation_style: '',
-            most_active_period: '',
-            summary_text: ''
-          },
-          clusters: [],
-          patterns: [],
-          connections: [],
-          recommendations: [],
-          generated_at: new Date().toISOString(),
-          detail_level: 'basic'
-        };
+        // Summary 미생성 상태: FE SDK 호환 빈 기본값 반환
+        return createEmptyGraphSummaryDto();
       }
-      // Doc -> DTO (Simple cast)
-      const { _id, ...rest } = doc as any;
-      return rest as GraphSummaryDto;
+      // DB Doc → FE DTO 변환 (필드명 매핑 포함)
+      return toGraphSummaryDto(doc);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.getGraphSummary failed', { cause: String(err) });

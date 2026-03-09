@@ -6,7 +6,8 @@
  */
 
 export interface OverviewSection {
-  total_conversations: number;
+  /** Python AI 서버(discovery/schema.py)의 실제 출력 필드명. total_source_nodes = 분석에 사용된 소스 노드 수 */
+  total_source_nodes: number;
   time_span: string; // "YYYY-MM-DD ~ YYYY-MM-DD" or "N/A"
   primary_interests: string[];
   conversation_style: string;

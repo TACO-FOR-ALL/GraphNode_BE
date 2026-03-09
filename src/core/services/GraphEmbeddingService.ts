@@ -487,17 +487,27 @@ export class GraphEmbeddingService {
             // subclusters가 undefined일 경우 빈 배열로 처리
             const subclusters = snapshot.subclusters || [];
 
-            const upsertPromises = [
-              ...snapshot.nodes.map((node) =>
+            // WriteConflict 방지: 같은 컬렉션에 대한 동시 write는 트랜잭션 내에서
+            // WriteConflict(61)를 발생시킬 수 있으므로, 컬렉션별로 순차 실행한다.
+            // (nodes, edges, clusters, subclusters는 서로 다른 컬렉션이므로
+            //  각 컬렉션 내에서는 Promise.all로 병렬 처리해도 안전함)
+            await Promise.all(
+              snapshot.nodes.map((node) =>
                 this.graphManagementService.upsertNode({ ...node, userId }, { session })
-              ),
-              ...snapshot.edges.map((edge) =>
+              )
+            );
+            await Promise.all(
+              snapshot.edges.map((edge) =>
                 this.graphManagementService.upsertEdge({ ...edge, userId }, { session })
-              ),
-              ...snapshot.clusters.map((cluster) =>
+              )
+            );
+            await Promise.all(
+              snapshot.clusters.map((cluster) =>
                 this.graphManagementService.upsertCluster({ ...cluster, userId }, { session })
-              ),
-              ...subclusters.map((subcluster) => {
+              )
+            );
+            await Promise.all(
+              subclusters.map((subcluster) => {
                 const { deletedAt, ...rest } = subcluster;
                 return this.graphManagementService.upsertSubcluster(
                   {
@@ -505,15 +515,14 @@ export class GraphEmbeddingService {
                     userId,
                     createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString(),
-                    ...(deletedAt != null ? { deletedAt: new Date(deletedAt).getTime() } : {})
+                    ...(deletedAt != null ? { deletedAt: new Date(deletedAt).getTime() } : {}),
                   },
                   { session }
                 );
-              }),
-              this.graphManagementService.saveStats({ ...snapshot.stats, userId }, { session }),
-            ];
+              })
+            );
+            await this.graphManagementService.saveStats({ ...snapshot.stats, userId }, { session });
 
-            await Promise.all(upsertPromises);
           });
         },
         { label: 'GraphEmbeddingService.persistSnapshot.transaction' }

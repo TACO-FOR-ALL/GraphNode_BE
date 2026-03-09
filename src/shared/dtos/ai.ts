@@ -87,3 +87,22 @@ export interface AIChatResponseDto {
   title?: string;
   messages: ChatMessage[];
 }
+
+/**
+ * RAG 채팅 요청 DTO (FE 책임 기반)
+ * @public
+ * @prop id FE가 만들어줄 message 용 uuid
+ * @prop model AI 모델 계열
+ * @prop chatContent 사용자의 현재 질문
+ * @prop modelName 구체적인 모델명 (선택)
+ * @prop retrievedContext FE가 벡터 검색 등으로 찾아낸 관련 과거 맥락 (ChatMessage 재활용)
+ * @prop recentMessages FE가 판단한 최근 대화 흐름
+ */
+export interface AIRagChatRequestDto {
+  id: string;
+  model: 'openai' | 'deepseek' | 'claude' | 'gemini'; // ApiKeyModel 호환
+  chatContent: string;
+  modelName?: string;
+  retrievedContext: ChatMessage[];
+  recentMessages: ChatMessage[];
+}
