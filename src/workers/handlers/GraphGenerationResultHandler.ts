@@ -163,7 +163,7 @@ export class GraphGenerationResultHandler implements JobHandler {
               connections: summaryJson.connections,
               recommendations: summaryJson.recommendations,
               detail_level: summaryJson.detail_level,
-              generatedAt: (summaryJson as any).generated_at || new Date().toISOString(), 
+              generatedAt: summaryJson.generated_at || new Date().toISOString(),
             };
 
             await graphService.upsertGraphSummary(userId, summaryDoc);

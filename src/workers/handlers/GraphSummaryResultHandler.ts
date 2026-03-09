@@ -61,7 +61,7 @@ export class GraphSummaryResultHandler implements JobHandler {
           connections: summaryJson.connections,
           recommendations: summaryJson.recommendations,
           detail_level: summaryJson.detail_level,
-          generatedAt: (summaryJson as any).generated_at || new Date().toISOString(), // Map snake_case to camelCase
+          generatedAt: summaryJson.generated_at || new Date().toISOString(), // Map snake_case to camelCase
         };
 
         await graphService.upsertGraphSummary(userId, summaryDoc);

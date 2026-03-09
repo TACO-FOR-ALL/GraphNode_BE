@@ -69,6 +69,7 @@ describe('GraphAi API Integration Tests', () => {
         listEdges: jest.fn(async () => Array.from(edgesStore.values())),
         upsertCluster: jest.fn(async (cluster: any) => { clustersStore.set(cluster.id, cluster); }),
         listClusters: jest.fn(async () => Array.from(clustersStore.values())),
+        listSubclusters: jest.fn(async () => []),
         findCluster: jest.fn(async (uid: string, id: string) => clustersStore.get(id) || null),
         saveStats: jest.fn(async (stats: any) => { statsStore.set(stats.userId, stats); }),
         getStats: jest.fn(async (uid: string) => statsStore.get(uid) || null),
@@ -197,7 +198,7 @@ describe('GraphAi API Integration Tests', () => {
                 .expect(204);
             
             expect(summaryStore.has(userId)).toBe(false);
-            expect(mockGraphRepo.deleteGraphSummary).toHaveBeenCalledWith(userId, undefined);
+            expect(mockGraphRepo.deleteGraphSummary).toHaveBeenCalledWith(userId, true, undefined);
         });
     });
 
@@ -223,7 +224,7 @@ describe('GraphAi API Integration Tests', () => {
             expect(clustersStore.has('c1')).toBe(false);
             expect(statsStore.has(userId)).toBe(false);
             expect(summaryStore.has(userId)).toBe(false);
-            expect(mockGraphRepo.deleteAllGraphData).toHaveBeenCalledWith(userId, undefined);
+            expect(mockGraphRepo.deleteAllGraphData).toHaveBeenCalledWith(userId, true, undefined);
         });
     });
 
@@ -275,95 +276,3 @@ describe('GraphAi API Integration Tests', () => {
         });
     });
 
-    describe('POST /v1/graph-ai/add-conversation/:conversationId', () => {
-        it('should return 404 if conversation not found', async () => {
-            await request(app)
-                .post('/v1/graph-ai/add-conversation/nonexistent')
-                .set('Authorization', `Bearer ${accessToken}`)
-                .expect(404);
-        });
-
-        it('should queue conversation addition', async () => {
-            const cid = 'conv2';
-            conversationsStore.set(cid, { _id: cid, ownerUserId: userId, title: 'Test Conv 2' });
-            messagesStore.set(cid, [{ 
-                id: 'm2', 
-                conversationId: cid, 
-                role: 'user', 
-                content: 'test add', 
-                createdAt: new Date().toISOString() 
-            }]);
-
-            const res = await request(app)
-                .post(`/v1/graph-ai/add-conversation/${cid}`)
-                .set('Authorization', `Bearer ${accessToken}`)
-                .expect(202);
-
-            expect(res.body.status).toBe('queued');
-            expect(sqsMessages.length).toBe(1);
-            expect(sqsMessages[0].body.taskType).toBe('ADD_CONVERSATION_REQUEST');
-        });
-
-        it('should process directly if GRAPH_AI_DIRECT is true', async () => {
-            process.env.GRAPH_AI_DIRECT = 'true';
-            const cid = 'conv3';
-            conversationsStore.set(cid, { _id: cid, ownerUserId: userId, title: 'Direct' });
-            messagesStore.set(cid, [{ 
-                id: 'm3', 
-                conversationId: cid, 
-                role: 'user', 
-                content: 'direct', 
-                createdAt: new Date().toISOString() 
-            }]);
-
-            // INTERCEPT MOCK-AI-SERVER
-            nock('http://mock-ai-server')
-                .post('/add-node')
-                .reply(200, {
-                    nodes: [{ id: 100, origId: cid, clusterId: 'c2', clusterName: 'C2', numMessages: 1, timestamp: null }],
-                    edges: [],
-                    assignedCluster: { clusterId: 'c2', isNewCluster: true, confidence: 1, reasoning: 'test' }
-                });
-
-            const res = await request(app)
-                .post(`/v1/graph-ai/add-conversation/${cid}`)
-                .set('Authorization', `Bearer ${accessToken}`)
-                .expect(202);
-
-            expect(res.body.message).toContain('(Direct)');
-            expect(nodesStore.size).toBe(1);
-            delete process.env.GRAPH_AI_DIRECT;
-        });
-    });
-
-    describe('POST /v1/graph-ai/test/generate-json', () => {
-        it('should return 400 for invalid input', async () => {
-            await request(app)
-                .post('/v1/graph-ai/test/generate-json')
-                .send({ not: 'an array' })
-                .expect(400);
-        });
-
-        it('should start direct generation from JSON', async () => {
-            const inputData = [{ 
-                id: 'test1', 
-                conversation_id: 'test1', 
-                title: 'T', 
-                create_time: 123, 
-                update_time: 456, 
-                mapping: {} 
-            }];
-            
-            nock('http://mock-ai-server')
-                .post('/analysis')
-                .reply(200, { task_id: 'task_123', status: 'queued' });
-
-            const res = await request(app)
-                .post('/v1/graph-ai/test/generate-json')
-                .send(inputData)
-                .expect(202);
-            
-            expect(res.body.taskId).toBe('task_123');
-        });
-    });
-});

@@ -36,6 +36,7 @@ import { CleanupCron } from '../infra/cron/CleanupCron';
 import {
   setupSentryErrorHandler,
 } from '../shared/utils/sentry';
+import { NotFoundError } from '../shared/errors/domain';
 
 /**
  * Express 앱 부트스트랩.
@@ -104,7 +105,7 @@ export function createApp() {
     if ((req as any).log) {
       (req as any).log.level = 'silent';
     }
-    res.status(404).json({ message: "Not Found" });
+    next(new NotFoundError(`Route ${req.method} ${req.path} not found`));
   });
 
 

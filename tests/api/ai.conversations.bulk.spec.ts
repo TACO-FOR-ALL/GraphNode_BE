@@ -194,7 +194,7 @@ describe('POST /v1/ai/conversations/bulk', () => {
 
   it('should return 400 for invalid request body', async () => {
     const invalidRequest = {
-      conversations: [{ id: 'conv-1' /* missing title */ }],
+      conversations: 'not-an-array', // conversations should be an array
     };
     await agent.post('/v1/ai/conversations/bulk').send(invalidRequest).expect(400);
   });

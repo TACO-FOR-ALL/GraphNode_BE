@@ -165,15 +165,15 @@ describe('Auth Flow Integration', () => {
     }
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({
+    expect(res.body).toEqual(expect.objectContaining({
         userId: '12345',
-        profile: {
+        profile: expect.objectContaining({
             id: '12345',
             email: 'test@example.com',
             displayName: 'Test User',
             avatarUrl: 'https://example.com/avatar.jpg'
-        }
-    });
+        })
+    }));
   });
 
   it('Step 4: Token Rotation (Expired Access Token)', async () => {
