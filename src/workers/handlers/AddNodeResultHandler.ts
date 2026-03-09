@@ -68,10 +68,13 @@ export class AddNodeResultHandler implements JobHandler {
       let totalNodesAdded = 0;
       let totalEdgesAdded = 0;
 
+      const clusterPromises: Promise<void>[] = [];
+      const nodePromises: Promise<void>[] = [];
+      
       for (const result of batchResult.results || []) {
-        // 클러스터 추가 로직
+        // 클러스터 추가 로직 (병렬 수집)
         if (result.assignedCluster && result.assignedCluster.isNewCluster && result.assignedCluster.clusterId) {
-            await graphService.upsertCluster({
+            clusterPromises.push(graphService.upsertCluster({
                 id: result.assignedCluster.clusterId,
                 userId: userId,
                 name: result.assignedCluster.name || '',
@@ -80,16 +83,16 @@ export class AddNodeResultHandler implements JobHandler {
                 size: 1,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
-            });
+            }));
         }
 
-        // 노드 저장
+        // 노드 저장 (병렬 수집)
         for (const node of result.nodes || []) {
           const tempId = String(node.id);
           const dbNodeId = nextNodeId++;
           createdNodeIds.set(tempId, dbNodeId);
 
-          await graphService.upsertNode({
+          nodePromises.push(graphService.upsertNode({
             id: dbNodeId,
             userId,
             origId: node.origId,
@@ -99,12 +102,16 @@ export class AddNodeResultHandler implements JobHandler {
             sourceType: 'chat', // For AddNode, default to chat
             embedding: [],
             timestamp: node.timestamp || null,
-          });
+          }));
           totalNodesAdded++;
         }
       }
+      
+      // 클러스터 및 노드 병렬 저장 실행
+      await Promise.all([...clusterPromises, ...nodePromises]);
 
       // 두 번째 루프로 모든 엣지 저장 보장
+      const edgePromises: Promise<string>[] = [];
       for (const result of batchResult.results || []) {
         for (const edge of result.edges || []) {
             const sourceIdStr = String(edge.source);
@@ -114,18 +121,21 @@ export class AddNodeResultHandler implements JobHandler {
             const targetId = createdNodeIds.get(targetIdStr) ?? parseInt(targetIdStr, 10);
 
             if (!isNaN(sourceId) && !isNaN(targetId)) {
-                await graphService.upsertEdge({
+                edgePromises.push(graphService.upsertEdge({
                     userId,
                     source: sourceId,
                     target: targetId,
                     weight: edge.weight || 1.0,
                     type: (edge.type || 'similarity') as any, // Cast to any to bypass strict type checking
                     intraCluster: edge.intraCluster ?? true,
-                });
+                }));
                 totalEdgesAdded++;
             }
         }
       }
+      
+      // 엣지 병렬 저장 실행
+      await Promise.all(edgePromises);
 
       // 3. GraphStats 갱신 (updatedAt 반영)
       // 변경된 노드/엣지 개수도 GraphStats를 직접 업데이트할 필요가 있는지?
@@ -138,19 +148,21 @@ export class AddNodeResultHandler implements JobHandler {
           await graphService.saveStats(stats);
       }
 
-      // 4. 알림 전송
-      await notiService.sendNotification(userId, NotificationType.ADD_CONVERSATION_COMPLETED, {
-        taskId,
-        nodeCount: totalNodesAdded,
-        edgeCount: totalEdgesAdded,
-        timestamp: new Date().toISOString(),
-      });
-      await notiService.sendFcmPushNotification(
-        userId,
-        'Graph Updated',
-        'Your conversations are successfully added to your knowledge graph.',
-        { taskId, status: 'COMPLETED' }
-      );
+      // 4. 알림 전송 병렬화
+      await Promise.allSettled([
+        notiService.sendNotification(userId, NotificationType.ADD_CONVERSATION_COMPLETED, {
+          taskId,
+          nodeCount: totalNodesAdded,
+          edgeCount: totalEdgesAdded,
+          timestamp: new Date().toISOString(),
+        }),
+        notiService.sendFcmPushNotification(
+          userId,
+          'Graph Updated',
+          'Your conversations are successfully added to your knowledge graph.',
+          { taskId, status: 'COMPLETED' }
+        )
+      ]);
 
     } catch (err) {
       logger.error({ err, taskId, userId }, 'Failed to process add node result');

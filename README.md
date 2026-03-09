@@ -192,6 +192,7 @@ infisical run --env=prod -- npm start
 
 - **[Code Style & Contribution Guide](docs/architecture/CODE_STYLE.md)**: 네이밍 컨벤션, 아키텍처 패턴, 에러 핸들링 규칙 등
 - **[Daily Dev Logs](docs/guides/Daily)**: 일별 작업 상세 기록
+  - [2026-03-09 AddNode 및 Microscope Ingest 핸들러 병렬 처리 최적화](docs/guides/Daily/20260309-handler-parallel-optimization.md)
   - [2026-03-09 유사도 검색 API 및 데이터 보강 (Enrichment) 구현](docs/guides/Daily/20260309-similarity-search-refinement.md)
   - [2026-03-08 FE SDK 재귀적 페이징 처리 리팩토링](docs/guides/Daily/20260308-fe-sdk-pagination-refactor.md)
   - [2026-03-08 서버 커서 기반 페이징 구현 (Note/Folder)](docs/guides/Daily/20260308-be-cursor-pagination-implementation.md)
