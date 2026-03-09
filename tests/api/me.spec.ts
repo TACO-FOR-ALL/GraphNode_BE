@@ -147,7 +147,7 @@ describe('Me API Integration Tests', () => {
 
     it('should return 400 for invalid model in PATCH', async () => {
         const res = await request(app)
-          .patch(`/v1/me/api-keys/claude`) // Current controller only allows openai/deepseek
+          .patch(`/v1/me/api-keys/invalid-model`)
           .set('Authorization', `Bearer ${accessToken}`)
           .send({ apiKey: 'some-key' });
         expect(res.status).toBe(400);

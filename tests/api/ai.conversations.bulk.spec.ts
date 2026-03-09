@@ -31,10 +31,28 @@ jest.mock('../../src/core/services/GoogleOAuthService', () => ({
 jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => ({
   UserRepositoryMySQL: class {
     async findOrCreateFromProvider() {
-      return { id: 'user-test-id' } as any;
+      return { 
+        id: 'user-test-id',
+        email: 'test@example.com',
+        displayName: 'Test User',
+        provider: 'google',
+        providerUserId: 'google-uid-test',
+        preferredLanguage: 'en',
+        createdAt: new Date(),
+      } as any;
     }
     async findById(id: any) {
-      if (id === 'user-test-id') return { id: 'user-test-id', email: 'test@example.com' };
+      if (id === 'user-test-id') {
+        return { 
+          id: 'user-test-id', 
+          email: 'test@example.com',
+          displayName: 'Test User',
+          provider: 'google',
+          providerUserId: 'google-uid-test',
+          preferredLanguage: 'en',
+          createdAt: new Date(),
+        };
+      }
       return null;
     }
   },
@@ -110,7 +128,7 @@ function appWithTestEnv() {
 }
 
 describe('POST /v1/ai/conversations/bulk', () => {
-  let app: Express.Application;
+  let app: any;
   let agent: request.SuperTest<request.Test>;
   let accessToken: string;
 

@@ -1,3 +1,4 @@
+import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { GraphEmbeddingService } from '../../src/core/services/GraphEmbeddingService';
 import { GraphManagementService } from '../../src/core/services/GraphManagementService';
 import { VectorStore } from '../../src/core/ports/VectorStore';
@@ -30,6 +31,16 @@ describe('GraphEmbeddingService', () => {
       deleteEdgesByNodeIds: jest.fn(),
       upsertGraphSummary: jest.fn(),
       getGraphSummary: jest.fn(),
+      deleteGraphSummary: jest.fn(),
+      restoreGraphSummary: jest.fn(),
+      deleteNodes: jest.fn(),
+      restoreNodesByOrigIds: jest.fn(),
+      deleteNodesByOrigIds: jest.fn(),
+      restoreNode: jest.fn(),
+      restoreCluster: jest.fn(),
+      listSubclusters: jest.fn(),
+      upsertSubcluster: jest.fn(),
+      deleteGraph: jest.fn(),
     } as unknown as jest.Mocked<GraphManagementService>;
 
     mockVectorStore = {
@@ -72,7 +83,7 @@ describe('GraphEmbeddingService', () => {
   describe('deleteNode', () => {
     it('should delegate to graphManagementService.deleteNode', async () => {
       await service.deleteNode('u1', 1);
-      expect(mockGraphService.deleteNode).toHaveBeenCalledWith('u1', 1);
+      expect(mockGraphService.deleteNode).toHaveBeenCalledWith('u1', 1, undefined, expect.any(Object));
     });
   });
 

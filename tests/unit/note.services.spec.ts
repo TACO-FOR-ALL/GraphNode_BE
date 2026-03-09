@@ -38,10 +38,11 @@ class InMemoryNoteRepo implements NoteRepository {
     return doc;
   }
 
-  async listNotes(ownerUserId: string, folderId: string | null): Promise<NoteDoc[]> {
-    return Array.from(this.notes.values()).filter(
+  async listNotes(ownerUserId: string, folderId: string | null, limit: number, cursor?: string): Promise<{ items: NoteDoc[]; nextCursor: string | null }> {
+    const items = Array.from(this.notes.values()).filter(
       (n) => n.ownerUserId === ownerUserId && n.folderId === folderId
     );
+    return { items, nextCursor: null };
   }
 
   async deleteAllNotes(ownerUserId: string, session?: ClientSession): Promise<number> {
@@ -209,10 +210,11 @@ class InMemoryNoteRepo implements NoteRepository {
     return doc;
   }
 
-  async listFolders(ownerUserId: string, parentId: string | null): Promise<FolderDoc[]> {
-    return Array.from(this.folders.values()).filter(
+  async listFolders(ownerUserId: string, parentId: string | null, limit: number, cursor?: string): Promise<{ items: FolderDoc[]; nextCursor: string | null }> {
+    const items = Array.from(this.folders.values()).filter(
       (f) => f.ownerUserId === ownerUserId && f.parentId === parentId
     );
+    return { items, nextCursor: null };
   }
 
   async updateFolder(
@@ -318,16 +320,18 @@ class InMemoryNoteRepo implements NoteRepository {
     );
   }
 
-  async listTrashNotes(ownerUserId: string): Promise<NoteDoc[]> {
-    return Array.from(this.notes.values()).filter(
+  async listTrashNotes(ownerUserId: string, limit: number, cursor?: string): Promise<{ items: NoteDoc[]; nextCursor: string | null }> {
+    const items = Array.from(this.notes.values()).filter(
       (n) => n.ownerUserId === ownerUserId && n.deletedAt !== null
     );
+    return { items, nextCursor: null };
   }
 
-  async listTrashFolders(ownerUserId: string): Promise<FolderDoc[]> {
-    return Array.from(this.folders.values()).filter(
+  async listTrashFolders(ownerUserId: string, limit: number, cursor?: string): Promise<{ items: FolderDoc[]; nextCursor: string | null }> {
+    const items = Array.from(this.folders.values()).filter(
       (f) => f.ownerUserId === ownerUserId && f.deletedAt !== null
     );
+    return { items, nextCursor: null };
   }
 
   async hardDeleteExpiredNotes(expiredBefore: Date): Promise<number> {
@@ -398,12 +402,12 @@ describe('NoteService', () => {
     await service.createNote('u1', { content: 'folder note', folderId: 'f1' });
 
     const rootNotes = await service.listNotes('u1', null);
-    expect(rootNotes).toHaveLength(1);
-    expect(rootNotes[0].content).toBe('root note');
+    expect(rootNotes.items).toHaveLength(1);
+    expect(rootNotes.items[0].content).toBe('root note');
 
     const folderNotes = await service.listNotes('u1', 'f1');
-    expect(folderNotes).toHaveLength(1);
-    expect(folderNotes[0].content).toBe('folder note');
+    expect(folderNotes.items).toHaveLength(1);
+    expect(folderNotes.items[0].content).toBe('folder note');
   });
 
   test('updateNote updates fields', async () => {

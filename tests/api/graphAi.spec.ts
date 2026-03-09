@@ -124,7 +124,11 @@ describe('GraphAi API Integration Tests', () => {
             findById: jest.fn(async (id: any) => ({ 
                 id: String(id), 
                 email: 'test@example.com', 
-                username: 'testuser' 
+                displayName: 'testuser',
+                provider: 'google',
+                providerUserId: 'google-uid-1',
+                preferredLanguage: 'en',
+                createdAt: new Date(),
             })),
             findByEmail: jest.fn(async () => null),
         }));
@@ -154,11 +158,13 @@ describe('GraphAi API Integration Tests', () => {
     });
 
     describe('GET /v1/graph-ai/summary', () => {
-        it('should return 404 if summary not found', async () => {
-            await request(app)
+        it('should return default summary if summary not found', async () => {
+            const res = await request(app)
                 .get('/v1/graph-ai/summary')
                 .set('Authorization', `Bearer ${accessToken}`)
-                .expect(404);
+                .expect(200);
+            
+            expect(res.body.overview.total_conversations).toBe(0);
         });
 
         it('should return summary if exists', async () => {

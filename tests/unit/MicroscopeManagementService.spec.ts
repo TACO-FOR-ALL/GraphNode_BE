@@ -1,3 +1,4 @@
+import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { MicroscopeManagementService } from '../../src/core/services/MicroscopeManagementService';
 import { MicroscopeWorkspaceStore } from '../../src/core/ports/MicroscopeWorkspaceStore';
 import { GraphNeo4jStore } from '../../src/core/ports/GraphNeo4jStore';
@@ -28,7 +29,8 @@ describe('MicroscopeManagementService', () => {
       saveGraphPayload: jest.fn(),
       findGraphPayloadsByIds: jest.fn(),
       deleteGraphPayloadsByGroupId: jest.fn(),
-    };
+      findLatestWorkspaceByNodeId: jest.fn(),
+    } as any;
 
     mockGraphNeo4jStore = {
       saveGraph: jest.fn(),
@@ -61,7 +63,7 @@ describe('MicroscopeManagementService', () => {
       hardDelete: jest.fn(),
       restore: jest.fn(),
       findModifiedSince: jest.fn(),
-    };
+    } as any;
 
     mockNoteRepo = {
       createNote: jest.fn(),
@@ -92,7 +94,7 @@ describe('MicroscopeManagementService', () => {
       restoreFolder: jest.fn(),
       restoreFolders: jest.fn(),
       deleteAllFolders: jest.fn(),
-    };
+    } as any;
 
     service = new MicroscopeManagementService(
       mockWorkspaceStore,
