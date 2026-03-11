@@ -75,12 +75,14 @@ export class AiController {
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders();
       
       const sendEvent = (event: string, data: unknown) => {
         res.write(`event: ${event}\n`);
         res.write(`data: ${JSON.stringify(data)}\n\n`);
       };
 
+      // SSE 스트리밍 응답 처리
       try {
         const result: AIChatResponseDto = await this.aiInteractionService.handleAIChat(
           ownerUserId,
@@ -131,17 +133,20 @@ export class AiController {
     const files = req.files as Express.Multer.File[] | undefined;
     const isStreaming = req.headers['accept'] === 'text/event-stream';
 
+    // SSE 스트리밍 응답 처리
     if (isStreaming) {
       await this.aiInteractionService.checkApiKey(ownerUserId, chatbody.model);
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders();
 
       const sendEvent = (event: string, data: unknown) => {
         res.write(`event: ${event}\n`);
         res.write(`data: ${JSON.stringify(data)}\n\n`);
       };
 
+      // SSE 스트리밍 응답 처리
       try {
         const result: AIChatResponseDto = await this.aiInteractionService.handleRagAIChat(
           ownerUserId,

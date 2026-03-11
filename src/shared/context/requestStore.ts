@@ -21,6 +21,17 @@ export type RequestContext = {
   ip?: string;
   /** User-Agent 헤더 값 */
   userAgent?: string;
+  /**
+   * true일 경우 이 요청 스코프 내의 auditProxy 로그(audit.call, audit.success)와
+   * pino-http 자동 HTTP 로그를 억제한다.
+   * 에러 로그(audit.error)는 억제하지 않는다.
+   *
+   * @remarks
+   * SSE 등 연결/해제가 반복되는 엔드포인트에서 무의미한 로그 과다 발생을 방지하기 위해 사용한다.
+   * 다른 서비스가 동일한 Service를 직접 호출하는 경우에는 이 플래그가 설정되지 않으므로,
+   * 정상적으로 로그가 출력된다.
+   */
+  suppressAuditLog?: boolean;
   // 추후 확장: 역할(roles), 클라이언트 ID, 헤더 스냅샷 등
 };
 
