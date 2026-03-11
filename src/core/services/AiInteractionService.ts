@@ -15,7 +15,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Readable } from 'stream';
 
 import { AppError } from '../../shared/errors/base';
-import { NotFoundError, UpstreamError, ValidationError, ForbiddenError } from '../../shared/errors/domain';
+import { NotFoundError, UpstreamError, ValidationError, ForbiddenError, RateLimitError } from '../../shared/errors/domain';
 import { AIchatType } from '../../shared/ai-providers/AIchatType';
 import { ChatManagementService } from './ChatManagementService';
 import { UserService } from './UserService';
@@ -165,7 +165,12 @@ export class AiInteractionService {
         { label: 'AiProvider.generateChat' }
       );
 
-      if (!aiResponseResult.ok) throw new UpstreamError(`AI Generation failed: ${aiResponseResult.error}`);
+      if (!aiResponseResult.ok) {
+        if (aiResponseResult.error === 'rate_limited') {
+          throw new RateLimitError('AI Generation failed: rate limited. Please check your quota.');
+        }
+        throw new UpstreamError(`AI Generation failed: ${aiResponseResult.error}`);
+      }
 
       const aiResponse : AiResponse = aiResponseResult.data;
 
@@ -293,7 +298,12 @@ export class AiInteractionService {
         () => provider.generateChat(apiKey, { model: chatbody.modelName, messages: fullMessages }, onStream, this.storageAdapter),
         { label: 'AiProvider.generateChat(RAG)' }
       );
-      if (!result.ok) throw new UpstreamError(`AI Generation failed: ${result.error}`);
+      if (!result.ok) {
+        if (result.error === 'rate_limited') {
+          throw new RateLimitError('AI Generation failed: rate limited. Please check your quota.');
+        }
+        throw new UpstreamError(`AI Generation failed: ${result.error}`);
+      }
 
       const aiResponse = result.data;
 

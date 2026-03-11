@@ -2,6 +2,19 @@
 
 GraphNode Backend는 데이터의 특성에 따라 MySQL, MongoDB, Redis, Vector DB를 혼용하는 **Polyglot Persistence** 전략을 사용합니다. 본 문서는 각 데이터베이스의 스키마와 필드 정의를 상세히 기술합니다. 클라우드 기반 DB의 안정성을 위해 지수 백오프 기반의 [재시도 정책](retry-policy.md)이 전 계층에 적용되어 있습니다.
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 ---
 
 ## 1. PostgreSQL (Relational Data)
