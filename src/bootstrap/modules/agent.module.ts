@@ -8,20 +8,8 @@ import { container } from '../container';
  * @returns Express 라우터
  */
 export function makeAgentRouter(): Router {
-  // singleton services
-  const userRepository = container.getUserRepository();
-  const noteService = container.getNoteService();
-  const conversationService = container.getConversationService();
-  const messageService = container.getMessageService();
-  const graphEmbeddingService = container.getGraphEmbeddingService();
-  const graphVectorService = container.getGraphVectorService();
-
   return createAgentRouter({
-    userRepository,
-    noteService,
-    conversationService,
-    messageService,
-    graphEmbeddingService,
-    graphVectorService,
+    userRepository: container.getUserRepository(),
+    agentService: container.getAgentService(),
   });
 }
