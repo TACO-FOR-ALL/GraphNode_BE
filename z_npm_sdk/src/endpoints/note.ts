@@ -355,22 +355,13 @@ export class NoteApi {
   }
 
   /**
-   * 특정 ID의 폴더를 가져옵니다.
-   * @param id - 가져올 폴더의 ID
+   * 특정 ID의 폴더 정보를 조회합니다.
+   * 
+   * @param id - 조회할 폴더의 ID (UUID)
    * @returns 요청한 폴더 상세 정보
    * @example
    * const response = await client.note.getFolder('folder-123');
-   *
-   * console.log(response.data);
-   * // Output:
-   * {
-   *   id: 'folder-123',
-   *   name: 'Work Projects',
-   *   parentId: null,
-   *   createdAt: '...',
-   *   updatedAt: '...',
-   *   ownerUserId: 'user-123'
-   * }
+   * console.log(response.data.name);
    */
   getFolder(id: string): Promise<HttpResponse<FolderDto>> {
     return this.rb.path(`/folders/${id}`).get<FolderDto>();
@@ -397,6 +388,7 @@ export class NoteApi {
 
   /**
    * 특정 폴더를 소프트 삭제합니다 (휴지통으로 이동).
+   * 
    * @param id - 삭제할 폴더의 ID
    * @example
    * await client.note.softDeleteFolder('folder-123');
@@ -407,6 +399,7 @@ export class NoteApi {
 
   /**
    * 특정 폴더를 영구 삭제합니다.
+   * 
    * @param id - 삭제할 폴더의 ID
    * @example
    * await client.note.hardDeleteFolder('folder-123');
@@ -417,22 +410,24 @@ export class NoteApi {
 
   /**
    * 모든 폴더를 삭제합니다.
+   * 
    * @returns 삭제된 폴더 수
    * @example
    * const response = await client.note.deleteAllFolders();
-   * console.log(response.data.deletedCount); // 3
+   * console.log(response.data.deletedCount);
    */
   async deleteAllFolders(): Promise<HttpResponse<{ deletedCount: number }>> {
     return this.rb.path('/folders').delete<{ deletedCount: number }>();
   }
 
   /**
-   * 특정 폴더를 복구합니다.
+   * 삭제된 폴더를 복구합니다.
+   * 
    * @param id - 복구할 폴더의 ID
    * @returns 복구된 폴더 정보
    * @example
    * const response = await client.note.restoreFolder('folder-123');
-   * console.log(response.data.id); // 'folder-123'
+   * console.log(response.data.name);
    */
   restoreFolder(id: string): Promise<HttpResponse<FolderDto>> {
     return this.rb.path(`/folders/${id}/restore`).post<FolderDto>({});

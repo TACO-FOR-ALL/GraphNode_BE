@@ -28,9 +28,9 @@ export class AppleAuthApi {
 
   /**
    * 브라우저를 Apple 로그인 페이지로 리다이렉트합니다.
-   * @param windowObj window 객체 (테스트/SSR 대응, 기본값 window)
+   * @param windowObj - window 객체 (기본값: window). 테스트 또는 SSR 환경에서 모킹 시 사용합니다.
    * @example
-   * // In a browser environment:
+   * // 브라우저 환경에서 호출 시 즉시 리다이렉트
    * client.appleAuth.login();
    */
   login(windowObj: Window = window): void {

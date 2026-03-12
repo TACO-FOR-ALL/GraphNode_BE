@@ -58,11 +58,20 @@ export class SyncService {
       this.noteService.findFoldersModifiedSince(ownerUserId, since),
     ]);
 
+    // 메시지를 conversationId별로 그룹화
+    const messagesByConvId = new Map<string, MessageDoc[]>();
+    for (const msg of msgDocs) {
+      if (msg.deletedAt) continue;
+      const list = messagesByConvId.get(msg.conversationId) || [];
+      list.push(msg);
+      messagesByConvId.set(msg.conversationId, list);
+    }
+
     // 필터링: deletedAt이 없는(활성) 데이터만 반환
     return {
       conversations: convDocs
         .filter((doc) => !doc.deletedAt)
-        .map((doc) => toChatThreadDto(doc, [])),
+        .map((doc) => toChatThreadDto(doc, messagesByConvId.get(doc._id) || [])),
       messages: msgDocs.filter((doc) => !doc.deletedAt).map(toChatMessageDto),
       notes: noteDocs.filter((doc) => !doc.deletedAt).map(toNoteDto),
       folders: folderDocs.filter((doc) => !doc.deletedAt).map(toFolderDto),
@@ -85,10 +94,19 @@ export class SyncService {
       this.messageService.findModifiedSince(ownerUserId, since),
     ]);
 
+    // 메시지를 conversationId별로 그룹화
+    const messagesByConvId = new Map<string, MessageDoc[]>();
+    for (const msg of msgDocs) {
+      if (msg.deletedAt) continue;
+      const list = messagesByConvId.get(msg.conversationId) || [];
+      list.push(msg);
+      messagesByConvId.set(msg.conversationId, list);
+    }
+
     return {
       conversations: convDocs
         .filter((doc) => !doc.deletedAt)
-        .map((doc) => toChatThreadDto(doc, [])),
+        .map((doc) => toChatThreadDto(doc, messagesByConvId.get(doc._id) || [])),
       messages: msgDocs.filter((doc) => !doc.deletedAt).map(toChatMessageDto),
       serverTime: new Date().toISOString(),
     };

@@ -47,11 +47,25 @@ export interface AgentChatStreamOptions {
 export type AgentChatStreamHandler = (event: AgentChatStreamEvent) => void;
 
 /**
- * /v1/agent/chat/stream 스트리밍 API를 여는 헬퍼.
- * - 서버는 text/event-stream(SSE) 형식으로 event/data 를 보낸다.
- * - 이 함수는 fetch + ReadableStream 으로 SSE 프레임을 파싱해서 onEvent에 전달한다.
+ * /v1/agent/chat/stream 스트리밍 API를 여는 헬퍼입니다.
+ * 
+ * @remarks
+ * 서버는 `text/event-stream`(SSE) 형식으로 이벤트를 전송하며, 이 함수는 이를 파싱하여 콜백으로 전달합니다.
+ * 에이전트의 사고 과정(status), 답변 조각(chunk), 최종 결과(result)를 실시간으로 받아볼 수 있습니다.
  *
+ * @param params - 스트림 요청 파라미터 (메시지, 컨텍스트 등)
+ * @param onEvent - 스트림 이벤트 핸들러
+ * @param options - (선택) fetch 구현체 및 AbortSignal 옵션
  * @returns 스트림을 취소하는 cancel 함수
+ * 
+ * @example
+ * const cancel = await openAgentChatStream(
+ *   { userMessage: '이 노트 요약해줘' },
+ *   (ev) => {
+ *     if (ev.event === 'chunk') process.stdout.write(ev.data.text);
+ *     if (ev.event === 'result') console.log('\nFinal Answer:', ev.data.answer);
+ *   }
+ * );
  */
 export async function openAgentChatStream(
   params: AgentChatStreamParams,

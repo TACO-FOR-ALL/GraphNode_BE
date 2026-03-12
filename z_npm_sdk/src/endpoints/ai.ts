@@ -105,6 +105,13 @@ export class AiApi {
    * @param onEvent - SSE 이벤트 수신 콜백 ({ event: string, data: any })
    * @param options - 추가 옵션 (AbortSignal을 통한 요청 취소 지원)
    * @returns 스트림 중단(abort) 함수
+   * 
+   * @example
+   * const abort = await client.ai.chatStream('conv_123', { id: 'msg_1', model: 'openai', chatContent: 'Tell me a story' }, [], (event) => {
+   *   if (event.event === 'chunk') console.log(event.data.text);
+   *   if (event.event === 'result') console.log('Done:', event.data.messages);
+   * });
+   * // 필요 시 호출: abort();
    */
   async chatStream(
     conversationId: string,
@@ -128,6 +135,15 @@ export class AiApi {
    * @param files - 첨부 파일
    * @param onStream - 실시간 텍스트 콜백
    * @returns AI 응답 DTO
+   * 
+   * @example
+   * const res = await client.ai.ragChat('conv_123', {
+   *   id: 'msg_2',
+   *   model: 'openai',
+   *   chatContent: '이 문서 내용을 요약해줘',
+   *   retrievedContext: [{ role: 'user', content: '문서 본문 내용...' }],
+   *   recentMessages: []
+   * });
    */
   async ragChat(
     conversationId: string,
@@ -148,6 +164,9 @@ export class AiApi {
    * @param options - AbortSignal 등 추가 옵션
    * @returns 스트림 중단 함수
    * @see chatStream 이벤트 구조 참고
+   * 
+   * @example
+   * await client.ai.ragChatStream('conv_123', ragDto, [], (ev) => { ... });
    */
   async ragChatStream(
     conversationId: string,
@@ -300,8 +319,11 @@ export class AiApi {
 
   /**
    * AI 관련 파일을 다운로드합니다.
-   * @param fileKey 파일 키 (S3 Key)
-   * @returns Blob 객체
+   * @param fileKey - 파일 키 (S3 Key)
+   * @returns BloB 객체 (이미지, 문서 등)
+   * @example
+   * const blob = await client.ai.downloadFile('chat-files/123-abc.png');
+   * const url = URL.createObjectURL(blob);
    */
   async downloadFile(fileKey: string): Promise<Blob> {
     const rb = this.rb.path(`/v1/ai/files/${fileKey}`);

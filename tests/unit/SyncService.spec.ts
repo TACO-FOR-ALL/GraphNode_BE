@@ -56,18 +56,26 @@ describe('SyncService', () => {
   });
 
   describe('pull', () => {
-    it('should fetch modified data from all services', async () => {
+    it('should fetch modified data from all services and nest messages', async () => {
       const userId = 'u1';
       const since = new Date();
 
-      mockConvSvc.findModifiedSince.mockResolvedValue([]);
-      mockMsgSvc.findModifiedSince.mockResolvedValue([]);
+      const mockConv = { _id: 'c1', ownerUserId: userId, title: 'T1', createdAt: Date.now(), updatedAt: Date.now(), deletedAt: null };
+      const mockMsg = { _id: 'm1', conversationId: 'c1', ownerUserId: userId, role: 'user', content: 'Hello', createdAt: Date.now(), updatedAt: Date.now(), deletedAt: null };
+
+      mockConvSvc.findModifiedSince.mockResolvedValue([mockConv as any]);
+      mockMsgSvc.findModifiedSince.mockResolvedValue([mockMsg as any]);
       mockNoteSvc.findNotesModifiedSince.mockResolvedValue([]);
       mockNoteSvc.findFoldersModifiedSince.mockResolvedValue([]);
 
       const result = await service.pull(userId, since);
 
-      expect(result.conversations).toEqual([]);
+      expect(result.conversations).toHaveLength(1);
+      expect(result.conversations[0].id).toBe('c1');
+      expect(result.conversations[0].messages).toHaveLength(1);
+      expect(result.conversations[0].messages[0].id).toBe('m1');
+      expect(result.messages).toHaveLength(1);
+      
       expect(mockConvSvc.findModifiedSince).toHaveBeenCalledWith(userId, since);
       expect(mockMsgSvc.findModifiedSince).toHaveBeenCalledWith(userId, since);
       expect(mockNoteSvc.findNotesModifiedSince).toHaveBeenCalledWith(userId, since);
