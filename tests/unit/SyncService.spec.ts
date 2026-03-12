@@ -85,10 +85,16 @@ describe('SyncService', () => {
   describe('push', () => {
     it('should process creates for conversations', async () => {
         const changes = {
-            conversations: [
-                { id: 'c1', title: 'New Conv', model: 'gpt-4', systemPrompt: '', temperature: 0.7, attachedFiles: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
-            ],
-            lastPulledAt: new Date().toISOString()
+        conversations: [
+          {
+            id: 'c1',
+            title: 'New Conv',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            messages: [],
+          },
+        ],
+        lastPulledAt: new Date().toISOString(),
         };
         
         await service.push('u1', changes as any);
@@ -112,12 +118,19 @@ describe('SyncService', () => {
     });
 
     it('should ignore stale updates (LWW)', async () => {
-         const changes = {
-            notes: [
-                { id: 'n1', title: 'Old', content: '', createdAt: new Date().toISOString(), updatedAt: new Date(Date.now() - 20000).toISOString() }
-            ],
-            lastPulledAt: new Date().toISOString()
-        };
+      const changes = {
+        notes: [
+          {
+            id: 'n1',
+            title: 'Old',
+            content: '',
+            folderId: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date(Date.now() - 20000).toISOString(),
+          },
+        ],
+        lastPulledAt: new Date().toISOString(),
+      };
 
         // Existing note is newer
         mockNoteSvc.getNoteDoc.mockResolvedValue({ id: 'n1', ownerUserId: 'u1', updatedAt: new Date(Date.now() - 5000) } as any);

@@ -172,6 +172,7 @@ infisical run --env=prod -- npm start
   - [SQS Logic](docs/architecture/LOGIC_SQS.md) | [FCM Logic](docs/architecture/LOGIC_FCM.md) | [Workers](docs/architecture/WORKERS.md)
   - [Security](docs/architecture/SECURITY.md) | [Observability](docs/architecture/OBSERVABILITY.md) | [Audit Logs](docs/architecture/AUDIT_LOGS.md) | [Sentry](docs/architecture/sentry.md)
   - [AI Provider Architecture](docs/architecture/ai-provider-architecture.md) | [Soft/Hard_Delete](docs/architecture/soft-hard-delete-flow.md) | [Retry Policy](docs/architecture/retry-policy.md)
+  - [✨ 기능 명세서 (Functional Specification)](functional_specification.md)
 
 ---
 
@@ -198,6 +199,7 @@ infisical run --env=prod -- npm start
 
 - **[Code Style & Contribution Guide](docs/architecture/CODE_STYLE.md)**: 네이밍 컨벤션, 아키텍처 패턴, 에러 핸들링 규칙 등
 - **[Daily Dev Logs](docs/guides/Daily)**: 일별 작업 상세 기록
+  - [2026-03-12 SyncService 유닛 테스트 타입 오류 수정 및 검증](docs/guides/Daily/20260312-sync-service-test-fix.md)
   - [2026-03-12 Sync pull 로직 리팩토링 및 메시지 병합 (Nesting)](docs/guides/Daily/20260312-sync-logic-refactor.md)
   - [2026-03-12 FE SDK JSDoc 보강 및 엔드포인트별 문서 분리 리팩토링](docs/guides/Daily/20260312-sdk-docs-refactor.md)
   - [2026-03-12 Sync 로직 분석 및 동기화 동작 사양 문서화](docs/guides/Daily/20260312-sync-logic-analysis.md)
