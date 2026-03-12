@@ -50,8 +50,13 @@ export class NotificationApi {
 
   /**
    * FCM 디바이스 토큰을 등록합니다.
+   * 
+   * @remarks
+   * 푸시 알림 수신을 위해 사용자의 디바이스 토큰을 서버에 저장합니다.
    *
-   * @param token - FCM 디바이스 토큰
+   * @param token - FCM 디바이스 토큰 (string)
+   * @example
+   * await client.notifications.registerDeviceToken('fcm-token-xyz');
    */
   async registerDeviceToken(token: string): Promise<void> {
     await this.rb.path('/device-token').post({ token });
@@ -59,8 +64,13 @@ export class NotificationApi {
 
   /**
    * FCM 디바이스 토큰을 삭제(등록 해제)합니다.
+   * 
+   * @remarks
+   * 로그아웃 시 또는 푸시 알림 비활성화 시 사용됩니다.
    *
-   * @param token - 삭제할 FCM 디바이스 토큰
+   * @param token - 삭제할 FCM 디바이스 토큰 (string)
+   * @example
+   * await client.notifications.removeDeviceToken('fcm-token-xyz');
    */
   async removeDeviceToken(token: string): Promise<void> {
     await this.rb.path('/device-token').delete({ token });

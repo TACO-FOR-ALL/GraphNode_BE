@@ -56,18 +56,26 @@ describe('SyncService', () => {
   });
 
   describe('pull', () => {
-    it('should fetch modified data from all services', async () => {
+    it('should fetch modified data from all services and nest messages', async () => {
       const userId = 'u1';
       const since = new Date();
 
-      mockConvSvc.findModifiedSince.mockResolvedValue([]);
-      mockMsgSvc.findModifiedSince.mockResolvedValue([]);
+      const mockConv = { _id: 'c1', ownerUserId: userId, title: 'T1', createdAt: Date.now(), updatedAt: Date.now(), deletedAt: null };
+      const mockMsg = { _id: 'm1', conversationId: 'c1', ownerUserId: userId, role: 'user', content: 'Hello', createdAt: Date.now(), updatedAt: Date.now(), deletedAt: null };
+
+      mockConvSvc.findModifiedSince.mockResolvedValue([mockConv as any]);
+      mockMsgSvc.findModifiedSince.mockResolvedValue([mockMsg as any]);
       mockNoteSvc.findNotesModifiedSince.mockResolvedValue([]);
       mockNoteSvc.findFoldersModifiedSince.mockResolvedValue([]);
 
       const result = await service.pull(userId, since);
 
-      expect(result.conversations).toEqual([]);
+      expect(result.conversations).toHaveLength(1);
+      expect(result.conversations[0].id).toBe('c1');
+      expect(result.conversations[0].messages).toHaveLength(1);
+      expect(result.conversations[0].messages[0].id).toBe('m1');
+      expect(result.messages).toHaveLength(1);
+      
       expect(mockConvSvc.findModifiedSince).toHaveBeenCalledWith(userId, since);
       expect(mockMsgSvc.findModifiedSince).toHaveBeenCalledWith(userId, since);
       expect(mockNoteSvc.findNotesModifiedSince).toHaveBeenCalledWith(userId, since);
@@ -77,10 +85,16 @@ describe('SyncService', () => {
   describe('push', () => {
     it('should process creates for conversations', async () => {
         const changes = {
-            conversations: [
-                { id: 'c1', title: 'New Conv', model: 'gpt-4', systemPrompt: '', temperature: 0.7, attachedFiles: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
-            ],
-            lastPulledAt: new Date().toISOString()
+        conversations: [
+          {
+            id: 'c1',
+            title: 'New Conv',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            messages: [],
+          },
+        ],
+        lastPulledAt: new Date().toISOString(),
         };
         
         await service.push('u1', changes as any);
@@ -104,12 +118,19 @@ describe('SyncService', () => {
     });
 
     it('should ignore stale updates (LWW)', async () => {
-         const changes = {
-            notes: [
-                { id: 'n1', title: 'Old', content: '', createdAt: new Date().toISOString(), updatedAt: new Date(Date.now() - 20000).toISOString() }
-            ],
-            lastPulledAt: new Date().toISOString()
-        };
+      const changes = {
+        notes: [
+          {
+            id: 'n1',
+            title: 'Old',
+            content: '',
+            folderId: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date(Date.now() - 20000).toISOString(),
+          },
+        ],
+        lastPulledAt: new Date().toISOString(),
+      };
 
         // Existing note is newer
         mockNoteSvc.getNoteDoc.mockResolvedValue({ id: 'n1', ownerUserId: 'u1', updatedAt: new Date(Date.now() - 5000) } as any);

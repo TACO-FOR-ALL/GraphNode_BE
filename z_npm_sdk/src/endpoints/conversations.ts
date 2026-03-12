@@ -245,8 +245,11 @@ export class ConversationsApi {
 
   /**
    * 대화를 영구 삭제합니다.
-   * 주의: 이 대화를 기반으로 생성된 지식 그래프(Graph Node/Edge) 데이터들 또한 연쇄 영구 삭제됩니다.
-   * @param conversationId 대화 ID
+   * 
+   * @remarks
+   * **경고:** 이 작업은 취소할 수 없습니다. 이 대화를 기반으로 생성된 지식 그래프(Graph Node/Edge) 데이터들 또한 함께 영구 삭제됩니다.
+   * 
+   * @param conversationId - 대화 ID
    * @example
    * await client.conversations.hardDelete('conv-123');
    */
@@ -259,7 +262,10 @@ export class ConversationsApi {
 
   /**
    * 모든 대화를 삭제합니다.
-   * 주의: 사용자의 모든 그래프 데이터 또한 연쇄 삭제됩니다.
+   * 
+   * @remarks
+   * **주의:** 사용자의 모든 대화 내역 및 연관된 지식 그래프 데이터가 즉시 파기됩니다.
+   * 
    * @returns 삭제된 대화 수
    * @example
    * const response = await client.conversations.deleteAll();
@@ -374,9 +380,12 @@ export class ConversationsApi {
 
   /**
    * 메시지를 영구 삭제합니다.
-   * 주의: 이 메시지를 기반으로 생성된 지식 그래프 노드(Graph Node) 및 연결된 엣지도 함께 연속 영구 삭제됩니다.
-   * @param conversationId 대화 ID
-   * @param messageId 메시지 ID
+   * 
+   * @remarks
+   * **경고:** 이 작업은 취소할 수 없습니다. 이 메시지를 기반으로 생성된 지식 그래프 노드(Graph Node) 및 연결된 엣지도 함께 영구 삭제됩니다.
+   * 
+   * @param conversationId - 대화 ID
+   * @param messageId - 메시지 ID
    * @example
    * await client.conversations.hardDeleteMessage('conv-123', 'msg-999');
    */
@@ -392,21 +401,15 @@ export class ConversationsApi {
 
   /**
    * 삭제된 메시지를 복구합니다.
-   * 주의: 이 메시지를 기반으로 생성되었던 지식 그래프 노드(Graph Node)도 함께 연쇄 복원됩니다.
-   * @param conversationId 대화 ID
-   * @param messageId 메시지 ID
+   * 
+   * @remarks
+   * 메시지 복구 시, 이 메시지를 기반으로 생성되었던 지식 그래프 노드(Graph Node)도 함께 연쇄 복원됩니다.
+   * 
+   * @param conversationId - 대화 ID
+   * @param messageId - 메시지 ID
    * @returns 복구된 메시지 정보
    * @example
    * const response = await client.conversations.restoreMessage('conv-123', 'msg-999');
-   *
-   * console.log(response.data);
-   * // Output:
-   * {
-   *   id: 'msg-999',
-   *   role: 'user',
-   *   content: '...',
-   *   createdAt: '...'
-   * }
    */
   restoreMessage(conversationId: string, messageId: string): Promise<HttpResponse<MessageDto>> {
     return this.rb
