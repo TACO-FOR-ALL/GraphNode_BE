@@ -15,6 +15,7 @@ import { GraphGenerationService } from '../core/services/GraphGenerationService'
 import { SyncService } from '../core/services/SyncService';
 import { NotificationService } from '../core/services/NotificationService';
 import { AiInteractionService } from '../core/services/AiInteractionService';
+import { AgentService } from '../core/services/AgentService';
 import { GoogleOAuthService } from '../core/services/GoogleOAuthService';
 import { AppleOAuthService } from '../core/services/AppleOAuthService';
 import { MicroscopeManagementService } from '../core/services/MicroscopeManagementService';
@@ -61,9 +62,9 @@ export class Container {
   private userRepo: UserRepository | null = null;
   private noteRepo: NoteRepository | null = null;
   private graphRepo: GraphDocumentStore | null = null; // Renamed to Mongo Store
-  private neo4jStore: GraphNeo4jStore | null = null; 
-  private vectorStore: VectorStore | null = null; 
-  private graphVectorService: GraphVectorService | null = null; 
+  private neo4jStore: GraphNeo4jStore | null = null;
+  private vectorStore: VectorStore | null = null;
+  private graphVectorService: GraphVectorService | null = null;
   private microscopeWorkspaceRepo: MicroscopeWorkspaceStore | null = null;
 
   // Infra Adapters
@@ -83,6 +84,7 @@ export class Container {
   private syncService: SyncService | null = null;
   private notificationService: NotificationService | null = null;
   private aiInteractionService: AiInteractionService | null = null;
+  private agentService: AgentService | null = null;
   private googleOAuthService: GoogleOAuthService | null = null;
   private appleOAuthService: AppleOAuthService | null = null;
   private microscopeManagementService: MicroscopeManagementService | null = null;
@@ -124,11 +126,11 @@ export class Container {
   }
 
   getGraphNeo4jStore(): GraphNeo4jStore {
-      if (!this.neo4jStore) {
-          const raw = new Neo4jGraphAdapter();
-          this.neo4jStore = createAuditProxy(raw, 'Neo4jGraphAdapter');
-      }
-      return this.neo4jStore;
+    if (!this.neo4jStore) {
+      const raw = new Neo4jGraphAdapter();
+      this.neo4jStore = createAuditProxy(raw, 'Neo4jGraphAdapter');
+    }
+    return this.neo4jStore;
   }
 
   getVectorStore(): VectorStore {
@@ -369,7 +371,27 @@ export class Container {
   }
 
   /**
-   *
+   * AgentService 인스턴스를 반환합니다.
+   */
+  getAgentService(): AgentService {
+    if (!this.agentService) {
+      const raw = new AgentService(
+        //FIXED(강현일) : 생성자에서 직접 주입받는걸로 변경
+        {
+          userService: this.getUserService(),
+          noteService: this.getNoteService(),
+          conversationService: this.getConversationService(),
+          messageService: this.getMessageService(),
+          graphEmbeddingService: this.getGraphEmbeddingService(),
+          graphVectorService: this.getGraphVectorService(),
+        }
+      );
+      this.agentService = createAuditProxy(raw, 'AgentService');
+    }
+    return this.agentService;
+  }
+
+  /**
    * AiInteractionService 인스턴스를 반환합니다.
    */
   getAiInteractionService(): AiInteractionService {
