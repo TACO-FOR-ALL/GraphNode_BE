@@ -8,8 +8,8 @@ import { container } from '../container';
  * @returns Express 라우터
  */
 export function makeAgentRouter(): Router {
+  //FIXED(강현일) : AgentRouter가 직접적으로 UserRepository를 안가지게 수정
   return createAgentRouter({
-    userRepository: container.getUserRepository(),
     agentService: container.getAgentService(),
   });
 }

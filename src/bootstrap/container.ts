@@ -62,9 +62,9 @@ export class Container {
   private userRepo: UserRepository | null = null;
   private noteRepo: NoteRepository | null = null;
   private graphRepo: GraphDocumentStore | null = null; // Renamed to Mongo Store
-  private neo4jStore: GraphNeo4jStore | null = null; 
-  private vectorStore: VectorStore | null = null; 
-  private graphVectorService: GraphVectorService | null = null; 
+  private neo4jStore: GraphNeo4jStore | null = null;
+  private vectorStore: VectorStore | null = null;
+  private graphVectorService: GraphVectorService | null = null;
   private microscopeWorkspaceRepo: MicroscopeWorkspaceStore | null = null;
 
   // Infra Adapters
@@ -126,11 +126,11 @@ export class Container {
   }
 
   getGraphNeo4jStore(): GraphNeo4jStore {
-      if (!this.neo4jStore) {
-          const raw = new Neo4jGraphAdapter();
-          this.neo4jStore = createAuditProxy(raw, 'Neo4jGraphAdapter');
-      }
-      return this.neo4jStore;
+    if (!this.neo4jStore) {
+      const raw = new Neo4jGraphAdapter();
+      this.neo4jStore = createAuditProxy(raw, 'Neo4jGraphAdapter');
+    }
+    return this.neo4jStore;
   }
 
   getVectorStore(): VectorStore {
@@ -375,13 +375,17 @@ export class Container {
    */
   getAgentService(): AgentService {
     if (!this.agentService) {
-      const raw = new AgentService({
-        noteService: this.getNoteService(),
-        conversationService: this.getConversationService(),
-        messageService: this.getMessageService(),
-        graphEmbeddingService: this.getGraphEmbeddingService(),
-        graphVectorService: this.getGraphVectorService(),
-      });
+      const raw = new AgentService(
+        //FIXED(강현일) : 생성자에서 직접 주입받는걸로 변경
+        {
+          userService: this.getUserService(),
+          noteService: this.getNoteService(),
+          conversationService: this.getConversationService(),
+          messageService: this.getMessageService(),
+          graphEmbeddingService: this.getGraphEmbeddingService(),
+          graphVectorService: this.getGraphVectorService(),
+        }
+      );
       this.agentService = createAuditProxy(raw, 'AgentService');
     }
     return this.agentService;

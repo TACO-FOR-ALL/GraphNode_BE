@@ -98,10 +98,7 @@ export class SyncService {
    * 노트 및 폴더 변경사항 조회 (Pull Notes)
    * 활성 데이터만 반환합니다.
    */
-  async pullNotes(
-    ownerUserId: string,
-    sinceInput?: string | Date
-  ): Promise<SyncPullNotesResponse> {
+  async pullNotes(ownerUserId: string, sinceInput?: string | Date): Promise<SyncPullNotesResponse> {
     const since = this.parseSince(sinceInput);
 
     const [noteDocs, folderDocs] = await Promise.all([
@@ -118,6 +115,8 @@ export class SyncService {
 
   /**
    * since 파라미터 파싱 헬퍼
+   * @param sinceInput since 파라미터
+   * @returns Date
    */
   private parseSince(sinceInput?: string | Date): Date {
     if (!sinceInput) return new Date(0);

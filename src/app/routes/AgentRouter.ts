@@ -11,8 +11,11 @@ import { requireLogin } from '../middlewares/auth';
 import { asyncHandler } from '../utils/asyncHandler';
 import type { UserRepository } from '../../core/ports/UserRepository';
 
+/**
+ * AgentRouter 생성 인자.
+ * UserRepository 안가지게 수정
+ */
 export interface AgentRouterDeps {
-  userRepository: UserRepository;
   agentService: AgentService;
 }
 
@@ -21,7 +24,8 @@ export interface AgentRouterDeps {
  */
 export function createAgentRouter(deps: AgentRouterDeps): Router {
   const router = Router();
-  const agentController = new AgentController(deps.agentService, deps.userRepository);
+  // AgentController가 UserRepository를 직접적으로 안가지게 수정
+  const agentController = new AgentController(deps.agentService);
 
   router.use(bindSessionUser);
   router.use(requireLogin);

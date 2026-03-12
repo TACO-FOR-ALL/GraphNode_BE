@@ -12,109 +12,18 @@ import { ConversationService } from './ConversationService';
 import { MessageService } from './MessageService';
 import { GraphEmbeddingService } from './GraphEmbeddingService';
 import { GraphVectorService } from './GraphVectorService';
-import type { AgentMode, ChatStreamRequestBody } from '../../shared/dtos/agent';
+import { AgentMode, ChatStreamRequestBody } from '../../agent/types';
+import { UserService } from './UserService';
+import { InvalidApiKeyError } from '../../shared/errors/domain';
+import { ToolRegistry } from '../../agent/ToolRegistry';
 
 /** SSE 이벤트 전송 함수 타입 */
 export type SendEventFn = (event: string, data: unknown) => void;
 
-const AGENT_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
-  {
-    type: 'function',
-    function: {
-      name: 'search_notes',
-      description: '사용자의 노트를 키워드로 검색합니다. 노트 제목이나 내용에서 키워드를 찾습니다.',
-      parameters: {
-        type: 'object',
-        properties: {
-          keyword: { type: 'string', description: '검색할 키워드' },
-          limit: { type: 'number', description: '반환할 최대 노트 수 (기본값: 5)' },
-        },
-        required: ['keyword'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'get_recent_notes',
-      description: '사용자의 최근 노트 목록을 가져옵니다.',
-      parameters: {
-        type: 'object',
-        properties: {
-          limit: { type: 'number', description: '반환할 최대 노트 수 (기본값: 5)' },
-        },
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'search_conversations',
-      description:
-        '사용자의 채팅 대화/노드를 의미론적으로 검색합니다. 벡터 유사도 기반으로 관련성 높은 결과를 반환합니다.',
-      parameters: {
-        type: 'object',
-        properties: {
-          keyword: { type: 'string', description: '검색할 질의어 (의미론적 검색)' },
-          limit: { type: 'number', description: '반환할 최대 결과 수 (기본값: 5)' },
-        },
-        required: ['keyword'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'get_recent_conversations',
-      description: '사용자의 최근 채팅 대화 목록을 가져옵니다.',
-      parameters: {
-        type: 'object',
-        properties: {
-          limit: { type: 'number', description: '반환할 최대 대화 수 (기본값: 5)' },
-        },
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'get_graph_summary',
-      description: '사용자의 그래프 통계 및 클러스터 정보를 가져옵니다.',
-      parameters: { type: 'object', properties: {} },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'get_note_content',
-      description: '특정 노트의 전체 내용을 가져옵니다.',
-      parameters: {
-        type: 'object',
-        properties: {
-          noteId: { type: 'string', description: '노트 ID' },
-        },
-        required: ['noteId'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'get_conversation_messages',
-      description: '특정 대화의 메시지 내용을 가져옵니다.',
-      parameters: {
-        type: 'object',
-        properties: {
-          conversationId: { type: 'string', description: '대화 ID' },
-          limit: { type: 'number', description: '반환할 최대 메시지 수 (기본값: 20)' },
-        },
-        required: ['conversationId'],
-      },
-    },
-  },
-];
 
+//FIXED(강현일) : UserService 추가
 export interface AgentServiceDeps {
+  userService: UserService;
   noteService: NoteService;
   conversationService: ConversationService;
   messageService: MessageService;
@@ -123,67 +32,72 @@ export interface AgentServiceDeps {
 }
 
 export class AgentService {
+  private readonly toolRegistry = new ToolRegistry();
+
+  // FIXED(강현일) : 생성자에서 직접 주입받는걸로 변경
   constructor(private readonly deps: AgentServiceDeps) {}
 
   /**
    * 채팅 스트림 처리 (모드 분류 → chat/summary/note)
+   * @param userId 사용자 ID
+   * @param body 채팅 요청 바디
+   * @param sendEvent SSE 이벤트 전달 함수
+   * @returns void
    */
   async handleChatStream(
     userId: string,
     body: ChatStreamRequestBody,
-    openai: OpenAI,
     sendEvent: SendEventFn
   ): Promise<void> {
-    const { noteService, conversationService, messageService, graphEmbeddingService, graphVectorService } =
-      this.deps;
+    const {
+      userService,
+      noteService,
+      conversationService,
+      messageService,
+      graphEmbeddingService,
+      graphVectorService,
+    } = this.deps;
 
     const trimmedUser = (body.userMessage || '').trim();
     const context = (body.contextText || '').trim();
     const hasContext = context.length > 0;
     const { modeHint } = body;
 
+    // FIXED(강현일) : Service 단에서 API KEY 검증하게 변경
+    // API Key 조회 및 검증
+    const { apiKey: userOpenAIApiKey } = await userService.getApiKeys(userId, 'openai');
+    if (!userOpenAIApiKey) {
+      throw new InvalidApiKeyError('OpenAI API Key is required.');
+    }
+
+    // 내부적으로 OpenAI 인스턴스 생성 (Provider 통합 전까지 기존 로직 유지)
+    const openai = new OpenAI({ apiKey: userOpenAIApiKey });
+
+    // 시작 Event 전달
     sendEvent('status', { phase: 'analyzing', message: '요청 분석 중...' });
 
-    const classifierSystemPrompt = `
-      You are a router inside a note-taking and chat app.
-      You must choose EXACTLY ONE of the following modes for the current request:
-      - "chat"    : general conversation, Q&A, searching for notes/chats, asking about data, etc.
-      - "summary" : the user is asking to summarize, 정리해줘, 요약, 핵심만, 한줄요약, 개요 etc.
-      - "note"    : the user is asking to turn content into a note, 회의록, 기록, 노트로 정리, note, meeting minutes, minutes, 기록으로 남겨 etc.
-      Rules:
-      - If the user explicitly says anything like "노트로 정리해줘", "회의록으로 만들어줘", "note로 만들어줘", "meeting minutes로 만들어줘", "기록으로 남겨줘" → choose "note".
-      - If the user explicitly asks for "요약", "정리해줘", "핵심만", "summary", "개요" → choose "summary" (UNLESS they clearly say "노트로 정리" which is "note").
-      - If the user asks to find, search, or look up notes/conversations → choose "chat".
-      - Greetings or small talk → choose "chat".
-      - If you are unsure, default to "chat".
-      Output format:
-      - Respond with ONLY a JSON object in one line.
-      - Example: {"mode":"chat","reason":"user wants to search notes"}
-    `;
+    //FIXED(강현일) : System Prompt 를 메서드 밖으로 빼내서 수정 용이하게 변경
+    const classifierSystemPrompt = this.getClassifierSystemPrompt();
 
-    const classifierUserMessage = `
-      [User message]
-      ${trimmedUser}
+    //FIXED(강현일) : User Message도 그렇고, 밖으로 빼내서 메서드 형태로 변경
+    const classifierUserMessage = this.getClassifierUserPrompt(trimmedUser, context, hasContext);
 
-      [Has context?]
-      ${hasContext ? 'yes' : 'no'}
-
-      [Context preview]
-      ${context.slice(0, 500)}
-    `;
-
+    // OpenAI 호출
     const classifierResp = await openai.chat.completions.create({
-      model: 'gpt-4.1-mini',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: classifierSystemPrompt },
         { role: 'user', content: classifierUserMessage },
       ],
     });
 
+    // OpenAI 응답에서 모드 추출
     const classifierContent = classifierResp.choices[0]?.message?.content ?? '{"mode":"chat"}';
 
+    // JSON 파싱 및 모드 결정
     let mode: AgentMode = 'chat';
     try {
+      // JSON 파싱 시도, 실패시 기본값 chat으로 설정
       const parsed = JSON.parse(classifierContent) as { mode?: string; reason?: string };
       if (parsed.mode === 'chat' || parsed.mode === 'summary' || parsed.mode === 'note') {
         mode = parsed.mode;
@@ -192,11 +106,14 @@ export class AgentService {
       mode = 'chat';
     }
 
+    // modeHint가 주어졌다면, 그에 따른 모드로 강제 변경
     if (modeHint === 'summary') mode = 'summary';
     if (modeHint === 'note') mode = 'note';
 
+    // 모드 결정 후 Event 전달
     sendEvent('status', { phase: 'analyzing', message: `요청 분석 완료 (mode = ${mode})` });
 
+    // 모드에 따른 처리
     if (mode === 'chat') {
       await this.handleChatMode(userId, trimmedUser, context, hasContext, openai, sendEvent);
       return;
@@ -210,6 +127,16 @@ export class AgentService {
     await this.handleNoteMode(trimmedUser, context, openai, sendEvent);
   }
 
+  /**
+   * Chat 모드 처리
+   * Agent에서 Chat 모드로 처리하는 로직
+   * @param userId 사용자 ID
+   * @param trimmedUser 사용자 메시지
+   * @param context 컨텍스트 텍스트
+   * @param hasContext 컨텍스트 존재 여부
+   * @param openai OpenAI 인스턴스
+   * @param sendEvent SSE 이벤트 전달 함수
+   */
   private async handleChatMode(
     userId: string,
     trimmedUser: string,
@@ -218,27 +145,18 @@ export class AgentService {
     openai: OpenAI,
     sendEvent: SendEventFn
   ): Promise<void> {
-    const systemPrompt = `
-      You are the "GraphNode AI Assistant".
-      You help users manage their notes, conversations, and knowledge graph.
-      You have access to the following tools to retrieve user data:
-      - search_notes: Search notes by keyword
-      - get_recent_notes: Get recent notes
-      - search_conversations: Search conversations by keyword
-      - get_recent_conversations: Get recent conversations
-      - get_graph_summary: Get graph statistics and cluster info
-      - get_note_content: Get full content of a specific note
-      - get_conversation_messages: Get messages from a specific conversation
-      When the user asks about their data (notes, conversations, graph), use these tools to fetch the information.
-      Always respond in the same language as the user's message.
-      Keep responses concise and helpful.
-    `;
+    // FIXED (강현일) : Chat Mode의 System Prompt를 반환하는 메서드 추가
+    const systemPrompt = this.getChatSystemPrompt();
 
+    // FIXED (강현일) : User Message도 그렇고, 밖으로 빼내서 메서드 형태로 변경
+    const userMessage = this.getChatUserPrompt(trimmedUser, context, hasContext);
+
+    // FIXME TODO : OpenAI 한정으로 하드코딩 로직 들어있음. 이후 개선 필요. (현재 IAIProvider는 이런 로직 구현안되서 우선 수정 보류)
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
       {
         role: 'user',
-        content: hasContext ? `[Context]\n${context}\n\n[User]\n${trimmedUser}` : trimmedUser,
+        content: userMessage,
       },
     ];
 
@@ -246,24 +164,29 @@ export class AgentService {
     let loopCount = 0;
     const maxLoops = 5;
 
+    //
     while (continueLoop && loopCount < maxLoops) {
       loopCount++;
 
+      // 응답 생성
       const response = await openai.chat.completions.create({
-        model: 'gpt-4.1-mini',
+        model: 'gpt-4o-mini',
         messages,
-        tools: AGENT_TOOLS,
+        tools: this.toolRegistry.getDefinitions(),
         tool_choice: 'auto',
       });
 
+      // 응답 선택
       const choice = response.choices[0];
       const assistantMessage = choice.message;
 
+      // tool_calls가 있는지 확인
       if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
         messages.push(assistantMessage);
 
         sendEvent('status', { phase: 'searching', message: '데이터 검색 중...' });
 
+        // tool_calls가 있는 경우, tool_calls를 처리
         for (const toolCall of assistantMessage.tool_calls) {
           if (toolCall.type !== 'function') continue;
 
@@ -294,25 +217,33 @@ export class AgentService {
     }
   }
 
+  /**
+   * Agent Summary 모드 처리
+   * @param trimmedUser 사용자의 메시지
+   * @param context 사용자의 컨텍스트
+   * @param openai OpenAI 인스턴스
+   * @param sendEvent SSE 이벤트 전달 함수
+   */
   private async handleSummaryMode(
     trimmedUser: string,
     context: string,
     openai: OpenAI,
     sendEvent: SendEventFn
   ): Promise<void> {
-    const systemPrompt = `
-      Summarize ONLY the given context.
-      Do NOT create a structured note.
-      Use a simple markdown bullet list ("- ...").
-    `;
+    // FIXED(강현일) : Prompt 반환해주는 메서드 추가
+    const systemPrompt = this.getSummarySystemPrompt();
 
+    // FIXED(강현일) : User Message도 그렇고, 밖으로 빼내서 메서드 형태로 변경
+    const userMessage = this.getSummaryUserPrompt(trimmedUser, context);
+
+    // FIXME TODO : OpenAI 하드코딩 부분 이후 수정 필요. 26/03/12 기준으로는 IAiProvider의 interface에 미구현되어 있어 수정 보류
     const summaryResp = await openai.chat.completions.create({
-      model: 'gpt-4.1-mini',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
         {
           role: 'user',
-          content: `[User request]\n${trimmedUser}\n\n[Context]\n${context}`,
+          content: userMessage,
         },
       ],
     });
@@ -323,26 +254,25 @@ export class AgentService {
     sendEvent('status', { phase: 'done', message: '요약 생성 완료' });
   }
 
+  /**
+   * Agent Note 모드 처리
+   * @param trimmedUser 사용자의 메시지
+   * @param context 사용자의 컨텍스트
+   * @param openai OpenAI 인스턴스
+   * @param sendEvent SSE 이벤트 전달 함수
+   */
   private async handleNoteMode(
     trimmedUser: string,
     context: string,
     openai: OpenAI,
     sendEvent: SendEventFn
   ): Promise<void> {
-    const systemPromptNote = `
-      Create a well-structured markdown NOTE based on the user request and context.
-      Formatting:
-      - Use headings (##, ###) to group related ideas.
-      - Use bullet lists (- ...) when helpful.
-      - Use numbered lists when describing steps or processes.
-      - Highlight key decisions, conclusions, and TODOs.
-      - Output ONLY valid markdown. Do NOT add meta text like "Here is your note".
-    `;
-
-    const userForNote = `[User request]\n${trimmedUser}\n\n[Context]\n${context}`;
+    // FIXED(강현일) : Prompt 획득 메서드 추가
+    const systemPromptNote = this.getNoteSystemPrompt();
+    const userForNote = this.getNoteUserPrompt(trimmedUser, context);
 
     const noteStream = await openai.chat.completions.create({
-      model: 'gpt-4.1-mini',
+      model: 'gpt-4o-mini',
       stream: true,
       messages: [
         { role: 'system', content: systemPromptNote },
@@ -352,6 +282,7 @@ export class AgentService {
 
     let fullNote = '';
 
+    // SSE로 노트 생성, Note만 다른 (Summary, Chat) Mode와 다르게 SSE처리
     for await (const chunk of noteStream) {
       const delta = chunk.choices[0]?.delta?.content ?? '';
       if (!delta) continue;
@@ -367,7 +298,11 @@ export class AgentService {
     });
   }
 
-  /** 임베딩 조회 (임시 - 향후 개선 예정) */
+  /** 임베딩 조회 (임시 - 향후 개선 예정)
+   *  @param openai OpenAI 인스턴스
+   *  @param text 임베딩을 조회할 텍스트
+   *  @returns 임베딩 결과
+   */
   private async getEmbedding(openai: OpenAI, text: string): Promise<number[]> {
     const response = await openai.embeddings.create({
       model: 'text-embedding-3-small',
@@ -376,169 +311,152 @@ export class AgentService {
     return response.data[0].embedding;
   }
 
-  /** Function Calling 도구 실행 */
+  /** Function Calling 도구 실행
+   * @param userId 사용자 ID
+   * @param toolName 도구 이름
+   * @param args 도구 인자
+   * @param openai OpenAI 인스턴스
+   * @returns 도구 실행 결과
+   */
   private async executeToolCall(
     userId: string,
     toolName: string,
     args: Record<string, unknown>,
     openai: OpenAI
   ): Promise<string> {
-    const { noteService, conversationService, messageService, graphEmbeddingService, graphVectorService } =
-      this.deps;
+    return this.toolRegistry.execute(toolName, userId, args, this.deps, openai);
+  }
 
-    try {
-      switch (toolName) {
-        case 'search_notes': {
-          const keyword = args.keyword as string;
-          const limit = (args.limit as number) || 5;
+  // --- Prompt 관련 메서드 ---
 
-          const { items: allNotes } = await noteService.listNotes(userId, null, 10000);
-          const filtered = allNotes
-            .filter(
-              (note) =>
-                note.title.toLowerCase().includes(keyword.toLowerCase()) ||
-                note.content.toLowerCase().includes(keyword.toLowerCase())
-            )
-            .slice(0, limit);
+  /**
+   * HandleChatStream 메서드에서 필요로하는 ClassifierSystemPrompt를 반환하는 메서드
+   * AI Agent의 System Prompt를 반환하는 메서드
+   * @returns System Prompt
+   */
+  private getClassifierSystemPrompt(): string {
+    return `
+      You are a router inside a note-taking and chat app.
+      You must choose EXACTLY ONE of the following modes for the current request:
+      - "chat"    : general conversation, Q&A, searching for notes/chats, asking about data, etc.
+      - "summary" : the user is asking to summarize, 정리해줘, 요약, 핵심만, 한줄요약, 개요 etc.
+      - "note"    : the user is asking to turn content into a note, 회의록, 기록, 노트로 정리, note, meeting minutes, minutes, 기록으로 남겨 etc.
+      Rules:
+      - If the user explicitly says anything like "노트로 정리해줘", "회의록으로 만들어줘", "note로 만들어줘", "meeting minutes로 만들어줘", "기록으로 남겨줘" → choose "note".
+      - If the user explicitly asks for "요약", "정리해줘", "핵심만", "summary", "개요" → choose "summary" (UNLESS they clearly say "노트로 정리" which is "note").
+      - If the user asks to find, search, or look up notes/conversations → choose "chat".
+      - Greetings or small talk → choose "chat".
 
-          if (filtered.length === 0) {
-            return JSON.stringify({ message: '검색 결과가 없습니다.', notes: [] });
-          }
+      Respond with a JSON object with exactly two keys:
+      - mode: one of "chat", "summary", "note"
+      - reason: a short explanation of why you chose this mode
+      Example: {"mode":"chat","reason":"user wants to search notes"}
+    `;
+  }
 
-          return JSON.stringify({
-            message: `${filtered.length}개의 노트를 찾았습니다.`,
-            notes: filtered.map((n) => ({
-              id: n.id,
-              title: n.title,
-              preview: n.content.slice(0, 200) + (n.content.length > 200 ? '...' : ''),
-              updatedAt: n.updatedAt,
-            })),
-          });
-        }
+  /**
+   * HandleChatStream 메서드에서 필요로 하는 ClassifierUserPrompt를 반환하는 메서드
+   * Ai Agent에게 들어갈 User Prompt를 반환하는 메서드
+   * @param trimmedUser 사용자의 메시지
+   * @param context 사용자의 컨텍스트
+   * @param hasContext 컨텍스트 유무
+   * @returns User Prompt
+   */
+  private getClassifierUserPrompt(
+    trimmedUser: string,
+    context: string,
+    hasContext: boolean
+  ): string {
+    return `
+      [User message]
+      ${trimmedUser}
 
-        case 'get_recent_notes': {
-          const limit = (args.limit as number) || 5;
-          const { items: notes } = await noteService.listNotes(userId, null, limit);
-          const recent = notes
-            .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-            .slice(0, limit);
+      [Has context?]
+      ${hasContext ? 'yes' : 'no'}
 
-          return JSON.stringify({
-            message: `최근 ${recent.length}개의 노트입니다.`,
-            notes: recent.map((n) => ({
-              id: n.id,
-              title: n.title,
-              preview: n.content.slice(0, 200) + (n.content.length > 200 ? '...' : ''),
-              updatedAt: n.updatedAt,
-            })),
-          });
-        }
+      [Context preview]
+      ${context.slice(0, 500)}
+    `;
+  }
 
-        case 'search_conversations': {
-          const keyword = args.keyword as string;
-          const limit = (args.limit as number) || 5;
+  /**
+   * HandleChatMode 메서드에서 필요로하는 chatSystemPrompt를 반환하는 메서드
+   * @returns System Prompt
+   */
+  private getChatSystemPrompt(): string {
+    return `
+      You are the "GraphNode AI Assistant".
+      You help users manage their notes, conversations, and knowledge graph.
+      You have access to the following tools to retrieve user data:
+      - search_notes: Search notes by keyword
+      - get_recent_notes: Get recent notes
+      - search_conversations: Search conversations by keyword
+      - get_recent_conversations: Get recent conversations
+      - get_graph_summary: Get graph statistics and cluster info
+      - get_note_content: Get full content of a specific note
+      - get_conversation_messages: Get messages from a specific conversation
+      When the user asks about their data (notes, conversations, graph), use these tools to fetch the information.
+      Always respond in the same language as the user's message.
+      Keep responses concise and helpful.
+    `;
+  }
 
-          const queryVector = await this.getEmbedding(openai, keyword);
-          const searchResults = await graphVectorService.searchNodes(userId, queryVector, limit);
+  /**
+   * handleChatMode 메서드에서 필요로 하는 chatUserPrompt를 반환하는 메서드
+   * @param trimmedUser 사용자의 메시지
+   * @param context 사용자의 컨텍스트
+   * @param hasContext 컨텍스트 유무
+   * @returns User Prompt
+   */
+  private getChatUserPrompt(trimmedUser: string, context: string, hasContext: boolean): string {
+    return hasContext ? `[Context]\n${context}\n\n[User]\n${trimmedUser}` : trimmedUser;
+  }
 
-          if (searchResults.length === 0) {
-            return JSON.stringify({ message: '검색 결과가 없습니다.', conversations: [] });
-          }
+  /**
+   * handleSummaryMode 메서드에서 필요로하는 summarySystemPrompt를 반환하는 메서드
+   * @returns System Prompt
+   */
+  private getSummarySystemPrompt(): string {
+    return `
+      Summarize ONLY the given context.
+      Do NOT create a structured note.
+      Use a simple markdown bullet list ("- ...").
+    `;
+  }
 
-          return JSON.stringify({
-            message: `${searchResults.length}개의 관련 대화/노드를 찾았습니다.`,
-            conversations: searchResults.map((result) => ({
-              id: result.node.origId,
-              title: result.node.label || result.node.clusterName || '제목 없음',
-              content: result.node.summary || '',
-              similarity: result.score,
-              clusterId: result.node.clusterId,
-            })),
-          });
-        }
+  /**
+   * handleSummaryMode 메서드에서 필요로 하는 summaryUserPrompt를 반환하는 메서드
+   * @param trimmedUser 사용자의 메시지
+   * @param context 사용자의 컨텍스트
+   * @returns User Prompt
+   */
+  private getSummaryUserPrompt(trimmedUser: string, context: string): string {
+    return `[User request]\n${trimmedUser}\n\n[Context]\n${context}`;
+  }
 
-        case 'get_recent_conversations': {
-          const limit = (args.limit as number) || 5;
-          const { items: conversations } = await conversationService.listConversations(userId, limit);
+  /**
+   * handleNoteMode 메서드에서 필요로 하는 noteSystemPrompt를 반환하는 메서드
+   * @returns System Prompt
+   */
+  private getNoteSystemPrompt(): string {
+    return `
+      Create a well-structured markdown NOTE based on the user request and context.
+      Formatting:
+      - Use headings (##, ###) to group related ideas.
+      - Use bullet lists (- ...) when helpful.
+      - Use numbered lists when describing steps or processes.
+      - Highlight key decisions, conclusions, and TODOs.
+      - Output ONLY valid markdown. Do NOT add meta text like "Here is your note".
+    `;
+  }
 
-          return JSON.stringify({
-            message: `최근 ${conversations.length}개의 대화입니다.`,
-            conversations: conversations.map((c) => ({
-              id: c.id,
-              title: c.title,
-              updatedAt: c.updatedAt,
-            })),
-          });
-        }
-
-        case 'get_graph_summary': {
-          const stats = await graphEmbeddingService.getStats(userId);
-          const snapshot = await graphEmbeddingService.getSnapshotForUser(userId);
-
-          return JSON.stringify({
-            message: '그래프 요약 정보입니다.',
-            stats: {
-              totalNodes: stats?.nodes ?? 0,
-              totalEdges: stats?.edges ?? 0,
-              totalClusters: stats?.clusters ?? 0,
-            },
-            clusters:
-              snapshot?.clusters?.map((c) => ({
-                id: c.id,
-                name: c.name,
-                nodeCount: snapshot?.nodes?.filter((n) => n.clusterId === c.id).length ?? 0,
-              })) ?? [],
-          });
-        }
-
-        case 'get_note_content': {
-          const noteId = args.noteId as string;
-          try {
-            const note = await noteService.getNote(userId, noteId);
-            return JSON.stringify({
-              message: '노트 내용입니다.',
-              note: {
-                id: note.id,
-                title: note.title,
-                content: note.content,
-                updatedAt: note.updatedAt,
-              },
-            });
-          } catch {
-            return JSON.stringify({ message: '노트를 찾을 수 없습니다.', note: null });
-          }
-        }
-
-        case 'get_conversation_messages': {
-          const conversationId = args.conversationId as string;
-          const limit = (args.limit as number) || 20;
-
-          try {
-            const conv = await conversationService.getConversation(conversationId, userId);
-            const messageDocs = await messageService.findDocsByConversationId(conversationId);
-            const messages = messageDocs.slice(0, limit);
-
-            return JSON.stringify({
-              message: '대화 내용입니다.',
-              conversation: {
-                id: conv.id,
-                title: conv.title,
-                messages: messages.map((m: { role: string; content: string }) => ({
-                  role: m.role,
-                  content: m.content.slice(0, 500) + (m.content.length > 500 ? '...' : ''),
-                })),
-              },
-            });
-          } catch {
-            return JSON.stringify({ message: '대화를 찾을 수 없습니다.', conversation: null });
-          }
-        }
-
-        default:
-          return JSON.stringify({ error: `Unknown tool: ${toolName}` });
-      }
-    } catch (error) {
-      return JSON.stringify({ error: `도구 실행 중 오류가 발생했습니다: ${error}` });
-    }
+  /**
+   * handleNoteMode 메서드에서 필요로 하는 noteUserPrompt를 반환하는 메서드
+   * @param trimmedUser 사용자의 메시지
+   * @param context 사용자의 컨텍스트
+   * @returns User Prompt
+   */
+  private getNoteUserPrompt(trimmedUser: string, context: string): string {
+    return `[User request]\n${trimmedUser}\n\n[Context]\n${context}`;
   }
 }

@@ -6,6 +6,11 @@ GraphNode Backend는 **Hexagonal Architecture (Ports and Adapters)** 와 **Layer
 
 ```text
 src/
+├── agent/                # [Agent Layer] AI 에이전트 도구 및 로직
+│   ├── tools/            #   - 개별 도구(Note, Conversation 등) 구현체
+│   ├── ToolRegistry.ts   #   - 도구 등록 및 실행 관리
+│   └── types.ts          #   - 에이전트 공통 인터페이스 및 DTO
+│
 ├── app/                  # [Web Layer] HTTP 요청 처리 계층
 │   ├── controllers/      #   - 요청 검증, 서비스 호출, 응답 반환 (Presentation)
 │   ├── middlewares/      #   - 인증(Auth), 로깅(Logger), 에러 핸들링 등 공통 미들웨어
@@ -52,7 +57,14 @@ src/
 
 ## Layer Responsibilities
 
-### 1. App Layer (`src/app`)
+### 1. Agent Layer (`src/agent`)
+- **역할**: AI 에이전트의 구체적인 도구(Tools)와 실행 전략을 담당합니다.
+- **책임**:
+  - `tools/`: 사용자의 데이터(노트, 대화 등)에 접근하는 개별 Function Calling 도구 구현.
+  - `ToolRegistry`: 에이전트가 사용할 도구들을 등록하고 동적으로 실행하는 관리자 역할.
+  - 에이전트 전용 타입 및 DTO 관리.
+
+### 2. App Layer (`src/app`)
 - **역할**: 외부(Client)와의 인터페이스를 담당합니다. (Inbound Adapter)
 - **책임**:
   - HTTP 요청 파싱 및 유효성 검증 (`zod` 활용)
@@ -68,12 +80,13 @@ src/
   - **Types**: DB나 프레임워크에 종속되지 않는 순수 도메인 모델 정의.
   - **외부 기술(Express, AWS, MySql 등)에 의존하지 않음** (Dependency Inversion).
 
-### 3. Infra Layer (`src/infra`)
+### 4. Infra Layer (`src/infra`)
 - **역할**: Core Layer의 Port를 실제로 구현(Implements)하고 외부 시스템과 통신합니다. (Outbound Adapter)
 - **책임**:
   - 실제 DB 쿼리 수행 (Prisma, Mongoose)
-  - AWS, Redis, AI Provider 등 외부 API 통신
+  - AWS, Redis 등 외부 인프라 통신
   - Core Layer에서 정의한 인터페이스를 준수하여 구현
+  - (참고: AI Provider 연동은 현재 `shared/ai-providers`에서 관리됨)
 
 ### 4. Shared Layer (`src/shared`)
 - **역할**: 모든 계층에서 공통적으로 참조할 수 있는 유틸리티와 데이터 구조입니다.

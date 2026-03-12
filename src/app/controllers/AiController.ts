@@ -75,7 +75,7 @@ export class AiController {
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
-      
+
       const sendEvent = (event: string, data: unknown) => {
         res.write(`event: ${event}\n`);
         res.write(`data: ${JSON.stringify(data)}\n\n`);
@@ -115,15 +115,19 @@ export class AiController {
    * FE가 직접 임베딩/검색한 맥락(retrievedContext)을 포함합니다.
    */
   async handleAIRagChat(req: Request, res: Response) {
+    // userId 및 Conversation 검증
     const ownerUserId = getUserIdFromRequest(req)!;
     const conversationId = req.params.conversationId;
     if (!conversationId) throw new ValidationError('conversationId is required');
 
+    // 파일 처리
     let chatbody: any;
     if (req.headers['content-type']?.includes('multipart/form-data')) {
       chatbody = { ...req.body };
-      if (typeof chatbody.retrievedContext === 'string') chatbody.retrievedContext = JSON.parse(chatbody.retrievedContext);
-      if (typeof chatbody.recentMessages === 'string') chatbody.recentMessages = JSON.parse(chatbody.recentMessages);
+      if (typeof chatbody.retrievedContext === 'string')
+        chatbody.retrievedContext = JSON.parse(chatbody.retrievedContext);
+      if (typeof chatbody.recentMessages === 'string')
+        chatbody.recentMessages = JSON.parse(chatbody.recentMessages);
     } else {
       chatbody = req.body;
     }
@@ -131,6 +135,7 @@ export class AiController {
     const files = req.files as Express.Multer.File[] | undefined;
     const isStreaming = req.headers['accept'] === 'text/event-stream';
 
+    // SSE처리
     if (isStreaming) {
       await this.aiInteractionService.checkApiKey(ownerUserId, chatbody.model);
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -160,7 +165,12 @@ export class AiController {
         res.end();
       }
     } else {
-      const result = await this.aiInteractionService.handleRagAIChat(ownerUserId, chatbody, conversationId, files);
+      const result = await this.aiInteractionService.handleRagAIChat(
+        ownerUserId,
+        chatbody,
+        conversationId,
+        files
+      );
       res.status(201).json(result);
     }
   }
@@ -485,7 +495,10 @@ export class AiController {
     // 여기서는 기본적으로 octet-stream 사용하거나, key에서 추론 가능.
     // 간단히 octet-stream으로 설정.
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${key.split('/').pop() || 'file'}"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${key.split('/').pop() || 'file'}"`
+    );
 
     stream.pipe(res);
   }
