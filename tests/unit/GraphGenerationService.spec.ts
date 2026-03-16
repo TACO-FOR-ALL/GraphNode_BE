@@ -62,6 +62,10 @@ describe('GraphGenerationService', () => {
       sendTaskCompleted: jest.fn(),
       sendTaskFailed: jest.fn(),
       sendNotification: jest.fn(),
+      sendGraphGenerationRequested: jest.fn(),
+      sendGraphGenerationRequestFailed: jest.fn(),
+      sendGraphSummaryRequested: jest.fn(),
+      sendGraphSummaryRequestFailed: jest.fn(),
     } as any;
 
     mockQueuePort = {

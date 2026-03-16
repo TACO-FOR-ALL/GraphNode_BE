@@ -3,7 +3,6 @@ import { Container } from '../../bootstrap/container';
 import { AddNodeResultPayload } from '../../shared/dtos/queue';
 import { AiAddNodeBatchResult } from '../../shared/dtos/ai_graph_output';
 import { logger } from '../../shared/utils/logger';
-import { NotificationType } from '../notificationType';
 import { withRetry } from '../../shared/utils/retry';
 
 /**
@@ -39,11 +38,7 @@ export class AddNodeResultHandler implements JobHandler {
         await graphService.saveStats(stats);
       }
 
-      await notiService.sendNotification(userId, NotificationType.ADD_CONVERSATION_FAILED, {
-        taskId,
-        error: error || 'Unknown AI error',
-        timestamp: new Date().toISOString(),
-      });
+      await notiService.sendAddConversationFailed(userId, taskId, error || 'Unknown AI error');
       return;
     }
 
@@ -150,12 +145,7 @@ export class AddNodeResultHandler implements JobHandler {
 
       // 4. 알림 전송 병렬화
       await Promise.allSettled([
-        notiService.sendNotification(userId, NotificationType.ADD_CONVERSATION_COMPLETED, {
-          taskId,
-          nodeCount: totalNodesAdded,
-          edgeCount: totalEdgesAdded,
-          timestamp: new Date().toISOString(),
-        }),
+        notiService.sendAddConversationCompleted(userId, taskId, totalNodesAdded, totalEdgesAdded),
         notiService.sendFcmPushNotification(
           userId,
           'Graph Updated',
@@ -167,11 +157,7 @@ export class AddNodeResultHandler implements JobHandler {
     } catch (err) {
       logger.error({ err, taskId, userId }, 'Failed to process add node result');
 
-      await notiService.sendNotification(userId, NotificationType.ADD_CONVERSATION_FAILED, {
-        taskId,
-        error: err instanceof Error ? err.message : String(err),
-        timestamp: new Date().toISOString(),
-      });
+      await notiService.sendAddConversationFailed(userId, taskId, err instanceof Error ? err.message : String(err));
       await notiService.sendFcmPushNotification(
         userId,
         'Graph Update Failed',

@@ -1,3 +1,4 @@
+import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import * as admin from 'firebase-admin';
 
 import { NotificationService } from '../../src/core/services/NotificationService';
@@ -48,29 +49,29 @@ describe('NotificationService', () => {
 
       expect(mockEventBus.publish).toHaveBeenCalledWith(`notification:user:${userId}`, {
         type,
-        payload,
+        payload: { ...payload, timestamp: expect.any(String) },
         timestamp: expect.any(String),
       });
     });
   });
 
   describe('Device Tokens', () => {
-      it('registerDeviceToken should add token to redis', async () => {
-          await service.registerDeviceToken('u1', 't1');
-          expect(redis.sadd).toHaveBeenCalledWith('user:u1:fcm_tokens', 't1');
-          expect(redis.expire).toHaveBeenCalled();
-      });
+    it('registerDeviceToken should add token to redis', async () => {
+      await service.registerDeviceToken('u1', 't1');
+      expect((redis.sadd as any)).toHaveBeenCalledWith('user:u1:fcm_tokens', 't1');
+      expect((redis.expire as any)).toHaveBeenCalled();
+    });
 
-      it('unregisterDeviceToken should remove token from redis', async () => {
-          await service.unregisterDeviceToken('u1', 't1');
-          expect(redis.srem).toHaveBeenCalledWith('user:u1:fcm_tokens', 't1');
-      });
+    it('unregisterDeviceToken should remove token from redis', async () => {
+      await service.unregisterDeviceToken('u1', 't1');
+      expect((redis.srem as any)).toHaveBeenCalledWith('user:u1:fcm_tokens', 't1');
+    });
   });
 
   describe('sendFcmPushNotification', () => {
     it('should send multicast message if tokens exist', async () => {
-      (redis.smembers as jest.Mock).mockResolvedValue(['token1', 'token2']);
-      (admin.messaging().sendEachForMulticast as jest.Mock).mockResolvedValue({
+      (redis.smembers as any).mockResolvedValue(['token1', 'token2']);
+      (admin.messaging().sendEachForMulticast as any).mockResolvedValue({
         failureCount: 0,
         responses: [],
       });
@@ -85,8 +86,8 @@ describe('NotificationService', () => {
     });
 
     it('should remove invalid tokens', async () => {
-      (redis.smembers as jest.Mock).mockResolvedValue(['token1', 'invalid-token']);
-      (admin.messaging().sendEachForMulticast as jest.Mock).mockResolvedValue({
+      (redis.smembers as any).mockResolvedValue(['token1', 'invalid-token']);
+      (admin.messaging().sendEachForMulticast as any).mockResolvedValue({
         failureCount: 1,
         responses: [
           { success: true },
@@ -96,13 +97,13 @@ describe('NotificationService', () => {
 
       await service.sendFcmPushNotification('user-1', 'Title', 'Body');
 
-      expect(redis.srem).toHaveBeenCalledWith('user:user-1:fcm_tokens', 'invalid-token');
+      expect((redis.srem as any)).toHaveBeenCalledWith('user:user-1:fcm_tokens', 'invalid-token');
     });
 
     it('should NOT call admin.messaging if no tokens', async () => {
-        (redis.smembers as jest.Mock).mockResolvedValue([]);
-        await service.sendFcmPushNotification('u1', 'T', 'B');
-        expect(admin.messaging().sendEachForMulticast).not.toHaveBeenCalled();
+      (redis.smembers as any).mockResolvedValue([]);
+      await service.sendFcmPushNotification('u1', 'T', 'B');
+      expect(admin.messaging().sendEachForMulticast).not.toHaveBeenCalled();
     });
   });
 
@@ -125,6 +126,43 @@ describe('NotificationService', () => {
       await service.unsubscribeFromUserNotifications(userId);
 
       expect(mockEventBus.unsubscribe).toHaveBeenCalledWith(`notification:user:${userId}`);
+    });
+  });
+
+  describe('Specific Notification Methods', () => {
+    const userId = 'user-1';
+    const taskId = 'task-1';
+
+    it('sendGraphGenerationRequested should publish correct event', async () => {
+      await service.sendGraphGenerationRequested(userId, taskId);
+      expect(mockEventBus.publish).toHaveBeenCalledWith(`notification:user:${userId}`, expect.objectContaining({
+        type: 'GRAPH_GENERATION_REQUESTED',
+        payload: expect.objectContaining({ taskId, timestamp: expect.any(String) })
+      }));
+    });
+
+    it('sendGraphSummaryCompleted should publish correct event', async () => {
+      await service.sendGraphSummaryCompleted(userId, taskId);
+      expect(mockEventBus.publish).toHaveBeenCalledWith(`notification:user:${userId}`, expect.objectContaining({
+        type: 'GRAPH_SUMMARY_COMPLETED',
+        payload: expect.objectContaining({ taskId, timestamp: expect.any(String) })
+      }));
+    });
+
+    it('sendAddConversationCompleted should publish correct event with counts', async () => {
+      await service.sendAddConversationCompleted(userId, taskId, 10, 20);
+      expect(mockEventBus.publish).toHaveBeenCalledWith(`notification:user:${userId}`, expect.objectContaining({
+        type: 'ADD_CONVERSATION_COMPLETED',
+        payload: expect.objectContaining({ taskId, nodeCount: 10, edgeCount: 20, timestamp: expect.any(String) })
+      }));
+    });
+
+    it('sendMicroscopeDocumentCompleted should publish correct event with optional fields', async () => {
+      await service.sendMicroscopeDocumentCompleted(userId, taskId, 'src-1', 5);
+      expect(mockEventBus.publish).toHaveBeenCalledWith(`notification:user:${userId}`, expect.objectContaining({
+        type: 'MICROSCOPE_DOCUMENT_COMPLETED',
+        payload: expect.objectContaining({ taskId, sourceId: 'src-1', chunksCount: 5, timestamp: expect.any(String) })
+      }));
     });
   });
 });

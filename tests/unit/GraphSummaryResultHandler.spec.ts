@@ -23,6 +23,8 @@ describe('GraphSummaryResultHandler', () => {
     mockNotiService = {
       sendNotification: jest.fn(),
       sendFcmPushNotification: jest.fn(),
+      sendGraphSummaryCompleted: jest.fn(),
+      sendGraphSummaryFailed: jest.fn(),
     };
 
     mockContainer = {

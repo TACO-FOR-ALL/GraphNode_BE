@@ -48,11 +48,7 @@ export class GraphGenerationResultHandler implements JobHandler {
         }
 
         // 실패 알림 전송(Redis Pub/Sub & FCM)
-        await notiService.sendNotification(userId, NotificationType.GRAPH_GENERATION_FAILED, {
-          taskId,
-          error: errorMsg,
-          timestamp: new Date().toISOString(),
-        });
+        await notiService.sendGraphGenerationFailed(userId, taskId, errorMsg);
         await notiService.sendFcmPushNotification(
           userId,
           'Graph Generation Failed',
@@ -199,12 +195,7 @@ export class GraphGenerationResultHandler implements JobHandler {
 
         // 4. 완료 알림 병렬 전송
         await Promise.allSettled([
-          notiService.sendNotification(userId, NotificationType.GRAPH_GENERATION_COMPLETED, {
-            taskId,
-            nodeCount: snapshot.nodes.length,
-            edgeCount: snapshot.edges.length,
-            timestamp: new Date().toISOString(),
-          }),
+          notiService.sendGraphGenerationCompleted(userId, taskId),
           notiService.sendFcmPushNotification(
             userId,
             'Graph Ready',
@@ -226,11 +217,7 @@ export class GraphGenerationResultHandler implements JobHandler {
         }
 
         // 실패 알림 전송 (에러 발생 시점)
-        await notiService.sendNotification(userId, NotificationType.GRAPH_GENERATION_FAILED, {
-          taskId,
-          error: errorMsg,
-          timestamp: new Date().toISOString(),
-        });
+        await notiService.sendGraphGenerationFailed(userId, taskId, errorMsg);
         await notiService.sendFcmPushNotification(
           userId,
           'Graph Generation Failed',
