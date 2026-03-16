@@ -84,6 +84,84 @@ const client = createGraphNodeClient({
 
 ---
 
+## 📘 타입 레퍼런스 (Type Reference)
+
+SDK에서 export하는 모든 DTO, Enum, Interface의 목록과 설명입니다.
+
+- [📋 타입 전체 개요](docs/types/overview.md): SDK 타입 파일별 역할 요약 및 의존 관계
+- [🔔 알림 이벤트 타입 상세](docs/types/notification.md): `TaskType`, `NotificationType`, 각 이벤트 Payload 타입
+
+---
+
+## 🔔 실시간 알림 이벤트 (Notification Events)
+
+> **FE 개발자를 위한 빠른 참조.** 상세 내용은 [notification.md](docs/types/notification.md) 참고.
+
+GraphNode 백엔드는 그래프 생성, 대화 추가, Microscope 분석 등 **오래 걸리는 비동기 작업**이 완료되면 SSE(Server-Sent Events) 채널을 통해 알림을 Push합니다.
+
+### 흐름 요약
+
+```text
+FE → REST API 호출 (예: 그래프 생성 요청)
+         ↓
+서버 → SQS 발행 (TaskType) + 즉시 알림 Push (REQUESTED)
+         ↓
+AI Worker → 작업 처리
+         ↓
+서버 → 완료/실패 알림 Push (COMPLETED / FAILED)
+         ↓
+FE → 알림 수신 → UI 갱신
+```
+
+### NotificationType 전체 목록
+
+| 이벤트 값 | 발생 시점 |
+| --- | --- |
+| `GRAPH_GENERATION_REQUESTED` | 그래프 생성 요청 접수 |
+| `GRAPH_GENERATION_REQUEST_FAILED` | 요청 접수 실패 (SQS) |
+| `GRAPH_GENERATION_COMPLETED` | 그래프 생성 완료 |
+| `GRAPH_GENERATION_FAILED` | 그래프 생성 실패 (AI/DB) |
+| `GRAPH_SUMMARY_REQUESTED` | 요약 생성 요청 접수 |
+| `GRAPH_SUMMARY_REQUEST_FAILED` | 요약 요청 실패 |
+| `GRAPH_SUMMARY_COMPLETED` | 그래프 AI 요약 완료 |
+| `GRAPH_SUMMARY_FAILED` | 요약 생성 실패 |
+| `ADD_CONVERSATION_REQUESTED` | 대화 추가 요청 접수 |
+| `ADD_CONVERSATION_REQUEST_FAILED` | 대화 추가 요청 실패 |
+| `ADD_CONVERSATION_COMPLETED` | 새 대화 그래프 추가 완료 (+ nodeCount, edgeCount) |
+| `ADD_CONVERSATION_FAILED` | 대화 추가 실패 |
+| `MICROSCOPE_INGEST_REQUESTED` | Microscope 분석 요청 접수 |
+| `MICROSCOPE_INGEST_REQUEST_FAILED` | 분석 요청 실패 |
+| `MICROSCOPE_DOCUMENT_COMPLETED` | 단일 문서 분석 완료 (+ sourceId, chunksCount) |
+| `MICROSCOPE_DOCUMENT_FAILED` | 문서 분석 실패 |
+| `MICROSCOPE_WORKSPACE_COMPLETED` | 워크스페이스 전체 Ingest 완료 |
+
+### 기본 사용 예제
+
+```typescript
+import { NotificationType } from '@taco_tsinghua/graphnode-sdk';
+
+const closeStream = client.notification.stream((event) => {
+  switch (event.type) {
+    case NotificationType.GRAPH_GENERATION_COMPLETED:
+      await refreshGraphData();
+      break;
+    case NotificationType.GRAPH_GENERATION_FAILED:
+      showErrorToast(event.payload.error);
+      break;
+    case NotificationType.ADD_CONVERSATION_COMPLETED:
+      showToast(`${event.payload.nodeCount}개 노드 추가 완료`);
+      break;
+  }
+});
+
+// 컴포넌트 언마운트 시
+onUnmount(() => closeStream());
+```
+
+> 📌 **`TaskType`은 SDK 내부 서버간 관계를 이해하기 위한 참조용** 타입입니다. FE에서 직접 사용할 일은 거의 없습니다.
+
+---
+
 ## 🛠️ 개발 가이드 (Development Guide)
 
 - [Sync 로직 및 LWW 정책 상세](../../docs/architecture/sync-lww-logic.md)

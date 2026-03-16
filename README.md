@@ -199,6 +199,7 @@ infisical run --env=prod -- npm start
 
 - **[Code Style & Contribution Guide](docs/architecture/CODE_STYLE.md)**: 네이밍 컨벤션, 아키텍처 패턴, 에러 핸들링 규칙 등
 - **[Daily Dev Logs](docs/guides/Daily)**: 일별 작업 상세 기록
+  - [2026-03-16 SDK Notification 타입 정의 및 문서화 (TaskType/NotificationType)](docs/guides/Daily/20260316-sdk-notification-types-doc.md)
   - [2026-03-12 SyncService 유닛 테스트 타입 오류 수정 및 검증](docs/guides/Daily/20260312-sync-service-test-fix.md)
   - [2026-03-12 Sync pull 로직 리팩토링 및 메시지 병합 (Nesting)](docs/guides/Daily/20260312-sync-logic-refactor.md)
   - [2026-03-12 FE SDK JSDoc 보강 및 엔드포인트별 문서 분리 리팩토링](docs/guides/Daily/20260312-sdk-docs-refactor.md)

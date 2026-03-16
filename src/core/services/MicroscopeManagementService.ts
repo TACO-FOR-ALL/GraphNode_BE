@@ -14,6 +14,7 @@ import { UpstreamError, NotFoundError, ForbiddenError, ValidationError } from '.
 import { logger } from '../../shared/utils/logger';
 import { ConversationRepository } from '../ports/ConversationRepository';
 import { NoteRepository } from '../ports/NoteRepository';
+import { NotificationService } from './NotificationService';
 import { AiMicroscopeIngestResultItem } from '../../shared/dtos/ai_graph_output';
 import { withRetry } from '../../shared/utils/retry';
 
@@ -44,6 +45,7 @@ export class MicroscopeManagementService {
     private readonly storagePort: StoragePort,
     private readonly conversationRepo: ConversationRepository,
     private readonly noteRepo: NoteRepository,
+    private readonly notificationService: NotificationService
   ) {
     // SQS Request URL for AI tasks (Microscope 워커 요청 큐)
     this.jobQueueUrl = process.env.SQS_REQUEST_QUEUE_URL || 'TO_BE_CONFIGURED';
@@ -249,12 +251,19 @@ export class MicroscopeManagementService {
         { label: 'QueuePort.sendMessage' }
       );
       
+      // 성공 알림 전송
+      await this.notificationService.sendMicroscopeIngestRequested(userId, docId);
+
       workspace.documents.push(newDocument);
       logger.info({ userId, groupId, nodeId, nodeType, taskId: docId }, 'Enqueued Microscope Ingest From Node Task via SQS');
       
       return workspace;
     } catch (err) {
       logger.error({ err, userId, groupId, nodeId }, 'Failed to process node for Microscope workspace, createWorkspaceAndMicroscopeIngestFromNode');
+      
+      // 실패 알림 전송
+      await this.notificationService.sendMicroscopeIngestRequestFailed(userId, docId || 'unknown', String(err));
+
       throw new UpstreamError(`Failed to process node ${nodeId}`, { cause: String(err) });
     }
   }
