@@ -169,9 +169,16 @@ export class NotificationService {
    * (Legacy) 특정 사용자에게 SSE 알림을 전송(발행)합니다.
    * 외부에서는 아래의 타입별 전용 메서드 사용을 권장합니다.
    */
-  async sendNotification(userId: string, type: string, payload: unknown): Promise<void> {
+  async sendNotification(userId: string, type: string, payload: any): Promise<void> {
     const channel = this.getUserChannel(userId);
-    const message = { type, payload, timestamp: new Date().toISOString() };
+    const timestamp = new Date().toISOString();
+
+    // SDK: BaseNotificationPayload expects timestamp inside payload
+    if (payload && typeof payload === 'object') {
+      payload.timestamp = timestamp;
+    }
+
+    const message = { type, payload, timestamp };
 
     try {
       await withRetry(async () => await this.eventBus.publish(channel, message), {

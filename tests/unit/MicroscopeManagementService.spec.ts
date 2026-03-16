@@ -6,6 +6,7 @@ import { QueuePort } from '../../src/core/ports/QueuePort';
 import { StoragePort } from '../../src/core/ports/StoragePort';
 import { ConversationRepository } from '../../src/core/ports/ConversationRepository';
 import { NoteRepository } from '../../src/core/ports/NoteRepository';
+import { NotificationService } from '../../src/core/services/NotificationService';
 import { TaskType } from '../../src/shared/dtos/queue';
 import { NotFoundError, ValidationError } from '../../src/shared/errors/domain';
 
@@ -17,6 +18,7 @@ describe('MicroscopeManagementService', () => {
   let mockStoragePort: jest.Mocked<StoragePort>;
   let mockConversationRepo: jest.Mocked<ConversationRepository>;
   let mockNoteRepo: jest.Mocked<NoteRepository>;
+  let mockNotificationSvc: jest.Mocked<NotificationService>;
 
   beforeEach(() => {
     mockWorkspaceStore = {
@@ -96,13 +98,20 @@ describe('MicroscopeManagementService', () => {
       deleteAllFolders: jest.fn(),
     } as any;
 
+    mockNotificationSvc = {
+      sendMicroscopeIngestRequested: jest.fn(),
+      sendMicroscopeIngestRequestFailed: jest.fn(),
+      sendNotification: jest.fn(),
+    } as any;
+
     service = new MicroscopeManagementService(
       mockWorkspaceStore,
       mockGraphNeo4jStore,
       mockQueuePort,
       mockStoragePort,
       mockConversationRepo,
-      mockNoteRepo
+      mockNoteRepo,
+      mockNotificationSvc
     );
   });
 
