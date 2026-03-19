@@ -42,6 +42,18 @@ jest.mock('../../src/infra/redis/RedisEventBusAdapter', () => ({
   }
 }));
 
+// GraphAi 테스트는 큐잉만 검증. 알림 전송 시 NotificationService가 Mongo insert를 시도하는데,
+// 이 스펙의 Mongo mock은 db().collection()을 지원하지 않아 502가 난다. 따라서 NotificationService를 mock.
+jest.mock('../../src/core/services/NotificationService', () => ({
+  NotificationService: jest.fn().mockImplementation(() => ({
+    sendGraphGenerationRequested: jest.fn<any>().mockResolvedValue(undefined),
+    sendGraphGenerationRequestFailed: jest.fn<any>().mockResolvedValue(undefined),
+    sendGraphSummaryRequested: jest.fn<any>().mockResolvedValue(undefined),
+    sendGraphSummaryRequestFailed: jest.fn<any>().mockResolvedValue(undefined),
+    sendNotification: jest.fn<any>().mockResolvedValue(undefined),
+  })),
+}));
+
 describe('GraphAi API Integration Tests', () => {
     let app: Express;
     let accessToken: string;
