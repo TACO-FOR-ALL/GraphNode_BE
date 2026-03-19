@@ -320,8 +320,12 @@ export interface MicroscopeWorkspaceCompletedPayload extends BaseNotificationPay
  * ```
  */
 export interface NotificationEvent {
+  /** 알림 고유 ID (ULID) — 재연결 시 since 파라미터로 사용 */
+  id: string;
   /** 이벤트 종류 (@see NotificationTypeValue) */
   type: NotificationTypeValue;
   /** 이벤트별 상세 데이터 */
   payload: Record<string, unknown>;
+  /** 이벤트 발생 시각 (ISO 8601) */
+  timestamp: string;
 }
