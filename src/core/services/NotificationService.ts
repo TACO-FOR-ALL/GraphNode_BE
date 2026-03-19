@@ -228,13 +228,15 @@ export class NotificationService {
     // - 저장이 실패하면 replay 기반 유실 방지가 불가능해지므로, publish보다 먼저 수행합니다.
     const now = Date.now();
     const retentionDays = 7; //TODO: 일단 ttl을 7일로 설정했는데 추후에 변경하면됌!
+    const expiresAt = new Date(now + retentionDays * 24 * 60 * 60 * 1000);
+
     const doc: NotificationDoc = {
       _id: id,
       userId,
       type,
       payload,
       createdAt: now,
-      expiresAt: now + retentionDays * 24 * 60 * 60 * 1000,
+      expiresAt: expiresAt,
     };
 
     try {

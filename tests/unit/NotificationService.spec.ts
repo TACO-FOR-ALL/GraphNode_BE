@@ -60,7 +60,7 @@ describe('NotificationService', () => {
           type,
           payload: expect.any(Object),
           createdAt: expect.any(Number),
-          expiresAt: expect.any(Number),
+          expiresAt: expect.any(Date),
         })
       );
       expect(mockEventBus.publish).toHaveBeenCalledWith(`notification:user:${userId}`, {
@@ -82,7 +82,7 @@ describe('NotificationService', () => {
           type: 'TEST',
           payload: { ok: true },
           createdAt: 1700000000000,
-          expiresAt: 1700000000000 + 1000,
+          expiresAt: new Date(1700000000000 + 1000),
         },
       ]);
 

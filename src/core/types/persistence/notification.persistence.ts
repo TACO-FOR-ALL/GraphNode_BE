@@ -12,7 +12,7 @@ export type NotificationTypeString = string;
  * @param type 알림 타입
  * @param payload 알림 페이로드
  * @param createdAt 생성 시간 (epoch ms)
- * @param expiresAt 만료 시간 (epoch ms, TTL 인덱스 타겟)
+ * @param expiresAt 만료 시간 (Date 객체, TTL 인덱스 타겟)
  */
 export interface NotificationDoc {
   _id: string; // 커서(cursor) (예: ULID)
@@ -20,5 +20,5 @@ export interface NotificationDoc {
   type: NotificationTypeString;
   payload: unknown;
   createdAt: number; // epoch ms
-  expiresAt?: number; // epoch ms (TTL 인덱스 타겟)
+  expiresAt?: Date; // Date 객체 (TTL 인덱스 타겟)
 }

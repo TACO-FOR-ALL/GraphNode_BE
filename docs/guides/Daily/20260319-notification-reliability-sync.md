@@ -51,9 +51,9 @@
 ## 🔍 조사 결과 (TTL 및 자동 삭제)
 
 - **확인 사항:** `NotificationService.ts`에서 설정한 7일 TTL이 실제로 동작하는지 조사했습니다.
-- **결과:** 현재 `mongodb.ts`에 TTL 인덱스는 설정되어 있으나, `NotificationService`에서 `expiresAt`를 `number`(epoch ms)로 저장하고 있습니다.
-- **공식 문서 근거:** [MongoDB Official Manual - TTL Indexes](https://www.mongodb.com/docs/manual/core/index-ttl/#type)에 따르면, "To use a TTL index on a collection, you must have a field that contains either a **BSON date** or an array that contains BSON date objects."라고 명시되어 있습니다. 만약 필드 타입이 Date가 아닌 다른 타입(Number, String 등)일 경우, TTL 스레드는 해당 문서를 무시하며 자동 삭제가 수행되지 않습니다.
-- **권장 조치:** `NotificationService`에서 `expiresAt` 저장 시 `new Date(now + ...)`와 같이 Date 객체로 변환하여 저장해야 합니다.
+- **결과:** 현재 `mongodb.ts`에 TTL 인덱스는 설정되어 있으나, `NotificationService`에서 `expiresAt`를 `number`(epoch ms)로 저장하고 있어 자동 삭제가 작동하지 않음을 확인했습니다.
+- **공식 문서 근거:** [MongoDB Official Manual - TTL Indexes](https://www.mongodb.com/ko-kr/docs/manual/core/index-ttl/#behavior)에 따르면, "문서 의 인덱스 필드 에 하나 이상의 날짜 값이 포함되어 있지 않으면 문서 가 만료되지 않습니다."라고 명시되어 있습니다. (BSON Date 타입 필수)
+- **조치 완료:** `NotificationDoc` 인터페이스와 `NotificationService` 로직을 수정하여 `expiresAt`를 `Date` 객체로 저장하도록 변경하였으며, `NotificationService.spec.ts` 단위 테스트를 통해 검증을 완료했습니다.
 
 ---
 
