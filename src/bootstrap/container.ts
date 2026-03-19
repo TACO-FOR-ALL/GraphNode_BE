@@ -27,6 +27,7 @@ import { MessageRepository } from '../core/ports/MessageRepository';
 import { UserRepository } from '../core/ports/UserRepository';
 import { MicroscopeWorkspaceStore } from '../core/ports/MicroscopeWorkspaceStore';
 import { MicroscopeWorkspaceRepositoryMongo } from '../infra/repositories/MicroscopeWorkspaceRepositoryMongo';
+import { NotificationRepositoryMongo } from '../infra/repositories/NotificationRepositoryMongo';
 // DB / Infrastructure Adapters
 import { Neo4jGraphAdapter } from '../infra/graph/Neo4jGraphAdapter';
 import { ChromaVectorAdapter } from '../infra/vector/ChromaVectorAdapter';
@@ -39,6 +40,7 @@ import { VectorStore } from '../core/ports/VectorStore';
 import { QueuePort } from '../core/ports/QueuePort';
 import { StoragePort } from '../core/ports/StoragePort';
 import { EventBusPort } from '../core/ports/EventBusPort';
+import { NotificationRepository } from '../core/ports/NotificationRepository';
 // Infra Adapters
 import { AwsSqsAdapter } from '../infra/aws/AwsSqsAdapter';
 import { AwsS3Adapter } from '../infra/aws/AwsS3Adapter';
@@ -66,6 +68,7 @@ export class Container {
   private vectorStore: VectorStore | null = null;
   private graphVectorService: GraphVectorService | null = null;
   private microscopeWorkspaceRepo: MicroscopeWorkspaceStore | null = null;
+  private notificationRepo: NotificationRepository | null = null;
 
   // Infra Adapters
   private queueAdapter: QueuePort | null = null;
@@ -238,6 +241,16 @@ export class Container {
     return this.microscopeWorkspaceRepo;
   }
 
+  /**
+   * NotificationRepository(Mongo) 인스턴스를 반환합니다.
+   */
+  getNotificationRepository(): NotificationRepository {
+    if (!this.notificationRepo) {
+      this.notificationRepo = new NotificationRepositoryMongo();
+    }
+    return this.notificationRepo;
+  }
+
   // --- Services ---
 
   /**
@@ -364,7 +377,7 @@ export class Container {
    */
   getNotificationService(): NotificationService {
     if (!this.notificationService) {
-      const raw = new NotificationService(this.getRedisEventBusAdapter());
+      const raw = new NotificationService(this.getRedisEventBusAdapter(), this.getNotificationRepository());
       this.notificationService = createAuditProxy(raw, 'NotificationService');
     }
     return this.notificationService;
