@@ -51,7 +51,12 @@ export class NotificationController {
     const since = typeof req.query.since === 'string' ? req.query.since : null;
     const replayLimit = 200;
     try {
-      const missed = await this.notificationService.listMissedNotifications(userId, since, replayLimit);
+      // 미수신 알림 replay
+      const missed = await this.notificationService.listMissedNotifications(
+        userId,
+        since,
+        replayLimit
+      );
       for (const msg of missed) {
         if (res.writableEnded) break;
         this.writeSse(res, msg);

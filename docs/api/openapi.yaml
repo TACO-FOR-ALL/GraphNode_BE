@@ -1,4 +1,4 @@
-﻿openapi: 3.1.0
+openapi: 3.1.0
 info:
   title: GraphNode API
   version: 0.1.0
@@ -299,7 +299,15 @@ paths:
   /v1/notifications/stream:
     get:
       summary: Connect to notification stream (SSE)
-      description: Establishes a Server-Sent Events (SSE) connection to receive real-time notifications.
+      description: >-
+        Establishes a Server-Sent Events (SSE) connection to receive real-time notifications.
+        Optional `since` parameter allows replaying missed notifications from a specific cursor (ULID).
+      parameters:
+        - in: query
+          name: since
+          schema:
+            type: string
+          description: The last seen notification ID to replay from.
       responses:
         '200':
           description: Stream established
@@ -308,9 +316,9 @@ paths:
               schema:
                 type: string
                 example: |
-                  data: {"type":"CONNECTED","message":"SSE Connection established"}
+                  data: {"id":"01JK...","type":"CONNECTED","timestamp":"2026-03-19T...","message":"SSE Connection established"}
 
-                  data: {"type":"JOB_COMPLETED","payload":{...}}
+                  data: {"id":"01JK...","type":"JOB_COMPLETED","timestamp":"2026-03-19T...","payload":{...}}
   /v1/notifications/device-token:
     post:
       summary: Register FCM device token

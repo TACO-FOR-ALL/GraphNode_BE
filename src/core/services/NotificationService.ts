@@ -69,6 +69,10 @@ export class NotificationService {
    * 사용처:
    * - `NotificationController.stream()`에서 `?since=`를 받아 "끊긴 동안 미수신 알림"을 먼저 replay하고,
    *   이후 Redis Pub/Sub 실시간 구독으로 이어붙입니다.
+   * @param userId 사용자 ID
+   * @param sinceCursor 커서(cursor)
+   * @param limit 제한
+   * @returns 조회된 알림 문서
    */
   async listMissedNotifications(
     userId: string,
@@ -223,14 +227,14 @@ export class NotificationService {
     // - 따라서 여기서 이력을 저장해두고, FE가 재연결할 때 `?since=<마지막커서>`로 미수신분을 replay 받을 수 있게 합니다.
     // - 저장이 실패하면 replay 기반 유실 방지가 불가능해지므로, publish보다 먼저 수행합니다.
     const now = Date.now();
-    const retentionDays = 7;    //TODO: 일단 ttl을 7일로 설정했는데 추후에 변경하면됌!
+    const retentionDays = 7; //TODO: 일단 ttl을 7일로 설정했는데 추후에 변경하면됌!
     const doc: NotificationDoc = {
       _id: id,
       userId,
       type,
       payload,
       createdAt: now,
-      expiresAt: now + retentionDays * 24 * 60 * 60 * 1000, 
+      expiresAt: now + retentionDays * 24 * 60 * 60 * 1000,
     };
 
     try {
