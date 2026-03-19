@@ -80,5 +80,14 @@ async function ensureIndexes() {
   await db.collection('graph_subclusters').createIndex({ userId: 1 });
   await db.collection('graph_summaries').createIndex({ userId: 1 });
 
+  // notifications: replay 조회는 { userId, _id(cursor) } 조합을 사용합니다.
+  await db.collection('notifications').createIndex({ userId: 1, _id: 1 });
+
+  // notifications 보관 정책(선택): expiresAt(BSON Date) 기준 TTL 인덱스
+  // - 주의: expiresAt 필드 값이 반드시 'Date 객체'여야 하며, 숫자(number)일 경우 동작하지 않습니다.
+  // - expiresAt가 없는 문서는 TTL로 자동 삭제되지 않습니다.
+  // 목적: 알림 이력을 무한히 쌓지 않고 운영 정책(예: 7일)으로 자동 정리하기 위함
+  await db.collection('notifications').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
   logger.info({ event: 'db.migrations_checked' }, 'DB indexes ensured');
 }

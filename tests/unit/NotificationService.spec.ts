@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin';
 
 import { NotificationService } from '../../src/core/services/NotificationService';
 import { EventBusPort } from '../../src/core/ports/EventBusPort';
+import type { NotificationRepository } from '../../src/core/ports/NotificationRepository';
 import { redis } from '../../src/infra/redis/client';
 
 jest.mock('firebase-admin', () => ({
@@ -28,6 +29,7 @@ jest.mock('../../src/infra/redis/client', () => ({
 describe('NotificationService', () => {
   let service: NotificationService;
   let mockEventBus: jest.Mocked<EventBusPort>;
+  let mockNotificationRepo: jest.Mocked<NotificationRepository>;
 
   beforeEach(() => {
     mockEventBus = {
@@ -35,23 +37,65 @@ describe('NotificationService', () => {
       subscribe: jest.fn(),
       unsubscribe: jest.fn(),
     };
-    service = new NotificationService(mockEventBus);
+    mockNotificationRepo = {
+      insert: jest.fn(),
+      listAfter: jest.fn(),
+    };
+    service = new NotificationService(mockEventBus, mockNotificationRepo);
     jest.clearAllMocks();
   });
 
   describe('sendNotification', () => {
-    it('should publish notification event to user channel', async () => {
+    it('should persist then publish notification event to user channel', async () => {
       const userId = 'user-1';
       const type = 'info';
       const payload = { message: 'Hello' };
 
       await service.sendNotification(userId, type, payload);
 
+      expect(mockNotificationRepo.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          _id: expect.any(String),
+          userId,
+          type,
+          payload: expect.any(Object),
+          createdAt: expect.any(Number),
+          expiresAt: expect.any(Date),
+        })
+      );
       expect(mockEventBus.publish).toHaveBeenCalledWith(`notification:user:${userId}`, {
+        id: expect.any(String),
         type,
         payload: { ...payload, timestamp: expect.any(String) },
         timestamp: expect.any(String),
       });
+    });
+  });
+
+  describe('listMissedNotifications', () => {
+    it('should map persisted docs to SSE message shape', async () => {
+      const userId = 'user-1';
+      (mockNotificationRepo.listAfter as any).mockResolvedValue([
+        {
+          _id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+          userId,
+          type: 'TEST',
+          payload: { ok: true },
+          createdAt: 1700000000000,
+          expiresAt: new Date(1700000000000 + 1000),
+        },
+      ]);
+
+      const res = await service.listMissedNotifications(userId, 'cursor', 10);
+      expect(mockNotificationRepo.listAfter).toHaveBeenCalledWith(userId, 'cursor', 10);
+      expect(res).toEqual([
+        {
+          id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+          type: 'TEST',
+          payload: { ok: true },
+          timestamp: new Date(1700000000000).toISOString(),
+        },
+      ]);
     });
   });
 
@@ -136,6 +180,7 @@ describe('NotificationService', () => {
     it('sendGraphGenerationRequested should publish correct event', async () => {
       await service.sendGraphGenerationRequested(userId, taskId);
       expect(mockEventBus.publish).toHaveBeenCalledWith(`notification:user:${userId}`, expect.objectContaining({
+        id: expect.any(String),
         type: 'GRAPH_GENERATION_REQUESTED',
         payload: expect.objectContaining({ taskId, timestamp: expect.any(String) })
       }));
@@ -144,6 +189,7 @@ describe('NotificationService', () => {
     it('sendGraphSummaryCompleted should publish correct event', async () => {
       await service.sendGraphSummaryCompleted(userId, taskId);
       expect(mockEventBus.publish).toHaveBeenCalledWith(`notification:user:${userId}`, expect.objectContaining({
+        id: expect.any(String),
         type: 'GRAPH_SUMMARY_COMPLETED',
         payload: expect.objectContaining({ taskId, timestamp: expect.any(String) })
       }));
@@ -152,6 +198,7 @@ describe('NotificationService', () => {
     it('sendAddConversationCompleted should publish correct event with counts', async () => {
       await service.sendAddConversationCompleted(userId, taskId, 10, 20);
       expect(mockEventBus.publish).toHaveBeenCalledWith(`notification:user:${userId}`, expect.objectContaining({
+        id: expect.any(String),
         type: 'ADD_CONVERSATION_COMPLETED',
         payload: expect.objectContaining({ taskId, nodeCount: 10, edgeCount: 20, timestamp: expect.any(String) })
       }));
@@ -160,6 +207,7 @@ describe('NotificationService', () => {
     it('sendMicroscopeDocumentCompleted should publish correct event with optional fields', async () => {
       await service.sendMicroscopeDocumentCompleted(userId, taskId, 'src-1', 5);
       expect(mockEventBus.publish).toHaveBeenCalledWith(`notification:user:${userId}`, expect.objectContaining({
+        id: expect.any(String),
         type: 'MICROSCOPE_DOCUMENT_COMPLETED',
         payload: expect.objectContaining({ taskId, sourceId: 'src-1', chunksCount: 5, timestamp: expect.any(String) })
       }));

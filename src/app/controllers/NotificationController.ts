@@ -8,6 +8,16 @@ import { AuthError } from '../../shared/errors/domain';
 export class NotificationController {
   constructor(private readonly notificationService: NotificationService) {}
 
+  private writeSse(res: Response, message: any) {
+    // SSE 표준 id 필드를 사용하면, 브라우저에서 event.lastEventId로 커서를 얻을 수 있습니다.
+    // - 실시간 전송(Pub/Sub)과 replay 전송(DB 조회)의 메시지 포맷을 동일하게 유지하기 위해 공통 헬퍼로 분리합니다.
+    const id = message?.id;
+    if (id) {
+      res.write(`id: ${String(id)}\n`);
+    }
+    res.write(`data: ${JSON.stringify(message)}\n\n`);
+  }
+
   /**
    * SSE(Server-Sent Events) 스트림 연결
    * GET /v1/notifications/stream
@@ -31,13 +41,32 @@ export class NotificationController {
     });
 
     // 연결 확인용 초기 메시지 전송
-    res.write(
-      `data: ${JSON.stringify({ type: 'CONNECTED', message: 'SSE Connection established' })}\n\n`
-    );
+    this.writeSse(res, { type: 'CONNECTED', message: 'SSE Connection established' });
+
+    // 마지막 커서 이후(배타적, exclusive)의 "미수신 알림"을 replay 합니다.
+    // 참고: 브라우저 EventSource는 커스텀 헤더 제약이 있어, 쿼리 파라미터(?since=...)를 사용합니다.
+    // 흐름:
+    // 1) 연결 직후 DB에서 미수신 알림을 먼저 replay
+    // 2) 그 다음 Redis Pub/Sub을 구독하여 실시간 알림을 이어서 전송
+    const since = typeof req.query.since === 'string' ? req.query.since : null;
+    const replayLimit = 200;
+    try {
+      // 미수신 알림 replay
+      const missed = await this.notificationService.listMissedNotifications(
+        userId,
+        since,
+        replayLimit
+      );
+      for (const msg of missed) {
+        if (res.writableEnded) break;
+        this.writeSse(res, msg);
+      }
+    } catch (err) {
+      logger.warn({ err, userId }, 'Failed to replay missed notifications (non-fatal)');
+    }
 
     const handleNotification = (message: any) => {
-      // 메시지 포맷: data: {json}\n\n
-      res.write(`data: ${JSON.stringify(message)}\n\n`);
+      this.writeSse(res, message);
     };
 
     try {
