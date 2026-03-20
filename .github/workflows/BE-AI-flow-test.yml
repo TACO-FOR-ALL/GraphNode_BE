@@ -1,0 +1,100 @@
+name: BE-AI Integrated Flow Test
+
+on:
+  pull_request:
+    branches: [ "main", "develop" ]
+
+jobs:
+  test-flow:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Backend 레포지토리 체크아웃 (be/ 폴더에 저장)
+      - name: Checkout Backend
+        uses: actions/checkout@v4
+        with:
+          path: be
+
+      # 2. AI Worker 레포지토리 체크아웃 (ai-worker/ 폴더에 저장)
+      - name: Checkout AI Worker
+        uses: actions/checkout@v4
+        with:
+          repository: TACO-FOR-ALL/GraphNode_AI
+          path: ai-worker
+          token: ${{ secrets.GH_PAT }}
+
+      # 3. Docker Buildx 설정 (캐싱 기능을 위해 필수)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 4. Backend 이미지 빌드 및 캐싱
+      - name: Build Backend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: be
+          push: false
+          load: true # 빌드된 이미지를 로컬 도커 가상 시스템에 로드
+          tags: graphnode-be:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 5. AI Worker 이미지 빌드 및 캐싱
+      - name: Build AI Worker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ai-worker
+          push: false
+          load: true # 빌드된 이미지를 로컬 도커 가상 시스템에 로드
+          tags: graphnode-ai:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 6. Docker Compose를 통한 통합 테스트 서비스 기동
+      - name: Start Services
+        run: |
+          # be/ 폴더 내부에서 compose 실행
+          docker compose -f be/docker-compose.test.yml up -d
+
+      # 7. 모든 서비스가 Healthy 상태가 될 때까지 대기
+      - name: Wait for Services to be healthy
+        run: |
+          echo "Waiting for services to be healthy..."
+          # 최대 5분(30 * 10s) 대기
+          for i in {1..30}; do
+            # jq를 사용하여 각 서비스의 Health 상태를 확인
+            STATUSES=$(docker compose -f be/docker-compose.test.yml ps --format json | jq -r 'if type=="array" then .[].Health else .Health end' | sort | uniq)
+            echo "Current health statuses: $STATUSES"
+            
+            # 모든 서비스가 healthy이면 종료
+            if [[ "$STATUSES" == "healthy" ]]; then
+              echo "✅ All services are healthy!"
+              exit 0
+            fi
+            
+            # 하나라도 unhealthy가 있으면 10초 대기
+            echo "⏳ Still waiting for services... (Attempt $i/30)"
+            sleep 10
+          done
+          
+          echo "❌ Timed out waiting for services to be healthy."
+          docker compose -f be/docker-compose.test.yml ps
+          docker compose -f be/docker-compose.test.yml logs
+          exit 1
+
+      # 8. 실질적인 통합 E2E 테스트 실행
+      - name: Run Integrated E2E Tests
+        run: |
+          chmod +x be/scripts/e2e-test.sh
+          cd be && ./scripts/e2e-test.sh
+        env:
+          MONGODB_URI: mongodb://localhost:27017/taco5_graphnode_test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/taco5_graphnode_test
+          INTERNAL_SERVICE_TOKEN: ci-test-key
+
+      # 9. 실패 시 로그 업로드
+      - name: Upload Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs
+          path: be/e2e-logs/
