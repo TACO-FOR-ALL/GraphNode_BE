@@ -1,4 +1,5 @@
 #!/bin/bash
+# [LF-FIX-20260322] Ensuring Linux-compatible line endings for LocalStack
 echo "----------- Initializing LocalStack Resources -----------"
 
 # 1. S3 Buckets
