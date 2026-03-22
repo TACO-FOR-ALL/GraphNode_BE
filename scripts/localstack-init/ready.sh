@@ -15,8 +15,8 @@ echo "Waiting for SQS and S3 services to be running..." | tee -a /tmp/localstack
 MAX_RETRIES=30
 COUNT=0
 while [ $COUNT -lt $MAX_RETRIES ]; do
-  if curl -s http://localhost:4566/_localstack/health | grep -q '"sqs": "running"' && \
-     curl -s http://localhost:4566/_localstack/health | grep -q '"s3": "running"'; then
+  if curl -s http://localhost:4566/_localstack/health | grep -E -q '"sqs": "(running|available)"' && \
+     curl -s http://localhost:4566/_localstack/health | grep -E -q '"s3": "(running|available)"'; then
     echo "✅ LocalStack services are healthy and running!" | tee -a /tmp/localstack_init.log
     break
   fi

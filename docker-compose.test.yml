@@ -69,7 +69,7 @@ services:
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:4566/_localstack/health | grep '\"sqs\": \"running\"' && awslocal sqs get-queue-url --queue-name taco-graphnode-request-graph-sqs --region ap-northeast-2 && awslocal sqs get-queue-url --queue-name taco-graphnode-response-graph-sqs --region ap-northeast-2 || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:4566/_localstack/health | grep -E '\"sqs\": \"(running|available)\"' && awslocal sqs get-queue-url --queue-name taco-graphnode-request-graph-sqs --region ap-northeast-2 && awslocal sqs get-queue-url --queue-name taco-graphnode-response-graph-sqs --region ap-northeast-2 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 20
