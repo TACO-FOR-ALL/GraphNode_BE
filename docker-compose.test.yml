@@ -62,8 +62,11 @@ services:
       - SERVICES=s3,sqs
       - DEFAULT_REGION=ap-northeast-2
       - DEBUG=1
+      - EAGER_SERVICE_LOADING=1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
     healthcheck:
-      test: ["CMD-SHELL", "awslocal sqs get-queue-url --queue-name taco-graphnode-request-graph-sqs && awslocal sqs get-queue-url --queue-name taco-graphnode-response-graph-sqs || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:4566/_localstack/health | grep '\"sqs\": \"running\"' && awslocal sqs get-queue-url --queue-name taco-graphnode-request-graph-sqs --region ap-northeast-2 && awslocal sqs get-queue-url --queue-name taco-graphnode-response-graph-sqs --region ap-northeast-2 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 20
@@ -71,7 +74,7 @@ services:
     ports:
       - "4566:4566"
     volumes:
-      - "./scripts/localstack-init:/etc/localstack/init/ready.d"
+      - "./scripts/localstack-init:/docker-entrypoint-initaws.d"
 
   # --- Applications ---
   graphnode-be:
