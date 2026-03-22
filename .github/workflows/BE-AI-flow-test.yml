@@ -7,6 +7,9 @@ on:
 jobs:
   test-flow:
     runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
 
     steps:
       # 1. Backend 레포지토리 체크아웃 (be/ 폴더에 저장)

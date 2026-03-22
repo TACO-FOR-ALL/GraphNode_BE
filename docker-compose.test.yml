@@ -191,16 +191,17 @@ services:
       neo4j: { condition: service_healthy }
       localstack: { condition: service_started }
     environment:
-      # TODO: AI팀 협의 필요 - 현재 AI 코드는 아래 환경 변수들을 무시하고 config.py의 상수를 우선함
-      # FIXME: SQS/S3 연동을 위해 boto3 client 생성 시 endpoint_url 주입 로직이 필요함
       - ENV_MODE=prod
       - AWS_ENDPOINT_URL=http://localstack:4566
       - SQS_REQUEST_QUEUE_URL=http://localstack:4566/000000000000/taco-graphnode-request-graph-sqs
       - SQS_RESULT_QUEUE_URL=http://localstack:4566/000000000000/taco-graphnode-response-graph-sqs
       - MONGODB_URL=mongodb://mongo:27017/graphnode
+      - MONGODB_DB_NAME=graphnode
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_USERNAME=neo4j
       - NEO4J_PASSWORD=neo4j-password
+      - CHROMA_DATABASE=TACO_GraphNode
+      - CHROMA_API_URL=http://chroma:8000
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GROQ_API_KEY=${GROQ_API_KEY}
       - CHROMA_API_KEY=test-key
