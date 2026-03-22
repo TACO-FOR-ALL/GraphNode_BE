@@ -4,12 +4,19 @@ on:
   pull_request:
     branches: [ "main", "develop" ]
 
+# 권한 설정 (OIDC 인증을 위해 필수)
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   test-flow:
     runs-on: ubuntu-latest
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
 
     steps:
       # 1. Backend 레포지토리 체크아웃 (be/ 폴더에 저장)
@@ -25,6 +32,18 @@ jobs:
           repository: TACO-FOR-ALL/GraphNode_AI
           path: ai-worker
           token: ${{ secrets.GH_PAT }}
+
+      # 2-1. AWS 자격 증명 구성 (OIDC를 사용하여 ECR 접근 권한 획득)
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 2-2. Amazon ECR 로그인
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
       # 3. Docker Buildx 설정 (캐싱 기능을 위해 필수)
       - name: Set up Docker Buildx
