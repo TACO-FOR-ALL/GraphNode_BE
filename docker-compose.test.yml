@@ -49,6 +49,11 @@ services:
     container_name: graphnode-test-chroma
     ports:
       - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v2/heartbeat || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   localstack:
     image: localstack/localstack
@@ -120,16 +125,23 @@ services:
       - INTERNAL_SERVICE_TOKEN=ci-test-key
     ports:
       - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   graphnode-worker:
     image: graphnode-be:test
-    command: ["node", "dist/workers/index.js"]
+    entrypoint: ["node", "dist/workers/index.js"]
     depends_on:
       postgres: { condition: service_healthy }
       mongo: { condition: service_healthy }
       redis: { condition: service_healthy }
       neo4j: { condition: service_healthy }
       localstack: { condition: service_started }
+      graphnode-be: { condition: service_healthy }
     ports:
       - "3001:3001"
     healthcheck:
@@ -192,9 +204,12 @@ services:
       localstack: { condition: service_started }
     environment:
       - ENV_MODE=prod
+      - AWS_REGION=ap-northeast-2
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
       - AWS_ENDPOINT_URL=http://localstack:4566
-      - SQS_REQUEST_QUEUE_URL=http://localstack:4566/000000000000/taco-graphnode-request-graph-sqs
-      - SQS_RESULT_QUEUE_URL=http://localstack:4566/000000000000/taco-graphnode-response-graph-sqs
+      - AWS_SQS_REQUEST_QUEUE_URL=http://localstack:4566/000000000000/taco-graphnode-request-graph-sqs
+      - AWS_SQS_RESULT_QUEUE_URL=http://localstack:4566/000000000000/taco-graphnode-response-graph-sqs
       - MONGODB_URL=mongodb://mongo:27017/graphnode
       - MONGODB_DB_NAME=graphnode
       - NEO4J_URI=bolt://neo4j:7687
@@ -208,3 +223,8 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GROQ_API_KEY=${GROQ_API_KEY}
       - CHROMA_API_KEY=test-key
+    healthcheck:
+      test: ["CMD-SHELL", "python --version || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
