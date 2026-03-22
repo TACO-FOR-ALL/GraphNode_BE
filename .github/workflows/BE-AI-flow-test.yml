@@ -74,7 +74,8 @@ jobs:
       # 6. Docker Compose를 통한 통합 테스트 서비스 기동
       - name: Start Services
         run: |
-          # 윈도우 환경 퍼미션 누락 방지: 초기화 스크립트에 실행 권한 강제 부여
+          # 윈도우 환경 퍼미션 누락 방지 및 CRLF(\r\n) -> LF(\n) 변환
+          sed -i 's/\r$//' be/scripts/localstack-init/ready.sh
           chmod +x be/scripts/localstack-init/ready.sh
           # be/ 폴더 내부에서 compose 실행
           docker compose -f be/docker-compose.test.yml up -d
