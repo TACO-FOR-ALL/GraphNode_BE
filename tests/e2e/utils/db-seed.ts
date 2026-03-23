@@ -1,7 +1,7 @@
 import { MongoClient } from 'mongodb';
 import { PrismaClient } from '@prisma/client';
 
-const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/taco5_graphnode_test';
+const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/graphnode';
 const TEST_USER_ID = 'user-12345';
 
 const prisma = new PrismaClient();
@@ -45,7 +45,7 @@ export async function seedTestData() {
     // 이전 테스트의 잔여 데이터로 인한 충돌 방지를 위해 해당 유저 데이터 전체 삭제
     await db.collection('conversations').deleteMany({ ownerUserId: TEST_USER_ID });
     await db.collection('messages').deleteMany({ userId: TEST_USER_ID });
-    await db.collection('notes').deleteMany({ userId: TEST_USER_ID });
+    await db.collection('notes').deleteMany({ ownerUserId: TEST_USER_ID });
     await db.collection('graph_nodes').deleteMany({ userId: TEST_USER_ID });
     await db.collection('graph_edges').deleteMany({ userId: TEST_USER_ID });
     await db.collection('graph_clusters').deleteMany({ userId: TEST_USER_ID });
@@ -53,34 +53,35 @@ export async function seedTestData() {
 
     // Seed Conversation: 그래프 생성의 원본 데이터가 될 대화방
     const convId = 'conv-e2e-123';
+    const nowTimestamp = Date.now();
     await db.collection('conversations').insertOne({
       _id: convId,
-      id: convId,
       ownerUserId: TEST_USER_ID,
       title: 'E2E Test Chat',
-      updatedAt: new Date(),
-      createdAt: new Date(),
+      updatedAt: nowTimestamp,
+      createdAt: nowTimestamp,
     } as any);
 
     // Seed Message: 지식 추출의 핵심이 되는 대화 내용
     await db.collection('messages').insertOne({
       _id: 'msg-e2e-123',
-      id: 'msg-e2e-123',
       conversationId: convId,
-      userId: TEST_USER_ID,
+      ownerUserId: TEST_USER_ID,   // userId -> ownerUserId로 수정 (DB 스키마 일치)
       role: 'user',
       content: 'Hello, this is a test message for graph generation. Artificial intelligence and Knowledge Graphs are interesting.',
-      createdAt: new Date(),
+      createdAt: nowTimestamp,
+      updatedAt: nowTimestamp,
     } as any);
 
     // Seed Note: 노트 기반 요약 및 Microscope 분석을 위한 원본 문서
     await db.collection('notes').insertOne({
       _id: 'note-e2e-123',
-      userId: TEST_USER_ID,
+      ownerUserId: TEST_USER_ID,
       title: 'E2E Test Note',
       content: 'This note discusses the relationship between LLMs and Graph structures.',
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      deletedAt: null,
+      createdAt: nowTimestamp,
+      updatedAt: nowTimestamp,
     } as any);
 
     console.log('MongoDB data seeded.');

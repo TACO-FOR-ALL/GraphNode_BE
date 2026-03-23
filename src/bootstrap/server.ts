@@ -33,9 +33,7 @@ import { makeMicroscopeRouter } from './modules/microscope.module';
 import { CleanupCron } from '../infra/cron/CleanupCron';
 // import { createTestAgentRouter } from '../app/routes/agent.test';
 
-import {
-  setupSentryErrorHandler,
-} from '../shared/utils/sentry';
+import { setupSentryErrorHandler } from '../shared/utils/sentry';
 import { NotFoundError } from '../shared/errors/domain';
 
 /**
@@ -46,7 +44,7 @@ import { NotFoundError } from '../shared/errors/domain';
  */
 export function createApp() {
   const app = express();
-  
+
   // Sentry 초기화는 index.ts 최상단에서 수행됨 (Auto-instrumentation)
 
   const env = loadEnv();
@@ -78,8 +76,6 @@ export function createApp() {
   // Agent Router (조립된 Router 장착)
   app.use('/v1/agent', makeAgentRouter());
 
-  // Note Router (조립된 Router 장착)
-  app.use('/v1', makeNoteRouter());
 
   // Sync Router
   app.use('/v1/sync', makeSyncRouter());
@@ -98,6 +94,10 @@ export function createApp() {
   app.use('/auth/google', authGoogleRouter);
   app.use('/auth/apple', authAppleRouter);
   app.use('/v1/me', makeMeRouter());
+
+  // Note Router (가장 넓은 범위이므로 구체적인 v1 하위 라우터 아래에 배치)
+  app.use('/v1', makeNoteRouter());
+
   app.use('/auth', authSessionRouter);
 
   // 404 fall-through → Problem Details 형식으로 응답
@@ -107,7 +107,6 @@ export function createApp() {
     }
     next(new NotFoundError(`Route ${req.method} ${req.path} not found`));
   });
-
 
   // Sentry ErrorHandler (v8: setupExpressErrorHandler)
   // 에러를 포착하여 Sentry로 전송 후, next(err)로 다음 에러 핸들러에게 전달함
