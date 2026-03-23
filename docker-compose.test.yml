@@ -65,7 +65,7 @@ services:
       retries: 3
 
   localstack:
-    image: localstack/localstack
+    image: localstack/localstack:3.8.1
     container_name: graphnode-test-localstack
     environment:
       - SERVICES=s3,sqs
