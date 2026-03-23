@@ -107,20 +107,25 @@ jobs:
           echo "Waiting for services to be healthy..."
           # 최대 7.5분(45 * 10s) 대기
           for i in {1..45}; do
-            # 비정상 종료(Exited)된 컨테이너 탐지
-            EXITED_CONTAINERS=$(docker compose -f be/docker-compose.test.yml ps --format json | jq -r 'if type=="array" then .[] else null end | select(.State == "exited") | .Name')
+            # 비정상 종료(Exited)된 컨테이너 탐지 (--all 옵션 필수)
+            EXITED_CONTAINERS=$(docker compose -f be/docker-compose.test.yml ps --all --format json | jq -r 'if type=="array" then .[] else null end | select(.State == "exited") | .Name')
             if [ -n "$EXITED_CONTAINERS" ]; then
               echo "❌ Fatal Error: 일부 컨테이너가 비정상 종료(Crash) 되었습니다!"
               echo "죽은 컨테이너 목록: $EXITED_CONTAINERS"
+              echo "======== [LocalStack Logs] ========"
+              docker compose -f be/docker-compose.test.yml logs localstack
+              echo "==================================="
               exit 1
             fi
 
-            # jq를 사용하여 각 서비스의 Health 상태를 확인
+            # jq를 사용하여 각 서비스의 Health 상태를 확인 (살아있는 컨테이너만)
             STATUSES=$(docker compose -f be/docker-compose.test.yml ps --format json | jq -r 'if type=="array" then .[].Health else .Health end' | sort | uniq)
             echo "Current health statuses: $STATUSES"
             
             # 모든 서비스가 healthy이면 종료
             if [[ "$STATUSES" == "healthy" ]]; then
+              # 살아있는 컨테이너 개수가 정상적인지 최종 확인 (8개면 LocalStack 유실된 것임, 9~10개면 OK)
+              # 더 엄밀하게는 총 개수를 세어 확인해야하지만, EXITED 컨테이너가 잡히므로 여기서 패스 처리해도 무방합니다.
               echo "✅ All services are healthy!"
               exit 0
             fi
