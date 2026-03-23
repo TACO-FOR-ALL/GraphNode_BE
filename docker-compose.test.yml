@@ -217,6 +217,7 @@ services:
       - SENTRY_DSN=dummy
       - POSTHOG_API_KEY=dummy
       - POSTHOG_HOST=http://localhost:8080
+      - INTERNAL_SERVICE_TOKEN=ci-test-key
 
   graphnode-ai:
     image: graphnode-ai:test # GHA workflow에서 빌드된 이미지 사용
@@ -245,6 +246,7 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GROQ_API_KEY=${GROQ_API_KEY}
       - CHROMA_API_KEY=test-key
+      - INTERNAL_SERVICE_TOKEN=ci-test-key
     healthcheck:
       test: ["CMD-SHELL", "python3 -c 'import os; exit(0)' || exit 1"]
       interval: 10s

@@ -61,6 +61,7 @@ const EnvSchema = z.object({
 
   // AWS
   AWS_REGION: z.string().default('ap-northeast-2'),
+  AWS_ENDPOINT_URL: z.string().optional(), // LocalStack 연동을 위한 엔드포인트 URL
   AWS_ACCESS_KEY_ID: z.string().optional(), // 로컬 개발/테스트용
   AWS_SECRET_ACCESS_KEY: z.string().optional(), // 로컬 개발/테스트용
 
