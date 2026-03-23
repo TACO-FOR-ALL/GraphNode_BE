@@ -67,6 +67,15 @@ export interface NoteUpdateDto {
 }
 
 /**
+ * Note Bulk Create DTO
+ * @public
+ * @property notes 생성할 노트 목록
+ */
+export interface NoteBulkCreateDto {
+  notes: NoteCreateDto[];
+}
+
+/**
  * Folder Create DTO
  * @public
  * @property name 폴더 이름

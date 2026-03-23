@@ -98,6 +98,15 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
         const start = Date.now();
         // 현재 요청 컨텍스트(사용자 정보 등) 가져오기
         const ctx: RequestContext | undefined = requestStore.getStore();
+
+        /**
+         * SSE 등 반복 연결 경로에서 불필요한 로그를 억제하기 위한 플래그.
+         * suppressNotificationLog 미들웨어가 RequestContext에 설정한다.
+         * true이면 audit.call, audit.success 로그와 PostHog 이벤트를 건너뛴다.
+         * 에러 로그(audit.error)는 항상 기록한다.
+         * @see suppress-notification-log.ts
+         */
+        const suppressed = ctx?.suppressAuditLog === true;
         
         // 메타 데이터 정의
         const meta = {
@@ -108,13 +117,17 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
           ip: ctx?.ip,
         };
 
-        // 1. 호출 로그 (요약된 인자 포함)
-        try {
-          logger.info({ event: 'audit.call', ...meta, args: summarizeArgs(args) }, 'audit.call');
-        } catch (_) {}
+        // 1. 호출 로그 (요약된 인자 포함) — 억제 모드에서는 건너뜀
+        if (!suppressed) {
+          try {
+            logger.info({ event: 'audit.call', ...meta, args: summarizeArgs(args) }, 'audit.call');
+          } catch (_) {}
+        }
 
         // PostHog 이벤트 전송 헬퍼 함수
         const capturePostHog = (success: boolean, durationMs: number, error?: any) => {
+          // 억제 모드에서는 PostHog 이벤트도 건너뜀 (에러 시에는 항상 전송)
+          if (suppressed && success) return;
           try {
             const posthog = getPostHogClient();
             if (posthog) {
@@ -143,18 +156,20 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
             return result
               .then((res: any) => {
                 const durationMs = Date.now() - start;
-                // 3. 성공 로그
-                try {
-                  logger.info(
-                    {
-                      event: 'audit.success',
-                      ...meta,
-                      durationMs,
-                      result: summarizeResult(res),
-                    },
-                    'audit.success'
-                  );
-                } catch (_) {}
+                // 3. 성공 로그 — 억제 모드에서는 건너뜀
+                if (!suppressed) {
+                  try {
+                    logger.info(
+                      {
+                        event: 'audit.success',
+                        ...meta,
+                        durationMs,
+                        result: summarizeResult(res),
+                      },
+                      'audit.success'
+                    );
+                  } catch (_) {}
+                }
 
                 // PostHog 성공 이벤트
                 capturePostHog(true, durationMs);
@@ -163,7 +178,7 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
               })
               .catch((err: any) => {
                 const durationMs = Date.now() - start;
-                // 4. 에러 로그
+                // 4. 에러 로그 — 에러는 항상 기록 (억제하지 않음)
                 try {
                   logger.error(
                     {
@@ -185,24 +200,26 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
 
           // 결과가 Promise가 아닌 경우 (동기 처리)
           const durationMs = Date.now() - start;
-          try {
-            logger.info(
-              {
-                event: 'audit.success',
-                ...meta,
-                durationMs,
-                result: summarizeResult(result),
-              },
-              'audit.success'
-            );
-          } catch (_) {}
+          if (!suppressed) {
+            try {
+              logger.info(
+                {
+                  event: 'audit.success',
+                  ...meta,
+                  durationMs,
+                  result: summarizeResult(result),
+                },
+                'audit.success'
+              );
+            } catch (_) {}
+          }
 
           // PostHog 성공 이벤트 (동기)
           capturePostHog(true, durationMs);
 
           return result;
         } catch (err: any) {
-          // 동기 실행 중 에러 발생
+          // 동기 실행 중 에러 발생 — 에러는 항상 기록
           const durationMs = Date.now() - start;
           try {
             logger.error(
@@ -222,6 +239,7 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
           throw err;
         }
       };
+
     },
   });
 }

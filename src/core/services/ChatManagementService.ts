@@ -29,6 +29,30 @@ export class ChatManagementService {
   ) {}
 
   /**
+   * 만료된(소프트 삭제 후 30일 경과) 대화들을 찾아 영구 삭제합니다.
+   * 연관된 메시지 및 그래프 노드/엣지 데이터도 함께 삭제됩니다.
+   * @param expiredBefore 기준 시각 (이 시각 이전에 소프트 삭제된 항목 대상)
+   * @returns 처리된 대화 수
+   */
+  async cleanupExpiredConversations(expiredBefore: Date): Promise<number> {
+    const expiredConvs = await this.conversationService.findExpiredConversations(expiredBefore);
+    if (expiredConvs.length === 0) return 0;
+
+    let successCount = 0;
+    for (const conv of expiredConvs) {
+      try {
+        // 기존 deleteConversation 로직 재사용 (permanent=true로 영구 삭제 수행)
+        await this.deleteConversation(conv._id, conv.ownerUserId, true); // Changed conv.id to conv._id based on ConversationDoc structure
+        successCount++;
+      } catch (err: unknown) {
+        // 개별 삭제 실패 시 로그 남기고 계속 진행
+        console.error(`Failed to cleanup expired conversation ${conv._id}:`, err); // Changed conv.id to conv._id
+      }
+    }
+    return successCount;
+  }
+
+  /**
    * 새 대화를 생성합니다.
    *
    * @param ownerUserId 소유자 ID
@@ -40,7 +64,7 @@ export class ChatManagementService {
   async createConversation(
     ownerUserId: string,
     threadId: string,
-    title: string,
+    title?: string | null,
     messages?: Partial<ChatMessage>[]
   ): Promise<ChatThread> {
     const client: MongoClient = getMongo();
@@ -49,55 +73,64 @@ export class ChatManagementService {
     try {
       let result: ChatThread;
       await withRetry(
-        async () => {
-          await session.withTransaction(async () => {
-            // 1. 대화방 생성 (ConversationService 위임)
-            if (!title || title.trim().length === 0) {
-              throw new ValidationError('Title cannot be empty');
-            }
-
-            const finalThreadId: string = threadId.trim();
-            const now = new Date();
-
-            const convDoc: ConversationDoc = {
-              _id: finalThreadId,
-              ownerUserId,
-              title,
-              createdAt: now.getTime(),
-              updatedAt: now.getTime(),
-              deletedAt: null,
-            };
-
-            await this.conversationService.createDoc(convDoc, session);
-
-            // 2. 초기 메시지 생성
-            const createdMessageDocs: MessageDoc[] = [];
-            if (messages && messages.length > 0) {
-              for (const m of messages) {
-                if (!m.content || m.content.trim().length === 0) {
-                  throw new ValidationError('Message content cannot be empty');
-                }
-                const role: ChatRole = m.role || 'user';
-                const msgId = m.id?.trim() ? m.id : ulid();
-
-                const msgDoc: MessageDoc = {
-                  _id: msgId,
-                  ownerUserId: ownerUserId,
-                  conversationId: finalThreadId,
-                  role,
-                  content: m.content,
-                  createdAt: now.getTime(), // 대화방 생성 시간과 동일하게 설정
-                  updatedAt: now.getTime(),
-                  deletedAt: null,
-                };
-
-                const createdMsg = await this.messageService.createDoc(msgDoc, session);
-                createdMessageDocs.push(createdMsg);
+        async (bail) => {
+          try {
+            await session.withTransaction(async () => {
+              // 1. 대화방 생성 (ConversationService 위임)
+              const finalTitle = title || '';
+              if (finalTitle.trim().length === 0) {
+                throw new ValidationError('Title cannot be empty');
               }
-            }
 
-            result = toChatThreadDto(convDoc, createdMessageDocs);
-          });
+              const finalThreadId: string = threadId.trim();
+              const now = new Date();
+
+              const convDoc: ConversationDoc = {
+                _id: finalThreadId,
+                ownerUserId,
+                title: finalTitle,
+                createdAt: now.getTime(),
+                updatedAt: now.getTime(),
+                deletedAt: null,
+              };
+
+              await this.conversationService.createDoc(convDoc, session);
+
+              // 2. 초기 메시지 생성
+              const createdMessageDocs: MessageDoc[] = [];
+              if (messages && messages.length > 0) {
+                for (const m of messages) {
+                  if (!m.content || m.content.trim().length === 0) {
+                    throw new ValidationError('Message content cannot be empty');
+                  }
+                  const role: ChatRole = m.role || 'user';
+                  const msgId = m.id?.trim() ? m.id : ulid();
+
+                  const msgDoc: MessageDoc = {
+                    _id: msgId,
+                    ownerUserId: ownerUserId,
+                    conversationId: finalThreadId,
+                    role,
+                    content: m.content,
+                    createdAt: now.getTime(), // 대화방 생성 시간과 동일하게 설정
+                    updatedAt: now.getTime(),
+                    deletedAt: null,
+                  };
+
+                  const createdMsg = await this.messageService.createDoc(msgDoc, session);
+                  createdMessageDocs.push(createdMsg);
+                }
+              }
+
+              result = toChatThreadDto(convDoc, createdMessageDocs);
+            });
+          } catch (err: unknown) {
+            if (err instanceof AppError) {
+              bail(err as Error);
+              return;
+            }
+            throw err;
+          }
         },
         { label: 'ChatManagementService.createConversation.transaction' }
       );
@@ -128,7 +161,7 @@ export class ChatManagementService {
    */
   async bulkCreateConversations(
     ownerUserId: string,
-    threads: { id: string; title: string; messages?: Partial<ChatMessage>[] }[]
+    threads: { id: string; title?: string | null; messages?: Partial<ChatMessage>[] }[]
   ): Promise<ChatThread[]> {
     // TODO: [Refactor] 현재는 생성된 모든 대화/메시지 객체를 반환하고 있어 대용량(100MB+) 처리 시 OOM 및 이벤트 루프 차단 위험이 있음.
     // 추후 생성된 리소스의 ID 배열만 반환하거나 요약 정보만 반환하도록 변경 필요.
@@ -153,7 +186,16 @@ export class ChatManagementService {
 
               // 1. 문서 객체 준비 (메모리 상에서 변환)
               for (const thread of chunk) {
-                if (!thread.title || thread.title.trim().length === 0) continue;
+                let threadTitle = thread.title || '';
+                if (threadTitle.trim().length === 0) {
+                  const firstMsg = thread.messages && thread.messages.length > 0 ? thread.messages[0] : null;
+                  if (firstMsg && firstMsg.content && firstMsg.content.trim().length > 0) {
+                    const content = firstMsg.content.trim();
+                    threadTitle = content.length > 10 ? content.substring(0, 10) + '...' : content;
+                  } else {
+                    threadTitle = 'New Conversation';
+                  }
+                }
 
                 // const finalThreadId: string = thread.id?.trim() ? thread.id : ulid();
                 const finalThreadId: string = thread.id;
@@ -162,7 +204,7 @@ export class ChatManagementService {
                 const convDoc: ConversationDoc = {
                   _id: finalThreadId,
                   ownerUserId,
-                  title: thread.title,
+                  title: threadTitle,
                   createdAt: now.getTime(),
                   updatedAt: now.getTime(),
                   deletedAt: null,
@@ -331,6 +373,7 @@ export class ChatManagementService {
    * @param ownerUserId 소유자 ID
    * @param limit 페이지당 항목 수
    * @param cursor 페이징 커서
+   * @returns 휴지통 대화 목록 (ChatThread 배열)
    */
   async listTrashByOwner(ownerUserId: string, limit: number, cursor?: string) {
     return this.conversationService.listTrashByOwner(ownerUserId, limit, cursor);
@@ -410,8 +453,10 @@ export class ChatManagementService {
    *
    * @param id 대화 ID
    * @param ownerUserId 소유자 ID
-   * @param permanent 영구 삭제 여부 (기본값: false)
-   * @returns 성공 여부
+   * @returns 삭제 성공 여부 (boolean)
+   * @remarks
+   * - permanent=false (Soft Delete) 시 deletedAt 필드를 현재 시각으로 설정
+   * - permanent=true (Hard Delete) 시 연관된 모든 메시지 및 그래프 데이터(Node/Edge)를 연쇄 삭제
    */
   async deleteConversation(
     id: string,
@@ -475,7 +520,8 @@ export class ChatManagementService {
    *
    * @param id 대화 ID
    * @param ownerUserId 소유자 ID
-   * @returns 성공 여부
+   * @returns 복구 성공 여부 (boolean)
+   * @remarks 소프트 삭제된 대화의 deletedAt 필드를 다시 null로 초기화하고 연관된 메시지들도 함께 복구합니다.
    */
   async restoreConversation(id: string, ownerUserId: string): Promise<boolean> {
     const client: MongoClient = getMongo();
@@ -664,9 +710,10 @@ export class ChatManagementService {
    *
    * @param ownerUserId 소유자 ID
    * @param conversationId 대화 ID
-   * @param messageId 메시지 ID
-   * @param permanent 영구 삭제 여부 (기본값: false)
-   * @returns 성공 여부
+   * @param messageId 삭제할 메시지 ID
+   * @param permanent 영구 삭제 여부
+   * @returns 삭제 성공 여부
+   * @remarks 영구 삭제 시 연관된 그래프 노드 데이터도 함께 삭제됩니다.
    */
   async deleteMessage(
     ownerUserId: string,
@@ -730,8 +777,8 @@ export class ChatManagementService {
    *
    * @param ownerUserId 소유자 ID
    * @param conversationId 대화 ID
-   * @param messageId 메시지 ID
-   * @returns 성공 여부
+   * @param messageId 복구할 메시지 ID
+   * @returns 복구 성공 여부 (boolean)
    */
   async restoreMessage(
     ownerUserId: string,
@@ -788,9 +835,10 @@ export class ChatManagementService {
    * 대화방 소유권 확인
    *
    * @param conversationId 대화 ID
+   * @param conversationId 대화 ID
    * @param ownerUserId 소유자 ID
-   * @returns 대화방 문서
-   * @throws NotFoundError 대화방이 없거나 소유자가 아닌 경우
+   * @returns 대화 문서 (ConversationDoc)
+   * @throws NotFoundError 대화가 존재하지 않거나 소유자가 아닌 경우
    */
   async validateConversationOwner(
     conversationId: string,
@@ -806,14 +854,13 @@ export class ChatManagementService {
     return conv;
   }
 
-  /**
-   * 대화 문서 직접 업데이트 (Internal Use/System Update)
-   * 예: AI 응답 후 lastResponseId 업데이트 등
-   */
-
 
   /**
    * 대화 문서 직접 업데이트 (System Use)
+   *
+   * @param conversationId 대화 ID
+   * @param ownerUserId 소유자 ID
+   * @param updates 업데이트할 필드들
    */
   async updateDocWithAuth(
     conversationId: string,
@@ -825,18 +872,12 @@ export class ChatManagementService {
   }
 
   /**
-   * 사용자의 모든 대화와 메시지를 삭제합니다.
+   * 대화 문서 직접 업데이트 (System Use)
+   * 예: AI 응답 후 lastResponseId 업데이트 등
    *
+   * @param conversationId 대화 ID
    * @param ownerUserId 소유자 ID
-   * @returns 삭제된 대화 수
-   */
-  /**
-   * 대화 문서 직접 업데이트 (System Use)
-   * 예: AI 응답 후 lastResponseId 업데이트 등
-   */
-  /**
-   * 대화 문서 직접 업데이트 (System Use)
-   * 예: AI 응답 후 lastResponseId 업데이트 등
+   * @param updates 업데이트할 필드들
    */
   async updateDoc(
     conversationId: string,
@@ -847,6 +888,13 @@ export class ChatManagementService {
     await this.conversationService.updateDoc(conversationId, ownerUserId, updates);
   }
 
+  /**
+   * 사용자의 모든 대화와 메시지를 삭제합니다.
+   *
+   * @param ownerUserId 소유자 ID
+   * @returns 삭제된 대화 문서 수
+   * @remarks 해당 사용자의 모든 대화, 메시지, 그리고 전체 그래프 데이터를 영구 삭제합니다.
+   */
   async deleteAllConversations(ownerUserId: string): Promise<number> {
     const client: MongoClient = getMongo();
     const session: ClientSession = client.startSession();

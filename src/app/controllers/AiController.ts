@@ -61,7 +61,6 @@ export class AiController {
     if (!conversationId) throw new ValidationError('conversationId is required');
 
     const chatbody: AIchatType = req.body as AIchatType;
-    // FIXME: [Model Option Expansion] Request Body에서 구체적인 모델명(gpt-4-turbo 등)을 받을 수 있도록 DTO 및 스키마 확장 필요
 
     // Multer로 업로드된 파일들
     const files = req.files as Express.Multer.File[] | undefined;
@@ -69,60 +68,108 @@ export class AiController {
     const isStreaming = req.headers['accept'] === 'text/event-stream';
 
     if (isStreaming) {
-      // [FE Feedback Reflected]
-      // res.flushHeaders()를 호출하기 전, 서비스 로직 시작 단계에서의 검증(API Key, 모델 등) 실패 시
-      // HTTP 에러(400, 401, 403 등)를 반환할 수 있도록 헤더 전송 시점을 늦춥니다.
-      
-
       // api key 조회 및 검증 시도
       await this.aiInteractionService.checkApiKey(ownerUserId, chatbody.model);
 
-      // SSE Setup (헤더 설정만 먼저 수행, flush는 데이터 전송 시 자동 또는 명시적 호출)
+      // SSE Setup
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
-      res.flushHeaders(); // <-- 제거: 에러 발생 시 HTTP 상태 코드 변경이 불가능해짐
-
-      // Import는 파일 상단으로 이동해야 하지만, 로컬 스코프에서 사용 가능한지 확인.
-      // TypeScript에서는 import를 최상단에 두는 것이 원칙이므로 최상단으로 옮김.
+      res.flushHeaders();
       
       const sendEvent = (event: string, data: unknown) => {
-        // 혹시라도 헤더가 아직 전송되지 않았다면(첫 데이터) 이때 전송됨
         res.write(`event: ${event}\n`);
         res.write(`data: ${JSON.stringify(data)}\n\n`);
       };
 
+      // SSE 스트리밍 응답 처리
       try {
         const result: AIChatResponseDto = await this.aiInteractionService.handleAIChat(
           ownerUserId,
           chatbody,
           conversationId,
           files,
-          (chunk) => {
-            // 청크 전송 시 (실제 스트림 시작 후)
-            sendEvent(AiStreamEvent.CHUNK, { text: chunk });
-          }
+          (chunk) => sendEvent(AiStreamEvent.CHUNK, { text: chunk })
         );
 
         sendEvent(AiStreamEvent.STATUS, { phase: 'done' });
         sendEvent(AiStreamEvent.RESULT, result);
         res.end();
       } catch (err) {
-        // 아직 헤더가 전송되지 않았다면(스트림 시작 전 에러), 일반 JSON 에러 응답을 보낼 수 있음
-        if (!res.headersSent) {
-           // Controller는 asyncHandler로 감싸져 있다고 가정하므로 throw 하면 글로벌 핸들러가 처리
-           // 혹은 여기서 직접 처리:
-           throw err; 
-        }
-
-        // 이미 스트림이 시작된 후 에러 발생 시: SSE 에러 이벤트 전송 후 종료
+        if (!res.headersSent) throw err;
         const message = err instanceof Error ? err.message : String(err);
         sendEvent(AiStreamEvent.ERROR, { message });
         res.end();
       }
     } else {
-      // Normal Request
       const result: AIChatResponseDto = await this.aiInteractionService.handleAIChat(
+        ownerUserId,
+        chatbody,
+        conversationId,
+        files
+      );
+      res.status(201).json(result);
+    }
+  }
+
+  /**
+   * RAG 기반 AI 대화를 처리하는 Controller 메서드
+   * FE가 직접 임베딩/검색한 맥락(retrievedContext)을 포함합니다.
+   */
+  async handleAIRagChat(req: Request, res: Response) {
+    // userId 및 Conversation 검증
+    const ownerUserId = getUserIdFromRequest(req)!;
+    const conversationId = req.params.conversationId;
+    if (!conversationId) throw new ValidationError('conversationId is required');
+
+    // 파일 처리
+    let chatbody: any;
+    if (req.headers['content-type']?.includes('multipart/form-data')) {
+      chatbody = { ...req.body };
+      if (typeof chatbody.retrievedContext === 'string')
+        chatbody.retrievedContext = JSON.parse(chatbody.retrievedContext);
+      if (typeof chatbody.recentMessages === 'string')
+        chatbody.recentMessages = JSON.parse(chatbody.recentMessages);
+    } else {
+      chatbody = req.body;
+    }
+
+    const files = req.files as Express.Multer.File[] | undefined;
+    const isStreaming = req.headers['accept'] === 'text/event-stream';
+
+    // SSE 스트리밍 응답 처리
+    if (isStreaming) {
+      await this.aiInteractionService.checkApiKey(ownerUserId, chatbody.model);
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders();
+
+      const sendEvent = (event: string, data: unknown) => {
+        res.write(`event: ${event}\n`);
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+      };
+
+      // SSE 스트리밍 응답 처리
+      try {
+        const result: AIChatResponseDto = await this.aiInteractionService.handleRagAIChat(
+          ownerUserId,
+          chatbody,
+          conversationId,
+          files,
+          (chunk) => sendEvent(AiStreamEvent.CHUNK, { text: chunk })
+        );
+        sendEvent(AiStreamEvent.STATUS, { phase: 'done' });
+        sendEvent(AiStreamEvent.RESULT, result);
+        res.end();
+      } catch (err) {
+        if (!res.headersSent) throw err;
+        const message = err instanceof Error ? err.message : String(err);
+        sendEvent(AiStreamEvent.ERROR, { message });
+        res.end();
+      }
+    } else {
+      const result = await this.aiInteractionService.handleRagAIChat(
         ownerUserId,
         chatbody,
         conversationId,
@@ -452,7 +499,10 @@ export class AiController {
     // 여기서는 기본적으로 octet-stream 사용하거나, key에서 추론 가능.
     // 간단히 octet-stream으로 설정.
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${key.split('/').pop() || 'file'}"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${key.split('/').pop() || 'file'}"`
+    );
 
     stream.pipe(res);
   }

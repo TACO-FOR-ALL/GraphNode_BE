@@ -146,5 +146,19 @@ export interface ConversationRepository {
     ownerUserId: string,
     limit: number,
     cursor?: string
-  ): Promise<{ items: ConversationDoc[]; nextCursor?: string | null }>;
+   ): Promise<{ items: ConversationDoc[]; nextCursor?: string | null }>;
+
+  /**
+   * 오래된 소프트 삭제된 대화들을 영구 삭제합니다 (자동 정리용).
+   * @param expiredBefore 기준 시각 (이 시각 이전에 삭제된 항목들을 삭제)
+   * @returns 삭제된 대화 수
+   */
+  hardDeleteExpired(expiredBefore: Date): Promise<number>;
+
+  /**
+   * 소프트 삭제된 지 오래되어 만료된 대화 목록을 조회합니다.
+   * @param expiredBefore 기준 시각 (이 시각 이전 삭제건 대상)
+   * @returns 만료된 대화 문서 배열
+   */
+  findExpiredConversations(expiredBefore: Date): Promise<ConversationDoc[]>;
 }

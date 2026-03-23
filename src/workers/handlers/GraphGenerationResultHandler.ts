@@ -48,11 +48,7 @@ export class GraphGenerationResultHandler implements JobHandler {
         }
 
         // 실패 알림 전송(Redis Pub/Sub & FCM)
-        await notiService.sendNotification(userId, NotificationType.GRAPH_GENERATION_FAILED, {
-          taskId,
-          error: errorMsg,
-          timestamp: new Date().toISOString(),
-        });
+        await notiService.sendGraphGenerationFailed(userId, taskId, errorMsg);
         await notiService.sendFcmPushNotification(
           userId,
           'Graph Generation Failed',
@@ -64,116 +60,131 @@ export class GraphGenerationResultHandler implements JobHandler {
 
       // COMPLETED 처리
       if (status === 'COMPLETED' && resultS3Key) {
-        // 1. S3에서 결과 JSON 다운로드
-        const aiGraphOutput: AiGraphOutputDto =
-          await withRetry(
+        // 1. S3에서 결과 JSON, Features, Summary 병렬 다운로드
+        const downloadPromises: Promise<any>[] = [
+          withRetry(
             async () => await storagePort.downloadJson<AiGraphOutputDto>(resultS3Key),
             { label: 'GraphGenerationResultHandler.downloadJson.graph' }
-          );
+          ),
+          payload.featuresS3Key
+            ? withRetry(
+                async () => await storagePort.downloadJson<GraphFeaturesJsonDto>(payload.featuresS3Key!),
+                { label: 'GraphGenerationResultHandler.downloadJson.features' }
+              ).catch((err) => {
+                logger.error({ err, taskId, userId }, 'Failed to download features JSON (Non-fatal)');
+                return null;
+              })
+            : Promise.resolve(null),
+          (payload.summaryIncluded && payload.summaryS3Key)
+            ? withRetry(
+                async () => await storagePort.downloadJson<GraphSummary>(payload.summaryS3Key!),
+                { label: 'GraphGenerationResultHandler.downloadJson.summary' }
+              ).catch((err) => {
+                logger.error({ err, taskId, userId }, 'Failed to download summary JSON (Non-fatal)');
+                return null;
+              })
+            : Promise.resolve(null),
+        ];
+
+        const [aiGraphOutput, featuresJson, summaryJson] = await Promise.all(downloadPromises) as [AiGraphOutputDto, GraphFeaturesJsonDto | null, GraphSummary | null];
 
         // 2. Mapper를 통해 DTO 변환
         const snapshot = mapAiOutputToSnapshot(aiGraphOutput, userId);
-
-        // 3. DB 저장 (기존 Service 로직 재사용)
         const persistPayload: PersistGraphPayloadDto = {
           userId,
           snapshot,
         };
-        await graphService.persistSnapshot(persistPayload);
 
-        // 3.5. Vector DB 저장 (Features + Cluster Info Merge)
-        if (payload.featuresS3Key) {
-          try {
-            const graphVectorService = container.getGraphVectorService();
-            
-            // features.json 다운로드 (Embeddings)
-            const features = await withRetry(
-              async () => await storagePort.downloadJson<GraphFeaturesJsonDto>(payload.featuresS3Key!),
-              { label: 'GraphGenerationResultHandler.downloadJson.features' }
-            );
-            
-            // graph_final.json (Nodes with Cluster Info) - 이미 aiGraphOutput에 있음
-            // Mapping: orig_id -> Node Info
-            const nodeMap = new Map<string, typeof aiGraphOutput.nodes[0]>();
-            aiGraphOutput.nodes.forEach(node => {
-              if (node.orig_id) {
-                nodeMap.set(node.orig_id, node);
+        // 3. 병렬 DB 저장 작업 준비
+        const saveTasks: Promise<any>[] = [];
+
+        // 3.1. 메인 그래프 DB 저장 (필수 작업, throw 전파됨)
+        saveTasks.push(graphService.persistSnapshot(persistPayload));
+
+        // 3.2. Vector DB 저장 (옵션 작업, 실패 시 메인 동작에 영향 없는 Non-fatal)
+        if (featuresJson) {
+          saveTasks.push(
+            (async () => {
+              try {
+                const graphVectorService = container.getGraphVectorService();
+
+                // Mapping: orig_id -> Node Info
+                const nodeMap = new Map<string, typeof aiGraphOutput.nodes[0]>();
+                aiGraphOutput.nodes.forEach((node) => {
+                  if (node.orig_id) nodeMap.set(node.orig_id, node);
+                });
+
+                const vectorItems = featuresJson.conversations.map((conv, idx) => {
+                  const vector = featuresJson.embeddings[idx];
+                  const nodeInfo = nodeMap.get(conv.orig_id);
+
+                  const clusterId = nodeInfo?.cluster_id || 'unknown';
+                  const clusterName = nodeInfo?.cluster_name || 'Unclustered';
+                  const keywordsStr = conv.keywords.map((k) => k.term).join(',');
+
+                  const metadata: any = {
+                    user_id: userId,
+                    conversation_id: conv.orig_id,
+                    orig_id: conv.orig_id,
+                    node_id: conv.id,
+                    cluster_id: clusterId,
+                    cluster_name: clusterName,
+                    keywords: keywordsStr,
+                    create_time: conv.create_time || 0,
+                    num_messages: conv.num_sections || 0,
+                    source_type: conv.source_type || 'chat',
+                    update_time: conv.update_time || 0,
+                  };
+
+                  return {
+                    id: `${userId}_${conv.orig_id}`,
+                    vector: vector,
+                    payload: metadata,
+                  };
+                });
+
+                await withRetry(
+                  async () => await graphVectorService.saveGraphFeatures(userId, vectorItems),
+                  { label: 'GraphVectorService.saveGraphFeatures' }
+                );
+              } catch (featureErr) {
+                logger.error({ err: featureErr, taskId, userId }, 'Failed to persist graph features (Non-fatal)');
               }
-            });
-
-            // Merge & Transform to Vector Items
-            const vectorItems = features.conversations.map((conv, idx) => {
-              const vector = features.embeddings[idx];
-              const nodeInfo = nodeMap.get(conv.orig_id);
-
-              // 클러스터 정보가 없으면 기본값 or 'unknown'
-              const clusterId = nodeInfo?.cluster_id || 'unknown';
-              const clusterName = nodeInfo?.cluster_name || 'Unclustered';
-
-              // Keywords: Obj Array -> String (comma separated)
-              const keywordsStr = conv.keywords.map(k => k.term).join(',');
-
-              // Construct Metadata (Snake Case)
-              const metadata: any = {
-                user_id: userId,
-                conversation_id: conv.orig_id,
-                orig_id: conv.orig_id,
-                node_id: conv.id,
-                cluster_id: clusterId,
-                cluster_name: clusterName,
-                keywords: keywordsStr,
-                create_time: conv.create_time || 0,
-                num_messages: conv.num_sections || 0, // Fallback to 0 if undefined
-                source_type: conv.source_type || 'chat',
-                update_time: conv.update_time || 0
-              };
-
-              return {
-                id: `${userId}_${conv.orig_id}`, // Composite ID for Vector DB
-                vector: vector,
-                payload: metadata // 'metadata' property in interface is mapped to 'payload' in VectorItem
-              };
-            });
-
-            await withRetry(
-              async () => await graphVectorService.saveGraphFeatures(userId, vectorItems),
-              { label: 'GraphVectorService.saveGraphFeatures' }
-            );
-          } catch (featureErr) {
-            logger.error({ err: featureErr, taskId }, 'Failed to persist graph features (Non-fatal)');
-            // Vector DB 저장이 실패해도 DB 저장은 성공했으므로 전체 재시도는 하지 않음 (Non-fatal)
-          }
+            })()
+          );
         }
 
-        // 3.8. Summary DB 저장 (if included)
-        if (payload.summaryIncluded && payload.summaryS3Key) {
-          try {
-            logger.info({ taskId, userId }, 'Processing integrated graph summary from result');
-            const summaryJson = await withRetry(
-              async () => await storagePort.downloadJson<GraphSummary>(payload.summaryS3Key!),
-              { label: 'GraphGenerationResultHandler.downloadJson.summary' }
-            );
+        // 3.3. Summary DB 저장 (옵션 작업, 실패 시 메인 동작에 영향 없는 Non-fatal)
+        if (summaryJson) {
+          saveTasks.push(
+            (async () => {
+              try {
+                logger.info({ taskId, userId }, 'Processing integrated graph summary from result');
+                const summaryDoc: GraphSummaryDoc = {
+                  id: ulid(),
+                  userId: userId,
+                  overview: summaryJson.overview,
+                  clusters: summaryJson.clusters,
+                  patterns: summaryJson.patterns,
+                  connections: summaryJson.connections,
+                  recommendations: summaryJson.recommendations,
+                  detail_level: summaryJson.detail_level,
+                  generatedAt: summaryJson.generated_at || new Date().toISOString(),
+                };
 
-            const summaryDoc: GraphSummaryDoc = {
-              id: ulid(), 
-              userId: userId,
-              overview: summaryJson.overview,
-              clusters: summaryJson.clusters,
-              patterns: summaryJson.patterns,
-              connections: summaryJson.connections,
-              recommendations: summaryJson.recommendations,
-              detail_level: summaryJson.detail_level,
-              generatedAt: (summaryJson as any).generated_at || new Date().toISOString(), 
-            };
-
-            await graphService.upsertGraphSummary(userId, summaryDoc);
-            logger.info({ taskId, userId }, 'Integrated graph summary persisted to DB');
-          } catch (sumErr) {
-            logger.error({ err: sumErr, taskId, userId }, 'Failed to persist integrated graph summary (Non-fatal)');
-          }
+                await graphService.upsertGraphSummary(userId, summaryDoc);
+                logger.info({ taskId, userId }, 'Integrated graph summary persisted to DB');
+              } catch (sumErr) {
+                logger.error({ err: sumErr, taskId, userId }, 'Failed to persist integrated graph summary (Non-fatal)');
+              }
+            })()
+          );
         }
 
-        // 3.9. 상태 변경: CREATED
+        // 3.4. 모든 DB 데이터 저장 병렬 대기
+        await Promise.all(saveTasks);
+
+        // 3.5. 상태 변경: CREATED (모두 완전하게 저장된 후 마지막에 상태 업데이트)
         const stats = await graphService.getStats(userId);
         if (stats) {
           stats.status = 'CREATED';
@@ -182,19 +193,16 @@ export class GraphGenerationResultHandler implements JobHandler {
           logger.info({ taskId, userId }, 'Graph status updated to CREATED');
         }
 
-        // 4. 성공 알림 전송
-        await notiService.sendNotification(userId, NotificationType.GRAPH_GENERATION_COMPLETED, {
-          taskId,
-          nodeCount: snapshot.nodes.length,
-          edgeCount: snapshot.edges.length,
-          timestamp: new Date().toISOString(),
-        });
-        await notiService.sendFcmPushNotification(
-          userId,
-          'Graph Ready',
-          `Your knowledge graph (${snapshot.nodes.length} nodes) is ready!`,
-          { type: NotificationType.GRAPH_GENERATION_COMPLETED, taskId }
-        );
+        // 4. 완료 알림 병렬 전송
+        await Promise.allSettled([
+          notiService.sendGraphGenerationCompleted(userId, taskId),
+          notiService.sendFcmPushNotification(
+            userId,
+            'Graph Ready',
+            `Your knowledge graph (${snapshot.nodes.length} nodes) is ready!`,
+            { type: NotificationType.GRAPH_GENERATION_COMPLETED, taskId }
+          )
+        ]);
       }
     } catch (err) {
       // 에러 발생 시 상태 롤백 및 알림 전송
@@ -209,11 +217,7 @@ export class GraphGenerationResultHandler implements JobHandler {
         }
 
         // 실패 알림 전송 (에러 발생 시점)
-        await notiService.sendNotification(userId, NotificationType.GRAPH_GENERATION_FAILED, {
-          taskId,
-          error: errorMsg,
-          timestamp: new Date().toISOString(),
-        });
+        await notiService.sendGraphGenerationFailed(userId, taskId, errorMsg);
         await notiService.sendFcmPushNotification(
           userId,
           'Graph Generation Failed',

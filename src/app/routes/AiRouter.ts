@@ -89,6 +89,12 @@ export function createAiRouter(deps: {
     asyncHandler(aiController.handleAIChat.bind(aiController))
   );
 
+  router.post(
+    '/conversations/:conversationId/rag-chat',
+    upload.array('files'),
+    asyncHandler(aiController.handleAIRagChat.bind(aiController))
+  );
+
   router.get('/files/:key', asyncHandler(aiController.downloadFile.bind(aiController)));
 
   return router;

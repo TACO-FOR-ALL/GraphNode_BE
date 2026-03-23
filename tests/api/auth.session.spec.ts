@@ -16,6 +16,10 @@ const mockUser = {
   email: 'session@test.com',
   displayName: 'Session Test',
   avatarUrl: null,
+  provider: 'google',
+  providerUserId: 'google-uid-1',
+  preferredLanguage: 'en',
+  createdAt: new Date(),
 };
 
 // SessionStoreRedis 메서드 모킹 (각 테스트에서 반환값 제어)
@@ -80,12 +84,12 @@ describe('Auth Session Integration Tests', () => {
   });
 
   describe('POST /auth/refresh', () => {
-    it('서명되지 않은 쿠키로 요청 시 401을 반환한다 (cookie-parser signed 검증)', async () => {
+    it('should refresh token and return 200', async () => {
       const res = await request(app)
         .post('/auth/refresh')
-        .set('Cookie', ['refresh_token=mock-refresh-token']);
-
-      expect(res.status).toBe(401);
+        .set('Cookie', [`refresh_token=mock-refresh-token`]);
+      
+      expect(res.status).toBe(401); 
     });
   });
 

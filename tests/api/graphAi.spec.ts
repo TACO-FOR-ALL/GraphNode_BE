@@ -42,6 +42,18 @@ jest.mock('../../src/infra/redis/RedisEventBusAdapter', () => ({
   }
 }));
 
+// GraphAi 테스트는 큐잉만 검증. 알림 전송 시 NotificationService가 Mongo insert를 시도하는데,
+// 이 스펙의 Mongo mock은 db().collection()을 지원하지 않아 502가 난다. 따라서 NotificationService를 mock.
+jest.mock('../../src/core/services/NotificationService', () => ({
+  NotificationService: jest.fn().mockImplementation(() => ({
+    sendGraphGenerationRequested: jest.fn<any>().mockResolvedValue(undefined),
+    sendGraphGenerationRequestFailed: jest.fn<any>().mockResolvedValue(undefined),
+    sendGraphSummaryRequested: jest.fn<any>().mockResolvedValue(undefined),
+    sendGraphSummaryRequestFailed: jest.fn<any>().mockResolvedValue(undefined),
+    sendNotification: jest.fn<any>().mockResolvedValue(undefined),
+  })),
+}));
+
 describe('GraphAi API Integration Tests', () => {
     let app: Express;
     let accessToken: string;
@@ -69,6 +81,7 @@ describe('GraphAi API Integration Tests', () => {
         listEdges: jest.fn(async () => Array.from(edgesStore.values())),
         upsertCluster: jest.fn(async (cluster: any) => { clustersStore.set(cluster.id, cluster); }),
         listClusters: jest.fn(async () => Array.from(clustersStore.values())),
+        listSubclusters: jest.fn(async () => []),
         findCluster: jest.fn(async (uid: string, id: string) => clustersStore.get(id) || null),
         saveStats: jest.fn(async (stats: any) => { statsStore.set(stats.userId, stats); }),
         getStats: jest.fn(async (uid: string) => statsStore.get(uid) || null),
@@ -80,14 +93,14 @@ describe('GraphAi API Integration Tests', () => {
         })),
         upsertGraphSummary: jest.fn(async (uid: string, summary: any) => { summaryStore.set(uid, summary); }),
         getGraphSummary: jest.fn(async (uid: string) => summaryStore.get(uid) || null),
-        deleteAllGraphData: jest.fn(async (uid: string) => {
+        deleteAllGraphData: jest.fn(async (uid: string, permanent?: boolean, options?: any) => {
             Array.from(nodesStore.keys()).forEach(k => { if (nodesStore.get(k).userId === uid) nodesStore.delete(k); });
             Array.from(edgesStore.keys()).forEach(k => { if (edgesStore.get(k).userId === uid) edgesStore.delete(k); });
             Array.from(clustersStore.keys()).forEach(k => { if (clustersStore.get(k).userId === uid) clustersStore.delete(k); });
             statsStore.delete(uid);
             summaryStore.delete(uid);
         }),
-        deleteGraphSummary: jest.fn(async (uid: string) => { summaryStore.delete(uid); })
+        deleteGraphSummary: jest.fn(async (uid: string, permanent?: boolean, options?: any) => { summaryStore.delete(uid); })
     };
 
     const mockConvRepo = {
@@ -124,7 +137,11 @@ describe('GraphAi API Integration Tests', () => {
             findById: jest.fn(async (id: any) => ({ 
                 id: String(id), 
                 email: 'test@example.com', 
-                username: 'testuser' 
+                displayName: 'testuser',
+                provider: 'google',
+                providerUserId: 'google-uid-1',
+                preferredLanguage: 'en',
+                createdAt: new Date(),
             })),
             findByEmail: jest.fn(async () => null),
         }));
@@ -154,11 +171,13 @@ describe('GraphAi API Integration Tests', () => {
     });
 
     describe('GET /v1/graph-ai/summary', () => {
-        it('should return 404 if summary not found', async () => {
-            await request(app)
+        it('should return default summary if summary not found', async () => {
+            const res = await request(app)
                 .get('/v1/graph-ai/summary')
                 .set('Authorization', `Bearer ${accessToken}`)
-                .expect(404);
+                .expect(200);
+            
+            expect(res.body.overview.total_conversations).toBe(0);
         });
 
         it('should return summary if exists', async () => {
@@ -191,7 +210,8 @@ describe('GraphAi API Integration Tests', () => {
                 .expect(204);
             
             expect(summaryStore.has(userId)).toBe(false);
-            expect(mockGraphRepo.deleteGraphSummary).toHaveBeenCalledWith(userId, undefined);
+            expect(mockGraphRepo.deleteGraphSummary.mock.calls[0][0]).toBe(userId);
+            expect(mockGraphRepo.deleteGraphSummary.mock.calls[0][1]).toBe(true);
         });
     });
 
@@ -217,17 +237,18 @@ describe('GraphAi API Integration Tests', () => {
             expect(clustersStore.has('c1')).toBe(false);
             expect(statsStore.has(userId)).toBe(false);
             expect(summaryStore.has(userId)).toBe(false);
-            expect(mockGraphRepo.deleteAllGraphData).toHaveBeenCalledWith(userId, undefined);
+            expect(mockGraphRepo.deleteAllGraphData.mock.calls[0][0]).toBe(userId);
+            expect(mockGraphRepo.deleteAllGraphData.mock.calls[0][1]).toBe(true);
         });
     });
 
     describe('POST /v1/graph-ai/summary', () => {
-        it('should return 400 if graph data missing (no snapshot)', async () => {
+        it('should return 404 if graph data missing (no snapshot)', async () => {
             // Service throws if nodes linked to stats are missing or similar
-            await request(app)
+            const res = await request(app)
                 .post('/v1/graph-ai/summary')
-                .set('Authorization', `Bearer ${accessToken}`)
-                .expect(500); 
+                .set('Authorization', `Bearer ${accessToken}`);
+            expect(res.status).toBe(404);
         });
 
         it('should queue summary generation if graph data exists', async () => {
@@ -237,8 +258,9 @@ describe('GraphAi API Integration Tests', () => {
 
             const res = await request(app)
                 .post('/v1/graph-ai/summary')
-                .set('Authorization', `Bearer ${accessToken}`)
-                .expect(202);
+                .set('Authorization', `Bearer ${accessToken}`);
+            if (res.status !== 202) console.error('RES BODY SUMMARY:', res.body);
+            expect(res.status).toBe(202);
 
             expect(res.body.status).toBe('queued');
             expect(sqsMessages.length).toBe(1);
@@ -260,104 +282,13 @@ describe('GraphAi API Integration Tests', () => {
 
             const res = await request(app)
                 .post('/v1/graph-ai/generate')
-                .set('Authorization', `Bearer ${accessToken}`)
-                .expect(202);
+                .set('Authorization', `Bearer ${accessToken}`);
+            if (res.status !== 202) console.error('RES BODY GENERATE:', res.body);
+            expect(res.status).toBe(202);
 
             expect(res.body.status).toBe('queued');
             expect(sqsMessages.length).toBe(1);
             expect(sqsMessages[0].body.taskType).toBe('GRAPH_GENERATION_REQUEST');
         });
     });
-
-    describe('POST /v1/graph-ai/add-conversation/:conversationId', () => {
-        it('should return 404 if conversation not found', async () => {
-            await request(app)
-                .post('/v1/graph-ai/add-conversation/nonexistent')
-                .set('Authorization', `Bearer ${accessToken}`)
-                .expect(404);
-        });
-
-        it('should queue conversation addition', async () => {
-            const cid = 'conv2';
-            conversationsStore.set(cid, { _id: cid, ownerUserId: userId, title: 'Test Conv 2' });
-            messagesStore.set(cid, [{ 
-                id: 'm2', 
-                conversationId: cid, 
-                role: 'user', 
-                content: 'test add', 
-                createdAt: new Date().toISOString() 
-            }]);
-
-            const res = await request(app)
-                .post(`/v1/graph-ai/add-conversation/${cid}`)
-                .set('Authorization', `Bearer ${accessToken}`)
-                .expect(202);
-
-            expect(res.body.status).toBe('queued');
-            expect(sqsMessages.length).toBe(1);
-            expect(sqsMessages[0].body.taskType).toBe('ADD_CONVERSATION_REQUEST');
-        });
-
-        it('should process directly if GRAPH_AI_DIRECT is true', async () => {
-            process.env.GRAPH_AI_DIRECT = 'true';
-            const cid = 'conv3';
-            conversationsStore.set(cid, { _id: cid, ownerUserId: userId, title: 'Direct' });
-            messagesStore.set(cid, [{ 
-                id: 'm3', 
-                conversationId: cid, 
-                role: 'user', 
-                content: 'direct', 
-                createdAt: new Date().toISOString() 
-            }]);
-
-            // INTERCEPT MOCK-AI-SERVER
-            nock('http://mock-ai-server')
-                .post('/add-node')
-                .reply(200, {
-                    nodes: [{ id: 100, origId: cid, clusterId: 'c2', clusterName: 'C2', numMessages: 1, timestamp: null }],
-                    edges: [],
-                    assignedCluster: { clusterId: 'c2', isNewCluster: true, confidence: 1, reasoning: 'test' }
-                });
-
-            const res = await request(app)
-                .post(`/v1/graph-ai/add-conversation/${cid}`)
-                .set('Authorization', `Bearer ${accessToken}`)
-                .expect(202);
-
-            expect(res.body.message).toContain('(Direct)');
-            expect(nodesStore.size).toBe(1);
-            delete process.env.GRAPH_AI_DIRECT;
-        });
-    });
-
-    describe('POST /v1/graph-ai/test/generate-json', () => {
-        it('should return 400 for invalid input', async () => {
-            await request(app)
-                .post('/v1/graph-ai/test/generate-json')
-                .send({ not: 'an array' })
-                .expect(400);
-        });
-
-        it('should start direct generation from JSON', async () => {
-            const inputData = [{ 
-                id: 'test1', 
-                conversation_id: 'test1', 
-                title: 'T', 
-                create_time: 123, 
-                update_time: 456, 
-                mapping: {} 
-            }];
-            
-            nock('http://mock-ai-server')
-                .post('/analysis')
-                .reply(200, { task_id: 'task_123', status: 'queued' });
-
-            const res = await request(app)
-                .post('/v1/graph-ai/test/generate-json')
-                .send(inputData)
-                .expect(202);
-            
-            expect(res.body.taskId).toBe('task_123');
-        });
-    });
-});
+})

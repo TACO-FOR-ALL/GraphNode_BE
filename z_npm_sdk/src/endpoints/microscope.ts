@@ -58,34 +58,49 @@ export class MicroscopeApi {
 
   /**
    * 유저의 모든 현존 워크스페이스(Workspace) 메타데이터 목록을 조회합니다.
+   * 
+   * @remarks
    * 이 메서드는 사이드바 등에서 지식 그래프(Microscope) 목록을 보여주기 위한 용도로 사용됩니다.
    * 반환된 목록의 객체들은 그래프 노드/엣지를 포함하지 않는 '메타데이터' 전용 객체입니다.
    * 
    * @returns {Promise<HttpResponse<MicroscopeWorkspace[]>>} 워크스페이스 메타데이터 배열
+   * @example
+   * const workspaces = await client.microscope.listWorkspaces();
+   * console.log(workspaces.data[0].name);
    */
   async listWorkspaces(): Promise<HttpResponse<MicroscopeWorkspace[]>> {
     return this.rb.get<MicroscopeWorkspace[]>();
   }
 
   /**
-   * 단일 워크스페이스의 상세 상태와 메타데이터(예: 진행률, 에러 상태 등)를 조회합니다.
-   * 이 메서드는 Ingest 진행 과정 등을 파악하기 위해 사용되며, 
+   * 단일 워크스페이스의 상세 상태와 메타데이터를 조회합니다.
+   * 
+   * @remarks
+   * 이 메서드는 Ingest 진행 과정(진행률, 에러 상태 등)을 파악하기 위해 사용되며, 
    * 실제 그래프 데이터 요소를 반환하지 않습니다.
    *
-   * @param microscopeWorkspaceId 조회할 microscope 워크스페이스 ID
+   * @param microscopeWorkspaceId - 조회할 워크스페이스 ID
    * @returns {Promise<HttpResponse<MicroscopeWorkspace>>} 워크스페이스 메타데이터
+   * @example
+   * const ws = await client.microscope.getWorkspace('ws_123');
+   * console.log(ws.data.status); // 'COMPLETED'
    */
   async getWorkspace(microscopeWorkspaceId: string): Promise<HttpResponse<MicroscopeWorkspace>> {
     return this.rb.path(`/${microscopeWorkspaceId}`).get<MicroscopeWorkspace>();
   }
 
   /**
-   * 워크스페이스의 실제 구체적인 세부 "지식 그래프(Microscope) 데이터(Nodes & Edges)"를 조회합니다.
+   * 워크스페이스의 실제 구체적인 세부 "지식 그래프 데이터(Nodes & Edges)"를 조회합니다.
+   * 
+   * @remarks
    * `listWorkspaces`나 `getWorkspace`와 달리 이 메서드는 화면 가운데 그려질 메인 시각화용 
    * 그래프 데이터를 가져오기 위한 목적으로 사용됩니다.
    * 
-   * @param microscopeWorkspaceId 조회할 microscope 워크스페이스 ID
-   * @returns {Promise<HttpResponse<MicroscopeGraphData[]>>} 실제 그래프 데이터
+   * @param microscopeWorkspaceId - 조회할 워크스페이스 ID
+   * @returns {Promise<HttpResponse<MicroscopeGraphData[]>>} 실제 그래프 데이터 목록
+   * @example
+   * const graphData = await client.microscope.getWorkspaceGraph('ws_123');
+   * console.log(graphData[0].nodes.length);
    */
   async getWorkspaceGraph(microscopeWorkspaceId: string): Promise<HttpResponse<MicroscopeGraphData[]>> {
     return this.rb.path(`/${microscopeWorkspaceId}/graph`).get<MicroscopeGraphData[]>();
@@ -115,8 +130,9 @@ export class MicroscopeApi {
   /**
    * 워크스페이스를 삭제합니다. 연관된 Neo4j 그래프와 메타데이터가 파기됩니다.
    *
-   * @param microscopeWorkspaceId 삭제할 microscope 워크스페이스 ID
-   * @returns {Promise<HttpResponse<void>>}
+   * @param microscopeWorkspaceId - 삭제할 워크스페이스 ID
+   * @example
+   * await client.microscope.deleteWorkspace('ws_123');
    */
   async deleteWorkspace(microscopeWorkspaceId: string): Promise<HttpResponse<void>> {
     return this.rb.path(`/${microscopeWorkspaceId}`).delete<void>();

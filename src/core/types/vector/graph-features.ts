@@ -45,22 +45,25 @@ export interface GraphNodeVectorMetadata {
   orig_id: string;
 
   /** 생성된 그래프 내부의 노드 ID (Integer) - features.json의 'id' */
-  node_id: number; // or string if needed
+  node_id?: number; 
 
-  /** 클러스터 ID (e.g. "cluster_1") - from graph_final.json */
-  cluster_id: string;
+  /** 클러스터 ID (e.g. "cluster_1") */
+  cluster_id?: string;
 
-  /** 클러스터 이름 (e.g. "Python Dev") - from graph_final.json */
-  cluster_name: string;
+  /** 클러스터 이름 (e.g. "Python Dev") */
+  cluster_name?: string;
+
+  /** 클러스터링 신뢰도 */
+  cluster_confidence?: string;
 
   /** 키워드 목록 문자열 (쉼표 구분, e.g. "python,fastapi") */
-  keywords: string;
+  keywords?: string;
 
   /** 생성 시각 (Epoch or ISO) */
-  create_time: number | string;
+  create_time?: number | string;
 
-  /** 메시지 수 */
-  num_messages: number;
+  /** 섹션 수 (또는 메시지 수) */
+  num_sections?: number;
 
   /** 그 외 확장 필드 (Index signature for flexibility) */
   [key: string]: any;

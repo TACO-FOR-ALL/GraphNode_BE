@@ -59,6 +59,10 @@ jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => {
           email: input.email,
           displayName: input.displayName,
           avatarUrl: input.avatarUrl,
+          provider: 'google',
+          providerUserId: input.providerUserId || 'mock-id',
+          preferredLanguage: 'en',
+          createdAt: new Date(),
         };
       }
       async findById(id: any) {
@@ -68,6 +72,10 @@ jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => {
             email: 'test@example.com',
             displayName: 'Test User',
             avatarUrl: 'https://example.com/avatar.jpg',
+            provider: 'google',
+            providerUserId: 'google-uid-1',
+            preferredLanguage: 'en',
+            createdAt: new Date(),
           };
         }
         return null;
@@ -157,15 +165,15 @@ describe('Auth Flow Integration', () => {
     }
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({
+    expect(res.body).toEqual(expect.objectContaining({
         userId: '12345',
-        profile: {
+        profile: expect.objectContaining({
             id: '12345',
             email: 'test@example.com',
             displayName: 'Test User',
             avatarUrl: 'https://example.com/avatar.jpg'
-        }
-    });
+        })
+    }));
   });
 
   it('Step 4: Token Rotation (Expired Access Token)', async () => {

@@ -5,6 +5,10 @@ import { EventBusPort } from '../ports/EventBusPort';
 import { logger } from '../../shared/utils/logger';
 import { loadEnv } from '../../config/env';
 import { withRetry } from '../../shared/utils/retry';
+import { NotificationType } from '../../workers/notificationType';
+import type { NotificationRepository } from '../ports/NotificationRepository';
+import type { NotificationDoc } from '../types/persistence/notification.persistence';
+import { ulid } from 'ulid';
 
 const env = loadEnv();
 
@@ -37,7 +41,10 @@ if (admin.apps.length === 0) {
  * - (Legacy) Redis Pub/Sub 및 SSE를 통한 웹 알림도 지원합니다.
  */
 export class NotificationService {
-  constructor(private readonly eventBus: EventBusPort) {}
+  constructor(
+    private readonly eventBus: EventBusPort,
+    private readonly notificationRepo: NotificationRepository
+  ) {}
 
   /**
    * 사용자 별 알림 채널 이름을 생성합니다.
@@ -52,6 +59,37 @@ export class NotificationService {
    */
   private getFcmTokenKey(userId: string): string {
     return `user:${userId}:fcm_tokens`;
+  }
+
+  /**
+   * SSE 재연결용 replay 헬퍼
+   * - 특정 커서 이후의 알림 이력을 조회합니다.
+   * - 반환값은 실시간(Pub/Sub)로 내려가는 SSE 메시지 포맷과 동일한 형태를 유지합니다.
+   *
+   * 사용처:
+   * - `NotificationController.stream()`에서 `?since=`를 받아 "끊긴 동안 미수신 알림"을 먼저 replay하고,
+   *   이후 Redis Pub/Sub 실시간 구독으로 이어붙입니다.
+   * @param userId 사용자 ID
+   * @param sinceCursor 커서(cursor)
+   * @param limit 제한
+   * @returns 조회된 알림 문서
+   */
+  async listMissedNotifications(
+    userId: string,
+    sinceCursor: string | null,
+    limit: number
+  ): Promise<any[]> {
+    const docs = await withRetry(
+      async () => await this.notificationRepo.listAfter(userId, sinceCursor, limit),
+      { label: 'NotificationService.listMissedNotifications.listAfter' }
+    );
+
+    return docs.map((d) => ({
+      id: d._id,
+      type: d.type,
+      payload: d.payload,
+      timestamp: new Date(d.createdAt).toISOString(),
+    }));
   }
 
   /**
@@ -84,10 +122,9 @@ export class NotificationService {
   async unregisterDeviceToken(userId: string, token: string): Promise<void> {
     const key = this.getFcmTokenKey(userId);
     try {
-      await withRetry(
-        async () => await redis.srem(key, token),
-        { label: 'NotificationService.unregisterDeviceToken.redis' }
-      );
+      await withRetry(async () => await redis.srem(key, token), {
+        label: 'NotificationService.unregisterDeviceToken.redis',
+      });
     } catch (error) {
       logger.error({ err: error, userId }, 'Failed to unregister FCM token');
       throw error; // 혹은 무시
@@ -112,10 +149,9 @@ export class NotificationService {
     let tokens: string[] = [];
 
     try {
-      tokens = await withRetry(
-        async () => await redis.smembers(key),
-        { label: 'NotificationService.sendFcmPushNotification.smembers' }
-      );
+      tokens = await withRetry(async () => await redis.smembers(key), {
+        label: 'NotificationService.sendFcmPushNotification.smembers',
+      });
     } catch (error) {
       logger.error({ err: error, userId }, 'Failed to fetch FCM tokens from Redis');
       return;
@@ -128,11 +164,12 @@ export class NotificationService {
 
     try {
       const response = await withRetry(
-        async () => await admin.messaging().sendEachForMulticast({
-          tokens,
-          notification: { title, body },
-          data,
-        }),
+        async () =>
+          await admin.messaging().sendEachForMulticast({
+            tokens,
+            notification: { title, body },
+            data,
+          }),
         { label: 'NotificationService.sendFcmPushNotification.multicast' }
       );
 
@@ -152,10 +189,9 @@ export class NotificationService {
         });
 
         if (failedTokens.length > 0) {
-          await withRetry(
-            async () => await redis.srem(key, ...failedTokens),
-            { label: 'NotificationService.sendFcmPushNotification.sremFailed' }
-          );
+          await withRetry(async () => await redis.srem(key, ...failedTokens), {
+            label: 'NotificationService.sendFcmPushNotification.sremFailed',
+          });
           logger.info({ userId, count: failedTokens.length }, 'Removed invalid FCM tokens');
         }
       }
@@ -168,24 +204,282 @@ export class NotificationService {
 
   /**
    * (Legacy) 특정 사용자에게 SSE 알림을 전송(발행)합니다.
+   * 외부에서는 아래의 타입별 전용 메서드 사용을 권장합니다.
    *
-   * @param userId 수신자 사용자 ID
-   * @param type 알림 유형
-   * @param payload 알림 데이터
+   * 신뢰성 보강:
+   * - 기존: Redis Pub/Sub만 사용 → SSE가 끊긴 동안 발행된 알림은 유실될 수 있음
+   * - 변경: MongoDB에 알림 이력을 먼저 저장 → 재연결 시 `?since=` 기반 replay로 유실을 보완
    */
-  async sendNotification(userId: string, type: string, payload: unknown): Promise<void> {
+  async sendNotification(userId: string, type: string, payload: any): Promise<void> {
     const channel = this.getUserChannel(userId);
-    const message = { type, payload, timestamp: new Date().toISOString() };
+    const timestamp = new Date().toISOString();
+    const id = ulid(); // replay 커서(cursor)
+
+    // SDK: BaseNotificationPayload expects timestamp inside payload
+    if (payload && typeof payload === 'object') {
+      payload.timestamp = timestamp;
+    }
+
+    const message = { id, type, payload, timestamp };
+
+    // replay를 위한 이력 저장
+    // - 알림은 실시간으로도 전달되지만(아래 publish), 네트워크/브라우저 이슈로 SSE가 끊겨 있으면 수신하지 못합니다.
+    // - 따라서 여기서 이력을 저장해두고, FE가 재연결할 때 `?since=<마지막커서>`로 미수신분을 replay 받을 수 있게 합니다.
+    // - 저장이 실패하면 replay 기반 유실 방지가 불가능해지므로, publish보다 먼저 수행합니다.
+    const now = Date.now();
+    const retentionDays = 7; //TODO: 일단 ttl을 7일로 설정했는데 추후에 변경하면됌!
+    const expiresAt = new Date(now + retentionDays * 24 * 60 * 60 * 1000);
+
+    const doc: NotificationDoc = {
+      _id: id,
+      userId,
+      type,
+      payload,
+      createdAt: now,
+      expiresAt: expiresAt,
+    };
 
     try {
-      await withRetry(
-        async () => await this.eventBus.publish(channel, message),
-        { label: 'NotificationService.sendNotification.publish' }
-      );
+      await withRetry(async () => await this.notificationRepo.insert(doc), {
+        label: 'NotificationService.sendNotification.persist',
+      });
+      await withRetry(async () => await this.eventBus.publish(channel, message), {
+        label: 'NotificationService.sendNotification.publish',
+      });
     } catch (error) {
       logger.error({ err: error, userId, type }, 'Failed to publish notification');
       throw error;
     }
+  }
+
+  // ── 그래프 생성 (Graph Generation) 전용 메서드 ─────────────────────────────
+
+  /**
+   * 그래프 생성 요청이 서버에 정상 접수되었음을 알립니다.
+   * @param userId 사용자 ID
+   * @param taskId 작업 ID
+   */
+  async sendGraphGenerationRequested(userId: string, taskId: string): Promise<void> {
+    await this.sendNotification(userId, NotificationType.GRAPH_GENERATION_REQUESTED, { taskId });
+  }
+
+  /**
+   * 그래프 생성 요청 접수 자체가 실패했음을 알립니다.
+   * @param userId 사용자 ID
+   * @param taskId 작업 ID
+   * @param error 실패 원인 메시지
+   */
+  async sendGraphGenerationRequestFailed(
+    userId: string,
+    taskId: string,
+    error: string
+  ): Promise<void> {
+    await this.sendNotification(userId, NotificationType.GRAPH_GENERATION_REQUEST_FAILED, {
+      taskId,
+      error,
+    });
+  }
+
+  /**
+   * 그래프 생성 작업이 완료되었음을 알립니다.
+   * @param userId 사용자 ID
+   * @param taskId 작업 ID
+   */
+  async sendGraphGenerationCompleted(userId: string, taskId: string): Promise<void> {
+    await this.sendNotification(userId, NotificationType.GRAPH_GENERATION_COMPLETED, { taskId });
+  }
+
+  /**
+   * 그래프 생성 작업 중 오류가 발생했음을 알립니다.
+   * @param userId 사용자 ID
+   * @param taskId 작업 ID
+   * @param error 실패 원인 메시지
+   */
+  async sendGraphGenerationFailed(userId: string, taskId: string, error: string): Promise<void> {
+    await this.sendNotification(userId, NotificationType.GRAPH_GENERATION_FAILED, {
+      taskId,
+      error,
+    });
+  }
+
+  // ── 그래프 요약 (Graph Summary) 전용 메서드 ────────────────────────────────
+
+  /**
+   * 그래프 요약 요청이 서버에 정상 접수되었음을 알립니다.
+   * @param userId 사용자 ID
+   * @param taskId 작업 ID
+   */
+  async sendGraphSummaryRequested(userId: string, taskId: string): Promise<void> {
+    await this.sendNotification(userId, NotificationType.GRAPH_SUMMARY_REQUESTED, { taskId });
+  }
+
+  /**
+   * 그래프 요약 요청 접수 자체가 실패했음을 알립니다.
+   * @param userId 사용자 ID
+   * @param taskId 작업 ID
+   * @param error 실패 원인 메시지
+   */
+  async sendGraphSummaryRequestFailed(
+    userId: string,
+    taskId: string,
+    error: string
+  ): Promise<void> {
+    await this.sendNotification(userId, NotificationType.GRAPH_SUMMARY_REQUEST_FAILED, {
+      taskId,
+      error,
+    });
+  }
+
+  /**
+   * 그래프 요약 작업이 완료되었음을 알립니다.
+   * @param userId 사용자 ID
+   * @param taskId 작업 ID
+   */
+  async sendGraphSummaryCompleted(userId: string, taskId: string): Promise<void> {
+    await this.sendNotification(userId, NotificationType.GRAPH_SUMMARY_COMPLETED, { taskId });
+  }
+
+  /**
+   * 그래프 요약 작업 중 오류가 발생했음을 알립니다.
+   * @param userId 사용자 ID
+   * @param taskId 작업 ID
+   * @param error 실패 원인 메시지
+   */
+  async sendGraphSummaryFailed(userId: string, taskId: string, error: string): Promise<void> {
+    await this.sendNotification(userId, NotificationType.GRAPH_SUMMARY_FAILED, { taskId, error });
+  }
+
+  // ── 대화 추가 (Add Conversation) 전용 메서드 ───────────────────────────────
+
+  /**
+   * 대화 추가 요청이 서버에 정상 접수되었음을 알립니다.
+   * @param userId 사용자 ID
+   * @param taskId 작업 ID
+   */
+  async sendAddConversationRequested(userId: string, taskId: string): Promise<void> {
+    await this.sendNotification(userId, NotificationType.ADD_CONVERSATION_REQUESTED, { taskId });
+  }
+
+  /**
+   * 대화 추가 요청 접수 자체가 실패했음을 알립니다.
+   * @param userId 사용자 ID
+   * @param taskId 작업 ID
+   * @param error 실패 원인 메시지
+   */
+  async sendAddConversationRequestFailed(
+    userId: string,
+    taskId: string,
+    error: string
+  ): Promise<void> {
+    await this.sendNotification(userId, NotificationType.ADD_CONVERSATION_REQUEST_FAILED, {
+      taskId,
+      error,
+    });
+  }
+
+  /**
+   * 대화 추가 작업이 완료되었음을 알립니다.
+   * @param userId 사용자 ID
+   * @param taskId 작업 ID
+   * @param nodeCount 추가된 노드 수
+   * @param edgeCount 추가된 엣지 수
+   */
+  async sendAddConversationCompleted(
+    userId: string,
+    taskId: string,
+    nodeCount: number,
+    edgeCount: number
+  ): Promise<void> {
+    await this.sendNotification(userId, NotificationType.ADD_CONVERSATION_COMPLETED, {
+      taskId,
+      nodeCount,
+      edgeCount,
+    });
+  }
+
+  /**
+   * 대화 추가 작업 중 오류가 발생했음을 알립니다.
+   * @param userId 사용자 ID
+   * @param taskId 작업 ID
+   * @param error 실패 원인 메시지
+   */
+  async sendAddConversationFailed(userId: string, taskId: string, error: string): Promise<void> {
+    await this.sendNotification(userId, NotificationType.ADD_CONVERSATION_FAILED, {
+      taskId,
+      error,
+    });
+  }
+
+  // ── Microscope 문서 분석 전용 메서드 ───────────────────────────────────────
+
+  /**
+   * Microscope 문서 분석 요청이 서버에 정상 접수되었음을 알립니다.
+   * @param userId 사용자 ID
+   * @param taskId 작업 ID
+   */
+  async sendMicroscopeIngestRequested(userId: string, taskId: string): Promise<void> {
+    await this.sendNotification(userId, NotificationType.MICROSCOPE_INGEST_REQUESTED, { taskId });
+  }
+
+  /**
+   * Microscope 문서 분석 요청 접수 자체가 실패했음을 알립니다.
+   * @param userId 사용자 ID
+   * @param taskId 작업 ID
+   * @param error 실패 원인 메시지
+   */
+  async sendMicroscopeIngestRequestFailed(
+    userId: string,
+    taskId: string,
+    error: string
+  ): Promise<void> {
+    await this.sendNotification(userId, NotificationType.MICROSCOPE_INGEST_REQUEST_FAILED, {
+      taskId,
+      error,
+    });
+  }
+
+  /**
+   * Microscope 문서 분석 작업이 완료되었음을 알립니다.
+   * @param userId 사용자 ID
+   * @param taskId 작업 ID
+   * @param sourceId 분석된 문서 ID
+   * @param chunksCount 분석된 청크 수
+   */
+  async sendMicroscopeDocumentCompleted(
+    userId: string,
+    taskId: string,
+    sourceId?: string,
+    chunksCount?: number
+  ): Promise<void> {
+    await this.sendNotification(userId, NotificationType.MICROSCOPE_DOCUMENT_COMPLETED, {
+      taskId,
+      sourceId,
+      chunksCount,
+    });
+  }
+
+  /**
+   * Microscope 문서 분석 작업 중 오류가 발생했음을 알립니다.
+   * @param userId 사용자 ID
+   * @param taskId 작업 ID
+   * @param error 실패 원인 메시지
+   */
+  async sendMicroscopeDocumentFailed(userId: string, taskId: string, error: string): Promise<void> {
+    await this.sendNotification(userId, NotificationType.MICROSCOPE_DOCUMENT_FAILED, {
+      taskId,
+      error,
+    });
+  }
+
+  /**
+   * Microscope 워크스페이스 생성 작업이 완료되었음을 알립니다.
+   * @param userId 사용자 ID
+   * @param taskId 작업 ID
+   */
+  async sendMicroscopeWorkspaceCompleted(userId: string, taskId: string): Promise<void> {
+    await this.sendNotification(userId, NotificationType.MICROSCOPE_WORKSPACE_COMPLETED, {
+      taskId,
+    });
   }
 
   /**
@@ -203,10 +497,11 @@ export class NotificationService {
 
     try {
       await withRetry(
-        async () => await this.eventBus.subscribe(channel, (message) => {
-          logger.debug({ userId, channel }, 'Notification received from bus');
-          onMessage(message);
-        }),
+        async () =>
+          await this.eventBus.subscribe(channel, (message) => {
+            logger.debug({ userId, channel }, 'Notification received from bus');
+            onMessage(message);
+          }),
         { label: 'NotificationService.subscribe.subscribe' }
       );
       logger.info({ userId, channel }, 'Subscribed to user notifications');
@@ -226,10 +521,9 @@ export class NotificationService {
     const channel = this.getUserChannel(userId);
 
     try {
-      await withRetry(
-        async () => await this.eventBus.unsubscribe(channel),
-        { label: 'NotificationService.unsubscribe.unsubscribe' }
-      );
+      await withRetry(async () => await this.eventBus.unsubscribe(channel), {
+        label: 'NotificationService.unsubscribe.unsubscribe',
+      });
       logger.info({ userId, channel }, 'Unsubscribed from user notifications');
     } catch (error) {
       logger.error({ err: error, userId }, 'Failed to unsubscribe from user notifications');

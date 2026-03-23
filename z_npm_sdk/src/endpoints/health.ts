@@ -25,13 +25,12 @@ export class HealthApi {
 
   /**
    * 서버의 헬스 상태를 확인합니다.
-   * @returns 헬스 체크 결과
+   * 
+   * @returns 헬스 체크 결과 ({ ok: true })
    * @example
    * const response = await client.health.get();
-   * console.log(response.data);
-   * // Output:
-   * {
-   *   ok: true
+   * if (response.data.ok) {
+   *   console.log('Server is healthy');
    * }
    */
   get(): Promise<HttpResponse<HealthResponse>> {

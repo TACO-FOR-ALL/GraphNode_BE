@@ -1,8 +1,9 @@
-import { RequestBuilder, type HttpResponse } from '../http-builder.js';
+import { RequestBuilder, type HttpResponse, type HttpResponseError } from '../http-builder.js';
 import type {
   NoteDto,
   NoteCreateDto,
   NoteUpdateDto,
+  NoteBulkCreateDto,
   FolderDto,
   FolderCreateDto,
   FolderUpdateDto,
@@ -18,6 +19,7 @@ import type {
  * 주요 기능:
  * - 노트 관리 (생성, 조회, 수정, 삭제) (`createNote`, `listNotes`, `getNote`, `updateNote`, `deleteNote`)
  * - 폴더 관리 (생성, 조회, 수정, 삭제) (`createFolder`, `listFolders`, `getFolder`, `updateFolder`, `deleteFolder`)
+ * - 여러 노트 일괄 생성 (`bulkCreate`)
  *
  * @public
  */
@@ -57,12 +59,7 @@ export class NoteApi {
    * // Output:
    * {
    *   id: '550e8400-e29b-41d4-a716-446655440000',
-   *   title: 'Meeting Notes',
-   *   content: '# Weekly Sync...',
-   *   folderId: null,
-   *   createdAt: '2023-10-27T10:00:00Z',
-   *   updatedAt: '2023-10-27T10:00:00Z',
-   *   ownerUserId: 'user-123'
+   *   title: 'Meeting Notes', ...
    * }
    */
   createNote(dto: NoteCreateDto): Promise<HttpResponse<NoteDto>> {
@@ -70,36 +67,62 @@ export class NoteApi {
   }
 
   /**
-   * 사용자의 모든 노트를 가져옵니다.
+   * 여러 개의 노트를 일괄 생성합니다.
+   * @param dto - 일괄 생성할 노트 목록
+   *    - `notes` (NoteCreateDto[]): 생성할 노트 데이터 배열
+   * @returns 생성된 노트 목록
+   * @example
+   * const response = await client.note.bulkCreate({
+   *   notes: [
+   *     {
+   *       id: '550e8400-e29b-41d4-a716-446655440001',
+   *       title: 'Note 1',
+   *       content: 'First note content'
+   *     },
+   *     {
+   *       id: '550e8400-e29b-41d4-a716-446655440002',
+   *       title: 'Note 2',
+   *       content: 'Second note content'
+   *     }
+   *   ]
+   * });
+   * console.log(response.data.notes);
+   */
+  bulkCreate(dto: NoteBulkCreateDto): Promise<HttpResponse<{ notes: NoteDto[] }>> {
+    return this.rb.path('/notes/bulk').post<{ notes: NoteDto[] }>(dto);
+  }
+
+  /**
+   * 사용자의 모든 노트를 가져옵니다. (모든 페이지 자동 조회)
+   * @param folderId - 특정 폴더 ID로 필터링 (선택)
    * @returns 노트 목록 (NoteDto 배열)
    * @example
    * const response = await client.note.listNotes();
-   *
-   * console.log(response.data);
-   * // Output:
-   * [
-   *   {
-   *     id: '550e8400-e29b-41d4-a716-446655440000',
-   *     title: 'Meeting Notes',
-   *     content: '...',
-   *     folderId: null,
-   *     createdAt: '...',
-   *     updatedAt: '...',
-   *     ownerUserId: 'user-123'
-   *   },
-   *   {
-   *     id: '661f9511-f30c-52e5-b827-557766551111',
-   *     title: 'Ideas',
-   *     content: '...',
-   *     folderId: 'folder-123',
-   *     createdAt: '...',
-   *     updatedAt: '...',
-   *     ownerUserId: 'user-123'
-   *   }
-   * ]
+   * console.log(response.data); // 모든 노트 목록
    */
-  listNotes(): Promise<HttpResponse<NoteDto[]>> {
-    return this.rb.path('/notes').get<NoteDto[]>();
+  async listNotes(folderId?: string): Promise<HttpResponse<NoteDto[]>> {
+    const allItems: NoteDto[] = [];
+    let cursor: string | null = null;
+
+    do {
+      const res: HttpResponse<{ items: NoteDto[]; nextCursor: string | null }> = await this.rb
+        .path('/notes')
+        .query({ folderId, limit: 100, cursor: cursor || undefined })
+        .get<{ items: NoteDto[]; nextCursor: string | null }>();
+
+      if (!res.isSuccess) {
+        return res as HttpResponseError;
+      }
+
+      allItems.push(...res.data.items);
+      cursor = res.data.nextCursor;
+    } while (cursor);
+
+    return {
+      isSuccess: true,
+      statusCode: 200,
+      data: allItems,
+    };
   }
 
   /**
@@ -156,22 +179,23 @@ export class NoteApi {
   }
 
   /**
-   * 특정 노트를 삭제합니다.
+   * 특정 노트를 소프트 삭제합니다 (휴지통으로 이동).
    * @param id - 삭제할 노트의 ID
-   * @param permanent - 영구 삭제 여부 (true: 영구 삭제, false/undefined: 휴지통 이동)
-   * @returns 성공 시 빈 응답
    * @example
-   * // 휴지통으로 이동 (Soft Delete)
-   * const response = await client.note.deleteNote('550e8400-e29b-41d4-a716-446655440000');
-   *
-   * console.log(response.data);
-   * // Output:
-   * {
-   *   ok: true
-   * }
+   * await client.note.softDeleteNote('550e8400-e29b-41d4-a716-446655440000');
    */
-  deleteNote(id: string, permanent?: boolean): Promise<HttpResponse<void>> {
-    return this.rb.path(`/notes/${id}`).query({ permanent }).delete<void>();
+  softDeleteNote(id: string): Promise<HttpResponse<void>> {
+    return this.rb.path(`/notes/${id}`).query({ permanent: false }).delete<void>();
+  }
+
+  /**
+   * 특정 노트를 영구 삭제합니다.
+   * @param id - 삭제할 노트의 ID
+   * @example
+   * await client.note.hardDeleteNote('550e8400-e29b-41d4-a716-446655440000');
+   */
+  hardDeleteNote(id: string): Promise<HttpResponse<void>> {
+    return this.rb.path(`/notes/${id}`).query({ permanent: true }).delete<void>();
   }
 
   /**
@@ -186,15 +210,57 @@ export class NoteApi {
   }
 
   /**
-   * 휴지통(Trash) 목록을 조회합니다.
+   * 휴지통(Trash) 목록을 조회합니다. (모든 페이지 자동 조회)
    * @returns 삭제된 노트 및 폴더 목록
    * @example
    * const response = await client.note.listTrash();
-   * console.log(response.data.notes);
-   * console.log(response.data.folders);
+   * console.log(response.data.notes); // 모든 삭제된 노트
+   * console.log(response.data.folders); // 모든 삭제된 폴더
    */
-  listTrash(): Promise<HttpResponse<TrashListResponseDto>> {
-    return this.rb.path('/notes/trash').get<TrashListResponseDto>();
+  async listTrash(): Promise<HttpResponse<TrashListResponseDto>> {
+    const allNotes: NoteDto[] = [];
+    const allFolders: FolderDto[] = [];
+    let notesCursor: string | null = null;
+    let foldersCursor: string | null = null;
+    let hasMore = true;
+
+    while (hasMore) {
+      const res: HttpResponse<{
+        notes: { items: NoteDto[]; nextCursor: string | null };
+        folders: { items: FolderDto[]; nextCursor: string | null };
+      }> = await this.rb
+        .path('/notes/trash')
+        .query({
+          limit: 100,
+          notesCursor: notesCursor || undefined,
+          foldersCursor: foldersCursor || undefined,
+        })
+        .get<{
+          notes: { items: NoteDto[]; nextCursor: string | null };
+          folders: { items: FolderDto[]; nextCursor: string | null };
+        }>();
+
+      if (!res.isSuccess) {
+        return res as HttpResponseError;
+      }
+
+      allNotes.push(...res.data.notes.items);
+      allFolders.push(...res.data.folders.items);
+
+      notesCursor = res.data.notes.nextCursor;
+      foldersCursor = res.data.folders.nextCursor;
+
+      hasMore = !!(notesCursor || foldersCursor);
+    }
+
+    return {
+      isSuccess: true,
+      statusCode: 200,
+      data: {
+        notes: allNotes,
+        folders: allFolders,
+      },
+    };
   }
 
   /**
@@ -256,53 +322,46 @@ export class NoteApi {
   }
 
   /**
-   * 사용자의 모든 폴더를 가져옵니다.
+   * 사용자의 모든 폴더를 가져옵니다. (모든 페이지 자동 조회)
+   * @param parentId - 상위 폴더 ID로 필터링 (선택)
    * @returns 폴더 목록 (FolderDto 배열)
    * @example
    * const response = await client.note.listFolders();
-   *
-   * console.log(response.data);
-   * // Output:
-   * [
-   *   {
-   *     id: 'folder-123',
-   *     name: 'Work Projects',
-   *     parentId: null,
-   *     createdAt: '...',
-   *     updatedAt: '...',
-   *     ownerUserId: 'user-123'
-   *   },
-   *   {
-   *     id: 'folder-124',
-   *     name: 'Personal',
-   *     parentId: null,
-   *     createdAt: '...',
-   *     updatedAt: '...',
-   *     ownerUserId: 'user-123'
-   *   }
-   * ]
+   * console.log(response.data); // 모든 폴더 목록
    */
-  listFolders(): Promise<HttpResponse<FolderDto[]>> {
-    return this.rb.path('/folders').get<FolderDto[]>();
+  async listFolders(parentId?: string): Promise<HttpResponse<FolderDto[]>> {
+    const allItems: FolderDto[] = [];
+    let cursor: string | null = null;
+
+    do {
+      const res: HttpResponse<{ items: FolderDto[]; nextCursor: string | null }> = await this.rb
+        .path('/folders')
+        .query({ parentId, limit: 100, cursor: cursor || undefined })
+        .get<{ items: FolderDto[]; nextCursor: string | null }>();
+
+      if (!res.isSuccess) {
+        return res as HttpResponseError;
+      }
+
+      allItems.push(...res.data.items);
+      cursor = res.data.nextCursor;
+    } while (cursor);
+
+    return {
+      isSuccess: true,
+      statusCode: 200,
+      data: allItems,
+    };
   }
 
   /**
-   * 특정 ID의 폴더를 가져옵니다.
-   * @param id - 가져올 폴더의 ID
+   * 특정 ID의 폴더 정보를 조회합니다.
+   * 
+   * @param id - 조회할 폴더의 ID (UUID)
    * @returns 요청한 폴더 상세 정보
    * @example
    * const response = await client.note.getFolder('folder-123');
-   *
-   * console.log(response.data);
-   * // Output:
-   * {
-   *   id: 'folder-123',
-   *   name: 'Work Projects',
-   *   parentId: null,
-   *   createdAt: '...',
-   *   updatedAt: '...',
-   *   ownerUserId: 'user-123'
-   * }
+   * console.log(response.data.name);
    */
   getFolder(id: string): Promise<HttpResponse<FolderDto>> {
     return this.rb.path(`/folders/${id}`).get<FolderDto>();
@@ -328,35 +387,47 @@ export class NoteApi {
   }
 
   /**
-   * 특정 폴더를 삭제합니다.
+   * 특정 폴더를 소프트 삭제합니다 (휴지통으로 이동).
+   * 
    * @param id - 삭제할 폴더의 ID
-   * @param permanent - 영구 삭제 여부 (true: 영구 삭제, false/undefined: 휴지통 이동)
-   * @returns 성공 시 빈 응답
    * @example
-   * await client.note.deleteFolder('folder-123');
+   * await client.note.softDeleteFolder('folder-123');
    */
-  deleteFolder(id: string, permanent?: boolean): Promise<HttpResponse<void>> {
-    return this.rb.path(`/folders/${id}`).query({ permanent }).delete<void>();
+  softDeleteFolder(id: string): Promise<HttpResponse<void>> {
+    return this.rb.path(`/folders/${id}`).query({ permanent: false }).delete<void>();
+  }
+
+  /**
+   * 특정 폴더를 영구 삭제합니다.
+   * 
+   * @param id - 삭제할 폴더의 ID
+   * @example
+   * await client.note.hardDeleteFolder('folder-123');
+   */
+  hardDeleteFolder(id: string): Promise<HttpResponse<void>> {
+    return this.rb.path(`/folders/${id}`).query({ permanent: true }).delete<void>();
   }
 
   /**
    * 모든 폴더를 삭제합니다.
+   * 
    * @returns 삭제된 폴더 수
    * @example
    * const response = await client.note.deleteAllFolders();
-   * console.log(response.data.deletedCount); // 3
+   * console.log(response.data.deletedCount);
    */
   async deleteAllFolders(): Promise<HttpResponse<{ deletedCount: number }>> {
     return this.rb.path('/folders').delete<{ deletedCount: number }>();
   }
 
   /**
-   * 특정 폴더를 복구합니다.
+   * 삭제된 폴더를 복구합니다.
+   * 
    * @param id - 복구할 폴더의 ID
    * @returns 복구된 폴더 정보
    * @example
    * const response = await client.note.restoreFolder('folder-123');
-   * console.log(response.data.id); // 'folder-123'
+   * console.log(response.data.name);
    */
   restoreFolder(id: string): Promise<HttpResponse<FolderDto>> {
     return this.rb.path(`/folders/${id}/restore`).post<FolderDto>({});

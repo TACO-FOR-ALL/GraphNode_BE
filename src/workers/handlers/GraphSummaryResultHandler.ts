@@ -6,7 +6,6 @@ import { logger } from '../../shared/utils/logger';
 import { JobHandler } from './JobHandler';
 import { GraphSummary } from '../../shared/dtos/ai_graph_output';
 import { GraphSummaryDoc } from '../../core/types/persistence/graph.persistence';
-import { NotificationType } from '../notificationType';
 import { withRetry } from '../../shared/utils/retry';
 
 export class GraphSummaryResultHandler implements JobHandler {
@@ -25,11 +24,7 @@ export class GraphSummaryResultHandler implements JobHandler {
         logger.error({ taskId, userId, error }, 'Graph summary generation failed');
         
         // 실패 notification 전달
-        await notiService.sendNotification(userId, NotificationType.GRAPH_SUMMARY_FAILED, {
-          taskId,
-          error: error || 'Unknown error',
-          timestamp: new Date().toISOString(),
-        });
+        await notiService.sendGraphSummaryFailed(userId, taskId, error || 'Unknown error');
         
         await notiService.sendFcmPushNotification(
           userId,
@@ -61,7 +56,7 @@ export class GraphSummaryResultHandler implements JobHandler {
           connections: summaryJson.connections,
           recommendations: summaryJson.recommendations,
           detail_level: summaryJson.detail_level,
-          generatedAt: (summaryJson as any).generated_at || new Date().toISOString(), // Map snake_case to camelCase
+          generatedAt: summaryJson.generated_at || new Date().toISOString(), // Map snake_case to camelCase
         };
 
         await graphService.upsertGraphSummary(userId, summaryDoc);
@@ -77,10 +72,7 @@ export class GraphSummaryResultHandler implements JobHandler {
         logger.info({ taskId, userId }, 'Graph summary persisted to DB');
 
         // 3. Send Notification
-        await notiService.sendNotification(userId, NotificationType.GRAPH_SUMMARY_COMPLETED, {
-          taskId,
-          timestamp: new Date().toISOString(),
-        });
+        await notiService.sendGraphSummaryCompleted(userId, taskId);
         await notiService.sendFcmPushNotification(
           userId,
           'Graph Ready',

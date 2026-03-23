@@ -45,6 +45,29 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
+   * 여러 노트를 일괄 생성한다.
+   * @param docs 생성할 노트 문서 배열
+   * @param session (선택) 트랜잭션 세션
+   * @returns 생성된 노트 문서 배열
+   */
+  async createNotes(docs: NoteDoc[], session?: ClientSession): Promise<NoteDoc[]> {
+    try {
+      if (docs.length === 0) return [];
+      
+      // insertMany는 { acknowledged: true, insertedIds: { '0': ..., '1': ... } } 를 반환
+      const result = await this.notesCol().insertMany(docs, { session });
+      
+      // insertedIds 길이와 docs 길이가 같다고 가정 (에러가 나지 않았다면)
+      if (result.acknowledged) {
+        return docs;
+      }
+      return [];
+    } catch (err: unknown) {
+      this.handleError('NoteRepositoryMongo.createNotes', err);
+    }
+  }
+
+  /**
    * ID로 노트를 조회한다.
    * @param id 노트 ID
    * @param ownerUserId 소유자 사용자 ID
@@ -66,11 +89,34 @@ export class NoteRepositoryMongo implements NoteRepository {
    * 특정 폴더(또는 루트)의 노트 목록을 조회한다.
    * @param ownerUserId 소유자 사용자 ID
    * @param folderId 폴더 ID (null이면 루트 폴더)
-   * @returns 노트 문서 배열
+   * @param limit 가져올 개수
+   * @param cursor 페이징 커서 (updatedAt 기준)
+   * @returns 노트 문서 목록과 다음 커서
    */
-  async listNotes(ownerUserId: string, folderId: string | null): Promise<NoteDoc[]> {
+  async listNotes(
+    ownerUserId: string,
+    folderId: string | null,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: NoteDoc[]; nextCursor: string | null }> {
     try {
-      return this.notesCol().find({ ownerUserId, folderId, deletedAt: null }).toArray();
+      const query: any = { ownerUserId, folderId, deletedAt: null };
+      if (cursor) {
+        query.updatedAt = { $lt: new Date(parseInt(cursor, 10)) };
+      }
+
+      const items: NoteDoc[] = await this.notesCol()
+        .find(query)
+        .sort({ updatedAt: -1 })
+        .limit(limit)
+        .toArray();
+
+      const last = items[items.length - 1];
+      const nextCursor = (items.length === limit && last?.updatedAt)
+        ? String(last.updatedAt.getTime())
+        : null;
+
+      return { items, nextCursor };
     } catch (err: unknown) {
       this.handleError('NoteRepositoryMongo.listNotes', err);
     }
@@ -103,11 +149,11 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
-   * 노트를 삭제한다.
+   * 노트를 영구 삭제합니다.
    * @param id 노트 ID
    * @param ownerUserId 소유자 사용자 ID
    * @param session (선택) 트랜잭션 세션
-   * @return 삭제 성공 여부
+   * @returns 삭제 성공 여부
    */
   async deleteNote(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
     try {
@@ -119,8 +165,8 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
-   * 노트를 soft delete 한다
-   * @param id 노트 id
+   * 노트를 소프트 삭제합니다 (휴지통으로 이동).
+   * @param id 노트 ID
    * @param ownerUserId 소유자 사용자 ID
    * @param session (선택) 트랜잭션 세션
    * @returns 삭제 성공 여부
@@ -137,8 +183,9 @@ export class NoteRepositoryMongo implements NoteRepository {
       this.handleError('NoteRepositoryMongo.softDeleteNote', err);
     }
   }
+
   /**
-   * 사용자의 모든 노트를 삭제합니다.
+   * 사용자의 모든 노트를 영구 삭제합니다.
    * @param ownerUserId 소유자 사용자 ID
    * @param session (선택) 트랜잭션 세션
    * @returns 삭제된 노트 수
@@ -153,7 +200,7 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
-   * 폴더에 속한 모든 노트를 삭제합니다. (루트 노트 제외)
+   * 폴더에 정식으로 속한 모든 노트를 영구 삭제합니다 (루트 폴더 제외).
    * @param ownerUserId 소유자 사용자 ID
    * @param session (선택) 트랜잭션 세션
    * @returns 삭제된 노트 수
@@ -169,8 +216,9 @@ export class NoteRepositoryMongo implements NoteRepository {
       this.handleError('NoteRepositoryMongo.deleteAllNotesInFolders', err);
     }
   }
+
   /**
-   * 노트를 영구 삭제(Hard Delete)한다.
+   * 노트를 영구 삭제(Hard Delete)합니다.
    * @param id 노트 ID
    * @param ownerUserId 소유자 사용자 ID
    * @param session (선택) 트랜잭션 세션
@@ -186,19 +234,25 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
-   * 삭제된 노트를 복구한다.
+   * 소프트 삭제된 노트를 복구합니다.
    * @param id 노트 ID
    * @param ownerUserId 소유자 사용자 ID
+   * @param newParentId (선택) 복구 시 이동할 부모 폴더 ID
    * @param session (선택) 트랜잭션 세션
    * @returns 복구 성공 여부
    */
-  async restoreNote(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
+  async restoreNote(
+    id: string,
+    ownerUserId: string,
+    newParentId?: string | null,
+    session?: ClientSession
+  ): Promise<boolean> {
     try {
-      const result = await this.notesCol().updateOne(
-        { _id: id, ownerUserId },
-        { $set: { deletedAt: null, updatedAt: new Date() } },
-        { session }
-      );
+      const update: any = { $set: { deletedAt: null, updatedAt: new Date() } };
+      if (newParentId !== undefined) {
+        update.$set.folderId = newParentId;
+      }
+      const result = await this.notesCol().updateOne({ _id: id, ownerUserId }, update, { session });
       return result.modifiedCount > 0;
     } catch (err: unknown) {
       this.handleError('NoteRepositoryMongo.restoreNote', err);
@@ -206,7 +260,7 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
-   * 특정 시점 이후에 수정된 노트 목록을 조회한다. (동기화용)
+   * 특정 시점 이후에 수정된 노트 목록을 조회합니다 (동기화용).
    * @param ownerUserId 소유자 사용자 ID
    * @param since 기준 시각
    * @returns 변경된 노트 문서 배열
@@ -225,7 +279,7 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
-   * 특정 시점 이후에 수정된 폴더 목록을 조회한다. (동기화용)
+   * 특정 시점 이후에 수정된 폴더 목록을 조회합니다 (동기화용).
    * @param ownerUserId 소유자 사용자 ID
    * @param since 기준 시각
    * @returns 변경된 폴더 문서 배열
@@ -244,7 +298,11 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
-   * 여러 폴더에 속한 노트들을 조회합니다.
+   * 여러 폴더 ID에 속한 노트 목록을 조회합니다.
+   * @param folderIds 폴더 ID 배열
+   * @param ownerUserId 소유자 사용자 ID
+   * @param includeDeleted 삭제된 노트 포함 여부
+   * @returns 노트 문서 배열
    */
   async listNotesByFolderIds(
     folderIds: string[],
@@ -264,29 +322,77 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
-   * 휴지통 항목 조회: 삭제된 노트 목록을 조회합니다.
+   * 휴지통에 있는 모든 노트 목록을 조회합니다.
+   * @param ownerUserId 소유자 사용자 ID
+   * @param limit 가져올 개수
+   * @param cursor 페이징 커서
+   * @returns 삭제된 노트 문서 목록과 다음 커서
    */
-  async listTrashNotes(ownerUserId: string): Promise<NoteDoc[]> {
+  async listTrashNotes(
+    ownerUserId: string,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: NoteDoc[]; nextCursor: string | null }> {
     try {
-      return this.notesCol().find({ ownerUserId, deletedAt: { $ne: null } }).toArray();
+      const query: any = { ownerUserId, deletedAt: { $ne: null } };
+      if (cursor) {
+        query.updatedAt = { $lt: new Date(parseInt(cursor, 10)) };
+      }
+
+      const items: NoteDoc[] = await this.notesCol()
+        .find(query)
+        .sort({ updatedAt: -1 })
+        .limit(limit)
+        .toArray();
+
+      const last = items[items.length - 1];
+      const nextCursor = (items.length === limit && last?.updatedAt)
+        ? String(last.updatedAt.getTime())
+        : null;
+
+      return { items, nextCursor };
     } catch (err: unknown) {
       this.handleError('NoteRepositoryMongo.listTrashNotes', err);
     }
   }
 
   /**
-   * 휴지통 항목 조회: 삭제된 폴더 목록을 조회합니다.
+   * 휴지통에 있는 모든 폴더 목록을 조회합니다.
+   * @param ownerUserId 소유자 사용자 ID
+   * @param limit 가져올 개수
+   * @param cursor 페이징 커서
+   * @returns 삭제된 폴더 문서 목록과 다음 커서
    */
-  async listTrashFolders(ownerUserId: string): Promise<FolderDoc[]> {
+  async listTrashFolders(
+    ownerUserId: string,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: FolderDoc[]; nextCursor: string | null }> {
     try {
-      return this.foldersCol().find({ ownerUserId, deletedAt: { $ne: null } }).toArray();
+      const query: any = { ownerUserId, deletedAt: { $ne: null } };
+      if (cursor) {
+        query.updatedAt = { $lt: new Date(parseInt(cursor, 10)) };
+      }
+
+      const items: FolderDoc[] = await this.foldersCol()
+        .find(query)
+        .sort({ updatedAt: -1 })
+        .limit(limit)
+        .toArray();
+
+      const last = items[items.length - 1];
+      const nextCursor = (items.length === limit && last?.updatedAt)
+        ? String(last.updatedAt.getTime())
+        : null;
+
+      return { items, nextCursor };
     } catch (err: unknown) {
       this.handleError('NoteRepositoryMongo.listTrashFolders', err);
     }
   }
 
   /**
-   * 여러 폴더에 속한 노트들을 일괄 삭제한다.
+   * 여러 폴더 ID에 속한 노트들을 영구 삭제합니다.
    * @param folderIds 폴더 ID 배열
    * @param ownerUserId 소유자 사용자 ID
    * @param session (선택) 트랜잭션 세션
@@ -310,11 +416,11 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
-   * 여러 폴더에 속한 노트들을 일괄 Soft Delete 한다.
+   * 여러 폴더 ID에 속한 노트들을 일괄 소프트 삭제합니다.
    * @param folderIds 폴더 ID 배열
    * @param ownerUserId 소유자 사용자 ID
    * @param session (선택) 트랜잭션 세션
-   * @returns 업데이트된 노트 수
+   * @returns 수정된 노트 수
    */
   async softDeleteNotesByFolderIds(
     folderIds: string[],
@@ -335,7 +441,7 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
-   * 여러 폴더에 속한 노트들을 일괄 Hard Delete 한다.
+   * 여러 폴더 ID에 속한 노트들을 일괄 영구 삭제합니다.
    * @param folderIds 폴더 ID 배열
    * @param ownerUserId 소유자 사용자 ID
    * @param session (선택) 트랜잭션 세션
@@ -359,7 +465,7 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
-   * 여러 폴더에 속한 노트들을 일괄 복구한다.
+   * 여러 폴더 ID에 속한 노트들을 일괄 복구합니다.
    * @param folderIds 폴더 ID 배열
    * @param ownerUserId 소유자 사용자 ID
    * @param session (선택) 트랜잭션 세션
@@ -386,7 +492,10 @@ export class NoteRepositoryMongo implements NoteRepository {
   // --- Folder Operations ---
 
   /**
-   * 폴더를 생성한다.
+   * 폴더를 생성합니다.
+   * @param doc 생성할 폴더 문서
+   * @param session (선택) 트랜잭션 세션
+   * @returns 생성된 폴더 문서
    */
   async createFolder(doc: FolderDoc, session?: ClientSession): Promise<FolderDoc> {
     try {
@@ -398,7 +507,11 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
-   * ID로 폴더를 조회한다.
+   * ID로 폴더를 조회합니다.
+   * @param id 폴더 ID
+   * @param ownerUserId 소유자 사용자 ID
+   * @param includeDeleted 삭제된 폴더 포함 여부
+   * @returns 폴더 문서 또는 null
    */
   async getFolder(id: string, ownerUserId: string, includeDeleted: boolean = false): Promise<FolderDoc | null> {
     try {
@@ -413,18 +526,49 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
-   * 특정 폴더(또는 루트)의 하위 폴더 목록을 조회한다.
+   * 특정 부모 폴더 내의 하위 폴더 목록을 조회합니다.
+   * @param ownerUserId 소유자 사용자 ID
+   * @param parentId 부모 폴더 ID (null이면 루트)
+   * @param limit 가져올 개수
+   * @param cursor 페이징 커서 (updatedAt 기준)
+   * @returns 폴더 문서 목록과 다음 커서
    */
-  async listFolders(ownerUserId: string, parentId: string | null): Promise<FolderDoc[]> {
+  async listFolders(
+    ownerUserId: string,
+    parentId: string | null,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: FolderDoc[]; nextCursor: string | null }> {
     try {
-      return this.foldersCol().find({ ownerUserId, parentId, deletedAt: null }).toArray();
+      const query: any = { ownerUserId, parentId, deletedAt: null };
+      if (cursor) {
+        query.updatedAt = { $lt: new Date(parseInt(cursor, 10)) };
+      }
+
+      const items: FolderDoc[] = await this.foldersCol()
+        .find(query)
+        .sort({ updatedAt: -1 })
+        .limit(limit)
+        .toArray();
+
+      const last = items[items.length - 1];
+      const nextCursor = (items.length === limit && last?.updatedAt)
+        ? String(last.updatedAt.getTime())
+        : null;
+
+      return { items, nextCursor };
     } catch (err: unknown) {
       this.handleError('NoteRepositoryMongo.listFolders', err);
     }
   }
 
   /**
-   * 폴더를 수정한다.
+   * 폴더 정보를 수정합니다.
+   * @param id 폴더 ID
+   * @param ownerUserId 소유자 사용자 ID
+   * @param updates 수정할 필드들
+   * @param session (선택) 트랜잭션 세션
+   * @returns 수정된 폴더 문서 또는 null
    */
   async updateFolder(
     id: string,
@@ -445,7 +589,11 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
-   * 폴더를 삭제한다.
+   * 폴더를 영구 삭제합니다.
+   * @param id 폴더 ID
+   * @param ownerUserId 소유자 사용자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제 성공 여부
    */
   async deleteFolder(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
     try {
@@ -456,6 +604,12 @@ export class NoteRepositoryMongo implements NoteRepository {
     }
   }
 
+  /**
+   * 사용자의 모든 폴더를 영구 삭제합니다.
+   * @param ownerUserId 소유자 사용자 ID
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제된 폴더 수
+   */
   async deleteAllFolders(ownerUserId: string, session?: ClientSession): Promise<number> {
     try {
       const result = await this.foldersCol().deleteMany({ ownerUserId }, { session });
@@ -468,6 +622,9 @@ export class NoteRepositoryMongo implements NoteRepository {
   /**
    * 특정 폴더의 모든 하위 폴더 ID(자손 포함)를 조회한다.
    * - MongoDB Aggregation Pipeline의 `$graphLookup`을 사용한다.
+   * @param rootFolderId 최상위 폴더 ID
+   * @param ownerUserId 소유자 사용자 ID
+   * @returns 하위 폴더 ID 목록
    */
   async findDescendantFolderIds(rootFolderId: string, ownerUserId: string): Promise<string[]> {
     try {
@@ -551,7 +708,7 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
-   * 여러 폴더를 일괄 Hard Delete 한다.
+   * 여러 폴더 ID를 일괄 영구 삭제합니다.
    * @param ids 삭제할 폴더 ID 배열
    * @param ownerUserId 소유자 사용자 ID
    * @param session (선택) 트랜잭션 세션
@@ -575,7 +732,7 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
-   * 삭제된 폴더를 복구한다.
+   * 소프트 삭제된 폴더를 복구합니다.
    * @param id 폴더 ID
    * @param ownerUserId 소유자 사용자 ID
    * @param session (선택) 트랜잭션 세션
@@ -595,30 +752,117 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
-   * 여러 폴더를 일괄 복구한다.
+   * 여러 폴더 ID를 일괄 복구합니다.
    * @param ids 복구할 폴더 ID 배열
    * @param ownerUserId 소유자 사용자 ID
    * @param session (선택) 트랜잭션 세션
+   * @param targetFolderId (선택) 기준 폴더 ID (부모 변경 대상)
+   * @param newParentId (선택) 기준 폴더의 새 부모 폴더 ID
    * @returns 복구된 폴더 수
    */
   async restoreFolders(
     ids: string[],
     ownerUserId: string,
-    session?: ClientSession
+    session?: ClientSession,
+    targetFolderId?: string,
+    newParentId?: string | null
   ): Promise<number> {
     try {
       if (ids.length === 0) return 0;
+
+      // 1. 모든 대상 폴더들 복구 (deletedAt = null)
       const result: UpdateResult<FolderDoc> = await this.foldersCol().updateMany(
         { _id: { $in: ids }, ownerUserId },
         { $set: { deletedAt: null, updatedAt: new Date() } },
         { session }
       );
+
+      // 2. 만약 targetFolderId와 newParentId가 제공되었다면 (부모 유효성 체크 결과에 따라)
+      if (targetFolderId && newParentId !== undefined) {
+        await this.foldersCol().updateOne(
+          { _id: targetFolderId, ownerUserId },
+          { $set: { parentId: newParentId, updatedAt: new Date() } },
+          { session }
+        );
+      }
+
       return result.modifiedCount;
     } catch (err: unknown) {
       this.handleError('NoteRepositoryMongo.restoreFolders', err);
     }
   }
 
+  /**
+   * 소프트 삭제된 지 오래되어 만료된 노트들을 영구 삭제합니다.
+   * @param expiredBefore 기준 시각
+   * @returns 삭제된 노트 수
+   */
+  async hardDeleteExpiredNotes(expiredBefore: Date): Promise<number> {
+    try {
+      const result = await this.notesCol().deleteMany({
+        deletedAt: { $ne: null, $lt: expiredBefore },
+      });
+      return result.deletedCount;
+    } catch (err: unknown) {
+      this.handleError('NoteRepositoryMongo.hardDeleteExpiredNotes', err);
+    }
+  }
+
+  /**
+   * 소프트 삭제된 지 오래되어 만료된 폴더들을 영구 삭제합니다.
+   * @param expiredBefore 기준 시각
+   * @returns 삭제된 폴더 수
+   */
+  async hardDeleteExpiredFolders(expiredBefore: Date): Promise<number> {
+    try {
+      const result = await this.foldersCol().deleteMany({
+        deletedAt: { $ne: null, $lt: expiredBefore },
+      });
+      return result.deletedCount;
+    } catch (err: unknown) {
+      this.handleError('NoteRepositoryMongo.hardDeleteExpiredFolders', err);
+    }
+  }
+
+  /**
+   * 소프트 삭제된 지 오래되어 만료된 노트 목록을 조회합니다.
+   * @param expiredBefore 기준 시각
+   * @returns 만료된 노트 문서 배열
+   */
+  async findExpiredNotes(expiredBefore: Date): Promise<NoteDoc[]> {
+    try {
+      return await this.notesCol()
+        .find({
+          deletedAt: { $ne: null, $lt: expiredBefore },
+        })
+        .toArray();
+    } catch (err: unknown) {
+      this.handleError('NoteRepositoryMongo.findExpiredNotes', err);
+    }
+  }
+
+  /**
+   * 소프트 삭제된 지 오래되어 만료된 폴더 목록을 조회합니다.
+   * @param expiredBefore 기준 시각
+   * @returns 만료된 폴더 문서 배열
+   */
+  async findExpiredFolders(expiredBefore: Date): Promise<FolderDoc[]> {
+    try {
+      return await this.foldersCol()
+        .find({
+          deletedAt: { $ne: null, $lt: expiredBefore },
+        })
+        .toArray();
+    } catch (err: unknown) {
+      this.handleError('NoteRepositoryMongo.findExpiredFolders', err);
+    }
+  }
+
+  /**
+   * 공통 에러 핸들러
+   * @param methodName 호출한 메서드 이름
+   * @param err 에러 객체
+   */
   private handleError(methodName: string, err: unknown): never {
     if (
       err instanceof Error &&

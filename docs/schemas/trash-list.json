@@ -5,12 +5,36 @@
   "type": "object",
   "properties": {
     "notes": {
-      "type": "array",
-      "items": { "$ref": "note.json" }
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": { "$ref": "note.json" }
+        },
+        "nextCursor": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "required": ["items", "nextCursor"]
     },
     "folders": {
-      "type": "array",
-      "items": { "$ref": "folder.json" }
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": { "$ref": "folder.json" }
+        },
+        "nextCursor": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "required": ["items", "nextCursor"]
     }
   },
   "required": ["notes", "folders"]

@@ -151,15 +151,20 @@ export class MeApi {
 
   /**
    * OpenAI Assistant ID를 조회합니다.
-   * @returns assistantId (없으면 null)
+   * @returns Assistant ID 정보를 담은 DTO (없으면 null)
+   * @example
+   * const res = await client.me.getOpenAiAssistantId();
+   * console.log(res.data.assistantId);
    */
   getOpenAiAssistantId(): Promise<HttpResponse<OpenAiAssistantIdResponseDto>> {
     return this.rb.path('/v1/me/openai-assistant-id').get<OpenAiAssistantIdResponseDto>();
   }
 
   /**
-   * OpenAI Assistant ID를 설정/업데이트합니다.
-   * @param assistantId 설정할 Assistant ID
+   * OpenAI Assistant ID를 설정하거나 업데이트합니다.
+   * @param assistantId - 설정할 Assistant ID (string)
+   * @example
+   * await client.me.updateOpenAiAssistantId('asst_abc123');
    */
   updateOpenAiAssistantId(assistantId: string): Promise<HttpResponse<void>> {
     return this.rb.path('/v1/me/openai-assistant-id').patch<void>({ assistantId });
@@ -167,15 +172,25 @@ export class MeApi {
 
   /**
    * 사용자 선호 언어를 조회합니다.
-   * @returns language code (예: 'en', 'ko')
+   * 
+   * @remarks
+   * 결과값은 'en', 'ko', 'cn' 등의 ISO 639-1 기반 코드로 반환됩니다.
+   * 
+   * @returns 선호 언어 코드 DTO
+   * @example
+   * const res = await client.me.getPreferredLanguage();
+   * console.log(res.data.language); // 'ko'
    */
   getPreferredLanguage(): Promise<HttpResponse<PreferredLanguageResponseDto>> {
     return this.rb.path('/v1/me/preferred-language').get<PreferredLanguageResponseDto>();
   }
 
   /**
-   * 사용자 선호 언어를 설정/업데이트합니다.
-   * @param language 설정할 언어 코드(en, ko, cn)
+   * 사용자 선호 언어를 설정하거나 업데이트합니다.
+   * 
+   * @param language - 설정할 언어 코드 ('en' | 'ko' | 'cn')
+   * @example
+   * await client.me.updatePreferredLanguage('ko');
    */
   updatePreferredLanguage(language: string): Promise<HttpResponse<void>> {
     

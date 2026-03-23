@@ -79,6 +79,26 @@ export type {
 export { openAgentChatStream } from './endpoints/agent.js';
 export type { AIChatRequestDto, AIChatResponseDto } from './endpoints/ai.js';
 export { AiStreamEvent } from './types/ai-event.js';
+export {
+  TaskType,
+  NotificationType,
+} from './types/notification.js';
+export type {
+  NotificationTypeValue,
+  NotificationEvent,
+  BaseNotificationPayload,
+  GraphGenerationRequestedPayload,
+  GraphGenerationRequestFailedPayload,
+  GraphGenerationCompletedPayload,
+  GraphGenerationFailedPayload,
+  GraphSummaryCompletedPayload,
+  GraphSummaryFailedPayload,
+  AddConversationCompletedPayload,
+  AddConversationFailedPayload,
+  MicroscopeDocumentCompletedPayload,
+  MicroscopeDocumentFailedPayload,
+  MicroscopeWorkspaceCompletedPayload,
+} from './types/notification.js';
 export type { GraphGenerationResponseDto, GenerateGraphOptions } from './types/graphAi.js';
 export type {
   AiInputData,

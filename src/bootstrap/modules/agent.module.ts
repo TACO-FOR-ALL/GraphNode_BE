@@ -8,20 +8,8 @@ import { container } from '../container';
  * @returns Express 라우터
  */
 export function makeAgentRouter(): Router {
-  // singleton services
-  const userRepository = container.getUserRepository();
-  const noteService = container.getNoteService();
-  const conversationService = container.getConversationService();
-  const messageService = container.getMessageService();
-  const graphEmbeddingService = container.getGraphEmbeddingService();
-  const graphVectorService = container.getGraphVectorService();
-
+  //FIXED(강현일) : AgentRouter가 직접적으로 UserRepository를 안가지게 수정
   return createAgentRouter({
-    userRepository,
-    noteService,
-    conversationService,
-    messageService,
-    graphEmbeddingService,
-    graphVectorService,
+    agentService: container.getAgentService(),
   });
 }

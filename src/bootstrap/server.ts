@@ -30,11 +30,13 @@ import { makeAgentRouter } from './modules/agent.module';
 import { makeNotificationRouter } from './modules/notification.module';
 import { makeFileRouter } from './modules/file.module';
 import { makeMicroscopeRouter } from './modules/microscope.module';
+import { CleanupCron } from '../infra/cron/CleanupCron';
 // import { createTestAgentRouter } from '../app/routes/agent.test';
 
 import {
   setupSentryErrorHandler,
 } from '../shared/utils/sentry';
+import { NotFoundError } from '../shared/errors/domain';
 
 /**
  * Express 앱 부트스트랩.
@@ -100,7 +102,10 @@ export function createApp() {
 
   // 404 fall-through → Problem Details 형식으로 응답
   app.use((req, res, next) => {
-    res.status(404).json({ message: "Not Found" });
+    if ((req as any).log) {
+      (req as any).log.level = 'silent';
+    }
+    next(new NotFoundError(`Route ${req.method} ${req.path} not found`));
   });
 
 
@@ -117,6 +122,9 @@ export function createApp() {
 export async function bootstrap() {
   const database = await initDatabases();
   const app = createApp();
+
+  // 오래된 삭제된 항목 자동 정리 크론 시작
+  CleanupCron.start();
 
   return { app, database };
 }

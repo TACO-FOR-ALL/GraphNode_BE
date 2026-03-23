@@ -167,6 +167,23 @@ export interface CreateEdgeResponse {
 export type UpdateNodePayload = Partial<Pick<GraphNodeDto, 'clusterId' | 'clusterName'>>;
 
 /**
+ * 유사 노드 검색 결과 (Enrichment 포함)
+ * @public
+ * @property node 보강된 노드 데이터
+ * @property score 유사도 점수 (0~1)
+ */
+export interface EnrichedNodeResult {
+  node: GraphNodeDto;
+  score: number;
+}
+
+/**
+ * 유사 노드 검색 응답
+ * @public
+ */
+export type SearchNodesResponse = EnrichedNodeResult[];
+
+/**
  * Graph Summary DTO
  */
 export interface GraphSummaryDto {

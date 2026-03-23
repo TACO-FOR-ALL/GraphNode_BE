@@ -6,11 +6,10 @@ import { GraphEmbeddingService } from './GraphEmbeddingService';
 import { NoteService } from './NoteService';
 import { UserService } from './UserService';
 import { NotificationService } from './NotificationService';
-import { NotificationType } from '../../workers/notificationType';
 import { HttpClient } from '../../infra/http/httpClient';
 import { AiInputConversation, AiInputMappingNode } from '../../shared/dtos/ai_input';
 import { logger } from '../../shared/utils/logger';
-import { AppError, UpstreamError, GraphNotFoundError, ConflictError } from '../../shared/errors/domain';
+import { AppError, UpstreamError, GraphNotFoundError } from '../../shared/errors/domain';
 import { ChatMessage } from '../../shared/dtos/ai';
 import { mapSnapshotToAiInput } from '../../shared/mappers/graph_ai_input.mapper';
 import { GraphGenRequestPayload, GraphSummaryRequestPayload, AddNodeRequestPayload, TaskType } from '../../shared/dtos/queue';
@@ -113,6 +112,7 @@ export class GraphGenerationService {
           bucket: process.env.S3_PAYLOAD_BUCKET,
           includeSummary: options?.includeSummary ?? true,
           summaryLanguage: language,
+          language : language,
           extraS3Keys: [noteS3Key], // 통합된 노트 데이터 S3 키 전달
         },
         timestamp: new Date().toISOString(),
@@ -124,20 +124,13 @@ export class GraphGenerationService {
       );
 
       // 성공 알림 전송
-      await this.notificationService.sendNotification(userId, NotificationType.GRAPH_GENERATION_REQUESTED, {
-        taskId,
-        timestamp: new Date().toISOString(),
-      });
+      await this.notificationService.sendGraphGenerationRequested(userId, taskId);
 
       return taskId;
     } catch (err) {
       logger.error({ err, userId }, 'Failed to enqueue graph generation request');
       // 실패 알림 전송
-      await this.notificationService.sendNotification(userId, NotificationType.GRAPH_GENERATION_REQUEST_FAILED, {
-        taskId: taskId || 'unknown',
-        error: String(err),
-        timestamp: new Date().toISOString(),
-      });
+      await this.notificationService.sendGraphGenerationRequestFailed(userId, taskId || 'unknown', String(err));
 
       if (err instanceof AppError) throw err;
       throw new UpstreamError('Failed to request graph generation via queue', {
@@ -243,9 +236,17 @@ export class GraphGenerationService {
         { label: 'QueuePort.sendMessage.Summary' }
       );
       
+      // 성공 알림 전송
+      await this.notificationService.sendGraphSummaryRequested(userId, taskId);
+      
       return taskId;
     } catch (err) {
       logger.error({ err, userId }, 'Failed to requesting graph summary');
+      
+      // 실패 알림 전송
+      const taskId = (err as any).taskId || 'unknown'; // taskId가 스코프 밖에 있을 수 있으므로 방어적 처리
+      await this.notificationService.sendGraphSummaryRequestFailed(userId, taskId, String(err));
+
       if (err instanceof AppError) throw err;
       throw new UpstreamError('Request Graph Summary Failed', { cause: String(err) });
     }
@@ -404,9 +405,17 @@ export class GraphGenerationService {
         { label: 'QueuePort.sendMessage.AddNode' }
       );
 
+      // 성공 알림 전송
+      await this.notificationService.sendAddConversationRequested(userId, taskId);
+
       return taskId;
     } catch (err) {
       logger.error({ err, userId }, 'Failed to queue add node request');
+      
+      // 실패 알림 전송 (taskId가 try 블록 내부에 정의되어 있으므로 에러 객체에 taskId를 담아두거나 스코프를 조정해야 함)
+      // 여기서는 스코프 문제로 'unknown' 처리하거나 상단으로 taskId 정의를 뺌
+      await this.notificationService.sendAddConversationRequestFailed(userId, 'unknown', String(err));
+
       if (err instanceof AppError) throw err;
       throw new UpstreamError('Failed to request add node via queue', { cause: String(err) });
     }

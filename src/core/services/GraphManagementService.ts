@@ -18,6 +18,8 @@ import {
   toGraphStatsDoc,
   toGraphStatsDto,
 } from '../../shared/mappers/graph';
+import { toGraphSummaryDto, createEmptyGraphSummaryDto } from '../../shared/mappers/graph_summary.mapper';
+
 import {
   GraphClusterDoc,
   GraphEdgeDoc,
@@ -107,7 +109,11 @@ export class GraphManagementService {
   }
 
   /**
-   * 노드 복구
+   * 삭제된 노드를 복구합니다. (Soft Delete 해제)
+   *
+   * @param userId 사용자 ID
+   * @param id 노드 ID
+   * @param options (선택) 트랜잭션 옵션
    */
   async restoreNode(userId: string, id: number, options?: RepoOptions): Promise<void> {
     try {
@@ -167,6 +173,10 @@ export class GraphManagementService {
 
   /**
    * 원본 ID 배열 기반 연쇄 복원
+   *
+   * @param userId 사용자 ID
+   * @param origIds 메시지 ID 등의 원본 식별자 배열
+   * @param options 트랜잭션 옵션
    */
   async restoreNodesByOrigIds(
     userId: string,
@@ -198,6 +208,24 @@ export class GraphManagementService {
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.findNode failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 원본 ID 목록 기반 여러 노드 조회
+   *
+   * @param userId 사용자 ID
+   * @param origIds 원본 식별자 배열
+   * @returns GraphNodeDto 배열
+   */
+  async findNodesByOrigIds(userId: string, origIds: string[]): Promise<GraphNodeDto[]> {
+    try {
+      this.assertUser(userId);
+      const docs = await this.repo.findNodesByOrigIds(userId, origIds);
+      return docs.map((doc) => toGraphNodeDto(doc));
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.findNodesByOrigIds failed', { cause: String(err) });
     }
   }
 
@@ -387,7 +415,11 @@ export class GraphManagementService {
   }
 
   /**
-   * 클러스터 복구
+   * 삭제된 클러스터를 복구합니다.
+   *
+   * @param userId 사용자 ID
+   * @param clusterId 클러스터 ID
+   * @param options (선택) 트랜잭션 옵션
    */
   async restoreCluster(userId: string, clusterId: string, options?: RepoOptions): Promise<void> {
     try {
@@ -440,6 +472,9 @@ export class GraphManagementService {
 
   /**
    * 서브클러스터 생성 또는 업데이트
+   * 
+   * @param subcluster 서브클러스터 데이터 (Doc 형태)
+   * @param options (선택) 트랜잭션 옵션
    */
   async upsertSubcluster(subcluster: GraphSubclusterDoc, options?: RepoOptions): Promise<void> {
     try {
@@ -451,7 +486,12 @@ export class GraphManagementService {
   }
 
   /**
-   * 서브클러스터 삭제
+   * 서브클러스터를 삭제합니다.
+   * 
+   * @param userId 사용자 ID
+   * @param subclusterId 서브클러스터 ID
+   * @param permanent 영구 삭제 여부
+   * @param options (선택) 트랜잭션 옵션
    */
   async deleteSubcluster(
     userId: string,
@@ -469,7 +509,11 @@ export class GraphManagementService {
   }
 
   /**
-   * 서브클러스터 복구
+   * 삭제된 서브클러스터를 복구합니다.
+   * 
+   * @param userId 사용자 ID
+   * @param subclusterId 서브클러스터 ID
+   * @param options (선택) 트랜잭션 옵션
    */
   async restoreSubcluster(
     userId: string,
@@ -486,7 +530,10 @@ export class GraphManagementService {
   }
 
   /**
-   * 서브클러스터 목록 조회
+   * 사용자의 모든 서브클러스터 목록을 조회합니다.
+   * 
+   * @param userId 사용자 ID
+   * @returns 서브클러스터 문서 배열
    */
   async listSubclusters(userId: string): Promise<GraphSubclusterDoc[]> {
     try {
@@ -568,7 +615,10 @@ export class GraphManagementService {
   }
 
   /**
-   * 전체 그래프 데이터 복구
+   * 삭제된 모든 그래프 데이터를 복구합니다.
+   * 
+   * @param userId 사용자 ID
+   * @param options (선택) 트랜잭션 옵션
    */
   async restoreGraph(userId: string, options?: RepoOptions): Promise<void> {
     try {
@@ -598,32 +648,25 @@ export class GraphManagementService {
 
   /**
    * 그래프 요약/인사이트 조회
+   *
+   * @param userId 사용자 ID
+   * @returns GraphSummaryDto (FE SDK 호환 형식). Summary가 없으면 빈 기본값 반환.
+   * @throws {ValidationError} userId 미제공 시
+   * @throws {UpstreamError} DB 조회 실패 시
+   * @remarks
+   * - DB 저장 필드(total_source_nodes, generatedAt)를 FE 기대 필드(total_conversations, generated_at)로 변환
+   * - 변환 로직은 `graph_summary.mapper.ts`의 `toGraphSummaryDto`에 위임
    */
   async getGraphSummary(userId: string): Promise<GraphSummaryDto> {
     try {
       this.assertUser(userId);
       const doc = await this.repo.getGraphSummary(userId);
       if (!doc) {
-        return {
-          overview: {
-            total_conversations: 0,
-            time_span: '',
-            primary_interests: [],
-            conversation_style: '',
-            most_active_period: '',
-            summary_text: ''
-          },
-          clusters: [],
-          patterns: [],
-          connections: [],
-          recommendations: [],
-          generated_at: new Date().toISOString(),
-          detail_level: 'basic'
-        };
+        // Summary 미생성 상태: FE SDK 호환 빈 기본값 반환
+        return createEmptyGraphSummaryDto();
       }
-      // Doc -> DTO (Simple cast)
-      const { _id, ...rest } = doc as any;
-      return rest as GraphSummaryDto;
+      // DB Doc → FE DTO 변환 (필드명 매핑 포함)
+      return toGraphSummaryDto(doc);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.getGraphSummary failed', { cause: String(err) });
@@ -644,7 +687,10 @@ export class GraphManagementService {
   }
 
   /**
-   * 그래프 요약/인사이트 복구
+   * 삭제된 그래프 요약/인사이트를 복구합니다.
+   * 
+   * @param userId 사용자 ID
+   * @param options (선택) 트랜잭션 옵션
    */
   async restoreGraphSummary(userId: string, options?: RepoOptions): Promise<void> {
     try {

@@ -4,6 +4,7 @@ import {
   NotFoundError,
   ValidationError,
   UpstreamError,
+  InvalidApiKeyError,
 } from '../../shared/errors/domain';
 import { User } from '../types/persistence/UserPersistence';
 // import { openAI } from '../../shared/openai/index'; // Moved checkAPIKeyValid responsibility to AiProvider or just save it
@@ -67,7 +68,7 @@ export class UserService {
   /**
    * 사용자의 모든 API Key를 조회합니다.
    * @param userId 사용자 ID
-   * @param model API Key 모델 ('openai' | 'deepseek')
+   * @param model API Key 모델 ('openai' | 'gemini' | 'claude')
    * @returns API Key 값 (없으면 null)
    * @throws {ValidationError} userId가 유효하지 않거나 model이 잘못된 경우
    * @throws {NotFoundError} 사용자를 찾지 못한 경우
@@ -76,7 +77,7 @@ export class UserService {
   async getApiKeys(userId: string, model: ApiKeyModel): Promise<ApiKeysResponseDto> {
     try {
       if (!userId || typeof userId !== 'string') {
-         throw new ValidationError('User ID must be a valid string.');
+        throw new ValidationError('User ID must be a valid string.');
       }
 
       const user: User | null = await this.userRepository.findById(userId);
@@ -136,11 +137,11 @@ export class UserService {
           const provider = getAiProvider(model);
           const result = await provider.checkAPIKeyValid(apiKey);
           if (!result.ok) {
-            throw new ValidationError(`Invalid API Key for ${model}: ${result.error}`);
+            throw new InvalidApiKeyError(`Invalid API Key for ${model}: ${result.error}`);
           }
         } catch (err: unknown) {
-          if (err instanceof ValidationError) throw err;
-          throw new ValidationError(`Failed to validate API Key for ${model}.`);
+          if (err instanceof InvalidApiKeyError) throw err;
+          throw new InvalidApiKeyError(`Failed to validate API Key for ${model}.`);
         }
       }
 
@@ -235,11 +236,10 @@ export class UserService {
     }
     // Simple validation
     if (!language || language.length > 10) {
-        throw new ValidationError('Invalid language code');
+      throw new ValidationError('Invalid language code');
     }
     await this.userRepository.updatePreferredLanguage(userId, language);
   }
-
 
   /**
    * API Key 모델 유효성 검사
@@ -252,5 +252,4 @@ export class UserService {
       throw new ValidationError('Invalid model provided.');
     }
   }
-
 }

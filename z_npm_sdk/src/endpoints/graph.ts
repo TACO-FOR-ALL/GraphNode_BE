@@ -8,6 +8,7 @@ import type {
   GraphSubclusterDto,
   CreateEdgeResponse,
   UpdateNodePayload,
+  SearchNodesResponse,
 } from '../types/graph.js';
 
 /**
@@ -29,6 +30,19 @@ export class GraphApi {
 
   constructor(rb: RequestBuilder) {
     this.rb = rb.path('/v1/graph');
+  }
+
+  /**
+   * 벡터 유사도를 기반으로 노드를 검색합니다.
+   * @param queryVector - 검색할 벡터 (number[])
+   * @param limit - 검색 결과 개수 (기본값: 5)
+   * @returns 검색된 노드와 유사도 점수 목록 (SearchNodesResponse)
+   * @example
+   * const response = await client.graph.searchNodes([0.1, 0.2, ...], 5);
+   * console.log(response.data[0].node.id);
+   */
+  searchNodes(queryVector: number[], limit?: number): Promise<HttpResponse<SearchNodesResponse>> {
+    return this.rb.path('/search').post<SearchNodesResponse>({ queryVector, limit });
   }
 
   /**
@@ -356,16 +370,32 @@ export class GraphApi {
     return this.rb.path(`/clusters/${clusterId}/restore`).post<void>();
   }
 
-  // --- Subclusters ---
-
+  /**
+   * 모든 서브클러스터(Subcluster) 목록을 조회합니다.
+   * 
+   * @returns 서브클러스터 DTO 배열
+   */
   async listSubclusters(): Promise<HttpResponse<GraphSubclusterDto[]>> {
     return this.rb.path('/subclusters').get<GraphSubclusterDto[]>();
   }
 
+  /**
+   * 특정 서브클러스터의 상세 정보를 조회합니다.
+   * 
+   * @param subclusterId - 서브클러스터 ID
+   * @returns 서브클러스터 DTO
+   */
   async getSubcluster(subclusterId: string): Promise<HttpResponse<GraphSubclusterDto>> {
     return this.rb.path(`/subclusters/${subclusterId}`).get<GraphSubclusterDto>();
   }
 
+  /**
+   * 특정 서브클러스터를 삭제합니다.
+   * 
+   * @param subclusterId - 서브클러스터 ID
+   * @example
+   * await client.graph.deleteSubcluster('sub_123');
+   */
   async deleteSubcluster(subclusterId: string): Promise<HttpResponse<void>> {
     return this.rb.path(`/subclusters/${subclusterId}`).delete<void>();
   }
@@ -404,23 +434,15 @@ export class GraphApi {
 
   /**
    * 전체 그래프 스냅샷을 가져옵니다.
-   * @returns 그래프 스냅샷
+   *
+   * 만약 `nodes`나 `edges` 등 특정 필드가 빈 배열이라면, 해당 사용자의 그래프 데이터가 존재하지 않음을 의미합니다.
+   *
+   * @returns 그래프 스냅샷 (GraphSnapshotDto)
    * @example
    * const response = await client.graph.getSnapshot();
    *
-   * console.log(response.data);
-   * // Output:
-   * {
-   *   nodes: [
-   *     { id: 101, ... },
-   *     { id: 102, ... }
-   *   ],
-   *   edges: [
-   *     { id: 'edge-1', ... }
-   *   ],
-   *   clusters: [
-   *     { id: 'cluster-a', ... }
-   *   ]
+   * if (response.data.nodes.length === 0) {
+   *   console.log('그래프 데이터가 없습니다.');
    * }
    */
   getSnapshot(): Promise<HttpResponse<GraphSnapshotDto>> {

@@ -9,7 +9,8 @@ import { container } from '../container';
 
 export function makeGraphRouter(): Router {
   const graphEmbeddingService = container.getGraphEmbeddingService();
+  const graphVectorService = container.getGraphVectorService();
 
   //Router(Factory) - expose composite (or graphService) to router as appropriate
-  return createGraphRouter(graphEmbeddingService);
+  return createGraphRouter(graphEmbeddingService, graphVectorService);
 }

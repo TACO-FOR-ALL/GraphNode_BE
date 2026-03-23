@@ -74,24 +74,11 @@ export class MicroscopeIngestResultHandler implements JobHandler {
         const errorMsg = error || 'Unknown error from Microscope AI Pipeline';
         logger.warn({ taskId, userId, groupId, s3Key, error: errorMsg }, 'Microscope document processing failed');
         
-        await notiService.sendNotification(userId, NotificationType.MICROSCOPE_DOCUMENT_FAILED, {
-          taskId,
-          groupId,
-          s3Key,
-          error: errorMsg,
-          timestamp: new Date().toISOString(),
-        });
+        await notiService.sendMicroscopeDocumentFailed(userId, taskId, errorMsg);
       } else {
         logger.info({ taskId, userId, groupId, s3Key, chunks_count }, 'Microscope document processing completed successfully');
         
-        await notiService.sendNotification(userId, NotificationType.MICROSCOPE_DOCUMENT_COMPLETED, {
-          taskId,
-          groupId,
-          s3Key,
-          sourceId,
-          chunksCount: chunks_count,
-          timestamp: new Date().toISOString(),
-        });
+        await notiService.sendMicroscopeDocumentCompleted(userId, taskId, sourceId, chunks_count);
       }
 
       // 3. 워크스페이스 내에 남은 PENDING/PROCESSING 문서가 있는지 검사하여 최종 종합 Noti 판별
@@ -110,26 +97,20 @@ export class MicroscopeIngestResultHandler implements JobHandler {
       if (pendingCount === 0) {
         logger.info({ userId, groupId, totalDocs, completedCount, failedCount }, 'All documents in Microscope workspace have been processed');
         
-        await notiService.sendNotification(userId, NotificationType.MICROSCOPE_WORKSPACE_COMPLETED, {
-          groupId,
-          workspaceName: updatedWorkspace.name,
-          totalDocs,
-          completedCount,
-          failedCount,
-          timestamp: new Date().toISOString(),
-        });
-
-        // FCM 푸시 알림 (전체 완료 건)
-        await notiService.sendFcmPushNotification(
-          userId,
-          'Microscope Workspace Ready',
-          `Your workspace "${updatedWorkspace.name}" is ready! (${completedCount} passed, ${failedCount} failed)`,
-          {
-            type: NotificationType.MICROSCOPE_WORKSPACE_COMPLETED,
-            groupId,
-            completedCount: String(completedCount),
-          }
-        );
+        await Promise.allSettled([
+          notiService.sendMicroscopeWorkspaceCompleted(userId, taskId),
+          // FCM 푸시 알림 (전체 완료 건)
+          notiService.sendFcmPushNotification(
+            userId,
+            'Microscope Workspace Ready',
+            `Your workspace "${updatedWorkspace.name}" is ready! (${completedCount} passed, ${failedCount} failed)`,
+            {
+              type: NotificationType.MICROSCOPE_WORKSPACE_COMPLETED,
+              groupId,
+              completedCount: String(completedCount),
+            }
+          )
+        ]);
       }
     } catch (err) {
       logger.error({ err, taskId, userId, groupId, docId }, 'Exception during Microscope Result Handling');

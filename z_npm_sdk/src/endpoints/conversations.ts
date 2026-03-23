@@ -1,4 +1,4 @@
-import { RequestBuilder, type HttpResponse } from '../http-builder.js';
+import { RequestBuilder, type HttpResponse, type HttpResponseError } from '../http-builder.js';
 import type {
   ConversationDto,
   ConversationCreateDto,
@@ -111,51 +111,67 @@ export class ConversationsApi {
   }
 
   /**
-   * 대화 목록을 조회합니다.
+   * 대화 목록을 조회합니다. (모든 페이지 자동 조회)
    * @returns 대화 목록 (ConversationDto 배열)
    * @example
    * const response = await client.conversations.list();
-   *
-   * console.log(response.data);
-   * // Output:
-   * [
-   *   {
-   *     id: 'conv-123',
-   *     title: 'Project Brainstorming',
-   *     messages: [],
-   *     createdAt: '2023-10-27T10:00:00Z',
-   *     updatedAt: '2023-10-27T10:00:00Z'
-   *   },
-   *   {
-   *     id: 'conv-124',
-   *     title: 'Another Chat',
-   *     messages: [],
-   *     createdAt: '2023-10-28T10:00:00Z',
-   *     updatedAt: '2023-10-28T10:00:00Z'
-   *   }
-   * ]
+   * console.log(response.data); // 모든 대화 목록
    */
-  list(): Promise<HttpResponse<ConversationDto[]>> {
-    return this.rb.path('/v1/ai/conversations').get<ConversationDto[]>();
+  async list(): Promise<HttpResponse<ConversationDto[]>> {
+    const allItems: ConversationDto[] = [];
+    let cursor: string | null = null;
+
+    do {
+      const res: HttpResponse<{ items: ConversationDto[]; nextCursor: string | null }> = await this.rb
+        .path('/v1/ai/conversations')
+        .query({ limit: 100, cursor: cursor || undefined })
+        .get<{ items: ConversationDto[]; nextCursor: string | null }>();
+
+      if (!res.isSuccess) {
+        return res as HttpResponseError;
+      }
+
+      allItems.push(...res.data.items);
+      cursor = res.data.nextCursor;
+    } while (cursor);
+
+    return {
+      isSuccess: true,
+      statusCode: 200,
+      data: allItems,
+    };
   }
 
   /**
-   * 삭제된 대화(휴지통) 목록을 조회합니다.
-   * @param limit - 한 번에 가져올 개수 (기본값 50)
-   * @param cursor - 다음 페이지를 위한 커서
-   * @returns 삭제된 대화 목록 및 다음 커서
+   * 삭제된 대화(휴지통) 목록을 조회합니다. (모든 페이지 자동 조회)
+   * @returns 삭제된 대화 목록 (ConversationDto 배열)
    * @example
-   * const response = await client.conversations.listTrash(20);
-   * console.log(response.data.items);
+   * const response = await client.conversations.listTrash();
+   * console.log(response.data); // 모든 삭제된 대화 목록
    */
-  listTrash(
-    limit?: number,
-    cursor?: string
-  ): Promise<HttpResponse<{ items: ConversationDto[]; nextCursor?: string | null }>> {
-    return this.rb
-      .path('/v1/ai/conversations/trash')
-      .query({ limit, cursor })
-      .get<{ items: ConversationDto[]; nextCursor?: string | null }>();
+  async listTrash(): Promise<HttpResponse<ConversationDto[]>> {
+    const allItems: ConversationDto[] = [];
+    let cursor: string | null = null;
+
+    do {
+      const res: HttpResponse<{ items: ConversationDto[]; nextCursor: string | null }> = await this.rb
+        .path('/v1/ai/conversations/trash')
+        .query({ limit: 100, cursor: cursor || undefined })
+        .get<{ items: ConversationDto[]; nextCursor: string | null }>();
+
+      if (!res.isSuccess) {
+        return res as HttpResponseError;
+      }
+
+      allItems.push(...res.data.items);
+      cursor = res.data.nextCursor;
+    } while (cursor);
+
+    return {
+      isSuccess: true,
+      statusCode: 200,
+      data: allItems,
+    };
   }
 
   /**
@@ -215,29 +231,41 @@ export class ConversationsApi {
   }
 
   /**
-   * 대화를 삭제합니다.
-   * 주의: 이 대화를 기반으로 생성된 지식 그래프(Graph Node/Edge) 데이터들 또한 동일한 정책에 따라 연쇄 삭제(Cascade Delete) 됩니다.
+   * 대화를 소프트 삭제합니다 (휴지통으로 이동).
    * @param conversationId 대화 ID
-   * @param permanent 영구 삭제 여부 (true: 영구 삭제, false: soft delete)
    * @example
-   * const response = await client.conversations.delete('conv-123');
-   *
-   * console.log(response.data);
-   * // Output:
-   * {
-   *   ok: true
-   * }
+   * await client.conversations.softDelete('conv-123');
    */
-  delete(conversationId: string, permanent?: boolean): Promise<HttpResponse<{ ok: true }>> {
+  softDelete(conversationId: string): Promise<HttpResponse<{ ok: true }>> {
     return this.rb
       .path(`/v1/ai/conversations/${conversationId}`)
-      .query({ permanent })
+      .query({ permanent: false })
+      .delete<{ ok: true }>();
+  }
+
+  /**
+   * 대화를 영구 삭제합니다.
+   * 
+   * @remarks
+   * **경고:** 이 작업은 취소할 수 없습니다. 이 대화를 기반으로 생성된 지식 그래프(Graph Node/Edge) 데이터들 또한 함께 영구 삭제됩니다.
+   * 
+   * @param conversationId - 대화 ID
+   * @example
+   * await client.conversations.hardDelete('conv-123');
+   */
+  hardDelete(conversationId: string): Promise<HttpResponse<{ ok: true }>> {
+    return this.rb
+      .path(`/v1/ai/conversations/${conversationId}`)
+      .query({ permanent: true })
       .delete<{ ok: true }>();
   }
 
   /**
    * 모든 대화를 삭제합니다.
-   * 주의: 사용자의 모든 그래프 데이터 또한 연쇄 삭제됩니다.
+   * 
+   * @remarks
+   * **주의:** 사용자의 모든 대화 내역 및 연관된 지식 그래프 데이터가 즉시 파기됩니다.
+   * 
    * @returns 삭제된 대화 수
    * @example
    * const response = await client.conversations.deleteAll();
@@ -334,49 +362,54 @@ export class ConversationsApi {
   }
 
   /**
-   * 메시지를 삭제합니다.
-   * 주의: 이 메시지를 기반으로 생성된 지식 그래프 노드(Graph Node) 및 연결된 엣지도 함께 연쇄 삭제됩니다.
+   * 메시지를 소프트 삭제합니다 (휴지통으로 이동).
    * @param conversationId 대화 ID
    * @param messageId 메시지 ID
-   * @param permanent 영구 삭제 여부 (true: 영구 삭제, false: soft delete)
-   * @returns 성공 시 빈 응답
    * @example
-   * const response = await client.conversations.deleteMessage('conv-123', 'msg-999');
-   *
-   * console.log(response.data);
-   * // Output:
-   * {
-   *   ok: true
-   * }
+   * await client.conversations.softDeleteMessage('conv-123', 'msg-999');
    */
-  deleteMessage(
+  softDeleteMessage(
     conversationId: string,
-    messageId: string,
-    permanent?: boolean
+    messageId: string
   ): Promise<HttpResponse<{ ok: true }>> {
     return this.rb
       .path(`/v1/ai/conversations/${conversationId}/messages/${messageId}`)
-      .query({ permanent })
+      .query({ permanent: false })
+      .delete<{ ok: true }>();
+  }
+
+  /**
+   * 메시지를 영구 삭제합니다.
+   * 
+   * @remarks
+   * **경고:** 이 작업은 취소할 수 없습니다. 이 메시지를 기반으로 생성된 지식 그래프 노드(Graph Node) 및 연결된 엣지도 함께 영구 삭제됩니다.
+   * 
+   * @param conversationId - 대화 ID
+   * @param messageId - 메시지 ID
+   * @example
+   * await client.conversations.hardDeleteMessage('conv-123', 'msg-999');
+   */
+  hardDeleteMessage(
+    conversationId: string,
+    messageId: string
+  ): Promise<HttpResponse<{ ok: true }>> {
+    return this.rb
+      .path(`/v1/ai/conversations/${conversationId}/messages/${messageId}`)
+      .query({ permanent: true })
       .delete<{ ok: true }>();
   }
 
   /**
    * 삭제된 메시지를 복구합니다.
-   * 주의: 이 메시지를 기반으로 생성되었던 지식 그래프 노드(Graph Node)도 함께 연쇄 복원됩니다.
-   * @param conversationId 대화 ID
-   * @param messageId 메시지 ID
+   * 
+   * @remarks
+   * 메시지 복구 시, 이 메시지를 기반으로 생성되었던 지식 그래프 노드(Graph Node)도 함께 연쇄 복원됩니다.
+   * 
+   * @param conversationId - 대화 ID
+   * @param messageId - 메시지 ID
    * @returns 복구된 메시지 정보
    * @example
    * const response = await client.conversations.restoreMessage('conv-123', 'msg-999');
-   *
-   * console.log(response.data);
-   * // Output:
-   * {
-   *   id: 'msg-999',
-   *   role: 'user',
-   *   content: '...',
-   *   createdAt: '...'
-   * }
    */
   restoreMessage(conversationId: string, messageId: string): Promise<HttpResponse<MessageDto>> {
     return this.rb

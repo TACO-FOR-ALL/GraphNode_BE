@@ -30,6 +30,19 @@ export interface AIChatResponseDto {
 }
 
 /**
+ * RAG 채팅 요청 DTO (FE 책임 기반)
+ * @public
+ */
+export interface AIRagChatRequestDto {
+  id: string;
+  model: ApiKeyModel;
+  chatContent: string;
+  modelName?: string;
+  retrievedContext: MessageDto[];
+  recentMessages: MessageDto[];
+}
+
+/**
  * AI Chat API
  *
  * AI 모델과의 실시간 채팅 기능을 제공하는 API 클래스입니다.
@@ -45,16 +58,25 @@ export class AiApi {
 
 
   /**
-   * 대화 내에서 AI와 채팅을 진행합니다.
-   * - 파일 첨부 가능 (files 인자)
-   * - 스트리밍 기본 지원 (Server-Sent Events)
-   * - onStream 콜백을 통해 청크 수신 가능
-   * - Promise는 최종 완료된 응답(AIChatResponseDto)으로 resolve됨 (기존 호환성 유지)
+   * 대화 내에서 AI와 채팅을 진행합니다. (표준 요청/응답 방식)
+   * 
+   * @remarks
+   * 내부적으로 Server-Sent Events(SSE)를 사용하지만, Promise는 AI의 최종 응답이 모두 수신된 후 resolve됩니다.
+   * 실시간 글자 단위 업데이트가 필요하면 `onStream` 콜백을 사용하세요.
    *
-   * @param conversationId - 대화 ID
-   * @param dto - 채팅 요청 데이터
-   * @param files - (선택) 업로드할 파일 리스트
-   * @param onStream - (선택) 스트림 청크 수신 콜백 (AiStreamEvent.CHUNK 이벤트의 text 값)
+   * @param conversationId - 대화 ID (ULID/UUID)
+   * @param dto - 채팅 요청 데이터 (id, model, chatContent 등)
+   * @param files - (선택) 업로드할 파일 리스트 (이미지, 문서 등)
+   * @param onStream - (선택) 실시간 텍스트 청크 수신 콜백
+   * @returns AI 응답 DTO 및 HTTP 상태 코드
+   * @throws {Error} 네트워크 오류 또는 스트림 처리 실패 시
+   * 
+   * @example
+   * const res = await client.ai.chat('conv_123', { 
+   *   id: 'msg_1', 
+   *   model: 'openai', 
+   *   chatContent: '안녕?' 
+   * }, [], (text) => console.log(text));
    */
   async chat(
     conversationId: string,
@@ -62,55 +84,138 @@ export class AiApi {
     files?: File[],
     onStream?: (chunk: string) => void
   ): Promise<HttpResponse<AIChatResponseDto>> {
-    const rb = this.rb.path(`/v1/ai/conversations/${conversationId}/chat`);
+    return this._handleChatRequest(`/v1/ai/conversations/${conversationId}/chat`, dto, files, onStream);
+  }
 
-    // 1. Body 준비 (JSON or FormData)
+  /**
+   * AI 채팅 스트림을 엽니다. (SSE 고수준 제어용)
+   * 
+   * @remarks
+   * 이 메서드는 SSE 이벤트를 직접 제어할 수 있는 저수준 API입니다.
+   * `AiStreamEvent` 타입을 통해 이벤트별 분기 처리가 가능합니다.
+   * 
+   * 주요 이벤트:
+   * - `chunk`: 텍스트 스트림 조각 수신 (`{ text: string }`)
+   * - `result`: 최종 답변 및 메시지 목록 수신 (`AIChatResponseDto`)
+   * - `error`: 서버 측 처리 오류 발생 (`{ message: string }`)
+   * 
+   * @param conversationId - 대화 ID
+   * @param dto - 채팅 요청 데이터
+   * @param files - (선택) 업로드할 파일 리스트 (기본값: [])
+   * @param onEvent - SSE 이벤트 수신 콜백 ({ event: string, data: any })
+   * @param options - 추가 옵션 (AbortSignal을 통한 요청 취소 지원)
+   * @returns 스트림 중단(abort) 함수
+   * 
+   * @example
+   * const abort = await client.ai.chatStream('conv_123', { id: 'msg_1', model: 'openai', chatContent: 'Tell me a story' }, [], (event) => {
+   *   if (event.event === 'chunk') console.log(event.data.text);
+   *   if (event.event === 'result') console.log('Done:', event.data.messages);
+   * });
+   * // 필요 시 호출: abort();
+   */
+  async chatStream(
+    conversationId: string,
+    dto: AIChatRequestDto,
+    files: File[] = [],
+    onEvent: (event: any) => void,
+    options: { signal?: AbortSignal; fetchImpl?: any } = {}
+  ): Promise<() => void> {
+    return this._handleChatStream(`/v1/ai/conversations/${conversationId}/chat`, dto, files, onEvent, options);
+  }
+
+  /**
+   * RAG 기반 채팅을 진행합니다. (FE가 검색한 맥락 포함 요청)
+   * 
+   * @remarks
+   * 사용자가 현재 보고 있는 문서 조각이나 관련 과거 대화(`retrievedContext`)를 백엔드에 직접 전달하여, 
+   * 서버 측의 별도 벡터 검색 없이도 정확한 답변을 유도할 수 있는 API입니다.
+   * 
+   * @param conversationId - 대화 ID
+   * @param dto - RAG 요청 데이터 (retrievedContext, recentMessages 포함)
+   * @param files - 첨부 파일
+   * @param onStream - 실시간 텍스트 콜백
+   * @returns AI 응답 DTO
+   * 
+   * @example
+   * const res = await client.ai.ragChat('conv_123', {
+   *   id: 'msg_2',
+   *   model: 'openai',
+   *   chatContent: '이 문서 내용을 요약해줘',
+   *   retrievedContext: [{ role: 'user', content: '문서 본문 내용...' }],
+   *   recentMessages: []
+   * });
+   */
+  async ragChat(
+    conversationId: string,
+    dto: AIRagChatRequestDto,
+    files?: File[],
+    onStream?: (chunk: string) => void
+  ): Promise<HttpResponse<AIChatResponseDto>> {
+    return this._handleChatRequest(`/v1/ai/conversations/${conversationId}/rag-chat`, dto, files, onStream);
+  }
+
+  /**
+   * RAG 기반 채팅 스트림을 엽니다. (고수준 제어용)
+   * 
+   * @param conversationId - 대화 ID
+   * @param dto - RAG 요청 데이터
+   * @param files - 첨부 파일
+   * @param onEvent - SSE 이벤트 수신 콜백
+   * @param options - AbortSignal 등 추가 옵션
+   * @returns 스트림 중단 함수
+   * @see chatStream 이벤트 구조 참고
+   * 
+   * @example
+   * await client.ai.ragChatStream('conv_123', ragDto, [], (ev) => { ... });
+   */
+  async ragChatStream(
+    conversationId: string,
+    dto: AIRagChatRequestDto,
+    files: File[] = [],
+    onEvent: (event: any) => void,
+    options: { signal?: AbortSignal; fetchImpl?: any } = {}
+  ): Promise<() => void> {
+    return this._handleChatStream(`/v1/ai/conversations/${conversationId}/rag-chat`, dto, files, onEvent, options);
+  }
+
+  /**
+   * 공통 채팅 요청 처리기 (내부용)
+   */
+  private async _handleChatRequest(
+    path: string,
+    dto: any,
+    files?: File[],
+    onStream?: (chunk: string) => void
+  ): Promise<HttpResponse<AIChatResponseDto>> {
+    const rb = this.rb.path(path);
     let body: unknown;
     if (files && files.length > 0) {
       const formData = new FormData();
-      formData.append('id', dto.id);
-      formData.append('model', dto.model);
-      formData.append('chatContent', dto.chatContent);
-      if (dto.modelName) {
-        formData.append('modelName', dto.modelName);
-      }
-      files.forEach((file) => formData.append('files', file));
+      Object.entries(dto).forEach(([k, v]) => {
+        if (typeof v === 'object') formData.append(k, JSON.stringify(v));
+        else formData.append(k, String(v));
+      });
+      files.forEach((f) => formData.append('files', f));
       body = formData;
     } else {
       body = dto;
     }
 
     try {
-      // 2. 요청 전송 (Accept: text/event-stream 강제)
-      // sendRaw에 extraHeaders를 전달하여 요청
       const res = await rb.sendRaw('POST', body, { Accept: 'text/event-stream' });
-
       if (!res.ok) {
         let errBody;
-        try {
-          errBody = await res.json();
-        } catch {
-          errBody = await res.text();
-        }
-        return {
-          isSuccess: false,
-          error: { statusCode: res.status, message: res.statusText, body: errBody },
-        };
+        try { errBody = await res.json(); } catch { errBody = await res.text(); }
+        return { isSuccess: false, error: { statusCode: res.status, message: res.statusText, body: errBody } };
       }
-
-      // 3. 응답 처리 (SSE vs JSON)
+      
       const contentType = res.headers.get('content-type') || '';
       if (!contentType.includes('text/event-stream')) {
-        // SSE가 아니면 일반 JSON으로 처리 (Fallback)
         const json = await res.json();
         return { isSuccess: true, statusCode: res.status, data: json };
       }
 
-      // 4. SSE 스트림 파싱
-      if (!res.body) {
-         throw new Error('Response body is empty');
-      }
-
+      if (!res.body) throw new Error('Response body is empty');
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
@@ -121,174 +226,104 @@ export class AiApi {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        
-        // SSE 이벤트 파싱 로직
-        // 예: "event: chunk\ndata: {...}\n\n"
         const parts = buffer.split('\n\n');
-        buffer = parts.pop() || ''; // 마지막 불완전한 부분은 버퍼에 남김
-
+        buffer = parts.pop() || '';
         for (const part of parts) {
           const lines = part.split('\n');
           let eventName = 'message';
           let dataStr = '';
-
           for (const line of lines) {
             const trimmed = line.trim();
             if (trimmed.startsWith('event:')) eventName = trimmed.slice(6).trim();
             else if (trimmed.startsWith('data:')) dataStr = trimmed.slice(5).trim();
           }
-
           if (dataStr) {
             try {
               const parsed = JSON.parse(dataStr);
-              
-              if (eventName === AiStreamEvent.CHUNK) {
-                if (onStream) onStream(parsed.text);
-              } else if (eventName === AiStreamEvent.RESULT) {
-                finalResult = parsed;
-              } else if (eventName === AiStreamEvent.ERROR) {
-                finalError = parsed.message;
-              }
-            } catch {
-               // JSON 파싱 에러 무시
-            }
+              if (eventName === AiStreamEvent.CHUNK && onStream) onStream(parsed.text);
+              else if (eventName === AiStreamEvent.RESULT) finalResult = parsed;
+              else if (eventName === AiStreamEvent.ERROR) finalError = parsed.message;
+            } catch { /* ignore */ }
           }
         }
       }
 
-      // 스트림 종료 후 처리
-      if (finalError) {
-        return {
-          isSuccess: false,
-          error: { statusCode: 500, message: finalError },
-        };
-      }
+      if (finalError) return { isSuccess: false, error: { statusCode: 500, message: finalError } };
+      if (!finalResult) return { isSuccess: false, error: { statusCode: 500, message: 'Stream ended without result' } };
 
-      if (!finalResult) {
-        // result 이벤트 없이 끝난 경우 (예: 연결 끊김 등)
-        return {
-          isSuccess: false,
-          error: { statusCode: 500, message: 'Stream ended without result' },
-        };
-      }
-
-      return {
-        isSuccess: true,
-        statusCode: 201, // Created
-        data: finalResult,
-      };
-
+      return { isSuccess: true, statusCode: 201, data: finalResult };
     } catch (e) {
-      return {
-        isSuccess: false,
-        error: {
-          statusCode: 0,
-          message: e instanceof Error ? e.message : String(e),
-        },
-      };
+      return { isSuccess: false, error: { statusCode: 0, message: e instanceof Error ? e.message : String(e) } };
     }
   }
 
   /**
-   * AI 채팅 스트림을 엽니다. (Low-level SSE 제어용)
-   * 
-   * @remarks
-   * 이 메서드는 SSE 이벤트를 직접 제어할 수 있는 저수준 API입니다.
-   * `AiStreamEvent` enum을 사용하여 이벤트 타입을 구분할 수 있습니다.
-   * - `AiStreamEvent.CHUNK` ('chunk'): 텍스트 스트림 조각 ({ text: string })
-   * - `AiStreamEvent.RESULT` ('result'): 최종 응답 DTO ({ messages: MessageDto[], ... })
-   * - `AiStreamEvent.ERROR` ('error'): 에러 발생 ({ message: string })
-   * 
-   * @param conversationId 대화 ID
-   * @param dto 채팅 요청 데이터
-   * @param files 업로드할 파일 리스트
-   * @param onEvent SSE 이벤트 수신 콜백 ({ event: string, data: any })
-   * @param options 추가 옵션 (AbortSignal 등)
-   * @returns 스트림 중단(abort) 함수
+   * 공통 채팅 스트림 처리기 (내부용)
    */
-  async chatStream(
-    conversationId: string,
-    dto: AIChatRequestDto,
-    files: File[] = [],
+  private async _handleChatStream(
+    path: string,
+    dto: any,
+    files: File[],
     onEvent: (event: any) => void,
-    options: { signal?: AbortSignal; fetchImpl?: any } = {}
+    options: { signal?: AbortSignal }
   ): Promise<() => void> {
-    const rb = this.rb.path(`/v1/ai/conversations/${conversationId}/chat`);
-
-    // Body 준비
+    const rb = this.rb.path(path);
+    const controller = new AbortController();
+    const signal = options.signal || controller.signal;
     let body: any;
-    const headers: Record<string, string> = {
-      Accept: 'text/event-stream',
-    };
-
     if (files.length > 0) {
       const formData = new FormData();
-      formData.append('id', dto.id);
-      formData.append('model', dto.model);
-      formData.append('chatContent', dto.chatContent);
-      if (dto.modelName) {
-        formData.append('modelName', dto.modelName);
-      }
+      Object.entries(dto).forEach(([k, v]) => {
+        if (typeof v === 'object') formData.append(k, JSON.stringify(v));
+        else formData.append(k, String(v));
+      });
       files.forEach((f) => formData.append('files', f));
       body = formData;
     } else {
       body = dto;
     }
 
-    const controller = new AbortController();
-    const signal = options.signal || controller.signal;
-
-    try {
-      // options.signal 전달은 RequestBuilder 구현에 따라 다를 수 있으나
-      // 현재 rb.sendRaw 인터페이스를 활용해 요청
-      const res = await rb.sendRaw('POST', body, headers);
-
-      if (!res.body) return () => controller.abort();
-
+    rb.sendRaw('POST', body, { Accept: 'text/event-stream' }).then(async (res) => {
+      if (!res.body) return;
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-
-      (async () => {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const parts = buffer.split('\n\n');
-          buffer = parts.pop() || '';
-
-          for (const part of parts) {
-            const lines = part.split('\n');
-            let eventName = 'message';
-            let dataStr = '';
-
-            for (const line of lines) {
-              if (line.startsWith('event:')) eventName = line.slice(6).trim();
-              else if (line.startsWith('data:')) dataStr = line.slice(5).trim();
-            }
-
-            if (dataStr) {
-              try {
-                const parsed = JSON.parse(dataStr);
-                onEvent({ event: eventName, data: parsed });
-              } catch {
-                // ignore
-              }
-            }
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() || '';
+        for (const part of parts) {
+          const lines = part.split('\n');
+          let eventName = 'message';
+          let dataStr = '';
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('event:')) eventName = trimmed.slice(6).trim();
+            else if (trimmed.startsWith('data:')) dataStr = trimmed.slice(5).trim();
+          }
+          if (dataStr) {
+            try {
+              const parsed = JSON.parse(dataStr);
+              onEvent({ event: eventName, data: parsed });
+            } catch { /* ignore */ }
           }
         }
-      })();
-    } catch (e) {
-      onEvent({ event: AiStreamEvent.ERROR, data: { message: String(e) } });
-    }
-
+      }
+    }).catch(e => {
+      if (!signal.aborted) onEvent({ event: AiStreamEvent.ERROR, data: { message: String(e) } });
+    });
     return () => controller.abort();
   }
 
   /**
    * AI 관련 파일을 다운로드합니다.
-   * @param fileKey 파일 키 (S3 Key)
-   * @returns Blob 객체
+   * @param fileKey - 파일 키 (S3 Key)
+   * @returns BloB 객체 (이미지, 문서 등)
+   * @example
+   * const blob = await client.ai.downloadFile('chat-files/123-abc.png');
+   * const url = URL.createObjectURL(blob);
    */
   async downloadFile(fileKey: string): Promise<Blob> {
     const rb = this.rb.path(`/v1/ai/files/${fileKey}`);

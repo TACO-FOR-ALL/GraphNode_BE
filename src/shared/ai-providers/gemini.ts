@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI, Content, Part } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { Readable } from 'stream';
 
 import { IAiProvider, Result, AiResponse, ChatGenerationParams } from './IAiProvider';
@@ -6,11 +6,13 @@ import { StoragePort } from '../../core/ports/StoragePort';
 import { documentProcessor } from '../utils/documentProcessor';
 import { logger } from '../../shared/utils/logger';
 
+/**
+ * Gemini API의 원시 에러를 시스템에서 사용하는 표준 에러 코드로 변환합니다.
+ */
 function normalizeError(e: any): string {
   const msg = e.message || '';
   const status = e.status || (e.response?.status);
   
-  // Log full error for internal diagnostics (Critical for "unknown_error" debugging)
   logger.error({ 
     err: e, 
     message: msg, 
@@ -19,17 +21,14 @@ function normalizeError(e: any): string {
     details: e.details || e.response?.data?.error?.details
   }, 'Gemini Provider Error caught');
 
-  // GoogleGenerativeAI Error Mapping
   if (msg.includes('API key not valid')) return 'unauthorized_key';
   if (msg.includes('Location not supported')) return 'unsupported_location';
   if (msg.includes('429') || msg.includes('quota')) return 'rate_limited';
   
-  // Status code based mapping
   if (status === 401) return 'unauthorized_key';
   if (status === 403) return 'forbidden';
   if (status === 404) return 'model_not_found';
   
-  // String matching for other common codes
   if (msg.includes('PERMISSION_DENIED')) return 'forbidden';
   if (msg.includes('UNAUTHENTICATED')) return 'unauthorized_key';
   if (msg.includes('RESOURCE_EXHAUSTED')) return 'rate_limited';
@@ -39,7 +38,7 @@ function normalizeError(e: any): string {
 }
 
 /**
- * 스트림을 버퍼로 변환하는 헬퍼 함수
+ * 스트림 데이터를 버퍼로 변환합니다.
  */
 async function streamToBuffer(stream: Readable): Promise<Buffer> {
   const chunks: Buffer[] = [];
@@ -50,16 +49,23 @@ async function streamToBuffer(stream: Readable): Promise<Buffer> {
   });
 }
 
+/**
+ * Gemini (@google/genai) AI Provider 구현체
+ */
 export const geminiProvider: IAiProvider = {
+  /**
+   * API 키 유효성을 검증합니다.
+   */
   async checkAPIKeyValid(apiKey: string): Promise<Result<true>> {
     if (!apiKey || apiKey.trim().length === 0) {
       return { ok: false, error: 'empty_api_key' };
     }
     try {
-      const genAI = new GoogleGenerativeAI(apiKey);
-      // Using gemini-1.5-flash as it's the current recommended fast/capable model
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-      await model.generateContent('Hi');
+      const ai = new GoogleGenAI({ apiKey });
+      await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: 'Hi'
+      });
       return { ok: true, data: true };
     } catch (e: any) {
       return { ok: false, error: normalizeError(e) };
@@ -67,7 +73,7 @@ export const geminiProvider: IAiProvider = {
   },
 
   /**
-   * 통합 채팅 생성 메서드 (Stateless)
+   * 대화를 생성하고 선택적으로 스트리밍 응답을 제공합니다.
    */
   async generateChat(
     apiKey: string,
@@ -76,70 +82,50 @@ export const geminiProvider: IAiProvider = {
     storageAdapter?: StoragePort
   ): Promise<Result<AiResponse>> {
     try {
-      const genAI = new GoogleGenerativeAI(apiKey);
+      const ai = new GoogleGenAI({ apiKey });
       
-      // 1. System Instruction 추출
       let systemInstruction: string | undefined;
-      const history: Content[] = [];
-      let lastUserMessageParts: Part[] = [];
+      const contents: any[] = [];
 
-      // History mapping
       const rawMessages = params.messages;
       
-      // Extract System
+      // 시스템 지시문 추출
       const systemMsg = rawMessages.find(m => m.role === 'system');
       if (systemMsg) {
-          if (Array.isArray(systemMsg.content)) {
-            // @ts-ignore - content type mismatch handling
-              systemInstruction = systemMsg.content.map(c => c.text).join('\n');
-          } else {
-              systemInstruction = systemMsg.content as string;
-          }
+          systemInstruction = typeof systemMsg.content === 'string' 
+            ? systemMsg.content 
+            : "";
       }
 
-      // Filter non-system messages
       const chatMessages = rawMessages.filter(m => m.role !== 'system');
       
       if (chatMessages.length === 0) {
           return { ok: false, error: 'no_user_message' };
       }
 
-      // Process all messages to build history and last message
-      // Gemini expects history + last message prompt separately for sendMessageStream
-      // But we can iterate all, pop the last one, or just build them.
-      
-      // Let's build ALL contents first, then separate last one.
-      const allContents: Content[] = [];
-
+      // 메시지 이력 구성
       for (const m of chatMessages) {
-          const parts: Part[] = [];
+          const parts: any[] = [];
 
-          // 1. Text Content
-          if (m.content) {
-               if (typeof m.content === 'string') {
-                   parts.push({ text: m.content });
-               }
+          if (m.content && typeof m.content === 'string') {
+              parts.push({ text: m.content });
           }
 
-          // 2. Attachments (File Handling)
+          // 첨부파일 처리
           if (m.attachments && m.attachments.length > 0 && storageAdapter) {
               for (const att of m.attachments) {
                   try {
                        const stream = await storageAdapter.downloadStream(att.url, { bucketType: 'file' });
                        const buffer = await streamToBuffer(stream as Readable);
-                       
-                       // DocumentProcessor processing
                        const processed = await documentProcessor.process(buffer, att.mimeType, att.name);
                        
                        if (processed.type === 'text') {
-                           // Text/Code/PDF/Doc -> Text Part
                            parts.push({ text: processed.content });
                        } else if (processed.type === 'image') {
-                           // Image -> Inline Data
                            parts.push({
                                inlineData: {
                                    mimeType: att.mimeType,
-                                   data: processed.content // base64
+                                   data: processed.content
                                }
                            });
                        }
@@ -150,46 +136,32 @@ export const geminiProvider: IAiProvider = {
           }
           
           if (parts.length > 0) {
-              allContents.push({
+              contents.push({
                   role: m.role === 'assistant' ? 'model' : 'user',
                   parts: parts
               });
           }
       }
 
-      // 이전 대화 기록 + 마지막 메시지가 다 없음
-      if (allContents.length === 0) return { ok: false, error: 'empty_context' };
-
-      // Separate History vs Last Message
-      const lastContent = allContents[allContents.length - 1];
-      const historyContents = allContents.slice(0, -1);
-      
-      // Check if last message is from user (Gemini requirement: prompt must be user?)
-      // Actually sendMessageStream takes (prompt).
-      // If last message is 'model', we might have an issue, but standard chat flow ends with user.
-      
-      const model = genAI.getGenerativeModel({ 
-          model: params.model || 'gemini-1.5-flash',
-          systemInstruction: systemInstruction 
+      // 스트리밍 호출
+      const streamResponse = await ai.models.generateContentStream({
+        model: params.model || 'gemini-3-flash-preview',
+        contents: contents,
+        config: {
+          systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
+          maxOutputTokens: 4096
+        }
       });
 
-      const chat = model.startChat({
-        history: historyContents,
-        generationConfig: { maxOutputTokens: 4096 },
-      });
-
-      
-      const result = await chat.sendMessageStream(lastContent.parts);
-
-      // LLM 답변을 받는 부분
       let fullContent = '';
-      for await (const chunk of result.stream) {
-        const chunkText = chunk.text();
-        fullContent += chunkText;
-        onStream?.(chunkText);
+      for await (const chunk of streamResponse) {
+        const delta = chunk.text || '';
+        if (delta) {
+          fullContent += delta;
+          onStream?.(delta);
+        }
       }
 
-      // return
       return {
         ok: true,
         data: {
@@ -204,20 +176,28 @@ export const geminiProvider: IAiProvider = {
     }
   },
 
+  /**
+   * 대화 요약(제목)을 생성합니다.
+   */
   async requestGenerateThreadTitle(
     apiKey: string,
     firstUserMessage: string,
     opts?: { timeoutMs?: number; language?: string }
   ): Promise<Result<string>> {
     try {
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const ai = new GoogleGenAI({ apiKey });
       const languageInstruction = opts?.language 
         ? ` The title MUST be in ${opts.language}.`
         : '';
       const prompt = `Generate a thread title based on the message below in 20 letters or less.${languageInstruction} Return ONLY the JSON object {"title": "..."}. Message: "${firstUserMessage}"`;
-      const result = await model.generateContent(prompt);
-      const text = result.response.text();
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt
+      });
+      
+      // response.text property (Gen AI 2.0 pattern)
+      const text = (response as any).text || '';
       try {
         const jsonStr = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
         const { title } = JSON.parse(jsonStr);

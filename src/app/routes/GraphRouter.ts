@@ -6,21 +6,29 @@
 import { Router } from 'express';
 
 import type { GraphEmbeddingService } from '../../core/services/GraphEmbeddingService';
+import type { GraphVectorService } from '../../core/services/GraphVectorService';
 import { internalOrSession } from '../middlewares/internal';
 import { asyncHandler } from '../utils/asyncHandler';
 import { GraphController } from '../controllers/GraphController';
 
 /**
  * 라우터 팩토리 함수
- * @param graphEmbeddingService - 그래프 관련 서비스 인스턴스
+ * @param graphEmbeddingService - 그래프 관리 서비스
+ * @param graphVectorService - 벡터 검색 서비스
  * @returns 라우터 객체
  */
-export function createGraphRouter(graphEmbeddingService: GraphEmbeddingService) {
+export function createGraphRouter(
+  graphEmbeddingService: GraphEmbeddingService,
+  graphVectorService: GraphVectorService
+) {
   const router = Router();
-  const graphController = new GraphController(graphEmbeddingService);
+  const graphController = new GraphController(graphEmbeddingService, graphVectorService);
 
   // 공통 미들웨어 적용: 세션 사용자 바인딩 및 로그인 요구
   router.use(internalOrSession);
+
+  // Search 유사도 검색 route
+  router.post('/search', asyncHandler(graphController.searchNodes.bind(graphController)));
 
   // Node routes
   router.post('/nodes', asyncHandler(graphController.createNode.bind(graphController)));

@@ -3,17 +3,18 @@
  * - 파일 타입별(PDF, Word, Excel, Image 등) 처리 로직 검증
  * - 에러 핸들링 및 Fallback 검증
  */
+import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { DocumentProcessor } from '../../src/shared/utils/documentProcessor';
 
 // Mock External Libraries
 jest.mock('pdf-parse', () => {
-    return jest.fn().mockResolvedValue({ text: 'PDF Content' });
+    return (jest.fn() as any).mockResolvedValue({ text: 'PDF Content' });
 });
 jest.mock('mammoth', () => ({
-    extractRawText: jest.fn().mockResolvedValue({ value: 'Word Content' }),
+    extractRawText: (jest.fn() as any).mockResolvedValue({ value: 'Word Content' }),
 }));
 jest.mock('officeparser', () => ({
-    parseOfficeAsync: jest.fn().mockResolvedValue('PPT Content'),
+    parseOffice: jest.fn((path: any, callback: any) => callback('PPT Content', null)),
 }));
 jest.mock('xlsx', () => ({
     read: jest.fn().mockReturnValue({
@@ -56,7 +57,7 @@ describe('DocumentProcessor', () => {
         const result = await processor.process(buffer, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'test.docx');
 
         expect(result.type).toBe('text');
-        expect(result.content).toBe('Word Content');
+        expect(result.content).toBe('[File: test.docx (Word)]\nWord Content');
         expect(result.metadata?.parser).toBe('mammoth');
     });
 
@@ -74,7 +75,7 @@ describe('DocumentProcessor', () => {
         const result = await processor.process(buffer, 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'test.pptx');
 
         expect(result.type).toBe('text');
-        expect(result.content).toBe('PPT Content');
+        expect(result.content).toBe('[File: test.pptx (Slide)]\nPPT Content');
         expect(result.metadata?.parser).toBe('officeparser');
     });
 

@@ -1,37 +1,94 @@
-import { GraphVectorRepository } from '../../infra/repositories/GraphVectorRepository';
+import { VectorStore, MacroNodeSearchResult } from '../ports/VectorStore';
+import { GraphManagementService } from './GraphManagementService';
 import { logger } from '../../shared/utils/logger';
+import { GraphNodeDto } from '../../shared/dtos/graph';
 
 /**
- * Service: GraphVectorService
+ * 모듈: GraphVectorService (그래프 벡터 서비스)
  *
  * 책임:
  * - 그래프 임베딩 벡터와 관련된 비즈니스 로직을 처리합니다.
- * - GraphVectorRepository를 통해 Vector DB와 상호작용합니다.
- * - 현재는 주로 AI 파이프라인 결과(features.json)를 저장하는 역할을 수행합니다.
- * - 추후 벡터 검색, 유사도 분석 등의 기능이 추가될 수 있습니다.
+ * - VectorStore(Port)를 직접 호출하여 벡터 저장/검색을 수행합니다.
+ * - 검색된 벡터 결과(orig_id)를 기반으로 MongoDB의 노드 정보를 결합(Enrichment)합니다.
  */
 export class GraphVectorService {
-  constructor(private readonly graphVectorRepo: GraphVectorRepository) {}
+  /** AI 워커와 동기화된 기본 컬렉션 명칭 */
+  private static readonly COLLECTION_NAME = 'macro_node_all_minilm_l6_v2';
+
+  constructor(
+    private readonly vectorStore: VectorStore,
+    private readonly graphMgmtService: GraphManagementService
+  ) {}
 
   /**
-   * UI/Handler에서 구성한 Vector Item 배열을 저장합니다.
+   * AI 파이프라인에서 생성된 벡터 데이터를 저장합니다.
    *
-   * @param userId - 사용자 ID
-   * @param items - 저장할 Vector Items
+   * @param userId 사용자 ID
+   * @param items 저장할 벡터 항목 배열
    */
   async saveGraphFeatures(userId: string, items: any[]): Promise<void> {
     logger.info({ userId, count: items.length }, 'GraphVectorService: Saving graph features');
-    await this.graphVectorRepo.saveGraphFeatures(userId, items);
+    await this.vectorStore.upsert(GraphVectorService.COLLECTION_NAME, items);
   }
 
   /**
-   * 벡터 유사도 검색을 수행합니다. (예시)
+   * 벡터 유사도 검색 및 데이터 보강(Enrichment)을 수행합니다.
    *
-   * @param userId - 사용자 ID
-   * @param queryVector - 검색할 벡터
-   * @param limit - 결과 개수
+   * @param userId 사용자 ID
+   * @param queryVector 검색할 질의 벡터
+   * @param limit 결과 개수 제한
+   * @returns 보강된 노드 데이터와 유사도 점수 배열
    */
-  async searchNodes(userId: string, queryVector: number[], limit: number = 5) {
-    return this.graphVectorRepo.searchNodes(userId, queryVector, limit);
+  async searchNodes(
+    userId: string,
+    queryVector: number[],
+    limit: number = 5
+  ): Promise<Array<{ node: GraphNodeDto; score: number }>> {
+    try {
+      // 1. Vector Store에서 유사한 벡터 검색
+      const vectorResults: MacroNodeSearchResult[] = await this.vectorStore.search(
+        GraphVectorService.COLLECTION_NAME,
+        queryVector,
+        {
+          filter: { user_id: userId },
+          limit,
+        }
+      );
+
+      if (vectorResults.length === 0) return [];
+
+      // 2. 검색 결과에서 orig_id 추출 및 중복 제거
+      const origIds = [...new Set(vectorResults.map((v) => v.payload.orig_id))];
+
+      // 3. MongoDB에서 해당 orig_id를 가진 노드 정보 대량 조회
+      const nodes = await this.graphMgmtService.findNodesByOrigIds(userId, origIds);
+
+      // 4. 노드 맵 구축 (origId -> NodeDto)
+      const nodeMap = new Map<string, GraphNodeDto>();
+      nodes.forEach((n) => {
+        if (n.origId) nodeMap.set(n.origId, n);
+      });
+
+      // 5. 검색 점수와 노드 데이터를 결합하여 최종 반환 (Enrichment)
+      const results: Array<{ node: GraphNodeDto; score: number }> = [];
+
+      for (const vectorResult of vectorResults) {
+        // 벡터 데이터의 orig_id로 MongoDB에서 조회된 노드 정보를 찾습니다.
+        const node = nodeMap.get(vectorResult.payload.orig_id);
+
+        if (node) {
+          // 일치하는 노드가 있을 경우에만 결과 목록에 추가합니다.
+          results.push({
+            node: node,
+            score: vectorResult.score,
+          });
+        }
+      }
+
+      return results;
+    } catch (err: unknown) {
+      logger.error({ err, userId }, 'GraphVectorService.searchNodes failed');
+      throw err;
+    }
   }
 }

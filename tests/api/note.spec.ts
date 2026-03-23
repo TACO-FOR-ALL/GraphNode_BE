@@ -21,21 +21,58 @@ jest.mock('../../src/infra/repositories/GraphRepositoryMongo');
 jest.mock('../../src/infra/aws/AwsSqsAdapter');
 jest.mock('../../src/infra/aws/AwsS3Adapter');
 jest.mock('../../src/infra/redis/RedisEventBusAdapter');
+jest.mock('../../src/infra/db/mongodb', () => ({
+  getMongo: jest.fn().mockReturnValue({
+    startSession: jest.fn().mockReturnValue({
+      withTransaction: async (fn: any) => await fn(),
+      endSession: jest.fn(),
+    }),
+  }),
+  initMongo: jest.fn(),
+}));
+jest.mock('../../src/infra/db', () => ({
+  initDatabases: jest.fn(),
+}));
 
 // Mock implementations
-(GraphRepositoryMongo as jest.Mock).mockImplementation(() => ({
-  upsertNode: jest.fn(),
-  listNodes: jest.fn(),
-  upsertEdge: jest.fn(),
-  listEdges: jest.fn(),
-  upsertCluster: jest.fn(),
-  listClusters: jest.fn(),
-  saveStats: jest.fn(),
-  getStats: jest.fn(),
-  getSnapshotForUser: jest.fn(),
-  upsertGraphSummary: jest.fn(),
-  getGraphSummary: jest.fn(),
-}));
+(GraphRepositoryMongo as unknown as jest.Mock).mockImplementation(() => ({
+  upsertNode: jest.fn<any>().mockResolvedValue(undefined),
+  updateNode: jest.fn<any>().mockResolvedValue(undefined),
+  deleteNode: jest.fn<any>().mockResolvedValue(undefined),
+  deleteNodes: jest.fn<any>().mockResolvedValue(undefined),
+  deleteNodesByOrigIds: jest.fn<any>().mockResolvedValue(undefined),
+  restoreNode: jest.fn<any>().mockResolvedValue(undefined),
+  restoreNodesByOrigIds: jest.fn<any>().mockResolvedValue(undefined),
+  findNode: jest.fn<any>().mockResolvedValue(null),
+  findNodesByOrigIds: jest.fn<any>().mockResolvedValue([]),
+  listNodes: jest.fn<any>().mockResolvedValue([]),
+  listNodesByCluster: jest.fn<any>().mockResolvedValue([]),
+  deleteAllGraphData: jest.fn<any>().mockResolvedValue(undefined),
+  restoreAllGraphData: jest.fn<any>().mockResolvedValue(undefined),
+  upsertEdge: jest.fn<any>().mockResolvedValue('edge-id'),
+  deleteEdge: jest.fn<any>().mockResolvedValue(undefined),
+  deleteEdgeBetween: jest.fn<any>().mockResolvedValue(undefined),
+  deleteEdgesByNodeIds: jest.fn<any>().mockResolvedValue(undefined),
+  restoreEdge: jest.fn<any>().mockResolvedValue(undefined),
+  listEdges: jest.fn<any>().mockResolvedValue([]),
+  upsertCluster: jest.fn<any>().mockResolvedValue(undefined),
+  deleteCluster: jest.fn<any>().mockResolvedValue(undefined),
+  restoreCluster: jest.fn<any>().mockResolvedValue(undefined),
+  findCluster: jest.fn<any>().mockResolvedValue(null),
+  listClusters: jest.fn<any>().mockResolvedValue([]),
+  upsertSubcluster: jest.fn<any>().mockResolvedValue(undefined),
+  deleteSubcluster: jest.fn<any>().mockResolvedValue(undefined),
+  restoreSubcluster: jest.fn<any>().mockResolvedValue(undefined),
+  listSubclusters: jest.fn<any>().mockResolvedValue([]),
+  saveStats: jest.fn<any>().mockResolvedValue(undefined),
+  getStats: jest.fn<any>().mockResolvedValue(null),
+  deleteStats: jest.fn<any>().mockResolvedValue(undefined),
+  upsertGraphSummary: jest.fn<any>().mockResolvedValue(undefined),
+  getGraphSummary: jest.fn<any>().mockResolvedValue(null),
+  deleteGraphSummary: jest.fn<any>().mockResolvedValue(undefined),
+  restoreGraphSummary: jest.fn<any>().mockResolvedValue(undefined),
+  getSnapshotForUser: jest.fn<any>().mockResolvedValue({}),
+} as any));
 
 (AwsSqsAdapter as jest.Mock).mockImplementation(() => ({
   sendMessage: jest.fn(),
@@ -59,9 +96,15 @@ let foldersStore = new Map<string, FolderDoc>();
 jest.mock('../../src/infra/repositories/NoteRepositoryMongo', () => ({
   NoteRepositoryMongo: class {
     // --- Note Operations ---
-    async createNote(doc: NoteDoc) {
+    async createNote(doc: NoteDoc, _session?: any) {
       notesStore.set(doc._id, { ...doc });
       return doc;
+    }
+    async createNotes(docs: NoteDoc[], _session?: any) {
+      for (const doc of docs) {
+        notesStore.set(doc._id, { ...doc });
+      }
+      return docs;
     }
     async getNote(id: string, ownerUserId: string, includeDeleted: boolean = false) {
       const n = notesStore.get(id);
@@ -69,12 +112,14 @@ jest.mock('../../src/infra/repositories/NoteRepositoryMongo', () => ({
       if (!includeDeleted && n.deletedAt) return null;
       return n;
     }
-    async listNotes(ownerUserId: string, folderId: string | null) {
-      return Array.from(notesStore.values()).filter(
+    async listNotes(ownerUserId: string, folderId: string | null, limit: number = 20, cursor?: string) {
+      const all = Array.from(notesStore.values()).filter(
         (n) => n.ownerUserId === ownerUserId && n.folderId === folderId && !n.deletedAt
       );
+      const items = all.slice(0, limit);
+      return { items, nextCursor: all.length > limit ? 'next' : null };
     }
-    async updateNote(id: string, ownerUserId: string, updates: Partial<NoteDoc>) {
+    async updateNote(id: string, ownerUserId: string, updates: Partial<NoteDoc>, _session?: any) {
       const n = notesStore.get(id);
       if (!n || n.ownerUserId !== ownerUserId || n.deletedAt) return null;
       const updated = { ...n, ...updates, updatedAt: new Date() };
@@ -115,7 +160,15 @@ jest.mock('../../src/infra/repositories/NoteRepositoryMongo', () => ({
       }
       return count;
     }
-    async deleteAllNotesInFolders(ownerUserId: string) {
+    async listTrashNotes(ownerUserId: string, limit: number = 20, cursor?: string) {
+      const all = Array.from(notesStore.values()).filter((n) => n.ownerUserId === ownerUserId && n.deletedAt !== null);
+      return { items: all.slice(0, limit), nextCursor: all.length > limit ? 'next' : null };
+    }
+    async listTrashFolders(ownerUserId: string, limit: number = 20, cursor?: string) {
+      const all = Array.from(foldersStore.values()).filter((f) => f.ownerUserId === ownerUserId && f.deletedAt !== null);
+      return { items: all.slice(0, limit), nextCursor: all.length > limit ? 'next' : null };
+    }
+    async deleteAllNotesInFolders(ownerUserId: string, _session?: any) {
       let count = 0;
       const toDelete: string[] = [];
       for (const n of notesStore.values()) {
@@ -138,6 +191,11 @@ jest.mock('../../src/infra/repositories/NoteRepositoryMongo', () => ({
         }
         toDelete.forEach(id => notesStore.delete(id));
         return count;
+    }
+    async listNotesByFolderIds(folderIds: string[], ownerUserId: string, includeDeleted = false) {
+        return Array.from(notesStore.values()).filter(
+            (n) => n.ownerUserId === ownerUserId && n.folderId && folderIds.includes(n.folderId) && (includeDeleted || !n.deletedAt)
+        );
     }
     async softDeleteNotesByFolderIds(folderIds: string[], ownerUserId: string) {
         let count = 0;
@@ -167,7 +225,7 @@ jest.mock('../../src/infra/repositories/NoteRepositoryMongo', () => ({
     }
 
     // --- Folder Operations ---
-    async createFolder(doc: FolderDoc) {
+    async createFolder(doc: FolderDoc, _session?: any) {
       foldersStore.set(doc._id, { ...doc });
       return doc;
     }
@@ -177,12 +235,14 @@ jest.mock('../../src/infra/repositories/NoteRepositoryMongo', () => ({
       if (!includeDeleted && f.deletedAt) return null;
       return f;
     }
-    async listFolders(ownerUserId: string, parentId: string | null) {
-      return Array.from(foldersStore.values()).filter(
+    async listFolders(ownerUserId: string, parentId: string | null, limit: number = 20, cursor?: string) {
+      const all = Array.from(foldersStore.values()).filter(
         (f) => f.ownerUserId === ownerUserId && f.parentId === parentId && !f.deletedAt
       );
+      const items = all.slice(0, limit);
+      return { items, nextCursor: all.length > limit ? 'next' : null };
     }
-    async updateFolder(id: string, ownerUserId: string, updates: Partial<FolderDoc>) {
+    async updateFolder(id: string, ownerUserId: string, updates: Partial<FolderDoc>, _session?: any) {
       const f = foldersStore.get(id);
       if (!f || f.ownerUserId !== ownerUserId || f.deletedAt) return null;
       const updated = { ...f, ...updates, updatedAt: new Date() };
@@ -246,7 +306,7 @@ jest.mock('../../src/infra/repositories/NoteRepositoryMongo', () => ({
       }
       return count;
     }
-    async deleteAllFolders(ownerUserId: string) {
+    async deleteAllFolders(ownerUserId: string, _session?: any) {
       let count = 0;
       for (const [id, f] of foldersStore.entries()) {
         if (f.ownerUserId === ownerUserId) {
@@ -358,8 +418,8 @@ describe('Note API Integration Tests', () => {
           .set('Authorization', `Bearer ${accessToken}`);
 
         expect(listRes.status).toBe(200);
-        expect(listRes.body).toHaveLength(1);
-        expect(listRes.body[0].name).toBe('Child');
+        expect(listRes.body.items).toHaveLength(1);
+        expect(listRes.body.items[0].name).toBe('Child');
     });
 
     it('should soft delete and restore a folder', async () => {
@@ -396,7 +456,7 @@ describe('Note API Integration Tests', () => {
         const createRes = await request(app)
           .post('/v1/folders')
           .set('Authorization', `Bearer ${accessToken}`)
-          .send({ name: 'Permanent' });
+          .send({ name: 'Hard Delete' });
         const folderId = createRes.body.id;
 
         await request(app)
@@ -441,6 +501,43 @@ describe('Note API Integration Tests', () => {
       expect(getRes.body.content).toBe('C1');
     });
 
+    it('should bulk create notes', async () => {
+      const res = await request(app)
+        .post('/v1/notes/bulk')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          notes: [
+            { id: '12345678-1234-1234-1234-123456789012', title: 'Bulk T1', content: 'Bulk C1' },
+            { id: '12345678-1234-1234-1234-123456789013', title: '', content: 'Bulk C2 Content' },
+          ]
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.notes).toHaveLength(2);
+      expect(res.body.notes[0].title).toBe('Bulk T1');
+      expect(res.body.notes[0].content).toBe('Bulk C1');
+      expect(res.body.notes[1].title).toBe('Bulk C2 Co...'); // Title auto-generation test
+
+      // Check if they were actually saved
+      expect(notesStore.has('12345678-1234-1234-1234-123456789012')).toBe(true);
+      expect(notesStore.has('12345678-1234-1234-1234-123456789013')).toBe(true);
+    });
+
+    it('should bulk create without generated title if content is empty', async () => {
+      const res = await request(app)
+        .post('/v1/notes/bulk')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          notes: [
+            { id: '12345678-1234-1234-1234-123456789014', title: '', content: '' },
+          ]
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.notes).toHaveLength(1);
+      expect(res.body.notes[0].title).toBe('Untitled'); // Title default fallback
+    });
+
     it('should update a note', async () => {
         const createRes = await request(app)
           .post('/v1/notes')
@@ -472,8 +569,8 @@ describe('Note API Integration Tests', () => {
           .set('Authorization', `Bearer ${accessToken}`);
 
         expect(listRes.status).toBe(200);
-        expect(listRes.body).toHaveLength(1);
-        expect(listRes.body[0].folderId).toBe(folderId);
+        expect(listRes.body.items).toHaveLength(1);
+        expect(listRes.body.items[0].folderId).toBe(folderId);
     });
 
     it('should soft delete and restore a note', async () => {

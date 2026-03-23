@@ -28,10 +28,13 @@ export class NotificationApi {
    * 참고:
    * - 이 메서드는 HTTP 요청을 수행하지 않고, 연결 가능한 URL 문자열만 반환합니다.
    * - 세션 기반 인증을 사용하므로, 브라우저의 `EventSource`가 쿠키를 전송하도록 설정해야 합니다.
+   * - `since` 파라미터를 사용하여 마지막으로 받은 알림 이후의 누락된 알림을 서버로부터 재전송받을 수 있습니다.
    *
+   * @param since - 마지막으로 수신한 알림의 ID (optional)
    * @returns SSE 연결을 위한 전체 URL 문자열
    * @example
-   * const url = client.notification.getStreamUrl();
+   * const lastId = '01JK...';
+   * const url = client.notification.getStreamUrl(lastId);
    * const eventSource = new EventSource(url, { withCredentials: true });
    *
    * eventSource.onmessage = (event) => {
@@ -44,14 +47,23 @@ export class NotificationApi {
    *   eventSource.close();
    * };
    */
-  getStreamUrl(): string {
-    return this.rb.path('/stream').url();
+  getStreamUrl(since?: string): string {
+    const builder = this.rb.path('/stream');
+    if (since) {
+      builder.query({ since });
+    }
+    return builder.url();
   }
 
   /**
    * FCM 디바이스 토큰을 등록합니다.
+   * 
+   * @remarks
+   * 푸시 알림 수신을 위해 사용자의 디바이스 토큰을 서버에 저장합니다.
    *
-   * @param token - FCM 디바이스 토큰
+   * @param token - FCM 디바이스 토큰 (string)
+   * @example
+   * await client.notifications.registerDeviceToken('fcm-token-xyz');
    */
   async registerDeviceToken(token: string): Promise<void> {
     await this.rb.path('/device-token').post({ token });
@@ -59,8 +71,13 @@ export class NotificationApi {
 
   /**
    * FCM 디바이스 토큰을 삭제(등록 해제)합니다.
+   * 
+   * @remarks
+   * 로그아웃 시 또는 푸시 알림 비활성화 시 사용됩니다.
    *
-   * @param token - 삭제할 FCM 디바이스 토큰
+   * @param token - 삭제할 FCM 디바이스 토큰 (string)
+   * @example
+   * await client.notifications.removeDeviceToken('fcm-token-xyz');
    */
   async removeDeviceToken(token: string): Promise<void> {
     await this.rb.path('/device-token').delete({ token });

@@ -3,7 +3,6 @@ import { MessageRepositoryMongo } from '../infra/repositories/MessageRepositoryM
 import { UserRepositoryMySQL } from '../infra/repositories/UserRepositoryMySQL';
 import { NoteRepositoryMongo } from '../infra/repositories/NoteRepositoryMongo';
 import { GraphRepositoryMongo } from '../infra/repositories/GraphRepositoryMongo';
-import { GraphVectorRepository } from '../infra/repositories/GraphVectorRepository';
 import { GraphVectorService } from '../core/services/GraphVectorService';
 import { ConversationService } from '../core/services/ConversationService';
 import { MessageService } from '../core/services/MessageService';
@@ -16,6 +15,7 @@ import { GraphGenerationService } from '../core/services/GraphGenerationService'
 import { SyncService } from '../core/services/SyncService';
 import { NotificationService } from '../core/services/NotificationService';
 import { AiInteractionService } from '../core/services/AiInteractionService';
+import { AgentService } from '../core/services/AgentService';
 import { GoogleOAuthService } from '../core/services/GoogleOAuthService';
 import { AppleOAuthService } from '../core/services/AppleOAuthService';
 import { MicroscopeManagementService } from '../core/services/MicroscopeManagementService';
@@ -27,6 +27,7 @@ import { MessageRepository } from '../core/ports/MessageRepository';
 import { UserRepository } from '../core/ports/UserRepository';
 import { MicroscopeWorkspaceStore } from '../core/ports/MicroscopeWorkspaceStore';
 import { MicroscopeWorkspaceRepositoryMongo } from '../infra/repositories/MicroscopeWorkspaceRepositoryMongo';
+import { NotificationRepositoryMongo } from '../infra/repositories/NotificationRepositoryMongo';
 // DB / Infrastructure Adapters
 import { Neo4jGraphAdapter } from '../infra/graph/Neo4jGraphAdapter';
 import { ChromaVectorAdapter } from '../infra/vector/ChromaVectorAdapter';
@@ -39,6 +40,7 @@ import { VectorStore } from '../core/ports/VectorStore';
 import { QueuePort } from '../core/ports/QueuePort';
 import { StoragePort } from '../core/ports/StoragePort';
 import { EventBusPort } from '../core/ports/EventBusPort';
+import { NotificationRepository } from '../core/ports/NotificationRepository';
 // Infra Adapters
 import { AwsSqsAdapter } from '../infra/aws/AwsSqsAdapter';
 import { AwsS3Adapter } from '../infra/aws/AwsS3Adapter';
@@ -62,11 +64,11 @@ export class Container {
   private userRepo: UserRepository | null = null;
   private noteRepo: NoteRepository | null = null;
   private graphRepo: GraphDocumentStore | null = null; // Renamed to Mongo Store
-  private neo4jStore: GraphNeo4jStore | null = null; 
-  private vectorStore: VectorStore | null = null; 
-  private graphVectorRepo: GraphVectorRepository | null = null; 
-  private graphVectorService: GraphVectorService | null = null; 
+  private neo4jStore: GraphNeo4jStore | null = null;
+  private vectorStore: VectorStore | null = null;
+  private graphVectorService: GraphVectorService | null = null;
   private microscopeWorkspaceRepo: MicroscopeWorkspaceStore | null = null;
+  private notificationRepo: NotificationRepository | null = null;
 
   // Infra Adapters
   private queueAdapter: QueuePort | null = null;
@@ -85,6 +87,7 @@ export class Container {
   private syncService: SyncService | null = null;
   private notificationService: NotificationService | null = null;
   private aiInteractionService: AiInteractionService | null = null;
+  private agentService: AgentService | null = null;
   private googleOAuthService: GoogleOAuthService | null = null;
   private appleOAuthService: AppleOAuthService | null = null;
   private microscopeManagementService: MicroscopeManagementService | null = null;
@@ -126,11 +129,11 @@ export class Container {
   }
 
   getGraphNeo4jStore(): GraphNeo4jStore {
-      if (!this.neo4jStore) {
-          const raw = new Neo4jGraphAdapter();
-          this.neo4jStore = createAuditProxy(raw, 'Neo4jGraphAdapter');
-      }
-      return this.neo4jStore;
+    if (!this.neo4jStore) {
+      const raw = new Neo4jGraphAdapter();
+      this.neo4jStore = createAuditProxy(raw, 'Neo4jGraphAdapter');
+    }
+    return this.neo4jStore;
   }
 
   getVectorStore(): VectorStore {
@@ -141,16 +144,9 @@ export class Container {
     return this.vectorStore;
   }
 
-  getGraphVectorRepository(): GraphVectorRepository {
-    if (!this.graphVectorRepo) {
-      this.graphVectorRepo = new GraphVectorRepository(this.getVectorStore());
-    }
-    return this.graphVectorRepo;
-  }
-
   getGraphVectorService(): GraphVectorService {
     if (!this.graphVectorService) {
-      const raw = new GraphVectorService(this.getGraphVectorRepository());
+      const raw = new GraphVectorService(this.getVectorStore(), this.getGraphManagementService());
       this.graphVectorService = createAuditProxy(raw, 'GraphVectorService');
     }
     return this.graphVectorService;
@@ -243,6 +239,16 @@ export class Container {
       this.microscopeWorkspaceRepo = new MicroscopeWorkspaceRepositoryMongo();
     }
     return this.microscopeWorkspaceRepo;
+  }
+
+  /**
+   * NotificationRepository(Mongo) 인스턴스를 반환합니다.
+   */
+  getNotificationRepository(): NotificationRepository {
+    if (!this.notificationRepo) {
+      this.notificationRepo = new NotificationRepositoryMongo();
+    }
+    return this.notificationRepo;
   }
 
   // --- Services ---
@@ -371,14 +377,34 @@ export class Container {
    */
   getNotificationService(): NotificationService {
     if (!this.notificationService) {
-      const raw = new NotificationService(this.getRedisEventBusAdapter());
+      const raw = new NotificationService(this.getRedisEventBusAdapter(), this.getNotificationRepository());
       this.notificationService = createAuditProxy(raw, 'NotificationService');
     }
     return this.notificationService;
   }
 
   /**
-   *
+   * AgentService 인스턴스를 반환합니다.
+   */
+  getAgentService(): AgentService {
+    if (!this.agentService) {
+      const raw = new AgentService(
+        //FIXED(강현일) : 생성자에서 직접 주입받는걸로 변경
+        {
+          userService: this.getUserService(),
+          noteService: this.getNoteService(),
+          conversationService: this.getConversationService(),
+          messageService: this.getMessageService(),
+          graphEmbeddingService: this.getGraphEmbeddingService(),
+          graphVectorService: this.getGraphVectorService(),
+        }
+      );
+      this.agentService = createAuditProxy(raw, 'AgentService');
+    }
+    return this.agentService;
+  }
+
+  /**
    * AiInteractionService 인스턴스를 반환합니다.
    */
   getAiInteractionService(): AiInteractionService {
@@ -438,7 +464,8 @@ export class Container {
         this.getAwsSqsAdapter(),
         this.getAwsS3Adapter(),
         this.getConversationRepository(),
-        this.getNoteRepository()
+        this.getNoteRepository(),
+        this.getNotificationService()
       );
       this.microscopeManagementService = createAuditProxy(raw, 'MicroscopeManagementService');
     }

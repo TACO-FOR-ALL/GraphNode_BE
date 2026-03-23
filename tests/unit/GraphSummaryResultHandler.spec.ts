@@ -1,3 +1,4 @@
+import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { GraphSummaryResultHandler } from '../../src/workers/handlers/GraphSummaryResultHandler';
 import { TaskType, GraphSummaryResultPayload } from '../../src/shared/dtos/queue';
 
@@ -16,10 +17,14 @@ describe('GraphSummaryResultHandler', () => {
     };
     mockGraphService = {
       upsertGraphSummary: jest.fn(),
+      getStats: jest.fn(),
+      saveStats: jest.fn(),
     };
     mockNotiService = {
       sendNotification: jest.fn(),
       sendFcmPushNotification: jest.fn(),
+      sendGraphSummaryCompleted: jest.fn(),
+      sendGraphSummaryFailed: jest.fn(),
     };
 
     mockContainer = {

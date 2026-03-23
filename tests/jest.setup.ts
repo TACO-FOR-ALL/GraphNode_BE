@@ -109,4 +109,11 @@ jest.mock('../src/infra/db/mongodb', () => {
   };
 });
 
+// pdf-parse / officeparser 전역 mock
+// 이 라이브러리들은 모듈 로드 시 CustomGC 핸들(네이티브 GC 핸들)을 생성하여
+// Jest가 모든 테스트 완료 후에도 종료되지 않는 open handle 문제를 일으킵니다.
+// setupFilesAfterEnv에서 전역 mock으로 처리하면 ts-jest 타입 검사를 우회할 수 있습니다.
+jest.mock('pdf-parse');
+jest.mock('officeparser');
+
 export {};
