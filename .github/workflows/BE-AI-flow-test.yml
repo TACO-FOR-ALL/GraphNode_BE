@@ -140,7 +140,25 @@ jobs:
           docker compose -f be/docker-compose.test.yml logs
           exit 1
 
-      # 8. 실질적인 통합 E2E 테스트 실행
+      # 8. LocalStack init script(ready.sh)의 SQS/S3 리소스 생성 완료 대기
+      - name: Wait for LocalStack Resources to be Ready
+        run: |
+          echo "Waiting for ready.sh to create SQS queues in LocalStack..."
+          for i in {1..30}; do
+            docker exec graphnode-test-localstack awslocal sqs get-queue-url \
+              --queue-name taco-graphnode-request-graph-sqs \
+              --region ap-northeast-2 2>/dev/null && \
+            echo "✅ SQS queues are ready!" && exit 0
+            echo "⏳ SQS queues not ready yet... (Attempt $i/30)"
+            sleep 5
+          done
+          echo "❌ Timed out waiting for LocalStack SQS queues to be created."
+          echo "======== [LocalStack Logs] ========"
+          docker logs graphnode-test-localstack
+          echo "==================================="
+          exit 1
+
+      # 9. 실질적인 통합 E2E 테스트 실행
       - name: Run Integrated E2E Tests
         run: |
           chmod +x be/scripts/e2e-test.sh
