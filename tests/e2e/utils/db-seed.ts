@@ -44,7 +44,7 @@ export async function seedTestData() {
 
     // 이전 테스트의 잔여 데이터로 인한 충돌 방지를 위해 해당 유저 데이터 전체 삭제
     await db.collection('conversations').deleteMany({ ownerUserId: TEST_USER_ID });
-    await db.collection('messages').deleteMany({ userId: TEST_USER_ID });
+    await db.collection('messages').deleteMany({ ownerUserId: TEST_USER_ID });
     await db.collection('notes').deleteMany({ ownerUserId: TEST_USER_ID });
     await db.collection('graph_nodes').deleteMany({ userId: TEST_USER_ID });
     await db.collection('graph_edges').deleteMany({ userId: TEST_USER_ID });
@@ -80,8 +80,8 @@ export async function seedTestData() {
       title: 'E2E Test Note',
       content: 'This note discusses the relationship between LLMs and Graph structures.',
       deletedAt: null,
-      createdAt: nowTimestamp,
-      updatedAt: nowTimestamp,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     } as any);
 
     console.log('MongoDB data seeded.');

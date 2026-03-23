@@ -139,7 +139,7 @@ services:
       - OAUTH_APPLE_PRIVATE_KEY=dummy-apple-private-key
       - OAUTH_APPLE_REDIRECT_URI=http://localhost:3000/auth/apple/callback
       - OPENAI_ASSISTANT_ID=asst_dummy
-      - FIREBASE_CREDENTIALS_JSON={"project_id":"dummy"}
+      - FIREBASE_CREDENTIALS_JSON={"project_id":"dummy-test","private_key":"-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDE\n-----END PRIVATE KEY-----\n","client_email":"dummy@example.com"}
       - SENTRY_DSN=dummy
       - POSTHOG_API_KEY=dummy
       - POSTHOG_HOST=http://localhost:8080
@@ -212,7 +212,7 @@ services:
       - OAUTH_APPLE_PRIVATE_KEY=dummy-apple-private-key
       - OAUTH_APPLE_REDIRECT_URI=http://localhost:3000/auth/apple/callback
       - OPENAI_ASSISTANT_ID=asst_dummy
-      - FIREBASE_CREDENTIALS_JSON={"project_id":"dummy"}
+      - FIREBASE_CREDENTIALS_JSON={"project_id":"dummy-test","private_key":"-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDE\n-----END PRIVATE KEY-----\n","client_email":"dummy@example.com"}
       - SENTRY_DSN=dummy
       - POSTHOG_API_KEY=dummy
       - POSTHOG_HOST=http://localhost:8080
