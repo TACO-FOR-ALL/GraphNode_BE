@@ -20,7 +20,7 @@ import { MongoClient } from 'mongodb';
  */
 describe('End-to-End Graph Flow', () => {
   const userId = getTestUserId();
-  const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/taco5_graphnode_test';
+  const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/graphnode';
 
   beforeAll(async () => {
     // 테스트 시작 전 기초 데이터(유저, 원본 메시지 등) 주입
@@ -108,14 +108,34 @@ describe('End-to-End Graph Flow', () => {
     const db = mongoClient.db();
     
     // 증분 추출(Add Node)을 위해서는 기존에 완료된(CREATED) 그래프 통계 정보가 있어야 함
-    // (시나리오 1에서 이미 생성되었을 것이므로 덮어쓰거나 확인)
+    // 0. 상태 초기화: 현재 시점 기준으로 '완료' 상태의 통계 주입 (기준점 설정)
     await db.collection('graph_stats').updateOne(
         { userId },
-        { $set: { status: 'CREATED', updatedAt: new Date() } },
+        { $set: { status: 'CREATED', updatedAt: new Date().toISOString() } },
         { upsert: true }
     );
 
-    // 1. 노드 추가 API 호출
+    // 1. 실제 '새로운' 대화 데이터 추가 인서트 (실제 시나리오 모사)
+    const newConvId = `conv-incremental-${Date.now()}`;
+    await db.collection('conversations').insertOne({
+      _id: newConvId,
+      ownerUserId: userId,
+      title: 'Incremental Test Chat',
+      updatedAt: Date.now() + 5000, // 기준점보다 5초 미래 시각
+      createdAt: Date.now() + 5000,
+    } as any);
+    
+    await db.collection('messages').insertOne({
+      _id: `msg-incremental-${Date.now()}`,
+      conversationId: newConvId,
+      ownerUserId: userId,
+      role: 'user',
+      content: 'Adding a new node for incremental testing.',
+      createdAt: Date.now() + 5000,
+      updatedAt: Date.now() + 5000,
+    } as any);
+
+    // 2. 노드 추가 API 호출
     const response = await apiClient.post('/v1/graph-ai/add-node');
     expect(response.status).toBe(202);
     

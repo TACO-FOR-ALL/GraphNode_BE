@@ -12,7 +12,7 @@ import { MongoClient } from 'mongodb';
  */
 describe('End-to-End Microscope Flow', () => {
   const userId = getTestUserId();
-  const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/taco5_graphnode_test';
+  const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/graphnode';
 
   beforeAll(async () => {
     await seedTestData();
