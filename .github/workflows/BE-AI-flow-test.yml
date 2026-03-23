@@ -125,8 +125,8 @@ jobs:
           chmod +x be/scripts/e2e-test.sh
           cd be && ./scripts/e2e-test.sh
         env:
-          MONGODB_URI: mongodb://localhost:27017/taco5_graphnode_test
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/taco5_graphnode_test
+          MONGODB_URI: mongodb://localhost:27017/graphnode
+          DATABASE_URL: postgresql://app:app@localhost:5432/graphnode
           INTERNAL_SERVICE_TOKEN: ci-test-key
 
       # 9. 실패 시 로그 업로드
