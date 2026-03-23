@@ -35,6 +35,8 @@ export type {
   UpdateOpenAiAssistantIdRequestDto,
   PreferredLanguageResponseDto,
   UpdatePreferredLanguageRequestDto,
+  SessionInfoDto,
+  SessionsResponseDto,
 } from './types/me.js';
 export type {
   ConversationDto,

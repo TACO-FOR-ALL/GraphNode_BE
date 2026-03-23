@@ -14,6 +14,7 @@ import {
   JWT_ACCESS_EXPIRY_MS,
   JWT_REFRESH_EXPIRY_MS,
 } from './jwt';
+import { addSession, toSessionId } from '../../infra/redis/SessionStoreRedis';
 
 export interface ProviderUserInput {
   provider: Provider;
@@ -49,8 +50,15 @@ export async function completeLogin(
   });
 
   // JWT 토큰 생성
-  const accessToken = generateAccessToken({ userId: user.id });
   const refreshToken = generateRefreshToken({ userId: user.id });
+
+  // Redis 세션 등록 (동시 접속 제한 적용 - 초과 시 오래된 순으로 제거)
+  await addSession(user.id, refreshToken);
+
+  const accessToken = generateAccessToken({
+    userId: user.id,
+    sessionId: toSessionId(refreshToken),
+  });
 
   // 공통 쿠키 옵션 가져오기 (Secure, SameSite 등 중앙 관리)
   const commonCookieOpts = getAuthCookieOpts();

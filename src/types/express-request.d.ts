@@ -12,5 +12,7 @@ declare module 'express-serve-static-core' {
   interface Request {
     /** 인증된 사용자 ID(없으면 비로그인). 문자열로 일원화 */
     userId?: string;
+    /** 현재 유효한 Refresh Token (authJwt 갱신 후 설정, 로그아웃 시 Redis 제거용) */
+    currentRefreshToken?: string;
   }
 }

@@ -77,6 +77,9 @@ const EnvSchema = z.object({
   JWT_ACCESS_EXPIRY: z.string().default('1h'),
   JWT_REFRESH_EXPIRY: z.string().default('7d'),
 
+  // 세션(동시 접속) 제한 — 사용자당 허용 최대 기기 수 (기본 1)
+  MAX_CONCURRENT_SESSIONS: z.coerce.number().int().min(1).max(10).default(1),
+
 
   //FIREBASE Notification 설정
   FIREBASE_CREDENTIALS_JSON : z.string().optional(),

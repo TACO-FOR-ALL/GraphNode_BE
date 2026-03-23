@@ -1,12 +1,21 @@
 import { Request, Response, NextFunction } from 'express';
 
 import { AuthError } from '../../shared/errors/domain';
-import { verifyToken, generateAccessToken, generateRefreshToken, JWT_ACCESS_EXPIRY_MS, JWT_REFRESH_EXPIRY_MS } from '../utils/jwt';
+import {
+  verifyToken,
+  generateAccessToken,
+  generateRefreshToken,
+  JWT_ACCESS_EXPIRY_MS,
+  JWT_REFRESH_EXPIRY_MS,
+} from '../utils/jwt';
 import { bindUserIdToRequest } from '../utils/request';
 import { getAuthCookieOpts } from '../utils/sessionCookies';
-import { loadEnv } from '../../config/env';
-
-const env = loadEnv();
+import {
+  hasSession,
+  hasSessionBySessionId,
+  replaceSession,
+  toSessionId,
+} from '../../infra/redis/SessionStoreRedis';
 
 /**
  * JWT 인증 미들웨어
@@ -24,7 +33,17 @@ export async function authJwt(req: Request, res: Response, next: NextFunction) {
     if (accessToken) {
       try {
         const payload = verifyToken(accessToken);
+
+        // 매 요청 Redis 세션 검증 (다른 기기 로그인 시 즉시 차단)
+        if (payload.sessionId) {
+          const valid = await hasSessionBySessionId(payload.userId, payload.sessionId);
+          if (!valid) {
+            throw new AuthError('Session expired or invalidated');
+          }
+        }
+
         bindUserIdToRequest(req, payload.userId);
+        req.currentRefreshToken = req.signedCookies?.['refresh_token'];
         return next();
       } catch (err: any) {
         // 토큰 만료 에러가 아니면 인증 실패 처리
@@ -36,7 +55,6 @@ export async function authJwt(req: Request, res: Response, next: NextFunction) {
     }
 
     // 3. Refresh Token 확인 및 갱신
-    console.log('[DEBUG] authJwt signedCookies:', req.signedCookies);
     const refreshToken = req.signedCookies['refresh_token'];
     if (!refreshToken) {
       throw new AuthError('Authentication required');
@@ -44,9 +62,22 @@ export async function authJwt(req: Request, res: Response, next: NextFunction) {
 
     try {
       const payload = verifyToken(refreshToken);
-      const newAccessToken = generateAccessToken({ userId: payload.userId });
+
+      // Redis 세션 검증 (다른 기기 로그인 등으로 무효화된 경우 거부)
+      const valid = await hasSession(payload.userId, refreshToken);
+      if (!valid) {
+        throw new AuthError('Session expired or invalidated');
+      }
+
       // [Refresh Token Rotation] 보안 강화를 위해 Refresh Token도 함께 갱신
       const newRefreshToken = generateRefreshToken({ userId: payload.userId });
+      const newAccessToken = generateAccessToken({
+        userId: payload.userId,
+        sessionId: toSessionId(newRefreshToken),
+      });
+
+      // Redis 세션 교체 (기존 토큰 제거, 새 토큰 등록)
+      await replaceSession(payload.userId, refreshToken, newRefreshToken);
 
       // 새 Access Token 쿠키 설정
       // Electron/Cross-Domain 환경 고려: 중앙 관리된 옵션 사용(getAuthCookieOpts)
@@ -68,6 +99,7 @@ export async function authJwt(req: Request, res: Response, next: NextFunction) {
       res.setHeader('X-New-Access-Token', newAccessToken);
 
       bindUserIdToRequest(req, payload.userId);
+      req.currentRefreshToken = newRefreshToken;
       return next();
     } catch (err) {
       throw new AuthError('Invalid refresh token');

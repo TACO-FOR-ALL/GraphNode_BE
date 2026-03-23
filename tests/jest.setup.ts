@@ -11,6 +11,7 @@ process.env.JWT_SECRET = 'test-jwt-secret';
 process.env.DEV_INSECURE_COOKIES = 'true';
 process.env.JWT_ACCESS_EXPIRY = '1h';
 process.env.JWT_REFRESH_EXPIRY = '7d';
+process.env.MAX_CONCURRENT_SESSIONS = '1';
 process.env.OAUTH_GOOGLE_CLIENT_ID = 'test-client';
 process.env.OAUTH_GOOGLE_CLIENT_SECRET = 'test-secret';
 process.env.OAUTH_GOOGLE_REDIRECT_URI = 'http://localhost:3000/auth/google/callback';
@@ -44,6 +45,18 @@ const mockRedisInstance = {
   publish: jest.fn<any>().mockResolvedValue(1),
   subscribe: jest.fn<any>().mockResolvedValue(1),
   unsubscribe: jest.fn<any>().mockResolvedValue(1),
+  // SessionStore (ZSET)용
+  zadd: jest.fn<any>().mockResolvedValue(1),
+  zrem: jest.fn<any>().mockResolvedValue(1),
+  zcard: jest.fn<any>().mockResolvedValue(0),
+  zscore: jest.fn<any>().mockResolvedValue(null),
+  zrange: jest.fn<any>().mockResolvedValue([]),
+  zremrangebyrank: jest.fn<any>().mockResolvedValue(0),
+  expire: jest.fn<any>().mockResolvedValue(1),
+  sadd: jest.fn<any>().mockResolvedValue(1),
+  smembers: jest.fn<any>().mockResolvedValue([]),
+  srem: jest.fn<any>().mockResolvedValue(1),
+  sismember: jest.fn<any>().mockResolvedValue(0),
   once: jest.fn<any>().mockImplementation((event: any, callback: any) => {
       if (event === 'ready') callback();
       return mockRedisInstance;

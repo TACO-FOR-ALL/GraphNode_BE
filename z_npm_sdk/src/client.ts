@@ -30,7 +30,7 @@ export interface GraphNodeClientOptions extends Omit<BuilderOptions, 'baseUrl' |
  * GraphNode API 클라이언트
  * @public
  * @property health 헬스 체크 API
- * @property me 내 정보 관리 API
+ * @property me 내 정보 관리 API (프로필, API키, 세션 목록/특정 기기 로그아웃, 토큰 갱신 등)
  * @property conversations 대화 관리 API
  * @property googleAuth 구글 인증 API
  * @property graph 그래프 관리 API

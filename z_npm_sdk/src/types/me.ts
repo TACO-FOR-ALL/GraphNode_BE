@@ -88,3 +88,24 @@ export interface PreferredLanguageResponseDto {
 export interface UpdatePreferredLanguageRequestDto {
   language: string;
 }
+
+/**
+ * 세션(기기) 정보 DTO (GET /auth/sessions 응답)
+ * @public
+ * @property sessionId 세션 식별자 (특정 기기 로그아웃 시 사용)
+ * @property createdAt 세션 생성 시각 (Unix timestamp ms)
+ * @property isCurrent 현재 요청의 기기 여부
+ */
+export interface SessionInfoDto {
+  sessionId: string;
+  createdAt: number;
+  isCurrent: boolean;
+}
+
+/**
+ * GET /auth/sessions 응답 DTO
+ * @public
+ */
+export interface SessionsResponseDto {
+  sessions: SessionInfoDto[];
+}

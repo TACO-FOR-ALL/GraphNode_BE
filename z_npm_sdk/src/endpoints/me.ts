@@ -5,6 +5,7 @@ import type {
   ApiKeyModel,
   OpenAiAssistantIdResponseDto,
   PreferredLanguageResponseDto,
+  SessionsResponseDto,
 } from '../types/me.js';
 
 /**
@@ -16,6 +17,9 @@ import type {
  * 주요 기능:
  * - 내 프로필 조회 (`get`)
  * - 로그아웃 (`logout`)
+ * - 토큰 갱신 (`refresh`)
+ * - 세션(기기) 목록 조회 (`getSessions`)
+ * - 특정 기기 로그아웃 (`revokeSession`)
  * - API 키 관리 (조회, 업데이트, 삭제) (`getApiKeys`, `updateApiKey`, `deleteApiKey`)
  *
  * @public
@@ -64,14 +68,46 @@ export class MeApi {
 
   /**
    * 로그아웃을 수행합니다.
-   * - 서버 세션을 무효화합니다.
+   * - 서버 세션을 무효화하고 쿠키를 제거합니다.
    * @example
    * await client.me.logout();
    * console.log('Logged out successfully');
    */
   logout(): Promise<HttpResponse<void>> {
-    // 204 No Content 예상
     return this.rb.path('/auth/logout').post<void>();
+  }
+
+  /**
+   * Access Token 및 Refresh Token을 갱신합니다.
+   * - 쿠키에 담긴 Refresh Token으로 새 토큰을 발급받습니다.
+   * - credentials: 'include'로 쿠키가 전송되어야 합니다.
+   * @returns 성공 시 { ok: true }
+   */
+  refresh(): Promise<HttpResponse<{ ok: boolean }>> {
+    return this.rb.path('/auth/refresh').post<{ ok: boolean }>();
+  }
+
+  /**
+   * 현재 사용자의 세션(기기) 목록을 조회합니다.
+   * @returns 세션 목록 (sessionId, createdAt, isCurrent)
+   * @example
+   * const res = await client.me.getSessions();
+   * if (res.isSuccess) {
+   *   res.data.sessions.forEach(s => console.log(s.sessionId, s.isCurrent ? '(현재)' : ''));
+   * }
+   */
+  getSessions(): Promise<HttpResponse<SessionsResponseDto>> {
+    return this.rb.path('/auth/sessions').get<SessionsResponseDto>();
+  }
+
+  /**
+   * 특정 기기(세션)를 로그아웃합니다.
+   * @param sessionId getSessions()로 조회한 sessionId
+   * @example
+   * await client.me.revokeSession('abc123def456');
+   */
+  revokeSession(sessionId: string): Promise<HttpResponse<void>> {
+    return this.rb.path(`/auth/sessions/${encodeURIComponent(sessionId)}`).delete<void>();
   }
 
   /**
