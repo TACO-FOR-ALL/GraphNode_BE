@@ -71,7 +71,6 @@ services:
       - SERVICES=s3,sqs
       - DEFAULT_REGION=ap-northeast-2
       - DEBUG=1
-      - EAGER_SERVICE_LOADING=1
       - SKIP_SSL_CERT_DOWNLOAD=1
       - PERSISTENCE=0
       - LS_LOG=info

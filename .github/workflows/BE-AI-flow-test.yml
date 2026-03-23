@@ -85,8 +85,16 @@ jobs:
           cache-to: type=gha,mode=max
 
       # 6. Docker Compose를 통한 통합 테스트 서비스 기동
-      - name: Start Services
+      - name: Start Database Services First
         run: |
+          # 1단계: 메모리 점유가 큰 인프라 서비스들을 먼저 구동하여 메모리 스파이크 분산
+          docker compose -f be/docker-compose.test.yml up -d postgres mongo redis neo4j chroma
+          echo "Waiting 15 seconds for databases to initialize..."
+          sleep 15
+
+      - name: Start Application and LocalStack
+        run: |
+          # 2단계: 백엔드 어플리케이션 및 LocalStack 마저 구동
           # 윈도우 환경 퍼미션 누락 방지 및 CRLF(\r\n) -> LF(\n) 변환
           sed -i 's/\r$//' be/scripts/localstack-init/ready.sh
           chmod +x be/scripts/localstack-init/ready.sh
@@ -99,6 +107,14 @@ jobs:
           echo "Waiting for services to be healthy..."
           # 최대 7.5분(45 * 10s) 대기
           for i in {1..45}; do
+            # 비정상 종료(Exited)된 컨테이너 탐지
+            EXITED_CONTAINERS=$(docker compose -f be/docker-compose.test.yml ps --format json | jq -r 'if type=="array" then .[] else null end | select(.State == "exited") | .Name')
+            if [ -n "$EXITED_CONTAINERS" ]; then
+              echo "❌ Fatal Error: 일부 컨테이너가 비정상 종료(Crash) 되었습니다!"
+              echo "죽은 컨테이너 목록: $EXITED_CONTAINERS"
+              exit 1
+            fi
+
             # jq를 사용하여 각 서비스의 Health 상태를 확인
             STATUSES=$(docker compose -f be/docker-compose.test.yml ps --format json | jq -r 'if type=="array" then .[].Health else .Health end' | sort | uniq)
             echo "Current health statuses: $STATUSES"
