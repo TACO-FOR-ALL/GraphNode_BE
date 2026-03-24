@@ -4,6 +4,12 @@ import { z } from 'zod';
 import { getUserIdFromRequest } from '../utils/request';
 import { UserService } from '../../core/services/UserService';
 import { MeResponseDto, ApiKeyModel } from '../../shared/dtos/me';
+import { verifyToken } from '../utils/jwt';
+import {
+  listSessions,
+  removeSessionBySessionId,
+} from '../../infra/redis/SessionStoreRedis';
+import { ValidationError } from '../../shared/errors/domain';
 
 /**
  * /v1/me 엔드포인트의 컨트롤러 클래스.
@@ -148,6 +154,67 @@ export class MeController {
       res.status(204).send();
     } catch (e) {
       next(e);
+    }
+  }
+
+  /**
+   * GET /v1/me/sessions — 내 계정의 활성 세션 목록 조회
+   * - createdAt: 세션 생성 시각 (ISO 8601)
+   * - isCurrent: 현재 요청 기기와 동일한 세션 여부
+   */
+  async getSessions(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = getUserIdFromRequest(req)!;
+      const rows = await listSessions(userId);
+      const currentSessionId = this.getSessionIdFromRequest(req);
+
+      res.status(200).json({
+        sessions: rows.map((row) => ({
+          sessionId: row.sessionId,
+          createdAt: row.createdAt,
+          isCurrent: !!currentSessionId && currentSessionId === row.sessionId,
+        })),
+      });
+    } catch (e) {
+      next(e);
+    }
+  }
+
+  /**
+   * DELETE /v1/me/sessions/:sessionId — 특정 세션(기기) 강제 로그아웃
+   * - sessionId 형식 검증: 16자 hex
+   * - 없는 세션도 204 반환 (idempotent, 클라이언트 재시도에 안전)
+   */
+  async revokeSession(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = getUserIdFromRequest(req)!;
+      const { sessionId } = req.params;
+      if (!/^[a-f0-9]{16}$/.test(sessionId)) {
+        throw new ValidationError('Invalid sessionId format');
+      }
+
+      await removeSessionBySessionId(userId, sessionId);
+      res.status(204).send();
+    } catch (e) {
+      next(e);
+    }
+  }
+
+  /**
+   * 현재 요청에서 Access Token의 sessionId를 추출
+   * - Authorization 헤더 또는 signed cookie에서 토큰 획득 후 디코딩
+   */
+  private getSessionIdFromRequest(req: Request): string | null {
+    try {
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.startsWith('Bearer ')
+        ? authHeader.substring(7)
+        : req.signedCookies?.['access_token'];
+      if (!token) return null;
+      const payload = verifyToken(token);
+      return payload.sessionId ?? null;
+    } catch {
+      return null;
     }
   }
 }

@@ -31,6 +31,13 @@ process.env.SENTRY_DSN = 'https://test@sentry.io/1';
 process.env.POSTHOG_API_KEY = 'test-key';
 process.env.POSTHOG_HOST = 'https://app.posthog.com';
 
+// SessionStoreRedis ZSET 시뮬레이션용 인메모리 저장소 (테스트 격리용)
+const zsetStore: Record<string, Map<string, number>> = {};
+function getZset(key: string): Map<string, number> {
+  if (!zsetStore[key]) zsetStore[key] = new Map();
+  return zsetStore[key];
+}
+
 // Shared Mock Redis Instance
 const mockRedisInstance = {
   connect: jest.fn<any>().mockResolvedValue(undefined),
@@ -48,6 +55,38 @@ const mockRedisInstance = {
       if (event === 'ready') callback();
       return mockRedisInstance;
   }),
+  // SessionStoreRedis용 ZSET 메서드
+  zadd: jest.fn<any>().mockImplementation((key: string, score: number, member: string) => {
+    getZset(key).set(member, score);
+    return Promise.resolve(1);
+  }),
+  zrem: jest.fn<any>().mockImplementation((key: string, ...members: string[]) => {
+    const map = getZset(key);
+    let count = 0;
+    for (const m of members) if (map.delete(m)) count++;
+    return Promise.resolve(count);
+  }),
+  zcard: jest.fn<any>().mockImplementation((key: string) => {
+    return Promise.resolve(getZset(key).size);
+  }),
+  zscore: jest.fn<any>().mockImplementation((key: string, member: string) => {
+    const score = getZset(key).get(member);
+    return Promise.resolve(score ?? null);
+  }),
+  zrange: jest.fn<any>().mockImplementation((key: string, start: number, stop: number) => {
+    const map = getZset(key);
+    const entries = [...map.entries()].sort((a, b) => a[1] - b[1]);
+    const slice = entries.slice(start, stop === -1 ? undefined : stop + 1);
+    return Promise.resolve(slice.map(([m]) => m));
+  }),
+  zremrangebyrank: jest.fn<any>().mockImplementation((key: string, start: number, stop: number) => {
+    const map = getZset(key);
+    const entries = [...map.entries()].sort((a, b) => a[1] - b[1]);
+    const toRemove = entries.slice(start, stop + 1).map(([m]) => m);
+    for (const m of toRemove) map.delete(m);
+    return Promise.resolve(toRemove.length);
+  }),
+  expire: jest.fn<any>().mockResolvedValue(1),
 };
 
 // Mock IORedis
