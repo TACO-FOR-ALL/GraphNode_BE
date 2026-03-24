@@ -23,6 +23,7 @@ sleep 5
 # ts-node를 사용하여 TypeScript로 작성된 시딩 스크립트 실행
 # dotenv를 로드하여 환경변수(DB URI 등)가 정상적으로 적용되도록 함
 echo "🌱 Seeding test data..."
+export MONGODB_URI="mongodb://127.0.0.1:27017/graphnode?directConnection=true"
 npx ts-node -r dotenv/config tests/e2e/utils/db-seed.ts
 
 # 3. Jest 통합 테스트(E2E) 실행
