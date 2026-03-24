@@ -18,16 +18,23 @@ const env = loadEnv();
 
 const SESSION_KEY_PREFIX = 'user:';
 const SESSION_KEY_SUFFIX = ':sessions';
-const SESSION_TTL_SEC = Math.floor(JWT_REFRESH_EXPIRY_MS / 1000);
+const SESSION_TTL_SEC = Math.floor(JWT_REFRESH_EXPIRY_MS / 1000); // Redis 키 만료 시간
 
 /**
  * Refresh Token에서 세션 식별자 생성 (16자 hex)
  * Access Token의 sessionId와 매칭하여 Redis 세션 검증에 사용
+ * @param token refresh token
+ * @returns session id
  */
 export function toSessionId(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex').substring(0, 16);
 }
 
+/**
+ * Redis 세션 키 생성
+ * @param userId 사용자 ID
+ * @returns Redis 세션 키
+ */
 function getSessionKey(userId: string): string {
   return `${SESSION_KEY_PREFIX}${userId}${SESSION_KEY_SUFFIX}`;
 }
@@ -35,6 +42,8 @@ function getSessionKey(userId: string): string {
 /**
  * 세션 추가.
  * 제한 초과 시 가장 오래된 세션을 제거한 뒤 새 세션 추가
+ * @param userId 사용자 ID
+ * @param refreshToken refresh token
  */
 export async function addSession(userId: string, refreshToken: string): Promise<void> {
   const key = getSessionKey(userId);
@@ -45,13 +54,13 @@ export async function addSession(userId: string, refreshToken: string): Promise<
   try {
     await withRetry(
       async () => {
-        const count = await redis.zcard(key);
+        const count = await redis.zcard(key); // Redis sorted set에 저장된 요소 개수 반환
         const toRemove = count - maxSessions + 1;
         if (toRemove > 0) {
-          await redis.zremrangebyrank(key, 0, toRemove - 1);
+          await redis.zremrangebyrank(key, 0, toRemove - 1); // 가장 오래된 세션 제거
         }
-        await redis.zadd(key, score, member);
-        await redis.expire(key, SESSION_TTL_SEC);
+        await redis.zadd(key, score, member); // 새 세션 추가
+        await redis.expire(key, SESSION_TTL_SEC); // Redis 키 만료 시간 설정
       },
       { label: 'SessionStoreRedis.addSession' }
     );
@@ -65,15 +74,20 @@ export async function addSession(userId: string, refreshToken: string): Promise<
 /**
  * sessionId로 세션 유효 여부 확인 (Access Token 검증용)
  * Access Token에는 refresh token이 없으므로 sessionId로 Redis 검증
+ * @param userId 사용자 ID
+ * @param sessionId session id
+ * @returns 세션 유효 여부
  */
 export async function hasSessionBySessionId(userId: string, sessionId: string): Promise<boolean> {
   const key = getSessionKey(userId);
   try {
-    const rows = await withRetry(
-      async () => redis.zrange(key, 0, -1),
-      { label: 'SessionStoreRedis.hasSessionBySessionId' }
-    );
-    const found = rows.some((token) => toSessionId(token) === sessionId);
+    // Redis sorted set에서 모든 세션 가져오기
+    const rows: string[] = await withRetry(async () => redis.zrange(key, 0, -1), {
+      label: 'SessionStoreRedis.hasSessionBySessionId',
+    });
+
+    // sessionId로 세션 유효 여부 확인
+    const found: boolean = rows.some((token) => toSessionId(token) === sessionId);
     return found;
   } catch (error) {
     logger.error({ err: error, userId }, 'SessionStoreRedis.hasSessionBySessionId 실패');
@@ -83,14 +97,17 @@ export async function hasSessionBySessionId(userId: string, sessionId: string): 
 
 /**
  * Refresh Token으로 세션 유효 여부 확인 (리프레시 시 검증용)
+ * @param userId 사용자 ID
+ * @param refreshToken refresh token
+ * @returns 세션 유효 여부
  */
 export async function hasSession(userId: string, refreshToken: string): Promise<boolean> {
   const key = getSessionKey(userId);
   try {
-    const score = await withRetry(
-      async () => redis.zscore(key, refreshToken),
-      { label: 'SessionStoreRedis.hasSession' }
-    );
+    // Redis sorted set에서 refresh token의 score 가져오기
+    const score = await withRetry(async () => redis.zscore(key, refreshToken), {
+      label: 'SessionStoreRedis.hasSession',
+    });
     return score !== null;
   } catch (error) {
     logger.error({ err: error, userId }, 'SessionStoreRedis.hasSession 실패');
@@ -100,14 +117,15 @@ export async function hasSession(userId: string, refreshToken: string): Promise<
 
 /**
  * 세션 제거 (로그아웃)
+ * @param userId 사용자 ID
+ * @param refreshToken refresh token
  */
 export async function removeSession(userId: string, refreshToken: string): Promise<void> {
   const key = getSessionKey(userId);
   try {
-    await withRetry(
-      async () => redis.zrem(key, refreshToken),
-      { label: 'SessionStoreRedis.removeSession' }
-    );
+    await withRetry(async () => redis.zrem(key, refreshToken), {
+      label: 'SessionStoreRedis.removeSession',
+    });
     logger.debug({ userId, sessionId: toSessionId(refreshToken) }, '세션 제거됨');
   } catch (error) {
     logger.error({ err: error, userId }, 'SessionStoreRedis.removeSession 실패');
@@ -117,6 +135,9 @@ export async function removeSession(userId: string, refreshToken: string): Promi
 
 /**
  * 기존 세션을 새 세션으로 교체 (Refresh Token Rotation 시)
+ * @param userId 사용자 ID
+ * @param oldToken old refresh token
+ * @param newToken new refresh token
  */
 export async function replaceSession(
   userId: string,
@@ -130,13 +151,19 @@ export async function replaceSession(
   try {
     await withRetry(
       async () => {
+        // 기존 세션 제거
         await redis.zrem(key, oldToken);
-        const count = await redis.zcard(key);
-        const toRemove = count - maxSessions + 1;
+        // Redis sorted set에 저장된 요소 개수 반환
+        const count: number = await redis.zcard(key);
+        // 제거할 세션 수 계산
+        const toRemove: number = count - maxSessions + 1;
+        // 제거할 세션 수 > 0 이면 가장 오래된 세션 제거
         if (toRemove > 0) {
           await redis.zremrangebyrank(key, 0, toRemove - 1);
         }
+        // 새 세션 추가
         await redis.zadd(key, score, newToken);
+        // Redis 키 만료 시간 설정
         await redis.expire(key, SESSION_TTL_SEC);
       },
       { label: 'SessionStoreRedis.replaceSession' }

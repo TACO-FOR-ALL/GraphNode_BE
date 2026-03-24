@@ -26,10 +26,14 @@ import { AuthError } from '../../shared/errors/domain';
  */
 export async function logout(req: Request, res: Response, next: NextFunction) {
   try {
+    // refresh token 조회
     const refreshToken = req.signedCookies?.['refresh_token'];
     if (refreshToken) {
       try {
+        // refresh token 검증
         const payload = verifyToken(refreshToken);
+
+        // redis에서 세션 제거
         if (payload?.userId) {
           await removeSession(payload.userId, refreshToken);
         }
@@ -59,10 +63,12 @@ export async function refresh(req: Request, res: Response, next: NextFunction) {
   try {
     const refreshToken = req.signedCookies['refresh_token'];
 
+    // Refresh Token 검증
     if (!refreshToken) {
       throw new AuthError('No refresh token provided');
     }
 
+    // Refresh Token 유효성 확인
     const payload = verifyToken(refreshToken);
     if (!payload?.userId) {
       throw new AuthError('Invalid refresh token');
@@ -86,6 +92,7 @@ export async function refresh(req: Request, res: Response, next: NextFunction) {
     });
     await replaceSession(payload.userId, refreshToken, newRefreshToken);
 
+    // access token, refresh token 쿠키 설정
     const cookieOpts = getAuthCookieOpts();
     res.cookie('access_token', newAccessToken, {
       ...cookieOpts,
@@ -97,6 +104,7 @@ export async function refresh(req: Request, res: Response, next: NextFunction) {
     });
     res.status(200).json({ ok: true });
   } catch (e) {
+    // refresh token이 유효하지 않으면 쿠키 제거
     const opts = getAuthCookieOpts();
     res.clearCookie('access_token', opts);
     res.clearCookie('refresh_token', opts);
