@@ -1,0 +1,21 @@
+{
+  "$id": "https://graphnode.dev/schemas/sessions-response.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SessionsResponse",
+  "type": "object",
+  "properties": {
+    "sessions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "sessionId": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "isCurrent": { "type": "boolean" }
+        },
+        "required": ["sessionId", "createdAt", "isCurrent"]
+      }
+    }
+  },
+  "required": ["sessions"]
+}

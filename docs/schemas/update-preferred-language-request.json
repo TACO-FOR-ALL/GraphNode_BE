@@ -1,0 +1,10 @@
+{
+  "$id": "https://graphnode.dev/schemas/update-preferred-language-request.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "UpdatePreferredLanguageRequest",
+  "type": "object",
+  "properties": {
+    "language": { "type": "string", "minLength": 1, "maxLength": 10 }
+  },
+  "required": ["language"]
+}

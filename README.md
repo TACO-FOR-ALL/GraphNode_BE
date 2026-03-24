@@ -199,6 +199,7 @@ infisical run --env=prod -- npm start
 
 - **[Code Style & Contribution Guide](docs/architecture/CODE_STYLE.md)**: 네이밍 컨벤션, 아키텍처 패턴, 에러 핸들링 규칙 등
 - **[Daily Dev Logs](docs/guides/Daily)**: 일별 작업 상세 기록
+  - [2026-03-24 Me 서비스 API 및 SDK 문서 동기화](docs/guides/Daily/20260324-sync-me-api-docs.md)
   - [2026-03-19 알림 시스템 신뢰성 보강 및 문서/SDK 동기화](docs/guides/Daily/20260319-notification-reliability-sync.md)
   - [2026-03-16 알림 시스템 리팩토링 및 테스트 실패 해결](docs/guides/Daily/20260316-notification-system-refactor.md)
   - [2026-03-16 SDK Notification 타입 정의 및 문서화 (TaskType/NotificationType)](docs/guides/Daily/20260316-sdk-notification-types-doc.md)
