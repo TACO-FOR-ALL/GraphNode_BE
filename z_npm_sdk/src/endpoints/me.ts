@@ -5,6 +5,7 @@ import type {
   ApiKeyModel,
   OpenAiAssistantIdResponseDto,
   PreferredLanguageResponseDto,
+  SessionsResponseDto,
 } from '../types/me.js';
 
 /**
@@ -72,6 +73,39 @@ export class MeApi {
   logout(): Promise<HttpResponse<void>> {
     // 204 No Content 예상
     return this.rb.path('/auth/logout').post<void>();
+  }
+
+  /**
+   * Refresh Token을 사용하여 Access Token을 갱신합니다.
+   * - 쿠키 기반 인증 환경에서 401 복구 흐름에 사용합니다.
+   * @example
+   * const res = await client.me.refresh();
+   * if (res.isSuccess) { ... }
+   */
+  refresh(): Promise<HttpResponse<{ ok: boolean }>> {
+    return this.rb.path('/auth/refresh').post<{ ok: boolean }>();
+  }
+
+  /**
+   * 현재 계정의 세션 목록을 조회합니다.
+   * - 각 세션의 생성 시각과 현재 기기 여부를 제공합니다.
+   * @example
+   * const res = await client.me.getSessions();
+   * if (res.isSuccess) console.log(res.data.sessions);
+   */
+  getSessions(): Promise<HttpResponse<SessionsResponseDto>> {
+    return this.rb.path('/v1/me/sessions').get<SessionsResponseDto>();
+  }
+
+  /**
+   * 특정 세션(기기)을 강제 로그아웃합니다.
+   * - 현재 세션을 revoke하면 본인도 즉시 로그아웃될 수 있습니다.
+   * @param sessionId 세션 목록에서 받은 세션 ID
+   * @example
+   * await client.me.revokeSession(sessionId);
+   */
+  revokeSession(sessionId: string): Promise<HttpResponse<void>> {
+    return this.rb.path(`/v1/me/sessions/${sessionId}`).delete<void>();
   }
 
   /**
