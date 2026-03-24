@@ -20,6 +20,10 @@ export function createMeRouter(deps: { userService: UserService }): Router {
 
   router.get('/', asyncHandler(meController.getMe.bind(meController)));
 
+  // 세션 관리: 목록 조회, 특정 기기 로그아웃
+  router.get('/sessions', asyncHandler(meController.getSessions.bind(meController)));
+  router.delete('/sessions/:sessionId', asyncHandler(meController.revokeSession.bind(meController)));
+
   // API Keys
   router.get('/api-keys/:model', asyncHandler(meController.getApiKeys.bind(meController)));
   router.patch('/api-keys/:model', asyncHandler(meController.updateApiKey.bind(meController)));

@@ -48,6 +48,8 @@ const EnvSchema = z.object({
 
   // Redis (캐시 및 세션 저장소) 설정
   REDIS_URL: z.string().min(1, 'REDIS_URL required'),
+  // 사용자당 동시 접속 허용 기기 수 (초과 시 오래된 세션부터 로그아웃)
+  MAX_CONCURRENT_SESSIONS: z.coerce.number().int().positive().default(1),
 
   // Neo4j FIXME
   NEO4J_URI: z.string().default('bolt://localhost:7687'),

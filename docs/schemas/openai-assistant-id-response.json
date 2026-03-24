@@ -1,0 +1,10 @@
+{
+  "$id": "https://graphnode.dev/schemas/openai-assistant-id-response.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenAiAssistantIdResponse",
+  "type": "object",
+  "properties": {
+    "assistantId": { "type": ["string", "null"] }
+  },
+  "required": ["assistantId"]
+}

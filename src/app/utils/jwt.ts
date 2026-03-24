@@ -7,9 +7,11 @@ const env = loadEnv();
 /**
  * JWT 페이로드 인터페이스
  * - userId: 사용자 식별자
+ * - sessionId: Access Token에만 포함, 매 요청 Redis 세션 검증용 (다른 기기 로그인 시 즉시 차단)
  */
 export interface JwtPayload {
   userId: string;
+  sessionId?: string;
 }
 
 /**
