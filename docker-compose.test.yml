@@ -58,8 +58,7 @@ services:
     image: chromadb/chroma
     container_name: graphnode-test-chroma
     environment:
-      - CHROMA_SERVER_AUTHN_PROVIDER=chromadb.auth.token.TokenAuthenticationServerProvider
-      - CHROMA_SERVER_AUTHN_CREDENTIALS=test-key
+      - ALLOW_RESET=true
     ports:
       - "8000:8000"
     healthcheck:
@@ -127,7 +126,6 @@ services:
       
       # --- VectorDB (Chroma) ---
       - CHROMA_API_URL=http://chroma:8000
-      - CHROMA_API_KEY=test-key
       - CHROMA_TENANT=f9334ca3-a2bc-429e-a318-de2eb114d68d
       - CHROMA_DATABASE=TACO_GraphNode
       
@@ -200,7 +198,6 @@ services:
       
       # --- VectorDB (Chroma) ---
       - CHROMA_API_URL=http://chroma:8000
-      - CHROMA_API_KEY=test-key
       - CHROMA_TENANT=f9334ca3-a2bc-429e-a318-de2eb114d68d
       - CHROMA_DATABASE=TACO_GraphNode
 
@@ -236,19 +233,19 @@ services:
       - AWS_ENDPOINT_URL=http://localstack:4566
       - AWS_SQS_REQUEST_QUEUE_URL=http://localstack:4566/000000000000/taco-graphnode-request-graph-sqs
       - AWS_SQS_RESULT_QUEUE_URL=http://localstack:4566/000000000000/taco-graphnode-response-graph-sqs
-      - MONGODB_URL=mongodb://mongo:27017/graphnode
+      - MONGODB_URL=mongodb://mongo:27017/graphnode?replicaSet=rs0
       - MONGODB_DB_NAME=graphnode
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_USERNAME=neo4j
       - NEO4J_PASSWORD=neo4j-password
+      - NEO4J_password=neo4j-password
       - CHROMA_DATABASE=TACO_GraphNode
       - CHROMA_API_URL=http://chroma:8000
-      - CHROMA_MODE=local
+      - CHROMA_MODE=server
       - CHROMA_SERVER_HOST=chroma
       - CHROMA_SERVER_PORT=8000
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GROQ_API_KEY=${GROQ_API_KEY}
-      - CHROMA_API_KEY=test-key
       - INTERNAL_SERVICE_TOKEN=ci-test-key
     healthcheck:
       test: ["CMD-SHELL", "python3 -c 'import os; exit(0)' || exit 1"]
