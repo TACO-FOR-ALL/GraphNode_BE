@@ -42,7 +42,7 @@ const EnvSchema = z.object({
   // QDRANT_COLLECTION_NAME: z.string().min(1, 'QDRANT_COLLECTION_NAME required'),
   // QDRANT_VECTOR_SIZE: z.coerce.number().int().positive().default(1536), // OpenAI 임베딩 차원 수
   // QDRANT_DISTANCE_METRIC: z.enum(['Cosine', 'Euclidean']).default('Cosine'), // 거리 측정 방식
-  
+
   // OpenAI Assistants
   OPENAI_ASSISTANT_ID: z.string().optional(),
 
@@ -61,8 +61,9 @@ const EnvSchema = z.object({
 
   // AWS
   AWS_REGION: z.string().default('ap-northeast-2'),
-  AWS_ACCESS_KEY_ID: z.string().optional(), // 로컬 개발/테스트용
-  AWS_SECRET_ACCESS_KEY: z.string().optional(), // 로컬 개발/테스트용
+  AWS_ENDPOINT_URL: z.string().optional(), // LocalStack 연동을 위한 엔드포인트 URL
+  AWS_ACCESS_KEY_ID: z.string().optional(),
+  AWS_SECRET_ACCESS_KEY: z.string().optional(),
 
   // AWS SQS 설정
   SQS_REQUEST_QUEUE_URL: z.string().url('SQS_REQUEST_QUEUE_URL must be a valid URL'),
@@ -77,9 +78,8 @@ const EnvSchema = z.object({
   JWT_ACCESS_EXPIRY: z.string().default('1h'),
   JWT_REFRESH_EXPIRY: z.string().default('7d'),
 
-
   //FIREBASE Notification 설정
-  FIREBASE_CREDENTIALS_JSON : z.string().optional(),
+  FIREBASE_CREDENTIALS_JSON: z.string().optional(),
   //FIREBASE_VAPID_VALUE : z.string().optional(),
 
   //Sentry

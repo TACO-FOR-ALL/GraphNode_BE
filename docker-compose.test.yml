@@ -1,0 +1,258 @@
+version: '3.8'
+
+services:
+  # --- Infrastructure ---
+  postgres:
+    image: postgres:16
+    container_name: graphnode-test-postgres
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: graphnode
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d graphnode"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mongo:
+    image: mongo:7
+    container_name: graphnode-test-mongo
+    command: ["--replSet", "rs0"]
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: graphnode-test-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  neo4j:
+    image: neo4j:5
+    container_name: graphnode-test-neo4j
+    environment:
+      NEO4J_AUTH: neo4j/neo4j-password
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "neo4j-password", "RETURN 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  chroma:
+    image: chromadb/chroma
+    container_name: graphnode-test-chroma
+    environment:
+      - ALLOW_RESET=true
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "exit 0"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+
+  localstack:
+    image: localstack/localstack:3.8.1
+    container_name: graphnode-test-localstack
+    environment:
+      - SERVICES=s3,sqs
+      - DEFAULT_REGION=ap-northeast-2
+      - DEBUG=1
+      - SKIP_SSL_CERT_DOWNLOAD=1
+      - PERSISTENCE=0
+      - LS_LOG=info
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:4566/_localstack/health | grep -q '\"running\"' || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 20s
+    ports:
+      - "4566:4566"
+    volumes:
+      - "./scripts/localstack-init:/etc/localstack/init/ready.d"
+
+  # --- Applications ---
+  graphnode-be:
+    image: graphnode-be:test # GHA workflow에서 이 태그로 로드됨
+    depends_on:
+      postgres: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      neo4j: { condition: service_healthy }
+      localstack: { condition: service_started }
+    environment:
+      # --- 필수 환경 설정 (ECS Task Definition 대조) ---
+      - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=3000
+      - DEV_INSECURE_COOKIES=true # 테스트 편의를 위해 true (production 모드에서도 필요)
+      
+      # --- DB 연결 (도커 컨테이너 서비스명 활용) ---
+      - DATABASE_URL=postgresql://app:app@postgres:5432/graphnode
+      - MONGODB_URL=mongodb://mongo:27017/graphnode?replicaSet=rs0
+      - REDIS_URL=redis://redis:6379
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USERNAME=neo4j
+      - NEO4J_PASSWORD=neo4j-password
+      
+      # --- AWS/Mocking 연동 (LocalStack) ---
+      - AWS_REGION=ap-northeast-2
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - S3_PAYLOAD_BUCKET=taco5-graphnode-graphdata-s3
+      - S3_FILE_BUCKET=taco5-graphnode-filedata-chat-and-note-s3
+      - SQS_REQUEST_QUEUE_URL=http://localstack:4566/000000000000/taco-graphnode-request-graph-sqs
+      - SQS_RESULT_QUEUE_URL=http://localstack:4566/000000000000/taco-graphnode-response-graph-sqs
+      
+      # --- VectorDB (Chroma) ---
+      - CHROMA_API_KEY=test-key
+      - CHROMA_API_URL=http://chroma:8000
+      - CHROMA_TENANT=f9334ca3-a2bc-429e-a318-de2eb114d68d
+      - CHROMA_DATABASE=TACO_GraphNode
+      
+      # --- 기타 필수 시크릿 (더미 값) ---
+      - SESSION_SECRET=test-session-secret
+      - JWT_SECRET=test-jwt-secret
+      - OAUTH_GOOGLE_CLIENT_ID=dummy-google-client-id
+      - OAUTH_GOOGLE_CLIENT_SECRET=dummy-google-client-secret
+      - OAUTH_GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google/callback
+      - OAUTH_APPLE_TEAM_ID=dummy-apple-team-id
+      - OAUTH_APPLE_KEY_ID=dummy-apple-key-id
+      - OAUTH_APPLE_CLIENT_ID=dummy-apple-client-id
+      - OAUTH_APPLE_PRIVATE_KEY=dummy-apple-private-key
+      - OAUTH_APPLE_REDIRECT_URI=http://localhost:3000/auth/apple/callback
+      - OPENAI_ASSISTANT_ID=asst_dummy
+      - FIREBASE_CREDENTIALS_JSON={"project_id":"dummy-test","private_key":"-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEINT+gC/o2+c2xNInV3H6vT2/S5M2yH5nE6q\n-----END PRIVATE KEY-----\n","client_email":"dummy@example.com"}
+      - SENTRY_DSN=dummy
+      - POSTHOG_API_KEY=dummy
+      - POSTHOG_HOST=http://localhost:8080
+      - INTERNAL_SERVICE_TOKEN=ci-test-key
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  graphnode-worker:
+    image: graphnode-be:test
+    entrypoint: ["node", "dist/workers/index.js"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      neo4j: { condition: service_healthy }
+      localstack: { condition: service_started }
+      graphnode-be: { condition: service_healthy }
+    ports:
+      - "3001:3001"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3000
+      - DEV_INSECURE_COOKIES=true
+      
+      # --- DB 연결 (도커 컨테이너 서비스명 활용) ---
+      - DATABASE_URL=postgresql://app:app@postgres:5432/graphnode
+      - MONGODB_URL=mongodb://mongo:27017/graphnode?replicaSet=rs0
+      - REDIS_URL=redis://redis:6379
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USERNAME=neo4j
+      - NEO4J_PASSWORD=neo4j-password
+      
+      # --- AWS/Mocking 연동 (LocalStack) ---
+      - AWS_REGION=ap-northeast-2
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - S3_PAYLOAD_BUCKET=taco5-graphnode-graphdata-s3
+      - S3_FILE_BUCKET=taco5-graphnode-filedata-chat-and-note-s3
+      - SQS_REQUEST_QUEUE_URL=http://localstack:4566/000000000000/taco-graphnode-request-graph-sqs
+      - SQS_RESULT_QUEUE_URL=http://localstack:4566/000000000000/taco-graphnode-response-graph-sqs
+      
+      # --- VectorDB (Chroma) ---
+      - CHROMA_API_KEY=test-key
+      - CHROMA_API_URL=http://chroma:8000
+      - CHROMA_TENANT=f9334ca3-a2bc-429e-a318-de2eb114d68d
+      - CHROMA_DATABASE=TACO_GraphNode
+
+      # --- 기타 필수 시크릿 (더미 값) ---
+      - SESSION_SECRET=test-session-secret
+      - JWT_SECRET=test-jwt-secret
+      - OAUTH_GOOGLE_CLIENT_ID=dummy-google-client-id
+      - OAUTH_GOOGLE_CLIENT_SECRET=dummy-google-client-secret
+      - OAUTH_GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google/callback
+      - OAUTH_APPLE_TEAM_ID=dummy-apple-team-id
+      - OAUTH_APPLE_KEY_ID=dummy-apple-key-id
+      - OAUTH_APPLE_CLIENT_ID=dummy-apple-client-id
+      - OAUTH_APPLE_PRIVATE_KEY=dummy-apple-private-key
+      - OAUTH_APPLE_REDIRECT_URI=http://localhost:3000/auth/apple/callback
+      - OPENAI_ASSISTANT_ID=asst_dummy
+      - FIREBASE_CREDENTIALS_JSON={"project_id":"dummy-test","private_key":"-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEINT+gC/o2+c2xNInV3H6vT2/S5M2yH5nE6q\n-----END PRIVATE KEY-----\n","client_email":"dummy@example.com"}
+      - SENTRY_DSN=dummy
+      - POSTHOG_API_KEY=dummy
+      - POSTHOG_HOST=http://localhost:8080
+      - INTERNAL_SERVICE_TOKEN=ci-test-key
+
+  graphnode-ai:
+    image: graphnode-ai:test # GHA workflow에서 빌드된 이미지 사용
+    depends_on:
+      mongo: { condition: service_healthy }
+      neo4j: { condition: service_healthy }
+      localstack: { condition: service_started }
+    environment:
+      - ENV_MODE=prod
+      - AWS_REGION=ap-northeast-2
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_SQS_REQUEST_QUEUE_URL=http://localstack:4566/000000000000/taco-graphnode-request-graph-sqs
+      - AWS_SQS_RESULT_QUEUE_URL=http://localstack:4566/000000000000/taco-graphnode-response-graph-sqs
+      - MONGODB_URL=mongodb://mongo:27017/graphnode?replicaSet=rs0
+      - MONGODB_DB_NAME=graphnode
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USERNAME=neo4j
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=neo4j-password
+      - NEO4J_password=neo4j-password
+      - CHROMA_API_KEY=test-key
+      - CHROMA_DATABASE=TACO_GraphNode
+      - CHROMA_API_URL=http://chroma:8000
+      - CHROMA_MODE=server
+      - CHROMA_SERVER_HOST=chroma
+      - CHROMA_SERVER_PORT=8000
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - INTERNAL_SERVICE_TOKEN=ci-test-key
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c 'import os; exit(0)' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
