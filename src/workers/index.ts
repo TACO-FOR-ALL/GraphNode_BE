@@ -64,6 +64,7 @@ async function startWorker() {
     region: env.AWS_REGION || 'ap-northeast-2', // env.ts에 region이 없다면 기본값
     sqs: new SQSClient({
       region: env.AWS_REGION || 'ap-northeast-2',
+      endpoint: env.AWS_ENDPOINT_URL, // LocalStack 연동용
       credentials:
         env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY
           ? {
