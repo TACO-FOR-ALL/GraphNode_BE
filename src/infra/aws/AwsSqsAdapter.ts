@@ -27,6 +27,7 @@ export class AwsSqsAdapter implements QueuePort {
     // SQS 클라이언트 초기화
     this.client = new SQSClient({
       region: env.AWS_REGION,
+      endpoint: env.AWS_ENDPOINT_URL, // LocalStack 등 가상 환경 연동용
       credentials:
         env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY
           ? {
