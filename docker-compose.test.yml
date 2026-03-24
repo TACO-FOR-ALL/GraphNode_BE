@@ -20,6 +20,7 @@ services:
   mongo:
     image: mongo:7
     container_name: graphnode-test-mongo
+    command: ["--replSet", "rs0"]
     ports:
       - "27017:27017"
     healthcheck:
@@ -56,6 +57,9 @@ services:
   chroma:
     image: chromadb/chroma
     container_name: graphnode-test-chroma
+    environment:
+      - CHROMA_SERVER_AUTHN_PROVIDER=chromadb.auth.token.TokenAuthenticationServerProvider
+      - CHROMA_SERVER_AUTHN_CREDENTIALS=test-key
     ports:
       - "8000:8000"
     healthcheck:
@@ -139,7 +143,7 @@ services:
       - OAUTH_APPLE_PRIVATE_KEY=dummy-apple-private-key
       - OAUTH_APPLE_REDIRECT_URI=http://localhost:3000/auth/apple/callback
       - OPENAI_ASSISTANT_ID=asst_dummy
-      - FIREBASE_CREDENTIALS_JSON={"project_id":"dummy-test","private_key":"-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDE\n-----END PRIVATE KEY-----\n","client_email":"dummy@example.com"}
+      - FIREBASE_CREDENTIALS_JSON={"project_id":"dummy-test","private_key":"-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEINT+gC/o2+c2xNInV3H6vT2/S5M2yH5nE6q\n-----END PRIVATE KEY-----\n","client_email":"dummy@example.com"}
       - SENTRY_DSN=dummy
       - POSTHOG_API_KEY=dummy
       - POSTHOG_HOST=http://localhost:8080
@@ -212,7 +216,7 @@ services:
       - OAUTH_APPLE_PRIVATE_KEY=dummy-apple-private-key
       - OAUTH_APPLE_REDIRECT_URI=http://localhost:3000/auth/apple/callback
       - OPENAI_ASSISTANT_ID=asst_dummy
-      - FIREBASE_CREDENTIALS_JSON={"project_id":"dummy-test","private_key":"-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDE\n-----END PRIVATE KEY-----\n","client_email":"dummy@example.com"}
+      - FIREBASE_CREDENTIALS_JSON={"project_id":"dummy-test","private_key":"-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEINT+gC/o2+c2xNInV3H6vT2/S5M2yH5nE6q\n-----END PRIVATE KEY-----\n","client_email":"dummy@example.com"}
       - SENTRY_DSN=dummy
       - POSTHOG_API_KEY=dummy
       - POSTHOG_HOST=http://localhost:8080

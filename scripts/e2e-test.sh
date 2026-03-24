@@ -15,6 +15,10 @@ echo "============================================"
 echo "🔍 Checking service health..."
 docker compose -f $DOCKER_COMPOSE_FILE ps
 
+echo "⚙️ Initializing MongoDB Replica Set..."
+docker exec graphnode-test-mongo mongosh --eval "rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongo:27017'}]})" || true
+sleep 5
+
 # 2. 데이터베이스 초기화 및 시딩 (Reset & Seed)
 # ts-node를 사용하여 TypeScript로 작성된 시딩 스크립트 실행
 # dotenv를 로드하여 환경변수(DB URI 등)가 정상적으로 적용되도록 함
