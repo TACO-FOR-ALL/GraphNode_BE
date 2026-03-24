@@ -41,6 +41,8 @@ const mockHasSession = jest.fn<any>();
 const mockHasSessionBySessionId = jest.fn<any>();
 const mockReplaceSession = jest.fn<any>();
 const mockRemoveSession = jest.fn<any>();
+const mockListSessions = jest.fn<any>();
+const mockRemoveSessionBySessionId = jest.fn<any>();
 jest.mock('../../src/infra/redis/SessionStoreRedis', () => {
   const actual = jest.requireActual('../../src/infra/redis/SessionStoreRedis') as any;
   return {
@@ -49,6 +51,8 @@ jest.mock('../../src/infra/redis/SessionStoreRedis', () => {
     hasSessionBySessionId: (...args: any[]) => mockHasSessionBySessionId(...args),
     replaceSession: (...args: any[]) => mockReplaceSession(...args),
     removeSession: (...args: any[]) => mockRemoveSession(...args),
+    listSessions: (...args: any[]) => mockListSessions(...args),
+    removeSessionBySessionId: (...args: any[]) => mockRemoveSessionBySessionId(...args),
   };
 });
 
@@ -74,6 +78,8 @@ describe('Auth Session Integration Tests', () => {
     mockHasSessionBySessionId.mockResolvedValue(true);
     mockReplaceSession.mockResolvedValue(undefined);
     mockRemoveSession.mockResolvedValue(undefined);
+    mockListSessions.mockResolvedValue([]);
+    mockRemoveSessionBySessionId.mockResolvedValue(false);
   });
 
   describe('POST /auth/refresh', () => {
@@ -200,6 +206,53 @@ describe('Auth Session Integration Tests', () => {
 
       expect(res.status).toBe(401);
       expect(mockHasSessionBySessionId).toHaveBeenCalledWith(mockUser.id, sessionId);
+    });
+  });
+
+  describe('GET /v1/me/sessions', () => {
+    // 세션 목록 조회 시 현재 세션 표시가 내려와야 한다.
+    it('should return sessions with isCurrent flag', async () => {
+      const { toSessionId } = await import('../../src/infra/redis/SessionStoreRedis');
+      const refreshToken = 'mock-refresh-token-for-current-session';
+      const sessionId = toSessionId(refreshToken);
+      const tokenWithSession = generateAccessToken({ userId: mockUser.id, sessionId });
+      mockListSessions.mockResolvedValue([
+        { sessionId, createdAt: new Date('2026-01-01T00:00:00.000Z').toISOString() },
+      ]);
+
+      const res = await request(app)
+        .get('/v1/me/sessions')
+        .set('Authorization', `Bearer ${tokenWithSession}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.sessions[0]).toEqual(
+        expect.objectContaining({
+          sessionId,
+          isCurrent: true,
+        })
+      );
+    });
+  });
+
+  describe('DELETE /v1/me/sessions/:sessionId', () => {
+    // 존재하지 않는 세션이어도 idempotent하게 204를 반환해야 한다.
+    it('should return 204 for unknown session id', async () => {
+      const fakeSessionId = 'aaaaaaaaaaaaaaaa';
+      const res = await request(app)
+        .delete(`/v1/me/sessions/${fakeSessionId}`)
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(res.status).toBe(204);
+      expect(mockRemoveSessionBySessionId).toHaveBeenCalledWith(mockUser.id, fakeSessionId);
+    });
+
+    // 잘못된 sessionId 형식은 400으로 거부해야 한다.
+    it('should return 400 for invalid session id format', async () => {
+      const res = await request(app)
+        .delete('/v1/me/sessions/not-valid')
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(res.status).toBe(400);
     });
   });
 });

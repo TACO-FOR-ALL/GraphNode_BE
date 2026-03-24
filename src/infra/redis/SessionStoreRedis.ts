@@ -134,6 +134,65 @@ export async function removeSession(userId: string, refreshToken: string): Promi
 }
 
 /**
+ * 사용자 세션 목록 조회
+ * - Redis ZSET에서 해당 사용자의 모든 Refresh Token을 꺼내 sessionId, createdAt으로 변환
+ * @param userId 사용자 ID
+ * @returns sessionId, createdAt 목록 (오래된 순)
+ */
+export async function listSessions(
+  userId: string
+): Promise<Array<{ sessionId: string; createdAt: string }>> {
+  const key = getSessionKey(userId);
+  try {
+    const tokens: string[] = await withRetry(async () => redis.zrange(key, 0, -1), {
+      label: 'SessionStoreRedis.listSessions',
+    });
+
+    const rows = await Promise.all(
+      tokens.map(async (token) => {
+        const score = await withRetry(async () => redis.zscore(key, token), {
+          label: 'SessionStoreRedis.listSessions.zscore',
+        });
+        const createdAtMs = score ? Number(score) : Date.now();
+        return {
+          sessionId: toSessionId(token),
+          createdAt: new Date(createdAtMs).toISOString(),
+        };
+      })
+    );
+
+    return rows;
+  } catch (error) {
+    logger.error({ err: error, userId }, 'SessionStoreRedis.listSessions 실패');
+    return [];
+  }
+}
+
+/**
+ * sessionId로 특정 세션 강제 제거 (특정 기기 로그아웃)
+ * @param userId 사용자 ID
+ * @param sessionId 제거할 세션 ID (16자 hex)
+ * @returns 실제 제거 여부 (없으면 false)
+ */
+export async function removeSessionBySessionId(userId: string, sessionId: string): Promise<boolean> {
+  const key = getSessionKey(userId);
+  try {
+    const tokens: string[] = await withRetry(async () => redis.zrange(key, 0, -1), {
+      label: 'SessionStoreRedis.removeSessionBySessionId',
+    });
+    const token = tokens.find((t) => toSessionId(t) === sessionId);
+    if (!token) return false;
+    const removed = await withRetry(async () => redis.zrem(key, token), {
+      label: 'SessionStoreRedis.removeSessionBySessionId.zrem',
+    });
+    return removed > 0;
+  } catch (error) {
+    logger.error({ err: error, userId }, 'SessionStoreRedis.removeSessionBySessionId 실패');
+    return false;
+  }
+}
+
+/**
  * 기존 세션을 새 세션으로 교체 (Refresh Token Rotation 시)
  * @param userId 사용자 ID
  * @param oldToken old refresh token
