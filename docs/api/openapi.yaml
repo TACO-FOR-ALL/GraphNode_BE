@@ -395,6 +395,146 @@ paths:
                 $ref: ../schemas/problem.json
               example:
                 $ref: './examples/me-get-401.json'
+  /v1/me/sessions:
+    get:
+      summary: List active sessions
+      description: Returns a list of all active sessions for the authenticated user.
+      responses:
+        '200':
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/sessions-response.json
+        '401':
+          description: Not authenticated
+  /v1/me/sessions/{sessionId}:
+    delete:
+      summary: Revoke session
+      description: Terminates a specific session (device) identified by sessionId.
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{16}$'
+      responses:
+        '204':
+          description: Session revoked
+        '400':
+          description: Invalid sessionId format
+        '401':
+          description: Not authenticated
+  /v1/me/api-keys/{model}:
+    get:
+      summary: Get masked API key
+      parameters:
+        - name: model
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [openai, deepseek, claude, gemini]
+      responses:
+        '200':
+          description: Masked API key
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/api-key-response.json
+        '401':
+          description: Not authenticated
+    patch:
+      summary: Update API key
+      parameters:
+        - name: model
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [openai, deepseek, claude, gemini]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/update-api-key-request.json
+      responses:
+        '204':
+          description: Updated
+        '400':
+          description: Invalid request
+        '401':
+          description: Not authenticated
+    delete:
+      summary: Delete API key
+      parameters:
+        - name: model
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [openai, deepseek, claude, gemini]
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Not authenticated
+  /v1/me/openai-assistant-id:
+    get:
+      summary: Get OpenAI Assistant ID
+      responses:
+        '200':
+          description: Assistant ID
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/openai-assistant-id-response.json
+        '401':
+          description: Not authenticated
+    patch:
+      summary: Update OpenAI Assistant ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/update-openai-assistant-id-request.json
+      responses:
+        '204':
+          description: Updated
+        '400':
+          description: Invalid request
+        '401':
+          description: Not authenticated
+  /v1/me/preferred-language:
+    get:
+      summary: Get preferred language
+      responses:
+        '200':
+          description: Preferred language
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/preferred-language-response.json
+        '401':
+          description: Not authenticated
+    patch:
+      summary: Update preferred language
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/update-preferred-language-request.json
+      responses:
+        '204':
+          description: Updated
+        '400':
+          description: Invalid request
+        '401':
+          description: Not authenticated
   /v1/ai/conversations/bulk:
     post:
       summary: Bulk create conversations
@@ -2255,6 +2395,20 @@ components:
       $ref: ../schemas/note.json
     Folder:
       $ref: ../schemas/folder.json
+    SessionsResponse:
+      $ref: ../schemas/sessions-response.json
+    OpenAiAssistantIdResponse:
+      $ref: ../schemas/openai-assistant-id-response.json
+    UpdateOpenAiAssistantIdRequest:
+      $ref: ../schemas/update-openai-assistant-id-request.json
+    PreferredLanguageResponse:
+      $ref: ../schemas/preferred-language-response.json
+    UpdatePreferredLanguageRequest:
+      $ref: ../schemas/update-preferred-language-request.json
+    ApiKeyResponse:
+      $ref: ../schemas/api-key-response.json
+    UpdateApiKeyRequest:
+      $ref: ../schemas/update-api-key-request.json
   examples:
     meGet200:
       externalValue: ./examples/me-get-200.json

@@ -1,9 +1,8 @@
 import { Router } from 'express';
 
 import { GraphAiController } from '../controllers/GraphAiController';
-import { requireLogin } from '../middlewares/auth';
+import { internalOrSession } from '../middlewares/internal';
 import { GraphGenerationService } from '../../core/services/GraphGenerationService';
-import { bindSessionUser } from '../middlewares/session';
 import { asyncHandler } from '../utils/asyncHandler';
 
 export function createGraphAiRouter(graphGenerationService: GraphGenerationService): Router {
@@ -13,7 +12,7 @@ export function createGraphAiRouter(graphGenerationService: GraphGenerationServi
 
 
   // 공통 미들웨어 적용: 세션 사용자 바인딩 및 로그인 요구
-  router.use(bindSessionUser, requireLogin);
+  router.use(internalOrSession);
 
   // POST /v1/graph-ai/generate
   router.post('/generate', asyncHandler(graphAiController.generateGraph.bind(graphAiController)));

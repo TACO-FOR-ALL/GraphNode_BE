@@ -1,0 +1,180 @@
+name: BE-AI Integrated Flow Test
+
+on:
+  pull_request:
+    branches: [ "main", "develop" ]
+
+# 권한 설정 (OIDC 인증을 위해 필수)
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  test-flow:
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+
+    steps:
+      # 1. Backend 레포지토리 체크아웃 (be/ 폴더에 저장)
+      - name: Checkout Backend
+        uses: actions/checkout@v4
+        with:
+          path: be
+
+      # 2. AI Worker 레포지토리 체크아웃 (ai-worker/ 폴더에 저장)
+      - name: Checkout AI Worker
+        uses: actions/checkout@v4
+        with:
+          repository: TACO-FOR-ALL/GraphNode_AI
+          path: ai-worker
+          token: ${{ secrets.GH_PAT }}
+
+      # 2-1. Node.js 설정 및 의존성 캐싱 (E2E 테스트 실행용)
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: be/package-lock.json
+
+      # 2-2. Backend 의존성 설치 (Runner 호스트 환경)
+      - name: Install Dependencies
+        run: npm ci
+        working-directory: be
+
+      # 2-3. AWS 자격 증명 구성 (OIDC를 사용하여 ECR 접근 권한 획득)
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 2-4. Amazon ECR 로그인
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 3. Docker Buildx 설정 (캐싱 기능을 위해 필수)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 4. Backend 이미지 빌드 및 캐싱
+      - name: Build Backend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: be
+          push: false
+          load: true # 빌드된 이미지를 로컬 도커 가상 시스템에 로드
+          tags: graphnode-be:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 5. AI Worker 이미지 빌드 및 캐싱
+      - name: Build AI Worker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ai-worker
+          push: false
+          load: true # 빌드된 이미지를 로컬 도커 가상 시스템에 로드
+          tags: graphnode-ai:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 6. Docker Compose를 통한 통합 테스트 서비스 기동
+      - name: Start Database Services First
+        run: |
+          # 1단계: 메모리 점유가 큰 인프라 서비스들을 먼저 구동하여 메모리 스파이크 분산
+          docker compose -f be/docker-compose.test.yml up -d postgres mongo redis neo4j chroma
+          echo "Waiting 15 seconds for databases to initialize..."
+          sleep 15
+          echo "Initializing MongoDB Replica Set..."
+          docker exec graphnode-test-mongo mongosh --eval "rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongo:27017'}]})" || true
+          sleep 5
+
+      - name: Start Application and LocalStack
+        run: |
+          # 2단계: 백엔드 어플리케이션 및 LocalStack 마저 구동
+          # 윈도우 환경 퍼미션 누락 방지 및 CRLF(\r\n) -> LF(\n) 변환
+          sed -i 's/\r$//' be/scripts/localstack-init/ready.sh
+          chmod +x be/scripts/localstack-init/ready.sh
+          # be/ 폴더 내부에서 compose 실행
+          docker compose -f be/docker-compose.test.yml up -d
+
+      # 7. 모든 서비스가 Healthy 상태가 될 때까지 대기
+      - name: Wait for Services to be healthy
+        run: |
+          echo "Waiting for services to be healthy..."
+          # 최대 7.5분(45 * 10s) 대기
+          for i in {1..45}; do
+            # 비정상 종료(Exited)된 컨테이너 탐지 (--all 옵션 필수)
+            EXITED_CONTAINERS=$(docker compose -f be/docker-compose.test.yml ps --all --format json | jq -r 'if type=="array" then .[] else null end | select(.State == "exited") | .Name')
+            if [ -n "$EXITED_CONTAINERS" ]; then
+              echo "❌ Fatal Error: 일부 컨테이너가 비정상 종료(Crash) 되었습니다!"
+              echo "죽은 컨테이너 목록: $EXITED_CONTAINERS"
+              echo "======== [LocalStack Logs] ========"
+              docker compose -f be/docker-compose.test.yml logs localstack
+              echo "==================================="
+              exit 1
+            fi
+
+            # jq를 사용하여 각 서비스의 Health 상태를 확인 (살아있는 컨테이너만)
+            STATUSES=$(docker compose -f be/docker-compose.test.yml ps --format json | jq -r 'if type=="array" then .[].Health else .Health end' | sort | uniq)
+            echo "Current health statuses: $STATUSES"
+            
+            # 모든 서비스가 healthy이면 종료
+            if [[ "$STATUSES" == "healthy" ]]; then
+              # 살아있는 컨테이너 개수가 정상적인지 최종 확인 (8개면 LocalStack 유실된 것임, 9~10개면 OK)
+              # 더 엄밀하게는 총 개수를 세어 확인해야하지만, EXITED 컨테이너가 잡히므로 여기서 패스 처리해도 무방합니다.
+              echo "✅ All services are healthy!"
+              exit 0
+            fi
+            
+            # 하나라도 unhealthy가 있으면 10초 대기
+            echo "⏳ Still waiting for services... (Attempt $i/45)"
+            sleep 10
+          done
+          
+          echo "❌ Timed out waiting for services to be healthy."
+          docker compose -f be/docker-compose.test.yml ps
+          docker compose -f be/docker-compose.test.yml logs
+          exit 1
+
+      # 8. LocalStack init script(ready.sh)의 SQS/S3 리소스 생성 완료 대기
+      - name: Wait for LocalStack Resources to be Ready
+        run: |
+          echo "Waiting for ready.sh to create SQS queues in LocalStack..."
+          for i in {1..30}; do
+            docker exec graphnode-test-localstack awslocal sqs get-queue-url \
+              --queue-name taco-graphnode-request-graph-sqs \
+              --region ap-northeast-2 2>/dev/null && \
+            echo "✅ SQS queues are ready!" && exit 0
+            echo "⏳ SQS queues not ready yet... (Attempt $i/30)"
+            sleep 5
+          done
+          echo "❌ Timed out waiting for LocalStack SQS queues to be created."
+          echo "======== [LocalStack Logs] ========"
+          docker logs graphnode-test-localstack
+          echo "==================================="
+          exit 1
+
+      # 9. 실질적인 통합 E2E 테스트 실행
+      - name: Run Integrated E2E Tests
+        run: |
+          chmod +x be/scripts/e2e-test.sh
+          cd be && ./scripts/e2e-test.sh
+        env:
+          MONGODB_URI: mongodb://127.0.0.1:27017/graphnode?directConnection=true
+          DATABASE_URL: postgresql://app:app@localhost:5432/graphnode
+          INTERNAL_SERVICE_TOKEN: ci-test-key
+
+      # 9. 실패 시 로그 업로드
+      - name: Upload Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs
+          path: be/e2e-logs/

@@ -31,6 +31,8 @@ export class AwsS3Adapter implements StoragePort {
     // S3 클라이언트 초기화
     this.client = new S3Client({
       region: env.AWS_REGION,
+      endpoint: env.AWS_ENDPOINT_URL, // LocalStack 등 가상 환경 연동용
+      forcePathStyle: !!env.AWS_ENDPOINT_URL, // 커스텀 엔드포인트가 있을 때만 Path Style 활성화
       credentials:
         env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY
           ? {

@@ -6,27 +6,30 @@
 
 ### Profile & Session
 
-| Method | Endpoint | Description | Status Codes |
-| :--- | :--- | :--- | :--- |
-| `get()` | `GET /v1/me` | 내 프로필 및 계정 정보 조회 | 200, 401 |
-| `logout()` | `POST /auth/logout` | 현재 세션 로그아웃 | 204 |
+| Method               | Endpoint                     | Description                | Status Codes |
+| :------------------- | :--------------------------- | :------------------------- | :----------- |
+| `get()`              | `GET /v1/me`                 | 내 프로필 및 계정 정보 조회 | 200, 401     |
+| `logout()`           | `POST /auth/logout`          | 현재 세션 로그아웃          | 204          |
+| `refresh()`          | `POST /auth/refresh`         | Access Token 갱신          | 200          |
+| `getSessions()`      | `GET /v1/me/sessions`        | 활성 세션(기기) 목록 조회   | 200          |
+| `revokeSession(id)`  | `DELETE /v1/me/sessions/:id` | 특정 세션 강제 종료        | 204          |
 
 ### API Keys & AI Settings
 
-| Method | Endpoint | Description | Status Codes |
-| :--- | :--- | :--- | :--- |
-| `getApiKeys(model)` | `GET /v1/me/api-keys/:model` | 마스킹된 특정 모델 API 키 조회 | 200 |
-| `updateApiKey(model, key)`| `PATCH /.../api-keys/:model`| 특정 모델의 API 키 설정/수정 | 204 |
-| `deleteApiKey(model)` | `DELETE /.../api-keys/:model`| 설정된 API 키 삭제 | 204 |
-| `getOpenAiAssistantId()` | `GET /.../openai-assistant-id`| OpenAI Assistant ID 조회 | 200 |
-| `updateOpenAiAssistantId(id)` | `PATCH /.../openai-assistant-id`| OpenAI Assistant ID 설정 | 204 |
+| Method                        | Endpoint                         | Description                     | Status Codes |
+| :---------------------------- | :------------------------------- | :------------------------------ | :----------- |
+| `getApiKeys(model)`           | `GET /v1/me/api-keys/:model`      | 마스킹된 특정 모델 API 키 조회 | 200          |
+| `updateApiKey(model, key)`    | `PATCH /v1/me/api-keys/:model`   | 특정 모델의 API 키 설정/수정   | 204          |
+| `deleteApiKey(model)`         | `DELETE /v1/me/api-keys/:model`  | 설정된 API 키 삭제             | 204          |
+| `getOpenAiAssistantId()`      | `GET /v1/me/openai-assistant-id` | OpenAI Assistant ID 조회        | 200          |
+| `updateOpenAiAssistantId(id)` | `PATCH /v1/me/openai-assistant-id`| OpenAI Assistant ID 설정       | 204          |
 
 ### Preferences
 
-| Method | Endpoint | Description | Status Codes |
-| :--- | :--- | :--- | :--- |
-| `getPreferredLanguage()` | `GET /.../preferred-language`| 내 선호 언어(ko, en 등) 조회 | 200 |
-| `updatePreferredLanguage(lang)`| `PATCH /.../preferred-language`| 선호 언어 설정 변경 | 204, 400 |
+| Method                         | Endpoint                        | Description                   | Status Codes |
+| :----------------------------- | :------------------------------ | :---------------------------- | :----------- |
+| `getPreferredLanguage()`       | `GET /v1/me/preferred-language` | 내 선호 언어(ko, en 등) 조회 | 200          |
+| `updatePreferredLanguage(lang)`| `PATCH /v1/me/preferred-language`| 선호 언어 설정 변경          | 204, 400     |
 
 ---
 
@@ -71,6 +74,51 @@
   ```typescript
   await client.me.logout();
   ```
+- **Status Codes**: `204 No Content`
+
+---
+
+### `refresh()`
+
+인증 토큰(Refresh Token)을 사용하여 새로운 Access Token을 발급받습니다. 주로 401 에러가 발생했을 때 자동으로 토큰을 갱신하는 흐름에서 사용됩니다.
+
+- **Usage Example**
+  ```typescript
+  const { data } = await client.me.refresh();
+  if (data.ok) {
+    console.log('Token refreshed successfully');
+  }
+  ```
+- **Response Type**: `{ ok: boolean }`
+- **Status Codes**: `200 OK`
+
+---
+
+### `getSessions()`
+
+현재 사용자 계정으로 로그인된 모든 활성 세션(기기) 목록을 조회합니다. 각 세션의 생성 시각과 현재 요청 기기 여부를 확인할 수 있습니다.
+
+- **Usage Example**
+  ```typescript
+  const { data } = await client.me.getSessions();
+  data.sessions.forEach(s => {
+    console.log(`${s.sessionId}: ${s.isCurrent ? '(Current)' : ''}`);
+  });
+  ```
+- **Response Type**: `SessionsResponseDto`
+- **Status Codes**: `200 OK`
+
+---
+
+### `revokeSession(sessionId)`
+
+특정 세션(기기)을 강제로 로그아웃시킵니다. 자신의 현재 세션을 중단하면 즉시 인증이 만료될 수 있습니다.
+
+- **Usage Example**
+  ```typescript
+  await client.me.revokeSession('a1b2c3d4e5f6g7h8');
+  ```
+- **Parameters**: `sessionId` - 세션 식별 아이디 (16자 Hex string)
 - **Status Codes**: `204 No Content`
 
 ---
