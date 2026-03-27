@@ -25,6 +25,12 @@ router.post('/logout', ctrl.logout);
  */
 router.post('/refresh', ctrl.refresh);
 
+/**
+ * POST /auth/test-login — 테스트 환경 전용 로그인
+ * - 운영 환경에서는 비활성화(컨트롤러에서 404 처리)
+ */
+router.post('/test-login', ctrl.testLogin);
+
 // (resume token 관련 엔드포인트는 제거됨)
 
 export default router;

@@ -79,6 +79,13 @@ const EnvSchema = z.object({
   JWT_ACCESS_EXPIRY: z.string().default('1h'),
   JWT_REFRESH_EXPIRY: z.string().default('7d'),
 
+  // 테스트 전용 로그인(부하테스트 등) 설정
+  ENABLE_TEST_LOGIN: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
+  TEST_LOGIN_SECRET: z.string().optional(),
+
 
   //FIREBASE Notification 설정
   FIREBASE_CREDENTIALS_JSON : z.string().optional(),

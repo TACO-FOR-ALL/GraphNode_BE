@@ -19,6 +19,10 @@ import {
   toSessionId,
 } from '../../infra/redis/SessionStoreRedis';
 import { AuthError } from '../../shared/errors/domain';
+import { completeLogin } from '../utils/authLogin';
+import { loadEnv } from '../../config/env';
+
+const env = loadEnv();
 
 /**
  * POST /auth/logout — 서버 세션 파괴 및 쿠키 만료
@@ -109,5 +113,58 @@ export async function refresh(req: Request, res: Response, next: NextFunction) {
     res.clearCookie('access_token', opts);
     res.clearCookie('refresh_token', opts);
     res.status(401).json({ ok: false, error: 'Refresh failed' });
+  }
+}
+
+/**
+ * POST /auth/test-login — 테스트 전용 로그인 엔드포인트
+ * - ENABLE_TEST_LOGIN=true 이고 NODE_ENV !== 'production' 일 때만 동작
+ * - x-internal-token 헤더가 TEST_LOGIN_SECRET 과 일치해야 함
+ */
+export async function testLogin(req: Request, res: Response, next: NextFunction) {
+  try {
+    const enabled = env.ENABLE_TEST_LOGIN === true && env.NODE_ENV !== 'production';
+    if (!enabled) {
+      res.status(404).json({ ok: false, error: 'Not found' });
+      return;
+    }
+
+    const expectedSecret = env.TEST_LOGIN_SECRET;
+    const providedSecret = req.header('x-internal-token');
+    if (!expectedSecret || !providedSecret || providedSecret !== expectedSecret) {
+      throw new AuthError('Unauthorized internal request');
+    }
+
+    const providerUserId =
+      typeof req.body?.providerUserId === 'string' ? req.body.providerUserId.trim() : '';
+    if (!providerUserId) {
+      res.status(400).json({ ok: false, error: 'providerUserId is required' });
+      return;
+    }
+
+    const email =
+      typeof req.body?.email === 'string' && req.body.email.trim().length > 0
+        ? req.body.email.trim()
+        : null;
+    const displayName =
+      typeof req.body?.displayName === 'string' && req.body.displayName.trim().length > 0
+        ? req.body.displayName.trim()
+        : null;
+    const avatarUrl =
+      typeof req.body?.avatarUrl === 'string' && req.body.avatarUrl.trim().length > 0
+        ? req.body.avatarUrl.trim()
+        : null;
+
+    const { userId } = await completeLogin(req, res, {
+      provider: 'dev',
+      providerUserId,
+      email,
+      displayName,
+      avatarUrl,
+    });
+
+    res.status(200).json({ ok: true, userId });
+  } catch (e) {
+    next(e);
   }
 }
