@@ -26,17 +26,12 @@ echo "🌱 Seeding test data..."
 export MONGODB_URI="mongodb://127.0.0.1:27017/graphnode?directConnection=true"
 npx ts-node -r dotenv/config tests/e2e/utils/db-seed.ts
 
-# 3. Jest 통합 테스트(E2E) 실행
-# --runInBand: 테스트를 순차적으로 실행하여 DB 경쟁 상태(Race Condition) 방지
-# --forceExit: 비동기 작업 종료 대기 없이 테스트 완료 후 강제 종료 (네이티브 모듈 잔여 핸들 방지)
-echo "🧪 Running E2E tests with Jest..."
-if npx jest --config $E2E_CONFIG --runInBand --forceExit; then
-    echo "✅ E2E Tests Passed!"
-else
-    # 4. 테스트 실패 시 로그 수집
-    # 컨테이너 내부 터미널 로그를 추출하여 디버깅 편의성 제공
-    echo "❌ E2E Tests Failed!"
+# 3. 로그 수집 함수 정의
+# 스크립트가 종료될 때(성공, 실패, 캔슬) 현재 컨테이너 상태를 기록함
+collect_logs() {
+    echo "============================================"
     echo "📂 Collecting logs for debugging..."
+    echo "============================================"
     
     mkdir -p e2e-logs
     docker compose -f $DOCKER_COMPOSE_FILE logs graphnode-be > e2e-logs/be.log
@@ -45,8 +40,16 @@ else
     docker compose -f $DOCKER_COMPOSE_FILE logs localstack > e2e-logs/localstack.log
     
     echo "📑 Logs saved in e2e-logs/ directory."
-    exit 1
-fi
+}
+
+# 스크립트 종료 시(EXIT) 무조건 collect_logs 실행
+trap collect_logs EXIT
+
+# 4. Jest 통합 테스트(E2E) 실행
+# --runInBand: 테스트를 순차적으로 실행하여 DB 경쟁 상태(Race Condition) 방지
+# --forceExit: 비동기 작업 종료 대기 없이 테스트 완료 후 강제 종료 (네이티브 모듈 잔여 핸들 방지)
+echo "🧪 Running E2E tests with Jest..."
+npx jest --config $E2E_CONFIG --runInBand --forceExit
 
 echo "============================================"
 echo "🎉 All Integrated Tests Completed Successfully!"
