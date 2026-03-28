@@ -31,6 +31,14 @@ router.post('/refresh', ctrl.refresh);
  */
 router.post('/test-login', ctrl.testLogin);
 
+/**
+ * POST /auth/test-users/seed — 테스트 유저 일괄 생성/보장
+ * DELETE /auth/test-users — 테스트 유저 일괄 삭제
+ * - 운영 환경에서는 비활성화(컨트롤러에서 404 처리)
+ */
+router.post('/test-users/seed', ctrl.seedTestUsers);
+router.delete('/test-users', ctrl.deleteTestUsers);
+
 // (resume token 관련 엔드포인트는 제거됨)
 
 export default router;
