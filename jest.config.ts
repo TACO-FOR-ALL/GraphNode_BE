@@ -11,7 +11,7 @@ const config: Config = {
   collectCoverageFrom: ['src/app/**/*.{ts,js}'],
   setupFilesAfterEnv: ['<rootDir>/tests/jest.setup.ts'],
   moduleFileExtensions: ['ts', 'js', 'json'],
-  testMatch: ['**/tests/**/*.spec.ts'],
+  testMatch: ['**/tests/**/*.spec.ts', '!**/tests/e2e/**'],
   // pdf-parse 등 일부 네이티브 모듈의 CustomGC open handle을 위해 forceExit 사용
   // afterAll에서 모든 teardown을 수행한 뒤 Jest가 강제 종료합니다.
   forceExit: true,
