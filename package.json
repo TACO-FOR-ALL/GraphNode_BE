@@ -18,7 +18,10 @@
     "db:up": "docker compose up -d",
     "db:down": "docker compose down -v",
     "db:logs": "docker compose logs -f",
-    "test:users": "tsx tests/scripts/test-users-crud.ts"
+    "test:users": "tsx tests/scripts/test-users-crud.ts",
+    "k6:users:create": "tsx tests/scripts/create-k6-users.ts",
+    "k6:users:delete": "tsx tests/scripts/delete-k6-users.ts",
+    "k6:smoke:managed": "tsx tests/scripts/run-k6-smoke-managed.ts"
   },
   "repository": {
     "type": "git",

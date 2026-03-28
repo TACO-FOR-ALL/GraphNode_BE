@@ -35,7 +35,7 @@ export const logger = pino({
     remove: true, // 값을 제거하거나 '***'로 대체 (censor: '***')
   },
   transport:
-    process.env.NODE_ENV === 'production'
+    process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test'
       ? undefined
       : {
           target: 'pino-pretty',
