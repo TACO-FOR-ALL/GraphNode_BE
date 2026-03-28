@@ -28,7 +28,7 @@ export function initSentry() {
       nodeProfilingIntegration(),
     ],
     // 성능 모니터링 샘플링 비율 (1.0 = 100% 전송. 프로덕션에서는 줄여야 함 예: 0.1)
-    tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+    tracesSampleRate: (process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test') ? 0.1 : 1.0,
     // 프로파일링 샘플링 비율
     profilesSampleRate: 1.0,
 
