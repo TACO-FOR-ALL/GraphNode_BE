@@ -2,7 +2,7 @@
 /**
  * 목적: Graph HTTP API의 동작을 실서비스(GraphEmbeddingService)와 가상 저장소(Mock Repository)를 사용하여 검증한다.
  */
-import { jest, describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
+import { jest, describe, it, expect, beforeAll, beforeEach, afterAll } from '@jest/globals';
 import request from 'supertest';
 
 import { createApp } from '../../src/bootstrap/server';
@@ -181,13 +181,26 @@ jest.mock('../../src/infra/repositories/GraphRepositoryMongo', () => ({
 
 describe('Graph API Integration Tests', () => {
   let app: any;
+  let server: import('http').Server;
   const userId = '12345';
   let accessToken: string;
 
   beforeAll(async () => {
     process.env.SESSION_SECRET = 'test-secret';
     app = createApp();
+    server = app.listen(0);
     accessToken = generateAccessToken({ userId });
+  });
+
+  afterAll(async () => {
+    if (server) {
+      await new Promise<void>((resolve, reject) => {
+        server.close((err?: Error) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+    }
   });
 
   beforeEach(() => {

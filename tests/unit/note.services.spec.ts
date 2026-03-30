@@ -197,6 +197,18 @@ class InMemoryNoteRepo implements NoteRepository {
     );
   }
 
+  async searchByKeyword(
+    ownerUserId: string,
+    query: string,
+    limit?: number
+  ): Promise<(NoteDoc & { score?: number })[]> {
+    const items = Array.from(this.notes.values()).filter(
+      (n) => n.ownerUserId === ownerUserId && !n.deletedAt && 
+             (n.title.includes(query) || n.content.includes(query))
+    ).map(n => ({...n, score: 1}));
+    return limit ? items.slice(0, limit) : items;
+  }
+
   // --- Folder Operations ---
   async createFolder(doc: FolderDoc, session?: ClientSession): Promise<FolderDoc> {
     this.folders.set(doc._id, doc);

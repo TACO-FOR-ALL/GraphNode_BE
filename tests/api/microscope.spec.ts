@@ -85,6 +85,7 @@ import { UserRepositoryMySQL } from '../../src/infra/repositories/UserRepository
 
 describe('Microscope API Integration Tests', () => {
     let app: Express;
+    let server: import('http').Server;
     let accessToken: string;
     const userId = 'user-12345';
 
@@ -103,14 +104,23 @@ describe('Microscope API Integration Tests', () => {
         }));
 
         app = createApp();
+        server = app.listen(0);
         accessToken = generateAccessToken({ userId });
 
         if (!nock.isActive()) nock.activate();
     });
 
-    afterAll(() => {
+    afterAll(async () => {
         nock.cleanAll();
         nock.restore();
+        if (server) {
+            await new Promise<void>((resolve, reject) => {
+                server.close((err?: Error) => {
+                    if (err) reject(err);
+                    else resolve();
+                });
+            });
+        }
     });
 
     beforeEach(() => {

@@ -142,6 +142,23 @@ class InMemoryConvRepo implements ConversationRepository {
       (v) => v.deletedAt !== null && v.deletedAt !== undefined && v.deletedAt <= expiredBefore.getTime()
     );
   }
+
+  async searchByKeyword(
+    ownerUserId: string,
+    query: string,
+    limit?: number
+  ): Promise<(ConversationDoc & { score?: number })[]> {
+    const items = Array.from(this.data.values()).filter(
+      (v) => v.ownerUserId === ownerUserId && !v.deletedAt && v.title.includes(query)
+    ).map(v => ({...v, score: 1}));
+    return limit ? items.slice(0, limit) : items;
+  }
+
+  async findByIds(ids: string[], ownerUserId: string): Promise<ConversationDoc[]> {
+    return Array.from(this.data.values()).filter(
+      (v) => ids.includes(v._id) && v.ownerUserId === ownerUserId && !v.deletedAt
+    );
+  }
 }
 
 class InMemoryMsgRepo implements MessageRepository {
@@ -283,6 +300,22 @@ class InMemoryMsgRepo implements MessageRepository {
       result.push(...(this.msgs.get(cid) || []));
     }
     return result;
+  }
+
+  async searchByKeyword(
+    ownerUserId: string,
+    query: string,
+    limit?: number
+  ): Promise<(MessageDoc & { score?: number })[]> {
+    const items: (MessageDoc & { score?: number })[] = [];
+    for (const msgs of this.msgs.values()) {
+      for (const m of msgs) {
+        if (m.ownerUserId === ownerUserId && !m.deletedAt && m.content.includes(query)) {
+          items.push({ ...m, score: 1 });
+        }
+      }
+    }
+    return limit ? items.slice(0, limit) : items;
   }
 }
 
