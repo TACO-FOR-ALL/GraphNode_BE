@@ -16,6 +16,7 @@ import { AgentMode, ChatStreamRequestBody } from '../../agent/types';
 import { UserService } from './UserService';
 import { InvalidApiKeyError } from '../../shared/errors/domain';
 import { ToolRegistry } from '../../agent/ToolRegistry';
+import { loadEnv } from '../../config/env';
 
 /** SSE 이벤트 전송 함수 타입 */
 export type SendEventFn = (event: string, data: unknown) => void;
@@ -63,15 +64,17 @@ export class AgentService {
     const hasContext = context.length > 0;
     const { modeHint } = body;
 
-    // FIXED(강현일) : Service 단에서 API KEY 검증하게 변경
-    // API Key 조회 및 검증
+    // FIXED(강현일) : Service 단에서 API KEY 검증하던 로직 제거 (환경변수 공통 Key 사용)
+    /*
     const { apiKey: userOpenAIApiKey } = await userService.getApiKeys(userId, 'openai');
     if (!userOpenAIApiKey) {
       throw new InvalidApiKeyError('OpenAI API Key is required.');
     }
+    */
 
-    // 내부적으로 OpenAI 인스턴스 생성 (Provider 통합 전까지 기존 로직 유지)
-    const openai = new OpenAI({ apiKey: userOpenAIApiKey });
+    // 환경 변수에서 OpenAI API Key 로드
+    const env = loadEnv();
+    const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 
     // 시작 Event 전달
     sendEvent('status', { phase: 'analyzing', message: '요청 분석 중...' });
@@ -96,22 +99,39 @@ export class AgentService {
 
     // JSON 파싱 및 모드 결정
     let mode: AgentMode = 'chat';
+    let rejectionMessage = '';
+
     try {
-      // JSON 파싱 시도, 실패시 기본값 chat으로 설정
-      const parsed = JSON.parse(classifierContent) as { mode?: string; reason?: string };
-      if (parsed.mode === 'chat' || parsed.mode === 'summary' || parsed.mode === 'note') {
-        mode = parsed.mode;
+      // JSON 파싱 시도
+      const parsed = JSON.parse(classifierContent) as { 
+        mode?: string; 
+        reason?: string; 
+        rejectionMessage?: string; 
+      };
+
+      if (parsed.mode === 'chat' || parsed.mode === 'summary' || parsed.mode === 'note' || parsed.mode === 'irrelevant') {
+        mode = parsed.mode as AgentMode;
+        rejectionMessage = parsed.rejectionMessage || '';
       }
     } catch {
       mode = 'chat';
     }
 
-    // modeHint가 주어졌다면, 그에 따른 모드로 강제 변경
-    if (modeHint === 'summary') mode = 'summary';
-    if (modeHint === 'note') mode = 'note';
+    // modeHint가 주어졌다면, 그에 따른 모드로 강제 변경 (irrelevant는 힌트보다 우선)
+    if (mode !== 'irrelevant') {
+      if (modeHint === 'summary') mode = 'summary';
+      if (modeHint === 'note') mode = 'note';
+    }
 
     // 모드 결정 후 Event 전달
     sendEvent('status', { phase: 'analyzing', message: `요청 분석 완료 (mode = ${mode})` });
+
+    // 무관계한 질문 처리
+    if (mode === 'irrelevant') {
+      sendEvent('chunk', { text: rejectionMessage || '죄송합니다. 요청하신 질문은 현재 에이전트와 무관하여 답변드리기 어렵습니다.' });
+      sendEvent('status', { phase: 'done', message: '답변 불가' });
+      return;
+    }
 
     // 모드에 따른 처리
     if (mode === 'chat') {
@@ -336,21 +356,50 @@ export class AgentService {
    */
   private getClassifierSystemPrompt(): string {
     return `
-      You are a router inside a note-taking and chat app.
+      ${this.getAppScopePrompt()}
+      
       You must choose EXACTLY ONE of the following modes for the current request:
-      - "chat"    : general conversation, Q&A, searching for notes/chats, asking about data, etc.
-      - "summary" : the user is asking to summarize, 정리해줘, 요약, 핵심만, 한줄요약, 개요 etc.
-      - "note"    : the user is asking to turn content into a note, 회의록, 기록, 노트로 정리, note, meeting minutes, minutes, 기록으로 남겨 etc.
-      Rules:
-      - If the user explicitly says anything like "노트로 정리해줘", "회의록으로 만들어줘", "note로 만들어줘", "meeting minutes로 만들어줘", "기록으로 남겨줘" → choose "note".
-      - If the user explicitly asks for "요약", "정리해줘", "핵심만", "summary", "개요" → choose "summary" (UNLESS they clearly say "노트로 정리" which is "note").
-      - If the user asks to find, search, or look up notes/conversations → choose "chat".
-      - Greetings or small talk → choose "chat".
+      - "chat"       : general conversation, small talk, greetings (Hello, Hi, etc.), Q&A, searching for notes/chats, asking about data, etc.
+      - "summary"    : the user is asking to summarize context, 정리해줘, 요약, 핵심만, 한줄요약, 개요 etc.
+      - "note"       : the user is asking to turn content into a note, 회의록, 기록, 노트로 정리, note, meeting minutes etc.
+      - "irrelevant" : the request is completely unrelated to the app's scope.
 
-      Respond with a JSON object with exactly two keys:
-      - mode: one of "chat", "summary", "note"
-      - reason: a short explanation of why you chose this mode
-      Example: {"mode":"chat","reason":"user wants to search notes"}
+      ${this.getIrrelevantCriteriaPrompt()}
+
+      Rules:
+      - If it is a simple greeting (e.g., "Hello", "Hi", "안녕", "반가워"), CHOOSE "chat".
+      - If the user explicitly asks for "note" related tasks → choose "note".
+      - If the user explicitly asks for "summary" related tasks → choose "summary".
+      - If the user asks to find, search, or look up notes/conversations → choose "chat".
+      - If the request matches "irrelevant" criteria → choose "irrelevant".
+
+      Respond with a JSON object with:
+      - mode: one of "chat", "summary", "note", "irrelevant"
+      - reason: a short explanation (internal use)
+      - rejectionMessage: ONLY if mode is "irrelevant", provide a polite rejection message IN THE SAME LANGUAGE AS THE USER.
+      
+      Example for irrelevant: {"mode":"irrelevant","reason":"Cooking recipe","rejectionMessage":"죄송합니다. 저는 노트와 지식 관리를 도와드리는 에이전트로, 요리 관련 질문에는 답변드릴 수 없습니다."}
+    `;
+  }
+
+  /** 앱의 범위를 정의하는 프롬프트를 반환합니다. */
+  private getAppScopePrompt(): string {
+    return `
+      You are a router inside "GraphNode", a personal knowledge management app.
+      GraphNode helps users manage their personal notes, chat history, and knowledge graph.
+    `;
+  }
+
+  /** 무관계한 질문의 기준을 정의하는 프롬프트를 반환합니다. */
+  private getIrrelevantCriteriaPrompt(): string {
+    return `
+      [Irrelevant Criteria]
+      Choose "irrelevant" if the user's request is completely unrelated to personal knowledge management, notes, or searching their own data.
+      Examples of irrelevant topics:
+      - General trivia (e.g., "Who is the president of France?")
+      - Cooking recipes, sports scores, weather forecasts.
+      - Math problems or coding challenges (not related to user's notes).
+      - General advice not related to the user's context.
     `;
   }
 

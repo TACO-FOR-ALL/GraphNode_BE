@@ -43,6 +43,9 @@ const EnvSchema = z.object({
   // QDRANT_VECTOR_SIZE: z.coerce.number().int().positive().default(1536), // OpenAI 임베딩 차원 수
   // QDRANT_DISTANCE_METRIC: z.enum(['Cosine', 'Euclidean']).default('Cosine'), // 거리 측정 방식
 
+  // OpenAI API Key
+  OPENAI_API_KEY: z.string().min(1, 'OPENAI_API_KEY required'),
+
   // OpenAI Assistants
   OPENAI_ASSISTANT_ID: z.string().optional(),
 
