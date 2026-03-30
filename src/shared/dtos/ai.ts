@@ -106,3 +106,14 @@ export interface AIRagChatRequestDto {
   retrievedContext: ChatMessage[];
   recentMessages: ChatMessage[];
 }
+
+/**
+ * AI 챗 재시도 요청 DTO
+ * @public
+ * @prop model AI 모델 계열
+ * @prop modelName 구체적인 모델명 (선택)
+ */
+export interface AIChatRetryRequestDto {
+  model: 'openai' | 'deepseek' | 'claude' | 'gemini'; // ApiKeyModel 호환
+  modelName?: string;
+}

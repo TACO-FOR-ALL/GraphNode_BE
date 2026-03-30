@@ -43,6 +43,17 @@ export interface AIRagChatRequestDto {
 }
 
 /**
+ * AI 챗 재시도 요청 DTO
+ * @public
+ * @prop model AI 모델
+ * @prop modelName 구체적인 모델명 (선택)
+ */
+export interface AIChatRetryRequestDto {
+  model: ApiKeyModel;
+  modelName?: string;
+}
+
+/**
  * AI Chat API
  *
  * AI 모델과의 실시간 채팅 기능을 제공하는 API 클래스입니다.
@@ -121,6 +132,60 @@ export class AiApi {
     options: { signal?: AbortSignal; fetchImpl?: any } = {}
   ): Promise<() => void> {
     return this._handleChatStream(`/v1/ai/conversations/${conversationId}/chat`, dto, files, onEvent, options);
+  }
+
+  /**
+   * 대화 내역의 마지막 AI 응답을 삭제하고 다시 응답을 요청합니다. (재시도)
+   * 
+   * @remarks
+   * 이 메서드는 대화 기록 중 가장 최근의 메시지가 AI의 응답인지 확인한 후, 이를 영구 삭제하고
+   * 바로 이전까지의 대화 내역으로 AI에게 새로운 응답을 생성하도록 백엔드에 요청합니다.
+   * 
+   * @param conversationId - 대화 ID
+   * @param dto - 재시도 요청 데이터 (model, modelName)
+   * @param onStream - (선택) 실시간 텍스트 청크 수신 콜백
+   * @returns AI 응답 DTO 및 HTTP 상태 코드
+   * 
+   * @example
+   * const res = await client.ai.chatRetry('conv_123', {
+   *   model: 'openai'
+   * }, (text) => console.log(text));
+   */
+  async chatRetry(
+    conversationId: string,
+    dto: AIChatRetryRequestDto,
+    files?: File[],
+    onStream?: (chunk: string) => void
+  ): Promise<HttpResponse<AIChatResponseDto>> {
+    return this._handleChatRequest(`/v1/ai/conversations/${conversationId}/chat/retry`, dto, files, onStream);
+  }
+
+  /**
+   * AI 채팅 재시도 스트림을 엽니다. (SSE 고수준 제어용)
+   * 
+   * @remarks
+   * 마지막 응답을 삭제하고 새 응답을 받아오는 과정을 스트리밍으로 세밀하게 제어합니다.
+   * 
+   * @param conversationId - 대화 ID
+   * @param dto - 재시도 요청 데이터
+   * @param files - 첨부 파일
+   * @param onEvent - SSE 이벤트 수신 콜백 ({ event: string, data: any })
+   * @param options - AbortSignal 등 추가 옵션
+   * @returns 스트림 중단(abort) 함수
+   * 
+   * @example
+   * const abort = await client.ai.chatRetryStream('conv_123', { model: 'openai' }, undefined, (event) => {
+   *   if (event.event === 'chunk') console.log(event.data.text);
+   * });
+   */
+  async chatRetryStream(
+    conversationId: string,
+    dto: AIChatRetryRequestDto,
+    files: File[] | undefined,
+    onEvent: (event: any) => void,
+    options: { signal?: AbortSignal; fetchImpl?: any } = {}
+  ): Promise<() => void> {
+    return this._handleChatStream(`/v1/ai/conversations/${conversationId}/chat/retry`, dto, files || [], onEvent, options);
   }
 
   /**

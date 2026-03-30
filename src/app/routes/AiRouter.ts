@@ -90,6 +90,12 @@ export function createAiRouter(deps: {
   );
 
   router.post(
+    '/conversations/:conversationId/chat/retry',
+    upload.array('files'),
+    asyncHandler(aiController.handleRetryAIChat.bind(aiController))
+  );
+
+  router.post(
     '/conversations/:conversationId/rag-chat',
     upload.array('files'),
     asyncHandler(aiController.handleAIRagChat.bind(aiController))

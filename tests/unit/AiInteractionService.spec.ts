@@ -21,6 +21,8 @@ const mockChatSvc = {
   updateThreadId: jest.fn(),
   createMessage: jest.fn(),
   getMessages: jest.fn(),
+  deleteMessage: jest.fn(),
+  updateMessage: jest.fn(),
 } as unknown as jest.Mocked<ChatManagementService>;
 
 const mockUserSvc = {
@@ -212,6 +214,92 @@ describe('AiInteractionService', () => {
 
         expect(onStream).toHaveBeenCalledWith('Chunk1');
         expect(onStream).toHaveBeenCalledWith('Chunk2');
+    });
+  });
+
+  describe('handleRetryAIChat', () => {
+    const ownerUserId = 'user_1';
+    const conversationId = 'conv_1';
+    const retryBody = { model: 'openai' } as any;
+    const assistantMessage: any = { id: 'msg_assistant', role: 'assistant', content: 'Old AI response' };
+    const userMessage: any = { id: 'msg_user', role: 'user', content: 'User question', attachments: [] };
+
+    beforeEach(() => {
+      mockUserSvc.getApiKeys.mockResolvedValue({ apiKey: 'sk-test' } as any);
+      mockChatSvc.getConversation.mockResolvedValue({ id: conversationId } as any);
+      mockProvider.checkAPIKeyValid.mockResolvedValue({ ok: true, data: true });
+      mockProvider.generateChat.mockResolvedValue({
+        ok: true,
+        data: { content: 'New AI response', attachments: [] }
+      });
+      mockChatSvc.createMessage.mockImplementation((userId, convId, msg) => Promise.resolve({
+        ...msg,
+        id: 'msg_new_assistant',
+      } as any));
+    });
+
+    it('should delete the last assistant message and generate a new response', async () => {
+      mockChatSvc.getMessages.mockResolvedValue([userMessage, assistantMessage]);
+
+      const result = await service.handleRetryAIChat(ownerUserId, retryBody, conversationId);
+
+      expect(mockChatSvc.deleteMessage).toHaveBeenCalledWith(ownerUserId, conversationId, assistantMessage.id, true);
+      expect(mockProvider.generateChat).toHaveBeenCalledWith(
+        'sk-test',
+        expect.objectContaining({
+          messages: [userMessage]
+        }),
+        undefined,
+        mockStorageAdapter
+      );
+      expect(result.messages[0].content).toBe('New AI response');
+    });
+
+    it('should attach new files to the last user message and update it in DB', async () => {
+      const file = {
+        fieldname: 'files',
+        originalname: 'retry.png',
+        buffer: Buffer.from('retry_data'),
+        mimetype: 'image/png'
+      } as Express.Multer.File;
+      
+      mockChatSvc.getMessages.mockResolvedValue([userMessage, assistantMessage]);
+      mockStorageAdapter.upload.mockResolvedValue({ key: 'retry_key', url: 'retry_url' } as any);
+
+      await service.handleRetryAIChat(ownerUserId, retryBody, conversationId, [file]);
+
+      expect(mockStorageAdapter.upload).toHaveBeenCalled();
+      expect(mockChatSvc.updateMessage).toHaveBeenCalledWith(
+        ownerUserId,
+        conversationId,
+        userMessage.id,
+        expect.objectContaining({
+          attachments: expect.arrayContaining([
+            expect.objectContaining({ name: 'retry.png', type: 'image' })
+          ])
+        })
+      );
+    });
+
+    it('should throw ValidationError if history is empty', async () => {
+      mockChatSvc.getMessages.mockResolvedValue([]);
+
+      await expect(service.handleRetryAIChat(ownerUserId, retryBody, conversationId))
+        .rejects.toThrow('No messages found');
+    });
+
+    it('should throw ValidationError if last message is NOT an assistant message', async () => {
+      mockChatSvc.getMessages.mockResolvedValue([userMessage]);
+
+      await expect(service.handleRetryAIChat(ownerUserId, retryBody, conversationId))
+        .rejects.toThrow('last message in this conversation is not from the assistant');
+    });
+
+    it('should throw NotFoundError if conversation does not exist', async () => {
+      mockChatSvc.getConversation.mockRejectedValue(new Error('Not found'));
+
+      await expect(service.handleRetryAIChat(ownerUserId, retryBody, conversationId))
+        .rejects.toThrow('Conversation not found');
     });
   });
 

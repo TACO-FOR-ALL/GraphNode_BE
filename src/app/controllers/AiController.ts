@@ -113,6 +113,71 @@ export class AiController {
   }
 
   /**
+   * AI 대화 재시도를 처리하는 Controller 메서드
+   *
+   * 역할:
+   * 1. 가장 최근 AI 메시지 영구 삭제
+   * 2. 이전 대화 기록을 바탕으로 다시 AI 호출
+   * 3. 스트리밍 지원
+   */
+  async handleRetryAIChat(req: Request, res: Response) {
+    const ownerUserId: string = getUserIdFromRequest(req)!;
+    const conversationId: string = req.params.conversationId;
+    if (!conversationId) throw new ValidationError('conversationId is required');
+
+    let retrybody: any;
+    if (req.headers['content-type']?.includes('multipart/form-data')) {
+      retrybody = { ...req.body };
+    } else {
+      retrybody = req.body;
+    }
+
+    const files = req.files as Express.Multer.File[] | undefined;
+    const isStreaming = req.headers['accept'] === 'text/event-stream';
+
+    if (isStreaming) {
+      await this.aiInteractionService.checkApiKey(ownerUserId, retrybody.model);
+
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders();
+
+      const sendEvent = (event: string, data: unknown) => {
+        res.write(`event: ${event}\n`);
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+      };
+
+      try {
+        const result: AIChatResponseDto = await this.aiInteractionService.handleRetryAIChat(
+          ownerUserId,
+          retrybody,
+          conversationId,
+          files,
+          (chunk) => sendEvent(AiStreamEvent.CHUNK, { text: chunk })
+        );
+
+        sendEvent(AiStreamEvent.STATUS, { phase: 'done' });
+        sendEvent(AiStreamEvent.RESULT, result);
+        res.end();
+      } catch (err) {
+        if (!res.headersSent) throw err;
+        const message = err instanceof Error ? err.message : String(err);
+        sendEvent(AiStreamEvent.ERROR, { message });
+        res.end();
+      }
+    } else {
+      const result: AIChatResponseDto = await this.aiInteractionService.handleRetryAIChat(
+        ownerUserId,
+        retrybody,
+        conversationId,
+        files
+      );
+      res.status(201).json(result);
+    }
+  }
+
+  /**
    * RAG 기반 AI 대화를 처리하는 Controller 메서드
    * FE가 직접 임베딩/검색한 맥락(retrievedContext)을 포함합니다.
    */

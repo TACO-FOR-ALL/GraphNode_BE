@@ -933,6 +933,58 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }
+  /v1/ai/conversations/{conversationId}/chat/retry:
+    post:
+      summary: Regenerate AI response
+      description: Deletes the last AI response in the conversation and generates a new one. Supports streaming.
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [model]
+              properties:
+                model:
+                  type: string
+                  enum: [openai, claude, gemini, deepseek]
+                modelName:
+                  type: string
+                files:
+                  type: array
+                  items: { type: string, format: binary }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title: { type: string }
+                  messages:
+                    type: array
+                    items: { $ref: ../schemas/message.json }
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '502':
+          description: Upstream error
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
   /v1/ai/files:
     post:
       summary: Upload files
