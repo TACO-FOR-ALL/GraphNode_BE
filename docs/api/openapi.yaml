@@ -6,6 +6,42 @@ info:
     Backend API for GraphNode. Errors follow RFC 9457 Problem Details.
 jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 paths:
+  /v1/search:
+    get:
+      summary: Integrated keyword search across notes and AI chats
+      tags: [Search]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: 검색할 키워드
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/search.json'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '500':
+          description: Internal Server Error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
   /healthz:
     get:
       summary: Health check

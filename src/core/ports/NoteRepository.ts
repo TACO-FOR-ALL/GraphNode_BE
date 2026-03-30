@@ -377,8 +377,18 @@ export interface NoteRepository {
 
   /**
    * 소프트 삭제된 지 오래되어 만료된 폴더 목록을 조회합니다.
-   * @param expiredBefore 기준 시각
+   * @param expiredBefore 기준 시각 
    * @returns 만료된 폴더 문서 배열
    */
   findExpiredFolders(expiredBefore: Date): Promise<FolderDoc[]>;
+
+  /**
+   * 키워드를 사용하여 노트를 검색합니다 (Full-Text Search).
+   * 
+   * @param ownerUserId 소유자 ID (본인 노지만 검색)
+   * @param query 검색 키워드
+   * @param limit 최대 결과 수 (기본값: 20)
+   * @returns 검색어와 매칭되는 노트 문서 배열 (score 내림차순 정렬)
+   */
+  searchByKeyword(ownerUserId: string, query: string, limit?: number): Promise<(NoteDoc & { score?: number })[]>;
 }

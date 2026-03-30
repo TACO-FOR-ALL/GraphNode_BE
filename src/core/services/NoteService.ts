@@ -193,6 +193,24 @@ export class NoteService {
   }
 
   /**
+   * 키워드를 사용하여 노트를 검색합니다. (Full-Text Search)
+   *
+   * @param userId 검색을 수행하는 사용자 ID
+   * @param query 검색어
+   * @returns 검색 결과 노트 DTO 배열 (정확도 점수 내림차순 정렬)
+   * @remarks
+   * - MongoDB의 $text 인덱스를 활용하여 제목과 내용에서 키워드를 검색합니다.
+   * - 제목(title)에 더 높은 가중치가 부여되어 검색 결과가 정렬됩니다.
+   */
+  async searchNotesByKeyword(userId: string, query: string): Promise<Note[]> {
+    const docs = await withRetry(
+      async () => await this.noteRepo.searchByKeyword(userId, query),
+      { label: 'NoteService.searchNotesByKeyword' }
+    );
+    return docs.map((doc) => toNoteDto(doc));
+  }
+
+  /**
    * 노트를 수정합니다.
    *
    * @param userId 소유자 ID

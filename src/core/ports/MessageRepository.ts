@@ -166,4 +166,14 @@ export interface MessageRepository {
    * @returns 삭제된 메시지 개수
    */
   deleteAllByConversationId(conversationId: string, session?: ClientSession): Promise<number>;
+
+  /**
+   * 키워드를 사용하여 메시지 내용을 검색합니다 (Full-Text Search).
+   * 
+   * @param ownerUserId 소유자 ID
+   * @param query 검색 키워드
+   * @param limit 최대 결과 수 (기본값: 50)
+   * @returns 검색어와 매칭되는 메시지 문서 배열 (score 내림차순 정렬)
+   */
+  searchByKeyword(ownerUserId: string, query: string, limit?: number): Promise<(MessageDoc & { score?: number })[]>;
 }

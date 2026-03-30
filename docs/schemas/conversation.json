@@ -12,7 +12,8 @@
     "messages": {
       "type": "array",
       "items": { "$ref": "./message.json" }
-    }
+    },
+    "score": { "type": "number", "description": "Search relevance score" }
   },
   "additionalProperties": false
 }

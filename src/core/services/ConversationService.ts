@@ -307,6 +307,16 @@ export class ConversationService {
   }
 
   /**
+   * 여러 ID에 해당하는 대화 문서들을 한 번에 조회합니다. (Internal Use - Returns Docs)
+   * @param ids 대화 ID 배열
+   * @param ownerUserId 소유자 ID
+   * @returns 대화 문서 배열
+   */
+  async findDocsByIds(ids: string[], ownerUserId: string): Promise<ConversationDoc[]> {
+    return this.conversationRepo.findByIds(ids, ownerUserId);
+  }
+
+  /**
    * 특정 사용자의 모든 대화를 삭제합니다. (Internal Use)
    * @param ownerUserId 소유자 ID
    * @param session MongoDB 클라이언트 세션 (선택 사항)
@@ -331,6 +341,21 @@ export class ConversationService {
     }
     const e: any = err;
     if (e && typeof e.code === 'string') throw err;
+  }
+
+  /**
+   * 사용자의 대화 목록 내에서 제목 키워드 검색을 수행합니다.
+   * @param userId 사용자 ID
+   * @param keyword 검색 키워드
+   * @returns 검색된 대화 문서 배열 (점수 포함)
+   */
+  async searchByKeyword(userId: string, keyword: string): Promise<(ConversationDoc & { score?: number })[]> {
+    try {
+      return await this.conversationRepo.searchByKeyword(userId, keyword);
+    } catch (err: unknown) {
+      this.checkTransactionError(err);
+      throw new UpstreamError('Failed to search conversations', { cause: err as any });
+    }
   }
 
 }
