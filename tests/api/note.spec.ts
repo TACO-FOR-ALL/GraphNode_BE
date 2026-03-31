@@ -11,6 +11,7 @@ import request from 'supertest';
 import { createApp } from '../../src/bootstrap/server';
 import { generateAccessToken } from '../../src/app/utils/jwt';
 import { NoteDoc, FolderDoc } from '../../src/core/types/persistence/note.persistence';
+import { closeDatabases } from '../../src/infra/db';
 import { GraphRepositoryMongo } from '../../src/infra/repositories/GraphRepositoryMongo';
 import { AwsSqsAdapter } from '../../src/infra/aws/AwsSqsAdapter';
 import { AwsS3Adapter } from '../../src/infra/aws/AwsS3Adapter';
@@ -349,14 +350,12 @@ describe('Note API Integration Tests', () => {
   });
 
   afterAll(async () => {
-      if (server) {
-          await new Promise<void>((resolve, reject) => {
-              server.close((err: Error | undefined) => {
-                  if (err) reject(err);
-                  else resolve();
-              });
-          });
-      }
+    await closeDatabases();
+    if (server) {
+      await new Promise<void>((resolve) => {
+        server.close(() => resolve());
+      });
+    }
   });
 
   beforeEach(() => {

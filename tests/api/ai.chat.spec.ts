@@ -138,7 +138,11 @@ describe('AI Chat API (/conversations/:id/chat)', () => {
     if (cb.status !== 200) {
         throw new Error(`Login failed with status ${cb.status}: ${JSON.stringify(cb.body)}`);
     }
+  });
+
   afterAll(async () => {
+    const { closeDatabases } = require('../../src/infra/db');
+    await closeDatabases();
     if (app && app.close) {
       await new Promise<void>((resolve) => {
         app.close(() => resolve());

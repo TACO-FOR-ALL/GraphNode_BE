@@ -12,6 +12,7 @@ import { jest, describe, it, expect, beforeAll, beforeEach } from '@jest/globals
 import request from 'supertest';
 
 import { createApp } from '../../src/bootstrap/server';
+import { closeDatabases } from '../../src/infra/db';
 
 // --- Mocks ---
 
@@ -118,9 +119,10 @@ describe('AI Messages & Trash API', () => {
     });
 
     afterAll(async () => {
-        if (app && app.close) {
+        await closeDatabases();
+        if (app && (app as any).close) {
             await new Promise<void>((resolve) => {
-                app.close(() => resolve());
+                (app as any).close(() => resolve());
             });
         }
     });

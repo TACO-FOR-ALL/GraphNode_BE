@@ -111,6 +111,8 @@ describe('Microscope API Integration Tests', () => {
     });
 
     afterAll(async () => {
+        const { closeDatabases } = require('../../src/infra/db');
+        await closeDatabases();
         nock.cleanAll();
         nock.restore();
         if (server) {

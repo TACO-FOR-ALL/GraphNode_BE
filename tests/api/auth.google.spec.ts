@@ -44,6 +44,16 @@ describe('Auth Google Integration Tests', () => {
     app = createApp();
   });
 
+  afterAll(async () => {
+    const { closeDatabases } = require('../../src/infra/db');
+    await closeDatabases();
+    if (app && app.close) {
+      await new Promise<void>((resolve) => {
+        app.close(() => resolve());
+      });
+    }
+  });
+
   describe('GET /auth/google/start', () => {
     it('should redirect to google and set oauth_state cookie', async () => {
       const res = await request(app).get('/auth/google/start');

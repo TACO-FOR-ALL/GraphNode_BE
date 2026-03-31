@@ -9,6 +9,7 @@ import Ajv from 'ajv/dist/2020';
 import addFormats from 'ajv-formats';
 
 import { createApp } from '../../src/bootstrap/server';
+import { closeDatabases } from '../../src/infra/db';
 import problemSchema from '../schemas/problem.json';
 
 // AJV 준비(Problem Details 검증)
@@ -126,8 +127,17 @@ async function getLoggedInAgent(app: any) {
 }
 
 describe('AI Conversations API - negative cases', () => {
+  let app: any;
+
+  beforeAll(async () => {
+    app = appWithTestEnv();
+  });
+
+  afterAll(async () => {
+    await closeDatabases();
+  });
+
   test('401 when not authenticated', async () => {
-    const app = appWithTestEnv();
     const res = await request(app).get('/v1/ai/conversations');
     expect(res.status).toBe(401);
     expect(res.headers['content-type']).toContain('application/problem+json');
@@ -135,7 +145,6 @@ describe('AI Conversations API - negative cases', () => {
   });
 
   test('400 on invalid conversation create payload', async () => {
-    const app = appWithTestEnv();
     const agent = await getLoggedInAgent(app);
 
     const res = await agent.post('/v1/ai/conversations').send({});
@@ -174,5 +183,10 @@ describe('AI Conversations API - negative cases', () => {
     expect(res.headers['content-type']).toContain('application/problem+json');
     expect(validateProblem(res.body)).toBe(true);
     expect(res.body.type).toContain('not-found');
+  });
+
+  afterAll(async () => {
+    const { closeDatabases } = require('../../src/infra/db');
+    await closeDatabases();
   });
 });

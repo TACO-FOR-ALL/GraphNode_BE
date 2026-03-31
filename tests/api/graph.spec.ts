@@ -193,6 +193,8 @@ describe('Graph API Integration Tests', () => {
   });
 
   afterAll(async () => {
+    const { closeDatabases } = require('../../src/infra/db');
+    await closeDatabases();
     if (server) {
       await new Promise<void>((resolve, reject) => {
         server.close((err?: Error) => {

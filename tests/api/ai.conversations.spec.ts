@@ -7,6 +7,7 @@ import request from 'supertest';
 import { jest, describe, test, expect } from '@jest/globals';
 
 import { createApp } from '../../src/bootstrap/server';
+import { closeDatabases } from '../../src/infra/db';
 
 // 인메모리 스토어
 const store = {
@@ -206,9 +207,10 @@ describe('AI Conversations API', () => {
   });
 
   afterAll(async () => {
-    if (app && app.close) {
+    await closeDatabases();
+    if (app && (app as any).close) {
       await new Promise<void>((resolve) => {
-        app.close(() => resolve());
+        (app as any).close(() => resolve());
       });
     }
   });

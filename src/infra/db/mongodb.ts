@@ -15,6 +15,19 @@ import { logger } from '../../shared/utils/logger';
 export let client: MongoClient | undefined;
 
 /**
+ * MongoDB 연결 종료 함수
+ *
+ * 역할:
+ * 1. 활성 중인 클라이언트 객체가 있다면 연결을 명확히 닫습니다.
+ */
+export async function disconnectMongo(): Promise<void> {
+  if (client) {
+    await client.close();
+    client = undefined;
+  }
+}
+
+/**
  * MongoDB 초기화 함수
  *
  * 역할:
