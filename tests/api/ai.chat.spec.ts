@@ -138,6 +138,12 @@ describe('AI Chat API (/conversations/:id/chat)', () => {
     if (cb.status !== 200) {
         throw new Error(`Login failed with status ${cb.status}: ${JSON.stringify(cb.body)}`);
     }
+  afterAll(async () => {
+    if (app && app.close) {
+      await new Promise<void>((resolve) => {
+        app.close(() => resolve());
+      });
+    }
   });
 
   test('Normal JSON Chat (POST 201)', async () => {

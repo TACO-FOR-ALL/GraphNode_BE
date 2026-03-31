@@ -197,10 +197,23 @@ function appWithTestEnv() {
 }
 
 describe('AI Conversations API', () => {
-  test('Full Conversation LifeCycle including Missing Gaps', async () => {
-    const app = appWithTestEnv();
-    const agent = request.agent(app);
+  let app: any;
+  let agent: any;
 
+  beforeAll(async () => {
+    app = appWithTestEnv();
+    agent = request.agent(app);
+  });
+
+  afterAll(async () => {
+    if (app && app.close) {
+      await new Promise<void>((resolve) => {
+        app.close(() => resolve());
+      });
+    }
+  });
+
+  test('Full Conversation LifeCycle including Missing Gaps', async () => {
     // 1. Login (Google Mock)
     const start = await agent.get('/auth/google/start');
     const location = start.headers['location'] as string;

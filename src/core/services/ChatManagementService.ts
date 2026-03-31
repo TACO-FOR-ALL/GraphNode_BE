@@ -944,17 +944,17 @@ export class ChatManagementService {
       const trimmedKeyword = keyword.trim();
       if (!trimmedKeyword) return [];
 
-      // 1. 대화방 제목 검색 (점수 포함)
-      const convDocs = await withRetry(
-        async () => await this.conversationService.searchByKeyword(userId, trimmedKeyword),
-        { label: 'ChatManagementService.searchChatThreadsByKeyword(convs)' }
-      );
-
-      // 2. 메시지 내용 검색 (점수 포함)
-      const msgDocs = await withRetry(
-        async () => await this.messageService.searchMessagesByKeyword(userId, trimmedKeyword),
-        { label: 'ChatManagementService.searchChatThreadsByKeyword(msgs)' }
-      );
+      // 1 & 2. 대화방 제목 검색 및 메시지 내용 검색을 병렬로 수행합니다.
+      const [convDocs, msgDocs] = await Promise.all([
+        withRetry(
+          async () => await this.conversationService.searchByKeyword(userId, trimmedKeyword),
+          { label: 'ChatManagementService.searchChatThreadsByKeyword(convs)' }
+        ),
+        withRetry(
+          async () => await this.messageService.searchMessagesByKeyword(userId, trimmedKeyword),
+          { label: 'ChatManagementService.searchChatThreadsByKeyword(msgs)' }
+        ),
+      ]);
 
       // 3. 결과 통합 및 점수 계산을 위한 자료구조
       const threadMap = new Map<string, ChatThread>();

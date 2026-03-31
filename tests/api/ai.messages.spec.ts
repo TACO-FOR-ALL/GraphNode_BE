@@ -117,6 +117,14 @@ describe('AI Messages & Trash API', () => {
         }
     });
 
+    afterAll(async () => {
+        if (app && app.close) {
+            await new Promise<void>((resolve) => {
+                app.close(() => resolve());
+            });
+        }
+    });
+
     beforeEach(() => {
         jest.clearAllMocks();
     });

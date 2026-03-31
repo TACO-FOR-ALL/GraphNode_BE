@@ -27,11 +27,11 @@ export class SearchService {
   ): Promise<{ notes: Note[]; chatThreads: ChatThread[] }> {
     logger.info({ userId, keyword }, 'Integrated keyword search triggered');
 
-    // 1. 노트 검색 (점수 기반 정렬 반영됨)
-    const notes = await this.noteService.searchNotesByKeyword(userId, keyword);
-
-    // 2. AI 대화(스레드 + 메시지) 검색 (점수 합산 및 정렬 반영됨)
-    const chatThreads = await this.chatManagementService.searchChatThreadsByKeyword(userId, keyword);
+    // 1 & 2. 노트 검색 및 AI 대화 검색을 병렬로 수행합니다.
+    const [notes, chatThreads] = await Promise.all([
+      this.noteService.searchNotesByKeyword(userId, keyword),
+      this.chatManagementService.searchChatThreadsByKeyword(userId, keyword),
+    ]);
 
     return {
       notes,
