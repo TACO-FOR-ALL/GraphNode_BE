@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://graphnode.com/schemas/search.json",
+  "title": "Integrated Search Results",
+  "type": "object",
+  "properties": {
+    "notes": {
+      "type": "array",
+      "items": {
+        "$ref": "note.json"
+      },
+      "description": "검색된 노트 목록 (제목 또는 내용 매칭)"
+    },
+    "chatThreads": {
+      "type": "array",
+      "items": {
+        "$ref": "conversation.json"
+      },
+      "description": "검색된 AI 대화 목록 (대화 제목 또는 메시지 내용 매칭)"
+    }
+  },
+  "required": ["notes", "chatThreads"]
+}

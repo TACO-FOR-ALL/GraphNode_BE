@@ -109,6 +109,16 @@ describe('Auth Flow Integration', () => {
     actualJwt = jest.requireActual('jsonwebtoken') as any;
   });
 
+  afterAll(async () => {
+    const { closeDatabases } = require('../../src/infra/db');
+    await closeDatabases();
+    if (app && app.close) {
+      await new Promise<void>((resolve) => {
+        app.close(() => resolve());
+      });
+    }
+  });
+
   beforeEach(() => {
       // Reset mock implementation to actual
       (jwt.verify as jest.Mock).mockImplementation((token: any, secret: any, options: any) => {

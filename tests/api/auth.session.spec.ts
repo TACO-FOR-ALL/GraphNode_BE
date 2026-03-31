@@ -73,6 +73,16 @@ describe('Auth Session Integration Tests', () => {
     accessToken = generateAccessToken({ userId: mockUser.id });
   });
 
+  afterAll(async () => {
+    const { closeDatabases } = require('../../src/infra/db');
+    await closeDatabases();
+    if (app && app.close) {
+      await new Promise<void>((resolve) => {
+        app.close(() => resolve());
+      });
+    }
+  });
+
   beforeEach(() => {
     mockHasSession.mockResolvedValue(true);
     mockHasSessionBySessionId.mockResolvedValue(true);

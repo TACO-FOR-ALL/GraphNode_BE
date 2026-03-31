@@ -75,6 +75,16 @@ describe('Me API Integration Tests', () => {
     cookie = `access_token=${accessToken}`;
   });
 
+  afterAll(async () => {
+    const { closeDatabases } = require('../../src/infra/db');
+    await closeDatabases();
+    if (app && app.close) {
+      await new Promise<void>((resolve) => {
+        app.close(() => resolve());
+      });
+    }
+  });
+
   beforeEach(() => {
     userState = { ...mockUser };
   });

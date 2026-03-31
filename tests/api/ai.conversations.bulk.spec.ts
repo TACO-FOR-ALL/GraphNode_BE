@@ -2,6 +2,7 @@ import { jest, describe, it, expect, beforeAll, beforeEach } from '@jest/globals
 import request from 'supertest';
 
 import { createApp } from '../../src/bootstrap/server';
+import { closeDatabases } from '../../src/infra/db';
 import { generateAccessToken } from '../../src/app/utils/jwt';
 import { ChatThread, ChatMessage } from '../../src/shared/dtos/ai';
 
@@ -144,6 +145,10 @@ describe('POST /v1/ai/conversations/bulk', () => {
     await agent.get('/auth/google/callback').query({ code: 'mock_code', state });
   });
 
+  afterAll(async () => {
+    await closeDatabases();
+  });
+
   beforeEach(() => {
     store.conversations.clear();
   });
@@ -197,5 +202,10 @@ describe('POST /v1/ai/conversations/bulk', () => {
       conversations: 'not-an-array', // conversations should be an array
     };
     await agent.post('/v1/ai/conversations/bulk').send(invalidRequest).expect(400);
+  });
+
+  afterAll(async () => {
+    const { closeDatabases } = require('../../src/infra/db');
+    await closeDatabases();
   });
 });
