@@ -352,6 +352,82 @@ export class ConversationRepositoryMongo implements ConversationRepository {
   }
 
   /**
+   * 키워드를 사용하여 대화 제목을 검색합니다 (Full-Text Search).
+   *
+   * @param userId 검색을 수행하는 사용자의 고유 ID
+   * @param keyword 검색어
+   * @param limit 최대 결과 수
+   * @returns 검색 조건에 부합하는 대화 문서 배열 (점수 포함)
+   */
+  async searchByKeyword(
+    userId: string,
+    keyword: string,
+    limit: number = 20
+  ): Promise<(ConversationDoc & { score?: number })[]> {
+    try {
+      const trimmedKeyword = keyword.trim();
+      if (!trimmedKeyword) return [];
+
+      // MongoDB $text 검색 수행
+      // - projection에서 { score: { $meta: 'textScore' } } 를 추가하여 관련도 점수를 가져옵니다.
+      // - sort에서 동일한 메타데이터 필드를 사용하여 점수 높은 순으로 정렬합니다.
+      const items = await this.col()
+        .find(
+          {
+            ownerUserId: userId,
+            deletedAt: null,
+            $text: { $search: trimmedKeyword },
+          },
+          {
+            projection: {
+              _id: 1,
+              ownerUserId: 1,
+              title: 1,
+              provider: 1,
+              model: 1,
+              source: 1,
+              tags: 1,
+              createdAt: 1,
+              updatedAt: 1,
+              deletedAt: 1,
+              externalThreadId: 1,
+              lastResponseId: 1,
+              score: { $meta: 'textScore' },
+            },
+          }
+        )
+        .sort({ score: { $meta: 'textScore' } })
+        .limit(limit)
+        .toArray();
+
+      return items as (ConversationDoc & { score?: number })[];
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.searchByKeyword', err);
+    }
+  }
+
+  /**
+   * 여러 ID에 해당하는 대화 문서들을 한 번에 조회합니다.
+   *
+   * @param ids 대화 ID 배열
+   * @param ownerUserId 소유자 ID
+   * @returns 대화 문서 배열
+   */
+  async findByIds(ids: string[], ownerUserId: string): Promise<ConversationDoc[]> {
+    try {
+      if (ids.length === 0) return [];
+      return await this.col()
+        .find({
+          _id: { $in: ids },
+          ownerUserId,
+        })
+        .toArray();
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.findByIds', err);
+    }
+  }
+
+  /**
    * 공통 에러 핸들러
    * @param methodName 호출한 메서드 이름
    * @param err 에러 객체

@@ -7,6 +7,7 @@ import request from 'supertest';
 import { jest, describe, test, expect } from '@jest/globals';
 
 import { createApp } from '../../src/bootstrap/server';
+import { closeDatabases } from '../../src/infra/db';
 
 // 인메모리 스토어
 const store = {
@@ -197,10 +198,24 @@ function appWithTestEnv() {
 }
 
 describe('AI Conversations API', () => {
-  test('Full Conversation LifeCycle including Missing Gaps', async () => {
-    const app = appWithTestEnv();
-    const agent = request.agent(app);
+  let app: any;
+  let agent: any;
 
+  beforeAll(async () => {
+    app = appWithTestEnv();
+    agent = request.agent(app);
+  });
+
+  afterAll(async () => {
+    await closeDatabases();
+    if (app && (app as any).close) {
+      await new Promise<void>((resolve) => {
+        (app as any).close(() => resolve());
+      });
+    }
+  });
+
+  test('Full Conversation LifeCycle including Missing Gaps', async () => {
     // 1. Login (Google Mock)
     const start = await agent.get('/auth/google/start');
     const location = start.headers['location'] as string;

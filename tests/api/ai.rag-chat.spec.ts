@@ -60,6 +60,16 @@ describe('AI RAG Chat API (/conversations/:id/rag-chat)', () => {
     await agent.get('/auth/google/callback').query({ code: 'ok', state });
   });
 
+  afterAll(async () => {
+    const { closeDatabases } = require('../../src/infra/db');
+    await closeDatabases();
+    if (app && app.close) {
+      await new Promise<void>((resolve) => {
+        app.close(() => resolve());
+      });
+    }
+  });
+
   test('Normal RAG Chat (POST 201)', async () => {
     const res = await agent
       .post('/v1/ai/conversations/c_rag/rag-chat')
@@ -91,5 +101,10 @@ describe('AI RAG Chat API (/conversations/:id/rag-chat)', () => {
     expect(res.headers['content-type']).toContain('text/event-stream');
     expect(res.text).toContain('event: chunk');
     expect(res.text).toContain('data: {"text":"RAG Chunk"}');
+  });
+
+  afterAll(async () => {
+    const { closeDatabases } = require('../../src/infra/db');
+    await closeDatabases();
   });
 });

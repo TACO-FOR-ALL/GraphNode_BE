@@ -8,6 +8,7 @@
  * @property createdAt 생성 일시 (ISO 8601)
  * @property updatedAt 수정 일시 (ISO 8601)
  * @property deletedAt 삭제 일시 (ISO 8601, null이면 활성)
+ * @property score 검색 관련도 점수 (검색 결과에서만 포함, 높을수록 관련성 높음)
  */
 export interface NoteDto {
   id: string;
@@ -17,6 +18,8 @@ export interface NoteDto {
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
+  /** 검색 관련도 점수 (MongoDB textScore 기반, 검색 결과에서만 포함) */
+  score?: number;
 }
 
 /**

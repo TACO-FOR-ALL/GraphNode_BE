@@ -36,6 +36,8 @@ export interface Note {
   updatedAt: string;
   /** 삭제 일시 (ISO 8601 문자열, null이면 활성) */
   deletedAt?: string | null;
+  /** 검색 관련성 점수 (검색 결과에서만 포함됨) */
+  score?: number;
 }
 
 /**

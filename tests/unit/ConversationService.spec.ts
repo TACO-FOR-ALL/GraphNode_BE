@@ -110,6 +110,25 @@ class InMemoryConvRepo implements ConversationRepository {
     );
   }
 
+  async searchByKeyword(
+    ownerUserId: string,
+    keyword: string,
+    limit: number,
+    cursor?: string
+  ): Promise<(ConversationDoc & { score?: number })[]> {
+    const k = keyword.toLowerCase();
+    return Array.from(this.data.values())
+      .filter((v) => v.ownerUserId === ownerUserId && v.title.toLowerCase().includes(k))
+      .slice(0, limit)
+      .map(doc => ({ ...doc, score: 1 }));
+  }
+
+  async findByIds(ids: string[], ownerUserId: string): Promise<ConversationDoc[]> {
+    return Array.from(this.data.values()).filter(
+      (v) => ids.includes(v._id) && v.ownerUserId === ownerUserId
+    );
+  }
+
   async listTrashByOwner(): Promise<{ items: any[]; nextCursor?: string | null }> {
     return { items: [], nextCursor: null };
   }

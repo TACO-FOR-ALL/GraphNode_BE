@@ -28,3 +28,20 @@ export async function initDatabases() {
   // 5. Neo4j connection FIXME(Connection 시 인증 오류 발생, PW 확인 필요)
   // await initNeo4j();
 }
+
+/**
+ * 모든 데이터베이스 연결을 일괄 종료한다.
+ */
+export async function closeDatabases() {
+  const { disconnectMongo } = require('./mongodb');
+  const { closeRedis } = require('../redis/client');
+
+  try {
+    await prisma.$disconnect();
+    await disconnectMongo();
+    await closeRedis();
+  } catch (err) {
+    // 종료 중 에러는 로깅만 하고 무시 (테스트 환경 안정성용)
+    console.error('Error closing databases:', err);
+  }
+}

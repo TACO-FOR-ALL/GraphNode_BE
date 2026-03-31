@@ -4,7 +4,7 @@
  */
 
 /** 채팅 모드 */
-export type AgentMode = 'chat' | 'summary' | 'note';
+export type AgentMode = 'chat' | 'summary' | 'note' | 'irrelevant';
 
 /** 모드 힌트 (클라이언트에서 전달) */
 export type AgentModeHint = 'summary' | 'note' | 'auto';

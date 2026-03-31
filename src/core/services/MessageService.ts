@@ -320,6 +320,35 @@ export class MessageService {
    * @param session MongoDB 클라이언트 세션 (선택 사항)
    * @returns 삭제된 메시지 수
    */
+  /**
+   * 사용자의 메시지 중 내용에 키워드가 포함된 데이터를 검색합니다.
+   *
+   * @param userId 사용자 ID
+   * @param keyword 검색 키워드
+   * @returns 검색된 메시지 문서 배열
+   */
+  async searchMessagesByKeyword(userId: string, keyword: string): Promise<(MessageDoc & { score?: number })[]> {
+    try {
+      return await this.messageRepo.searchByKeyword(userId, keyword);
+    } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('MessageService.searchMessagesByKeyword failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 특정 사용자의 모든 메시지 문서를 삭제합니다. (Internal Use)
+   * @param ownerUserId 소유자 ID
+   * @param session MongoDB 클라이언트 세션 (선택 사항)
+   * @returns 삭제된 메시지 수
+   */
   async deleteAllDocsByUserId(ownerUserId: string, session?: ClientSession): Promise<number> {
     return this.messageRepo.deleteAllByUserId(ownerUserId, session);
   }

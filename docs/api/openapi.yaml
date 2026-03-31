@@ -6,6 +6,42 @@ info:
     Backend API for GraphNode. Errors follow RFC 9457 Problem Details.
 jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 paths:
+  /v1/search:
+    get:
+      summary: Integrated keyword search across notes and AI chats
+      tags: [Search]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: 검색할 키워드
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/search.json'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '500':
+          description: Internal Server Error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
   /healthz:
     get:
       summary: Health check
@@ -930,6 +966,58 @@ paths:
               schema: { $ref: ../schemas/problem.json }
         '502':
           description: Upstream error (AI provider failure)
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+  /v1/ai/conversations/{conversationId}/chat/retry:
+    post:
+      summary: Regenerate AI response
+      description: Deletes the last AI response in the conversation and generates a new one. Supports streaming.
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [model]
+              properties:
+                model:
+                  type: string
+                  enum: [openai, claude, gemini, deepseek]
+                modelName:
+                  type: string
+                files:
+                  type: array
+                  items: { type: string, format: binary }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title: { type: string }
+                  messages:
+                    type: array
+                    items: { $ref: ../schemas/message.json }
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '502':
+          description: Upstream error
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }

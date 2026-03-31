@@ -15,6 +15,19 @@ import { logger } from '../../shared/utils/logger';
 export let client: MongoClient | undefined;
 
 /**
+ * MongoDB 연결 종료 함수
+ *
+ * 역할:
+ * 1. 활성 중인 클라이언트 객체가 있다면 연결을 명확히 닫습니다.
+ */
+export async function disconnectMongo(): Promise<void> {
+  if (client) {
+    await client.close();
+    client = undefined;
+  }
+}
+
+/**
  * MongoDB 초기화 함수
  *
  * 역할:
@@ -63,7 +76,9 @@ async function ensureIndexes() {
   const db = getMongo().db();
 
   // conversations 컬렉션: 소유자 ID로 조회하며 최신순 정렬 및 페이징을 위해 updatedAt 인덱스 추가
-  await db.collection('conversations').createIndex({ ownerUserId: 1, deletedAt: 1, updatedAt: -1, _id: 1 });
+  await db
+    .collection('conversations')
+    .createIndex({ ownerUserId: 1, deletedAt: 1, updatedAt: -1, _id: 1 });
 
   // messages 컬렉션: 대화방 ID로 메시지 목록을 조회하므로 인덱스 생성
   await db.collection('messages').createIndex({ conversationId: 1, _id: 1 });
@@ -88,6 +103,35 @@ async function ensureIndexes() {
   // - expiresAt가 없는 문서는 TTL로 자동 삭제되지 않습니다.
   // 목적: 알림 이력을 무한히 쌓지 않고 운영 정책(예: 7일)으로 자동 정리하기 위함
   await db.collection('notifications').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+  // --- 통합 검색(Full-Text Search)을 위한 텍스트 인덱스 추가 ---
+
+  // notes: 제목(10)과 내용(1)에 가중치를 두어 검색
+  await db.collection('notes').createIndex(
+    { title: 'text', content: 'text' },
+    {
+      weights: { title: 10, content: 1 },
+      name: 'notes_full_text_search',
+    }
+  );
+
+  // conversations: 대화 제목 검색 (가중치 10)
+  await db.collection('conversations').createIndex(
+    { title: 'text' },
+    {
+      weights: { title: 10 },
+      name: 'conversations_full_text_search',
+    }
+  );
+
+  // messages: 메시지 내용 검색 (가중치 1)
+  await db.collection('messages').createIndex(
+    { content: 'text' },
+    {
+      weights: { content: 1 },
+      name: 'messages_full_text_search',
+    }
+  );
 
   logger.info({ event: 'db.migrations_checked' }, 'DB indexes ensured');
 }

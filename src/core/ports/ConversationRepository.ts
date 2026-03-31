@@ -161,4 +161,23 @@ export interface ConversationRepository {
    * @returns 만료된 대화 문서 배열
    */
   findExpiredConversations(expiredBefore: Date): Promise<ConversationDoc[]>;
+
+  /**
+   * 키워드를 사용하여 대화 제목을 검색합니다 (Full-Text Search).
+   * 
+   * @param ownerUserId 소유자 ID
+   * @param query 검색 키워드
+   * @param limit 최대 결과 수 (기본값: 20)
+   * @returns 검색어와 매칭되는 대화 문서 배열 (score 내림차순 정렬)
+   */
+  searchByKeyword(ownerUserId: string, query: string, limit?: number): Promise<(ConversationDoc & { score?: number })[]>;
+
+  /**
+   * 여러 ID에 해당하는 대화 문서들을 한 번에 조회합니다.
+   *
+   * @param ids 대화 ID 배열
+   * @param ownerUserId 소유자 ID
+   * @returns 대화 문서 배열
+   */
+  findByIds(ids: string[], ownerUserId: string): Promise<ConversationDoc[]>;
 }

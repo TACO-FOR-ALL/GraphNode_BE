@@ -17,6 +17,8 @@ export interface ConversationDto {
   updatedAt?: string; // ISO 8601
   deletedAt?: string | null; // ISO 8601
   messages: MessageDto[];
+  /** 검색 관련도 점수 (제목 점수 + 메시지 점수 합산, 검색 결과에서만 포함) */
+  score?: number;
 }
 
 /**

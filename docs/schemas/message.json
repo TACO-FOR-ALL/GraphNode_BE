@@ -10,7 +10,8 @@
     "content": { "type": "string" },
     "createdAt": { "type": "string", "format": "date-time" },
     "updatedAt": { "type": "string", "format": "date-time" },
-    "deletedAt": { "type": ["string", "null"], "format": "date-time" }
+    "deletedAt": { "type": ["string", "null"], "format": "date-time" },
+    "score": { "type": "number", "description": "Search relevance score" }
   },
   "additionalProperties": false
 }
