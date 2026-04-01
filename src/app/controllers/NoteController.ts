@@ -13,6 +13,7 @@ import {
 } from '../../shared/dtos/note.schemas';
 import { getUserIdFromRequest } from '../utils/request';
 import type { Note, Folder } from '../../shared/dtos/note';
+import { captureEvent } from '../../shared/utils/posthog';
 
 /**
  * 모듈: NoteController
@@ -36,6 +37,7 @@ export class NoteController {
     // Zod 스키마 검증 (실패 시 자동 throw)
     const data: z.infer<typeof createNoteSchema> = createNoteSchema.parse(req.body);
     const note: Note = await this.noteService.createNote(userId, data);
+    captureEvent(userId, 'note_created', { content_length: data.content?.length || 0 });
     res.status(201).json(note);
   }
 
@@ -48,6 +50,7 @@ export class NoteController {
     try {
       const dto = bulkCreateNotesSchema.parse(req.body);
       const result = await this.noteService.bulkCreateNotes(userId, dto);
+      captureEvent(userId, 'notes_bulk_imported', { note_count: dto.notes.length });
       res.status(201).json(result);
     } catch (err: any) {
       if (err.name === 'ZodError' || err.code === 'VALIDATION_FAILED') {
