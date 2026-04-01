@@ -12,6 +12,7 @@ import { GraphFeaturesJsonDto } from '../../core/types/vector/graph-features';
 import { GraphSummaryDoc } from '../../core/types/persistence/graph.persistence';
 import { NotificationType } from '../notificationType';
 import { withRetry } from '../../shared/utils/retry';
+import { captureEvent } from '../../shared/utils/posthog';
 
 /**
  * 그래프 생성 결과 처리 핸들러
@@ -62,31 +63,39 @@ export class GraphGenerationResultHandler implements JobHandler {
       if (status === 'COMPLETED' && resultS3Key) {
         // 1. S3에서 결과 JSON, Features, Summary 병렬 다운로드
         const downloadPromises: Promise<any>[] = [
-          withRetry(
-            async () => await storagePort.downloadJson<AiGraphOutputDto>(resultS3Key),
-            { label: 'GraphGenerationResultHandler.downloadJson.graph' }
-          ),
+          withRetry(async () => await storagePort.downloadJson<AiGraphOutputDto>(resultS3Key), {
+            label: 'GraphGenerationResultHandler.downloadJson.graph',
+          }),
           payload.featuresS3Key
             ? withRetry(
-                async () => await storagePort.downloadJson<GraphFeaturesJsonDto>(payload.featuresS3Key!),
+                async () =>
+                  await storagePort.downloadJson<GraphFeaturesJsonDto>(payload.featuresS3Key!),
                 { label: 'GraphGenerationResultHandler.downloadJson.features' }
               ).catch((err) => {
-                logger.error({ err, taskId, userId }, 'Failed to download features JSON (Non-fatal)');
+                logger.error(
+                  { err, taskId, userId },
+                  'Failed to download features JSON (Non-fatal)'
+                );
                 return null;
               })
             : Promise.resolve(null),
-          (payload.summaryIncluded && payload.summaryS3Key)
+          payload.summaryIncluded && payload.summaryS3Key
             ? withRetry(
                 async () => await storagePort.downloadJson<GraphSummary>(payload.summaryS3Key!),
                 { label: 'GraphGenerationResultHandler.downloadJson.summary' }
               ).catch((err) => {
-                logger.error({ err, taskId, userId }, 'Failed to download summary JSON (Non-fatal)');
+                logger.error(
+                  { err, taskId, userId },
+                  'Failed to download summary JSON (Non-fatal)'
+                );
                 return null;
               })
             : Promise.resolve(null),
         ];
 
-        const [aiGraphOutput, featuresJson, summaryJson] = await Promise.all(downloadPromises) as [AiGraphOutputDto, GraphFeaturesJsonDto | null, GraphSummary | null];
+        const [aiGraphOutput, featuresJson, summaryJson] = (await Promise.all(
+          downloadPromises
+        )) as [AiGraphOutputDto, GraphFeaturesJsonDto | null, GraphSummary | null];
 
         // 2. Mapper를 통해 DTO 변환
         const snapshot = mapAiOutputToSnapshot(aiGraphOutput, userId);
@@ -109,7 +118,7 @@ export class GraphGenerationResultHandler implements JobHandler {
                 const graphVectorService = container.getGraphVectorService();
 
                 // Mapping: orig_id -> Node Info
-                const nodeMap = new Map<string, typeof aiGraphOutput.nodes[0]>();
+                const nodeMap = new Map<string, (typeof aiGraphOutput.nodes)[0]>();
                 aiGraphOutput.nodes.forEach((node) => {
                   if (node.orig_id) nodeMap.set(node.orig_id, node);
                 });
@@ -148,7 +157,10 @@ export class GraphGenerationResultHandler implements JobHandler {
                   { label: 'GraphVectorService.saveGraphFeatures' }
                 );
               } catch (featureErr) {
-                logger.error({ err: featureErr, taskId, userId }, 'Failed to persist graph features (Non-fatal)');
+                logger.error(
+                  { err: featureErr, taskId, userId },
+                  'Failed to persist graph features (Non-fatal)'
+                );
               }
             })()
           );
@@ -175,7 +187,10 @@ export class GraphGenerationResultHandler implements JobHandler {
                 await graphService.upsertGraphSummary(userId, summaryDoc);
                 logger.info({ taskId, userId }, 'Integrated graph summary persisted to DB');
               } catch (sumErr) {
-                logger.error({ err: sumErr, taskId, userId }, 'Failed to persist integrated graph summary (Non-fatal)');
+                logger.error(
+                  { err: sumErr, taskId, userId },
+                  'Failed to persist integrated graph summary (Non-fatal)'
+                );
               }
             })()
           );
@@ -183,6 +198,15 @@ export class GraphGenerationResultHandler implements JobHandler {
 
         // 3.4. 모든 DB 데이터 저장 병렬 대기
         await Promise.all(saveTasks);
+
+        // 3.4.1. PostHog 이벤트 수집 (Macro Graph 생성 완료 가치 측정)
+        captureEvent(userId, 'macro_graph_generated', {
+          nodes_count: aiGraphOutput.nodes.length,
+          edges_count: aiGraphOutput.edges.length,
+          subclusters_count: aiGraphOutput.subclusters?.length || 0,
+          clusters_count: aiGraphOutput.metadata.clusters?.length || 0,
+          summary_themes: summaryJson?.overview?.primary_interests || [],
+        });
 
         // 3.5. 상태 변경: CREATED (모두 완전하게 저장된 후 마지막에 상태 업데이트)
         const stats = await graphService.getStats(userId);
@@ -201,14 +225,14 @@ export class GraphGenerationResultHandler implements JobHandler {
             'Graph Ready',
             `Your knowledge graph (${snapshot.nodes.length} nodes) is ready!`,
             { type: NotificationType.GRAPH_GENERATION_COMPLETED, taskId }
-          )
+          ),
         ]);
       }
     } catch (err) {
       // 에러 발생 시 상태 롤백 및 알림 전송
       const errorMsg = err instanceof Error ? err.message : 'Processing failed internally';
       logger.error({ err, taskId, userId }, 'Error processing graph generation result');
-      
+
       try {
         const stats = await graphService.getStats(userId);
         if (stats) {
@@ -225,7 +249,10 @@ export class GraphGenerationResultHandler implements JobHandler {
           { type: NotificationType.GRAPH_GENERATION_FAILED, taskId, error: errorMsg }
         );
       } catch (fallbackErr) {
-        logger.error({ err: fallbackErr, taskId, userId }, 'Failed to send fallback error notification');
+        logger.error(
+          { err: fallbackErr, taskId, userId },
+          'Failed to send fallback error notification'
+        );
       }
 
       // 여기서 에러를 던지면 sqs-consumer가 메시지를 삭제하지 않고 재시도 처리함 (설정에 따라 DLQ 이동)

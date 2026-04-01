@@ -30,6 +30,7 @@ import { AiResponse, getAiProvider, IAiProvider, Result } from '../../shared/ai-
 import { ApiKeyModel } from '../../shared/dtos/me';
 import { StoragePort } from '../ports/StoragePort';
 import { withRetry } from '../../shared/utils/retry';
+import { captureEvent } from '../../shared/utils/posthog';
 
 interface OpenAIResponsesApiResult {
   content: string;
@@ -218,6 +219,12 @@ export class AiInteractionService {
         }
       );
 
+      captureEvent(ownerUserId, 'ai_chat_completed', {
+        model_name: chatbody.modelName,
+        chat_type: 'normal',
+        attachments_count: userAttachments.length,
+      });
+
       return {
         title: isNewConversation ? newTitle || conversation?.title : undefined,
         messages: [userMessage, aiMessage],
@@ -381,6 +388,13 @@ export class AiInteractionService {
         metadata: { ...aiResponse.metadata, ragContextCount: chatbody.retrievedContext.length },
       });
 
+      captureEvent(ownerUserId, 'ai_chat_completed', {
+        model_name: chatbody.modelName,
+        chat_type: 'rag',
+        attachments_count: userAttachments.length,
+        context_count: chatbody.retrievedContext.length,
+      });
+
       return {
         title: isNewConversation ? conversation.title : undefined,
         messages: [dbUserMsg, dbAiMsg],
@@ -525,6 +539,11 @@ export class AiInteractionService {
           metadata: aiResponse.metadata,
         }
       );
+
+      captureEvent(ownerUserId, 'ai_chat_completed', {
+        model_name: retrybody.modelName,
+        chat_type: 'retry',
+      });
 
       return {
         title: conversation.title,

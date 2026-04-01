@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { getUserIdFromRequest } from '../utils/request';
 import { MicroscopeManagementService } from '../../core/services/MicroscopeManagementService';
 import { MicroscopeWorkspaceMetaDoc } from '../../core/types/persistence/microscope_workspace.persistence';
+import { captureEvent } from '../../shared/utils/posthog';
 
 export class MicroscopeController {
   constructor(private microscopeService: MicroscopeManagementService) {}
@@ -30,6 +31,11 @@ export class MicroscopeController {
         schemaName
       );
 
+      captureEvent(getUserIdFromRequest(req)!, 'microscope_ingest_requested', { 
+        node_id: nodeId, 
+        node_type: nodeType,
+        schema_name: schemaName 
+      });
       res.status(201).json(workspace);
     } catch (err) {
       next(err);

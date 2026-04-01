@@ -52,3 +52,24 @@ export const shutdownPostHog = async () => {
     logger.info('PostHog client shutdown');
   }
 };
+
+/**
+ * 이벤트를 PostHog로 전송합니다.
+ * 
+ * @param userId 사용자 ID (distinctId)
+ * @param event 이벤트명
+ * @param properties 추가 속성
+ */
+export const captureEvent = (userId: string, event: string, properties?: any) => {
+  const client = getPostHogClient();
+  if (client) {
+    client.capture({
+      distinctId: userId,
+      event,
+      properties: {
+        ...properties,
+        $source: 'backend',
+      },
+    });
+  }
+};

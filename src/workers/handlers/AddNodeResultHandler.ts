@@ -4,6 +4,7 @@ import { AddNodeResultPayload } from '../../shared/dtos/queue';
 import { AiAddNodeBatchResult } from '../../shared/dtos/ai_graph_output';
 import { logger } from '../../shared/utils/logger';
 import { withRetry } from '../../shared/utils/retry';
+import { captureEvent } from '../../shared/utils/posthog';
 
 /**
  * AddNode (배치) 결과 처리 핸들러
@@ -142,6 +143,13 @@ export class AddNodeResultHandler implements JobHandler {
           stats.status = 'UPDATED';
           await graphService.saveStats(stats);
       }
+
+      // 3.4.1. PostHog 이벤트 수집 (Add Node 완료 가치 측정)
+      captureEvent(userId, 'macro_graph_updated', {
+        nodes_added: totalNodesAdded,
+        edges_added: totalEdgesAdded,
+        processed_count: batchResult.processedCount || 0,
+      });
 
       // 4. 알림 전송 병렬화
       await Promise.allSettled([
