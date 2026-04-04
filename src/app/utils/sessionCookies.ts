@@ -12,12 +12,12 @@ import type { Response } from 'express';
  * @param httpOnly 자바스크립트 접근 차단 여부
  */
 function buildCookieOpts(httpOnly: boolean) {
-  const isProd = process.env.NODE_ENV === 'production';
+  const isProdLike = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test';
   const insecure = process.env.DEV_INSECURE_COOKIES === 'true';
   // secure: 배포환경이거나, 로컬이더라도 https/cross-site 테스트가 필요한 경우 insecure=false로 설정됨.
   // insecure=true 설정이 있으면 http 환경으로 간주하여 secure=false.
-  const secure = isProd ? !insecure : !insecure; 
-  
+  const secure = isProdLike && !insecure;
+
   // SameSite=None requires Secure. If not secure, fallback to Lax.
   const sameSite = secure ? 'none' : 'lax';
 
@@ -51,7 +51,7 @@ export function getAuthCookieOpts() {
 export function getDisplayCookieOpts() {
   return {
     ...buildCookieOpts(false),
-    signed: false, 
+    signed: false,
   };
 }
 
@@ -62,9 +62,9 @@ export function getDisplayCookieOpts() {
  * - Signed: true (서명됨)
  */
 export function getOauthStateCookieOpts() {
-  const isProd = process.env.NODE_ENV === 'production';
+  const isProdLike = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test';
   const insecure = process.env.DEV_INSECURE_COOKIES === 'true';
-  const secure = isProd && !insecure;
+  const secure = isProdLike && !insecure;
   const sameSite = secure ? 'none' : 'lax';
 
   return {
@@ -93,11 +93,10 @@ export function setHelperLoginCookies(
     email?: string | null;
   }
 ) {
-   
   let opts = getDisplayCookieOpts();
   const maxAgeEnv = process.env.COOKIE_HELPER_MAX_AGE;
-  if(maxAgeEnv) {
-      (opts as any).maxAge = Number(maxAgeEnv) * 1000;
+  if (maxAgeEnv) {
+    (opts as any).maxAge = Number(maxAgeEnv) * 1000;
   }
   res.cookie('gn-logged-in', '1', opts);
   if (profile) {
