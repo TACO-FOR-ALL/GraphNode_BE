@@ -122,10 +122,11 @@ export class ConversationsApi {
     let cursor: string | null = null;
 
     do {
-      const res: HttpResponse<{ items: ConversationDto[]; nextCursor: string | null }> = await this.rb
-        .path('/v1/ai/conversations')
-        .query({ limit: 100, cursor: cursor || undefined })
-        .get<{ items: ConversationDto[]; nextCursor: string | null }>();
+      const res: HttpResponse<{ items: ConversationDto[]; nextCursor: string | null }> =
+        await this.rb
+          .path('/v1/ai/conversations')
+          .query({ limit: 100, cursor: cursor || undefined })
+          .get<{ items: ConversationDto[]; nextCursor: string | null }>();
 
       if (!res.isSuccess) {
         return res as HttpResponseError;
@@ -154,10 +155,11 @@ export class ConversationsApi {
     let cursor: string | null = null;
 
     do {
-      const res: HttpResponse<{ items: ConversationDto[]; nextCursor: string | null }> = await this.rb
-        .path('/v1/ai/conversations/trash')
-        .query({ limit: 100, cursor: cursor || undefined })
-        .get<{ items: ConversationDto[]; nextCursor: string | null }>();
+      const res: HttpResponse<{ items: ConversationDto[]; nextCursor: string | null }> =
+        await this.rb
+          .path('/v1/ai/conversations/trash')
+          .query({ limit: 100, cursor: cursor || undefined })
+          .get<{ items: ConversationDto[]; nextCursor: string | null }>();
 
       if (!res.isSuccess) {
         return res as HttpResponseError;
@@ -245,10 +247,10 @@ export class ConversationsApi {
 
   /**
    * 대화를 영구 삭제합니다.
-   * 
+   *
    * @remarks
    * **경고:** 이 작업은 취소할 수 없습니다. 이 대화를 기반으로 생성된 지식 그래프(Graph Node/Edge) 데이터들 또한 함께 영구 삭제됩니다.
-   * 
+   *
    * @param conversationId - 대화 ID
    * @example
    * await client.conversations.hardDelete('conv-123');
@@ -262,10 +264,10 @@ export class ConversationsApi {
 
   /**
    * 모든 대화를 삭제합니다.
-   * 
+   *
    * @remarks
    * **주의:** 사용자의 모든 대화 내역 및 연관된 지식 그래프 데이터가 즉시 파기됩니다.
-   * 
+   *
    * @returns 삭제된 대화 수
    * @example
    * const response = await client.conversations.deleteAll();
@@ -380,10 +382,10 @@ export class ConversationsApi {
 
   /**
    * 메시지를 영구 삭제합니다.
-   * 
+   *
    * @remarks
-   * **경고:** 이 작업은 취소할 수 없습니다. 이 메시지를 기반으로 생성된 지식 그래프 노드(Graph Node) 및 연결된 엣지도 함께 영구 삭제됩니다.
-   * 
+   * **경고:** 이 작업은 취소할 수 없습니다.
+   *
    * @param conversationId - 대화 ID
    * @param messageId - 메시지 ID
    * @example
@@ -401,10 +403,10 @@ export class ConversationsApi {
 
   /**
    * 삭제된 메시지를 복구합니다.
-   * 
+   *
    * @remarks
    * 메시지 복구 시, 이 메시지를 기반으로 생성되었던 지식 그래프 노드(Graph Node)도 함께 연쇄 복원됩니다.
-   * 
+   *
    * @param conversationId - 대화 ID
    * @param messageId - 메시지 ID
    * @returns 복구된 메시지 정보
