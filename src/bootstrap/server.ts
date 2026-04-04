@@ -109,6 +109,7 @@ export function createApp() {
     if ((req as any).log) {
       (req as any).log.level = 'silent';
     }
+    (req as any).skipErrorLog = true;
     next(new NotFoundError(`Route ${req.method} ${req.path} not found`));
   });
 

@@ -2,14 +2,12 @@ import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
 
-
 import * as appleController from '../../src/app/controllers/AuthApple';
 import { AppleOAuthService } from '../../src/core/services/AppleOAuthService';
 import * as authLogin from '../../src/app/utils/authLogin';
 import { errorHandler } from '../../src/app/middlewares/error';
 import { container } from '../../src/bootstrap/container';
-
-const cookieParser = require('cookie-parser');
+import { createOauthState, verifyOauthState } from '../../src/app/utils/oauthState';
 
 // Mock dependencies
 jest.mock('../../src/core/services/AppleOAuthService');
@@ -35,33 +33,17 @@ describe('Apple Auth Controller', () => {
     app = express();
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
-    app.use(cookieParser('test-secret'));
 
-    // Setup routes
+    // 쿠키 파서 불필요 — HMAC-signed state는 쿠키에 의존하지 않음
     app.get('/auth/apple/start', appleController.start);
-    // Middleware to inject state for callback test
-    app.post(
-      '/auth/apple/callback',
-      (req, res, next) => {
-        if (req.headers['x-test-state']) {
-          // Mock signedCookies manually since we are not going through the full browser flow
-          req.signedCookies = req.signedCookies || {};
-          req.signedCookies['oauth_state_apple'] = req.headers['x-test-state'];
-        }
-        next();
-      },
-      appleController.callback
-    );
-
+    app.post('/auth/apple/callback', appleController.callback);
     app.use(errorHandler);
 
-    // Reset mocks
     jest.clearAllMocks();
 
-    // Reset container cache to ensure new mock is used
+    // 컨테이너 캐시 초기화
     (container as any).appleOAuthService = null;
 
-    // Setup AppleOAuthService mock instance
     appleServiceMock = {
       buildAuthUrl: jest.fn(),
       exchangeCode: jest.fn(),
@@ -71,6 +53,9 @@ describe('Apple Auth Controller', () => {
     (AppleOAuthService as jest.Mock).mockImplementation(() => appleServiceMock);
   });
 
+  // ──────────────────────────────────────────
+  // GET /auth/apple/start
+  // ──────────────────────────────────────────
   describe('GET /auth/apple/start', () => {
     it('should redirect to apple auth url', async () => {
       appleServiceMock.buildAuthUrl.mockReturnValue(
@@ -81,12 +66,34 @@ describe('Apple Auth Controller', () => {
 
       expect(res.status).toBe(302);
       expect(res.header.location).toBe('https://appleid.apple.com/auth/authorize?test=1');
-      expect(appleServiceMock.buildAuthUrl).toHaveBeenCalled();
+      expect(appleServiceMock.buildAuthUrl).toHaveBeenCalledTimes(1);
+    });
+
+    it('buildAuthUrl should receive a valid HMAC-signed state token', async () => {
+      appleServiceMock.buildAuthUrl.mockReturnValue(
+        'https://appleid.apple.com/auth/authorize?state=xyz'
+      );
+
+      await request(app).get('/auth/apple/start');
+
+      const [receivedState] = (appleServiceMock.buildAuthUrl as jest.Mock).mock.calls[0] as [string];
+
+      // HMAC state 형식: <base64url_payload>.<base64url_signature>
+      expect(receivedState).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+
+      // 실제로 verifyOauthState로도 검증 가능해야 함
+      expect(verifyOauthState(receivedState)).toBe(true);
     });
   });
 
+  // ──────────────────────────────────────────
+  // POST /auth/apple/callback
+  // ──────────────────────────────────────────
   describe('POST /auth/apple/callback', () => {
     it('should handle successful login', async () => {
+      // 실제 HMAC-signed state 생성 (SESSION_SECRET 기본값 사용)
+      const validState = createOauthState();
+
       const mockTokenSet = { idToken: 'valid_id_token' };
       const mockInfo = { sub: 'apple_123', email: 'test@example.com', name: 'Test User' };
 
@@ -96,10 +103,9 @@ describe('Apple Auth Controller', () => {
 
       const res = await request(app)
         .post('/auth/apple/callback')
-        .set('x-test-state', 'valid_state')
         .send({
           code: 'valid_code',
-          state: 'valid_state',
+          state: validState,
           user: '{"name":{"firstName":"Test","lastName":"User"}}',
         });
 
@@ -121,8 +127,10 @@ describe('Apple Auth Controller', () => {
     });
 
     it('should handle login with missing email and name', async () => {
+      const validState = createOauthState();
+
       const mockTokenSet = { idToken: 'valid_id_token' };
-      const mockInfo = { sub: 'apple_123' }; // Missing email and name
+      const mockInfo = { sub: 'apple_123' }; // email/name 없는 경우
 
       appleServiceMock.exchangeCode.mockResolvedValue(mockTokenSet as any);
       appleServiceMock.parseIdToken.mockReturnValue(mockInfo as any);
@@ -130,11 +138,9 @@ describe('Apple Auth Controller', () => {
 
       const res = await request(app)
         .post('/auth/apple/callback')
-        .set('x-test-state', 'valid_state')
-        .send({ code: 'valid_code', state: 'valid_state', user: '{}' });
+        .send({ code: 'valid_code', state: validState, user: '{}' });
 
       expect(res.status).toBe(200);
-
       expect(authLogin.completeLogin).toHaveBeenCalledWith(
         expect.anything(),
         expect.anything(),
@@ -147,30 +153,55 @@ describe('Apple Auth Controller', () => {
       );
     });
 
-    it('should return 400 if code or state is missing', async () => {
-      const res = await request(app).post('/auth/apple/callback').send({ code: 'valid_code' }); // missing state
+    it('should return 400 if code is missing', async () => {
+      const validState = createOauthState();
+
+      const res = await request(app)
+        .post('/auth/apple/callback')
+        .send({ state: validState }); // code 누락
 
       expect(res.status).toBe(400);
       expect(res.body.type).toContain('validation-failed');
     });
 
-    it('should return 400 if state mismatch', async () => {
+    it('should return 400 if state is missing', async () => {
       const res = await request(app)
         .post('/auth/apple/callback')
-        .set('x-test-state', 'expected_state')
-        .send({ code: 'valid_code', state: 'wrong_state' });
+        .send({ code: 'valid_code' }); // state 누락
+
+      expect(res.status).toBe(400);
+      expect(res.body.type).toContain('validation-failed');
+    });
+
+    it('should return 400 if state is a plain string (not HMAC-signed)', async () => {
+      const res = await request(app)
+        .post('/auth/apple/callback')
+        .send({ code: 'valid_code', state: 'plain_invalid_state' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.type).toContain('validation-failed');
+    });
+
+    it('should return 400 if state signature is tampered', async () => {
+      const validState = createOauthState();
+      // 서명 부분을 변조
+      const [payload] = validState.split('.');
+      const tamperedState = `${payload}.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`;
+
+      const res = await request(app)
+        .post('/auth/apple/callback')
+        .send({ code: 'valid_code', state: tamperedState });
 
       expect(res.status).toBe(400);
       expect(res.body.type).toContain('validation-failed');
     });
 
     it('should return 400 if request body is missing', async () => {
-      // Create a separate app instance or route to simulate missing body
       const appMissingBody = express();
       appMissingBody.post(
         '/auth/apple/callback',
-        (req, res, next) => {
-          req.body = undefined; // Force undefined
+        (req, _res, next) => {
+          req.body = undefined;
           next();
         },
         appleController.callback
@@ -183,16 +214,15 @@ describe('Apple Auth Controller', () => {
       expect(res.body.type).toContain('validation-failed');
     });
 
-    it('should handle service errors', async () => {
+    it('should return 500 if exchangeCode throws', async () => {
+      const validState = createOauthState();
+
       appleServiceMock.exchangeCode.mockRejectedValue(new Error('Exchange failed'));
 
       const res = await request(app)
         .post('/auth/apple/callback')
-        .set('x-test-state', 'valid_state')
-        .send({ code: 'valid_code', state: 'valid_state' });
+        .send({ code: 'valid_code', state: validState });
 
-      // The controller catches error and calls next(err), which goes to errorHandler
-      // errorHandler logs it and returns 500 (or whatever unknownToAppError maps to)
       expect(res.status).toBe(500);
     });
   });

@@ -59,7 +59,7 @@ export const httpLogger = pinoHttp({
   autoLogging: {
     ignore: (req) => {
       const url = req.url || '';
-      return url === '/healthz' || url === '/v1/healthz';
+      return url === '/healthz' || url === '/v1/healthz' || url === '/favicon.ico';
     },
   },
   customProps: (req, res) => ({

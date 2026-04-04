@@ -37,6 +37,11 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   // 2. 응답 데이터 생성: RFC 9457 표준 포맷
   const problem = toProblem(e, req);
 
+  // [Early Return] 로그 기록을 건너뛰어야 하는 경우 (예: 정의되지 않은 경로 404)
+  if ((req as any).skipErrorLog) {
+    return res.status(e.httpStatus).type('application/problem+json').json(problem);
+  }
+
   // [New] 중요 에러(500 이상)는 Sentry로 전송
   if (e.httpStatus >= 500) {
     Sentry.captureException(e, {
