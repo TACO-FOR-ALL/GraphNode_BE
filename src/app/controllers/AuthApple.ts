@@ -78,6 +78,7 @@ export async function callback(req: Request, res: Response, next: NextFunction) 
       avatarUrl: null,
     });
 
+    res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
     return res.status(200).send(`
       <!doctype html>
       <html>
