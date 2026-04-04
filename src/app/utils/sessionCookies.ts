@@ -28,8 +28,9 @@ function buildCookieOpts(httpOnly: boolean) {
     path: '/',
     // partitioned: true를 추가하여 CHIPS(Cookies Having Independent Partitioned State) 지원.
     // secure가 true인 경우에만 작동하며, 시크릿 모드에서도 제3자 쿠키로 허용됩니다.
+    // 도메인을 명시하지 않아 Host-only 쿠키로 생성하여 파티션 간 충돌을 방지합니다.
     ...(secure ? { partitioned: true } : {}),
-  } as any; // partitioned 속성이 선언되지 않은 환경을 위해 any 캐스팅
+  } as any;
 }
 
 /**
@@ -114,6 +115,7 @@ export function setHelperLoginCookies(
  * 표시용 보조 쿠키를 제거한다.
  */
 export function clearHelperLoginCookies(res: Response) {
-  res.clearCookie('gn-logged-in', { path: '/' });
-  res.clearCookie('gn-profile', { path: '/' });
+  const opts = getDisplayCookieOpts();
+  res.clearCookie('gn-logged-in', opts);
+  res.clearCookie('gn-profile', opts);
 }

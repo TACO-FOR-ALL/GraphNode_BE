@@ -114,8 +114,8 @@ describe('Utils Unit Tests', () => {
     describe('clearHelperLoginCookies', () => {
       it('should clear cookies', () => {
         clearHelperLoginCookies(res);
-        expect(clearCookieSpy).toHaveBeenCalledWith('gn-logged-in', { path: '/' });
-        expect(clearCookieSpy).toHaveBeenCalledWith('gn-profile', { path: '/' });
+        expect(clearCookieSpy).toHaveBeenCalledWith('gn-logged-in', expect.objectContaining({ path: '/' }));
+        expect(clearCookieSpy).toHaveBeenCalledWith('gn-profile', expect.objectContaining({ path: '/' }));
       });
     });
   });
