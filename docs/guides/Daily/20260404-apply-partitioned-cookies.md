@@ -41,8 +41,12 @@
 ## 🧪 검증 결과
 
 ### 1. API 통합 테스트
-- `tests/api/auth.google.spec.ts`: **PASS** (Redirect, Cookie set, Valid callback 검증 완료)
-- `tests/api/auth.apple.spec.ts`: **PASS** (HMAC-signed state, Callback 성공 유무 검증 완료)
+- `tests/api/auth.google.spec.ts`: **PASS** ✅
+- `tests/api/auth.apple.spec.ts`: **PASS** ✅
+
+### 2. 유닛 테스트
+- `tests/unit/utils.spec.ts`: **PASS** ✅
+    - `clearHelperLoginCookies` 시 `Partitioned` 등 전체 옵션이 반영되도록 기대값 수정 (`expect.objectContaining`)
 
 ### 2. 시나리오 검증
 - Chrome Incognito 모드에서 `Set-Cookie` 헤더에 `Partitioned` 문자열 포함 확인.
@@ -60,3 +64,4 @@
 ## 📜 변경 이력
 - v1.0 (2026-04-04): CHIPS 기본 적용 작업 기록
 - v1.1 (2026-04-04): COOP 헤더 및 Host-only 최적화, 쿠키 제거 로직 보강 내용 추가 업데이트
+- v1.2 (2026-04-04): 로직 변경으로 인한 유닛 테스트(`utils.spec.ts`) 실패 해결 및 테스트 코드 업데이트
