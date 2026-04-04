@@ -26,7 +26,10 @@ function buildCookieOpts(httpOnly: boolean) {
     secure,
     sameSite: sameSite as 'none' | 'lax',
     path: '/',
-  };
+    // partitioned: true를 추가하여 CHIPS(Cookies Having Independent Partitioned State) 지원.
+    // secure가 true인 경우에만 작동하며, 시크릿 모드에서도 제3자 쿠키로 허용됩니다.
+    ...(secure ? { partitioned: true } : {}),
+  } as any; // partitioned 속성이 선언되지 않은 환경을 위해 any 캐스팅
 }
 
 /**
@@ -74,7 +77,9 @@ export function getOauthStateCookieOpts() {
     signed: true,
     maxAge: 10 * 60 * 1000, // 10분
     path: '/',
-  };
+    // OAuth 인증 완료 후 원래 사이트로 돌아올 때 쿠키가 유실되지 않도록 파티션 적용
+    ...(secure ? { partitioned: true } : {}),
+  } as any;
 }
 
 /**
