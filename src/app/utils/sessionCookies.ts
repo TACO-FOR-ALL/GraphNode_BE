@@ -26,10 +26,10 @@ function buildCookieOpts(httpOnly: boolean) {
     secure,
     sameSite: sameSite as 'none' | 'lax',
     path: '/',
-    // partitioned: true를 추가하여 CHIPS(Cookies Having Independent Partitioned State) 지원.
-    // secure가 true인 경우에만 작동하며, 시크릿 모드에서도 제3자 쿠키로 허용됩니다.
-    // 도메인을 명시하지 않아 Host-only 쿠키로 생성하여 파티션 간 충돌을 방지합니다.
-    ...(secure ? { partitioned: true } : {}),
+    // NOTE: partitioned: true (CHIPS) 미사용.
+    // FE와 BE가 서로 다른 도메인에 있으므로 FE에서 BE로 fetch 시 top-level site가 FE 도메인이 되어
+    // 팝업 컨텍스트(taco4graphnode.online)에서 설정된 파티션 키와 불일치 → 쿠키 미전송 → 401.
+    // CHIPS는 임베디드 위젯 격리 목적으로 설계된 기능으로, 크로스 오리진 API 호출 구조에 부적합.
   } as any;
 }
 
@@ -78,8 +78,6 @@ export function getOauthStateCookieOpts() {
     signed: true,
     maxAge: 10 * 60 * 1000, // 10분
     path: '/',
-    // OAuth 인증 완료 후 원래 사이트로 돌아올 때 쿠키가 유실되지 않도록 파티션 적용
-    ...(secure ? { partitioned: true } : {}),
   } as any;
 }
 
