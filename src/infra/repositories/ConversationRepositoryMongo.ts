@@ -111,29 +111,35 @@ export class ConversationRepositoryMongo implements ConversationRepository {
     limit: number,
     cursor?: string
   ): Promise<{ items: ConversationDoc[]; nextCursor?: string | null }> {
-    // 기본 쿼리: 해당 사용자의 대화 중 삭제되지 않은 데이터만 조회
-    const query: any = { ownerUserId, deletedAt: null };
+    try {
+      // 기본 쿼리: 해당 사용자의 대화 중 삭제되지 않은 데이터만 조회
+      const query: any = { ownerUserId, deletedAt: null };
 
-    // 커서가 있다면, 그 커서(시간)보다 이전의 데이터만 조회 (최신순 정렬이므로)
-    if (cursor) {
-      query.updatedAt = { $lt: parseInt(cursor, 10) };
+      // 커서가 있다면, 그 커서(시간)보다 이전의 데이터만 조회 (최신순 정렬이므로)
+      // TODO: updatedAt 단독 커서는 동일 updatedAt 경계에서 항목 누락/중복 가능.
+      //       향후 { updatedAt, _id } 복합 커서로 교체 권장 (인덱스에 _id:1 이미 포함됨).
+      if (cursor) {
+        query.updatedAt = { $lt: parseInt(cursor, 10) };
+      }
+
+      // 옵션 설정: 업데이트 시간 내림차순 정렬, 개수 제한
+      const options: FindOptions<ConversationDoc> = {
+        sort: { updatedAt: -1, _id: 1 },
+        limit,
+      };
+
+      // 쿼리 실행 및 배열로 변환
+      const items: ConversationDoc[] = await this.col().find(query, options).toArray();
+
+      // 다음 커서 계산 (마지막 아이템의 updatedAt)
+      const last: ConversationDoc | undefined = items[items.length - 1];
+      const nextCursor: string | null =
+        items.length === limit && last?.updatedAt ? String(last.updatedAt) : null;
+
+      return { items, nextCursor };
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.listByOwner', err);
     }
-
-    // 옵션 설정: 업데이트 시간 내림차순 정렬, 개수 제한
-    const options: FindOptions<ConversationDoc> = {
-      sort: { updatedAt: -1 },
-      limit,
-    };
-
-    // 쿼리 실행 및 배열로 변환
-    const items: ConversationDoc[] = await this.col().find(query, options).toArray();
-
-    // 다음 커서 계산 (마지막 아이템의 updatedAt)
-    const last: ConversationDoc | undefined = items[items.length - 1];
-    const nextCursor: string | null =
-      items.length === limit && last?.updatedAt ? String(last.updatedAt) : null;
-
-    return { items, nextCursor };
   }
 
   /**
