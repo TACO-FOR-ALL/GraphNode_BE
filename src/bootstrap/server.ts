@@ -17,6 +17,7 @@ import authAppleRouter from '../app/routes/AuthAppleRouter';
 import { makeMeRouter } from './modules/user.module';
 import authSessionRouter from '../app/routes/AuthSessionRouter';
 import { requestContext } from '../app/middlewares/request-context';
+import { posthogAuditMiddleware } from '../app/middlewares/posthog-audit-middleware';
 import { httpLogger } from '../shared/utils/logger';
 import { errorHandler } from '../app/middlewares/error';
 // AI 라우터 import
@@ -60,6 +61,7 @@ export function createApp() {
   app.use(express.urlencoded({ limit: '100mb', extended: true })); // Apple OAuth post request body 파싱
   app.use(cookieParser(sessionSecert));
   app.use(requestContext);
+  app.use(posthogAuditMiddleware);
   app.use(httpLogger);
 
   // Health endpoints: available at /healthz and /v1/healthz
