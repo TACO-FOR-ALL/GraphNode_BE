@@ -19,6 +19,7 @@ const mockCaptureApiCall = jest.fn();
 
 jest.mock('../../src/shared/utils/posthog', () => ({
   captureApiCall: (...args: any[]) => mockCaptureApiCall(...args),
+  getGuestId: (ip?: string, userAgent?: string) => `guest_mock_${ip ?? 'unknown'}_${userAgent ?? 'unknown'}`,
 }));
 
 const mockGetStore = jest.fn();
@@ -110,13 +111,14 @@ describe('posthogAuditMiddleware', () => {
     expect(data.userAgent).toBe('jest-test');
   });
 
-  it('미인증 요청(req.userId 없음)이면 userId를 "anonymous"로 전송해야 한다', () => {
+  it('미인증 요청(req.userId 없음)이면 getGuestId 기반 guest ID로 전송해야 한다', () => {
     const { req, res, next } = buildMocks({ userId: undefined });
     posthogAuditMiddleware(req, res, next);
     triggerFinish(res);
 
     const [userId] = mockCaptureApiCall.mock.calls[0];
-    expect(userId).toBe('anonymous');
+    // ctx.ip = '127.0.0.1', ctx.userAgent = 'jest-test' (beforeEach 설정값)
+    expect(userId).toBe('guest_mock_127.0.0.1_jest-test');
   });
 
   // ─────────────────────────────────────────────────────────
