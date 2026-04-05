@@ -190,6 +190,7 @@ infisical run --env=prod -- npm start
 
 - **[Code Style & Contribution Guide](docs/architecture/CODE_STYLE.md)**: 네이밍 컨벤션, 아키텍처 패턴, 에러 핸들링 규칙 등
 - **[Daily Dev Logs](docs/guides/Daily)**: 일별 작업 상세 기록
+  - [2026-04-05 PostHog API 감사 시스템 구축 및 문서화](docs/guides/Daily/20260405-posthog-api-auditing-implementation.md)
   - [2026-04-04 CHIPS(Partitioned Cookies) 적용을 통한 시크릿 모드 로그인 이슈 해결](docs/guides/Daily/20260404-apply-partitioned-cookies.md)
   - [2026-03-30 Search API SDK 동기화 및 통합 테스트 Open Handle 제거](docs/guides/Daily/20260330-search-api-sdk-test-stabilization.md)
   - [2026-03-30 통합 키워드 검색 API 테스트 리팩토링 및 안정화](docs/guides/Daily/20260330-search-api-test-refactor.md)
