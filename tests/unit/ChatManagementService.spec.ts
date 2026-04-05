@@ -417,11 +417,11 @@ describe('ChatManagementService', () => {
 
       const c1 = list.items.find((i) => i.id === 'c1');
       expect(c1).toBeDefined();
-      expect(c1?.messages).toBeUndefined();
+      expect(c1?.messages).toHaveLength(0);
 
       const c2 = list.items.find((i) => i.id === 'c2');
       expect(c2).toBeDefined();
-      expect(c2?.messages).toBeUndefined();
+      expect(c2?.messages).toHaveLength(0);
     });
   });
 
