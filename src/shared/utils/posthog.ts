@@ -55,7 +55,7 @@ export const shutdownPostHog = async () => {
 
 /**
  * 이벤트를 PostHog로 전송합니다.
- * 
+ *
  * @param userId 사용자 ID (distinctId)
  * @param event 이벤트명
  * @param properties 추가 속성
@@ -72,4 +72,80 @@ export const captureEvent = (userId: string, event: string, properties?: any) =>
       },
     });
   }
+};
+
+// ─────────────────────────────────────────────────────────────
+// API 감사 로그 (Audit Log) 전송
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * API 호출 감사 데이터 구조체.
+ *
+ * @description
+ * HTTP 미들웨어(`posthog-audit-middleware`)가 모든 API 요청/응답 완료 시
+ * PostHog에 전송하는 데이터의 타입 계약입니다.
+ *
+ * 1차 목표 필드: method, path, statusCode, latencyMs, userId, correlationId, ip, userAgent
+ * 2차 목표 필드: requestBody, responseBody (민감 정보 마스킹 + 1 MB 트런케이션 적용)
+ */
+export interface ApiAuditData {
+  /** HTTP 메서드 (GET, POST, PUT, DELETE, PATCH …) */
+  method: string;
+  /** 요청 경로. 라우터 매칭 완료 후 패턴 경로 우선, 없으면 실제 경로 사용. (예: /v1/graph/:graphId) */
+  path: string;
+  /** HTTP 응답 상태 코드 */
+  statusCode: number;
+  /** 요청 수신 시각부터 응답 완료까지의 지연 시간 (밀리초) */
+  latencyMs: number;
+  /** W3C traceparent 기반 요청 추적 ID */
+  correlationId?: string;
+  /** 클라이언트 IP 주소 */
+  ip?: string;
+  /** User-Agent 헤더 값 */
+  userAgent?: string;
+  /**
+   * 마스킹 + 트런케이션이 적용된 요청 바디 (2차 목표).
+   * - password, token, secret, access, authorization 필드는 '***REDACTED***'로 대체.
+   * - JSON 직렬화 후 1 MB 초과 시 요약 객체로 대체.
+   */
+  requestBody?: unknown;
+  /**
+   * 마스킹 + 트런케이션이 적용된 응답 바디 (2차 목표).
+   * - 동일한 마스킹/트런케이션 정책 적용.
+   */
+  responseBody?: unknown;
+}
+
+/**
+ * API 호출 감사 이벤트를 PostHog로 전송합니다.
+ *
+ * @description
+ * `posthog-audit-middleware`에서 모든 API 응답 완료 시점(res.on('finish'))에
+ * 호출됩니다. PostHog 이벤트명은 `api_call`로 고정되며, 속성으로 {@link ApiAuditData}
+ * 전체가 전송됩니다.
+ *
+ * @param userId - 인증된 사용자 ID. 미인증 요청이면 'anonymous'.
+ * @param data - API 감사 데이터. {@link ApiAuditData} 참조.
+ *
+ * @example
+ * captureApiCall('user_01J...', {
+ *   method: 'POST',
+ *   path: '/v1/graph',
+ *   statusCode: 201,
+ *   latencyMs: 142,
+ *   correlationId: 'abc-123',
+ * });
+ */
+export const captureApiCall = (userId: string, data: ApiAuditData): void => {
+  const client = getPostHogClient();
+  if (!client) return;
+
+  client.capture({
+    distinctId: userId,
+    event: 'api_call',
+    properties: {
+      ...data,
+      $source: 'backend',
+    },
+  });
 };
