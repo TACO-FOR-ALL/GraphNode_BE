@@ -4,10 +4,10 @@
 > **PM 및 비기본 기술직군을 위한 요약**
 >
 > - **목표:** 서비스 운영 상태(API 성능)와 사용자 행동(기능 사용 패턴)을 통합 모니터링합니다.
->- **주요 지표:** API 호출량, 지연 시간(Latency), 에러율, 주요 기능(그래프 생성, AI 채팅) 전환율.
->- **DAU 측정:** `api_call` 이벤트를 기반으로 정확한 실사용자 수 및 로그인 전 활동(로그인 시도 등)을 추적합니다.
->- **데이터 활용:** 특정 사용자의 이용 흐름 추적, 장애 발생 시 요청/응답 바디 조회를 통한 원격 디버깅 지원.
->- **특이사항:** 개인정보 보호를 위해 비밀번호, 토큰 등 민감 정보는 자동 마스킹 처리됩니다.
+> - **주요 지표:** API 호출량, 지연 시간(Latency), 에러율, 주요 기능(그래프 생성, AI 채팅) 전환율.
+> - **DAU 측정:** `api_call` 이벤트를 기반으로 정확한 실사용자 수 및 로그인 전 활동(로그인 시도 등)을 추적합니다.
+> - **데이터 활용:** 특정 사용자의 이용 흐름 추적, 장애 발생 시 요청/응답 바디 조회를 통한 원격 디버깅 지원.
+> - **특이사항:** 개인정보 보호를 위해 비밀번호, 토큰 등 민감 정보는 자동 마스킹 처리됩니다.
 
 ---
 
@@ -195,53 +195,114 @@ app.use(httpLogger);
 
 장애 보고가 들어왔거나 특정 사용자의 행동을 즉시 확인해야 할 때 사용합니다.
 
-1. 좌측 메뉴 → **Activity** (또는 **Live Events**) 선택.
-2. **Filter events**에서 `api_call` 선택.
-3. 특정 유저로 필터링하려면 `Add filter` → `distinct_id` 선택 후 유저 UUID 또는 `guest_...` 입력을 통해 확인 가능.
-4. 목록에서 이벤트를 클릭하면 우측에 상세 속성이 나타납니다.
+1.  좌측 메뉴 → **Activity** (또는 **Live Events**) 선택.
+2.  **Filter events**에서 `api_call` 선택.
+3.  특정 유저로 필터링하려면 `Add filter` → `distinct_id` 선택 후 유저 UUID 또는 `guest_...` 입력을 통해 확인 가능.
+4.  목록에서 이벤트를 클릭하면 우측에 상세 속성이 나타납니다.
     - `requestBody`: 유저가 보낸 데이터 (마스킹 적용됨).
     - `responseBody`: 서버가 응답한 데이터 (마스킹 적용됨).
     - `latencyMs`: 응답 속도.
 
 ### 4.2. 주요 인사이트(Insights) 설정 방법
 
-#### A. 성능이 느린 API 상위 10개 찾기 (운영 최적화)
+#### C. DAU / WAU / MAU (활성 사용자 지표) 설정
 
-1. **Insights** → **+ New insight** → **Trends** 선택.
-2. Series: `api_call` 이벤트 선택.
-3. Math 항목을 `Total count`에서 `95th percentile` (p95) 또는 `Average`로 변경.
-4. Property: `latencyMs` 선택.
-5. **Breakdown by**: `path` 선택.
-6. Chart type: **Bar chart**로 변경하여 어떤 경로가 가장 느린지 가로막대 그래프로 확인.
+서비스의 성장을 측정하는 가장 기본적인 지표입니다.
 
-#### B. 에러 발생(5xx) 현황 및 비율 추적
+| 지표 | Insight Type | Series (Event) | Math (Agg) | Interval |
+| :--- | :--- | :--- | :--- | :--- |
+| **DAU** | Trends | `api_call` | Unique users | **Daily** |
+| **WAU** | Trends | `api_call` | Unique users | **Weekly** |
+| **MAU** | Trends | `api_call` | Unique users | **Monthly** |
 
-1. **Insights** → **Trends**.
-2. Series: `api_call`.
-3. **Filters**: `statusCode` >= `500` 조건 추가.
-4. Display: `Number of unique users`로 설정하여 얼마나 많은 유저가 에러를 겪고 있는지 파악.
+**상세 설정 방법 (DAU 기준):**
+1.  **Product Analytics** -> **Insights** -> **+ New insight**.
+2.  **Series**: `api_call` 이벤트를 선택합니다.
+3.  **Math**: `Total count`라고 적힌 파란색 글씨를 클릭하여 **Unique users**로 변경합니다. (id 기반 중복 제거)
+4.  **Time range**: 우측 상단에서 `Last 30 days` 등을 선택합니다.
+5.  **Interval**: 차트 바로 위에서 **Days**를 선택합니다 (WAU는 Weeks, MAU는 Months).
+6.  **Save**: 'DAU (api_call 기반)'으로 저장합니다.
 
-#### C. 로그인 시도 횟수 및 성공률 분석
+#### D. 로그인 시도 및 보안 분석
+1.  **Insights** → **Trends**.
+2.  **Series**: `api_call`.
+3.  **Breakdown by**: `distinct_id` (익명 사용자는 `guest_...`로 표시됨).
+4.  **Filters**: `path` = `/v1/auth/login` (로그인 API 경로).
+5.  **결과**: 특정 기기/IP에서 얼마나 반복적으로 로그인을 시도하는지, 그중 성공(200)과 실패(401) 비율은 어떠한지 확인할 수 있습니다.
 
-1. **Insights** → **Trends**.
-2. Series: `api_call`.
-3. **Breakdown by**: `distinct_id` (익명 사용자는 `guest_...`로 표시됨).
-4. **Filters**: `path` = `/v1/auth/login` (로그인 API 경로).
-5. **결과**: 특정 기기/IP에서 얼마나 반복적으로 로그인을 시도하는지, 그중 성공(200)과 실패(401) 비율은 어떠한지 확인할 수 있습니다.
+### 4.3. 추천 인사이트 및 대시보드 패널 (Advanced)
 
-### 4.3. 대시보드(Dashboards) 구성 추천 패널
+현재 `api_call` 이벤트와 `guest_hash` 식별자를 활용해 구성할 수 있는 강력한 인사이트들입니다.
 
-| 패널 명칭 | 대상 이벤트 | 설정 요약 | 용도 |
+| 패널 명칭 | Insight Type | 설정 핵심 (Series & Filter) | 용도 |
 | :--- | :--- | :--- | :--- |
-| **일일 총 API 호출** | `api_call` | Trends · Total count | 전체 트래픽 규모 및 추세 파악 |
-| **p95 Latency (Top 10)** | `api_call` | p95(latencyMs) · Breakdown: path | 병목 지점 실시간 모니터링 |
-| **서버 에러(5xx) 발생 수** | `api_call` | Filter: statusCode >= 500 | 즉각적인 시스템 장애 감지 |
-| **주요 비즈니스 이벤트** | `note_created` 등 | Trends · Total count | 프로덕트 성장 및 기능 활성 지표 |
-| **유저별 API 점유율** | `api_call` | Breakdown: distinct_id | 헤비 유저 감지 및 트래픽 분석 |
+| **API 에러율 트렌드** | Trends | `api_call` (Filter: `statusCode >= 400`) / Math: `Total count` | 전체 장애 상황 모니터링 |
+| **P95 지연 시간 (Top 10)** | Trends | `api_call` / Math: `95th percentile(latencyMs)` / Breakdown: `path` | 성능 병목 지점 실시간 포착 |
+| **로그인 전환율 (Funnel)** | Funnel | Step1: `/v1/auth/login` 시도 (전체) -> Step2: `/v1/auth/login` 성공 (200) | 인증 시스템 건전성 및 유저 유실 측정 |
+| **사용자별 API 점유율** | Trends | `api_call` / Breakdown: `distinct_id` | 헤비 유저 감지 및 이상 트래픽(DDoS 등) 분석 |
+| **경로별 유입 비중** | Trends | `api_call` / Breakdown: `path` / Chart: `Pie chart` | 어떤 기능이 가장 많이 쓰이는지 파악 |
+| **익명 유저 활동량** | Trends | `api_call` (Filter: `distinct_id` starts with `guest_`) | 비로그인 상태에서의 관심도 측정 |
 
 ---
 
-## 5. 레이어별 배치 가이드 (Best Practice)
+## 5. 인사이트 유형별 상세 가이드 (Step-by-Step Recipes)
+
+PostHog에서 제공하는 6가지 핵심 인사이트 유형을 우리 데이터(`api_call`)에 맞게 요리하는 방법입니다.
+
+### 5.1. 어떤 인사이트 유형을 선택해야 하나요?
+
+| 측정 목표 | 추천 유형 | 핵심 질문 | 사용 시점 |
+| :--- | :--- | :--- | :--- |
+| **규모/성능** | **Trends** | "호출량이 얼마나 늘었나?", "성능(p95)이 어떤가?" | 트래픽 및 성능 모니터링 시 |
+| **단계별 전환** | **Funnels** | "로그인 시도자 중 몇 %가 실제 성공하나?" | 특정 프로세스의 이탈 지점 파악 시 |
+| **지속 사용** | **Retention** | "오늘 들어온 유저가 7일 뒤에도 다시 활동하나?" | 제품의 장기 가치 확인 시 |
+| **유저 경로** | **User Paths** | "메인 접속 후 유저들은 주로 어디로 가나?" | 실제 사용자 행동 패턴 발견 시 |
+| **열성 팬** | **Stickiness** | "우리 서비스를 매일매일 쓰는 유저는 누구인가?" | 충성 고객(Power User) 식별 시 |
+| **유저 건강도** | **Lifecycle** | "전체 유저 중 신규 유입과 이탈 비중이 어떤가?" | 서비스 전체 성장세 확인 시 |
+
+---
+
+### 5.2. 유형별 상세 "클릭 가이드"
+
+모든 설정은 **Product Analytics -> Insights -> + New insight** 클릭 후 시작합니다.
+
+#### A. Trends (추세)
+- **Series**: `api_call` 선택.
+- **Math**: `Total count` 클릭 → **Property value (95th percentile)** 선택 → Property: `latencyMs` 지정.
+- **Breakdown**: `path` 선택 (어떤 경로가 성능을 깎아먹는지 확인).
+
+#### B. Funnels (퍼널)
+- **Steps**:
+  - **Step 1**: `api_call` 선택 → `Filter`: `path` = `/v1/auth/login`. (로그인 시도)
+  - **Step 2**: `api_call` 선택 → `Filter`: `path` = `/v1/auth/login` AND `statusCode` = 200. (로그인 성공)
+- **결과**: 두 단계 사이의 이탈 수치(Drop-off) 확인.
+
+#### C. Retention (유지율)
+- **Events**:
+  - **First event**: `api_call` (첫 활동).
+  - **Returning event**: `api_call` (재방문).
+- **Grouping**: `Unique users`.
+- **결과**: Day 0 대비 재방문 유저 생존율 확인.
+
+#### D. User Paths (사용자 경로)
+- **Step configuration**: `Starting from` 선택 → `api_call` 이벤트 선택.
+- **Path labels**: `path` 속성을 설정.
+- **Filters**: `path` = `/`.
+- **결과**: 메인 화면 시작 기준의 전체 행동 전이도 확인.
+
+#### E. Stickiness (고착도)
+- **Series**: `api_call` 선택.
+- **Math**: `Unique users`.
+- **Interval**: `Weekly`.
+- **결과**: 일주일 중 5일 이상 사용하는 유저 데이터 확인.
+
+#### F. Lifecycle (생애주기)
+- **Series**: `api_call` 선택.
+- **결과**: New, Returning, Resurrecting, Dormant 사용자 비중 확인.
+
+---
+
+## 6. 레이어별 배치 가이드 (Best Practice)
 
 - **Middleware (전역):** 모든 HTTP 요청/응답에 대한 **운영 지표(Latency, Status, Body)**를 수집합니다. `posthogAuditMiddleware`가 자동 처리하므로 별도 코드 불필요.
 - **Controller:** 사용자 인터랙션의 입구입니다. 사용자의 **"의도(Intent)"**를 캡처하십시오. 성공/실패 여부와 상관없이 '요청' 자체를 기록해야 전환율(Conversion)을 구할 수 있습니다.
@@ -250,9 +311,9 @@ app.use(httpLogger);
 
 ---
 
-## 6. 설정 및 운영
+## 7. 설정 및 운영
 
-### 6.1. 환경 변수
+### 7.1. 환경 변수
 
 `.env` 파일(또는 Infisical)에 다음 설정이 반드시 포함되어야 전송됩니다.
 
@@ -261,13 +322,11 @@ POSTHOG_API_KEY=phc_...
 POSTHOG_HOST=https://us.i.posthog.com  # 또는 https://app.posthog.com
 ```
 
-환경 변수가 없으면 PostHog 클라이언트가 초기화되지 않고, 모든 캡처 함수가 조용히 no-op으로 동작합니다 (Safe Fail).
-
-### 6.2. DAU/MAU 대시보드
+### 7.2. DAU/MAU 대시보드
 
 PostHog 인사이트에서 `Unique Users` 기준으로 추세를 설정하면 즉시 실사용자 지표를 확인할 수 있습니다. 모든 이벤트에 `$source: 'backend'`가 붙어 있으므로, 전체 서비스 지표 관리를 위해 필터로 활용하십시오.
 
-### 6.3. 제외 경로
+### 7.3. 제외 경로
 
 다음 경로는 이벤트가 전송되지 않습니다.
 

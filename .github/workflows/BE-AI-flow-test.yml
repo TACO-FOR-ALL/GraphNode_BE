@@ -171,9 +171,9 @@ jobs:
           DATABASE_URL: postgresql://app:app@localhost:5432/graphnode
           INTERNAL_SERVICE_TOKEN: ci-test-key
 
-      # 10. 실패 시 추가 로그 수집 (테스트 스크립트 도달 전 실패 대응)
+      # 10. 추가 로그 수집 (실패/캔슬 포함 모든 비정상 종료 대응)
       - name: Collect Logs on Failure
-        if: failure()
+        if: always()
         run: |
           mkdir -p be/e2e-logs
           docker compose -f be/docker-compose.test.yml logs --tail 500 > be/e2e-logs/docker-compose-all.log
