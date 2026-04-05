@@ -271,8 +271,7 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GROQ_API_KEY=${GROQ_API_KEY}
       - INTERNAL_SERVICE_TOKEN=ci-test-key
-      - MICROSCOPE_LLM_MODEL=gpt-4o-mini
-      - MACRO_LLM_MODEL=gpt-4o-mini
+
     healthcheck:
       test: ["CMD-SHELL", "python3 -c 'import os; exit(0)' || exit 1"]
       interval: 10s
