@@ -343,27 +343,10 @@ export class ChatManagementService {
       { label: 'ConversationService.listDocsByOwner' }
     );
 
-    // [Optimization] N+1 문제를 해결하기 위해 모든 대화방의 메시지를 한 번에 조회합니다.
-    const conversationIds : string[] = result.items.map((doc) => doc._id);
-    const allMessageDocs : MessageDoc[] = await withRetry(
-      async () => await this.messageService.findDocsByConversationIds(conversationIds),
-      { label: 'MessageService.findDocsByConversationIds' }
-    );
-
-    // 대화방 ID별로 메시지를 그룹화합니다.
-    const messagesByConvId = allMessageDocs.reduce((acc, doc) => {
-      if (!acc[doc.conversationId]) {
-        acc[doc.conversationId] = [];
-      }
-      acc[doc.conversationId].push(doc);
-      return acc;
-    }, {} as Record<string, MessageDoc[]>);
-
-    // 각 대화방 문서와 해당 메시지 그룹을 합쳐서 DTO로 변환합니다.
-    const items : ChatThread[] = result.items.map((doc) => {
-      const messageDocs = messagesByConvId[doc._id] || [];
-      return toChatThreadDto(doc, messageDocs);
-    });
+    // 목록 API에서는 메시지를 조회하지 않습니다.
+    // 메시지는 단건 조회(getConversation) 시점에 로드하며,
+    // DTO 타입(messages: ChatMessage[])은 그대로 유지하되 빈 배열로 반환합니다.
+    const items: ChatThread[] = result.items.map((doc) => toChatThreadDto(doc, []));
 
     return { items, nextCursor: result.nextCursor };
   }

@@ -80,8 +80,10 @@ async function ensureIndexes() {
     .collection('conversations')
     .createIndex({ ownerUserId: 1, deletedAt: 1, updatedAt: -1, _id: 1 });
 
-  // messages 컬렉션: 대화방 ID로 메시지 목록을 조회하므로 인덱스 생성
-  await db.collection('messages').createIndex({ conversationId: 1, _id: 1 });
+  // messages 컬렉션: 대화방 ID + deletedAt 필터 + createdAt 정렬을 커버하는 복합 인덱스
+  // findAllByConversationId / findAllByConversationIds 쿼리:
+  //   { conversationId, deletedAt: null } .sort({ createdAt: 1 }) → 이 인덱스가 완전 커버
+  await db.collection('messages').createIndex({ conversationId: 1, deletedAt: 1, createdAt: 1 });
 
   // Graph Collections: {id, userId} 조합으로 조회하므로 복합 인덱스 생성 (Unique)
   await db.collection('graph_nodes').createIndex({ userId: 1, id: 1 }, { unique: true });
