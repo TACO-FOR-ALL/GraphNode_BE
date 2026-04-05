@@ -3,6 +3,7 @@ import request from 'supertest';
 import express, { Request, Response, NextFunction } from 'express';
 import { createSearchRouter } from '../../src/app/routes/SearchRouter';
 import { SearchController } from '../../src/app/controllers/SearchController';
+import { errorHandler } from '../../src/app/middlewares/error';
 
 // --- Mocks ---
 // DB 의존성 및 인프라 의존성이 있는 미들웨어를 Mock 처리하여 격리 환경 구성
@@ -21,7 +22,18 @@ jest.mock('../../src/shared/utils/logger', () => ({
     error: jest.fn(),
     warn: jest.fn(),
     debug: jest.fn(),
+    child: jest.fn().mockReturnValue({
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+    }),
   },
+}));
+
+// Mock Sentry to prevent network calls in tests
+jest.mock('@sentry/node', () => ({
+  captureException: jest.fn(),
 }));
 
 const mockIntegratedSearchByKeyword = jest.fn() as jest.MockedFunction<
@@ -42,8 +54,9 @@ describe('Search API Integration Tests (Lightweight)', () => {
     app.use(express.json());
 
     // 2. 테스트용 인증 유저 강제 주입 (JWT 및 Session을 거치지 않음)
+    // req.userId는 authJwt/bindUserIdToRequest가 설정하는 실제 패턴과 동일하게 주입
     app.use((req: Request, res: Response, next: NextFunction) => {
-      (req as any).user = { id: userId, email: 'test@taco.com' };
+      req.userId = userId;
       next();
     });
 
@@ -51,6 +64,9 @@ describe('Search API Integration Tests (Lightweight)', () => {
     const searchController = new SearchController(mockSearchService);
     const searchRouter = createSearchRouter(searchController);
     app.use('/v1/search', searchRouter);
+
+    // 4. 중앙 에러 핸들러 등록 (AppError → RFC 9457 Problem Details 변환)
+    app.use(errorHandler);
   });
 
   beforeEach(() => {

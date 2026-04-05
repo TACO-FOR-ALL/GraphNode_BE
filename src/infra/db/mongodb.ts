@@ -93,6 +93,20 @@ async function ensureIndexes() {
   // Graph Stats: 사용자당 하나이므로 userId 인덱스
   await db.collection('graph_stats').createIndex({ userId: 1 }, { unique: true });
 
+  // conversations 동기화 쿼리: findModifiedSince { ownerUserId, updatedAt: { $gte } }
+  // 현재 주 인덱스(ownerUserId→deletedAt→updatedAt)는 deletedAt 없는 이 쿼리에 deletedAt 이후 키를 활용 못 함
+  await db.collection('conversations').createIndex(
+    { ownerUserId: 1, updatedAt: 1 },
+    { name: 'conversations_sync' }
+  );
+
+  // conversations 만료 정리 쿼리: hardDeleteExpired/findExpiredConversations
+  // { deletedAt: { $ne: null, $lt: ... } } — ownerUserId 없어 전체 스캔. deletedAt 인덱스로 커버
+  await db.collection('conversations').createIndex(
+    { deletedAt: 1 },
+    { name: 'conversations_cleanup' }
+  );
+
   // Missing indexes: graph_subclusters, graph_summaries
   await db.collection('graph_subclusters').createIndex({ userId: 1 });
   await db.collection('graph_summaries').createIndex({ userId: 1 });

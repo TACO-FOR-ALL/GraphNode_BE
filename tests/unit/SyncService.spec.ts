@@ -74,7 +74,8 @@ describe('SyncService', () => {
       expect(result.conversations[0].id).toBe('c1');
       expect(result.conversations[0].messages).toHaveLength(1);
       expect(result.conversations[0].messages[0].id).toBe('m1');
-      expect(result.messages).toHaveLength(1);
+      // messages는 conversations 내부에 embed됨 — 최상위 messages는 항상 빈 배열 (중복 전송 방지)
+      expect(result.messages).toHaveLength(0);
       
       expect(mockConvSvc.findModifiedSince).toHaveBeenCalledWith(userId, since);
       expect(mockMsgSvc.findModifiedSince).toHaveBeenCalledWith(userId, since);

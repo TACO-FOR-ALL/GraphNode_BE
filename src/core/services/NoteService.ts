@@ -447,56 +447,65 @@ export class NoteService {
 
     try {
       await withRetry(
-        async () => {
-          await session.withTransaction(async () => {
-            // 1. 삭제 대상 폴더 존재 확인
-            const targetFolder: FolderDoc | null = await this.noteRepo.getFolder(folderId, userId);
-            if (!targetFolder) {
-              // 트랜잭션 내에서 에러를 던지면 자동으로 롤백됩니다.
-              throw new NotFoundError(`Folder not found: ${folderId}`);
-            }
-
-            // 2. 모든 하위 폴더 ID 조회 (재귀적 탐색)
-            const descendantIds: string[] = await this.noteRepo.findDescendantFolderIds(
-              folderId,
-              userId
-            );
-
-            // 3. 삭제할 모든 폴더 ID 목록 구성 (타겟 폴더 포함)
-            const allFolderIdsToDelete: string[] = [folderId, ...descendantIds];
-
-            if (permanent) {
-              // 4. 해당 폴더들에 속한 모든 노트 ID 조회
-              const notesToHardDelete: NoteDoc[] = await this.noteRepo.listNotesByFolderIds(allFolderIdsToDelete, userId, true);
-              const noteIdsToHardDelete = notesToHardDelete.map((n: NoteDoc) => n._id);
-
-              // 5. 해당 폴더들에 속한 모든 노트 일괄 삭제 (Hard)
-              await this.noteRepo.hardDeleteNotesByFolderIds(allFolderIdsToDelete, userId, session);
-
-              // 6. 폴더들 일괄 삭제 (Hard)
-              await this.noteRepo.hardDeleteFolders(allFolderIdsToDelete, userId, session);
-
-              // 7. 연쇄 그래프 삭제
-              if (noteIdsToHardDelete.length > 0) {
-                await this.graphManagementService.deleteNodesByOrigIds(userId, noteIdsToHardDelete, true, { session });
+        async (bail) => {
+          try {
+            await session.withTransaction(async () => {
+              // 1. 삭제 대상 폴더 존재 확인
+              const targetFolder: FolderDoc | null = await this.noteRepo.getFolder(folderId, userId);
+              if (!targetFolder) {
+                // 트랜잭션 내에서 에러를 던지면 자동으로 롤백됩니다.
+                throw new NotFoundError(`Folder not found: ${folderId}`);
               }
+
+              // 2. 모든 하위 폴더 ID 조회 (재귀적 탐색)
+              const descendantIds: string[] = await this.noteRepo.findDescendantFolderIds(
+                folderId,
+                userId
+              );
+
+              // 3. 삭제할 모든 폴더 ID 목록 구성 (타겟 폴더 포함)
+              const allFolderIdsToDelete: string[] = [folderId, ...descendantIds];
+
+              if (permanent) {
+                // 4. 해당 폴더들에 속한 모든 노트 ID 조회
+                const notesToHardDelete: NoteDoc[] = await this.noteRepo.listNotesByFolderIds(allFolderIdsToDelete, userId, true);
+                const noteIdsToHardDelete = notesToHardDelete.map((n: NoteDoc) => n._id);
+
+                // 5. 해당 폴더들에 속한 모든 노트 일괄 삭제 (Hard)
+                await this.noteRepo.hardDeleteNotesByFolderIds(allFolderIdsToDelete, userId, session);
+
+                // 6. 폴더들 일괄 삭제 (Hard)
+                await this.noteRepo.hardDeleteFolders(allFolderIdsToDelete, userId, session);
+
+                // 7. 연쇄 그래프 삭제
+                if (noteIdsToHardDelete.length > 0) {
+                  await this.graphManagementService.deleteNodesByOrigIds(userId, noteIdsToHardDelete, true, { session });
+                }
+                return;
+              }
+
+              // 4. 해당 폴더들에 속한 모든 노트 일괄 삭제 (Soft)
+              const notesToSoftDelete: NoteDoc[] = await this.noteRepo.listNotesByFolderIds(allFolderIdsToDelete, userId);
+              const noteIdsToSoftDelete = notesToSoftDelete.map((n: NoteDoc) => n._id);
+
+              await this.noteRepo.softDeleteNotesByFolderIds(allFolderIdsToDelete, userId, session);
+
+              // 5. 폴더들 일괄 삭제 (Soft)
+              await this.noteRepo.softDeleteFolders(allFolderIdsToDelete, userId, session);
+
+              // 6. 연쇄 그래프 삭제
+              if (noteIdsToSoftDelete.length > 0) {
+                await this.graphManagementService.deleteNodesByOrigIds(userId, noteIdsToSoftDelete, false, { session });
+              }
+            });
+          } catch (err: unknown) {
+            // 도메인 에러(NotFoundError 등)는 재시도 불필요 — 즉시 중단
+            if (err instanceof NotFoundError) {
+              bail(err as Error);
               return;
             }
-
-            // 4. 해당 폴더들에 속한 모든 노트 일괄 삭제 (Soft)
-            const notesToSoftDelete: NoteDoc[] = await this.noteRepo.listNotesByFolderIds(allFolderIdsToDelete, userId);
-            const noteIdsToSoftDelete = notesToSoftDelete.map((n: NoteDoc) => n._id);
-
-            await this.noteRepo.softDeleteNotesByFolderIds(allFolderIdsToDelete, userId, session);
-
-            // 5. 폴더들 일괄 삭제 (Soft)
-            await this.noteRepo.softDeleteFolders(allFolderIdsToDelete, userId, session);
-
-            // 6. 연쇄 그래프 삭제
-            if (noteIdsToSoftDelete.length > 0) {
-              await this.graphManagementService.deleteNodesByOrigIds(userId, noteIdsToSoftDelete, false, { session });
-            }
-          });
+            throw err;
+          }
         },
         { label: 'NoteService.deleteFolder.transaction' }
       );
@@ -531,46 +540,55 @@ export class NoteService {
 
     try {
       await withRetry(
-        async () => {
-          await session.withTransaction(async () => {
-            // 1. 복구 대상 폴더 존재 확인
-            const targetFolder: FolderDoc | null = await this.noteRepo.getFolder(folderId, userId, true);
-            if (!targetFolder) {
-              throw new NotFoundError(`Folder not found: ${folderId}`);
-            }
-
-            // 2. 부모 폴더 유효성 체크
-            let parentId = targetFolder.parentId;
-            if (parentId) {
-              const parentFolder = await this.noteRepo.getFolder(parentId, userId, true);
-              if (!parentFolder || parentFolder.deletedAt !== null) {
-                parentId = null;
+        async (bail) => {
+          try {
+            await session.withTransaction(async () => {
+              // 1. 복구 대상 폴더 존재 확인
+              const targetFolder: FolderDoc | null = await this.noteRepo.getFolder(folderId, userId, true);
+              if (!targetFolder) {
+                throw new NotFoundError(`Folder not found: ${folderId}`);
               }
+
+              // 2. 부모 폴더 유효성 체크
+              let parentId = targetFolder.parentId;
+              if (parentId) {
+                const parentFolder = await this.noteRepo.getFolder(parentId, userId, true);
+                if (!parentFolder || parentFolder.deletedAt !== null) {
+                  parentId = null;
+                }
+              }
+
+              // 3. 모든 하위 폴더 ID 조회
+              const descendantIds: string[] = await this.noteRepo.findDescendantFolderIds(
+                folderId,
+                userId
+              );
+
+              // 4. 복구할 모든 폴더 ID 목록 구성 (타겟 폴더 포함)
+              const allFolderIdsToRestore: string[] = [folderId, ...descendantIds];
+
+              // 5. 해당 폴더들에 속한 모든 노트 일괄 복구
+              const notesToRestore: NoteDoc[] = await this.noteRepo.listNotesByFolderIds(allFolderIdsToRestore, userId, true);
+              const noteIdsToRestore = notesToRestore.map((n: NoteDoc) => n._id);
+
+              await this.noteRepo.restoreNotesByFolderIds(allFolderIdsToRestore, userId, session);
+
+              // 6. 폴더들 일괄 복구 (타겟 폴더의 parentId 업데이트 포함)
+              await this.noteRepo.restoreFolders(allFolderIdsToRestore, userId, session, folderId, parentId);
+
+              // 7. 연쇄 그래프 복구
+              if (noteIdsToRestore.length > 0) {
+                await this.graphManagementService.restoreNodesByOrigIds(userId, noteIdsToRestore, { session });
+              }
+            });
+          } catch (err: unknown) {
+            // 도메인 에러(NotFoundError 등)는 재시도 불필요 — 즉시 중단
+            if (err instanceof NotFoundError) {
+              bail(err as Error);
+              return;
             }
-
-            // 3. 모든 하위 폴더 ID 조회
-            const descendantIds: string[] = await this.noteRepo.findDescendantFolderIds(
-              folderId,
-              userId
-            );
-
-            // 4. 복구할 모든 폴더 ID 목록 구성 (타겟 폴더 포함)
-            const allFolderIdsToRestore: string[] = [folderId, ...descendantIds];
-
-            // 5. 해당 폴더들에 속한 모든 노트 일괄 복구
-            const notesToRestore: NoteDoc[] = await this.noteRepo.listNotesByFolderIds(allFolderIdsToRestore, userId, true);
-            const noteIdsToRestore = notesToRestore.map((n: NoteDoc) => n._id);
-            
-            await this.noteRepo.restoreNotesByFolderIds(allFolderIdsToRestore, userId, session);
-
-            // 6. 폴더들 일괄 복구 (타겟 폴더의 parentId 업데이트 포함)
-            await this.noteRepo.restoreFolders(allFolderIdsToRestore, userId, session, folderId, parentId);
-
-            // 7. 연쇄 그래프 복구
-            if (noteIdsToRestore.length > 0) {
-              await this.graphManagementService.restoreNodesByOrigIds(userId, noteIdsToRestore, { session });
-            }
-          });
+            throw err;
+          }
         },
         { label: 'NoteService.restoreFolder.transaction' }
       );
@@ -738,14 +756,23 @@ export class NoteService {
     try {
       let deletedFolders = 0;
       await withRetry(
-        async () => {
-          await session.withTransaction(async () => {
-            // 1. 폴더 내의 모든 노트 삭제
-            await this.noteRepo.deleteAllNotesInFolders(userId, session);
+        async (bail) => {
+          try {
+            await session.withTransaction(async () => {
+              // 1. 폴더 내의 모든 노트 삭제
+              await this.noteRepo.deleteAllNotesInFolders(userId, session);
 
-            // 2. 모든 폴더 삭제
-            deletedFolders = await this.noteRepo.deleteAllFolders(userId, session);
-          });
+              // 2. 모든 폴더 삭제
+              deletedFolders = await this.noteRepo.deleteAllFolders(userId, session);
+            });
+          } catch (err: unknown) {
+            // 도메인 에러는 재시도 불필요 — 즉시 중단
+            if (err instanceof NotFoundError) {
+              bail(err as Error);
+              return;
+            }
+            throw err;
+          }
         },
         { label: 'NoteService.deleteAllFolders.transaction' }
       );

@@ -367,7 +367,7 @@ describe('ChatManagementService', () => {
   describe('bulkCreateConversations', () => {
     it('should create multiple conversations in chunk', async () => {
       const threads = [
-        { id: 'c1', title: 'T1', messages: [{ id: 'm1', content: 'hi' }] },
+        { id: 'c1', title: 'T1', messages: [{ id: 'm1', content: 'hi', role: 'user' }] },
         { id: 'c2', title: 'T2', messages: [] },
       ];
 
@@ -377,10 +377,28 @@ describe('ChatManagementService', () => {
       expect(results[0].id).toBe('c1');
       expect(results[1].id).toBe('c2');
 
+      // listConversations와 동일하게 응답 messages는 항상 빈 배열 (Lazy Loading)
+      expect(results[0].messages).toHaveLength(0);
+      expect(results[1].messages).toHaveLength(0);
+
+      // 메시지는 DB에 정상 저장되어야 함
       const c1 = await convRepo.findById('c1', 'u1');
       expect(c1).toBeDefined();
       const m1 = await msgRepo.findAllByConversationId('c1');
       expect(m1).toHaveLength(1);
+    });
+
+    it('should generate title from first message if title is empty', async () => {
+      const threads = [
+        { id: 'c3', title: '', messages: [{ id: 'm3', content: 'Hello world this is a long message', role: 'user' }] },
+        { id: 'c4', title: '  ', messages: [] },
+      ];
+
+      const results = await chatSvc.bulkCreateConversations('u1', threads as any);
+
+      // 빈 title이면 첫 메시지 앞 10자 + '...' 또는 'New Conversation'
+      expect(results[0].title).toBe('Hello worl...');
+      expect(results[1].title).toBe('New Conversation');
     });
   });
 
