@@ -343,27 +343,10 @@ export class ChatManagementService {
       { label: 'ConversationService.listDocsByOwner' }
     );
 
-    // [Optimization] N+1 문제를 해결하기 위해 모든 대화방의 메시지를 한 번에 조회합니다.
-    const conversationIds : string[] = result.items.map((doc) => doc._id);
-    const allMessageDocs : MessageDoc[] = await withRetry(
-      async () => await this.messageService.findDocsByConversationIds(conversationIds),
-      { label: 'MessageService.findDocsByConversationIds' }
-    );
-
-    // 대화방 ID별로 메시지를 그룹화합니다.
-    const messagesByConvId = allMessageDocs.reduce((acc, doc) => {
-      if (!acc[doc.conversationId]) {
-        acc[doc.conversationId] = [];
-      }
-      acc[doc.conversationId].push(doc);
-      return acc;
-    }, {} as Record<string, MessageDoc[]>);
-
-    // 각 대화방 문서와 해당 메시지 그룹을 합쳐서 DTO로 변환합니다.
-    const items : ChatThread[] = result.items.map((doc) => {
-      const messageDocs = messagesByConvId[doc._id] || [];
-      return toChatThreadDto(doc, messageDocs);
-    });
+    // 목록 API에서는 메시지를 조회하지 않습니다.
+    // 메시지는 단건 조회(getConversation) 시점에 로드하며,
+    // DTO 타입(messages: ChatMessage[])은 그대로 유지하되 빈 배열로 반환합니다.
+    const items: ChatThread[] = result.items.map((doc) => toChatThreadDto(doc, []));
 
     return { items, nextCursor: result.nextCursor };
   }
@@ -466,53 +449,49 @@ export class ChatManagementService {
     const client: MongoClient = getMongo();
     const session: ClientSession = client.startSession();
 
+    // 그래프 삭제에 필요한 messageId 목록을 트랜잭션 외부에서 사전 조회.
+    // hard delete 시 TX 커밋 후 메시지가 사라지므로 TX 진입 전에 확보해야 함.
+    const messages = await this.messageService.findDocsByConversationId(id);
+    const messageIds = messages.map(m => m._id);
+
     try {
-      await withRetry(
-        async () => {
-          await session.withTransaction(async () => {
-            // 1. 대화방 삭제
-            const success = await this.conversationService.deleteDoc(
-              id,
-              ownerUserId,
-              permanent,
-              session
-            );
-            if (!success) {
-              throw new NotFoundError(`Conversation not found or delete failed: ${id}`);
-            }
+      // TX 범위: conversations + messages (핵심 비즈니스 데이터만 원자적 처리)
+      // graph 컬렉션을 TX에 포함하면 SQS 워커의 동시 쓰기와 write conflict 발생.
+      await session.withTransaction(async () => {
+        // 1. 대화방 삭제
+        const success = await this.conversationService.deleteDoc(
+          id,
+          ownerUserId,
+          permanent,
+          session
+        );
+        if (!success) {
+          throw new NotFoundError(`Conversation not found or delete failed: ${id}`);
+        }
 
-            // 2. 메시지 사전 조회 및 삭제 (Cascade)
-            const messages = await this.messageService.findDocsByConversationId(id);
-            const messageIds = messages.map(m => m._id);
-
-            if (permanent) {
-              await this.messageService.deleteAllByConversationId(id, session);
-            } else {
-              await this.messageService.softDeleteAllByConversationId(id, session);
-            }
-
-            // 3. 그래프 노드/엣지 연쇄 삭제 (Cascade Graph)
-            if (messageIds.length > 0) {
-              await this.graphManagementService.deleteNodesByOrigIds(ownerUserId, messageIds, permanent, { session });
-            }
-          });
-        },
-        { label: 'ChatManagementService.deleteConversation.transaction' }
-      );
-      return true;
+        // 2. 메시지 삭제 (Cascade)
+        if (permanent) {
+          await this.messageService.deleteAllByConversationId(id, session);
+        } else {
+          await this.messageService.softDeleteAllByConversationId(id, session);
+        }
+      });
     } catch (err: unknown) {
-      if (
-        err instanceof Error &&
-        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
-          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
-      ) {
-        throw err;
-      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('ChatService.deleteConversation failed', { cause: String(err) });
     } finally {
       await session.endSession();
     }
+
+    // TX 외부: 파생 데이터(graph) 삭제. TX와 원자성 불필요 — SQS 충돌 방지를 위해 분리.
+    if (messageIds.length > 0) {
+      await withRetry(
+        async () => this.graphManagementService.deleteNodesByOrigIds(ownerUserId, messageIds, permanent),
+        { retries: 3, label: 'ChatManagementService.deleteConversation.graphCleanup' }
+      );
+    }
+
+    return true;
   }
 
   /**
@@ -724,52 +703,46 @@ export class ChatManagementService {
     const client: MongoClient = getMongo();
     const session: ClientSession = client.startSession();
 
+    // TX 진입 전 소유권 확인 (read-only — TX 범위에 포함할 필요 없음)
+    await this.validateConversationOwner(conversationId, ownerUserId);
+
     try {
-      await withRetry(
-        async () => {
-          await session.withTransaction(async () => {
-            // 1. 소유권 확인
-            await this.validateConversationOwner(conversationId, ownerUserId);
+      // TX 범위: messages + conversations 타임스탬프 갱신 (핵심 비즈니스 데이터만)
+      // graph 컬렉션을 TX에 포함하면 SQS 워커의 동시 쓰기와 write conflict 발생.
+      await session.withTransaction(async () => {
+        // 1. 메시지 삭제
+        const success = await this.messageService.deleteDoc(
+          messageId,
+          conversationId,
+          permanent,
+          session
+        );
+        if (!success) {
+          throw new NotFoundError(`Message not found: ${messageId}`);
+        }
 
-            // 2. 메시지 삭제
-            const success = await this.messageService.deleteDoc(
-              messageId,
-              conversationId,
-              permanent,
-              session
-            );
-            if (!success) {
-              throw new NotFoundError(`Message not found: ${messageId}`);
-            }
-
-            // 3. 대화방 타임스탬프 갱신
-            await this.conversationService.updateDoc(
-              conversationId,
-              ownerUserId,
-              { updatedAt: Date.now() },
-              session
-            );
-
-            // 4. 연관된 지식 그래프 연쇄 삭제
-            await this.graphManagementService.deleteNodesByOrigIds(ownerUserId, [messageId], permanent, { session });
-          });
-        },
-        { label: 'ChatManagementService.deleteMessage.transaction' }
-      );
-      return true;
+        // 2. 대화방 타임스탬프 갱신
+        await this.conversationService.updateDoc(
+          conversationId,
+          ownerUserId,
+          { updatedAt: Date.now() },
+          session
+        );
+      });
     } catch (err: unknown) {
-      if (
-        err instanceof Error &&
-        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
-          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
-      ) {
-        throw err;
-      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('ChatService.deleteMessage failed', { cause: String(err) });
     } finally {
       await session.endSession();
     }
+
+    // TX 외부: 파생 데이터(graph) 삭제. TX와 원자성 불필요 — SQS 충돌 방지를 위해 분리.
+    await withRetry(
+      async () => this.graphManagementService.deleteNodesByOrigIds(ownerUserId, [messageId], permanent),
+      { retries: 3, label: 'ChatManagementService.deleteMessage.graphCleanup' }
+    );
+
+    return true;
   }
 
   /**
@@ -899,37 +872,33 @@ export class ChatManagementService {
     const client: MongoClient = getMongo();
     const session: ClientSession = client.startSession();
 
+    let deletedCount = 0;
+
     try {
-      let deletedCount = 0;
-      await withRetry(
-        async () => {
-          await session.withTransaction(async () => {
-            // 1. 모든 메시지 삭제
-            await this.messageService.deleteAllDocsByUserId(ownerUserId, session);
+      // TX 범위: messages + conversations (핵심 비즈니스 데이터만 원자적 처리)
+      // graph 6개 컬렉션(nodes/edges/clusters/subclusters/stats/summary)을 TX에 포함하면
+      // SQS 워커의 동시 쓰기와 write conflict 발생 — 트랜잭션 외부로 분리.
+      await session.withTransaction(async () => {
+        // 1. 모든 메시지 삭제
+        await this.messageService.deleteAllDocsByUserId(ownerUserId, session);
 
-            // 2. 모든 대화 삭제
-            deletedCount = await this.conversationService.deleteAllDocs(ownerUserId, session);
-
-            // 3. 모든 그래프 연쇄 삭제 (해당 유저의 전체 데이터 삭제 문맥에 부합)
-            await this.graphManagementService.deleteGraph(ownerUserId, true, { session });
-          });
-        },
-        { label: 'ChatManagementService.deleteAllConversations.transaction' }
-      );
-      return deletedCount;
+        // 2. 모든 대화 삭제
+        deletedCount = await this.conversationService.deleteAllDocs(ownerUserId, session);
+      });
     } catch (err: unknown) {
-      if (
-        err instanceof Error &&
-        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
-          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
-      ) {
-        throw err;
-      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('ChatService.deleteAllConversations failed', { cause: String(err) });
     } finally {
       await session.endSession();
     }
+
+    // TX 외부: 파생 데이터(graph 전체) 삭제. TX와 원자성 불필요 — SQS 충돌 방지를 위해 분리.
+    await withRetry(
+      async () => this.graphManagementService.deleteGraph(ownerUserId, true),
+      { retries: 5, minTimeout: 500, label: 'ChatManagementService.deleteAllConversations.graphCleanup' }
+    );
+
+    return deletedCount;
   }
 
   /**

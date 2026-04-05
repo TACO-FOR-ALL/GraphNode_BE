@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { PostHog } from 'posthog-node';
 
 import { logger } from './logger';
@@ -148,4 +149,22 @@ export const captureApiCall = (userId: string, data: ApiAuditData): void => {
       $source: 'backend',
     },
   });
+};
+
+/**
+ * IP와 User-Agent를 조합하여 고유한 익명 사용자 ID를 생성합니다.
+ *
+ * @description
+ * - 로그인 전(`userId`가 없을 때) 사용자를 식별하기 위해 사용합니다.
+ * - `guest_<sha256_hash_prefix>` 형식의 문자열을 반환합니다.
+ * - 동일한 환경(IP+UA)에서는 동일한 ID가 생성되므로 '로그인 시도 횟수' 등을 유전별로 집계할 수 있습니다.
+ *
+ * @param ip - 클라이언트 IP 주소
+ * @param userAgent - 클라이언트 User-Agent 문자열
+ * @returns 'guest_...' 형식의 고유 식별자
+ */
+export const getGuestId = (ip?: string, userAgent?: string): string => {
+  const data = `${ip ?? 'unknown'}-${userAgent ?? 'unknown'}`;
+  const hash = crypto.createHash('sha256').update(data).digest('hex').slice(0, 16);
+  return `guest_${hash}`;
 };

@@ -21,7 +21,7 @@
 import type { Request, Response, NextFunction } from 'express';
 
 import { requestStore } from '../../shared/context/requestStore';
-import { captureApiCall } from '../../shared/utils/posthog';
+import { captureApiCall, getGuestId } from '../../shared/utils/posthog';
 
 // ─────────────────────────────────────────────────────────────
 // 상수
@@ -179,10 +179,10 @@ export function posthogAuditMiddleware(req: Request, res: Response, next: NextFu
 
     const latencyMs = Number(process.hrtime.bigint() - startNs) / 1_000_000;
 
-    // userId: finish 시점에는 authJwt가 이미 실행되어 req.userId가 설정됨
-    const userId = req.userId ?? 'anonymous';
+    // userId: 인증된 경우 req.userId 사용, 미인증(로그인 전 등)인 경우 guest ID 생성
+    const distinctId = req.userId ?? getGuestId(ctx?.ip, ctx?.userAgent);
 
-    captureApiCall(userId, {
+    captureApiCall(distinctId, {
       method: req.method,
       path: resolveRoutePath(req),
       statusCode: res.statusCode,

@@ -80,8 +80,10 @@ async function ensureIndexes() {
     .collection('conversations')
     .createIndex({ ownerUserId: 1, deletedAt: 1, updatedAt: -1, _id: 1 });
 
-  // messages 컬렉션: 대화방 ID로 메시지 목록을 조회하므로 인덱스 생성
-  await db.collection('messages').createIndex({ conversationId: 1, _id: 1 });
+  // messages 컬렉션: 대화방 ID + deletedAt 필터 + createdAt 정렬을 커버하는 복합 인덱스
+  // findAllByConversationId / findAllByConversationIds 쿼리:
+  //   { conversationId, deletedAt: null } .sort({ createdAt: 1 }) → 이 인덱스가 완전 커버
+  await db.collection('messages').createIndex({ conversationId: 1, deletedAt: 1, createdAt: 1 });
 
   // Graph Collections: {id, userId} 조합으로 조회하므로 복합 인덱스 생성 (Unique)
   await db.collection('graph_nodes').createIndex({ userId: 1, id: 1 }, { unique: true });
@@ -103,6 +105,9 @@ async function ensureIndexes() {
   // - expiresAt가 없는 문서는 TTL로 자동 삭제되지 않습니다.
   // 목적: 알림 이력을 무한히 쌓지 않고 운영 정책(예: 7일)으로 자동 정리하기 위함
   await db.collection('notifications').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+  // notes 컬렉션: listNotes 쿼리 패턴 { ownerUserId, folderId, deletedAt: null } + sort(updatedAt: -1) 커버
+  await db.collection('notes').createIndex({ ownerUserId: 1, folderId: 1, deletedAt: 1, updatedAt: -1 });
 
   // --- 통합 검색(Full-Text Search)을 위한 텍스트 인덱스 추가 ---
 
