@@ -106,6 +106,9 @@ async function ensureIndexes() {
   // 목적: 알림 이력을 무한히 쌓지 않고 운영 정책(예: 7일)으로 자동 정리하기 위함
   await db.collection('notifications').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
+  // notes 컬렉션: listNotes 쿼리 패턴 { ownerUserId, folderId, deletedAt: null } + sort(updatedAt: -1) 커버
+  await db.collection('notes').createIndex({ ownerUserId: 1, folderId: 1, deletedAt: 1, updatedAt: -1 });
+
   // --- 통합 검색(Full-Text Search)을 위한 텍스트 인덱스 추가 ---
 
   // notes: 제목(10)과 내용(1)에 가중치를 두어 검색
