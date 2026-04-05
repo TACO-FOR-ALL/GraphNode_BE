@@ -156,7 +156,7 @@ describe('End-to-End Graph Flow', () => {
           isUpdating = true;
         }
         // 최종적으로 다시 'CREATED' 상태가 되면 완료
-        if (isUpdating && stats && stats.status === 'CREATED') {
+        if (isUpdating && stats && stats.status === 'UPDATED') {
           isFinished = true;
           break;
         }

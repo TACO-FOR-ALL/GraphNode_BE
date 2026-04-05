@@ -12,7 +12,12 @@ import { logger } from '../../shared/utils/logger';
 import { AppError, UpstreamError, GraphNotFoundError } from '../../shared/errors/domain';
 import { ChatMessage } from '../../shared/dtos/ai';
 import { mapSnapshotToAiInput } from '../../shared/mappers/graph_ai_input.mapper';
-import { GraphGenRequestPayload, GraphSummaryRequestPayload, AddNodeRequestPayload, TaskType } from '../../shared/dtos/queue';
+import {
+  GraphGenRequestPayload,
+  GraphSummaryRequestPayload,
+  AddNodeRequestPayload,
+  TaskType,
+} from '../../shared/dtos/queue';
 // Interfaces
 import { QueuePort } from '../ports/QueuePort';
 import { StoragePort } from '../ports/StoragePort';
@@ -59,9 +64,12 @@ export class GraphGenerationService {
    * @param options 옵션 (요약 포함 여부 등)
    * @returns 발행된 작업의 Task ID
    */
-  async requestGraphGenerationViaQueue(userId: string, options?: { 
-    includeSummary?: boolean; 
-  }): Promise<string> {
+  async requestGraphGenerationViaQueue(
+    userId: string,
+    options?: {
+      includeSummary?: boolean;
+    }
+  ): Promise<string> {
     let taskId: string | undefined;
     try {
       taskId = `task_${userId}_${ulid()}`;
@@ -112,16 +120,15 @@ export class GraphGenerationService {
           bucket: process.env.S3_PAYLOAD_BUCKET,
           includeSummary: options?.includeSummary ?? true,
           summaryLanguage: language,
-          language : language,
+          language: language,
           extraS3Keys: [noteS3Key], // 통합된 노트 데이터 S3 키 전달
         },
         timestamp: new Date().toISOString(),
       };
 
-      await withRetry(
-        async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody),
-        { label: 'QueuePort.sendMessage.GraphGen' }
-      );
+      await withRetry(async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
+        label: 'QueuePort.sendMessage.GraphGen',
+      });
 
       // 성공 알림 전송
       await this.notificationService.sendGraphGenerationRequested(userId, taskId);
@@ -130,7 +137,11 @@ export class GraphGenerationService {
     } catch (err) {
       logger.error({ err, userId }, 'Failed to enqueue graph generation request');
       // 실패 알림 전송
-      await this.notificationService.sendGraphGenerationRequestFailed(userId, taskId || 'unknown', String(err));
+      await this.notificationService.sendGraphGenerationRequestFailed(
+        userId,
+        taskId || 'unknown',
+        String(err)
+      );
 
       if (err instanceof AppError) throw err;
       throw new UpstreamError('Failed to request graph generation via queue', {
@@ -145,7 +156,7 @@ export class GraphGenerationService {
   async testRequestAddNodeViaQueue(userId: string): Promise<string> {
     const taskId = `task_test_add_node_${userId}_${ulid()}`;
     const s3Key = `add-node/${taskId}/test-batch.json`;
-    
+
     const mockPayload = {
       userId,
       existingClusters: [],
@@ -157,12 +168,15 @@ export class GraphGenerationService {
           create_time: Date.now() / 1000,
           update_time: Date.now() / 1000,
           mapping: {
-            'test_msg_id': {
+            test_msg_id: {
               id: 'test_msg_id',
               message: {
                 id: 'test_msg_id',
                 author: { role: 'user' },
-                content: { content_type: 'text', parts: ['This is a test message for graph generation.'] },
+                content: {
+                  content_type: 'text',
+                  parts: ['This is a test message for graph generation.'],
+                },
               },
               parent: null,
               children: [],
@@ -205,20 +219,20 @@ export class GraphGenerationService {
       if (!snapshot || snapshot.nodes.length === 0) {
         throw new GraphNotFoundError('Graph data not found for user. Please generate graph first.');
       }
-      
+
       const language = await this.userService.getPreferredLanguage(userId);
       const aiInput = mapSnapshotToAiInput(snapshot, language);
       const jsonPayload = JSON.stringify(aiInput);
       const dataStream = Readable.from([jsonPayload]);
-      
+
       const s3Key = `graph-summary/${taskId}/graph.json`;
       const bucket = process.env.S3_PAYLOAD_BUCKET || 'graph-node-payloads';
-      
+
       await withRetry(
         async () => await this.storagePort.upload(s3Key, dataStream, 'application/json'),
         { label: 'Storage.upload.summary' }
       );
-      
+
       const messageBody: GraphSummaryRequestPayload = {
         taskId,
         taskType: TaskType.GRAPH_SUMMARY_REQUEST,
@@ -230,19 +244,18 @@ export class GraphGenerationService {
         },
         timestamp: new Date().toISOString(),
       };
-      
-      await withRetry(
-        async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody),
-        { label: 'QueuePort.sendMessage.Summary' }
-      );
-      
+
+      await withRetry(async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
+        label: 'QueuePort.sendMessage.Summary',
+      });
+
       // 성공 알림 전송
       await this.notificationService.sendGraphSummaryRequested(userId, taskId);
-      
+
       return taskId;
     } catch (err) {
       logger.error({ err, userId }, 'Failed to requesting graph summary');
-      
+
       // 실패 알림 전송
       const taskId = (err as any).taskId || 'unknown'; // taskId가 스코프 밖에 있을 수 있으므로 방어적 처리
       await this.notificationService.sendGraphSummaryRequestFailed(userId, taskId, String(err));
@@ -298,14 +311,13 @@ export class GraphGenerationService {
       const taskId = `task_add_node_${userId}_${ulid()}`;
       const s3Key = `add-node/${taskId}/batch.json`;
 
-      const stats = await withRetry(
-        async () => await this.graphEmbeddingService.getStats(userId),
-        { label: 'GraphEmbeddingService.getStats' }
-      );
+      const stats = await withRetry(async () => await this.graphEmbeddingService.getStats(userId), {
+        label: 'GraphEmbeddingService.getStats',
+      });
       if (!stats) {
         throw new GraphNotFoundError('Graph statistics not found. Please generate graph first.');
       }
-      
+
       const lastGraphUpdatedAt = stats.updatedAt ? new Date(stats.updatedAt).getTime() : 0;
 
       // 변경된 대화 수집
@@ -314,9 +326,9 @@ export class GraphGenerationService {
         { label: 'ChatManagementService.listConversations.initial' }
       );
       let allConversations = listResult.items;
-      
+
       let cursor = listResult.nextCursor ?? undefined;
-      while(cursor !== null && cursor !== undefined) {
+      while (cursor !== null && cursor !== undefined) {
         const nextResult = await withRetry(
           async () => await this.chatManagementService.listConversations(userId, 100, cursor),
           { label: 'ChatManagementService.listConversations.loop' }
@@ -325,9 +337,9 @@ export class GraphGenerationService {
         cursor = nextResult.nextCursor ?? undefined;
       }
 
-      const updatedConversations = allConversations.filter(conv => {
-         const convUpdateTime = conv.updatedAt ? new Date(conv.updatedAt).getTime() : 0;
-         return convUpdateTime > lastGraphUpdatedAt;
+      const updatedConversations = allConversations.filter((conv) => {
+        const convUpdateTime = conv.updatedAt ? new Date(conv.updatedAt).getTime() : 0;
+        return convUpdateTime > lastGraphUpdatedAt;
       });
 
       if (updatedConversations.length === 0) {
@@ -335,17 +347,19 @@ export class GraphGenerationService {
       }
 
       // AI 입력 포맷 변환
-      const mappedConversations: AiInputConversation[] = updatedConversations.map(conv => {
+      const mappedConversations: AiInputConversation[] = updatedConversations.map((conv) => {
         const messages: ChatMessage[] = conv.messages || [];
         const mapping: Record<string, AiInputMappingNode> = {};
         let prevMsgId: string | null = null;
-  
+
+        // 대화 순서 정렬
         messages.sort((a, b) => {
           const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
           const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
           return timeA - timeB;
         });
-  
+
+        // 대화 메시지 매핑
         for (const msg of messages) {
           const id = msg.id;
           mapping[id] = {
@@ -358,7 +372,7 @@ export class GraphGenerationService {
             parent: prevMsgId,
             children: [],
           };
-  
+
           if (prevMsgId && mapping[prevMsgId]) {
             mapping[prevMsgId].children.push(id);
           }
@@ -376,6 +390,7 @@ export class GraphGenerationService {
         };
       });
 
+      // 기존 클러스터 정보 가져오기
       const existingClusters = await this.graphEmbeddingService.listClusters(userId);
       const batchPayload = {
         userId,
@@ -383,12 +398,15 @@ export class GraphGenerationService {
         conversations: mappedConversations,
       };
 
+      // S3에 데이터 업로드
       const payloadJson = JSON.stringify(batchPayload);
       await this.storagePort.upload(s3Key, payloadJson, 'application/json');
 
+      // 그래프 상태 업데이트
       stats.status = 'UPDATING';
       await this.graphEmbeddingService.saveStats(stats);
 
+      // SQS 메시지 생성
       const messageBody: AddNodeRequestPayload = {
         taskId,
         taskType: TaskType.ADD_NODE_REQUEST,
@@ -400,10 +418,9 @@ export class GraphGenerationService {
         timestamp: new Date().toISOString(),
       };
 
-      await withRetry(
-        async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody),
-        { label: 'QueuePort.sendMessage.AddNode' }
-      );
+      await withRetry(async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
+        label: 'QueuePort.sendMessage.AddNode',
+      });
 
       // 성공 알림 전송
       await this.notificationService.sendAddConversationRequested(userId, taskId);
@@ -411,10 +428,14 @@ export class GraphGenerationService {
       return taskId;
     } catch (err) {
       logger.error({ err, userId }, 'Failed to queue add node request');
-      
+
       // 실패 알림 전송 (taskId가 try 블록 내부에 정의되어 있으므로 에러 객체에 taskId를 담아두거나 스코프를 조정해야 함)
       // 여기서는 스코프 문제로 'unknown' 처리하거나 상단으로 taskId 정의를 뺌
-      await this.notificationService.sendAddConversationRequestFailed(userId, 'unknown', String(err));
+      await this.notificationService.sendAddConversationRequestFailed(
+        userId,
+        'unknown',
+        String(err)
+      );
 
       if (err instanceof AppError) throw err;
       throw new UpstreamError('Failed to request add node via queue', { cause: String(err) });
@@ -438,7 +459,7 @@ export class GraphGenerationService {
         async () => await this.chatManagementService.listConversations(userId, BATCH_SIZE, cursor),
         { label: 'ChatManagementService.listConversations.stream' }
       );
-      
+
       for (const conv of result.items) {
         const messages: ChatMessage[] = conv.messages || [];
         const mapping: Record<string, AiInputMappingNode> = {};
@@ -498,7 +519,7 @@ export class GraphGenerationService {
   private async *streamNotes(userId: string): AsyncGenerator<string> {
     yield '[';
     let isFirst = true;
-    
+
     // NoteService.findNotesModifiedSince 를 활용하여 모든 노트를 가져옴
     const allNotes = await withRetry(
       async () => await this.noteService.findNotesModifiedSince(userId, new Date(0)),
