@@ -60,13 +60,20 @@ export class AddNodeResultHandler implements JobHandler {
         ? Math.max(...existingNodes.map(n => n.id)) + 1
         : 1;
 
+      // AI가 반환하는 엣지 target은 ChromaDB record ID 포맷인 "{userId}_{origId}"입니다.
+      // 기존 노드의 numeric DB id를 origId 기준으로 해소하기 위한 역방향 맵을 구축합니다.
+      const origIdToDbId = new Map<string, number>(
+        existingNodes.map(n => [n.origId, n.id])
+      );
+
+      // 신규 노드의 AI string ID("{userId}_{origId}") → 할당될 numeric DB id 맵
       const createdNodeIds: Map<string, number> = new Map();
       let totalNodesAdded = 0;
       let totalEdgesAdded = 0;
 
       const clusterPromises: Promise<void>[] = [];
       const nodePromises: Promise<void>[] = [];
-      
+
       for (const result of batchResult.results || []) {
         // 클러스터 추가 로직 (병렬 수집)
         if (result.assignedCluster && result.assignedCluster.isNewCluster && result.assignedCluster.clusterId) {
@@ -84,9 +91,11 @@ export class AddNodeResultHandler implements JobHandler {
 
         // 노드 저장 (병렬 수집)
         for (const node of result.nodes || []) {
-          const tempId = String(node.id);
+          const tempId = String(node.id); // "{userId}_{origId}" format
           const dbNodeId = nextNodeId++;
           createdNodeIds.set(tempId, dbNodeId);
+          // 배치 내 신규 노드도 origId 맵에 추가 (배치 내 conv끼리 엣지 연결 시 참조 가능하도록)
+          origIdToDbId.set(node.origId, dbNodeId);
 
           nodePromises.push(graphService.upsertNode({
             id: dbNodeId,
@@ -94,42 +103,72 @@ export class AddNodeResultHandler implements JobHandler {
             origId: node.origId,
             clusterId: node.clusterId,
             clusterName: node.clusterName || '',
-            numMessages: node.numMessages || 0, // Fallback for ai result
-            sourceType: 'chat', // For AddNode, default to chat
+            numMessages: node.numMessages || 0,
+            sourceType: 'chat',
             embedding: [],
             timestamp: node.timestamp || null,
           }));
           totalNodesAdded++;
         }
       }
-      
+
       // 클러스터 및 노드 병렬 저장 실행
       await Promise.all([...clusterPromises, ...nodePromises]);
+
+      /**
+       * AI edge ID 해소 헬퍼.
+       *
+       * AI Python worker가 반환하는 source/target ID는 ChromaDB record ID 포맷인
+       * "{userId}_{origId}" 문자열입니다. 이를 MongoDB numeric id로 변환합니다.
+       *
+       * 우선순위:
+       * 1. 이번 배치에서 신규 생성된 노드 (createdNodeIds)
+       * 2. origId 기반 기존 노드 조회 (origIdToDbId): "{userId}_{origId}" 에서 prefix 제거
+       * 3. 레거시 numeric 문자열 (parseInt fallback)
+       */
+      const resolveNodeId = (rawId: string): number | null => {
+        // 1. 신규 노드 (이번 배치)
+        const fromBatch = createdNodeIds.get(rawId);
+        if (fromBatch !== undefined) return fromBatch;
+
+        // 2. 기존 노드: "{userId}_{origId}" → origId 추출
+        const prefix = userId + '_';
+        const origId = rawId.startsWith(prefix) ? rawId.slice(prefix.length) : rawId;
+        const fromExisting = origIdToDbId.get(origId);
+        if (fromExisting !== undefined) return fromExisting;
+
+        // 3. 레거시: 숫자 문자열 직접 파싱
+        const parsed = parseInt(rawId, 10);
+        return isNaN(parsed) ? null : parsed;
+      };
 
       // 두 번째 루프로 모든 엣지 저장 보장
       const edgePromises: Promise<string>[] = [];
       for (const result of batchResult.results || []) {
         for (const edge of result.edges || []) {
-            const sourceIdStr = String(edge.source);
-            const sourceId = createdNodeIds.get(sourceIdStr) ?? parseInt(sourceIdStr, 10);
-            
-            const targetIdStr = String(edge.target);
-            const targetId = createdNodeIds.get(targetIdStr) ?? parseInt(targetIdStr, 10);
+            const sourceId = resolveNodeId(String(edge.source));
+            const targetId = resolveNodeId(String(edge.target));
 
-            if (!isNaN(sourceId) && !isNaN(targetId)) {
-                edgePromises.push(graphService.upsertEdge({
-                    userId,
-                    source: sourceId,
-                    target: targetId,
-                    weight: edge.weight || 1.0,
-                    type: (edge.type || 'similarity') as any, // Cast to any to bypass strict type checking
-                    intraCluster: edge.intraCluster ?? true,
-                }));
-                totalEdgesAdded++;
+            if (sourceId === null || targetId === null) {
+                logger.warn(
+                  { taskId, userId, source: edge.source, target: edge.target },
+                  'AddNode edge skipped: could not resolve node ID to DB numeric id'
+                );
+                continue;
             }
+
+            edgePromises.push(graphService.upsertEdge({
+                userId,
+                source: sourceId,
+                target: targetId,
+                weight: edge.weight || 1.0,
+                type: (edge.type || 'hard') as 'hard' | 'insight',
+                intraCluster: edge.intraCluster ?? true,
+            }));
+            totalEdgesAdded++;
         }
       }
-      
+
       // 엣지 병렬 저장 실행
       await Promise.all(edgePromises);
 
