@@ -68,11 +68,13 @@ export class SyncService {
     }
 
     // 필터링: deletedAt이 없는(활성) 데이터만 반환
+    // messages는 conversations 내부에 embed되어 반환됨 (FE pullWorker가 serverThread.messages로 사용)
+    // 최상위 messages 필드는 빈 배열 — 중복 전송 방지
     return {
       conversations: convDocs
         .filter((doc) => !doc.deletedAt)
         .map((doc) => toChatThreadDto(doc, messagesByConvId.get(doc._id) || [])),
-      messages: msgDocs.filter((doc) => !doc.deletedAt).map(toChatMessageDto),
+      messages: [],
       notes: noteDocs.filter((doc) => !doc.deletedAt).map(toNoteDto),
       folders: folderDocs.filter((doc) => !doc.deletedAt).map(toFolderDto),
       serverTime: new Date().toISOString(),
@@ -103,11 +105,13 @@ export class SyncService {
       messagesByConvId.set(msg.conversationId, list);
     }
 
+    // messages는 conversations 내부에 embed되어 반환됨 (FE pullWorker가 serverThread.messages로 사용)
+    // 최상위 messages 필드는 빈 배열 — 중복 전송 방지
     return {
       conversations: convDocs
         .filter((doc) => !doc.deletedAt)
         .map((doc) => toChatThreadDto(doc, messagesByConvId.get(doc._id) || [])),
-      messages: msgDocs.filter((doc) => !doc.deletedAt).map(toChatMessageDto),
+      messages: [],
       serverTime: new Date().toISOString(),
     };
   }
@@ -160,124 +164,107 @@ export class SyncService {
     const client: MongoClient = getMongo();
     const session: ClientSession = client.startSession();
 
+    // --- TX 외부: 모든 기존 문서를 병렬로 미리 조회 (N+1 방지) ---
+    const convDocs = (changes.conversations ?? []).map(dto => toConversationDoc(dto, ownerUserId));
+    const msgDocs = (changes.messages ?? []).map(dto => toMessageDoc(dto, dto.conversationId, ownerUserId));
+    const noteDocs: NoteDoc[] = (changes.notes ?? []).map(dto => ({
+      _id: dto.id,
+      ownerUserId,
+      title: dto.title,
+      content: dto.content,
+      folderId: dto.folderId || null,
+      createdAt: new Date(dto.createdAt),
+      updatedAt: new Date(dto.updatedAt),
+      deletedAt: dto.deletedAt ? new Date(dto.deletedAt) : null,
+    }));
+    const folderDocs: FolderDoc[] = (changes.folders ?? []).map(dto => ({
+      _id: dto.id,
+      ownerUserId,
+      name: dto.name,
+      parentId: dto.parentId || null,
+      createdAt: new Date(dto.createdAt),
+      updatedAt: new Date(dto.updatedAt),
+      deletedAt: dto.deletedAt ? new Date(dto.deletedAt) : null,
+    }));
+
+    const [existingConvs, existingMsgs, existingNotes, existingFolders] = await Promise.all([
+      Promise.all(convDocs.map(d => this.conversationService.findDocById(d._id, ownerUserId))),
+      Promise.all(msgDocs.map(d => this.messageService.findDocById(d._id))),
+      Promise.all(noteDocs.map(d => this.noteService.getNoteDoc(d._id, ownerUserId))),
+      Promise.all(folderDocs.map(d => this.noteService.getFolderDoc(d._id, ownerUserId))),
+    ]);
+
+    const existingConvMap = new Map<string, ConversationDoc | null>(
+      convDocs.map((d, i) => [d._id, existingConvs[i]])
+    );
+    const existingMsgMap = new Map<string, MessageDoc | null>(
+      msgDocs.map((d, i) => [d._id, existingMsgs[i]])
+    );
+    const existingNoteMap = new Map<string, NoteDoc | null>(
+      noteDocs.map((d, i) => [d._id, existingNotes[i]])
+    );
+    const existingFolderMap = new Map<string, FolderDoc | null>(
+      folderDocs.map((d, i) => [d._id, existingFolders[i]])
+    );
+
+    // --- TX 내부: 미리 조회한 Map을 사용하여 쓰기만 수행 ---
     try {
       await session.withTransaction(async () => {
         // 1. Conversations
-        if (changes.conversations) {
-          for (const dto of changes.conversations) {
-            const doc: ConversationDoc = toConversationDoc(dto, ownerUserId);
-            const existing: ConversationDoc | null = await this.conversationService.findDocById(
-              doc._id,
-              ownerUserId
-            );
+        for (const doc of convDocs) {
+          const existing = existingConvMap.get(doc._id);
 
-            // 소유권 확인 (다른 사용자의 데이터를 덮어쓰지 않도록)
-            if (existing && existing.ownerUserId !== ownerUserId) {
-              continue; // 또는 에러 처리
-            }
+          // 소유권 확인 (다른 사용자의 데이터를 덮어쓰지 않도록)
+          if (existing && existing.ownerUserId !== ownerUserId) continue;
 
-            // LWW: 서버 데이터가 더 최신이면 건너뜀
-            if (existing && existing.updatedAt >= doc.updatedAt) {
-              continue;
-            }
+          // LWW: 서버 데이터가 더 최신이면 건너뜀
+          if (existing && existing.updatedAt >= doc.updatedAt) continue;
 
-            if (existing) {
-              await this.conversationService.updateDoc(
-                doc._id,
-                ownerUserId,
-                { ...doc, updatedAt: doc.updatedAt },
-                session
-              );
-              continue;
-            }
-
+          if (existing) {
+            await this.conversationService.updateDoc(doc._id, ownerUserId, { ...doc, updatedAt: doc.updatedAt }, session);
+          } else {
             await this.conversationService.createDoc(doc, session);
           }
         }
 
         // 2. Messages
-        if (changes.messages) {
-          for (const dto of changes.messages) {
-            const doc: MessageDoc = toMessageDoc(dto, dto.conversationId, ownerUserId);
-            const existing: MessageDoc | null = await this.messageService.findDocById(doc._id);
+        for (const doc of msgDocs) {
+          const existing = existingMsgMap.get(doc._id);
 
-            // 소유권 확인
-            if (existing && existing.ownerUserId !== ownerUserId) {
-              continue;
-            }
+          // 소유권 확인
+          if (existing && existing.ownerUserId !== ownerUserId) continue;
 
-            if (existing && existing.updatedAt >= doc.updatedAt) {
-              continue;
-            }
+          if (existing && existing.updatedAt >= doc.updatedAt) continue;
 
-            if (existing) {
-              await this.messageService.updateDoc(doc._id, doc.conversationId, doc, session);
-              continue;
-            }
-
+          if (existing) {
+            await this.messageService.updateDoc(doc._id, doc.conversationId, doc, session);
+          } else {
             await this.messageService.createDoc(doc, session);
           }
         }
 
         // 3. Notes
-        if (changes.notes) {
-          for (const dto of changes.notes) {
-            const doc: NoteDoc = {
-              _id: dto.id,
-              ownerUserId,
-              title: dto.title,
-              content: dto.content,
-              folderId: dto.folderId || null,
-              createdAt: new Date(dto.createdAt),
-              updatedAt: new Date(dto.updatedAt),
-              deletedAt: dto.deletedAt ? new Date(dto.deletedAt) : null,
-            };
+        for (const doc of noteDocs) {
+          const existing = existingNoteMap.get(doc._id);
 
-            const existing: NoteDoc | null = await this.noteService.getNoteDoc(
-              doc._id,
-              ownerUserId
-            );
+          if (existing && existing.updatedAt >= doc.updatedAt) continue;
 
-            if (existing && existing.updatedAt >= doc.updatedAt) {
-              continue;
-            }
-
-            if (existing) {
-              await this.noteService.updateNoteDoc(doc._id, ownerUserId, doc, session);
-              continue;
-            }
-
+          if (existing) {
+            await this.noteService.updateNoteDoc(doc._id, ownerUserId, doc, session);
+          } else {
             await this.noteService.createNoteDoc(doc, session);
           }
         }
 
         // 4. Folders
-        if (changes.folders) {
-          for (const dto of changes.folders) {
-            const doc: FolderDoc = {
-              _id: dto.id,
-              ownerUserId,
-              name: dto.name,
-              parentId: dto.parentId || null,
-              createdAt: new Date(dto.createdAt),
-              updatedAt: new Date(dto.updatedAt),
-              deletedAt: dto.deletedAt ? new Date(dto.deletedAt) : null,
-            };
+        for (const doc of folderDocs) {
+          const existing = existingFolderMap.get(doc._id);
 
-            const existing: FolderDoc | null = await this.noteService.getFolderDoc(
-              doc._id,
-              ownerUserId
-            );
+          if (existing && existing.updatedAt >= doc.updatedAt) continue;
 
-            if (existing && existing.updatedAt >= doc.updatedAt) {
-              continue;
-            }
-
-            if (existing) {
-              await this.noteService.updateFolderDoc(doc._id, ownerUserId, doc, session);
-              continue;
-            }
-
+          if (existing) {
+            await this.noteService.updateFolderDoc(doc._id, ownerUserId, doc, session);
+          } else {
             await this.noteService.createFolderDoc(doc, session);
           }
         }

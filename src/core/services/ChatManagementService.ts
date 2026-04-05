@@ -154,122 +154,110 @@ export class ChatManagementService {
    * 여러 대화를 한 번에 생성합니다 (Bulk Create).
    *
    * 성능과 안정성을 위해 데이터를 청크(Chunk) 단위로 나누어 처리합니다.
+   * 응답의 messages 배열은 listConversations와 동일하게 빈 배열로 반환합니다.
+   * (단건 조회 getConversation 시점에 메시지를 로드하는 Lazy Loading 전략)
    *
    * @param ownerUserId 소유자 ID
    * @param threads 생성할 대화 목록
-   * @returns 생성된 대화 목록 (성공한 것만)
+   * @returns 생성된 대화 목록 — messages는 항상 [] (listConversations와 동일 구조)
    */
   async bulkCreateConversations(
     ownerUserId: string,
     threads: { id: string; title?: string | null; messages?: Partial<ChatMessage>[] }[]
   ): Promise<ChatThread[]> {
-    // TODO: [Refactor] 현재는 생성된 모든 대화/메시지 객체를 반환하고 있어 대용량(100MB+) 처리 시 OOM 및 이벤트 루프 차단 위험이 있음.
-    // 추후 생성된 리소스의 ID 배열만 반환하거나 요약 정보만 반환하도록 변경 필요.
-    // 주의: 이 변경 시 클라이언트 SDK의 응답 처리 로직도 함께 수정되어야 함.
+    // TODO: [Refactor] 현재는 생성된 모든 대화 객체를 반환하고 있어 대용량(100MB+) 처리 시 OOM 위험이 있음.
+    // 추후 생성된 리소스의 ID 배열만 반환하도록 변경 필요.
     const client: MongoClient = getMongo();
-    const CHUNK_SIZE = 20; // 한 번의 트랜잭션에서 처리할 대화 개수 (메시지 수에 따라 조절 필요)
+    const CHUNK_SIZE = 20; // 한 번의 트랜잭션에서 처리할 대화 개수
     const results: ChatThread[] = [];
 
-    // 전체 데이터를 Chunk 단위로 순회
-    for (let i = 0; i < threads.length; i += CHUNK_SIZE) {
-      const chunk = threads.slice(i, i + CHUNK_SIZE);
-      const session: ClientSession = client.startSession();
+    // 세션을 루프 외부에서 한 번만 생성 — 세션 생성은 서버 왕복이므로 청크마다 생성하면 낭비
+    const session: ClientSession = client.startSession();
 
-      try {
-        const transactionResult = await withRetry(
-          async () => {
-            return await session.withTransaction(async () => {
-              const convDocs: ConversationDoc[] = [];
-              const allMsgDocs: MessageDoc[] = [];
-              const chunkResults: ChatThread[] = [];
-              const now = new Date();
+    try {
+      for (let i = 0; i < threads.length; i += CHUNK_SIZE) {
+        const chunk = threads.slice(i, i + CHUNK_SIZE);
 
-              // 1. 문서 객체 준비 (메모리 상에서 변환)
-              for (const thread of chunk) {
-                let threadTitle = thread.title || '';
-                if (threadTitle.trim().length === 0) {
-                  const firstMsg = thread.messages && thread.messages.length > 0 ? thread.messages[0] : null;
-                  if (firstMsg && firstMsg.content && firstMsg.content.trim().length > 0) {
-                    const content = firstMsg.content.trim();
-                    threadTitle = content.length > 10 ? content.substring(0, 10) + '...' : content;
-                  } else {
-                    threadTitle = 'New Conversation';
-                  }
-                }
+        // now를 transaction callback 외부에서 고정 — callback은 TransientTransactionError 시
+        // 드라이버에 의해 재호출되므로, 내부에서 선언하면 retry마다 타임스탬프가 달라짐
+        const now = Date.now();
 
-                // const finalThreadId: string = thread.id?.trim() ? thread.id : ulid();
-                const finalThreadId: string = thread.id;
+        // withRetry를 제거하고 session.withTransaction만 사용:
+        // - withTransaction이 내부적으로 TransientTransactionError / UnknownTransactionCommitResult를 재시도함
+        // - withRetry로 이중 감싸면 AppError 등 도메인 에러도 1~5초 대기 후 재시도하는 버그 발생
+        const chunkResults = await session.withTransaction(async () => {
+          const convDocs: ConversationDoc[] = [];
+          const allMsgDocs: MessageDoc[] = [];
+          const chunkDtos: ChatThread[] = [];
 
-                // Conversation Doc 준비
-                const convDoc: ConversationDoc = {
-                  _id: finalThreadId,
+          // 1. 문서 객체 준비 (메모리 상에서 변환)
+          for (const thread of chunk) {
+            let threadTitle = thread.title || '';
+            if (threadTitle.trim().length === 0) {
+              const firstMsg = thread.messages && thread.messages.length > 0 ? thread.messages[0] : null;
+              if (firstMsg && firstMsg.content && firstMsg.content.trim().length > 0) {
+                const content = firstMsg.content.trim();
+                threadTitle = content.length > 10 ? content.substring(0, 10) + '...' : content;
+              } else {
+                threadTitle = 'New Conversation';
+              }
+            }
+
+            const finalThreadId: string = thread.id;
+
+            const convDoc: ConversationDoc = {
+              _id: finalThreadId,
+              ownerUserId,
+              title: threadTitle,
+              createdAt: now,
+              updatedAt: now,
+              deletedAt: null,
+            };
+            convDocs.push(convDoc);
+
+            // Message Docs — DB 저장용. 응답 DTO에는 포함하지 않음 (Lazy Loading)
+            if (thread.messages && thread.messages.length > 0) {
+              for (const m of thread.messages) {
+                if (!m.content || m.content.trim().length === 0) continue;
+                allMsgDocs.push({
+                  _id: m.id?.trim() ? m.id : ulid(),
                   ownerUserId,
-                  title: threadTitle,
-                  createdAt: now.getTime(),
-                  updatedAt: now.getTime(),
+                  conversationId: finalThreadId,
+                  role: m.role || 'user',
+                  content: m.content,
+                  createdAt: now,
+                  updatedAt: now,
                   deletedAt: null,
-                };
-                convDocs.push(convDoc);
-
-                // Message Docs 준비
-                const threadMsgDocs: MessageDoc[] = [];
-                if (thread.messages && thread.messages.length > 0) {
-                  for (const m of thread.messages) {
-                    if (!m.content || m.content.trim().length === 0) continue;
-
-                    const msgDoc: MessageDoc = {
-                      _id: m.id?.trim() ? m.id : ulid(),
-                      ownerUserId: ownerUserId,
-                      conversationId: finalThreadId,
-                      role: m.role || 'user',
-                      content: m.content,
-                      createdAt: now.getTime(),
-                      updatedAt: now.getTime(),
-                      deletedAt: null,
-                    };
-                    allMsgDocs.push(msgDoc);
-                    threadMsgDocs.push(msgDoc);
-                  }
-                }
-
-                // 결과 DTO 생성
-                chunkResults.push(toChatThreadDto(convDoc, threadMsgDocs));
+                });
               }
+            }
 
-              // 2. DB 일괄 저장 (Bulk Insert)
-              // 빈 배열일 경우 createDocs 내부에서 처리됨
-              if (convDocs.length > 0) {
-                await this.conversationService.createDocs(convDocs, session);
-              }
-              if (allMsgDocs.length > 0) {
-                await this.messageService.createDocs(allMsgDocs, session);
-              }
+            // listConversations와 동일하게 messages: [] 로 반환
+            chunkDtos.push(toChatThreadDto(convDoc, []));
+          }
 
-              return chunkResults;
-            });
-          },
-          { label: 'ChatManagementService.bulkCreateConversations.chunkTransaction' }
-        );
+          // 2. DB 일괄 저장 (Bulk Insert)
+          if (convDocs.length > 0) {
+            await this.conversationService.createDocs(convDocs, session);
+          }
+          if (allMsgDocs.length > 0) {
+            await this.messageService.createDocs(allMsgDocs, session);
+          }
 
-        results.push(...transactionResult);
-      } catch (err: unknown) {
-        if (
-          err instanceof Error &&
-          ((err as any).hasErrorLabel?.('TransientTransactionError') ||
-            (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
-        ) {
-          throw err;
-        }
-        // 청크 처리 중 에러 발생 시, 해당 청크는 롤백되지만 이전 청크들은 이미 커밋됨.
-        // 여기서는 에러를 다시 던져서 클라이언트에게 알림 (Partial Success 상태가 됨)
-        if (err instanceof AppError) throw err;
-        throw new UpstreamError(
-          'ChatService.bulkCreateConversations failed during chunk processing',
-          { cause: String(err) }
-        );
-      } finally {
-        await session.endSession();
+          return chunkDtos;
+        });
+
+        results.push(...(chunkResults ?? []));
       }
+    } catch (err: unknown) {
+      // 청크 처리 중 에러: 해당 청크는 롤백, 이전 청크들은 이미 커밋된 Partial Success 상태
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError(
+        'ChatService.bulkCreateConversations failed during chunk processing',
+        { cause: String(err) }
+      );
+    } finally {
+      await session.endSession();
     }
 
     return results;
@@ -378,7 +366,14 @@ export class ChatManagementService {
     try {
       // 1. 업데이트 수행 (Doc)
       const updatedDoc = await withRetry(
-        async () => await this.conversationService.updateDoc(id, ownerUserId, updates),
+        async (bail) => {
+          try {
+            return await this.conversationService.updateDoc(id, ownerUserId, updates);
+          } catch (err: unknown) {
+            if (err instanceof AppError) { bail(err as Error); return null; }
+            throw err;
+          }
+        },
         { label: 'ConversationService.updateDoc' }
       );
       if (!updatedDoc) {
@@ -506,40 +501,34 @@ export class ChatManagementService {
     const client: MongoClient = getMongo();
     const session: ClientSession = client.startSession();
 
-    try {
-      await withRetry(
-        async () => {
-          await session.withTransaction(async () => {
-            const success = await this.conversationService.restoreDoc(id, ownerUserId, session);
-            if (!success) {
-              throw new NotFoundError(`Conversation not found or restore failed: ${id}`);
-            }
-            await this.messageService.restoreAllByConversationId(id, session);
+    // TX 외부: 복원할 메시지 ID 목록을 미리 조회 (graph restore는 SQS 충돌 방지를 위해 TX 밖에서 처리)
+    const messages = await this.messageService.findDocsByConversationId(id);
+    const messageIds = messages.map(m => m._id);
 
-            // 연쇄 복원 (Cascade Graph Restore)
-            const messages = await this.messageService.findDocsByConversationId(id);
-            const messageIds = messages.map(m => m._id);
-            if (messageIds.length > 0) {
-              await this.graphManagementService.restoreNodesByOrigIds(ownerUserId, messageIds, { session });
-            }
-          });
-        },
-        { label: 'ChatManagementService.restoreConversation.transaction' }
-      );
-      return true;
+    try {
+      await session.withTransaction(async () => {
+        const success = await this.conversationService.restoreDoc(id, ownerUserId, session);
+        if (!success) {
+          throw new NotFoundError(`Conversation not found or restore failed: ${id}`);
+        }
+        await this.messageService.restoreAllByConversationId(id, session);
+      });
     } catch (err: unknown) {
-      if (
-        err instanceof Error &&
-        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
-          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
-      ) {
-        throw err;
-      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('ChatService.restoreConversation failed', { cause: String(err) });
     } finally {
       await session.endSession();
     }
+
+    // TX 외부: 파생 데이터(graph) 복원. TX와 원자성 불필요 — SQS 충돌 방지를 위해 분리.
+    if (messageIds.length > 0) {
+      await withRetry(
+        async () => this.graphManagementService.restoreNodesByOrigIds(ownerUserId, messageIds),
+        { retries: 3, label: 'ChatManagementService.restoreConversation.graphRestore' }
+      );
+    }
+
+    return true;
   }
 
   // --- Message Operations ---
@@ -563,38 +552,47 @@ export class ChatManagementService {
     try {
       let result: ChatMessage;
       await withRetry(
-        async () => {
-          await session.withTransaction(async () => {
-            // 1. 소유권 확인
-            await this.validateConversationOwner(conversationId, ownerUserId);
+        async (bail) => {
+          try {
+            await session.withTransaction(async () => {
+              // 1. 소유권 확인
+              await this.validateConversationOwner(conversationId, ownerUserId);
 
-            // 2. 메시지 생성
-            const msgId = message.id?.trim() ? message.id : ulid();
-            const now = new Date();
+              // 2. 메시지 생성
+              const msgId = message.id?.trim() ? message.id : ulid();
+              const now = new Date();
 
-            const msgDoc: MessageDoc = {
-              _id: msgId,
-              conversationId,
-              ownerUserId,
-              role: message.role,
-              content: message.content,
-              createdAt: now.getTime(),
-              updatedAt: now.getTime(),
-              deletedAt: null,
-            };
+              const msgDoc: MessageDoc = {
+                _id: msgId,
+                conversationId,
+                ownerUserId,
+                role: message.role,
+                content: message.content,
+                createdAt: now.getTime(),
+                updatedAt: now.getTime(),
+                deletedAt: null,
+              };
 
-            const createdDoc = await this.messageService.createDoc(msgDoc, session);
+              const createdDoc = await this.messageService.createDoc(msgDoc, session);
 
-            // 3. 대화방 타임스탬프 갱신
-            await this.conversationService.updateDoc(
-              conversationId,
-              ownerUserId,
-              { updatedAt: createdDoc.updatedAt },
-              session
-            );
+              // 3. 대화방 타임스탬프 갱신
+              await this.conversationService.updateDoc(
+                conversationId,
+                ownerUserId,
+                { updatedAt: createdDoc.updatedAt },
+                session
+              );
 
-            result = toChatMessageDto(createdDoc);
-          });
+              result = toChatMessageDto(createdDoc);
+            });
+          } catch (err: unknown) {
+            // 도메인 에러(NotFoundError, ValidationError 등)는 재시도 불필요 — 즉시 중단
+            if (err instanceof AppError) {
+              bail(err as Error);
+              return;
+            }
+            throw err;
+          }
         },
         { label: 'ChatManagementService.createMessage.transaction' }
       );
@@ -634,49 +632,45 @@ export class ChatManagementService {
 
     try {
       let result: ChatMessage;
-      await withRetry(
-        async () => {
-          await session.withTransaction(async () => {
-            // 1. 소유권 확인
-            await this.validateConversationOwner(conversationId, ownerUserId);
+      await session.withTransaction(async () => {
+        // 1. 소유권 확인
+        await this.validateConversationOwner(conversationId, ownerUserId);
 
-            // 2. 메시지 업데이트
-            const createdAt = new Date(updates.createdAt || Date.now()).getTime();
-            const deletedAt = new Date(updates.deletedAt || 0).getTime() || null;
-            const updatePayload = { ...updates, updatedAt: Date.now(), createdAt, deletedAt };
-            const updatedDoc = await this.messageService.updateDoc(
-              messageId,
-              conversationId,
-              updatePayload,
-              session
-            );
+        // 2. 메시지 업데이트 — createdAt/deletedAt은 클라이언트가 명시적으로 보낸 경우에만 적용
+        const updatePayload: Record<string, unknown> = { ...updates, updatedAt: Date.now() };
+        if ('createdAt' in updates && updates.createdAt !== undefined) {
+          updatePayload.createdAt = new Date(updates.createdAt).getTime();
+        } else {
+          delete updatePayload.createdAt;
+        }
+        if ('deletedAt' in updates) {
+          updatePayload.deletedAt = updates.deletedAt ? new Date(updates.deletedAt).getTime() : null;
+        } else {
+          delete updatePayload.deletedAt;
+        }
+        const updatedDoc = await this.messageService.updateDoc(
+          messageId,
+          conversationId,
+          updatePayload,
+          session
+        );
 
-            if (!updatedDoc) {
-              throw new NotFoundError(`Message not found: ${messageId}`);
-            }
+        if (!updatedDoc) {
+          throw new NotFoundError(`Message not found: ${messageId}`);
+        }
 
-            // 3. 대화방 타임스탬프 갱신
-            await this.conversationService.updateDoc(
-              conversationId,
-              ownerUserId,
-              { updatedAt: updatedDoc.updatedAt },
-              session
-            );
+        // 3. 대화방 타임스탬프 갱신
+        await this.conversationService.updateDoc(
+          conversationId,
+          ownerUserId,
+          { updatedAt: updatedDoc.updatedAt },
+          session
+        );
 
-            result = toChatMessageDto(updatedDoc);
-          });
-        },
-        { label: 'ChatManagementService.updateMessage.transaction' }
-      );
+        result = toChatMessageDto(updatedDoc);
+      });
       return result!;
     } catch (err: unknown) {
-      if (
-        err instanceof Error &&
-        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
-          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
-      ) {
-        throw err;
-      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('ChatService.updateMessage failed', { cause: String(err) });
     } finally {

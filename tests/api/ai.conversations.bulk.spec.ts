@@ -84,17 +84,11 @@ jest.mock('../../src/core/services/ChatManagementService', () => ({
     async bulkCreateConversations(ownerUserId: string, threads: { id: string; title: string; messages?: Partial<ChatMessage>[] }[]) {
       const now = new Date().toISOString();
       return threads.map((t) => {
+        // listConversations와 동일하게 messages: [] 반환 (Lazy Loading 전략)
         const newConv: ChatThread & { ownerUserId: string } = {
           id: t.id || 'mock-id',
           title: t.title,
-          messages: (t.messages || []).map(m => ({
-            id: m.id || 'msg-id',
-            role: m.role || 'user',
-            content: m.content || '',
-            createdAt: now,
-            updatedAt: now,
-            userId: ownerUserId
-          })) as ChatMessage[],
+          messages: [],
           createdAt: now,
           updatedAt: now,
           ownerUserId,
@@ -178,8 +172,9 @@ describe('POST /v1/ai/conversations/bulk', () => {
     expect(res.body.conversations).toHaveLength(2);
     expect(res.body.conversations[0].title).toBe('Bulk Conv 1');
     expect(res.body.conversations[1].title).toBe('Bulk Conv 2');
-    expect(res.body.conversations[0].messages).toHaveLength(1);
-    expect(res.body.conversations[1].messages).toHaveLength(2);
+    // bulk create는 listConversations와 동일하게 messages: [] 반환 (메시지는 DB에 저장됨, Lazy Loading)
+    expect(res.body.conversations[0].messages).toHaveLength(0);
+    expect(res.body.conversations[1].messages).toHaveLength(0);
 
     // Verify that conversations are actually in the mock store
     const conv1 = store.conversations.get('conv-1');

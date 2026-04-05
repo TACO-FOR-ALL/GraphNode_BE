@@ -42,8 +42,9 @@ describe('Search API Integration Tests (Lightweight)', () => {
     app.use(express.json());
 
     // 2. 테스트용 인증 유저 강제 주입 (JWT 및 Session을 거치지 않음)
+    // req.userId는 authJwt/bindUserIdToRequest가 설정하는 실제 패턴과 동일하게 주입
     app.use((req: Request, res: Response, next: NextFunction) => {
-      (req as any).user = { id: userId, email: 'test@taco.com' };
+      req.userId = userId;
       next();
     });
 
