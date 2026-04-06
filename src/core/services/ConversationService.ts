@@ -326,6 +326,27 @@ export class ConversationService {
     return this.conversationRepo.deleteAll(ownerUserId, session);
   }
 
+  /**
+   * 특정 사용자의 모든 대화 ID만 조회합니다 (메모리 최적화용 Projection).
+   * @description 전체 문서 대신 `_id` 필드만 가져와 메모리 사용을 최소화합니다.
+   * @param ownerUserId 소유자 ID
+   * @returns 대화 ID 문자열 배열
+   */
+  async findAllIdsByOwner(ownerUserId: string): Promise<string[]> {
+    return this.conversationRepo.findAllIdsByOwner(ownerUserId);
+  }
+
+  /**
+   * 주어진 ID 배열에 해당하는 대화를 일괄 삭제합니다 (Chunk Delete용).
+   * @param ids 삭제할 대화 ID 배열
+   * @param session MongoDB 클라이언트 세션 (선택 사항)
+   * @returns 삭제된 대화 수
+   */
+  async deleteDocsByIds(ids: string[], session?: ClientSession): Promise<number> {
+    if (ids.length === 0) return 0;
+    return this.conversationRepo.deleteByIds(ids, session);
+  }
+
 
   /**
    * 트랜잭션 관련 에러를 체크합니다.
@@ -343,19 +364,5 @@ export class ConversationService {
     if (e && typeof e.code === 'string') throw err;
   }
 
-  /**
-   * 사용자의 대화 목록 내에서 제목 키워드 검색을 수행합니다.
-   * @param userId 사용자 ID
-   * @param keyword 검색 키워드
-   * @returns 검색된 대화 문서 배열 (점수 포함)
-   */
-  async searchByKeyword(userId: string, keyword: string): Promise<(ConversationDoc & { score?: number })[]> {
-    try {
-      return await this.conversationRepo.searchByKeyword(userId, keyword);
-    } catch (err: unknown) {
-      this.checkTransactionError(err);
-      throw new UpstreamError('Failed to search conversations', { cause: err as any });
-    }
-  }
 
 }

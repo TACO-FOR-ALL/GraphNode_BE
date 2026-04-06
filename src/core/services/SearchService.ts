@@ -1,41 +1,37 @@
 import { logger } from '../../shared/utils/logger';
-import { NoteService } from './NoteService';
-import { ChatManagementService } from './ChatManagementService';
 import { Note } from '../../shared/dtos/note';
 import { ChatThread } from '../../shared/dtos/ai';
 
 /**
  * 모듈: SearchService (통합 검색 서비스)
- * 책임: 노트 및 AI 대화(대화방, 메시지) 전반에 걸쳐 통합된 키워드 검색을 수행합니다.
+ * 책임: 노트 및 AI 대화 전반에 걸친 통합 키워드 검색을 수행합니다.
+ *
+ * @remarks
+ * [개편 작업 중 — 임시 비활성화]
+ * 기존 MongoDB $text 역색인 기반 검색이 제거되었습니다.
+ * 추후 Atlas Search 또는 별도 검색 엔진 기반으로 재구현 예정입니다.
+ * 현재 모든 검색 요청에 대해 빈 결과를 반환합니다.
  */
 export class SearchService {
-  constructor(
-    private noteService: NoteService,
-    private chatManagementService: ChatManagementService
-  ) {}
-
   /**
-   * 노트와 AI 대화(대화방 제목 및 메시지 내용)에서 통합 키워드 검색을 수행합니다.
+   * 통합 키워드 검색을 수행합니다.
    *
    * @param userId 검색을 수행하는 사용자의 고유 ID
    * @param keyword 검색할 키워드
-   * @returns 통합 검색 결과 (노트 DTO 배열 및 대화 스레드 DTO 배열)
+   * @returns 빈 검색 결과 (notes: [], chatThreads: [])
+   *
+   * @remarks
+   * 현재 검색 기능은 개편 작업 중으로 임시 비활성화되어 있습니다.
+   * $text 역색인 기반 구현이 제거되었으며, 새로운 검색 엔진 연동 후 복구됩니다.
    */
   async integratedSearchByKeyword(
     userId: string,
     keyword: string
   ): Promise<{ notes: Note[]; chatThreads: ChatThread[] }> {
-    logger.info({ userId, keyword }, 'Integrated keyword search triggered');
-
-    // 1 & 2. 노트 검색 및 AI 대화 검색을 병렬로 수행합니다.
-    const [notes, chatThreads] = await Promise.all([
-      this.noteService.searchNotesByKeyword(userId, keyword),
-      this.chatManagementService.searchChatThreadsByKeyword(userId, keyword),
-    ]);
-
-    return {
-      notes,
-      chatThreads,
-    };
+    logger.warn(
+      { userId, keyword },
+      '[SearchService] 통합 검색 기능은 현재 개편 작업 중으로 임시 비활성화되어 있습니다. 빈 결과를 반환합니다.'
+    );
+    return { notes: [], chatThreads: [] };
   }
 }

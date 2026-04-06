@@ -159,6 +159,23 @@ class InMemoryConvRepo implements ConversationRepository {
       (v) => ids.includes(v._id) && v.ownerUserId === ownerUserId && !v.deletedAt
     );
   }
+
+  async findAllIdsByOwner(ownerUserId: string): Promise<string[]> {
+    return Array.from(this.data.values())
+      .filter((v) => v.ownerUserId === ownerUserId)
+      .map((v) => v._id);
+  }
+
+  async deleteByIds(ids: string[], session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const id of ids) {
+      if (this.data.has(id)) {
+        this.data.delete(id);
+        count++;
+      }
+    }
+    return count;
+  }
 }
 
 class InMemoryMsgRepo implements MessageRepository {
@@ -317,6 +334,16 @@ class InMemoryMsgRepo implements MessageRepository {
     }
     return limit ? items.slice(0, limit) : items;
   }
+
+  async deleteAllByConversationIds(conversationIds: string[], session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const cid of conversationIds) {
+      const msgs = this.msgs.get(cid) || [];
+      count += msgs.length;
+      this.msgs.delete(cid);
+    }
+    return count;
+  }
 }
 
 describe('ChatManagementService', () => {
@@ -424,7 +451,7 @@ describe('ChatManagementService', () => {
   });
 
   describe('listConversations', () => {
-    it('returns conversations without messages', async () => {
+    it('returns conversations with messages (N+1 free batch load)', async () => {
       await chatSvc.createConversation('u1', 'c1', 'Hello', [
         { id: 'm1', role: 'user', content: 'hi' },
       ]);
@@ -435,7 +462,9 @@ describe('ChatManagementService', () => {
 
       const c1 = list.items.find((i) => i.id === 'c1');
       expect(c1).toBeDefined();
-      expect(c1?.messages).toHaveLength(0);
+      expect(c1?.messages).toHaveLength(1);
+      expect(c1?.messages[0].id).toBe('m1');
+      expect(c1?.messages[0].content).toBe('hi');
 
       const c2 = list.items.find((i) => i.id === 'c2');
       expect(c2).toBeDefined();

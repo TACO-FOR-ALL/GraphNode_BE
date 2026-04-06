@@ -272,6 +272,38 @@ export class ConversationRepositoryMongo implements ConversationRepository {
   }
 
   /**
+   * 특정 사용자의 모든 대화 ID만 조회합니다 (메모리 최적화용 Projection).
+   * @param ownerUserId 소유자 ID
+   * @returns 대화 ID 문자열 배열
+   */
+  async findAllIdsByOwner(ownerUserId: string): Promise<string[]> {
+    try {
+      const docs = await this.col()
+        .find({ ownerUserId }, { projection: { _id: 1 } })
+        .toArray();
+      return docs.map((d) => d._id as unknown as string);
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.findAllIdsByOwner', err);
+    }
+  }
+
+  /**
+   * 주어진 ID 배열에 해당하는 대화를 일괄 삭제합니다 (Chunk Delete용).
+   * @param ids 삭제할 대화 ID 배열
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제된 대화 수
+   */
+  async deleteByIds(ids: string[], session?: ClientSession): Promise<number> {
+    if (ids.length === 0) return 0;
+    try {
+      const result = await this.col().deleteMany({ _id: { $in: ids } } as any, { session });
+      return result.deletedCount;
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.deleteByIds', err);
+    }
+  }
+
+  /**
    * 특정 시점 이후에 변경된 대화 목록을 조회합니다 (동기화용).
    * @param ownerUserId 소유자 사용자 ID
    * @param since 기준 시각
@@ -354,61 +386,6 @@ export class ConversationRepositoryMongo implements ConversationRepository {
         .toArray();
     } catch (err: unknown) {
       this.handleError('ConversationRepositoryMongo.findExpiredConversations', err);
-    }
-  }
-
-  /**
-   * 키워드를 사용하여 대화 제목을 검색합니다 (Full-Text Search).
-   *
-   * @param userId 검색을 수행하는 사용자의 고유 ID
-   * @param keyword 검색어
-   * @param limit 최대 결과 수
-   * @returns 검색 조건에 부합하는 대화 문서 배열 (점수 포함)
-   */
-  async searchByKeyword(
-    userId: string,
-    keyword: string,
-    limit: number = 20
-  ): Promise<(ConversationDoc & { score?: number })[]> {
-    try {
-      const trimmedKeyword = keyword.trim();
-      if (!trimmedKeyword) return [];
-
-      // MongoDB $text 검색 수행
-      // - projection에서 { score: { $meta: 'textScore' } } 를 추가하여 관련도 점수를 가져옵니다.
-      // - sort에서 동일한 메타데이터 필드를 사용하여 점수 높은 순으로 정렬합니다.
-      const items = await this.col()
-        .find(
-          {
-            ownerUserId: userId,
-            deletedAt: null,
-            $text: { $search: trimmedKeyword },
-          },
-          {
-            projection: {
-              _id: 1,
-              ownerUserId: 1,
-              title: 1,
-              provider: 1,
-              model: 1,
-              source: 1,
-              tags: 1,
-              createdAt: 1,
-              updatedAt: 1,
-              deletedAt: 1,
-              externalThreadId: 1,
-              lastResponseId: 1,
-              score: { $meta: 'textScore' },
-            },
-          }
-        )
-        .sort({ score: { $meta: 'textScore' } })
-        .limit(limit)
-        .toArray();
-
-      return items as (ConversationDoc & { score?: number })[];
-    } catch (err: unknown) {
-      this.handleError('ConversationRepositoryMongo.searchByKeyword', err);
     }
   }
 
