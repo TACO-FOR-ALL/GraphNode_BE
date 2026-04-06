@@ -101,10 +101,13 @@ async function ensureIndexes() {
   );
 
   // conversations 만료 정리 쿼리: hardDeleteExpired/findExpiredConversations
-  // { deletedAt: { $ne: null, $lt: ... } } — ownerUserId 없어 전체 스캔. deletedAt 인덱스로 커버
+  // 삭제된 대화만 스캔하도록 Partial Index 적용
   await db.collection('conversations').createIndex(
     { deletedAt: 1 },
-    { name: 'conversations_cleanup' }
+    { 
+      name: 'conversations_cleanup_partial',
+      partialFilterExpression: { deletedAt: { $type: 'date' } }
+    }
   );
 
   // Missing indexes: graph_subclusters, graph_summaries
@@ -117,40 +120,13 @@ async function ensureIndexes() {
   // notifications 보관 정책(선택): expiresAt(BSON Date) 기준 TTL 인덱스
   // - 주의: expiresAt 필드 값이 반드시 'Date 객체'여야 하며, 숫자(number)일 경우 동작하지 않습니다.
   // - expiresAt가 없는 문서는 TTL로 자동 삭제되지 않습니다.
-  // 목적: 알림 이력을 무한히 쌓지 않고 운영 정책(예: 7일)으로 자동 정리하기 위함
+  // 목적: 알림 이력 정리
   await db.collection('notifications').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
   // notes 컬렉션: listNotes 쿼리 패턴 { ownerUserId, folderId, deletedAt: null } + sort(updatedAt: -1) 커버
   await db.collection('notes').createIndex({ ownerUserId: 1, folderId: 1, deletedAt: 1, updatedAt: -1 });
 
-  // --- 통합 검색(Full-Text Search)을 위한 텍스트 인덱스 추가 ---
-
-  // notes: 제목(10)과 내용(1)에 가중치를 두어 검색
-  await db.collection('notes').createIndex(
-    { title: 'text', content: 'text' },
-    {
-      weights: { title: 10, content: 1 },
-      name: 'notes_full_text_search',
-    }
-  );
-
-  // conversations: 대화 제목 검색 (가중치 10)
-  await db.collection('conversations').createIndex(
-    { title: 'text' },
-    {
-      weights: { title: 10 },
-      name: 'conversations_full_text_search',
-    }
-  );
-
-  // messages: 메시지 내용 검색 (가중치 1)
-  await db.collection('messages').createIndex(
-    { content: 'text' },
-    {
-      weights: { content: 1 },
-      name: 'messages_full_text_search',
-    }
-  );
+  // (이전 텍스트 인덱스들은 용량 문제로 제거되었습니다. Atlas Search 등으로 대체 필요)
 
   logger.info({ event: 'db.migrations_checked' }, 'DB indexes ensured');
 }

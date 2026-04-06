@@ -357,52 +357,24 @@ export class MessageRepositoryMongo implements MessageRepository {
   }
 
   /**
-   * 키워드를 사용하여 메시지 내용을 검색합니다 (Full-Text Search).
-   *
-   * @param userId 검색을 수행하는 사용자의 고유 ID
-   * @param keyword 검색어
-   * @param limit 최대 결과 수
-   * @returns 검색 조건에 부합하는 메시지 문서 배열 (점수 포함)
+   * 여러 대화방 ID에 속한 모든 메시지를 일괄 삭제합니다 (Chunk Delete용).
+   * @param conversationIds 삭제 대상 대화방 ID 배열
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제된 메시지 수
    */
-  async searchByKeyword(
-    userId: string,
-    keyword: string,
-    limit: number = 50
-  ): Promise<(MessageDoc & { score?: number })[]> {
+  async deleteAllByConversationIds(
+    conversationIds: string[],
+    session?: ClientSession
+  ): Promise<number> {
+    if (conversationIds.length === 0) return 0;
     try {
-      const trimmedKeyword = keyword.trim();
-      if (!trimmedKeyword) return [];
-
-      const items = await this.col()
-        .find(
-          {
-            ownerUserId: userId,
-            deletedAt: null,
-            $text: { $search: trimmedKeyword },
-          },
-          {
-            projection: {
-              _id: 1,
-              conversationId: 1,
-              ownerUserId: 1,
-              role: 1,
-              content: 1,
-              createdAt: 1,
-              updatedAt: 1,
-              deletedAt: 1,
-              attachments: 1,
-              metadata: 1,
-              score: { $meta: 'textScore' },
-            },
-          }
-        )
-        .sort({ score: { $meta: 'textScore' } })
-        .limit(limit)
-        .toArray();
-
-      return items as (MessageDoc & { score?: number })[];
+      const result: DeleteResult = await this.col().deleteMany(
+        { conversationId: { $in: conversationIds } },
+        { session }
+      );
+      return result.deletedCount;
     } catch (err: unknown) {
-      this.handleError('MessageRepositoryMongo.searchByKeyword', err);
+      this.handleError('MessageRepositoryMongo.deleteAllByConversationIds', err);
     }
   }
 

@@ -859,54 +859,6 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
-   * 키워드를 사용하여 노트를 검색합니다 (Full-Text Search).
-   *
-   * @param userId 검색을 수행하는 사용자의 고유 ID
-   * @param keyword 검색어
-   * @param limit 최대 결과 수
-   * @returns 검색 조건에 부합하는 노트 문서 배열 (점수 포함)
-   */
-  async searchByKeyword(
-    userId: string,
-    keyword: string,
-    limit: number = 20
-  ): Promise<(NoteDoc & { score?: number })[]> {
-    try {
-      const trimmedKeyword = keyword.trim();
-      if (!trimmedKeyword) return [];
-
-      const items = await this.notesCol()
-        .find(
-          {
-            ownerUserId: userId,
-            deletedAt: null,
-            $text: { $search: trimmedKeyword },
-          },
-          {
-            projection: {
-              _id: 1,
-              ownerUserId: 1,
-              title: 1,
-              content: 1,
-              folderId: 1,
-              createdAt: 1,
-              updatedAt: 1,
-              deletedAt: 1,
-              score: { $meta: 'textScore' },
-            },
-          }
-        )
-        .sort({ score: { $meta: 'textScore' } })
-        .limit(limit)
-        .toArray();
-
-      return items as (NoteDoc & { score?: number })[];
-    } catch (err: unknown) {
-      this.handleError('NoteRepositoryMongo.searchByKeyword', err);
-    }
-  }
-
-  /**
    * 공통 에러 핸들러
    * @param methodName 호출한 메서드 이름
    * @param err 에러 객체

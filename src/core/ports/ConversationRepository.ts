@@ -163,16 +163,6 @@ export interface ConversationRepository {
   findExpiredConversations(expiredBefore: Date): Promise<ConversationDoc[]>;
 
   /**
-   * 키워드를 사용하여 대화 제목을 검색합니다 (Full-Text Search).
-   * 
-   * @param ownerUserId 소유자 ID
-   * @param query 검색 키워드
-   * @param limit 최대 결과 수 (기본값: 20)
-   * @returns 검색어와 매칭되는 대화 문서 배열 (score 내림차순 정렬)
-   */
-  searchByKeyword(ownerUserId: string, query: string, limit?: number): Promise<(ConversationDoc & { score?: number })[]>;
-
-  /**
    * 여러 ID에 해당하는 대화 문서들을 한 번에 조회합니다.
    *
    * @param ids 대화 ID 배열
@@ -180,4 +170,25 @@ export interface ConversationRepository {
    * @returns 대화 문서 배열
    */
   findByIds(ids: string[], ownerUserId: string): Promise<ConversationDoc[]>;
+
+  /**
+   * 특정 사용자의 모든 대화 ID만 조회합니다 (메모리 최적화용 Projection).
+   *
+   * @description `{ _id: 1 }` Projection을 사용하여 전체 문서 대신 ID 배열만 반환합니다.
+   *              대용량 삭제 시 전체 문서를 메모리에 올리지 않기 위해 사용합니다.
+   * @param ownerUserId 소유자 ID
+   * @returns 대화 ID 문자열 배열
+   */
+  findAllIdsByOwner(ownerUserId: string): Promise<string[]>;
+
+  /**
+   * 주어진 ID 배열에 해당하는 대화를 일괄 삭제합니다 (Chunk Delete용).
+   *
+   * @description Chunking 기반 삭제 시 청크 단위로 호출됩니다.
+   *              `deleteMany({ _id: { $in: ids } })` 로 구현됩니다.
+   * @param ids 삭제할 대화 ID 배열
+   * @param session (선택) MongoDB 트랜잭션 세션
+   * @returns 삭제된 대화 수
+   */
+  deleteByIds(ids: string[], session?: ClientSession): Promise<number>;
 }

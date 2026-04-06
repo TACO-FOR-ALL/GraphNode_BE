@@ -115,8 +115,9 @@ export function createApp() {
     next(new NotFoundError(`Route ${req.method} ${req.path} not found`));
   });
 
-  // Sentry ErrorHandler (v8: setupExpressErrorHandler)
-  // 에러를 포착하여 Sentry로 전송 후, next(err)로 다음 에러 핸들러에게 전달함
+  // Sentry ErrorHandler: span/transaction 마킹 전용 (shouldHandleError: () => false)
+  // 실제 captureException은 errorHandler에서 단독 수행 → event id 회수 및 CloudWatch 로그 기록.
+  // 중복 전송 방지 설계: docs/architecture/sentry.md 섹션 8.1 참조.
   setupSentryErrorHandler(app);
 
   // Central error handler (RFC 9457)
