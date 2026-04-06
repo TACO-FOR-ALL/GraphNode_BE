@@ -71,6 +71,8 @@ AI와의 새로운 대화 세션을 생성합니다. 생성 시 초기 메시지
 - **Status Codes**
   - `201 Created`: 성공
   - `400 Bad Request`: 필수 필드(title) 누락 혹은 잘못된 데이터 형식
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `502 Bad Gateway`: 데이터베이스 트랜잭션 오류 (재시도 가능)
 
 ---
 
@@ -89,7 +91,11 @@ AI와의 새로운 대화 세션을 생성합니다. 생성 시 초기 메시지
   ```
 - **Response Type**: `{ conversations: ConversationDto[] }`
 - **Type Location**: `z_npm_sdk/src/types/conversation.ts`
-- **Status Codes**: `201`, `400`
+- **Status Codes**
+  - `201 Created`: 일괄 생성 성공
+  - `400 Bad Request`: 데이터 형식 오류
+  - `401 Unauthorized`: 인증되지 않은 요청
+  - `502 Bad Gateway`: 데이터베이스 오류
 
 ---
 
@@ -104,7 +110,9 @@ AI와의 새로운 대화 세션을 생성합니다. 생성 시 초기 메시지
   ```
 - **Response Type**: `ConversationDto[]`
 - **Type Location**: `z_npm_sdk/src/types/conversation.ts`
-- **Status Codes**: `200`, `401`
+- **Status Codes**
+  - `200 OK`: 조회 성공 (데이터가 없으면 빈 배열)
+  - `401 Unauthorized`: 인증되지 않은 요청
 
 ---
 
@@ -117,7 +125,9 @@ AI와의 새로운 대화 세션을 생성합니다. 생성 시 초기 메시지
   const { data } = await client.conversations.listTrash();
   ```
 - **Response Type**: `ConversationDto[]`
-- **Status Codes**: `200`, `401`
+- **Status Codes**
+  - `200 OK`: 조회 성공 (데이터가 없으면 빈 배열)
+  - `401 Unauthorized`: 인증되지 않은 요청
 
 ---
 
@@ -131,7 +141,11 @@ AI와의 새로운 대화 세션을 생성합니다. 생성 시 초기 메시지
   console.log(data.messages.length);
   ```
 - **Response Type**: `ConversationDto`
-- **Status Codes**: `200 OK`, `404 Not Found`
+- **Status Codes**
+  - `200 OK`: 조회 성공
+  - `401 Unauthorized`: 인증되지 않은 요청
+  - `404 Not Found`: 해당 ID의 대화가 존재하지 않음
+  - `502 Bad Gateway`: 데이터베이스 오류
 
 ---
 
@@ -144,7 +158,12 @@ AI와의 새로운 대화 세션을 생성합니다. 생성 시 초기 메시지
   await client.conversations.update('conv-uuid', { title: '수정된 제목' });
   ```
 - **Response Type**: `ConversationDto`
-- **Status Codes**: `200 OK`, `404 Not Found`
+- **Status Codes**
+  - `200 OK`: 수정 성공
+  - `400 Bad Request`: 제목이 비어있거나 형식 오류
+  - `401 Unauthorized`: 인증되지 않은 요청
+  - `404 Not Found`: 해당 ID의 대화가 존재하지 않음
+  - `502 Bad Gateway`: 데이터베이스 오류
 
 ---
 
@@ -156,7 +175,11 @@ AI와의 새로운 대화 세션을 생성합니다. 생성 시 초기 메시지
   ```typescript
   await client.conversations.softDelete('conv-uuid');
   ```
-- **Status Codes**: `204 No Content`, `404 Not Found`
+- **Status Codes**
+  - `204 No Content`: 소프트 삭제 성공
+  - `401 Unauthorized`: 인증되지 않은 요청
+  - `404 Not Found`: 해당 ID의 대화가 존재하지 않음
+  - `502 Bad Gateway`: 데이터베이스 오류
 
 ---
 
@@ -168,7 +191,11 @@ AI와의 새로운 대화 세션을 생성합니다. 생성 시 초기 메시지
   ```typescript
   await client.conversations.hardDelete('conv-uuid');
   ```
-- **Status Codes**: `204 No Content`, `404 Not Found`
+- **Status Codes**
+  - `204 No Content`: 영구 삭제 성공
+  - `401 Unauthorized`: 인증되지 않은 요청
+  - `404 Not Found`: 해당 ID의 대화가 존재하지 않음
+  - `502 Bad Gateway`: 데이터베이스 오류
 
 ---
 
@@ -182,7 +209,9 @@ AI와의 새로운 대화 세션을 생성합니다. 생성 시 초기 메시지
     await client.conversations.deleteAll();
   }
   ```
-- **Status Codes**: `204 No Content`
+- **Status Codes**
+  - `200 OK`: 삭제 성공. `{ deletedCount: number }` 반환
+  - `401 Unauthorized`: 인증되지 않은 요청
 
 ---
 
@@ -195,7 +224,11 @@ AI와의 새로운 대화 세션을 생성합니다. 생성 시 초기 메시지
   await client.conversations.restore('conv-uuid');
   ```
 - **Response Type**: `ConversationDto`
-- **Status Codes**: `200 OK`, `404 Not Found`
+- **Status Codes**
+  - `200 OK`: 복구 성공
+  - `401 Unauthorized`: 인증되지 않은 요청
+  - `404 Not Found`: 해당 ID의 대화가 존재하지 않거나 소프트 삭제된 상태가 아님
+  - `502 Bad Gateway`: 데이터베이스 오류
 
 ---
 
@@ -235,7 +268,12 @@ AI와의 새로운 대화 세션을 생성합니다. 생성 시 초기 메시지
   }
   ```
 - **Type Location**: `z_npm_sdk/src/types/message.ts`
-- **Status Codes**: `201 Created`, `404 Not Found`
+- **Status Codes**
+  - `201 Created`: 메시지 생성 성공
+  - `400 Bad Request`: 내용이 비어있거나 형식 오류
+  - `401 Unauthorized`: 인증되지 않은 요청
+  - `404 Not Found`: 해당 대화가 존재하지 않음
+  - `502 Bad Gateway`: 데이터베이스 오류
 
 ---
 
@@ -250,7 +288,12 @@ AI와의 새로운 대화 세션을 생성합니다. 생성 시 초기 메시지
   });
   ```
 - **Response Type**: `MessageDto`
-- **Status Codes**: `200 OK`, `404 Not Found`
+- **Status Codes**
+  - `200 OK`: 수정 성공
+  - `400 Bad Request`: 형식 오류
+  - `401 Unauthorized`: 인증되지 않은 요청
+  - `404 Not Found`: 해당 메시지 또는 대화가 존재하지 않음
+  - `502 Bad Gateway`: 데이터베이스 오류
 
 ---
 
@@ -262,7 +305,11 @@ AI와의 새로운 대화 세션을 생성합니다. 생성 시 초기 메시지
   ```typescript
   await client.conversations.softDeleteMessage('conv-123', 'msg-111');
   ```
-- **Status Codes**: `204 No Content`, `404 Not Found`
+- **Status Codes**
+  - `204 No Content`: 소프트 삭제 성공
+  - `401 Unauthorized`: 인증되지 않은 요청
+  - `404 Not Found`: 해당 메시지 또는 대화가 존재하지 않음
+  - `502 Bad Gateway`: 데이터베이스 오류
 
 ---
 
@@ -276,7 +323,11 @@ AI와의 새로운 대화 세션을 생성합니다. 생성 시 초기 메시지
   await client.conversations.hardDeleteMessage('conv-123', 'msg-111');
   ```
 
-- **Status Codes**: `204 No Content`, `404 Not Found`
+- **Status Codes**
+  - `204 No Content`: 영구 삭제 성공
+  - `401 Unauthorized`: 인증되지 않은 요청
+  - `404 Not Found`: 해당 메시지 또는 대화가 존재하지 않음
+  - `502 Bad Gateway`: 데이터베이스 오류
 
 ---
 
@@ -289,7 +340,11 @@ AI와의 새로운 대화 세션을 생성합니다. 생성 시 초기 메시지
   await client.conversations.restoreMessage('conv-123', 'msg-111');
   ```
 - **Response Type**: `MessageDto`
-- **Status Codes**: `200 OK`, `404 Not Found`
+- **Status Codes**
+  - `200 OK`: 복구 성공
+  - `401 Unauthorized`: 인증되지 않은 요청
+  - `404 Not Found`: 해당 메시지가 존재하지 않거나 소프트 삭제된 상태가 아님
+  - `502 Bad Gateway`: 데이터베이스 오류
 - **Remarks**: 메시지 복원은 단순 텍스트 복원을 넘어, 해당 시점의 지식 그래프 상태를 재구성하는 트리거가 될 수 있습니다.
 
 ---

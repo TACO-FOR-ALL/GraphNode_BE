@@ -70,7 +70,7 @@ export class AiApi {
 
   /**
    * 대화 내에서 AI와 채팅을 진행합니다. (표준 요청/응답 방식)
-   * 
+   *
    * @remarks
    * 내부적으로 Server-Sent Events(SSE)를 사용하지만, Promise는 AI의 최종 응답이 모두 수신된 후 resolve됩니다.
    * 실시간 글자 단위 업데이트가 필요하면 `onStream` 콜백을 사용하세요.
@@ -81,7 +81,17 @@ export class AiApi {
    * @param onStream - (선택) 실시간 텍스트 청크 수신 콜백
    * @returns AI 응답 DTO 및 HTTP 상태 코드
    * @throws {Error} 네트워크 오류 또는 스트림 처리 실패 시
-   * 
+   *
+   * **응답 상태 코드:**
+   * - `201 Created`: AI 응답 생성 성공 (SSE 스트림 완료 후 SDK가 설정)
+   * - `400 Bad Request`: chatContent가 비어있거나 지원하지 않는 모델 지정
+   * - `401 Unauthorized`: 인증되지 않은 요청 (세션 만료)
+   * - `403 Forbidden`: 해당 모델의 API 키가 설정되지 않음
+   * - `404 Not Found`: conversationId에 해당하는 대화가 존재하지 않음
+   * - `429 Too Many Requests`: AI 공급자 Rate Limit 초과 (재시도 가능)
+   * - `502 Bad Gateway`: AI 공급자 오류 (재시도 가능)
+   * - `504 Gateway Timeout`: AI 공급자 응답 시간 초과 (재시도 가능)
+   *
    * @example
    * const res = await client.ai.chat('conv_123', { 
    *   id: 'msg_1', 
@@ -136,16 +146,26 @@ export class AiApi {
 
   /**
    * 대화 내역의 마지막 AI 응답을 삭제하고 다시 응답을 요청합니다. (재시도)
-   * 
+   *
    * @remarks
    * 이 메서드는 대화 기록 중 가장 최근의 메시지가 AI의 응답인지 확인한 후, 이를 영구 삭제하고
    * 바로 이전까지의 대화 내역으로 AI에게 새로운 응답을 생성하도록 백엔드에 요청합니다.
-   * 
+   *
    * @param conversationId - 대화 ID
    * @param dto - 재시도 요청 데이터 (model, modelName)
    * @param onStream - (선택) 실시간 텍스트 청크 수신 콜백
    * @returns AI 응답 DTO 및 HTTP 상태 코드
-   * 
+   *
+   * **응답 상태 코드:**
+   * - `201 Created`: 재시도 AI 응답 생성 성공
+   * - `400 Bad Request`: conversationId 누락 또는 형식 오류
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `403 Forbidden`: 해당 모델의 API 키가 설정되지 않음
+   * - `404 Not Found`: conversationId에 해당하는 대화가 존재하지 않음
+   * - `429 Too Many Requests`: AI 공급자 Rate Limit 초과 (재시도 가능)
+   * - `502 Bad Gateway`: AI 공급자 오류 (재시도 가능)
+   * - `504 Gateway Timeout`: AI 공급자 응답 시간 초과 (재시도 가능)
+   *
    * @example
    * const res = await client.ai.chatRetry('conv_123', {
    *   model: 'openai'
@@ -190,17 +210,27 @@ export class AiApi {
 
   /**
    * RAG 기반 채팅을 진행합니다. (FE가 검색한 맥락 포함 요청)
-   * 
+   *
    * @remarks
-   * 사용자가 현재 보고 있는 문서 조각이나 관련 과거 대화(`retrievedContext`)를 백엔드에 직접 전달하여, 
+   * 사용자가 현재 보고 있는 문서 조각이나 관련 과거 대화(`retrievedContext`)를 백엔드에 직접 전달하여,
    * 서버 측의 별도 벡터 검색 없이도 정확한 답변을 유도할 수 있는 API입니다.
-   * 
+   *
    * @param conversationId - 대화 ID
    * @param dto - RAG 요청 데이터 (retrievedContext, recentMessages 포함)
    * @param files - 첨부 파일
    * @param onStream - 실시간 텍스트 콜백
    * @returns AI 응답 DTO
-   * 
+   *
+   * **응답 상태 코드:**
+   * - `201 Created`: RAG AI 응답 생성 성공
+   * - `400 Bad Request`: chatContent 또는 맥락 데이터 형식 오류
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `403 Forbidden`: 해당 모델의 API 키가 설정되지 않음
+   * - `404 Not Found`: conversationId에 해당하는 대화가 존재하지 않음
+   * - `429 Too Many Requests`: AI 공급자 Rate Limit 초과 (재시도 가능)
+   * - `502 Bad Gateway`: AI 공급자 오류 (재시도 가능)
+   * - `504 Gateway Timeout`: AI 공급자 응답 시간 초과 (재시도 가능)
+   *
    * @example
    * const res = await client.ai.ragChat('conv_123', {
    *   id: 'msg_2',

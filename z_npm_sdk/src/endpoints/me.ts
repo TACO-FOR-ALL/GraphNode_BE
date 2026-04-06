@@ -26,6 +26,13 @@ export class MeApi {
 
   /**
    * 내 프로필 정보를 조회합니다.
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 조회 성공
+   * - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음)
+   * - `404 Not Found`: 사용자 데이터가 존재하지 않음 (드문 케이스)
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @returns 내 정보
    *    - `user` (UserProfileDto): 사용자 프로필 정보
    *      - `id` (string): 사용자 ID
@@ -66,6 +73,11 @@ export class MeApi {
   /**
    * 로그아웃을 수행합니다.
    * - 서버 세션을 무효화합니다.
+   *
+   * **응답 상태 코드:**
+   * - `204 No Content`: 로그아웃 성공
+   * - `401 Unauthorized`: 이미 로그아웃된 세션일 경우 (구현에 따라 204를 반환할 수도 있음)
+   *
    * @example
    * await client.me.logout();
    * console.log('Logged out successfully');
@@ -78,6 +90,11 @@ export class MeApi {
   /**
    * Refresh Token을 사용하여 Access Token을 갱신합니다.
    * - 쿠키 기반 인증 환경에서 401 복구 흐름에 사용합니다.
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 갱신 성공. `{ ok: true }` 반환
+   * - `401 Unauthorized`: Refresh Token이 없거나 무효함. `{ ok: false, error: 'Session expired or invalidated' }` 반환
+   *
    * @example
    * const res = await client.me.refresh();
    * if (res.isSuccess) { ... }
@@ -110,9 +127,16 @@ export class MeApi {
 
   /**
    * 특정 모델의 API 키를 조회합니다.
-   * @param model - 조회할 API 키 모델 ('openai' | 'deepseek')
+   * @param model - 조회할 API 키 모델 ('openai' | 'deepseek' | 'claude' | 'gemini')
    * @returns 마스킹된 API 키 정보
    *    - `apiKey` (string | null): 마스킹된 API 키 (설정되지 않은 경우 null)
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 조회 성공 (설정되지 않은 경우 apiKey가 null)
+   * - `400 Bad Request`: 유효하지 않은 model 값
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 사용자 정보가 존재하지 않음
+   *
    * @example
    * const response = await client.me.getApiKeys('openai');
    * console.log(response.data);
@@ -127,8 +151,16 @@ export class MeApi {
 
   /**
    * 특정 모델의 API 키를 설정/업데이트합니다.
-   * @param model - 설정할 API 키 모델 ('openai' | 'deepseek')
+   * @param model - 설정할 API 키 모델 ('openai' | 'deepseek' | 'claude' | 'gemini')
    * @param apiKey - 설정할 API 키 값 (string)
+   *
+   * **응답 상태 코드:**
+   * - `204 No Content`: 업데이트 성공
+   * - `400 Bad Request`: API 키가 비어있거나 공급자 측 키 검증 실패 (`InvalidApiKeyError`)
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 사용자 정보가 존재하지 않음
+   * - `502 Bad Gateway`: 외부 AI 공급자 검증 중 오류
+   *
    * @example
    * await client.me.updateApiKey('openai', 'sk-proj-1234567890abcdef');
    * console.log('OpenAI API key updated');

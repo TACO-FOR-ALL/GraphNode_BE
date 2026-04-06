@@ -37,6 +37,12 @@ export class GraphApi {
    * @param queryVector - 검색할 벡터 (number[])
    * @param limit - 검색 결과 개수 (기본값: 5)
    * @returns 검색된 노드와 유사도 점수 목록 (SearchNodesResponse)
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 검색 성공
+   * - `400 Bad Request`: queryVector가 누락되거나 배열이 아님
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   *
    * @example
    * const response = await client.graph.searchNodes([0.1, 0.2, ...], 5);
    * console.log(response.data[0].node.id);
@@ -151,6 +157,13 @@ export class GraphApi {
    * @param payload - 업데이트할 데이터
    *    - `clusterId` (string, optional): 변경할 클러스터 ID
    *    - `clusterName` (string, optional): 변경할 클러스터 이름
+   *
+   * **응답 상태 코드:**
+   * - `204 No Content`: 업데이트 성공
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 노드가 존재하지 않음
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * await client.graph.updateNode(101, {
    *   clusterName: 'Project Beta'
@@ -165,6 +178,13 @@ export class GraphApi {
    * 특정 노드를 삭제합니다.
    * @param nodeId - 삭제할 노드의 ID
    * @param options - 옵션 (`permanent`가 true이면 영구 삭제, 아니면 소프트 삭제)
+   *
+   * **응답 상태 코드:**
+   * - `204 No Content`: 삭제 성공
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 노드가 존재하지 않음
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * await client.graph.deleteNode(101, { permanent: true });
    * // Output: (No content)
@@ -177,6 +197,13 @@ export class GraphApi {
   /**
    * 휴지통에 있는(소프트 삭제된) 특정 노드를 복원합니다.
    * @param nodeId - 복원할 노드의 ID
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 복원 성공. `{ message: 'Node restored' }` 반환
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 노드가 존재하지 않거나 소프트 삭제된 상태가 아님
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * await client.graph.restoreNode(101);
    */
@@ -273,6 +300,12 @@ export class GraphApi {
   /**
    * 휴지통에 있는(소프트 삭제된) 특정 엣지를 복원합니다.
    * @param edgeId - 복원할 엣지의 ID
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 복원 성공. `{ message: 'Edge restored' }` 반환
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * await client.graph.restoreEdge('edge-uuid-...');
    */
@@ -363,6 +396,12 @@ export class GraphApi {
   /**
    * 휴지통에 있는(소프트 삭제된) 특정 클러스터를 복원합니다.
    * @param clusterId - 복원할 클러스터의 ID
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 복원 성공. `{ message: 'Cluster restored' }` 반환
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * await client.graph.restoreCluster('cluster-a');
    */

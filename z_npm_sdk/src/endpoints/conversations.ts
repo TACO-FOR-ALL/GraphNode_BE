@@ -36,6 +36,13 @@ export class ConversationsApi {
    *    - `messages` (MessageDto[]): 메시지 목록
    *    - `createdAt` (string): 생성 일시
    *    - `updatedAt` (string): 수정 일시
+   *
+   * **응답 상태 코드:**
+   * - `201 Created`: 대화 생성 성공
+   * - `400 Bad Request`: title이 비어있거나 데이터 형식이 잘못됨
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * const response = await client.conversations.create({
    *   title: 'Project Brainstorming',
@@ -67,6 +74,13 @@ export class ConversationsApi {
    * @param dto 일괄 생성 요청 데이터
    *    - `conversations` (ConversationCreateDto[]): 생성할 대화 목록
    * @returns 생성된 대화 목록
+   *
+   * **응답 상태 코드:**
+   * - `201 Created`: 일괄 생성 성공
+   * - `400 Bad Request`: 데이터 형식 오류
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * const response = await client.conversations.bulkCreate({
    *   conversations: [
@@ -113,6 +127,11 @@ export class ConversationsApi {
   /**
    * 대화 목록을 조회합니다. (모든 페이지 자동 조회)
    * @returns 대화 목록 (ConversationDto 배열)
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 조회 성공 (데이터가 없으면 빈 배열 반환)
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   *
    * @example
    * const response = await client.conversations.list();
    * console.log(response.data); // 모든 대화 목록
@@ -146,6 +165,11 @@ export class ConversationsApi {
   /**
    * 삭제된 대화(휴지통) 목록을 조회합니다. (모든 페이지 자동 조회)
    * @returns 삭제된 대화 목록 (ConversationDto 배열)
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 조회 성공 (데이터가 없으면 빈 배열 반환)
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   *
    * @example
    * const response = await client.conversations.listTrash();
    * console.log(response.data); // 모든 삭제된 대화 목록
@@ -185,6 +209,13 @@ export class ConversationsApi {
    *    - `messages` (MessageDto[]): 메시지 목록
    *    - `createdAt` (string): 생성 일시
    *    - `updatedAt` (string): 수정 일시
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 조회 성공
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 ID의 대화가 존재하지 않음
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * const response = await client.conversations.get('conv-123');
    *
@@ -210,6 +241,14 @@ export class ConversationsApi {
    * @param patch 수정할 데이터
    *    - `title` (string, optional): 변경할 제목
    * @returns 수정된 대화 정보
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 수정 성공
+   * - `400 Bad Request`: 제목이 비어있거나 형식 오류
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 ID의 대화가 존재하지 않음
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * const response = await client.conversations.update('conv-123', {
    *   title: 'Renamed Conversation'
@@ -235,6 +274,13 @@ export class ConversationsApi {
   /**
    * 대화를 소프트 삭제합니다 (휴지통으로 이동).
    * @param conversationId 대화 ID
+   *
+   * **응답 상태 코드:**
+   * - `204 No Content`: 삭제 성공
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 ID의 대화가 존재하지 않음
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * await client.conversations.softDelete('conv-123');
    */
@@ -252,6 +298,13 @@ export class ConversationsApi {
    * **경고:** 이 작업은 취소할 수 없습니다. 이 대화를 기반으로 생성된 지식 그래프(Graph Node/Edge) 데이터들 또한 함께 영구 삭제됩니다.
    *
    * @param conversationId - 대화 ID
+   *
+   * **응답 상태 코드:**
+   * - `204 No Content`: 영구 삭제 성공
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 ID의 대화가 존재하지 않음
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * await client.conversations.hardDelete('conv-123');
    */
@@ -269,6 +322,11 @@ export class ConversationsApi {
    * **주의:** 사용자의 모든 대화 내역 및 연관된 지식 그래프 데이터가 즉시 파기됩니다.
    *
    * @returns 삭제된 대화 수
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 삭제 성공. `{ deletedCount: number }` 반환
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   *
    * @example
    * const response = await client.conversations.deleteAll();
    * console.log(response.data.deletedCount); // 5
@@ -282,6 +340,13 @@ export class ConversationsApi {
    * 주의: 이 대화를 기반으로 생성되었던 지식 그래프(Graph Node/Edge) 데이터들 또한 연쇄 복구(Cascade Restore) 됩니다.
    * @param conversationId 대화 ID
    * @returns 복구된 대화 정보
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 복구 성공
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 ID의 대화가 존재하지 않거나 소프트 삭제된 상태가 아님
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * const response = await client.conversations.restore('conv-123');
    *
@@ -313,6 +378,14 @@ export class ConversationsApi {
    *    - `role` (string): 역할
    *    - `content` (string): 내용
    *    - `createdAt` (string): 생성 일시
+   *
+   * **응답 상태 코드:**
+   * - `201 Created`: 메시지 생성 성공
+   * - `400 Bad Request`: 내용이 비어있거나 형식 오류
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 대화가 존재하지 않음
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * const response = await client.conversations.createMessage('conv-123', {
    *   role: 'user',
@@ -339,6 +412,14 @@ export class ConversationsApi {
    * @param patch 수정할 데이터
    *    - `content` (string, optional): 변경할 내용
    * @returns 수정된 메시지 정보
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 수정 성공
+   * - `400 Bad Request`: 형식 오류
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 메시지 또는 대화가 존재하지 않음
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * const response = await client.conversations.updateMessage('conv-123', 'msg-999', {
    *   content: 'Tell me a joke about Python.'
@@ -367,6 +448,13 @@ export class ConversationsApi {
    * 메시지를 소프트 삭제합니다 (휴지통으로 이동).
    * @param conversationId 대화 ID
    * @param messageId 메시지 ID
+   *
+   * **응답 상태 코드:**
+   * - `204 No Content`: 삭제 성공
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 메시지 또는 대화가 존재하지 않음
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * await client.conversations.softDeleteMessage('conv-123', 'msg-999');
    */
@@ -388,6 +476,13 @@ export class ConversationsApi {
    *
    * @param conversationId - 대화 ID
    * @param messageId - 메시지 ID
+   *
+   * **응답 상태 코드:**
+   * - `204 No Content`: 영구 삭제 성공
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 메시지 또는 대화가 존재하지 않음
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * await client.conversations.hardDeleteMessage('conv-123', 'msg-999');
    */
@@ -410,6 +505,13 @@ export class ConversationsApi {
    * @param conversationId - 대화 ID
    * @param messageId - 메시지 ID
    * @returns 복구된 메시지 정보
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 복구 성공
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 메시지가 존재하지 않거나 소프트 삭제된 상태가 아님
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * const response = await client.conversations.restoreMessage('conv-123', 'msg-999');
    */
