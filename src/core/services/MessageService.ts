@@ -352,4 +352,18 @@ export class MessageService {
   async deleteAllDocsByUserId(ownerUserId: string, session?: ClientSession): Promise<number> {
     return this.messageRepo.deleteAllByUserId(ownerUserId, session);
   }
+
+  /**
+   * 여러 대화방 ID에 속한 모든 메시지를 일괄 삭제합니다 (Chunk Delete용).
+   * @param conversationIds 삭제 대상 대화방 ID 배열
+   * @param session MongoDB 클라이언트 세션 (선택 사항)
+   * @returns 삭제된 메시지 수
+   */
+  async deleteDocsByConversationIds(
+    conversationIds: string[],
+    session?: ClientSession
+  ): Promise<number> {
+    if (conversationIds.length === 0) return 0;
+    return this.messageRepo.deleteAllByConversationIds(conversationIds, session);
+  }
 }

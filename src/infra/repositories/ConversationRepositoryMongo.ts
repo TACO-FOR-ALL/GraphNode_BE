@@ -272,6 +272,38 @@ export class ConversationRepositoryMongo implements ConversationRepository {
   }
 
   /**
+   * 특정 사용자의 모든 대화 ID만 조회합니다 (메모리 최적화용 Projection).
+   * @param ownerUserId 소유자 ID
+   * @returns 대화 ID 문자열 배열
+   */
+  async findAllIdsByOwner(ownerUserId: string): Promise<string[]> {
+    try {
+      const docs = await this.col()
+        .find({ ownerUserId }, { projection: { _id: 1 } })
+        .toArray();
+      return docs.map((d) => d._id as unknown as string);
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.findAllIdsByOwner', err);
+    }
+  }
+
+  /**
+   * 주어진 ID 배열에 해당하는 대화를 일괄 삭제합니다 (Chunk Delete용).
+   * @param ids 삭제할 대화 ID 배열
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제된 대화 수
+   */
+  async deleteByIds(ids: string[], session?: ClientSession): Promise<number> {
+    if (ids.length === 0) return 0;
+    try {
+      const result = await this.col().deleteMany({ _id: { $in: ids } } as any, { session });
+      return result.deletedCount;
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.deleteByIds', err);
+    }
+  }
+
+  /**
    * 특정 시점 이후에 변경된 대화 목록을 조회합니다 (동기화용).
    * @param ownerUserId 소유자 사용자 ID
    * @param since 기준 시각

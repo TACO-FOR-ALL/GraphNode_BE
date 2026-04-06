@@ -171,93 +171,136 @@ export class ChatManagementService {
     const CHUNK_SIZE = 20; // 한 번의 트랜잭션에서 처리할 대화 개수
     const results: ChatThread[] = [];
 
-    // 세션을 루프 외부에서 한 번만 생성 — 세션 생성은 서버 왕복이므로 청크마다 생성하면 낭비
-    const session: ClientSession = client.startSession();
+    const chunkErrors: Array<{ chunkIndex: number; error: unknown }> = [];
 
-    try {
-      for (let i = 0; i < threads.length; i += CHUNK_SIZE) {
-        const chunk = threads.slice(i, i + CHUNK_SIZE);
+    // 세션은 청크마다 생성/해제: 오래 열린 세션이 ServerSession pool을 점유하는 것을 방지
+    for (let chunkIndex = 0; chunkIndex < Math.ceil(threads.length / CHUNK_SIZE); chunkIndex++) {
+      const chunk = threads.slice(chunkIndex * CHUNK_SIZE, (chunkIndex + 1) * CHUNK_SIZE);
 
-        // now를 transaction callback 외부에서 고정 — callback은 TransientTransactionError 시
-        // 드라이버에 의해 재호출되므로, 내부에서 선언하면 retry마다 타임스탬프가 달라짐
-        const now = Date.now();
+      // now를 withRetry 콜백 외부에서 고정 — TX 재시도 시 타임스탬프 불일치 방지
+      const now = Date.now();
 
-        // withRetry를 제거하고 session.withTransaction만 사용:
-        // - withTransaction이 내부적으로 TransientTransactionError / UnknownTransactionCommitResult를 재시도함
-        // - withRetry로 이중 감싸면 AppError 등 도메인 에러도 1~5초 대기 후 재시도하는 버그 발생
-        const chunkResults = await session.withTransaction(async () => {
-          const convDocs: ConversationDoc[] = [];
-          const allMsgDocs: MessageDoc[] = [];
-          const chunkDtos: ChatThread[] = [];
+      try {
+        // 청크 단위 지수 백오프 재시도 (WriteConflict / TransientTransactionError 대응)
+        const chunkDtos = await withRetry(
+          async (bail) => {
+            // Mongodb Session Open
+            const session: ClientSession = client.startSession();
+            try {
+              let dtos: ChatThread[] = [];
+              await session.withTransaction(async () => {
+                //
+                const convDocs: ConversationDoc[] = []; //
+                const allMsgDocs: MessageDoc[] = []; //
+                const pendingDtos: ChatThread[] = []; //
 
-          // 1. 문서 객체 준비 (메모리 상에서 변환)
-          for (const thread of chunk) {
-            let threadTitle = thread.title || '';
-            if (threadTitle.trim().length === 0) {
-              const firstMsg = thread.messages && thread.messages.length > 0 ? thread.messages[0] : null;
-              if (firstMsg && firstMsg.content && firstMsg.content.trim().length > 0) {
-                const content = firstMsg.content.trim();
-                threadTitle = content.length > 10 ? content.substring(0, 10) + '...' : content;
-              } else {
-                threadTitle = 'New Conversation';
+                // 1. 문서 객체 준비 (메모리 상에서 변환)
+                for (const thread of chunk) {
+                  let threadTitle = thread.title || '';
+
+                  // 대화 제목이 없을 경우에, 첫 메세지의 대화 내용을 기반으로 처리 시도
+                  if (threadTitle.trim().length === 0) {
+                    const firstMsg =
+                      thread.messages && thread.messages.length > 0 ? thread.messages[0] : null;
+
+                    // 첫 메세지의 내용 확인, 있으면 그것을 대화 제목으로
+                    if (firstMsg && firstMsg.content && firstMsg.content.trim().length > 0) {
+                      const content = firstMsg.content.trim();
+                      threadTitle =
+                        content.length > 10 ? content.substring(0, 10) + '...' : content;
+                    }
+                    // 첫 메세지 대화 내용도 없으면 New Conversation으로 고정
+                    else {
+                      threadTitle = 'New Conversation';
+                    }
+                  }
+
+                  const finalThreadId: string = thread.id; // 현재 loop의 대화방(Conversation)의 id 획득
+
+                  // ConversationDoc 구축
+                  const convDoc: ConversationDoc = {
+                    _id: finalThreadId,
+                    ownerUserId,
+                    title: threadTitle,
+                    createdAt: now,
+                    updatedAt: now,
+                    deletedAt: null,
+                  };
+                  convDocs.push(convDoc);
+
+                  // Message Docs — DB 저장용. 응답 DTO에는 포함하지 않음 (Lazy Loading)
+                  if (thread.messages && thread.messages.length > 0) {
+                    // Conversation 와 연결된 Message들에 대한 루프 처리
+                    for (const m of thread.messages) {
+                      // 메세지 내용이 없는 경우 continue
+                      if (!m.content || m.content.trim().length === 0) continue;
+
+                      // MessageDoc 구축
+                      allMsgDocs.push({
+                        _id: m.id?.trim() ? m.id : ulid(),
+                        ownerUserId,
+                        conversationId: finalThreadId,
+                        role: m.role || 'user',
+                        content: m.content,
+                        createdAt: now,
+                        updatedAt: now,
+                        deletedAt: null,
+                      });
+                    }
+                  }
+
+                  // listConversations와 동일하게 messages: [] 로 반환
+                  pendingDtos.push(toChatThreadDto(convDoc, []));
+                }
+
+                // 2. DB 일괄 저장 (Bulk Insert)
+                if (convDocs.length > 0) {
+                  await this.conversationService.createDocs(convDocs, session);
+                }
+                if (allMsgDocs.length > 0) {
+                  await this.messageService.createDocs(allMsgDocs, session);
+                }
+
+                dtos = pendingDtos;
+              });
+              return dtos;
+            } catch (err: unknown) {
+              // 도메인 에러(ValidationError 등)는 재시도 불필요 — 즉시 중단
+              if (err instanceof AppError) {
+                bail(err as Error);
+                return [];
               }
+              throw err;
+            } finally {
+              await session.endSession();
             }
+          },
 
-            const finalThreadId: string = thread.id;
-
-            const convDoc: ConversationDoc = {
-              _id: finalThreadId,
-              ownerUserId,
-              title: threadTitle,
-              createdAt: now,
-              updatedAt: now,
-              deletedAt: null,
-            };
-            convDocs.push(convDoc);
-
-            // Message Docs — DB 저장용. 응답 DTO에는 포함하지 않음 (Lazy Loading)
-            if (thread.messages && thread.messages.length > 0) {
-              for (const m of thread.messages) {
-                if (!m.content || m.content.trim().length === 0) continue;
-                allMsgDocs.push({
-                  _id: m.id?.trim() ? m.id : ulid(),
-                  ownerUserId,
-                  conversationId: finalThreadId,
-                  role: m.role || 'user',
-                  content: m.content,
-                  createdAt: now,
-                  updatedAt: now,
-                  deletedAt: null,
-                });
-              }
-            }
-
-            // listConversations와 동일하게 messages: [] 로 반환
-            chunkDtos.push(toChatThreadDto(convDoc, []));
+          // 재시도횟수, label 등 retry 처리
+          {
+            retries: 3,
+            factor: 2,
+            minTimeout: 500,
+            maxTimeout: 4000,
+            randomize: true,
+            label: `ChatManagementService.bulkCreateConversations.chunk[${chunkIndex}]`,
           }
+        );
 
-          // 2. DB 일괄 저장 (Bulk Insert)
-          if (convDocs.length > 0) {
-            await this.conversationService.createDocs(convDocs, session);
-          }
-          if (allMsgDocs.length > 0) {
-            await this.messageService.createDocs(allMsgDocs, session);
-          }
-
-          return chunkDtos;
-        });
-
-        results.push(...(chunkResults ?? []));
+        // 정상적으로 저장된 것들 저장
+        results.push(...chunkDtos);
+      } catch (err: unknown) {
+        // 청크 실패: 이 청크는 건너뛰고 나머지 청크 계속 처리 (Fault-tolerance)
+        chunkErrors.push({ chunkIndex, error: err });
       }
-    } catch (err: unknown) {
-      // 청크 처리 중 에러: 해당 청크는 롤백, 이전 청크들은 이미 커밋된 Partial Success 상태
-      if (err instanceof AppError) throw err;
-      throw new UpstreamError(
-        'ChatService.bulkCreateConversations failed during chunk processing',
-        { cause: String(err) }
-      );
-    } finally {
-      await session.endSession();
+    }
+
+    // 모든 청크가 실패한 경우에만 에러 throw (부분 성공은 허용)
+    if (chunkErrors.length > 0 && results.length === 0) {
+      if (chunkErrors[0].error instanceof AppError) throw chunkErrors[0].error;
+      throw new UpstreamError('ChatService.bulkCreateConversations failed: all chunks failed', {
+        cause: String(chunkErrors[0].error),
+      });
     }
 
     return results;
@@ -386,7 +429,10 @@ export class ChatManagementService {
           try {
             return await this.conversationService.updateDoc(id, ownerUserId, updates);
           } catch (err: unknown) {
-            if (err instanceof AppError) { bail(err as Error); return null; }
+            if (err instanceof AppError) {
+              bail(err as Error);
+              return null;
+            }
             throw err;
           }
         },
@@ -422,25 +468,20 @@ export class ChatManagementService {
    * @param ownerUserId 소유자 ID
    * @param externalThreadId 외부 Thread ID
    */
-  async updateThreadId(
-    id: string,
-    ownerUserId: string,
-    externalThreadId: string
-  ): Promise<void> {
-     // 내부적으로 updateDoc 사용
-     const client: MongoClient = getMongo();
-     const session: ClientSession = client.startSession();
-     try {
-       await withRetry(
-         async () => await this.conversationService.updateDoc(id, ownerUserId, { externalThreadId }, session),
-         { label: 'ConversationService.updateDoc.externalThreadId' }
-       );
-     } finally {
-       await session.endSession();
-     }
+  async updateThreadId(id: string, ownerUserId: string, externalThreadId: string): Promise<void> {
+    // 내부적으로 updateDoc 사용
+    const client: MongoClient = getMongo();
+    const session: ClientSession = client.startSession();
+    try {
+      await withRetry(
+        async () =>
+          await this.conversationService.updateDoc(id, ownerUserId, { externalThreadId }, session),
+        { label: 'ConversationService.updateDoc.externalThreadId' }
+      );
+    } finally {
+      await session.endSession();
+    }
   }
-
-
 
   /**
    * 대화를 삭제합니다. (Cascade Delete)
@@ -463,7 +504,7 @@ export class ChatManagementService {
     // 그래프 삭제에 필요한 messageId 목록을 트랜잭션 외부에서 사전 조회.
     // hard delete 시 TX 커밋 후 메시지가 사라지므로 TX 진입 전에 확보해야 함.
     const messages = await this.messageService.findDocsByConversationId(id);
-    const messageIds = messages.map(m => m._id);
+    const messageIds = messages.map((m) => m._id);
 
     try {
       // TX 범위: conversations + messages (핵심 비즈니스 데이터만 원자적 처리)
@@ -497,7 +538,8 @@ export class ChatManagementService {
     // TX 외부: 파생 데이터(graph) 삭제. TX와 원자성 불필요 — SQS 충돌 방지를 위해 분리.
     if (messageIds.length > 0) {
       await withRetry(
-        async () => this.graphManagementService.deleteNodesByOrigIds(ownerUserId, messageIds, permanent),
+        async () =>
+          this.graphManagementService.deleteNodesByOrigIds(ownerUserId, messageIds, permanent),
         { retries: 3, label: 'ChatManagementService.deleteConversation.graphCleanup' }
       );
     }
@@ -519,7 +561,7 @@ export class ChatManagementService {
 
     // TX 외부: 복원할 메시지 ID 목록을 미리 조회 (graph restore는 SQS 충돌 방지를 위해 TX 밖에서 처리)
     const messages = await this.messageService.findDocsByConversationId(id);
-    const messageIds = messages.map(m => m._id);
+    const messageIds = messages.map((m) => m._id);
 
     try {
       await session.withTransaction(async () => {
@@ -660,7 +702,9 @@ export class ChatManagementService {
           delete updatePayload.createdAt;
         }
         if ('deletedAt' in updates) {
-          updatePayload.deletedAt = updates.deletedAt ? new Date(updates.deletedAt).getTime() : null;
+          updatePayload.deletedAt = updates.deletedAt
+            ? new Date(updates.deletedAt).getTime()
+            : null;
         } else {
           delete updatePayload.deletedAt;
         }
@@ -748,7 +792,8 @@ export class ChatManagementService {
 
     // TX 외부: 파생 데이터(graph) 삭제. TX와 원자성 불필요 — SQS 충돌 방지를 위해 분리.
     await withRetry(
-      async () => this.graphManagementService.deleteNodesByOrigIds(ownerUserId, [messageId], permanent),
+      async () =>
+        this.graphManagementService.deleteNodesByOrigIds(ownerUserId, [messageId], permanent),
       { retries: 3, label: 'ChatManagementService.deleteMessage.graphCleanup' }
     );
 
@@ -779,7 +824,11 @@ export class ChatManagementService {
             await this.validateConversationOwner(conversationId, ownerUserId);
 
             // 2. 메시지 복구
-            const success = await this.messageService.restoreDoc(messageId, conversationId, session);
+            const success = await this.messageService.restoreDoc(
+              messageId,
+              conversationId,
+              session
+            );
             if (!success) {
               throw new NotFoundError(`Message not found: ${messageId}`);
             }
@@ -793,7 +842,9 @@ export class ChatManagementService {
             );
 
             // 4. 연관된 지식 그래프 연쇄 복원
-            await this.graphManagementService.restoreNodesByOrigIds(ownerUserId, [messageId], { session });
+            await this.graphManagementService.restoreNodesByOrigIds(ownerUserId, [messageId], {
+              session,
+            });
           });
         },
         { label: 'ChatManagementService.restoreMessage.transaction' }
@@ -837,7 +888,6 @@ export class ChatManagementService {
     return conv;
   }
 
-
   /**
    * 대화 문서 직접 업데이트 (System Use)
    *
@@ -850,8 +900,8 @@ export class ChatManagementService {
     ownerUserId: string,
     updates: Partial<ConversationDoc>
   ): Promise<void> {
-     // Reuse logic
-     await this.conversationService.updateDoc(conversationId, ownerUserId, updates);
+    // Reuse logic
+    await this.conversationService.updateDoc(conversationId, ownerUserId, updates);
   }
 
   /**
@@ -874,41 +924,107 @@ export class ChatManagementService {
   /**
    * 사용자의 모든 대화와 메시지를 삭제합니다.
    *
+   * @description 거대한 단일 트랜잭션 안티패턴을 제거하고 Chunk 기반 처리를 적용합니다.
+   *   1. ID Projection으로 전체 대화 ID 배열만 조회 (메모리 최적화)
+   *   2. CHUNK_SIZE 단위로 분할하여 청크별 독립 트랜잭션 수행
+   *   3. 청크 실패 시 지수 백오프 최대 3회 재시도, 실패해도 나머지 청크 계속 처리
+   *   4. 모든 청크 처리 후 그래프 전체 삭제 (TX 외부)
    * @param ownerUserId 소유자 ID
-   * @returns 삭제된 대화 문서 수
-   * @remarks 해당 사용자의 모든 대화, 메시지, 그리고 전체 그래프 데이터를 영구 삭제합니다.
+   * @returns 삭제된 대화 문서 수 (부분 성공 포함)
+   * @throws {UpstreamError} UPSTREAM_ERROR — 모든 청크가 실패한 경우
    */
   async deleteAllConversations(ownerUserId: string): Promise<number> {
-    const client: MongoClient = getMongo();
-    const session: ClientSession = client.startSession();
+    // Chunk 크기: WiredTiger 캐시 초과 및 Lock 경합 방지를 위해 소규모 단위 유지
+    const CHUNK_SIZE = 20;
 
-    let deletedCount = 0;
-
-    try {
-      // TX 범위: messages + conversations (핵심 비즈니스 데이터만 원자적 처리)
-      // graph 6개 컬렉션(nodes/edges/clusters/subclusters/stats/summary)을 TX에 포함하면
-      // SQS 워커의 동시 쓰기와 write conflict 발생 — 트랜잭션 외부로 분리.
-      await session.withTransaction(async () => {
-        // 1. 모든 메시지 삭제
-        await this.messageService.deleteAllDocsByUserId(ownerUserId, session);
-
-        // 2. 모든 대화 삭제
-        deletedCount = await this.conversationService.deleteAllDocs(ownerUserId, session);
+    // Step 1: ID Projection — 전체 문서 대신 _id 배열만 메모리에 적재
+    const allIds = await this.conversationService.findAllIdsByOwner(ownerUserId);
+    if (allIds.length === 0) {
+      // 대화가 없어도 그래프는 정리
+      await withRetry(async () => this.graphManagementService.deleteGraph(ownerUserId, true), {
+        retries: 5,
+        minTimeout: 500,
+        label: 'ChatManagementService.deleteAllConversations.graphCleanup',
       });
-    } catch (err: unknown) {
-      if (err instanceof AppError) throw err;
-      throw new UpstreamError('ChatService.deleteAllConversations failed', { cause: String(err) });
-    } finally {
-      await session.endSession();
+      return 0;
     }
 
-    // TX 외부: 파생 데이터(graph 전체) 삭제. TX와 원자성 불필요 — SQS 충돌 방지를 위해 분리.
-    await withRetry(
-      async () => this.graphManagementService.deleteGraph(ownerUserId, true),
-      { retries: 5, minTimeout: 500, label: 'ChatManagementService.deleteAllConversations.graphCleanup' }
-    );
+    // Step 2: ID 배열을 CHUNK_SIZE 단위로 분할
+    const chunks: string[][] = [];
+    for (let i = 0; i < allIds.length; i += CHUNK_SIZE) {
+      chunks.push(allIds.slice(i, i + CHUNK_SIZE));
+    }
 
-    return deletedCount;
+    const client: MongoClient = getMongo();
+    let totalDeleted = 0;
+    const chunkErrors: Array<{ chunkIndex: number; error: unknown }> = [];
+
+    // Step 3: 청크별 독립 트랜잭션 + 지수 백오프 재시도
+    // - 세션은 청크마다 생성/해제: 오래 열린 세션이 ServerSession pool을 점유하는 것을 방지
+    for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+      const chunkIds = chunks[chunkIndex];
+
+      try {
+        // 청크 단위 재시도 (WriteConflict 등 일시적 오류에 대응)
+        const deleted = await withRetry(
+          async (bail) => {
+            const session: ClientSession = client.startSession(); //Mongodb session Open
+            try {
+              //삭제 진행
+              let count = 0;
+              await session.withTransaction(async () => {
+                // 1. 해당 청크의 메시지 먼저 삭제 (FK 참조 정합성)
+                await this.messageService.deleteDocsByConversationIds(chunkIds, session);
+                // 2. 해당 청크의 대화 삭제
+                count = await this.conversationService.deleteDocsByIds(chunkIds, session);
+              });
+              return count;
+            } catch (err: unknown) {
+              // 도메인 에러(NotFoundError 등)는 재시도 불필요 — 즉시 중단
+              if (err instanceof AppError) {
+                bail(err as Error);
+                return 0;
+              }
+              throw err;
+            } finally {
+              await session.endSession();
+            }
+          },
+
+          //retry 횟수 처리 및 labeling 설정
+          {
+            retries: 3,
+            factor: 2,
+            minTimeout: 500,
+            maxTimeout: 4000,
+            randomize: true,
+            label: `ChatManagementService.deleteAllConversations.chunk[${chunkIndex}]`,
+          }
+        );
+
+        totalDeleted += deleted;
+      } catch (err: unknown) {
+        // 청크 실패: 이 청크는 건너뛰고 나머지 청크 계속 처리 (Fault-tolerance)
+        chunkErrors.push({ chunkIndex, error: err });
+      }
+    }
+
+    // Step 4: TX 외부 — 파생 데이터(graph 전체) 삭제
+    // graph 컬렉션을 TX에 포함하면 SQS 워커의 동시 쓰기와 write conflict 발생 — 분리 유지.
+    await withRetry(async () => this.graphManagementService.deleteGraph(ownerUserId, true), {
+      retries: 5,
+      minTimeout: 500,
+      label: 'ChatManagementService.deleteAllConversations.graphCleanup',
+    });
+
+    // 일부 청크 실패 시: 전체 실패가 아니면 부분 성공으로 반환
+    if (chunkErrors.length > 0 && totalDeleted === 0) {
+      throw new UpstreamError('ChatService.deleteAllConversations failed: all chunks failed', {
+        cause: String(chunkErrors[0].error),
+      });
+    }
+
+    return totalDeleted;
   }
 
   /**
@@ -958,9 +1074,9 @@ export class ChatManagementService {
       }
 
       // 3. 메시지 검색 결과에서 누락된 대화방 정보 로드 (N+1 최적화)
-      const missingConvIds = Array.from(new Set(
-        msgDocs.map(m => m.conversationId).filter(id => !threadMap.has(id))
-      ));
+      const missingConvIds = Array.from(
+        new Set(msgDocs.map((m) => m.conversationId).filter((id) => !threadMap.has(id)))
+      );
 
       if (missingConvIds.length > 0) {
         const missingConvs = await this.conversationService.findDocsByIds(missingConvIds, userId);

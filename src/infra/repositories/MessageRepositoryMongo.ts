@@ -406,6 +406,28 @@ export class MessageRepositoryMongo implements MessageRepository {
     }
   }
 
+  /**
+   * 여러 대화방 ID에 속한 모든 메시지를 일괄 삭제합니다 (Chunk Delete용).
+   * @param conversationIds 삭제 대상 대화방 ID 배열
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제된 메시지 수
+   */
+  async deleteAllByConversationIds(
+    conversationIds: string[],
+    session?: ClientSession
+  ): Promise<number> {
+    if (conversationIds.length === 0) return 0;
+    try {
+      const result: DeleteResult = await this.col().deleteMany(
+        { conversationId: { $in: conversationIds } },
+        { session }
+      );
+      return result.deletedCount;
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.deleteAllByConversationIds', err);
+    }
+  }
+
   private handleError(methodName: string, err: unknown): never {
     if (
       err instanceof Error &&

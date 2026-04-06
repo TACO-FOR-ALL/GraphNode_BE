@@ -169,11 +169,22 @@ export interface MessageRepository {
 
   /**
    * 키워드를 사용하여 메시지 내용을 검색합니다 (Full-Text Search).
-   * 
+   *
    * @param ownerUserId 소유자 ID
    * @param query 검색 키워드
    * @param limit 최대 결과 수 (기본값: 50)
    * @returns 검색어와 매칭되는 메시지 문서 배열 (score 내림차순 정렬)
    */
   searchByKeyword(ownerUserId: string, query: string, limit?: number): Promise<(MessageDoc & { score?: number })[]>;
+
+  /**
+   * 여러 대화방 ID에 속한 모든 메시지를 일괄 삭제합니다 (Chunk Delete용).
+   *
+   * @description Chunking 기반 삭제 시 청크 단위로 호출됩니다.
+   *              `deleteMany({ conversationId: { $in: conversationIds } })` 로 구현됩니다.
+   * @param conversationIds 삭제 대상 대화방 ID 배열
+   * @param session (선택) MongoDB 트랜잭션 세션
+   * @returns 삭제된 메시지 수
+   */
+  deleteAllByConversationIds(conversationIds: string[], session?: ClientSession): Promise<number>;
 }
