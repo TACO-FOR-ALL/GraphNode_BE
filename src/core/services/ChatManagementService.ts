@@ -314,12 +314,14 @@ export class ChatManagementService {
   }
 
   /**
-   * 대화 목록을 조회합니다. (메시지 포함)
+   * 대화 목록을 메시지와 함께 조회합니다.
+   *
+   * N+1 쿼리 방지: 대화 목록(1 query) + 전체 메시지 일괄 조회(1 query, $in)로 총 2번의 DB 쿼리만 발생합니다.
    *
    * @param ownerUserId 소유자 ID
    * @param limit 페이지당 항목 수
    * @param cursor 페이징 커서 (Optional)
-   * @returns 대화 목록 및 다음 커서
+   * @returns 대화 목록(메시지 포함) 및 다음 커서
    */
   async listConversations(
     ownerUserId: string,
@@ -331,10 +333,24 @@ export class ChatManagementService {
       { label: 'ConversationService.listDocsByOwner' }
     );
 
-    // 목록 API에서는 메시지를 조회하지 않습니다.
-    // 메시지는 단건 조회(getConversation) 시점에 로드하며,
-    // DTO 타입(messages: ChatMessage[])은 그대로 유지하되 빈 배열로 반환합니다.
-    const items: ChatThread[] = result.items.map((doc) => toChatThreadDto(doc, []));
+    // N+1 방지: 모든 대화의 메시지를 단 1번의 쿼리로 일괄 조회 ($in 연산)
+    const conversationIds = result.items.map((doc) => doc._id);
+    const allMessages = await withRetry(
+      async () => await this.messageService.findDocsByConversationIds(conversationIds),
+      { label: 'MessageService.findDocsByConversationIds' }
+    );
+
+    // conversationId 기준으로 메모리 내 그룹핑 (O(M), M = 전체 메시지 수)
+    const messagesByConvId = new Map<string, MessageDoc[]>();
+    for (const msg of allMessages) {
+      const arr = messagesByConvId.get(msg.conversationId) ?? [];
+      arr.push(msg);
+      messagesByConvId.set(msg.conversationId, arr);
+    }
+
+    const items: ChatThread[] = result.items.map((doc) =>
+      toChatThreadDto(doc, messagesByConvId.get(doc._id) ?? [])
+    );
 
     return { items, nextCursor: result.nextCursor };
   }

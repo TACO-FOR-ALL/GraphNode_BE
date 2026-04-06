@@ -424,7 +424,7 @@ describe('ChatManagementService', () => {
   });
 
   describe('listConversations', () => {
-    it('returns conversations without messages', async () => {
+    it('returns conversations with messages (N+1 free batch load)', async () => {
       await chatSvc.createConversation('u1', 'c1', 'Hello', [
         { id: 'm1', role: 'user', content: 'hi' },
       ]);
@@ -435,7 +435,9 @@ describe('ChatManagementService', () => {
 
       const c1 = list.items.find((i) => i.id === 'c1');
       expect(c1).toBeDefined();
-      expect(c1?.messages).toHaveLength(0);
+      expect(c1?.messages).toHaveLength(1);
+      expect(c1?.messages[0].id).toBe('m1');
+      expect(c1?.messages[0].content).toBe('hi');
 
       const c2 = list.items.find((i) => i.id === 'c2');
       expect(c2).toBeDefined();
