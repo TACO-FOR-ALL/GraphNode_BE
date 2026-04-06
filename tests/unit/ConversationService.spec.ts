@@ -138,6 +138,23 @@ class InMemoryConvRepo implements ConversationRepository {
   async findExpiredConversations(): Promise<any[]> {
     return [];
   }
+
+  async findAllIdsByOwner(ownerUserId: string): Promise<string[]> {
+    return Array.from(this.data.values())
+      .filter((v) => v.ownerUserId === ownerUserId)
+      .map((v) => v._id);
+  }
+
+  async deleteByIds(ids: string[], session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const id of ids) {
+      if (this.data.has(id)) {
+        this.data.delete(id);
+        count++;
+      }
+    }
+    return count;
+  }
 }
 
 describe('ConversationService', () => {

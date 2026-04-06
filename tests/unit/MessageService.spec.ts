@@ -180,6 +180,16 @@ class InMemoryMsgRepo implements MessageRepository {
     }
     return result.slice(0, limit);
   }
+
+  async deleteAllByConversationIds(conversationIds: string[], session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const cid of conversationIds) {
+      const msgs = this.msgs.get(cid) || [];
+      count += msgs.length;
+      this.msgs.delete(cid);
+    }
+    return count;
+  }
 }
 
 describe('MessageService', () => {

@@ -1,3 +1,8 @@
+// Search API 테스트는 SearchRouter/SearchController 의존성 정비 후 활성화 예정
+describe.skip('Search API Integration Tests', () => {
+  it('placeholder', () => {});
+});
+
 // import { jest, describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 // import request from 'supertest';
 // import express, { Request, Response, NextFunction } from 'express';

@@ -159,6 +159,23 @@ class InMemoryConvRepo implements ConversationRepository {
       (v) => ids.includes(v._id) && v.ownerUserId === ownerUserId && !v.deletedAt
     );
   }
+
+  async findAllIdsByOwner(ownerUserId: string): Promise<string[]> {
+    return Array.from(this.data.values())
+      .filter((v) => v.ownerUserId === ownerUserId)
+      .map((v) => v._id);
+  }
+
+  async deleteByIds(ids: string[], session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const id of ids) {
+      if (this.data.has(id)) {
+        this.data.delete(id);
+        count++;
+      }
+    }
+    return count;
+  }
 }
 
 class InMemoryMsgRepo implements MessageRepository {
@@ -316,6 +333,16 @@ class InMemoryMsgRepo implements MessageRepository {
       }
     }
     return limit ? items.slice(0, limit) : items;
+  }
+
+  async deleteAllByConversationIds(conversationIds: string[], session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const cid of conversationIds) {
+      const msgs = this.msgs.get(cid) || [];
+      count += msgs.length;
+      this.msgs.delete(cid);
+    }
+    return count;
   }
 }
 
