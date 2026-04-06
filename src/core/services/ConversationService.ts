@@ -364,19 +364,5 @@ export class ConversationService {
     if (e && typeof e.code === 'string') throw err;
   }
 
-  /**
-   * 사용자의 대화 목록 내에서 제목 키워드 검색을 수행합니다.
-   * @param userId 사용자 ID
-   * @param keyword 검색 키워드
-   * @returns 검색된 대화 문서 배열 (점수 포함)
-   */
-  async searchByKeyword(userId: string, keyword: string): Promise<(ConversationDoc & { score?: number })[]> {
-    try {
-      return await this.conversationRepo.searchByKeyword(userId, keyword);
-    } catch (err: unknown) {
-      this.checkTransactionError(err);
-      throw new UpstreamError('Failed to search conversations', { cause: err as any });
-    }
-  }
 
 }
