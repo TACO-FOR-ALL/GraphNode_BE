@@ -134,13 +134,25 @@ describe('End-to-End Graph Flow', () => {
       } as any);
 
       await db.collection('messages').insertOne({
-        _id: `msg-incremental-${Date.now()}`,
+        _id: `msg-incremental-user-${Date.now()}`,
         conversationId: newConvId,
         ownerUserId: userId,
         role: 'user',
         content: 'Adding a new conversation node for incremental testing.',
         createdAt: futureMs,
         updatedAt: futureMs,
+      } as any);
+
+      // AI add_node 파이프라인은 Q-A pair(user+assistant 쌍)이 1개 이상 있어야 노드를 생성합니다.
+      // user 메시지만 있으면 Q-A pair가 0개로 파이프라인이 건너뛰어 graph_nodes 미삽입됩니다.
+      await db.collection('messages').insertOne({
+        _id: `msg-incremental-assistant-${Date.now()}`,
+        conversationId: newConvId,
+        ownerUserId: userId,
+        role: 'assistant',
+        content: 'Incremental graph testing adds new nodes to an existing knowledge graph without full regeneration.',
+        createdAt: futureMs + 1000,
+        updatedAt: futureMs + 1000,
       } as any);
 
       console.log(`Inserted conversation: ${newConvId}`);

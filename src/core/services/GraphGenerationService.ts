@@ -62,16 +62,32 @@ export class GraphGenerationService {
    *
    * @param userId 사용자 ID
    * @param options 옵션 (요약 포함 여부 등)
-   * @returns 발행된 작업의 Task ID
+   * @returns 발행된 작업의 Task ID 또는 건너뛴 경우 null
    */
   async requestGraphGenerationViaQueue(
     userId: string,
     options?: {
       includeSummary?: boolean;
     }
-  ): Promise<string> {
+  ): Promise<string | null> {
     let taskId: string | undefined;
     try {
+      // 0. 데이터 존재 여부 확인
+      const convs = await withRetry(
+        async () => await this.chatManagementService.listConversations(userId, 1),
+        { label: 'ChatManagementService.listConversations.check' }
+      );
+      const notes = await withRetry(
+        async () => await this.noteService.findNotesModifiedSince(userId, new Date(0)),
+        { label: 'NoteService.findNotesModifiedSince.check' }
+      );
+      const activeNotes = notes.filter((n) => !n.deletedAt);
+
+      if (convs.items.length === 0 && activeNotes.length === 0) {
+        logger.info({ userId }, 'No conversation or note data found. Skipping graph generation.');
+        return null;
+      }
+
       taskId = `task_${userId}_${ulid()}`;
       const s3Key = `graph-generation/${taskId}/input.json`;
 

@@ -1,10 +1,7 @@
 import { JobHandler } from './JobHandler';
 import { Container } from '../../bootstrap/container';
 import { AddNodeResultPayload } from '../../shared/dtos/queue';
-import {
-  AiAddNodeBatchResult,
-  isNoteResultItem,
-} from '../../shared/dtos/ai_graph_output';
+import { AiAddNodeBatchResult, isNoteResultItem } from '../../shared/dtos/ai_graph_output';
 import { logger } from '../../shared/utils/logger';
 import { withRetry } from '../../shared/utils/retry';
 import { captureEvent } from '../../shared/utils/posthog';
@@ -34,7 +31,7 @@ export class AddNodeResultHandler implements JobHandler {
     // 상태에 따른 처리, FAILED 시에
     if (status === 'FAILED' || error) {
       logger.error({ taskId, userId, error }, 'AddNode task failed from AI Server');
-      
+
       // 실패 알림 전송 전에 상태 롤백
       const stats = await graphService.getStats(userId);
       if (stats) {
@@ -59,15 +56,12 @@ export class AddNodeResultHandler implements JobHandler {
 
       // 2. DB 저장 (클러스터 생성, 노드 및 엣지 반영)
       const existingNodes = await graphService.listNodes(userId);
-      let nextNodeId = existingNodes.length > 0
-        ? Math.max(...existingNodes.map(n => n.id)) + 1
-        : 1;
+      let nextNodeId =
+        existingNodes.length > 0 ? Math.max(...existingNodes.map((n) => n.id)) + 1 : 1;
 
       // AI가 반환하는 엣지 target은 ChromaDB record ID 포맷인 "{userId}_{origId}"입니다.
       // 기존 노드의 numeric DB id를 origId 기준으로 해소하기 위한 역방향 맵을 구축합니다.
-      const origIdToDbId = new Map<string, number>(
-        existingNodes.map(n => [n.origId, n.id])
-      );
+      const origIdToDbId = new Map<string, number>(existingNodes.map((n) => [n.origId, n.id]));
 
       // 신규 노드의 AI string ID("{userId}_{origId}") → 할당될 numeric DB id 맵
       const createdNodeIds: Map<string, number> = new Map();
@@ -81,7 +75,13 @@ export class AddNodeResultHandler implements JobHandler {
         // 처리 실패(skipped + error)한 항목은 노드/클러스터 저장 건너뜀
         if (result.skipped && result.error) {
           logger.warn(
-            { taskId, userId, conversationId: result.conversationId, noteId: result.noteId, error: result.error },
+            {
+              taskId,
+              userId,
+              conversationId: result.conversationId,
+              noteId: result.noteId,
+              error: result.error,
+            },
             'AddNode result item skipped by AI pipeline — no nodes to persist'
           );
           continue;
@@ -92,17 +92,23 @@ export class AddNodeResultHandler implements JobHandler {
         const sourceType = isNote ? 'markdown' : 'chat';
 
         // 클러스터 추가 로직 (병렬 수집)
-        if (result.assignedCluster && result.assignedCluster.isNewCluster && result.assignedCluster.clusterId) {
-            clusterPromises.push(graphService.upsertCluster({
-                id: result.assignedCluster.clusterId,
-                userId: userId,
-                name: result.assignedCluster.name || '',
-                description: result.assignedCluster.reasoning || '',
-                themes: result.assignedCluster.themes || [],
-                size: 1,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            }));
+        if (
+          result.assignedCluster &&
+          result.assignedCluster.isNewCluster &&
+          result.assignedCluster.clusterId
+        ) {
+          clusterPromises.push(
+            graphService.upsertCluster({
+              id: result.assignedCluster.clusterId,
+              userId: userId,
+              name: result.assignedCluster.name || '',
+              description: result.assignedCluster.reasoning || '',
+              themes: result.assignedCluster.themes || [],
+              size: 1,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            })
+          );
         }
 
         // 노드 저장 (병렬 수집)
@@ -113,18 +119,20 @@ export class AddNodeResultHandler implements JobHandler {
           // 배치 내 신규 노드도 origId 맵에 추가 (배치 내 항목끼리 엣지 연결 시 참조 가능하도록)
           origIdToDbId.set(node.origId, dbNodeId);
 
-          nodePromises.push(graphService.upsertNode({
-            id: dbNodeId,
-            userId,
-            origId: node.origId,
-            clusterId: node.clusterId,
-            clusterName: node.clusterName || '',
-            // 대화: numMessages(Q-A 쌍 수), 노트: numSections(섹션 수) → 공통 numMessages 필드에 저장
-            numMessages: isNote ? (node.numSections ?? 0) : (node.numMessages ?? 0),
-            sourceType,
-            embedding: [],
-            timestamp: node.timestamp ?? null,
-          }));
+          nodePromises.push(
+            graphService.upsertNode({
+              id: dbNodeId,
+              userId,
+              origId: node.origId,
+              clusterId: node.clusterId,
+              clusterName: node.clusterName || '',
+              // 대화: numMessages(Q-A 쌍 수), 노트: numSections(섹션 수) → 공통 numMessages 필드에 저장
+              numMessages: isNote ? (node.numSections ?? 0) : (node.numMessages ?? 0),
+              sourceType,
+              embedding: [],
+              timestamp: node.timestamp ?? null,
+            })
+          );
           totalNodesAdded++;
         }
       }
@@ -163,26 +171,28 @@ export class AddNodeResultHandler implements JobHandler {
       const edgePromises: Promise<string>[] = [];
       for (const result of batchResult.results || []) {
         for (const edge of result.edges || []) {
-            const sourceId = resolveNodeId(String(edge.source));
-            const targetId = resolveNodeId(String(edge.target));
+          const sourceId = resolveNodeId(String(edge.source));
+          const targetId = resolveNodeId(String(edge.target));
 
-            if (sourceId === null || targetId === null) {
-                logger.warn(
-                  { taskId, userId, source: edge.source, target: edge.target },
-                  'AddNode edge skipped: could not resolve node ID to DB numeric id'
-                );
-                continue;
-            }
+          if (sourceId === null || targetId === null) {
+            logger.warn(
+              { taskId, userId, source: edge.source, target: edge.target },
+              'AddNode edge skipped: could not resolve node ID to DB numeric id'
+            );
+            continue;
+          }
 
-            edgePromises.push(graphService.upsertEdge({
-                userId,
-                source: sourceId,
-                target: targetId,
-                weight: edge.weight || 1.0,
-                type: (edge.type || 'hard') as 'hard' | 'insight',
-                intraCluster: edge.intraCluster ?? true,
-            }));
-            totalEdgesAdded++;
+          edgePromises.push(
+            graphService.upsertEdge({
+              userId,
+              source: sourceId,
+              target: targetId,
+              weight: edge.weight || 1.0,
+              type: (edge.type || 'hard') as 'hard' | 'insight',
+              intraCluster: edge.intraCluster ?? true,
+            })
+          );
+          totalEdgesAdded++;
         }
       }
 
@@ -195,9 +205,9 @@ export class AddNodeResultHandler implements JobHandler {
       // 혹은 통계 자체의 updatedAt을 갱신하는 것이 주요하다고 판단됨.
       const stats = await graphService.getStats(userId);
       if (stats) {
-          stats.updatedAt = new Date().toISOString();
-          stats.status = 'UPDATED';
-          await graphService.saveStats(stats);
+        stats.updatedAt = new Date().toISOString();
+        stats.status = 'UPDATED';
+        await graphService.saveStats(stats);
       }
 
       // 3.4.1. PostHog 이벤트 수집 (Add Node 완료 가치 측정)
@@ -215,13 +225,16 @@ export class AddNodeResultHandler implements JobHandler {
           'Graph Updated',
           'Your conversations are successfully added to your knowledge graph.',
           { taskId, status: 'COMPLETED' }
-        )
+        ),
       ]);
-
     } catch (err) {
       logger.error({ err, taskId, userId }, 'Failed to process add node result');
 
-      await notiService.sendAddConversationFailed(userId, taskId, err instanceof Error ? err.message : String(err));
+      await notiService.sendAddConversationFailed(
+        userId,
+        taskId,
+        err instanceof Error ? err.message : String(err)
+      );
       await notiService.sendFcmPushNotification(
         userId,
         'Graph Update Failed',
@@ -232,4 +245,3 @@ export class AddNodeResultHandler implements JobHandler {
     }
   }
 }
-

@@ -41,6 +41,7 @@ export class GraphAiApi {
    *
    * **응답 상태 코드:**
    * - `202 Accepted`: 그래프 생성 작업이 큐에 등록됨
+   * - `200 OK`: 사용자의 대화 또는 노트 데이터가 없어 작업을 생성하지 않고 건너뜀 (`status: 'skipped'`)
    * - `401 Unauthorized`: 인증되지 않은 요청
    * - `409 Conflict`: 동일한 작업이 이미 진행 중임
    *
