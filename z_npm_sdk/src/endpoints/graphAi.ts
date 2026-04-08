@@ -39,6 +39,11 @@ export class GraphAiApi {
    * @param options - 그래프 생성 옵션 (`includeSummary` 등)
    * @returns 작업 ID와 상태를 포함한 응답 객체 (`GraphGenerationResponseDto`)
    *
+   * **응답 상태 코드:**
+   * - `202 Accepted`: 그래프 생성 작업이 큐에 등록됨
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `409 Conflict`: 동일한 작업이 이미 진행 중임
+   *
    * @example
    * ```typescript
    * const response = await client.graphAi.generateGraph({ includeSummary: true, summaryLanguage: 'ko' });
@@ -95,6 +100,12 @@ export class GraphAiApi {
    *
    * @returns 작업 ID와 상태를 포함한 응답 객체 (`GraphGenerationResponseDto`)
    *
+   * **응답 상태 코드:**
+   * - `202 Accepted`: 요약 생성 작업이 큐에 등록됨
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 사용자의 그래프 데이터(노드)가 없음 (`GraphNotFoundError`)
+   * - `409 Conflict`: 동일한 작업이 이미 진행 중임
+   *
    * @example
    * ```typescript
    * const response = await client.graphAi.requestSummary();
@@ -116,6 +127,11 @@ export class GraphAiApi {
    *
    * @returns 그래프 요약 데이터 (`GraphSummaryDto`)
    *
+   * **응답 상태 코드:**
+   * - `200 OK`: 조회 성공 (아직 생성되지 않은 경우 빈 배열로 채워진 기본값 반환)
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * ```typescript
    * const response = await client.graphAi.getSummary();
@@ -136,6 +152,11 @@ export class GraphAiApi {
    * **API Endpoint**: `POST /v1/graph-ai/add-node`
    *
    * @returns 작업 ID와 상태를 포함한 응답 객체 (`GraphGenerationResponseDto`)
+   *
+   * **응답 상태 코드:**
+   * - `202 Accepted`: 노드 추가 작업이 큐에 등록됨
+   * - `200 OK`: 추가할 변경된 대화가 없어 작업이 건너뜀. `{ status: 'skipped' }` 반환
+   * - `401 Unauthorized`: 인증되지 않은 요청
    *
    * @example
    * ```typescript

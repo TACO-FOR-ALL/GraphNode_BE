@@ -66,7 +66,9 @@
   const { data } = await client.sync.pullConversations(lastSyncDate);
   ```
 - **Response Type**: `SyncPullConversationsResponse`
-- **Status Codes**: `200`, `401`
+- **Status Codes**
+  - `200 OK`: 성공. 변경된 대화/메시지 목록을 반환합니다.
+  - `401 Unauthorized`: 세션이 만료되었거나 인증되지 않았습니다.
 
 ---
 
@@ -79,7 +81,9 @@
   const { data } = await client.sync.pullNotes(new Date('2024-01-01'));
   ```
 - **Response Type**: `SyncPullNotesResponse`
-- **Status Codes**: `200`, `401`
+- **Status Codes**
+  - `200 OK`: 성공. 변경된 노트/폴더 목록을 반환합니다.
+  - `401 Unauthorized`: 세션이 만료되었거나 인증되지 않았습니다.
 
 ---
 
@@ -100,7 +104,9 @@
 - **Type Location**: `z_npm_sdk/src/types/sync.ts`
 - **Status Codes**
   - `200 OK`: 성공적으로 반영됨
-  - `400 Bad Request`: 요청 데이터 형식이 잘못됨
+  - `400 Bad Request`: 요청 데이터 형식이 잘못됨 (필수 필드 누락, 잘못된 타입)
+  - `401 Unauthorized`: 세션이 만료되었거나 인증되지 않았습니다.
+  - `502 Bad Gateway`: 데이터베이스 저장 오류 (재시도 가능)
 
 ---
 

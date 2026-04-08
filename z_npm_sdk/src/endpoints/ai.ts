@@ -10,18 +10,26 @@ import { AiStreamEvent } from '../types/ai-event.js';
  * @prop model AI 모델
  * @prop chatContent AI 챗 대화 내용
  * @prop modelName AI 모델 이름
+ * @prop title 대화 제목 예약어. 'NEW_CONVERSATION'을 전달하면 서버가 응답 완료 후 제목을 자동
+ *             생성하고, SSE RESULT 이벤트의 AIChatResponseDto.title 필드에 포함하여 반환합니다.
+ *             웹 클라이언트처럼 로컬 DB가 없어 제목을 즉시 결정하기 어려운 환경에서 활용합니다.
  */
 export interface AIChatRequestDto {
   id: string;
   model: ApiKeyModel;
   chatContent: string;
   modelName?: string;
+  /** 'NEW_CONVERSATION' 예약어를 전달하면 서버가 제목을 자동 생성하여 응답에 포함합니다. */
+  title?: string;
 }
 
 /**
  * AI 채팅 응답 DTO
  * @public
- * @property title 대화 제목 (선택적, 첫 대화 메시지에서 설정될 수 있음)
+ * @property title 생성된 대화 제목. 다음 두 경우에만 값이 포함된다:
+ *   1. 대화방이 존재하지 않아 서버가 신규 생성한 경우
+ *   2. 요청 body에 `title: 'NEW_CONVERSATION'` 예약어가 포함된 경우 (웹 클라이언트 전용 경로)
+ *   그 외 일반 요청에서는 `undefined`로 생략된다.
  * @property messages 생성된 메시지 목록 (사용자 메시지 + AI 응답 메시지)
  */
 export interface AIChatResponseDto {
@@ -70,24 +78,54 @@ export class AiApi {
 
   /**
    * 대화 내에서 AI와 채팅을 진행합니다. (표준 요청/응답 방식)
-   * 
+   *
    * @remarks
    * 내부적으로 Server-Sent Events(SSE)를 사용하지만, Promise는 AI의 최종 응답이 모두 수신된 후 resolve됩니다.
    * 실시간 글자 단위 업데이트가 필요하면 `onStream` 콜백을 사용하세요.
+   *
+   * ### `title: 'NEW_CONVERSATION'` 예약어 — 웹 클라이언트 전용
+   * 웹 클라이언트는 로컬 DB가 없어 대화방을 서버에 미리 생성(placeholder 제목)한 뒤
+   * 첫 메시지를 보내는 구조입니다. 이때 dto.title에 `'NEW_CONVERSATION'`을 전달하면
+   * 서버가 첫 메시지 내용을 바탕으로 제목을 AI가 자동 생성하고, DB를 즉시 업데이트한 뒤
+   * 응답의 `AIChatResponseDto.title`에 포함해 반환합니다.
+   * 이 값을 받아 UI의 대화방 제목을 갱신하면 "loading..." 없이 즉시 표시할 수 있습니다.
    *
    * @param conversationId - 대화 ID (ULID/UUID)
    * @param dto - 채팅 요청 데이터 (id, model, chatContent 등)
    * @param files - (선택) 업로드할 파일 리스트 (이미지, 문서 등)
    * @param onStream - (선택) 실시간 텍스트 청크 수신 콜백
-   * @returns AI 응답 DTO 및 HTTP 상태 코드
+   * @returns AI 응답 DTO 및 HTTP 상태 코드. `data.title`은 제목이 생성된 경우에만 포함됨.
    * @throws {Error} 네트워크 오류 또는 스트림 처리 실패 시
-   * 
+   *
+   * **응답 상태 코드:**
+   * - `201 Created`: AI 응답 생성 성공 (SSE 스트림 완료 후 SDK가 설정)
+   * - `400 Bad Request`: chatContent가 비어있거나 지원하지 않는 모델 지정
+   * - `401 Unauthorized`: 인증되지 않은 요청 (세션 만료)
+   * - `403 Forbidden`: 해당 모델의 API 키가 설정되지 않음
+   * - `404 Not Found`: conversationId에 해당하는 대화가 존재하지 않음
+   * - `429 Too Many Requests`: AI 공급자 Rate Limit 초과 (재시도 가능)
+   * - `502 Bad Gateway`: AI 공급자 오류 (재시도 가능)
+   * - `504 Gateway Timeout`: AI 공급자 응답 시간 초과 (재시도 가능)
+   *
    * @example
-   * const res = await client.ai.chat('conv_123', { 
-   *   id: 'msg_1', 
-   *   model: 'openai', 
-   *   chatContent: '안녕?' 
+   * // 일반 채팅
+   * const res = await client.ai.chat('conv_123', {
+   *   id: 'msg_1',
+   *   model: 'openai',
+   *   chatContent: '안녕?'
    * }, [], (text) => console.log(text));
+   *
+   * @example
+   * // 웹 클라이언트: 첫 메시지와 함께 제목 자동 생성 요청
+   * const res = await client.ai.chat('conv_123', {
+   *   id: 'msg_1',
+   *   model: 'openai',
+   *   chatContent: '안녕?',
+   *   title: 'NEW_CONVERSATION',  // 예약어: 서버가 제목을 생성해 응답에 포함
+   * });
+   * if (res.isSuccess && res.data.title) {
+   *   updateConversationTitle(res.data.title); // UI 제목 즉시 갱신
+   * }
    */
   async chat(
     conversationId: string,
@@ -100,28 +138,41 @@ export class AiApi {
 
   /**
    * AI 채팅 스트림을 엽니다. (SSE 고수준 제어용)
-   * 
+   *
    * @remarks
    * 이 메서드는 SSE 이벤트를 직접 제어할 수 있는 저수준 API입니다.
    * `AiStreamEvent` 타입을 통해 이벤트별 분기 처리가 가능합니다.
-   * 
+   *
    * 주요 이벤트:
    * - `chunk`: 텍스트 스트림 조각 수신 (`{ text: string }`)
-   * - `result`: 최종 답변 및 메시지 목록 수신 (`AIChatResponseDto`)
+   * - `result`: 최종 답변 수신 (`AIChatResponseDto`). `data.title`은 제목이 생성된 경우에만 포함.
    * - `error`: 서버 측 처리 오류 발생 (`{ message: string }`)
-   * 
+   *
+   * ### `title: 'NEW_CONVERSATION'` 예약어 — 웹 클라이언트 전용
+   * dto에 `title: 'NEW_CONVERSATION'`을 포함하면 서버가 첫 메시지 내용으로 제목을 자동 생성하고
+   * `result` 이벤트의 `data.title`에 담아 반환합니다.
+   * 웹은 이 값으로 placeholder 제목("New Conversation")을 즉시 교체할 수 있습니다.
+   *
    * @param conversationId - 대화 ID
    * @param dto - 채팅 요청 데이터
    * @param files - (선택) 업로드할 파일 리스트 (기본값: [])
    * @param onEvent - SSE 이벤트 수신 콜백 ({ event: string, data: any })
    * @param options - 추가 옵션 (AbortSignal을 통한 요청 취소 지원)
    * @returns 스트림 중단(abort) 함수
-   * 
+   *
    * @example
-   * const abort = await client.ai.chatStream('conv_123', { id: 'msg_1', model: 'openai', chatContent: 'Tell me a story' }, [], (event) => {
-   *   if (event.event === 'chunk') console.log(event.data.text);
-   *   if (event.event === 'result') console.log('Done:', event.data.messages);
-   * });
+   * // 웹 클라이언트: 제목 자동 생성 + 스트리밍
+   * const abort = await client.ai.chatStream(
+   *   'conv_123',
+   *   { id: 'msg_1', model: 'openai', chatContent: '안녕?', title: 'NEW_CONVERSATION' },
+   *   [],
+   *   (event) => {
+   *     if (event.event === 'chunk') appendText(event.data.text);
+   *     if (event.event === 'result' && event.data.title) {
+   *       updateConversationTitle(event.data.title); // placeholder 제목 즉시 교체
+   *     }
+   *   }
+   * );
    * // 필요 시 호출: abort();
    */
   async chatStream(
@@ -136,16 +187,26 @@ export class AiApi {
 
   /**
    * 대화 내역의 마지막 AI 응답을 삭제하고 다시 응답을 요청합니다. (재시도)
-   * 
+   *
    * @remarks
    * 이 메서드는 대화 기록 중 가장 최근의 메시지가 AI의 응답인지 확인한 후, 이를 영구 삭제하고
    * 바로 이전까지의 대화 내역으로 AI에게 새로운 응답을 생성하도록 백엔드에 요청합니다.
-   * 
+   *
    * @param conversationId - 대화 ID
    * @param dto - 재시도 요청 데이터 (model, modelName)
    * @param onStream - (선택) 실시간 텍스트 청크 수신 콜백
    * @returns AI 응답 DTO 및 HTTP 상태 코드
-   * 
+   *
+   * **응답 상태 코드:**
+   * - `201 Created`: 재시도 AI 응답 생성 성공
+   * - `400 Bad Request`: conversationId 누락 또는 형식 오류
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `403 Forbidden`: 해당 모델의 API 키가 설정되지 않음
+   * - `404 Not Found`: conversationId에 해당하는 대화가 존재하지 않음
+   * - `429 Too Many Requests`: AI 공급자 Rate Limit 초과 (재시도 가능)
+   * - `502 Bad Gateway`: AI 공급자 오류 (재시도 가능)
+   * - `504 Gateway Timeout`: AI 공급자 응답 시간 초과 (재시도 가능)
+   *
    * @example
    * const res = await client.ai.chatRetry('conv_123', {
    *   model: 'openai'
@@ -190,17 +251,27 @@ export class AiApi {
 
   /**
    * RAG 기반 채팅을 진행합니다. (FE가 검색한 맥락 포함 요청)
-   * 
+   *
    * @remarks
-   * 사용자가 현재 보고 있는 문서 조각이나 관련 과거 대화(`retrievedContext`)를 백엔드에 직접 전달하여, 
+   * 사용자가 현재 보고 있는 문서 조각이나 관련 과거 대화(`retrievedContext`)를 백엔드에 직접 전달하여,
    * 서버 측의 별도 벡터 검색 없이도 정확한 답변을 유도할 수 있는 API입니다.
-   * 
+   *
    * @param conversationId - 대화 ID
    * @param dto - RAG 요청 데이터 (retrievedContext, recentMessages 포함)
    * @param files - 첨부 파일
    * @param onStream - 실시간 텍스트 콜백
    * @returns AI 응답 DTO
-   * 
+   *
+   * **응답 상태 코드:**
+   * - `201 Created`: RAG AI 응답 생성 성공
+   * - `400 Bad Request`: chatContent 또는 맥락 데이터 형식 오류
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `403 Forbidden`: 해당 모델의 API 키가 설정되지 않음
+   * - `404 Not Found`: conversationId에 해당하는 대화가 존재하지 않음
+   * - `429 Too Many Requests`: AI 공급자 Rate Limit 초과 (재시도 가능)
+   * - `502 Bad Gateway`: AI 공급자 오류 (재시도 가능)
+   * - `504 Gateway Timeout`: AI 공급자 응답 시간 초과 (재시도 가능)
+   *
    * @example
    * const res = await client.ai.ragChat('conv_123', {
    *   id: 'msg_2',

@@ -38,6 +38,10 @@
   ```typescript
   await client.notification.registerDeviceToken('fcm-token-123...');
   ```
+- **Status Codes**
+  - `200 OK`: FCM 토큰 등록 성공
+  - `400 Bad Request`: 토큰 값이 비어있거나 형식 오류
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
 
 ---
 
@@ -48,6 +52,9 @@
   ```typescript
   await client.notification.removeDeviceToken('fcm-token-123...');
   ```
+- **Status Codes**
+  - `200 OK`: FCM 토큰 제거 성공
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
 
 ---
 

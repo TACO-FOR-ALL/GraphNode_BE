@@ -96,6 +96,71 @@ FE → FormData 생성 → (files 파라미터로 여러 파일 Append) → POST
 
 ---
 
+## AI 채팅 — `NEW_CONVERSATION` 예약어 패턴
+
+### 배경: 웹 vs 모바일의 대화 제목 생성 차이
+
+| 클라이언트 | 로컬 DB | 제목 생성 방식 |
+|------------|---------|--------------|
+| 모바일 앱  | 있음    | 대화 생성 시 로컬에서 즉시 추론 → 서버 동기화 |
+| 웹 클라이언트 | 없음 | 서버에 placeholder 제목으로 대화방 선생성 → **문제 발생** |
+
+웹은 대화방을 서버에 미리 만들어야 화면에 표시할 수 있습니다. 그 시점에는 사용자가 아직 아무 메시지도 보내지 않았으므로 의미 있는 제목을 만들 수 없습니다. 결과적으로 "New Conversation" 같은 placeholder 제목이 지속되는 UX 문제가 있었습니다.
+
+### 해결: `title: 'NEW_CONVERSATION'` 예약어
+
+첫 메시지 전송 시 DTO에 `title: 'NEW_CONVERSATION'`을 포함하면 서버가 처리합니다.
+
+```typescript
+// 웹 클라이언트 사용 예 (chatStream)
+const abort = await client.ai.chatStream(
+  conversationId,
+  {
+    id: messageId,
+    model: 'openai',
+    chatContent: userInput,
+    title: 'NEW_CONVERSATION',   // ← 예약어: 서버가 제목을 자동 생성
+  },
+  [],
+  (event) => {
+    if (event.event === 'chunk') appendText(event.data.text);
+    if (event.event === 'result' && event.data.title) {
+      // SSE RESULT 이벤트에 생성된 제목이 포함됨
+      updateConversationTitle(event.data.title);
+    }
+  }
+);
+```
+
+### 서버 처리 흐름
+
+```
+FE(웹)
+  1. POST /v1/ai/conversations          → "New Conversation"으로 대화방 선생성
+  2. 사용자 첫 메시지 입력
+  3. POST /v1/ai/conversations/:id/chat  → body에 { title: 'NEW_CONVERSATION' } 포함
+                                           ↓
+                              서버: chatbody.title === 'NEW_CONVERSATION' 감지
+                                           ↓
+                              AI → 제목 생성 (requestGenerateThreadTitle)
+                                           ↓
+                              DB: updateConversation({ title: 생성된제목 })
+                                           ↓
+  4. SSE RESULT 이벤트                  → { title: "프로젝트 아이디어 논의", messages: [...] }
+  5. FE: UI 제목 즉시 갱신 ✓
+```
+
+### 응답에서 `title` 필드가 포함되는 경우
+
+`AIChatResponseDto.title`은 다음 두 경우에만 값을 포함합니다. 그 외에는 `undefined`로 생략됩니다.
+
+| 경우 | 설명 |
+|------|------|
+| 대화방 신규 생성 | `conversationId`에 해당하는 대화방이 서버에 없어 자동 생성된 경우 |
+| `NEW_CONVERSATION` 예약어 | 요청 body에 `title: 'NEW_CONVERSATION'`이 포함된 경우 (웹 전용) |
+
+---
+
 ## 관련 백엔드 엔드포인트
 
 | SDK 메서드 | 백엔드 엔드포인트 | 담당 파일 |

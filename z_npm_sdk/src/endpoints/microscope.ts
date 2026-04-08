@@ -26,6 +26,13 @@ export class MicroscopeApi {
    * @param noteId 분석을 요청할 노트의 고유 ID
    * @param schemaName 추출에 사용할 커스텀 엔티티 스키마 명칭 (옵션)
    * @returns {Promise<HttpResponse<MicroscopeWorkspace>>} 생성된 워크스페이스 메타데이터 반환
+   *
+   * **응답 상태 코드:**
+   * - `201 Created`: 워크스페이스 생성 및 Ingest 파이프라인 시작 성공
+   * - `400 Bad Request`: nodeId 또는 nodeType 누락
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `502 Bad Gateway`: SQS 전송 또는 데이터베이스 오류
+   *
    * @example
    * const res = await sdk.microscope.ingestFromNote('note_123');
    * console.log(res.data._id); // 워크스페이스(그룹) ID
@@ -45,6 +52,13 @@ export class MicroscopeApi {
    * @param conversationId 분석을 요청할 대화의 고유 ID
    * @param schemaName 추출에 사용할 커스텀 엔티티 스키마 명칭 (옵션)
    * @returns {Promise<HttpResponse<MicroscopeWorkspace>>} 생성된 워크스페이스 메타데이터 반환
+   *
+   * **응답 상태 코드:**
+   * - `201 Created`: 워크스페이스 생성 및 Ingest 파이프라인 시작 성공
+   * - `400 Bad Request`: nodeId 또는 nodeType 누락
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `502 Bad Gateway`: SQS 전송 또는 데이터베이스 오류
+   *
    * @example
    * const res = await sdk.microscope.ingestFromConversation('conv_456', 'code_schema');
    */
@@ -81,6 +95,13 @@ export class MicroscopeApi {
    *
    * @param microscopeWorkspaceId - 조회할 워크스페이스 ID
    * @returns {Promise<HttpResponse<MicroscopeWorkspace>>} 워크스페이스 메타데이터
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 조회 성공
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 워크스페이스가 존재하지 않음
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * const ws = await client.microscope.getWorkspace('ws_123');
    * console.log(ws.data.status); // 'COMPLETED'
@@ -131,6 +152,13 @@ export class MicroscopeApi {
    * 워크스페이스를 삭제합니다. 연관된 Neo4j 그래프와 메타데이터가 파기됩니다.
    *
    * @param microscopeWorkspaceId - 삭제할 워크스페이스 ID
+   *
+   * **응답 상태 코드:**
+   * - `204 No Content`: 삭제 성공
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 워크스페이스가 존재하지 않음
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * await client.microscope.deleteWorkspace('ws_123');
    */
