@@ -675,6 +675,7 @@ paths:
               schema: { $ref: ../schemas/problem.json }
     get:
       summary: List conversations
+      description: Returns a list of conversations. For performance reasons, the messages array in each conversation is empty. Use /test endpoint to get full message data.
       parameters:
         - in: query
           name: limit
@@ -714,6 +715,32 @@ paths:
                 properties:
                   deletedCount:
                     type: integer
+  /v1/ai/conversations/test:
+    get:
+      summary: [TEST] List conversations with full messages
+      description: Returns a list of conversations including the full messages array. Used for testing and debugging.
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - in: query
+          name: cursor
+          schema: { type: string, description: ISO 8601 cursor }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: ../schemas/conversation.json }
+                  nextCursor:
+                    oneOf:
+                      - { type: string }
+                      - { type: 'null' }
   /v1/ai/conversations/trash:
     get:
       summary: List deleted conversations (Trash)
@@ -1052,6 +1079,15 @@ paths:
         When using SSE, the server streams `chunk`, `status`, and `result` events. On non-streaming
         requests the response body contains the full `AIChatResponseDto` (201 Created).
         Supports file uploads for multimodal models (e.g., OpenAI Assistants, GPT-4o).
+
+
+        **`title: NEW_CONVERSATION` 예약어 (웹 클라이언트 전용)**:
+        웹 클라이언트는 로컬 DB 부재로 인해 대화 시작 전 서버에 placeholder 제목으로 대화방을
+        먼저 생성해야 합니다. 이후 첫 메시지 전송 시 `title: 'NEW_CONVERSATION'`을 함께 보내면
+        서버가 메시지 내용을 기반으로 AI가 제목을 자동 생성하고 DB에 즉시 반영합니다.
+        생성된 제목은 SSE `result` 이벤트 또는 JSON 응답의 `title` 필드로 반환되므로
+        클라이언트는 UI 제목을 로딩 지연 없이 즉시 갱신할 수 있습니다.
+        모바일 앱은 로컬에서 제목을 추론하므로 이 예약어가 필요하지 않습니다.
       parameters:
         - in: path
           name: conversationId
@@ -1071,6 +1107,13 @@ paths:
                   enum: [openai, claude, gemini, deepseek]
                 chatContent: { type: string }
                 modelName: { type: string, description: Specific model variant name (e.g. gpt-4o) }
+                title:
+                  type: string
+                  description: >-
+                    예약어 `NEW_CONVERSATION`을 전달하면 서버가 대화 제목을 자동 생성하고
+                    응답의 `title` 필드에 포함해 반환합니다. 다른 값은 무시됩니다.
+                    웹 클라이언트 전용 경로이며, 모바일에서는 사용 불필요합니다.
+                  example: NEW_CONVERSATION
                 files:
                   type: array
                   items: { type: string, format: binary }
@@ -1086,7 +1129,7 @@ paths:
                   data: {"text":"Hello "}
 
                   event: result
-                  data: {"title":"...", "messages":[...]}
+                  data: {"title":"프로젝트 아이디어 논의", "messages":[...]}
 
                   event: error
                   data: {"message":"Provider error"}
@@ -1097,7 +1140,11 @@ paths:
               schema:
                 type: object
                 properties:
-                  title: { type: string }
+                  title:
+                    type: string
+                    description: >-
+                      생성된 대화 제목. 요청 body에 `title: NEW_CONVERSATION`이 포함된 경우,
+                      또는 대화방이 신규 생성된 경우에만 포함됩니다. 그 외에는 생략됩니다.
                   messages:
                     type: array
                     items: { $ref: ../schemas/message.json }

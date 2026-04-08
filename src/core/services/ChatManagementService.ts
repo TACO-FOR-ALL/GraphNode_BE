@@ -357,24 +357,34 @@ export class ChatManagementService {
   }
 
   /**
-   * 대화 목록을 메시지와 함께 조회합니다.
+   * 대화 목록을 조회합니다.
    *
-   * N+1 쿼리 방지: 대화 목록(1 query) + 전체 메시지 일괄 조회(1 query, $in)로 총 2번의 DB 쿼리만 발생합니다.
+   * N+1 쿼리 방지: (includeMessages=true 일 때) 대화 목록(1 query) + 전체 메시지 일괄 조회(1 query, $in)로 총 2번의 DB 쿼리만 발생합니다.
    *
    * @param ownerUserId 소유자 ID
    * @param limit 페이지당 항목 수
    * @param cursor 페이징 커서 (Optional)
-   * @returns 대화 목록(메시지 포함) 및 다음 커서
+   * @param options 옵션 (includeMessages: 메시지 포함 여부)
+   * @returns 대화 목록 및 다음 커서
    */
   async listConversations(
     ownerUserId: string,
     limit: number,
-    cursor?: string
+    cursor?: string,
+    options: { includeMessages?: boolean } = { includeMessages: true }
   ): Promise<{ items: ChatThread[]; nextCursor?: string | null }> {
+    const { includeMessages = true } = options;
+
     const result = await withRetry(
       async () => await this.conversationService.listDocsByOwner(ownerUserId, limit, cursor),
       { label: 'ConversationService.listDocsByOwner' }
     );
+
+    // 메시지를 포함하지 않을 경우 즉시 반환
+    if (!includeMessages) {
+      const items: ChatThread[] = result.items.map((doc) => toChatThreadDto(doc, []));
+      return { items, nextCursor: result.nextCursor };
+    }
 
     // N+1 방지: 모든 대화의 메시지를 단 1번의 쿼리로 일괄 조회 ($in 연산)
     const conversationIds = result.items.map((doc) => doc._id);

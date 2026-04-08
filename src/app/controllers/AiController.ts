@@ -316,6 +316,7 @@ export class AiController {
    *
    * 역할:
    * - 사용자의 대화방 목록을 조회합니다.
+   * - 성능 최적화를 위해 메시지 배열은 포함하지 않습니다 ([] 반환).
    * - 페이지네이션(Pagination)을 지원합니다 (limit, cursor).
    *
    * 쿼리 파라미터:
@@ -331,9 +332,35 @@ export class AiController {
     const limit: number = parseInt((req.query.limit as string) || '50', 10);
     const cursor: string | undefined = req.query.cursor as string | undefined;
 
-    // 서비스 호출 (목록 조회)
+    // 서비스 호출 (목록 조회 - 메시지 제외)
     const result: { items: ChatThread[]; nextCursor?: string | null } =
-      await this.chatManagementService.listConversations(ownerUserId, limit, cursor);
+      await this.chatManagementService.listConversations(ownerUserId, limit, cursor, {
+        includeMessages: false,
+      });
+
+    res.status(200).json(result);
+  }
+
+  /**
+   * [TEST] Conversation List 획득 Controller 메서드 (메시지 포함)
+   *
+   * [GET] /v1/ai/conversations/test
+   *
+   * 역할:
+   * - 사용자의 대화방 목록을 메시지 데이터와 함께 조회합니다.
+   * - 대화 목록 테스트 및 디버깅 용도로 사용됩니다.
+   */
+  async listConversationsTest(req: Request, res: Response) {
+    const ownerUserId: string = getUserIdFromRequest(req)!;
+
+    const limit: number = parseInt((req.query.limit as string) || '50', 10);
+    const cursor: string | undefined = req.query.cursor as string | undefined;
+
+    // 서비스 호출 (목록 조회 - 메시지 포함)
+    const result: { items: ChatThread[]; nextCursor?: string | null } =
+      await this.chatManagementService.listConversations(ownerUserId, limit, cursor, {
+        includeMessages: true,
+      });
 
     res.status(200).json(result);
   }
