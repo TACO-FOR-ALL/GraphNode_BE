@@ -1,7 +1,10 @@
 import { JobHandler } from './JobHandler';
 import { Container } from '../../bootstrap/container';
 import { AddNodeResultPayload } from '../../shared/dtos/queue';
-import { AiAddNodeBatchResult } from '../../shared/dtos/ai_graph_output';
+import {
+  AiAddNodeBatchResult,
+  isNoteResultItem,
+} from '../../shared/dtos/ai_graph_output';
 import { logger } from '../../shared/utils/logger';
 import { withRetry } from '../../shared/utils/retry';
 import { captureEvent } from '../../shared/utils/posthog';
@@ -75,6 +78,19 @@ export class AddNodeResultHandler implements JobHandler {
       const nodePromises: Promise<void>[] = [];
 
       for (const result of batchResult.results || []) {
+        // 처리 실패(skipped + error)한 항목은 노드/클러스터 저장 건너뜀
+        if (result.skipped && result.error) {
+          logger.warn(
+            { taskId, userId, conversationId: result.conversationId, noteId: result.noteId, error: result.error },
+            'AddNode result item skipped by AI pipeline — no nodes to persist'
+          );
+          continue;
+        }
+
+        // 대화/노트 여부 판별: sourceType과 컨텐츠 단위 수(numMessages vs numSections) 결정
+        const isNote = isNoteResultItem(result);
+        const sourceType = isNote ? 'markdown' : 'chat';
+
         // 클러스터 추가 로직 (병렬 수집)
         if (result.assignedCluster && result.assignedCluster.isNewCluster && result.assignedCluster.clusterId) {
             clusterPromises.push(graphService.upsertCluster({
@@ -94,7 +110,7 @@ export class AddNodeResultHandler implements JobHandler {
           const tempId = String(node.id); // "{userId}_{origId}" format
           const dbNodeId = nextNodeId++;
           createdNodeIds.set(tempId, dbNodeId);
-          // 배치 내 신규 노드도 origId 맵에 추가 (배치 내 conv끼리 엣지 연결 시 참조 가능하도록)
+          // 배치 내 신규 노드도 origId 맵에 추가 (배치 내 항목끼리 엣지 연결 시 참조 가능하도록)
           origIdToDbId.set(node.origId, dbNodeId);
 
           nodePromises.push(graphService.upsertNode({
@@ -103,10 +119,11 @@ export class AddNodeResultHandler implements JobHandler {
             origId: node.origId,
             clusterId: node.clusterId,
             clusterName: node.clusterName || '',
-            numMessages: node.numMessages || 0,
-            sourceType: 'chat',
+            // 대화: numMessages(Q-A 쌍 수), 노트: numSections(섹션 수) → 공통 numMessages 필드에 저장
+            numMessages: isNote ? (node.numSections ?? 0) : (node.numMessages ?? 0),
+            sourceType,
             embedding: [],
-            timestamp: node.timestamp || null,
+            timestamp: node.timestamp ?? null,
           }));
           totalNodesAdded++;
         }

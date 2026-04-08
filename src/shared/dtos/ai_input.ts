@@ -80,16 +80,35 @@ export interface AiInputConversation {
 export type AiInputData = AiInputConversation[];
 
 /**
+ * AddNode 배치 처리 시 노트 한 건을 AI에 전달하는 입력 형식.
+ * 마크다운 content를 그대로 전달하며, AI는 섹션 단위로 분할하여 처리합니다.
+ *
+ * @property noteId - 원본 노트의 MongoDB `_id` (예: UUID 문자열)
+ * @property title - 노트 제목
+ * @property content - 노트 전체 내용 (Markdown 형식)
+ */
+export interface AiInputNote {
+  /** 원본 노트의 MongoDB _id */
+  noteId: string;
+  /** 노트 제목 */
+  title: string;
+  /** 노트 전체 내용 (Markdown) */
+  content: string;
+}
+
+/**
  * AddNode 배치 처리를 위해 AI 큐(.py)에 전송하기 전 S3에 저장하는 Payload/JSON 양식.
- * 
+ *
  * @property userId - 사용자 식별자 (UUID / ULID)
  * @property existingClusters - 현재 사용자가 보유한 기존 클러스터 정보 리스트 (clusterId, name, themes 등).
- * @property conversations - 새롭게 추가 또는 갱신된 대화의 내용 배열. AiInputConversation 구조로 상세 내용을 포괄함.
+ * @property conversations - 새롭게 추가 또는 갱신된 대화의 내용 배열. `mapping` 형식 또는 `messages[]` 형식 모두 허용.
+ * @property notes - 새롭게 추가 또는 갱신된 노트의 내용 배열.
  */
 export interface AiAddNodeBatchRequest {
   userId: string;
-  existingClusters: any[]; // Array of existing clusters
+  existingClusters: any[];
   conversations: AiInputConversation[];
+  notes: AiInputNote[];
 }
 
 /**

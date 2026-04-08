@@ -717,7 +717,7 @@ paths:
                     type: integer
   /v1/ai/conversations/test:
     get:
-      summary: [TEST] List conversations with full messages
+      summary: '[TEST] List conversations with full messages'
       description: Returns a list of conversations including the full messages array. Used for testing and debugging.
       parameters:
         - in: query
@@ -741,6 +741,17 @@ paths:
                     oneOf:
                       - { type: string }
                       - { type: 'null' }
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '500':
+          description: Internal Server Error
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+
   /v1/ai/conversations/trash:
     get:
       summary: List deleted conversations (Trash)

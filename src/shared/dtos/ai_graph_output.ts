@@ -148,27 +148,37 @@ export interface AiAddNodeClusterInfo {
  * AI 모듈에서 반환되는 AddNode 단일 노드 결과 형식입니다.
  * 파이썬 AI 로직의 return schema 형식을 정확히 따르며 카멜케이스(CamelCase)를 사용합니다.
  * (임베딩 및 sourceType은 제외되어 반환됨)
- * 
- * @property id - DB와 호환되는 기록 고유 식별자 (예: "{userId}_{conversationId}")
+ *
+ * 대화(conversation) 노드와 노트(note) 노드 두 종류를 통합합니다.
+ *
+ * @property id - DB와 호환되는 기록 고유 식별자 (예: "{userId}_{origId}")
  * @property userId - 사용자 식별자
- * @property origId - 원본 대화 식별자 (Conversation ID)
+ * @property origId - 원본 대화/노트 식별자
  * @property clusterId - 속하게 될(또는 새롭게 생성된) 클러스터 식별자
  * @property clusterName - 할당된 클러스터의 이름
- * @property numMessages - 이 대화(노드)에 포함된 원본 메시지(Q-A)의 개수
- * @property timestamp - 타임스탬프 (기본 null)
- * @property createdAt - 노드(대화) 생성 시각 (기본 null)
- * @property updatedAt - 노드(대화) 업데이트 시각 (기본 null)
+ * @property numMessages - 대화 노드 전용: Q-A 메시지 쌍의 개수
+ * @property numSections - 노트 노드 전용: 마크다운 섹션의 개수
+ * @property timestamp - 대화 노드 전용: 타임스탬프 (기본 null)
+ * @property createdAt - 대화 노드 전용: 생성 시각 (기본 null)
+ * @property updatedAt - 대화 노드 전용: 업데이트 시각 (기본 null)
  */
 export interface AiAddNodeNodeOutput {
-  id: string; // E.g., "{userId}_{conversationId}"
+  /** DB 고유 기록 식별자. 예: "{userId}_{origId}" */
+  id: string;
   userId: string;
-  origId: string; 
+  origId: string;
   clusterId: string;
   clusterName: string;
-  numMessages: number;
-  timestamp: string | null;
-  createdAt: string | null;
-  updatedAt: string | null;
+  /** 대화 노드 전용: Q-A 메시지 쌍 수 */
+  numMessages?: number;
+  /** 노트 노드 전용: 마크다운 섹션 수 */
+  numSections?: number;
+  /** 대화 노드 전용 (노트에는 존재하지 않음) */
+  timestamp?: string | null;
+  /** 대화 노드 전용 (노트에는 존재하지 않음) */
+  createdAt?: string | null;
+  /** 대화 노드 전용 (노트에는 존재하지 않음) */
+  updatedAt?: string | null;
 }
 
 /**
@@ -189,22 +199,63 @@ export interface AiAddNodeEdgeOutput {
 }
 
 /**
- * 배치 형태로 요청된 개별 대화(Conversation) 생성/분석 결과입니다.
- * 개별 대화의 노드 배열, 엣지 배열, 클러스터 정보, 그리고 기타 디버그 정보(outputDev)를 갖습니다.
+ * 배치 처리된 개별 항목(대화 또는 노트)의 결과입니다.
+ *
+ * 대화 결과: `conversationId` 필드가 존재합니다.
+ * 노트 결과: `noteId` 필드가 존재하며, `skipped` 필드가 명시적으로 포함됩니다.
+ *
+ * 판별은 `isNoteResultItem` / `isConversationResultItem` 타입 가드를 사용하십시오.
+ *
+ * @property conversationId - 대화 결과일 때 존재하는 원본 대화 ID
+ * @property noteId - 노트 결과일 때 존재하는 원본 노트 ID
+ * @property nodes - 생성된 노드 배열 (처리 성공 시 1개)
+ * @property edges - 생성된 엣지 배열
+ * @property outputDev - 디버그용 후보 노드 유사도 정보 (대화 전용, 선택)
+ * @property assignedCluster - 클러스터 할당 정보 (처리 성공 시 존재)
+ * @property skipped - 처리 건너뜀 여부 (노트 전용으로 명시, 대화에서는 미포함)
+ * @property error - 개별 항목 처리 실패 시 에러 메시지
  */
 export interface AiAddNodeResultItem {
-  conversationId: string;
+  /** 대화 결과일 때만 존재 */
+  conversationId?: string;
+  /** 노트 결과일 때만 존재 */
+  noteId?: string;
   nodes: AiAddNodeNodeOutput[];
   edges: AiAddNodeEdgeOutput[];
+  /** 대화 전용 디버그 정보 */
   outputDev?: any;
-  assignedCluster: AiAddNodeClusterInfo;
+  assignedCluster?: AiAddNodeClusterInfo;
+  skipped?: boolean;
+  error?: string;
 }
 
 /**
- * AddNode 컨테이너 처리의 최종 종합 결과 (Batch Result)
+ * result 항목이 노트 결과인지 판별하는 타입 가드.
+ * @param result - 판별 대상 result item
+ * @returns `noteId` 필드가 존재하면 true
+ */
+export function isNoteResultItem(
+  result: AiAddNodeResultItem
+): result is AiAddNodeResultItem & { noteId: string } {
+  return typeof result.noteId === 'string';
+}
+
+/**
+ * result 항목이 대화 결과인지 판별하는 타입 가드.
+ * @param result - 판별 대상 result item
+ * @returns `conversationId` 필드가 존재하면 true
+ */
+export function isConversationResultItem(
+  result: AiAddNodeResultItem
+): result is AiAddNodeResultItem & { conversationId: string } {
+  return typeof result.conversationId === 'string';
+}
+
+/**
+ * AddNode 배치 처리의 최종 종합 결과.
  * @property userId - 사용자 ID
- * @property processedCount - 성공적으로 처리된 대화 개수
- * @property results - 각 대화별 처리 결과 내역 목록
+ * @property processedCount - 처리 완료된 항목(대화 + 노트) 총 개수
+ * @property results - 각 항목별 처리 결과 목록 (대화/노트 혼재 가능)
  */
 export interface AiAddNodeBatchResult {
   userId: string;

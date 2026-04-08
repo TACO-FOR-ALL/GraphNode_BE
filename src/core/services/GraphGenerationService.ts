@@ -342,7 +342,16 @@ export class GraphGenerationService {
         return convUpdateTime > lastGraphUpdatedAt;
       });
 
-      if (updatedConversations.length === 0) {
+      // 변경된 노트 수집 (lastGraphUpdatedAt 이후 수정된 활성 노트)
+      const modifiedNotes = await withRetry(
+        async () =>
+          await this.noteService.findNotesModifiedSince(userId, new Date(lastGraphUpdatedAt)),
+        { label: 'NoteService.findNotesModifiedSince' }
+      );
+      const updatedNotes = modifiedNotes.filter((note) => !note.deletedAt);
+
+      // 대화도 노트도 변경 없으면 작업 불필요
+      if (updatedConversations.length === 0 && updatedNotes.length === 0) {
         return null;
       }
 
@@ -390,12 +399,20 @@ export class GraphGenerationService {
         };
       });
 
+      // 노트 AI 입력 포맷 변환 (AI가 요구하는 필드만 포함)
+      const mappedNotes = updatedNotes.map((note) => ({
+        noteId: note._id,
+        title: note.title,
+        content: note.content,
+      }));
+
       // 기존 클러스터 정보 가져오기
       const existingClusters = await this.graphEmbeddingService.listClusters(userId);
       const batchPayload = {
         userId,
         existingClusters,
         conversations: mappedConversations,
+        notes: mappedNotes,
       };
 
       // S3에 데이터 업로드
