@@ -161,6 +161,26 @@ export class AiInteractionService {
         } else throw err;
       }
 
+      // 3-a. NEW_CONVERSATION 예약어 처리: 대화방이 이미 존재하더라도 제목 자동 생성 요청
+      // 웹 클라이언트는 로컬 DB 부재로 제목을 즉시 결정하지 못하므로 이 경로를 사용한다.
+      if (!isNewConversation && chatbody.title === 'NEW_CONVERSATION') {
+        const preferredLanguage: string =
+          await this.userService.getPreferredLanguage(ownerUserId);
+        const titleRequest = await withRetry(
+          async () =>
+            await provider.requestGenerateThreadTitle(apiKey, chatbody.chatContent, {
+              language: preferredLanguage,
+            }),
+          { label: 'AiProvider.requestGenerateThreadTitle' }
+        );
+        newTitle = titleRequest.ok ? titleRequest.data : null;
+        if (newTitle) {
+          await this.chatManagementService.updateConversation(conversationId, ownerUserId, {
+            title: newTitle,
+          });
+        }
+      }
+
       // 4. 메시지 구성 (Stateless History)
       const historyMessages: ChatMessage[] =
         await this.chatManagementService.getMessages(conversationId);
@@ -225,8 +245,9 @@ export class AiInteractionService {
         attachments_count: userAttachments.length,
       });
 
+      // newTitle은 (신규 대화방 생성) 또는 (NEW_CONVERSATION 예약어) 케이스에서만 설정된다.
       return {
-        title: isNewConversation ? newTitle || conversation?.title : undefined,
+        title: newTitle ?? undefined,
         messages: [userMessage, aiMessage],
       };
     } catch (err: unknown) {

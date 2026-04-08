@@ -10,12 +10,17 @@ import { AiStreamEvent } from '../types/ai-event.js';
  * @prop model AI 모델
  * @prop chatContent AI 챗 대화 내용
  * @prop modelName AI 모델 이름
+ * @prop title 대화 제목 예약어. 'NEW_CONVERSATION'을 전달하면 서버가 응답 완료 후 제목을 자동
+ *             생성하고, SSE RESULT 이벤트의 AIChatResponseDto.title 필드에 포함하여 반환합니다.
+ *             웹 클라이언트처럼 로컬 DB가 없어 제목을 즉시 결정하기 어려운 환경에서 활용합니다.
  */
 export interface AIChatRequestDto {
   id: string;
   model: ApiKeyModel;
   chatContent: string;
   modelName?: string;
+  /** 'NEW_CONVERSATION' 예약어를 전달하면 서버가 제목을 자동 생성하여 응답에 포함합니다. */
+  title?: string;
 }
 
 /**

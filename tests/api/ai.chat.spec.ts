@@ -65,6 +65,16 @@ jest.mock('../../src/core/services/AiInteractionService', () => ({
         onChunk('Hello');
         onChunk(' world');
       }
+      // NEW_CONVERSATION 예약어: 제목이 생성되어 응답에 포함됨
+      if (body.title === 'NEW_CONVERSATION') {
+        return {
+          title: 'Generated Title',
+          messages: [
+            { id: 'm_user', role: 'user', content: body.chatContent },
+            { id: 'm_res', role: 'assistant', content: 'Hello world' },
+          ],
+        };
+      }
       return {
         id: 'm_res',
         role: 'assistant',
@@ -209,6 +219,40 @@ describe('AI Chat API (/conversations/:id/chat)', () => {
       .post('/v1/ai/conversations/invalid-id/chat')
       .send({ model: 'openai', content: 'hi' });
     expect(res.status).toBe(404);
+  });
+
+  describe('NEW_CONVERSATION title auto-generation', () => {
+    test('JSON: title=NEW_CONVERSATION → response.title is generated', async () => {
+      const res = await agent
+        .post('/v1/ai/conversations/c1/chat')
+        .send({
+          id: 'msg-new',
+          model: 'openai',
+          chatContent: 'hello',
+          title: 'NEW_CONVERSATION',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.title).toBe('Generated Title');
+      expect(res.body.messages).toHaveLength(2);
+    });
+
+    test('SSE: title=NEW_CONVERSATION → RESULT event contains generated title', async () => {
+      const res = await agent
+        .post('/v1/ai/conversations/c1/chat')
+        .set('Accept', 'text/event-stream')
+        .send({
+          id: 'msg-new-sse',
+          model: 'openai',
+          chatContent: 'hello stream',
+          title: 'NEW_CONVERSATION',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toContain('text/event-stream');
+      expect(res.text).toContain('event: result');
+      expect(res.text).toContain('"title":"Generated Title"');
+    });
   });
 
   describe('AI Chat Retry API (/conversations/:id/chat/retry)', () => {
