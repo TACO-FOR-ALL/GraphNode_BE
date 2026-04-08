@@ -126,7 +126,11 @@ export class ConversationsApi {
 
   /**
    * 대화 목록을 조회합니다. (모든 페이지 자동 조회)
-   * @returns 대화 목록 (ConversationDto 배열)
+   *
+   * **성능 최적화**: 이 메서드는 성능을 위해 메시지 데이터를 포함하지 않고 빈 배열(`[]`)로 반환합니다.
+   * 메시지 데이터를 포함하여 조회하려면 `listTest()` 메서드를 사용하세요.
+   *
+   * @returns 대화 목록 (ConversationDto 배열, messages는 빈 배열)
    *
    * **응답 상태 코드:**
    * - `200 OK`: 조회 성공 (데이터가 없으면 빈 배열 반환)
@@ -134,7 +138,7 @@ export class ConversationsApi {
    *
    * @example
    * const response = await client.conversations.list();
-   * console.log(response.data); // 모든 대화 목록
+   * console.log(response.data); // 모든 대화 목록 (messages: [])
    */
   async list(): Promise<HttpResponse<ConversationDto[]>> {
     const allItems: ConversationDto[] = [];
@@ -148,7 +152,47 @@ export class ConversationsApi {
           .get<{ items: ConversationDto[]; nextCursor: string | null }>();
 
       if (!res.isSuccess) {
-        return res as HttpResponseError;
+        return { ...res, data: allItems } as HttpResponseError;
+      }
+
+      allItems.push(...res.data.items);
+      cursor = res.data.nextCursor;
+    } while (cursor);
+
+    return {
+      isSuccess: true,
+      statusCode: 200,
+      data: allItems,
+    };
+  }
+
+  /**
+   * [TEST] 대화 목록을 메시지 데이터와 함께 조회합니다. (모든 페이지 자동 조회)
+   * 테스트 및 디버깅 목적으로 메시지를 포함하여 전체 목록을 가져옵니다.
+   *
+   * @returns 대화 목록 (ConversationDto 배열, 메시지 포함)
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 조회 성공
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   *
+   * @example
+   * const response = await client.conversations.listTest();
+   * console.log(response.data); // 모든 대화 목록 (메시지 포함)
+   */
+  async listTest(): Promise<HttpResponse<ConversationDto[]>> {
+    const allItems: ConversationDto[] = [];
+    let cursor: string | null = null;
+
+    do {
+      const res: HttpResponse<{ items: ConversationDto[]; nextCursor: string | null }> =
+        await this.rb
+          .path('/v1/ai/conversations/test')
+          .query({ limit: 100, cursor: cursor || undefined })
+          .get<{ items: ConversationDto[]; nextCursor: string | null }>();
+
+      if (!res.isSuccess) {
+        return { ...res, data: allItems } as HttpResponseError;
       }
 
       allItems.push(...res.data.items);

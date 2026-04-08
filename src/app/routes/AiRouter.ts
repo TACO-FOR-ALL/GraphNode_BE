@@ -35,6 +35,10 @@ export function createAiRouter(deps: {
     '/conversations/trash',
     asyncHandler(aiController.listTrashConversations.bind(aiController))
   );
+  router.get(
+    '/conversations/test',
+    asyncHandler(aiController.listConversationsTest.bind(aiController))
+  );
   router.get('/conversations', asyncHandler(aiController.listConversations.bind(aiController)));
   router.delete(
     '/conversations',
