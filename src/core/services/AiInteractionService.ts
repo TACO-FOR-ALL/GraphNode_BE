@@ -161,8 +161,27 @@ export class AiInteractionService {
         } else throw err;
       }
 
-      // 3-a. NEW_CONVERSATION 예약어 처리: 대화방이 이미 존재하더라도 제목 자동 생성 요청
-      // 웹 클라이언트는 로컬 DB 부재로 제목을 즉시 결정하지 못하므로 이 경로를 사용한다.
+      // 3-a. [NEW_CONVERSATION 예약어] 웹 클라이언트 전용 제목 자동 생성 경로
+      //
+      // 배경:
+      //   모바일 앱은 로컬 DB를 보유하므로 대화방 생성 시점에 제목을 즉시 결정할 수 있다.
+      //   반면 웹 클라이언트는 로컬 DB가 없어 화면에 대화방을 표시하려면 먼저
+      //   서버에 POST /conversations 를 호출해 placeholder 제목("New Conversation")으로
+      //   대화방을 미리 생성해야 한다.
+      //   이 시점에서는 아직 사용자가 어떤 메시지를 보낼지 모르므로 의미있는 제목을 만들 수 없다.
+      //
+      // 흐름:
+      //   1. 웹 클라이언트가 POST /conversations → placeholder 제목으로 대화방 선생성
+      //   2. 사용자가 첫 메시지 입력
+      //   3. 웹 클라이언트가 POST /chat 시 body에 { title: 'NEW_CONVERSATION' } 포함
+      //   4. 서버가 이 예약어를 감지 → AI로 제목 생성 → DB 즉시 업데이트 → RESULT 이벤트에 포함
+      //   5. 웹 클라이언트는 RESULT를 받아 UI 제목을 즉시 갱신 (loading... 없음)
+      //
+      // 주의:
+      //   - `!isNewConversation` 가드: 대화방이 없어 새로 만들 때(위 catch 블록)는
+      //     이미 제목이 생성되고 newTitle이 세팅되므로 중복 호출을 방지한다.
+      //   - 제목 생성 실패 시(titleRequest.ok === false) newTitle = null 로 유지하며
+      //     DB 업데이트도 건너뛴다. RESULT의 title 필드는 undefined가 되어 생략된다.
       if (!isNewConversation && chatbody.title === 'NEW_CONVERSATION') {
         const preferredLanguage: string =
           await this.userService.getPreferredLanguage(ownerUserId);
