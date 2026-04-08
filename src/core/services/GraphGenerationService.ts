@@ -62,16 +62,32 @@ export class GraphGenerationService {
    *
    * @param userId 사용자 ID
    * @param options 옵션 (요약 포함 여부 등)
-   * @returns 발행된 작업의 Task ID
+   * @returns 발행된 작업의 Task ID 또는 건너뛴 경우 null
    */
   async requestGraphGenerationViaQueue(
     userId: string,
     options?: {
       includeSummary?: boolean;
     }
-  ): Promise<string> {
+  ): Promise<string | null> {
     let taskId: string | undefined;
     try {
+      // 0. 데이터 존재 여부 확인
+      const convs = await withRetry(
+        async () => await this.chatManagementService.listConversations(userId, 1),
+        { label: 'ChatManagementService.listConversations.check' }
+      );
+      const notes = await withRetry(
+        async () => await this.noteService.findNotesModifiedSince(userId, new Date(0)),
+        { label: 'NoteService.findNotesModifiedSince.check' }
+      );
+      const activeNotes = notes.filter((n) => !n.deletedAt);
+
+      if (convs.items.length === 0 && activeNotes.length === 0) {
+        logger.info({ userId }, 'No conversation or note data found. Skipping graph generation.');
+        return null;
+      }
+
       taskId = `task_${userId}_${ulid()}`;
       const s3Key = `graph-generation/${taskId}/input.json`;
 
@@ -342,7 +358,16 @@ export class GraphGenerationService {
         return convUpdateTime > lastGraphUpdatedAt;
       });
 
-      if (updatedConversations.length === 0) {
+      // 변경된 노트 수집 (lastGraphUpdatedAt 이후 수정된 활성 노트)
+      const modifiedNotes = await withRetry(
+        async () =>
+          await this.noteService.findNotesModifiedSince(userId, new Date(lastGraphUpdatedAt)),
+        { label: 'NoteService.findNotesModifiedSince' }
+      );
+      const updatedNotes = modifiedNotes.filter((note) => !note.deletedAt);
+
+      // 대화도 노트도 변경 없으면 작업 불필요
+      if (updatedConversations.length === 0 && updatedNotes.length === 0) {
         return null;
       }
 
@@ -390,12 +415,20 @@ export class GraphGenerationService {
         };
       });
 
+      // 노트 AI 입력 포맷 변환 (AI가 요구하는 필드만 포함)
+      const mappedNotes = updatedNotes.map((note) => ({
+        noteId: note._id,
+        title: note.title,
+        content: note.content,
+      }));
+
       // 기존 클러스터 정보 가져오기
       const existingClusters = await this.graphEmbeddingService.listClusters(userId);
       const batchPayload = {
         userId,
         existingClusters,
         conversations: mappedConversations,
+        notes: mappedNotes,
       };
 
       // S3에 데이터 업로드
