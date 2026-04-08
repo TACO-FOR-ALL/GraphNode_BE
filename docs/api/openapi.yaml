@@ -717,7 +717,7 @@ paths:
                     type: integer
   /v1/ai/conversations/test:
     get:
-      summary: [TEST] List conversations with full messages
+      summary: '[TEST] List conversations with full messages'
       description: Returns a list of conversations including the full messages array. Used for testing and debugging.
       parameters:
         - in: query
@@ -741,6 +741,17 @@ paths:
                     oneOf:
                       - { type: string }
                       - { type: 'null' }
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '500':
+          description: Internal Server Error
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+
   /v1/ai/conversations/trash:
     get:
       summary: List deleted conversations (Trash)
@@ -2574,7 +2585,7 @@ paths:
                 example: |
                   event: status
                   data: {"phase":"analyzing","message":"..."}
-                  
+
                   event: chunk
                   data: {"text":"Hello"}
         '401':
@@ -2607,6 +2618,15 @@ paths:
                 properties:
                   message: { type: string }
                   taskId: { type: string }
+                  status: { type: string }
+        '200':
+          description: No data to process, skipped
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
                   status: { type: string }
         '401':
           description: Not authenticated
@@ -2774,7 +2794,6 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }
-
 
 components:
   schemas:
