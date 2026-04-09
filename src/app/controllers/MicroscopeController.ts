@@ -82,6 +82,31 @@ export class MicroscopeController {
   };
 
   /**
+   * 특정 노드 ID로 가장 최근에 요청된 Ingest의 워크스페이스 메타데이터를 반환합니다.
+   * FE에서 워크스페이스 ID 없이도 ingest 진행 상태를 추적할 때 사용합니다.
+   *
+   * @description
+   * `documents.createdAt DESC` 정렬을 사용하여 가장 최근에 생성된 Document를 포함하는 워크스페이스를 반환합니다.
+   * 반환된 워크스페이스의 `documents` 배열에서 `documents.find(d => d.nodeId === nodeId)`로
+   * 특정 Document를 추출한 뒤 `status` 필드를 확인하십시오.
+   *
+   * @param req.params.nodeId 조회할 노드 ID (Note 또는 Conversation의 _id)
+   * @returns 200 MicroscopeWorkspaceMetaDoc — 워크스페이스 메타데이터 전체
+   * @throws 404 해당 nodeId로 생성된 워크스페이스가 존재하지 않을 때
+   * @throws 502 DB 조회 실패 시
+   */
+  getLatestWorkspaceByNodeId = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { nodeId } = req.params;
+      const userId = getUserIdFromRequest(req)!;
+      const workspace = await this.microscopeService.getLatestWorkspaceByNodeId(userId, nodeId);
+      res.status(200).json(workspace);
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  /**
    * (신규) 특정 노드 ID와 연계된 가장 최신의 Microscope 그래프 데이터를 조회합니다.
    */
   getLatestGraphByNodeId = async (req: Request, res: Response, next: NextFunction) => {

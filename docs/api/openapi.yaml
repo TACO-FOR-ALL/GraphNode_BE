@@ -168,6 +168,50 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../schemas/problem.json'
+  /v1/microscope/nodes/{nodeId}/latest-workspace:
+    get:
+      summary: Get latest ingest workspace by node ID
+      description: >-
+        Returns the workspace containing the most recently **created** ingest Document for the given nodeId.
+        Sorted by `documents.createdAt DESC` — unlike `updatedAt`-based sorting, this guarantees that
+        a recently completed old ingest does not shadow an in-progress newer ingest request.
+        Use this endpoint to track ingest status (PROCESSING / COMPLETED / FAILED) without storing
+        the workspace ID returned by `POST /v1/microscope/nodes/ingest`.
+        Find the relevant Document via `workspace.documents.find(d => d.nodeId === nodeId)`.
+      tags: [Microscope]
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Note or Conversation ID used as the ingest source
+      responses:
+        '200':
+          description: OK — workspace found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/microscope.json'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '404':
+          description: Not Found — no microscope workspace exists for this nodeId
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '502':
+          description: Bad Gateway — database error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+
   /v1/microscope/{groupId}:
     get:
       summary: Get detailed workspace status and metadata

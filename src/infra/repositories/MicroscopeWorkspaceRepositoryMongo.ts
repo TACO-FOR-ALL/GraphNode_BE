@@ -110,6 +110,48 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
   }
 
   /**
+   * 특정 노드 ID가 포함된 Document 중 `documents.createdAt` 기준 가장 최근에 생성된 Document를 가진 워크스페이스를 조회합니다.
+   * MongoDB Aggregation을 사용하여 documents 배열을 unwind한 후 정렬합니다.
+   *
+   * @param userId 유저 ID
+   * @param nodeId 대상 노드 ID (Note/Conversation ID)
+   * @returns 조회된 워크스페이스 또는 null
+   * @throws {UpstreamError} DB 집계 쿼리 실패 시
+   * @example
+   * const ws = await repo.findWorkspaceByMostRecentDocumentNodeId('user_1', 'note_abc');
+   */
+  async findWorkspaceByMostRecentDocumentNodeId(
+    userId: string,
+    nodeId: string,
+    session?: ClientSession
+  ): Promise<MicroscopeWorkspaceMetaDoc | null> {
+    try {
+      const results = await this.microscope_workspaces_collection()
+        .aggregate<{ workspaceId: string }>(
+          [
+            { $match: { userId, 'documents.nodeId': nodeId } as any },
+            { $unwind: '$documents' },
+            { $match: { 'documents.nodeId': nodeId } },
+            { $sort: { 'documents.createdAt': -1 } },
+            { $limit: 1 },
+            { $project: { _id: 0, workspaceId: '$_id' } },
+          ],
+          { session }
+        )
+        .toArray();
+
+      if (results.length === 0) return null;
+
+      return this.findById(results[0].workspaceId, session);
+    } catch (err: unknown) {
+      this.handleError(
+        'MicroscopeWorkspaceRepositoryMongo.findWorkspaceByMostRecentDocumentNodeId',
+        err
+      );
+    }
+  }
+
+  /**
    * 워크스페이스를 삭제(Hard Delete)합니다.
    * 워크스페이스 하위의 문서 및 진행 상태(documents 배열)도 함께 소멸됩니다.
    * 

@@ -128,6 +128,43 @@ export class MicroscopeApi {
   }
 
   /**
+   * 특정 노드 ID로 가장 최근에 요청된 Microscope Ingest의 워크스페이스를 조회합니다.
+   *
+   * @description
+   * `ingestFromNote` / `ingestFromConversation` 호출 후 반환된 워크스페이스 ID를 보관하지 않아도,
+   * 이 메서드를 통해 해당 노드의 최신 Ingest 진행 상태를 즉시 확인할 수 있습니다.
+   *
+   * **정렬 기준**: 동일 nodeId에 대해 여러 번 Ingest를 요청한 경우, `documents.createdAt DESC` 기준으로
+   * 가장 최근에 **생성된** Document를 포함하는 워크스페이스를 반환합니다.
+   * `updatedAt` 기준 대비 "완료된 오래된 Ingest"가 "진행 중인 최신 Ingest"보다 우선 반환되는 역전 현상을 방지합니다.
+   *
+   * **status 확인 방법**: 반환된 `workspace.documents` 배열에서
+   * `documents.find(d => d.nodeId === nodeId)`로 특정 Document를 추출하여 `status` 필드를 확인하십시오.
+   *
+   * @param nodeId 조회할 노트(Note) 또는 대화(Conversation)의 고유 ID
+   * @returns {Promise<HttpResponse<MicroscopeWorkspace>>} 워크스페이스 메타데이터 전체 (documents 배열 포함)
+   * @throws `404` 해당 nodeId로 생성된 Microscope 워크스페이스가 존재하지 않을 때
+   * @throws `401` 인증되지 않은 요청 (세션 없음 또는 만료)
+   * @throws `502` 데이터베이스 오류
+   * @example
+   * // Step 1: ingest 요청
+   * await sdk.microscope.ingestFromNote('note_123');
+   *
+   * // Step 2: 워크스페이스 ID 없이 상태 추적
+   * const { data: workspace } = await sdk.microscope.getLatestWorkspaceByNodeId('note_123');
+   * const doc = workspace.documents.find(d => d.nodeId === 'note_123');
+   * console.log(doc?.status); // 'PROCESSING' | 'COMPLETED' | 'FAILED'
+   *
+   * // Step 3: 완료 시 그래프 조회
+   * if (doc?.status === 'COMPLETED') {
+   *   const graph = await sdk.microscope.getLatestGraphByNodeId('note_123');
+   * }
+   */
+  async getLatestWorkspaceByNodeId(nodeId: string): Promise<HttpResponse<MicroscopeWorkspace>> {
+    return this.rb.path(`/nodes/${nodeId}/latest-workspace`).get<MicroscopeWorkspace>();
+  }
+
+  /**
    * 특정 노드(Note/Conversation) ID와 연계된 가장 최신의 Microscope 지식 그래프 데이터를 조회합니다.
    * 
    * @remarks
