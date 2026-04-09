@@ -6,6 +6,7 @@ import type {
   OpenAiAssistantIdResponseDto,
   PreferredLanguageResponseDto,
   SessionsResponseDto,
+  PreferredLanguage,
 } from '../types/me.js';
 
 /**
@@ -202,10 +203,10 @@ export class MeApi {
 
   /**
    * 사용자 선호 언어를 조회합니다.
-   * 
+   *
    * @remarks
    * 결과값은 'en', 'ko', 'cn' 등의 ISO 639-1 기반 코드로 반환됩니다.
-   * 
+   *
    * @returns 선호 언어 코드 DTO
    * @example
    * const res = await client.me.getPreferredLanguage();
@@ -217,17 +218,12 @@ export class MeApi {
 
   /**
    * 사용자 선호 언어를 설정하거나 업데이트합니다.
-   * 
-   * @param language - 설정할 언어 코드 ('en' | 'ko' | 'cn')
+   *
+   * @param language - 설정할 언어 코드 ('en' | 'ko' | 'cn' | 'ja')
    * @example
    * await client.me.updatePreferredLanguage('ko');
    */
-  updatePreferredLanguage(language: string): Promise<HttpResponse<void>> {
-    
-    if (language != "en" && language != "ko" && language != "cn") {
-      throw new Error('Invalid language code. Please use "en", "ko", or "cn".');
-    }
-    
+  updatePreferredLanguage(language: PreferredLanguage): Promise<HttpResponse<void>> {
     return this.rb.path('/v1/me/preferred-language').patch<void>({ language });
   }
 
