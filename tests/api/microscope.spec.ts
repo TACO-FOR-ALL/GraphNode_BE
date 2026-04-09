@@ -6,6 +6,7 @@
  * - GET /v1/microscope (워크스페이스 목록)
  * - GET /v1/microscope/:groupId (워크스페이스 상세)
  * - GET /v1/microscope/:groupId/graph (그래프 데이터)
+ * - GET /v1/microscope/nodes/:nodeId/latest-workspace (노드 기반 최신 Ingest 워크스페이스, status 추적용)
  * - GET /v1/microscope/nodes/:nodeId/latest-graph (노드 기반 최신 그래프)
  * - DELETE /v1/microscope/:groupId (삭제)
  */
@@ -72,6 +73,25 @@ jest.mock('../../src/core/services/MicroscopeManagementService', () => ({
         getWorkspaceGraph: jest.fn<any>().mockResolvedValue({
             nodes: [{ id: 1, label: 'Node 1' }],
             edges: [{ source: 1, target: 2 }],
+        }),
+        getLatestWorkspaceByNodeId: jest.fn<any>().mockResolvedValue({
+            _id: 'ws-1',
+            userId: 'user-12345',
+            name: 'Test Note',
+            documents: [
+                {
+                    id: 'doc-1',
+                    s3Key: '',
+                    fileName: 'note-1.md',
+                    status: 'PROCESSING',
+                    nodeId: 'node-1',
+                    nodeType: 'note',
+                    createdAt: '2026-04-09T10:00:00Z',
+                    updatedAt: '2026-04-09T10:00:00Z',
+                },
+            ],
+            createdAt: '2026-04-09T10:00:00Z',
+            updatedAt: '2026-04-09T10:00:00Z',
         }),
         getLatestGraphByNodeId: jest.fn<any>().mockResolvedValue({
             nodes: [{ id: 1, label: 'Latest Node' }],
@@ -212,6 +232,42 @@ describe('Microscope API Integration Tests', () => {
             expect(res.body).toHaveProperty('nodes');
             expect(res.body).toHaveProperty('edges');
             expect(res.body.nodes.length).toBeGreaterThan(0);
+        });
+    });
+
+    // --- GET /v1/microscope/nodes/:nodeId/latest-workspace ---
+    describe('GET /v1/microscope/nodes/:nodeId/latest-workspace', () => {
+        it('should return 401 if unauthenticated', async () => {
+            await request(app)
+                .get('/v1/microscope/nodes/node-1/latest-workspace')
+                .expect(401);
+        });
+
+        it('should return 200 with workspace metadata when found', async () => {
+            const res = await request(app)
+                .get('/v1/microscope/nodes/node-1/latest-workspace')
+                .set('Authorization', `Bearer ${accessToken}`)
+                .expect(200);
+
+            expect(res.body).toHaveProperty('_id', 'ws-1');
+            expect(res.body).toHaveProperty('documents');
+            expect(Array.isArray(res.body.documents)).toBe(true);
+            const doc = res.body.documents.find((d: any) => d.nodeId === 'node-1');
+            expect(doc).toBeDefined();
+            expect(doc.status).toBe('PROCESSING');
+        });
+
+        it('should return 404 when no workspace exists for nodeId', async () => {
+            const { MicroscopeManagementService } = require('../../src/core/services/MicroscopeManagementService');
+            const mockInstance = (MicroscopeManagementService as jest.Mock).mock.results[0].value as any;
+            mockInstance.getLatestWorkspaceByNodeId.mockRejectedValueOnce(
+                Object.assign(new Error('Not found'), { statusCode: 404, code: 'NOT_FOUND' })
+            );
+
+            await request(app)
+                .get('/v1/microscope/nodes/nonexistent-node/latest-workspace')
+                .set('Authorization', `Bearer ${accessToken}`)
+                .expect(404);
         });
     });
 
