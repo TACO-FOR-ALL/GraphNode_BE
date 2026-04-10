@@ -55,7 +55,7 @@ export class AddNodeResultHandler implements JobHandler {
       );
 
       // 2. DB 저장 (클러스터 생성, 노드 및 엣지 반영)
-      const existingNodes = await graphService.listNodes(userId);
+      const existingNodes = await graphService.listNodesAll(userId);
       let nextNodeId =
         existingNodes.length > 0 ? Math.max(...existingNodes.map((n) => n.id)) + 1 : 1;
 
@@ -117,7 +117,7 @@ export class AddNodeResultHandler implements JobHandler {
           // [Deduplication] 기존 데이터에 동일한 origId가 있는지 확인합니다.
           // 존재한다면 해당 노드를 업데이트해야 하므로 기존의 숫자형 id를 재사용합니다.
           let dbNodeId = origIdToDbId.get(node.origId);
-          
+
           if (dbNodeId === undefined) {
             // 존재하지 않는 신규 노드인 경우에만 새로운 일련번호를 할당합니다.
             dbNodeId = nextNodeId++;

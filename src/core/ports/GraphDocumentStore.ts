@@ -27,20 +27,37 @@ export interface GraphDocumentStore {
     options?: RepoOptions
   ): Promise<void>;
   deleteNode(userId: string, id: number, permanent?: boolean, options?: RepoOptions): Promise<void>;
-  deleteNodes(userId: string, ids: number[], permanent?: boolean, options?: RepoOptions): Promise<void>;
-  deleteNodesByOrigIds(userId: string, origIds: string[], permanent?: boolean, options?: RepoOptions): Promise<void>;
+  deleteNodes(
+    userId: string,
+    ids: number[],
+    permanent?: boolean,
+    options?: RepoOptions
+  ): Promise<void>;
+  deleteNodesByOrigIds(
+    userId: string,
+    origIds: string[],
+    permanent?: boolean,
+    options?: RepoOptions
+  ): Promise<void>;
   restoreNode(userId: string, id: number, options?: RepoOptions): Promise<void>;
   restoreNodesByOrigIds(userId: string, origIds: string[], options?: RepoOptions): Promise<void>;
   findNode(userId: string, id: number): Promise<GraphNodeDoc | null>;
   findNodesByOrigIds(userId: string, origIds: string[]): Promise<GraphNodeDoc[]>;
+  findNodesByOrigIdsAll(userId: string, origIds: string[]): Promise<GraphNodeDoc[]>;
   listNodes(userId: string): Promise<GraphNodeDoc[]>;
+  listNodesAll(userId: string): Promise<GraphNodeDoc[]>;
   listNodesByCluster(userId: string, clusterId: string): Promise<GraphNodeDoc[]>;
   deleteAllGraphData(userId: string, permanent?: boolean, options?: RepoOptions): Promise<void>;
   restoreAllGraphData(userId: string, options?: RepoOptions): Promise<void>;
 
   // --- 엣지(Edge) 관련 메서드 ---
   upsertEdge(edge: GraphEdgeDoc, options?: RepoOptions): Promise<string>;
-  deleteEdge(userId: string, edgeId: string, permanent?: boolean, options?: RepoOptions): Promise<void>;
+  deleteEdge(
+    userId: string,
+    edgeId: string,
+    permanent?: boolean,
+    options?: RepoOptions
+  ): Promise<void>;
   deleteEdgeBetween(
     userId: string,
     source: number,
@@ -59,14 +76,24 @@ export interface GraphDocumentStore {
 
   // --- 클러스터(Cluster) 관련 메서드 ---
   upsertCluster(cluster: GraphClusterDoc, options?: RepoOptions): Promise<void>;
-  deleteCluster(userId: string, clusterId: string, permanent?: boolean, options?: RepoOptions): Promise<void>;
+  deleteCluster(
+    userId: string,
+    clusterId: string,
+    permanent?: boolean,
+    options?: RepoOptions
+  ): Promise<void>;
   restoreCluster(userId: string, clusterId: string, options?: RepoOptions): Promise<void>;
   findCluster(userId: string, clusterId: string): Promise<GraphClusterDoc | null>;
   listClusters(userId: string): Promise<GraphClusterDoc[]>;
 
   // Subclusters
   upsertSubcluster(subcluster: GraphSubclusterDoc, options?: RepoOptions): Promise<void>;
-  deleteSubcluster(userId: string, subclusterId: string, permanent?: boolean, options?: RepoOptions): Promise<void>;
+  deleteSubcluster(
+    userId: string,
+    subclusterId: string,
+    permanent?: boolean,
+    options?: RepoOptions
+  ): Promise<void>;
   restoreSubcluster(userId: string, subclusterId: string, options?: RepoOptions): Promise<void>;
   listSubclusters(userId: string): Promise<GraphSubclusterDoc[]>;
 
@@ -76,7 +103,11 @@ export interface GraphDocumentStore {
   deleteStats(userId: string, permanent?: boolean, options?: RepoOptions): Promise<void>;
 
   // --- Insight Summary ---
-  upsertGraphSummary(userId: string, summary: GraphSummaryDoc, options?: RepoOptions): Promise<void>;
+  upsertGraphSummary(
+    userId: string,
+    summary: GraphSummaryDoc,
+    options?: RepoOptions
+  ): Promise<void>;
   getGraphSummary(userId: string): Promise<GraphSummaryDoc | null>;
   deleteGraphSummary(userId: string, permanent?: boolean, options?: RepoOptions): Promise<void>;
   restoreGraphSummary(userId: string, options?: RepoOptions): Promise<void>;

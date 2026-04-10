@@ -76,11 +76,7 @@ export class GraphEmbeddingService {
    * 벡터가 누락된 노드를 찾습니다. (현재 비활성화)
    * @deprecated 벡터 정합성 검증은 비활성화되었습니다.
    */
-  async findNodesMissingVectors(
-    _userId: string,
-    _collection: string,
-    _nodeIds: Array<number>
-  ) {
+  async findNodesMissingVectors(_userId: string, _collection: string, _nodeIds: Array<number>) {
     this.throwVectorDisabledError();
   }
 
@@ -184,6 +180,16 @@ export class GraphEmbeddingService {
    */
   listNodes(userId: string) {
     return this.graphManagementService.listNodes(userId);
+  }
+
+  /**
+   * 특정 사용자의 모든 노드 목록(soft delete 되어서 휴지통에 잇는 것 까지)을 조회합니다.
+   * @param userId - 작업을 요청한 사용자 ID
+   * @returns 노드 객체 배열
+   * @throws {UpstreamError} - DB 오류 발생 시
+   */
+  listNodesAll(userId: string) {
+    return this.graphManagementService.listNodesAll(userId);
   }
 
   listNodesByCluster(userId: string, clusterId: string) {
@@ -408,14 +414,13 @@ export class GraphEmbeddingService {
       await withRetry(
         async () => {
           await session.withTransaction(async () => {
-            const nodesInCluster = await this.graphManagementService.listNodesByCluster(
-              userId,
-              id
-            );
+            const nodesInCluster = await this.graphManagementService.listNodesByCluster(userId, id);
             if (nodesInCluster.length > 0) {
               const ids = nodesInCluster.map((n) => n.id);
               // 1. 클러스터에 속한 모든 노드와 관련 엣지 삭제
-              await this.graphManagementService.deleteEdgesByNodeIds(userId, ids, permanent, { session });
+              await this.graphManagementService.deleteEdgesByNodeIds(userId, ids, permanent, {
+                session,
+              });
               await this.graphManagementService.deleteNodes(userId, ids, permanent, { session });
             }
             // 2. 클러스터 자체 삭제
@@ -449,11 +454,11 @@ export class GraphEmbeddingService {
       nodes,
       edges,
       clusters,
-      subclusters: subclusters.map(s => {
+      subclusters: subclusters.map((s) => {
         const { _id, deletedAt, ...rest } = s as any;
         return {
           ...rest,
-          ...(deletedAt != null && { deletedAt: new Date(deletedAt).toISOString() })
+          ...(deletedAt != null && { deletedAt: new Date(deletedAt).toISOString() }),
         };
       }),
       stats: stats
@@ -483,7 +488,7 @@ export class GraphEmbeddingService {
         async () => {
           await session.withTransaction(async () => {
             const { userId, snapshot } = payload;
-            
+
             // subclusters가 undefined일 경우 빈 배열로 처리
             const subclusters = snapshot.subclusters || [];
 
@@ -521,7 +526,6 @@ export class GraphEmbeddingService {
               })
             );
             await this.graphManagementService.saveStats({ ...snapshot.stats, userId }, { session });
-
           });
         },
         { label: 'GraphEmbeddingService.persistSnapshot.transaction' }
@@ -555,7 +559,7 @@ export class GraphEmbeddingService {
       await session.endSession();
     }
   }
-  
+
   async restoreGraph(_userId: string) {
     // [Hard Delete Policy] Restore is no longer supported
     throw new UpstreamError('Restore is not supported in hard-delete only mode');

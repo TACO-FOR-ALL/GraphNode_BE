@@ -100,7 +100,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param permanent 영구 삭제 여부 (true: Hard Delete, false: Soft Delete)
    * @param options (선택) 트랜잭션 옵션
    */
-  async deleteNode(userId: string, id: number, permanent: boolean = false, options?: RepoOptions): Promise<void> {
+  async deleteNode(
+    userId: string,
+    id: number,
+    permanent: boolean = false,
+    options?: RepoOptions
+  ): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
       if (permanent) {
@@ -133,7 +138,11 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   async restoreNode(userId: string, id: number, options?: RepoOptions): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
-      await this.graphNodes_col().updateOne({ id, userId } as any, { $set: { deletedAt: null } }, opts);
+      await this.graphNodes_col().updateOne(
+        { id, userId } as any,
+        { $set: { deletedAt: null } },
+        opts
+      );
       await this.graphEdges_col().updateMany(
         { userId, $or: [{ source: id }, { target: id }] } as any,
         { $set: { deletedAt: null } },
@@ -146,17 +155,38 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 지정된 ID 목록에 해당하는 여러 노드를 삭제합니다.
+   *
+   * @param userId 사용자 ID
+   * @param ids 노드 ID 목록
+   * @param permanent 완전 삭제 여부
+   * @param options (선택) 트랜잭션 옵션
    */
-  async deleteNodes(userId: string, ids: number[], permanent: boolean = false, options?: RepoOptions): Promise<void> {
+  async deleteNodes(
+    userId: string,
+    ids: number[],
+    permanent: boolean = false,
+    options?: RepoOptions
+  ): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
       if (permanent) {
         await this.graphNodes_col().deleteMany({ id: { $in: ids }, userId } as any, opts);
-        await this.graphEdges_col().deleteMany({ userId, $or: [{ source: { $in: ids } }, { target: { $in: ids } }] } as any, opts);
+        await this.graphEdges_col().deleteMany(
+          { userId, $or: [{ source: { $in: ids } }, { target: { $in: ids } }] } as any,
+          opts
+        );
       } else {
         const deletedAt = Date.now();
-        await this.graphNodes_col().updateMany({ id: { $in: ids }, userId } as any, { $set: { deletedAt } }, opts);
-        await this.graphEdges_col().updateMany({ userId, $or: [{ source: { $in: ids } }, { target: { $in: ids } }] } as any, { $set: { deletedAt } }, opts);
+        await this.graphNodes_col().updateMany(
+          { id: { $in: ids }, userId } as any,
+          { $set: { deletedAt } },
+          opts
+        );
+        await this.graphEdges_col().updateMany(
+          { userId, $or: [{ source: { $in: ids } }, { target: { $in: ids } }] } as any,
+          { $set: { deletedAt } },
+          opts
+        );
       }
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.deleteNodes', err);
@@ -165,29 +195,49 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 지정된 원본 ID(origId) 목록에 해당하는 노드들과 그 엣지들을 연쇄 삭제합니다.
+   *
+   * @param userId 사용자 ID
+   * @param origIds 원본 ID 목록
+   * @param permanent 완전 삭제 여부
+   * @param options (선택) 트랜잭션 옵션
    */
-  async deleteNodesByOrigIds(userId: string, origIds: string[], permanent?: boolean, options?: RepoOptions): Promise<void> {
+  async deleteNodesByOrigIds(
+    userId: string,
+    origIds: string[],
+    permanent?: boolean,
+    options?: RepoOptions
+  ): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
-      
-      // 1. 해당 origId들을 가진 노드들을 찾아 id(number)를 추출
-      const nodes = await this.graphNodes_col().find(
-        { userId, origId: { $in: origIds } } as any,
-        { ...opts, projection: { id: 1 } }
-      ).toArray();
 
-      const nodeIds = nodes.map(n => n.id);
-      
+      // 1. 해당 origId들을 가진 노드들을 찾아 id(number)를 추출
+      const nodes = await this.graphNodes_col()
+        .find({ userId, origId: { $in: origIds } } as any, { ...opts, projection: { id: 1 } })
+        .toArray();
+
+      const nodeIds = nodes.map((n) => n.id);
+
       if (nodeIds.length === 0) return; // 지울 노드가 없음
 
       // 2. 추출한 nodeIds로 노드와 엣지 연쇄 삭제
       if (permanent) {
         await this.graphNodes_col().deleteMany({ id: { $in: nodeIds }, userId } as any, opts);
-        await this.graphEdges_col().deleteMany({ userId, $or: [{ source: { $in: nodeIds } }, { target: { $in: nodeIds } }] } as any, opts);
+        await this.graphEdges_col().deleteMany(
+          { userId, $or: [{ source: { $in: nodeIds } }, { target: { $in: nodeIds } }] } as any,
+          opts
+        );
       } else {
         const deletedAt = Date.now();
-        await this.graphNodes_col().updateMany({ id: { $in: nodeIds }, userId } as any, { $set: { deletedAt } }, opts);
-        await this.graphEdges_col().updateMany({ userId, $or: [{ source: { $in: nodeIds } }, { target: { $in: nodeIds } }] } as any, { $set: { deletedAt } }, opts);
+        await this.graphNodes_col().updateMany(
+          { id: { $in: nodeIds }, userId } as any,
+          { $set: { deletedAt } },
+          opts
+        );
+        await this.graphEdges_col().updateMany(
+          { userId, $or: [{ source: { $in: nodeIds } }, { target: { $in: nodeIds } }] } as any,
+          { $set: { deletedAt } },
+          opts
+        );
       }
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.deleteNodesByOrigIds', err);
@@ -196,19 +246,26 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 지정된 원본 ID(origId) 목록에 해당하는 노드들과 그 엣지들을 복구합니다.
+   *
+   * @param userId 사용자 ID
+   * @param origIds 원본 ID 목록
+   * @param options (선택) 트랜잭션 옵션
    */
-  async restoreNodesByOrigIds(userId: string, origIds: string[], options?: RepoOptions): Promise<void> {
+  async restoreNodesByOrigIds(
+    userId: string,
+    origIds: string[],
+    options?: RepoOptions
+  ): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
-      
-      // 1. 해당 origId들을 가진 노드들을 찾아 id(number)를 추출 (삭제된 노드 포함)
-      const nodes = await this.graphNodes_col().find(
-        { userId, origId: { $in: origIds } } as any,
-        { ...opts, projection: { id: 1 } }
-      ).toArray();
 
-      const nodeIds = nodes.map(n => n.id);
-      
+      // 1. 해당 origId들을 가진 노드들을 찾아 id(number)를 추출 (삭제된 노드 포함)
+      const nodes = await this.graphNodes_col()
+        .find({ userId, origId: { $in: origIds } } as any, { ...opts, projection: { id: 1 } })
+        .toArray();
+
+      const nodeIds = nodes.map((n) => n.id);
+
       if (nodeIds.length === 0) return;
 
       // 2. 노드 및 관련 엣지 복구 (deletedAt = null)
@@ -230,8 +287,16 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   /**
    * 해당 사용자의 모든 그래프 데이터(노드, 엣지, 클러스터, 서브클러스터, 통계, 요약)를 삭제합니다.
    * 트랜잭션 등에서 호출될 수 있습니다.
+   *
+   * @param userId 사용자 ID
+   * @param _permanent 영구 삭제 여부 (현재 사용되지 않음)
+   * @param options (선택) 트랜잭션 옵션
    */
-  async deleteAllGraphData(userId: string, _permanent?: boolean, options?: RepoOptions): Promise<void> {
+  async deleteAllGraphData(
+    userId: string,
+    _permanent?: boolean,
+    options?: RepoOptions
+  ): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
       // [Hard Delete Enforced] Always remove all graph data from DB
@@ -248,7 +313,9 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 전체 그래프 데이터 복구 (현재 Hard Delete 정책으로 인해 미지원)
-   * 
+   *
+   * @param _userId 사용자 ID (현재 사용되지 않음)
+   * @param _options (선택) 트랜잭션 옵션
    * @throws {UpstreamError} 복구가 지원되지 않음을 알림
    */
   async restoreAllGraphData(_userId: string, _options?: RepoOptions): Promise<void> {
@@ -258,6 +325,9 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 특정 노드를 조회합니다.
+   *
+   * @param userId 사용자 ID
+   * @param id 노드 ID
    */
   async findNode(userId: string, id: number): Promise<GraphNodeDoc | null> {
     try {
@@ -266,12 +336,14 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
         userId,
         deletedAt: { $in: [null, undefined] },
       } as any);
-      
+
       if (doc && !doc.sourceType) {
         doc.sourceType = 'chat';
-        await this.graphNodes_col().updateOne({ id: doc.id, userId: doc.userId } as any, { $set: { sourceType: 'chat' } });
+        await this.graphNodes_col().updateOne({ id: doc.id, userId: doc.userId } as any, {
+          $set: { sourceType: 'chat' },
+        });
       }
-      
+
       return doc;
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.findNode', err);
@@ -280,7 +352,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 원본 ID(origId) 목록에 해당하는 노드들을 조회합니다.
-   * 
+   *
    * @param userId 사용자 ID
    * @param origIds 원본 ID 목록
    * @returns 조회된 노드 문서 배열
@@ -297,10 +369,9 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
       const toUpdate = docs.filter((d) => !d.sourceType);
       if (toUpdate.length > 0) {
         const ids = toUpdate.map((d) => d.id);
-        await this.graphNodes_col().updateMany(
-          { id: { $in: ids }, userId } as any,
-          { $set: { sourceType: 'chat' } }
-        );
+        await this.graphNodes_col().updateMany({ id: { $in: ids }, userId } as any, {
+          $set: { sourceType: 'chat' },
+        });
         toUpdate.forEach((d) => {
           d.sourceType = 'chat';
         });
@@ -313,7 +384,45 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   }
 
   /**
+   * 원본 ID(origId) 목록에 해당하는 노드들을 조회합니다 (삭제된 노드 포함).
+   * 백그라운드 워커에서 중복 생성을 방지(Deduplication)하기 위해 사용됩니다.
+   *
+   * @param userId - 작업을 요청한 사용자 ID
+   * @param origIds - 원본 ID 목록
+   * @returns 조회된 노드 문서 배열
+   * @throws {UpstreamError} - DB 오류 발생 시
+   */
+  async findNodesByOrigIdsAll(userId: string, origIds: string[]): Promise<GraphNodeDoc[]> {
+    try {
+      // deletedAt고 관계 없이 조회
+      const cursor: FindCursor<WithId<GraphNodeDoc>> = this.graphNodes_col().find({
+        userId,
+        origId: { $in: origIds },
+      } as any);
+      const docs = await cursor.toArray();
+
+      // sourceType이 없는 경우 chat으로 설정
+      const toUpdate = docs.filter((d) => !d.sourceType);
+      if (toUpdate.length > 0) {
+        const ids = toUpdate.map((d) => d.id);
+        await this.graphNodes_col().updateMany({ id: { $in: ids }, userId } as any, {
+          $set: { sourceType: 'chat' },
+        });
+        toUpdate.forEach((d) => {
+          d.sourceType = 'chat';
+        });
+      }
+
+      return docs;
+    } catch (err: unknown) {
+      this.handleError('GraphRepositoryMongo.findNodesByOrigIdsAll', err);
+    }
+  }
+
+  /**
    * 특정 사용자의 모든 노드 목록을 조회합니다.
+   * @param userId 사용자 ID
+   * @returns 조회된 노드 문서 배열
    */
   async listNodes(userId: string): Promise<GraphNodeDoc[]> {
     try {
@@ -323,14 +432,16 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
       } as any);
       const docs = await cursor.toArray();
 
-      const toUpdate = docs.filter(d => !d.sourceType);
+      // sourceType이 없는 경우 chat으로 설정
+      const toUpdate = docs.filter((d) => !d.sourceType);
       if (toUpdate.length > 0) {
-        const ids = toUpdate.map(d => d.id);
-        await this.graphNodes_col().updateMany(
-          { id: { $in: ids }, userId } as any, 
-          { $set: { sourceType: 'chat' } }
-        );
-        toUpdate.forEach(d => { d.sourceType = 'chat'; });
+        const ids = toUpdate.map((d) => d.id);
+        await this.graphNodes_col().updateMany({ id: { $in: ids }, userId } as any, {
+          $set: { sourceType: 'chat' },
+        });
+        toUpdate.forEach((d) => {
+          d.sourceType = 'chat';
+        });
       }
 
       return docs;
@@ -340,7 +451,43 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   }
 
   /**
+   * 특정 사용자의 모든 노드 목록을 조회합니다 (삭제된 노드 포함).
+   * 백그라운드 워커에서 이미 존재하는 노드인지(중복 제거) 확인하기 위해 사용됩니다.
+   *
+   * @param userId - 작업을 요청한 사용자 ID
+   * @returns 조회된 노드 문서 배열
+   * @throws {UpstreamError} - DB 오류 발생 시
+   */
+  async listNodesAll(userId: string): Promise<GraphNodeDoc[]> {
+    try {
+      // deletedAt고 관계 없이 조회
+      const cursor: FindCursor<WithId<GraphNodeDoc>> = this.graphNodes_col().find({
+        userId,
+      } as any);
+      const docs = await cursor.toArray();
+
+      const toUpdate = docs.filter((d) => !d.sourceType);
+      if (toUpdate.length > 0) {
+        const ids = toUpdate.map((d) => d.id);
+        await this.graphNodes_col().updateMany({ id: { $in: ids }, userId } as any, {
+          $set: { sourceType: 'chat' },
+        });
+        toUpdate.forEach((d) => {
+          d.sourceType = 'chat';
+        });
+      }
+
+      return docs;
+    } catch (err: unknown) {
+      this.handleError('GraphRepositoryMongo.listNodesAll', err);
+    }
+  }
+
+  /**
    * 특정 클러스터에 속한 모든 노드 목록을 조회합니다.
+   * @param userId 사용자 ID
+   * @param clusterId 클러스터 ID
+   * @returns 조회된 노드 문서 배열
    */
   async listNodesByCluster(userId: string, clusterId: string): Promise<GraphNodeDoc[]> {
     try {
@@ -351,14 +498,15 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
       } as any);
       const docs = await cursor.toArray();
 
-      const toUpdate = docs.filter(d => !d.sourceType);
+      const toUpdate = docs.filter((d) => !d.sourceType);
       if (toUpdate.length > 0) {
-        const ids = toUpdate.map(d => d.id);
-        await this.graphNodes_col().updateMany(
-          { id: { $in: ids }, userId } as any, 
-          { $set: { sourceType: 'chat' } }
-        );
-        toUpdate.forEach(d => { d.sourceType = 'chat'; });
+        const ids = toUpdate.map((d) => d.id);
+        await this.graphNodes_col().updateMany({ id: { $in: ids }, userId } as any, {
+          $set: { sourceType: 'chat' },
+        });
+        toUpdate.forEach((d) => {
+          d.sourceType = 'chat';
+        });
       }
 
       return docs;
@@ -397,8 +545,17 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 특정 엣지를 ID로 삭제합니다.
+   * @param userId 사용자 ID
+   * @param edgeId 엣지 ID
+   * @param permanent 완전 삭제 여부
+   * @param options 트랜잭션 옵션
    */
-  async deleteEdge(userId: string, edgeId: string, _permanent?: boolean, options?: RepoOptions): Promise<void> {
+  async deleteEdge(
+    userId: string,
+    edgeId: string,
+    _permanent?: boolean,
+    options?: RepoOptions
+  ): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
       // [Hard Delete Enforced]
@@ -410,6 +567,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 두 노드 사이에 있는 모든 엣지를 삭제합니다.
+   *
+   * @param userId 사용자 ID
+   * @param source 노드 ID
+   * @param target 노드 ID
+   * @param permanent 완전 삭제 여부
+   * @param options (선택) 트랜잭션 옵션
    */
   async deleteEdgeBetween(
     userId: string,
@@ -439,6 +602,11 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 지정된 노드 ID 목록에 연결된 모든 엣지를 삭제합니다.
+   *
+   * @param userId 사용자 ID
+   * @param ids 노드 ID 목록
+   * @param permanent 완전 삭제 여부
+   * @param options (선택) 트랜잭션 옵션
    */
   async deleteEdgesByNodeIds(
     userId: string,
@@ -464,7 +632,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 삭제된 엣지를 복구합니다.
-   * 
+   *
    * @param userId 사용자 ID
    * @param edgeId 엣지 ID
    * @param options (선택) 트랜잭션 옵션
@@ -519,8 +687,18 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 특정 클러스터를 삭제합니다.
+   *
+   * @param userId 사용자 ID
+   * @param clusterId 클러스터 ID
+   * @param _permanent 삭제 여부 (현재는 무시됨)
+   * @param options (선택) 트랜잭션 옵션
    */
-  async deleteCluster(userId: string, clusterId: string, _permanent?: boolean, options?: RepoOptions): Promise<void> {
+  async deleteCluster(
+    userId: string,
+    clusterId: string,
+    _permanent?: boolean,
+    options?: RepoOptions
+  ): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
       // [Hard Delete Enforced]
@@ -532,7 +710,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 삭제된 클러스터를 복구합니다.
-   * 
+   *
    * @param userId 사용자 ID
    * @param clusterId 클러스터 ID
    * @param options (선택) 트랜잭션 옵션
@@ -552,10 +730,17 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 특정 클러스터를 조회합니다.
+   *
+   * @param userId 사용자 ID
+   * @param clusterId 클러스터 ID
    */
   async findCluster(userId: string, clusterId: string): Promise<GraphClusterDoc | null> {
     try {
-      return await this.graphClusters_col().findOne({ id: clusterId, userId, deletedAt: { $in: [null, undefined] } } as any);
+      return await this.graphClusters_col().findOne({
+        id: clusterId,
+        userId,
+        deletedAt: { $in: [null, undefined] },
+      } as any);
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.findCluster', err);
     }
@@ -573,8 +758,6 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
       this.handleError('GraphRepositoryMongo.listClusters', err);
     }
   }
-
-
 
   /**
    * 서브클러스터 생성 또는 업데이트 (upsert)
@@ -601,7 +784,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 서브클러스터를 삭제합니다.
-   * 
+   *
    * @param userId 사용자 ID
    * @param subclusterId 서브클러스터 ID
    * @param permanent 영구 삭제 여부
@@ -624,12 +807,16 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 삭제된 서브클러스터를 복구합니다.
-   * 
+   *
    * @param userId 사용자 ID
    * @param subclusterId 서브클러스터 ID
    * @param options (선택) 트랜잭션 옵션
    */
-  async restoreSubcluster(userId: string, subclusterId: string, options?: RepoOptions): Promise<void> {
+  async restoreSubcluster(
+    userId: string,
+    subclusterId: string,
+    options?: RepoOptions
+  ): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
       await this.graphSubclusters_col().updateOne(
@@ -644,7 +831,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 사용자의 모든 서브클러스터 목록을 조회합니다.
-   * 
+   *
    * @param userId 사용자 ID
    * @returns 서브클러스터 문서 배열
    */
@@ -679,10 +866,17 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 특정 사용자의 그래프 통계를 조회합니다.
+   *
+   * @param userId - 작업을 요청한 사용자 ID
+   * @returns 조회된 통계 문서
+   * @throws {UpstreamError} - DB 오류 발생 시
    */
   async getStats(userId: string): Promise<GraphStatsDoc | null> {
     try {
-      return await this.graphStats_col().findOne({ userId, deletedAt: { $in: [null, undefined] } } as any);
+      return await this.graphStats_col().findOne({
+        userId,
+        deletedAt: { $in: [null, undefined] },
+      } as any);
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.getStats', err);
     }
@@ -690,6 +884,11 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 특정 사용자의 그래프 통계를 삭제합니다.
+   *
+   * @param userId - 작업을 요청한 사용자 ID
+   * @param _permanent - 삭제 여부 (현재는 무시됨)
+   * @param options - 트랜잭션 옵션
+   * @throws {UpstreamError} - DB 오류 발생 시
    */
   async deleteStats(userId: string, _permanent?: boolean, options?: RepoOptions): Promise<void> {
     try {
@@ -707,6 +906,14 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     return this.db().collection<GraphSummaryDoc>('graph_summaries');
   }
 
+  /**
+   * 그래프 요약 정보를 저장합니다.
+   *
+   * @param userId - 작업을 요청한 사용자 ID
+   * @param summary - 저장할 요약 정보
+   * @param options - 트랜잭션 옵션
+   * @throws {UpstreamError} - DB 오류 발생 시
+   */
   async upsertGraphSummary(
     userId: string,
     summary: GraphSummaryDoc,
@@ -725,16 +932,38 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     }
   }
 
+  /**
+   * 특정 사용자의 그래프 요약 정보를 조회합니다.
+   *
+   * @param userId - 작업을 요청한 사용자 ID
+   * @returns 조회된 요약 정보
+   * @throws {UpstreamError} - DB 오류 발생 시
+   */
   async getGraphSummary(userId: string): Promise<GraphSummaryDoc | null> {
     try {
-      const doc = await this.graphSummary_col().findOne({ userId: userId, deletedAt: { $in: [null, undefined] } } as any);
+      const doc = await this.graphSummary_col().findOne({
+        userId: userId,
+        deletedAt: { $in: [null, undefined] },
+      } as any);
       return doc;
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.getGraphSummary', err);
     }
   }
 
-  async deleteGraphSummary(userId: string, _permanent?: boolean, options?: RepoOptions): Promise<void> {
+  /**
+   * 특정 사용자의 그래프 요약 정보를 삭제합니다.
+   *
+   * @param userId - 작업을 요청한 사용자 ID
+   * @param _permanent - 삭제 여부 (현재는 무시됨)
+   * @param options - 트랜잭션 옵션
+   * @throws {UpstreamError} - DB 오류 발생 시
+   */
+  async deleteGraphSummary(
+    userId: string,
+    _permanent?: boolean,
+    options?: RepoOptions
+  ): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
       // [Hard Delete Enforced]
@@ -746,7 +975,9 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 삭제된 그래프 요약/인사이트를 복구합니다 (현재 Hard Delete 정책으로 인해 미지원).
-   * 
+   *
+   * @param _userId - 작업을 요청한 사용자 ID (현재 미사용)
+   * @param _options - 트랜잭션 옵션 (현재 미사용)
    * @throws {UpstreamError} 복구가 지원되지 않음을 알림
    */
   async restoreGraphSummary(_userId: string, _options?: RepoOptions): Promise<void> {
@@ -754,6 +985,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     throw new UpstreamError('Restore is not supported in hard-delete only mode');
   }
 
+  /**
+   * MongoDB 관련 에러를 처리합니다.
+   * @param methodName - 에러가 발생한 메서드 이름
+   * @param err - 에러 객체
+   * @throws {UpstreamError} - DB 오류 발생 시
+   */
   private handleError(methodName: string, err: unknown): never {
     if (
       err instanceof Error &&

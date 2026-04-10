@@ -27,18 +27,27 @@ class InMemoryNoteRepo implements NoteRepository {
   }
 
   async createNotes(docs: NoteDoc[], session?: ClientSession): Promise<NoteDoc[]> {
-    docs.forEach(doc => this.notes.set(doc._id, doc));
+    docs.forEach((doc) => this.notes.set(doc._id, doc));
     return docs;
   }
 
-  async getNote(id: string, ownerUserId: string, includeDeleted?: boolean): Promise<NoteDoc | null> {
+  async getNote(
+    id: string,
+    ownerUserId: string,
+    includeDeleted?: boolean
+  ): Promise<NoteDoc | null> {
     const doc = this.notes.get(id);
     if (!doc || doc.ownerUserId !== ownerUserId) return null;
     if (!includeDeleted && doc.deletedAt) return null;
     return doc;
   }
 
-  async listNotes(ownerUserId: string, folderId: string | null, limit: number, cursor?: string): Promise<{ items: NoteDoc[]; nextCursor: string | null }> {
+  async listNotes(
+    ownerUserId: string,
+    folderId: string | null,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: NoteDoc[]; nextCursor: string | null }> {
     const items = Array.from(this.notes.values()).filter(
       (n) => n.ownerUserId === ownerUserId && n.folderId === folderId
     );
@@ -202,10 +211,14 @@ class InMemoryNoteRepo implements NoteRepository {
     query: string,
     limit?: number
   ): Promise<(NoteDoc & { score?: number })[]> {
-    const items = Array.from(this.notes.values()).filter(
-      (n) => n.ownerUserId === ownerUserId && !n.deletedAt && 
-             (n.title.includes(query) || n.content.includes(query))
-    ).map(n => ({...n, score: 1}));
+    const items = Array.from(this.notes.values())
+      .filter(
+        (n) =>
+          n.ownerUserId === ownerUserId &&
+          !n.deletedAt &&
+          (n.title.includes(query) || n.content.includes(query))
+      )
+      .map((n) => ({ ...n, score: 1 }));
     return limit ? items.slice(0, limit) : items;
   }
 
@@ -215,14 +228,23 @@ class InMemoryNoteRepo implements NoteRepository {
     return doc;
   }
 
-  async getFolder(id: string, ownerUserId: string, includeDeleted?: boolean): Promise<FolderDoc | null> {
+  async getFolder(
+    id: string,
+    ownerUserId: string,
+    includeDeleted?: boolean
+  ): Promise<FolderDoc | null> {
     const doc = this.folders.get(id);
     if (!doc || doc.ownerUserId !== ownerUserId) return null;
     if (!includeDeleted && doc.deletedAt) return null;
     return doc;
   }
 
-  async listFolders(ownerUserId: string, parentId: string | null, limit: number, cursor?: string): Promise<{ items: FolderDoc[]; nextCursor: string | null }> {
+  async listFolders(
+    ownerUserId: string,
+    parentId: string | null,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: FolderDoc[]; nextCursor: string | null }> {
     const items = Array.from(this.folders.values()).filter(
       (f) => f.ownerUserId === ownerUserId && f.parentId === parentId
     );
@@ -332,14 +354,22 @@ class InMemoryNoteRepo implements NoteRepository {
     );
   }
 
-  async listTrashNotes(ownerUserId: string, limit: number, cursor?: string): Promise<{ items: NoteDoc[]; nextCursor: string | null }> {
+  async listTrashNotes(
+    ownerUserId: string,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: NoteDoc[]; nextCursor: string | null }> {
     const items = Array.from(this.notes.values()).filter(
       (n) => n.ownerUserId === ownerUserId && n.deletedAt !== null
     );
     return { items, nextCursor: null };
   }
 
-  async listTrashFolders(ownerUserId: string, limit: number, cursor?: string): Promise<{ items: FolderDoc[]; nextCursor: string | null }> {
+  async listTrashFolders(
+    ownerUserId: string,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: FolderDoc[]; nextCursor: string | null }> {
     const items = Array.from(this.folders.values()).filter(
       (f) => f.ownerUserId === ownerUserId && f.deletedAt !== null
     );
@@ -533,7 +563,9 @@ describe('NoteService', () => {
     });
 
     const folder = await service.createFolder('u1', { name: 'F' });
-    await expect(service.deleteFolder('u1', folder.id, true)).rejects.toThrow('NoteService.deleteFolder failed');
+    await expect(service.deleteFolder('u1', folder.id, true)).rejects.toThrow(
+      'NoteService.deleteFolder failed'
+    );
 
     // Restore mock
     require('../../src/infra/db/mongodb').getMongo = () => originalGetMongo;
