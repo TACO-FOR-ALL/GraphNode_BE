@@ -49,6 +49,9 @@ export class ConversationRepositoryMongo implements ConversationRepository {
    */
   async create(doc: ConversationDoc, session?: ClientSession): Promise<ConversationDoc> {
     try {
+      const now = Date.now();
+      doc.createdAt = now;
+      doc.updatedAt = now;
       // insertOne: 문서 하나를 컬렉션에 추가합니다.
       await this.col().insertOne(doc, { session });
       return doc;
@@ -69,6 +72,8 @@ export class ConversationRepositoryMongo implements ConversationRepository {
       if (docs.length === 0) {
         return [];
       }
+      const now = Date.now();
+      docs.forEach((d) => { d.createdAt = now; d.updatedAt = now; });
       // insertMany: 여러 문서를 한 번에 추가합니다.
       await this.col().insertMany(docs, { session });
       return docs;

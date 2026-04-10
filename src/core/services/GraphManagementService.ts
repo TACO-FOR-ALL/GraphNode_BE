@@ -80,11 +80,8 @@ export class GraphManagementService {
       this.assertUser(userId);
       const nId = this.parseId(id);
 
-      // 부분 업데이트를 위한 간단한 매핑
-      const patchDoc: any = { ...patch };
-      if (patch.updatedAt) patchDoc.updatedAt = patch.updatedAt;
-
-      await this.repo.updateNode(userId, nId, patchDoc, options);
+      // updatedAt은 repository layer가 항상 갱신합니다. 외부에서 전달된 값은 무시됩니다.
+      await this.repo.updateNode(userId, nId, patch as Partial<GraphNodeDoc>, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.updateNode failed', { cause: String(err) });

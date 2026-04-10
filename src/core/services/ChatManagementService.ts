@@ -705,7 +705,8 @@ export class ChatManagementService {
         await this.validateConversationOwner(conversationId, ownerUserId);
 
         // 2. 메시지 업데이트 — createdAt/deletedAt은 클라이언트가 명시적으로 보낸 경우에만 적용
-        const updatePayload: Record<string, unknown> = { ...updates, updatedAt: Date.now() };
+        // updatedAt은 repository layer가 항상 갱신합니다.
+        const updatePayload: Record<string, unknown> = { ...updates };
         if ('createdAt' in updates && updates.createdAt !== undefined) {
           updatePayload.createdAt = new Date(updates.createdAt).getTime();
         } else {
@@ -785,11 +786,11 @@ export class ChatManagementService {
           throw new NotFoundError(`Message not found: ${messageId}`);
         }
 
-        // 2. 대화방 타임스탬프 갱신
+        // 2. 대화방 타임스탬프 갱신 (updatedAt은 repository layer가 항상 갱신합니다)
         await this.conversationService.updateDoc(
           conversationId,
           ownerUserId,
-          { updatedAt: Date.now() },
+          {},
           session
         );
       });
@@ -843,11 +844,11 @@ export class ChatManagementService {
               throw new NotFoundError(`Message not found: ${messageId}`);
             }
 
-            // 3. 대화방 타임스탬프 갱신
+            // 3. 대화방 타임스탬프 갱신 (updatedAt은 repository layer가 항상 갱신합니다)
             await this.conversationService.updateDoc(
               conversationId,
               ownerUserId,
-              { updatedAt: Date.now() },
+              {},
               session
             );
 

@@ -71,8 +71,9 @@ export class ConversationService {
       const newThreadDto: Omit<ChatThread, 'messages'> = {
         id: finalThreadId,
         title,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        // Timestamp placeholders — actual values are always overridden by the repository layer.
+        createdAt: '',
+        updatedAt: '',
       };
 
       const convDoc: ConversationDoc = toConversationDoc(newThreadDto, ownerUserId);

@@ -105,8 +105,7 @@ export class AddNodeResultHandler implements JobHandler {
               description: result.assignedCluster.reasoning || '',
               themes: result.assignedCluster.themes || [],
               size: 1,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
+              // createdAt/updatedAt 생략 — repository layer가 설정합니다.
             })
           );
         }
@@ -199,13 +198,9 @@ export class AddNodeResultHandler implements JobHandler {
       // 엣지 병렬 저장 실행
       await Promise.all(edgePromises);
 
-      // 3. GraphStats 갱신 (updatedAt 반영)
-      // 변경된 노드/엣지 개수도 GraphStats를 직접 업데이트할 필요가 있는지?
-      // 기존 아키텍처 상 upsertNode에서 EventObserver가 총량을 조절하거나,
-      // 혹은 통계 자체의 updatedAt을 갱신하는 것이 주요하다고 판단됨.
+      // 3. GraphStats 갱신 (updatedAt은 repository가 자동으로 설정합니다)
       const stats = await graphService.getStats(userId);
       if (stats) {
-        stats.updatedAt = new Date().toISOString();
         stats.status = 'UPDATED';
         await graphService.saveStats(stats);
       }
