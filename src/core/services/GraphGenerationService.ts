@@ -7,7 +7,13 @@ import { NoteService } from './NoteService';
 import { UserService } from './UserService';
 import { NotificationService } from './NotificationService';
 import { HttpClient } from '../../infra/http/httpClient';
-import { AiInputConversation, AiInputMappingNode } from '../../shared/dtos/ai_input';
+import {
+  AiInputConversation,
+  AiInputMappingNode,
+  AiInputNote,
+  AiInputSection,
+  AiInputSourceNode,
+} from '../../shared/dtos/ai_input';
 import { logger } from '../../shared/utils/logger';
 import { AppError, UpstreamError, GraphNotFoundError } from '../../shared/errors/domain';
 import { ChatMessage } from '../../shared/dtos/ai';
@@ -23,6 +29,7 @@ import { QueuePort } from '../ports/QueuePort';
 import { StoragePort } from '../ports/StoragePort';
 import { loadEnv } from '../../config/env';
 import { withRetry } from '../../shared/utils/retry';
+import { GraphClusterDto } from '../../shared/dtos/graph';
 
 /**
  * 모듈: GraphGenerationService
@@ -416,14 +423,15 @@ export class GraphGenerationService {
       });
 
       // 노트 AI 입력 포맷 변환 (AI가 요구하는 필드만 포함)
-      const mappedNotes = updatedNotes.map((note) => ({
+      const mappedNotes: AiInputNote[] = updatedNotes.map((note) => ({
         noteId: note._id,
         title: note.title,
         content: note.content,
       }));
 
       // 기존 클러스터 정보 가져오기
-      const existingClusters = await this.graphEmbeddingService.listClusters(userId);
+      const existingClusters: GraphClusterDto[] =
+        await this.graphEmbeddingService.listClusters(userId);
       const batchPayload = {
         userId,
         existingClusters,
@@ -432,7 +440,7 @@ export class GraphGenerationService {
       };
 
       // S3에 데이터 업로드
-      const payloadJson = JSON.stringify(batchPayload);
+      const payloadJson: string = JSON.stringify(batchPayload);
       await this.storagePort.upload(s3Key, payloadJson, 'application/json');
 
       // 그래프 상태 업데이트
@@ -550,7 +558,7 @@ export class GraphGenerationService {
    * @yields 개별 노트 데이터 (JSON string)
    */
   private async *streamNotes(userId: string): AsyncGenerator<string> {
-    yield '[';
+    yield '{"source_nodes":[';
     let isFirst = true;
 
     // NoteService.findNotesModifiedSince 를 활용하여 모든 노트를 가져옴
@@ -563,13 +571,18 @@ export class GraphGenerationService {
       // 삭제된 노트 제외
       if (note.deletedAt) continue;
 
-      const aiNote = {
+      const aiNote: AiInputSourceNode = {
         id: note._id,
         title: note.title,
-        content: note.content,
+        sections: [
+          {
+            id: note._id,
+            content: note.content,
+          },
+        ],
         source_type: 'markdown',
-        createdAt: note.createdAt.toISOString(),
-        updatedAt: note.updatedAt.toISOString(),
+        create_time: note.createdAt ? new Date(note.createdAt).getTime() / 1000 : 0,
+        update_time: note.updatedAt ? new Date(note.updatedAt).getTime() / 1000 : 0,
       };
 
       if (!isFirst) yield ',';
@@ -577,6 +590,6 @@ export class GraphGenerationService {
       isFirst = false;
     }
 
-    yield ']';
+    yield ']}';
   }
 }

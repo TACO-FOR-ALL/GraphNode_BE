@@ -108,7 +108,7 @@ export interface AiAddNodeBatchRequest {
   userId: string;
   existingClusters: any[];
   conversations: AiInputConversation[];
-  notes: AiInputNote[];
+  notes: AiInputSourceNode[];
 }
 
 /**
@@ -134,3 +134,45 @@ export interface AiMicroscopeIngestRequest {
   api_key?: string;
 }
 
+
+/**
+ * AI 파이프라인의 개별 섹션(텍스트 조각) 형식.
+ * 하나의 노드는 여러 섹션으로 구성될 수 있습니다.
+ */
+export interface AiInputSection {
+  /** 섹션 식별자 */
+  id: string;
+  /** 섹션 본문 내용 */
+  content: string;
+  /** 역할 (chat의 경우 user/assistant, 그 외 생략 가능) */
+  role?: string;
+  /** 섹션 제목 (마크다운 헤더 등) */
+  section_title?: string;
+}
+
+/**
+ * AI 파이프라인의 핵심 입력 단위인 소스 노드 형식.
+ * 하나의 노트나 하나의 대화가 하나의 SourceNode가 됩니다.
+ */
+export interface AiInputSourceNode {
+  /** 원본 데이터 식별자 (MongoDB _id) */
+  id: string;
+  /** 제목 */
+  title?: string;
+  /** 구성 섹션 리스트 */
+  sections: AiInputSection[];
+  /** 소스 유형 */
+  source_type: 'chat' | 'markdown' | 'notion';
+  /** 생성 시간 (Unix Timestamp, seconds) */
+  create_time?: number;
+  /** 수정 시간 (Unix Timestamp, seconds) */
+  update_time?: number;
+}
+
+/**
+ * AI 서버에 전달할 최종 Payload 형식.
+ * 'source_nodes' 키를 최상위에 두어 AI 서버가 개별 노드들을 정확히 인식하게 합니다.
+ */
+export interface AiInputSourceNodesPayload {
+  source_nodes: AiInputSourceNode[];
+}
