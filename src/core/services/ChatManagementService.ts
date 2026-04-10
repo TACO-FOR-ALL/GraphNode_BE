@@ -496,7 +496,7 @@ export class ChatManagementService {
   /**
    * 대화를 삭제합니다. (Cascade Delete)
    *
-   * @param id 대화 ID
+   * @param conversationId 대화 ID
    * @param ownerUserId 소유자 ID
    * @returns 삭제 성공 여부 (boolean)
    * @remarks
@@ -504,7 +504,7 @@ export class ChatManagementService {
    * - permanent=true (Hard Delete) 시 연관된 모든 메시지 및 그래프 데이터(Node/Edge)를 연쇄 삭제
    */
   async deleteConversation(
-    id: string,
+    conversationId: string,
     ownerUserId: string,
     permanent: boolean = false
   ): Promise<boolean> {
@@ -513,7 +513,7 @@ export class ChatManagementService {
 
     // 그래프 삭제에 필요한 messageId 목록을 트랜잭션 외부에서 사전 조회.
     // hard delete 시 TX 커밋 후 메시지가 사라지므로 TX 진입 전에 확보해야 함.
-    const messages = await this.messageService.findDocsByConversationId(id);
+    const messages = await this.messageService.findDocsByConversationId(conversationId);
     const messageIds = messages.map((m) => m._id);
 
     try {
@@ -522,20 +522,20 @@ export class ChatManagementService {
       await session.withTransaction(async () => {
         // 1. 대화방 삭제
         const success = await this.conversationService.deleteDoc(
-          id,
+          conversationId,
           ownerUserId,
           permanent,
           session
         );
         if (!success) {
-          throw new NotFoundError(`Conversation not found or delete failed: ${id}`);
+          throw new NotFoundError(`Conversation not found or delete failed: ${conversationId}`);
         }
 
         // 2. 메시지 삭제 (Cascade)
         if (permanent) {
-          await this.messageService.deleteAllByConversationId(id, session);
+          await this.messageService.deleteAllByConversationId(conversationId, session);
         } else {
-          await this.messageService.softDeleteAllByConversationId(id, session);
+          await this.messageService.softDeleteAllByConversationId(conversationId, session);
         }
       });
     } catch (err: unknown) {
@@ -546,13 +546,12 @@ export class ChatManagementService {
     }
 
     // TX 외부: 파생 데이터(graph) 삭제. TX와 원자성 불필요 — SQS 충돌 방지를 위해 분리.
-    if (messageIds.length > 0) {
-      await withRetry(
-        async () =>
-          this.graphManagementService.deleteNodesByOrigIds(ownerUserId, messageIds, permanent),
-        { retries: 3, label: 'ChatManagementService.deleteConversation.graphCleanup' }
-      );
-    }
+
+    await withRetry(
+      async () =>
+        this.graphManagementService.deleteNodesByOrigIds(ownerUserId, [conversationId], permanent),
+      { retries: 3, label: 'ChatManagementService.deleteConversation.graphCleanup' }
+    );
 
     return true;
   }
@@ -787,12 +786,7 @@ export class ChatManagementService {
         }
 
         // 2. 대화방 타임스탬프 갱신 (updatedAt은 repository layer가 항상 갱신합니다)
-        await this.conversationService.updateDoc(
-          conversationId,
-          ownerUserId,
-          {},
-          session
-        );
+        await this.conversationService.updateDoc(conversationId, ownerUserId, {}, session);
       });
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
@@ -845,12 +839,7 @@ export class ChatManagementService {
             }
 
             // 3. 대화방 타임스탬프 갱신 (updatedAt은 repository layer가 항상 갱신합니다)
-            await this.conversationService.updateDoc(
-              conversationId,
-              ownerUserId,
-              {},
-              session
-            );
+            await this.conversationService.updateDoc(conversationId, ownerUserId, {}, session);
 
             // 4. 연관된 지식 그래프 연쇄 복원
             await this.graphManagementService.restoreNodesByOrigIds(ownerUserId, [messageId], {
