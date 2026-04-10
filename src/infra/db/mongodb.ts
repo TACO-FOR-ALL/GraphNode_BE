@@ -87,6 +87,7 @@ async function ensureIndexes() {
 
   // Graph Collections: {id, userId} 조합으로 조회하므로 복합 인덱스 생성 (Unique)
   await db.collection('graph_nodes').createIndex({ userId: 1, id: 1 }, { unique: true });
+  await db.collection('graph_nodes').createIndex({ origId: 1, userId: 1 }, { unique: true });
   await db.collection('graph_edges').createIndex({ userId: 1, id: 1 }, { unique: true });
   await db.collection('graph_clusters').createIndex({ userId: 1, id: 1 }, { unique: true });
 

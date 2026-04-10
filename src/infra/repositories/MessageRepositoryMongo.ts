@@ -38,6 +38,9 @@ export class MessageRepositoryMongo implements MessageRepository {
    */
   async create(doc: MessageDoc, session?: ClientSession): Promise<MessageDoc> {
     try {
+      const now = Date.now();
+      doc.createdAt = now;
+      doc.updatedAt = now;
       await this.col().insertOne(doc, { session });
       return doc;
     } catch (err: unknown) {
@@ -57,6 +60,8 @@ export class MessageRepositoryMongo implements MessageRepository {
       if (docs.length === 0) {
         return [];
       }
+      const now = Date.now();
+      docs.forEach((d) => { d.createdAt = now; d.updatedAt = now; });
       // insertMany: 여러 문서를 한 번에 추가합니다.
       await this.col().insertMany(docs, { session });
       return docs;

@@ -34,8 +34,7 @@ export function mapAiOutputToSnapshot(output: AiGraphOutputDto, userId: string):
     timestamp: node.timestamp,
     numMessages: node.num_sections,
     sourceType: node.source_type,
-    createdAt: generatedAt,
-    updatedAt: generatedAt,
+    // createdAt/updatedAt 생략 — repository layer가 항상 책임지고 설정합니다.
   }));
 
   // 2. Edges 변환
@@ -59,8 +58,7 @@ export function mapAiOutputToSnapshot(output: AiGraphOutputDto, userId: string):
       weight: edge.weight,
       type: type,
       intraCluster: edge.is_intra_cluster,
-      createdAt: generatedAt,
-      updatedAt: generatedAt,
+      // createdAt/updatedAt 생략 — repository layer가 항상 책임지고 설정합니다.
     };
   });
 
@@ -74,8 +72,7 @@ export function mapAiOutputToSnapshot(output: AiGraphOutputDto, userId: string):
       description: detail.description,
       size: detail.size,
       themes: detail.key_themes,
-      createdAt: generatedAt,
-      updatedAt: generatedAt,
+      // createdAt/updatedAt 생략 — repository layer가 항상 책임지고 설정합니다.
     })
   );
 
