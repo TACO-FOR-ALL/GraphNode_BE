@@ -46,11 +46,43 @@ describe('End-to-End Graph Flow', () => {
     await mongoClient.connect();
     const db = mongoClient.db();
 
+    // 1. DB접속해서, conversation과 note의 개수 각각 얻어서 보관 필요
+    const conversations = await db.collection('conversations').find({ ownerUserId: userId }).toArray();
+    const notes = await db.collection('notes').find({ ownerUserId: userId, deletedAt: null }).toArray();
+    const expectedOrigIds = [...conversations.map((c) => c._id.toString()), ...notes.map((n) => n._id.toString())];
+    const expectedCount = expectedOrigIds.length;
+    console.log(`Expected nodes: ${expectedCount} (Conversations: ${conversations.length}, Notes: ${notes.length})`);
+
     try {
       // 최대 10분 동안 10초 간격으로 DB 상태 확인 (60회 시도)
       for (let i = 0; i < 60; i++) {
-        const stats = await db.collection('graph_stats').findOne({ userId });
+        const stats = await db.collection<GraphStatsDoc>('graph_stats').findOne({ userId });
+
         if (stats && stats.status === 'CREATED') {
+          // 2. Conversation + Note의 개수만큼, Node가 생겼는지 확인
+          const nodes = await db.collection<GraphNodeDoc>('graph_nodes').find({ userId }).toArray();
+          const actualCount = nodes.length;
+          const actualOrigIds = nodes.map((n) => n.origId);
+
+          console.log(`Validation: Found ${actualCount} nodes in graph_nodes.`);
+
+          if (actualCount !== expectedCount) {
+            console.error(`[Test Failed] Node count mismatch! Expected: ${expectedCount}, Actual: ${actualCount}`);
+            console.error(`Expected IDs: ${JSON.stringify(expectedOrigIds)}`);
+            console.error(`Actual IDs: ${JSON.stringify(actualOrigIds)}`);
+            throw new Error(`Graph generation finished but node count mismatch: ${actualCount} vs ${expectedCount}`);
+          }
+
+          // 3. 생성된 노드의 origId가 seedTestData에서 주입한 데이터와 일치하는지 확인
+          for (const expectedId of expectedOrigIds) {
+            if (!actualOrigIds.includes(expectedId)) {
+              console.error(`[Test Failed] Missing node for origId: ${expectedId}`);
+              throw new Error(`Graph generation finished but missing node for origId: ${expectedId}`);
+            }
+          }
+
+          console.log('All expected nodes confirmed in graph_nodes with correct origIds.');
+
           isFinished = true;
           break;
         }
