@@ -112,11 +112,20 @@ export class AddNodeResultHandler implements JobHandler {
 
         // 노드 저장 (병렬 수집)
         for (const node of result.nodes || []) {
-          const tempId = String(node.id); // "{userId}_{origId}" format
-          const dbNodeId = nextNodeId++;
+          const tempId = String(node.id); // AI return id format: "{userId}_{origId}"
+
+          // [Deduplication] 기존 데이터에 동일한 origId가 있는지 확인합니다.
+          // 존재한다면 해당 노드를 업데이트해야 하므로 기존의 숫자형 id를 재사용합니다.
+          let dbNodeId = origIdToDbId.get(node.origId);
+          
+          if (dbNodeId === undefined) {
+            // 존재하지 않는 신규 노드인 경우에만 새로운 일련번호를 할당합니다.
+            dbNodeId = nextNodeId++;
+            // 배치 내 다른 엣지들이 참조할 수 있도록 맵에 등록
+            origIdToDbId.set(node.origId, dbNodeId);
+          }
+
           createdNodeIds.set(tempId, dbNodeId);
-          // 배치 내 신규 노드도 origId 맵에 추가 (배치 내 항목끼리 엣지 연결 시 참조 가능하도록)
-          origIdToDbId.set(node.origId, dbNodeId);
 
           nodePromises.push(
             graphService.upsertNode({

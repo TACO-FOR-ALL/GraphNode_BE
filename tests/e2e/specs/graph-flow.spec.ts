@@ -227,6 +227,16 @@ describe('End-to-End Graph Flow', () => {
       expect(noteNode?.sourceType).toBe('markdown');
       console.log(`Note node verified — origId: ${newNoteId}, sourceType: markdown`);
 
+      // 7. [DEDUPLICATION VERIFICATION]
+      // 기존 노드(conv-e2e-123)에 대한 노듸가 1개만 존재해야 합니다. (업데이트 확인)
+      const existingConvNodes = await db.collection('graph_nodes').find({
+        userId,
+        origId: 'conv-e2e-123',
+      }).toArray();
+      
+      expect(existingConvNodes.length).toBe(1);
+      console.log(`Deduplication verified — Only 1 node for origId: conv-e2e-123`);
+
     } finally {
       await mongoClient.close();
     }
