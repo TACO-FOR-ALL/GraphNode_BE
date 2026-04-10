@@ -8,6 +8,7 @@ import { UserService } from './UserService';
 import { NotificationService } from './NotificationService';
 import { HttpClient } from '../../infra/http/httpClient';
 import {
+  AiAddNodeBatchRequest,
   AiInputConversation,
   AiInputMappingNode,
   AiInputNote,
@@ -432,7 +433,7 @@ export class GraphGenerationService {
       // 기존 클러스터 정보 가져오기
       const existingClusters: GraphClusterDto[] =
         await this.graphEmbeddingService.listClusters(userId);
-      const batchPayload = {
+      const batchPayload: AiAddNodeBatchRequest = {
         userId,
         existingClusters,
         conversations: mappedConversations,

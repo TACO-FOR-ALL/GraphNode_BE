@@ -58,7 +58,7 @@ export interface AiInputMappingNode {
  * AI 모듈에서 사용되는 개별 대화(Conversation) 형식.
  * 이 구조는 AI 모듈(worker.py, add_node/call.py 등) 측에서 S3에 업로드된
  * 전체 대화 정보(메시지 매핑, 생성 시간)를 읽어들일 때 사용합니다.
- * 
+ *
  * @property id - 대화의 고유 ID
  * @property conversation_id - (Legacy) AI 측 파이썬 로직 하위호환을 위한 스네이크 케이스 ID
  * @property conversationId - (AddNode) 신규 AddNode 파이프라인에서 이용하는 카멜 케이스 ID
@@ -70,7 +70,7 @@ export interface AiInputMappingNode {
 export interface AiInputConversation {
   id: string;
   conversation_id: string; // Legacy Python tasks usage
-  conversationId: string;  // AddNode Python task usage
+  conversationId: string; // AddNode Python task usage
   title: string;
   create_time: number;
   update_time: number;
@@ -108,13 +108,13 @@ export interface AiAddNodeBatchRequest {
   userId: string;
   existingClusters: any[];
   conversations: AiInputConversation[];
-  notes: AiInputSourceNode[];
+  notes: AiInputNote[];
 }
 
 /**
  * AI 서버 측 Microscope (RAG/문서 섭취)를 위한 Ingest 요청 DTO 형식입니다.
  * SQS 메시지를 통해 이 양식으로 전달되면 AI의 `handle_microscope_ingest`가 실행됩니다.
- * 
+ *
  * @property user_id - 사용자 식별자
  * @property group_id - 그룹 식별자 (마이크로스코프 공간 논리적 구분)
  * @property s3_key - S3에 업로드된 대상 파일(PDF, MD, TXT 등)의 객체 키
@@ -133,7 +133,6 @@ export interface AiMicroscopeIngestRequest {
   model?: string;
   api_key?: string;
 }
-
 
 /**
  * AI 파이프라인의 개별 섹션(텍스트 조각) 형식.
