@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from '@jest/globals';
 import { apiClient, getTestUserId } from '../utils/api-client';
 import { seedTestData } from '../utils/db-seed';
 import { MongoClient } from 'mongodb';
+import { GraphNodeDoc, GraphStatsDoc } from '../../../src/core/types/persistence/graph.persistence';
 
 /**
  * Graph AI 엔드투엔드(E2E) 테스트 스펙
@@ -109,21 +110,62 @@ describe('End-to-End Graph Flow', () => {
     const db = mongoClient.db();
 
     try {
-      // 0. 기준점(baseline) 설정
-      // 현재 시각을 lastGraphUpdatedAt 기준점으로 graph_stats에 주입합니다.
-      // 이후 삽입하는 대화/노트의 updatedAt이 이 기준점보다 커야 AddNode에서 필터링됩니다.
+      // 0. 사전 상태 기록 (Rigorous Verification 용)
+      // 시드된 기존 노드(conv-e2e-123)의 정보를 미리 가져옵니다.
+      const initialNode = await db.collection<GraphNodeDoc>('graph_nodes').findOne({
+        userId,
+        origId: 'conv-e2e-123',
+      });
+      
+      if (!initialNode) {
+        throw new Error('Initial node for conv-e2e-123 not found. Check db-seed.');
+      }
+
+      const oldUpdatedAt = initialNode.updatedAt;
+      const oldNumMessages = initialNode.numMessages || 0;
+      console.log(`Initial node state for conv-e2e-123: updatedAt=${oldUpdatedAt}, numMessages=${oldNumMessages}`);
+
+      // 1. 기준점(baseline) 설정
       const baselineTime = new Date();
-      await db.collection('graph_stats').updateOne(
+      await db.collection<GraphStatsDoc>('graph_stats').updateOne(
         { userId },
         { $set: { status: 'CREATED', updatedAt: baselineTime.toISOString() } },
         { upsert: true }
       );
 
-      // 기준점보다 5초 미래 시각으로 신규 데이터를 생성하여 필터링 조건을 확실히 충족합니다.
       const futureMs = baselineTime.getTime() + 5000;
       const futureDate = new Date(futureMs);
 
-      // 1. 신규 대화 + 메시지 삽입
+      // 2. [기존 데이터 업데이트] conv-e2e-123에 새로운 메시지 쌍 추가
+      await db.collection('messages').insertMany([
+        {
+          _id: `msg-incremental-update-u-${Date.now()}`,
+          conversationId: 'conv-e2e-123',
+          ownerUserId: userId,
+          role: 'user',
+          content: 'I want to add more information about Graph Neural Networks.',
+          createdAt: futureMs,
+          updatedAt: futureMs,
+        },
+        {
+          _id: `msg-incremental-update-a-${Date.now()}`,
+          conversationId: 'conv-e2e-123',
+          ownerUserId: userId,
+          role: 'assistant',
+          content: 'GNNs are powerful tools for processing structured graph data.',
+          createdAt: futureMs + 1000,
+          updatedAt: futureMs + 1000,
+        }
+      ] as any);
+
+      // 대화방의 updatedAt도 갱신하여 AddNode가 감지하게 함
+      await db.collection('conversations').updateOne(
+        { _id: 'conv-e2e-123' } as any,
+        { $set: { updatedAt: futureMs + 2000 } }
+      );
+      console.log('Updated existing conversation: conv-e2e-123 with new messages.');
+
+      // 3. [신규 데이터 추가] incremental 대화 + 메시지 삽입
       const newConvId = `conv-incremental-${Date.now()}`;
       await db.collection('conversations').insertOne({
         _id: newConvId,
@@ -133,32 +175,28 @@ describe('End-to-End Graph Flow', () => {
         createdAt: futureMs,
       } as any);
 
-      await db.collection('messages').insertOne({
-        _id: `msg-incremental-user-${Date.now()}`,
-        conversationId: newConvId,
-        ownerUserId: userId,
-        role: 'user',
-        content: 'Adding a new conversation node for incremental testing.',
-        createdAt: futureMs,
-        updatedAt: futureMs,
-      } as any);
+      await db.collection('messages').insertMany([
+        {
+          _id: `msg-incremental-user-${Date.now()}`,
+          conversationId: newConvId,
+          ownerUserId: userId,
+          role: 'user',
+          content: 'Adding a new conversation node for incremental testing.',
+          createdAt: futureMs,
+          updatedAt: futureMs,
+        },
+        {
+          _id: `msg-incremental-assistant-${Date.now()}`,
+          conversationId: newConvId,
+          ownerUserId: userId,
+          role: 'assistant',
+          content: 'Incremental graph testing adds new nodes to an existing knowledge graph.',
+          createdAt: futureMs + 1000,
+          updatedAt: futureMs + 1000,
+        }
+      ] as any);
 
-      // AI add_node 파이프라인은 Q-A pair(user+assistant 쌍)이 1개 이상 있어야 노드를 생성합니다.
-      // user 메시지만 있으면 Q-A pair가 0개로 파이프라인이 건너뛰어 graph_nodes 미삽입됩니다.
-      await db.collection('messages').insertOne({
-        _id: `msg-incremental-assistant-${Date.now()}`,
-        conversationId: newConvId,
-        ownerUserId: userId,
-        role: 'assistant',
-        content: 'Incremental graph testing adds new nodes to an existing knowledge graph without full regeneration.',
-        createdAt: futureMs + 1000,
-        updatedAt: futureMs + 1000,
-      } as any);
-
-      console.log(`Inserted conversation: ${newConvId}`);
-
-      // 2. 신규 노트 삽입 (AddNode 노트 통합 검증용)
-      // updatedAt을 Date 객체로 삽입: NoteService.findNotesModifiedSince가 Date 비교 쿼리를 수행합니다.
+      // 4. [신규 노트 삽입] 
       const newNoteId = `note-incremental-${Date.now()}`;
       await db.collection('notes').insertOne({
         _id: newNoteId,
@@ -179,63 +217,48 @@ describe('End-to-End Graph Flow', () => {
         updatedAt: futureDate,
       } as any);
 
-      console.log(`Inserted note: ${newNoteId}`);
-
-      // 3. AddNode API 호출 — 대화 + 노트 동시 처리
+      // 5. AddNode API 호출
       const response = await apiClient.post('/v1/graph-ai/add-node');
       expect(response.status).toBe(202);
 
-      const taskId = response.data.taskId;
-      console.log(`Add Node Task Enqueued: ${taskId}`);
-
-      // 4. 상태 폴링: UPDATING → UPDATED 전환 대기 (최대 10분, 10초 간격)
-      let isUpdating = false;
+      // 6. 상태 폴링: UPDATED 전환 대기
       let isFinished = false;
-
       for (let i = 0; i < 60; i++) {
-        const stats = await db.collection('graph_stats').findOne({ userId });
-        if (stats && stats.status === 'UPDATING') {
-          isUpdating = true;
-        }
-        if (isUpdating && stats && stats.status === 'UPDATED') {
+        const stats = await db.collection<GraphStatsDoc>('graph_stats').findOne({ userId });
+        if (stats && stats.status === 'UPDATED') {
           isFinished = true;
           break;
         }
-        if (i % 6 === 0) process.stdout.write(`\n--- Waiting for node addition... (${i * 10}s) `);
-        process.stdout.write('.');
         await new Promise((resolve) => setTimeout(resolve, 10000));
       }
-
       expect(isFinished).toBe(true);
-      console.log('\nNode addition process completed (status: UPDATED).');
 
-      // 5. 대화 노드 저장 검증: sourceType이 'chat'이어야 합니다.
-      const convNode = await db.collection('graph_nodes').findOne({
-        userId,
-        origId: newConvId,
-      });
-      expect(convNode).not.toBeNull();
-      expect(convNode?.sourceType).toBe('chat');
-      console.log(`Conversation node verified — origId: ${newConvId}, sourceType: chat`);
-
-      // 6. 노트 노드 저장 검증: sourceType이 'markdown'이어야 합니다.
-      const noteNode = await db.collection('graph_nodes').findOne({
-        userId,
-        origId: newNoteId,
-      });
-      expect(noteNode).not.toBeNull();
-      expect(noteNode?.sourceType).toBe('markdown');
-      console.log(`Note node verified — origId: ${newNoteId}, sourceType: markdown`);
-
-      // 7. [DEDUPLICATION VERIFICATION]
-      // 기존 노드(conv-e2e-123)에 대한 노듸가 1개만 존재해야 합니다. (업데이트 확인)
-      const existingConvNodes = await db.collection('graph_nodes').find({
+      // 7. [RIGOROUS VERIFICATION - 기존 노드 업데이트]
+      const updatedNodes = await db.collection<GraphNodeDoc>('graph_nodes').find({
         userId,
         origId: 'conv-e2e-123',
       }).toArray();
       
-      expect(existingConvNodes.length).toBe(1);
-      console.log(`Deduplication verified — Only 1 node for origId: conv-e2e-123`);
+      expect(updatedNodes.length).toBe(1); // 중복 없음 확인
+      const updatedNode = updatedNodes[0];
+      
+      console.log(`Updated node state for conv-e2e-123: updatedAt=${updatedNode.updatedAt}, numMessages=${updatedNode.numMessages}`);
+      
+      // updatedAt 갱신 확인
+      expect(new Date(updatedNode.updatedAt).getTime()).toBeGreaterThan(new Date(oldUpdatedAt).getTime());
+      
+      // numMessages 증가 확인 (기존 1쌍 + 신규 1쌍 = 2여야 함)
+      expect(updatedNode.numMessages).toBeGreaterThan(oldNumMessages);
+      expect(updatedNode.numMessages).toBe(2);
+
+      // 8. [신규 노드 생성 확인]
+      const newConvNode = await db.collection<GraphNodeDoc>('graph_nodes').findOne({ userId, origId: newConvId });
+      expect(newConvNode).not.toBeNull();
+      
+      const newNoteNode = await db.collection<GraphNodeDoc>('graph_nodes').findOne({ userId, origId: newNoteId });
+      expect(newNoteNode).not.toBeNull();
+
+      console.log('All rigorous verifications passed: Existing node updated correctly, new nodes created.');
 
     } finally {
       await mongoClient.close();

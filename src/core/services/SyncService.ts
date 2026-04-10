@@ -211,30 +211,46 @@ export class SyncService {
     try {
       await session.withTransaction(async () => {
         // 1. Conversations
-        for (const doc of convDocs) {
+        const convDtos = changes.conversations ?? [];
+        for (let i = 0; i < convDtos.length; i++) {
+          const dto = convDtos[i];
+          const doc = convDocs[i];
           const existing = existingConvMap.get(doc._id);
 
           // 소유권 확인 (다른 사용자의 데이터를 덮어쓰지 않도록)
           if (existing && existing.ownerUserId !== ownerUserId) continue;
 
           // LWW: 서버 데이터가 더 최신이면 건너뜀
-          if (existing && existing.updatedAt >= doc.updatedAt) continue;
+          const clientUpdatedAt = new Date(dto.updatedAt || 0).getTime();
+          const serverUpdatedAt = typeof existing?.updatedAt === 'number' 
+            ? existing.updatedAt 
+            : (existing?.updatedAt as unknown as Date)?.getTime();
+          
+          if (existing && serverUpdatedAt >= clientUpdatedAt) continue;
 
           if (existing) {
-            await this.conversationService.updateDoc(doc._id, ownerUserId, { ...doc, updatedAt: doc.updatedAt }, session);
+            await this.conversationService.updateDoc(doc._id, ownerUserId, doc, session);
           } else {
             await this.conversationService.createDoc(doc, session);
           }
         }
 
         // 2. Messages
-        for (const doc of msgDocs) {
+        const msgDtos = changes.messages ?? [];
+        for (let i = 0; i < msgDtos.length; i++) {
+          const dto = msgDtos[i];
+          const doc = msgDocs[i];
           const existing = existingMsgMap.get(doc._id);
 
           // 소유권 확인
           if (existing && existing.ownerUserId !== ownerUserId) continue;
 
-          if (existing && existing.updatedAt >= doc.updatedAt) continue;
+          const clientUpdatedAt = new Date(dto.updatedAt || 0).getTime();
+          const serverUpdatedAt = typeof existing?.updatedAt === 'number'
+            ? existing.updatedAt
+            : (existing?.updatedAt as unknown as Date)?.getTime();
+
+          if (existing && serverUpdatedAt >= clientUpdatedAt) continue;
 
           if (existing) {
             await this.messageService.updateDoc(doc._id, doc.conversationId, doc, session);
@@ -244,10 +260,18 @@ export class SyncService {
         }
 
         // 3. Notes
-        for (const doc of noteDocs) {
+        const nDtos = changes.notes ?? [];
+        for (let i = 0; i < nDtos.length; i++) {
+          const dto = nDtos[i];
+          const doc = noteDocs[i];
           const existing = existingNoteMap.get(doc._id);
 
-          if (existing && existing.updatedAt >= doc.updatedAt) continue;
+          const clientUpdatedAt = new Date(dto.updatedAt || 0).getTime();
+          const serverUpdatedAt = existing?.updatedAt instanceof Date
+            ? existing.updatedAt.getTime()
+            : (existing?.updatedAt as unknown as number);
+
+          if (existing && serverUpdatedAt >= clientUpdatedAt) continue;
 
           if (existing) {
             await this.noteService.updateNoteDoc(doc._id, ownerUserId, doc, session);
@@ -257,10 +281,18 @@ export class SyncService {
         }
 
         // 4. Folders
-        for (const doc of folderDocs) {
+        const fDtos = changes.folders ?? [];
+        for (let i = 0; i < fDtos.length; i++) {
+          const dto = fDtos[i];
+          const doc = folderDocs[i];
           const existing = existingFolderMap.get(doc._id);
 
-          if (existing && existing.updatedAt >= doc.updatedAt) continue;
+          const clientUpdatedAt = new Date(dto.updatedAt || 0).getTime();
+          const serverUpdatedAt = existing?.updatedAt instanceof Date
+            ? existing.updatedAt.getTime()
+            : (existing?.updatedAt as unknown as number);
+
+          if (existing && serverUpdatedAt >= clientUpdatedAt) continue;
 
           if (existing) {
             await this.noteService.updateFolderDoc(doc._id, ownerUserId, doc, session);
