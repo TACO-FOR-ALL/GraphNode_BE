@@ -63,15 +63,27 @@ export async function seedTestData() {
     } as any);
 
     // Seed Message: 지식 추출의 핵심이 되는 대화 내용
-    await db.collection('messages').insertOne({
-      _id: 'msg-e2e-123',
-      conversationId: convId,
-      ownerUserId: TEST_USER_ID,   // userId -> ownerUserId로 수정 (DB 스키마 일치)
-      role: 'user',
-      content: 'Hello, this is a test message for graph generation. Artificial intelligence and Knowledge Graphs are interesting.',
-      createdAt: nowTimestamp,
-      updatedAt: nowTimestamp,
-    } as any);
+    // AI 파이프라인은 최소 1개 이상의 User-Assistant 쌍이 있어야 노드를 추출합니다.
+    await db.collection('messages').insertMany([
+      {
+        _id: 'msg-e2e-123-u',
+        conversationId: convId,
+        ownerUserId: TEST_USER_ID,
+        role: 'user',
+        content: 'Hello, this is a test message for graph generation. Artificial intelligence and Knowledge Graphs are interesting.',
+        createdAt: nowTimestamp,
+        updatedAt: nowTimestamp,
+      },
+      {
+        _id: 'msg-e2e-123-a',
+        conversationId: convId,
+        ownerUserId: TEST_USER_ID,
+        role: 'assistant',
+        content: 'I agree! Knowledge graphs provide a structured way to represent information, which is very useful for LLMs.',
+        createdAt: nowTimestamp + 1000,
+        updatedAt: nowTimestamp + 1000,
+      }
+    ] as any);
 
     // Seed Note: 노트 기반 요약 및 Microscope 분석을 위한 원본 문서
     await db.collection('notes').insertOne({

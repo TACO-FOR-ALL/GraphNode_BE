@@ -376,7 +376,8 @@ export class MicroscopeManagementService {
           taskId: docId,
           userId,
           graphData,
-          createdAt: new Date().toISOString(),
+          // createdAt은 repository layer가 항상 설정합니다.
+          createdAt: '',
         });
         logger.info(
           { userId, groupId, docId, graphPayloadId },

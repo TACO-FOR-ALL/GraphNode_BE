@@ -165,9 +165,13 @@ export class SyncService {
     const session: ClientSession = client.startSession();
 
     // --- TX 외부: 모든 기존 문서를 병렬로 미리 조회 (N+1 방지) ---
-    const convDocs = (changes.conversations ?? []).map(dto => toConversationDoc(dto, ownerUserId));
-    const msgDocs = (changes.messages ?? []).map(dto => toMessageDoc(dto, dto.conversationId, ownerUserId));
-    const noteDocs: NoteDoc[] = (changes.notes ?? []).map(dto => ({
+    const convDocs = (changes.conversations ?? []).map((dto) =>
+      toConversationDoc(dto, ownerUserId)
+    );
+    const msgDocs = (changes.messages ?? []).map((dto) =>
+      toMessageDoc(dto, dto.conversationId, ownerUserId)
+    );
+    const noteDocs: NoteDoc[] = (changes.notes ?? []).map((dto) => ({
       _id: dto.id,
       ownerUserId,
       title: dto.title,
@@ -177,7 +181,7 @@ export class SyncService {
       updatedAt: new Date(dto.updatedAt),
       deletedAt: dto.deletedAt ? new Date(dto.deletedAt) : null,
     }));
-    const folderDocs: FolderDoc[] = (changes.folders ?? []).map(dto => ({
+    const folderDocs: FolderDoc[] = (changes.folders ?? []).map((dto) => ({
       _id: dto.id,
       ownerUserId,
       name: dto.name,
@@ -187,22 +191,32 @@ export class SyncService {
       deletedAt: dto.deletedAt ? new Date(dto.deletedAt) : null,
     }));
 
+    // 이미 존재하는 문서들을 미리 조회
     const [existingConvs, existingMsgs, existingNotes, existingFolders] = await Promise.all([
-      Promise.all(convDocs.map(d => this.conversationService.findDocById(d._id, ownerUserId))),
-      Promise.all(msgDocs.map(d => this.messageService.findDocById(d._id))),
-      Promise.all(noteDocs.map(d => this.noteService.getNoteDoc(d._id, ownerUserId))),
-      Promise.all(folderDocs.map(d => this.noteService.getFolderDoc(d._id, ownerUserId))),
+      Promise.all(convDocs.map((d) => this.conversationService.findDocById(d._id, ownerUserId))),
+      Promise.all(msgDocs.map((d) => this.messageService.findDocById(d._id))),
+      Promise.all(noteDocs.map((d) => this.noteService.getNoteDoc(d._id, ownerUserId))),
+      Promise.all(folderDocs.map((d) => this.noteService.getFolderDoc(d._id, ownerUserId))),
     ]);
 
+    // 조회한 문서들을 Map으로 변환
+
+    // convDocs의 각 문서에 대해,
     const existingConvMap = new Map<string, ConversationDoc | null>(
       convDocs.map((d, i) => [d._id, existingConvs[i]])
     );
+
+    // msgDocs의 각 문서에 대해,
     const existingMsgMap = new Map<string, MessageDoc | null>(
       msgDocs.map((d, i) => [d._id, existingMsgs[i]])
     );
+
+    // noteDocs의 각 문서에 대해,
     const existingNoteMap = new Map<string, NoteDoc | null>(
       noteDocs.map((d, i) => [d._id, existingNotes[i]])
     );
+
+    // folderDocs의 각 문서에 대해,
     const existingFolderMap = new Map<string, FolderDoc | null>(
       folderDocs.map((d, i) => [d._id, existingFolders[i]])
     );
@@ -211,30 +225,49 @@ export class SyncService {
     try {
       await session.withTransaction(async () => {
         // 1. Conversations
-        for (const doc of convDocs) {
+        const convDtos = changes.conversations ?? [];
+        for (let i = 0; i < convDtos.length; i++) {
+          const dto = convDtos[i];
+          const doc = convDocs[i];
           const existing = existingConvMap.get(doc._id);
 
           // 소유권 확인 (다른 사용자의 데이터를 덮어쓰지 않도록)
           if (existing && existing.ownerUserId !== ownerUserId) continue;
 
           // LWW: 서버 데이터가 더 최신이면 건너뜀
-          if (existing && existing.updatedAt >= doc.updatedAt) continue;
+          const clientUpdatedAt = new Date(dto.updatedAt || 0).getTime(); // Client가 보낸 updatedAt
+          const serverUpdatedAt =
+            typeof existing?.updatedAt === 'number'
+              ? existing.updatedAt
+              : (existing?.updatedAt as unknown as Date)?.getTime(); // Server가 보낸 updatedAt
+
+          // Server가 더 최신이면 건너뜀
+          if (existing && serverUpdatedAt >= clientUpdatedAt) continue;
 
           if (existing) {
-            await this.conversationService.updateDoc(doc._id, ownerUserId, { ...doc, updatedAt: doc.updatedAt }, session);
+            await this.conversationService.updateDoc(doc._id, ownerUserId, doc, session);
           } else {
             await this.conversationService.createDoc(doc, session);
           }
         }
 
         // 2. Messages
-        for (const doc of msgDocs) {
+        const msgDtos = changes.messages ?? [];
+        for (let i = 0; i < msgDtos.length; i++) {
+          const dto = msgDtos[i];
+          const doc = msgDocs[i];
           const existing = existingMsgMap.get(doc._id);
 
           // 소유권 확인
           if (existing && existing.ownerUserId !== ownerUserId) continue;
 
-          if (existing && existing.updatedAt >= doc.updatedAt) continue;
+          const clientUpdatedAt = new Date(dto.updatedAt || 0).getTime(); // Client가 보낸 updatedAt
+          const serverUpdatedAt =
+            typeof existing?.updatedAt === 'number'
+              ? existing.updatedAt
+              : (existing?.updatedAt as unknown as Date)?.getTime(); // Server가 보낸 updatedAt
+
+          if (existing && serverUpdatedAt >= clientUpdatedAt) continue;
 
           if (existing) {
             await this.messageService.updateDoc(doc._id, doc.conversationId, doc, session);
@@ -244,10 +277,19 @@ export class SyncService {
         }
 
         // 3. Notes
-        for (const doc of noteDocs) {
+        const nDtos = changes.notes ?? [];
+        for (let i = 0; i < nDtos.length; i++) {
+          const dto = nDtos[i];
+          const doc = noteDocs[i];
           const existing = existingNoteMap.get(doc._id);
 
-          if (existing && existing.updatedAt >= doc.updatedAt) continue;
+          const clientUpdatedAt = new Date(dto.updatedAt || 0).getTime(); // Client가 보낸 updatedAt
+          const serverUpdatedAt =
+            existing?.updatedAt instanceof Date
+              ? existing.updatedAt.getTime()
+              : (existing?.updatedAt as unknown as number); // Server가 보낸 updatedAt
+
+          if (existing && serverUpdatedAt >= clientUpdatedAt) continue;
 
           if (existing) {
             await this.noteService.updateNoteDoc(doc._id, ownerUserId, doc, session);
@@ -257,10 +299,19 @@ export class SyncService {
         }
 
         // 4. Folders
-        for (const doc of folderDocs) {
+        const fDtos = changes.folders ?? [];
+        for (let i = 0; i < fDtos.length; i++) {
+          const dto = fDtos[i];
+          const doc = folderDocs[i];
           const existing = existingFolderMap.get(doc._id);
 
-          if (existing && existing.updatedAt >= doc.updatedAt) continue;
+          const clientUpdatedAt = new Date(dto.updatedAt || 0).getTime(); // Client가 보낸 updatedAt
+          const serverUpdatedAt =
+            existing?.updatedAt instanceof Date
+              ? existing.updatedAt.getTime()
+              : (existing?.updatedAt as unknown as number); // Server가 보낸 updatedAt
+
+          if (existing && serverUpdatedAt >= clientUpdatedAt) continue;
 
           if (existing) {
             await this.noteService.updateFolderDoc(doc._id, ownerUserId, doc, session);

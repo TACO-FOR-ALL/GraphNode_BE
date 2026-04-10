@@ -509,14 +509,13 @@ export class GraphEmbeddingService {
             await Promise.all(
               subclusters.map((subcluster) => {
                 const { deletedAt, ...rest } = subcluster;
+                // createdAt/updatedAt 생략 — repository layer가 설정합니다.
                 return this.graphManagementService.upsertSubcluster(
                   {
                     ...rest,
                     userId,
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
                     ...(deletedAt != null ? { deletedAt: new Date(deletedAt).getTime() } : {}),
-                  },
+                  } as any,
                   { session }
                 );
               })

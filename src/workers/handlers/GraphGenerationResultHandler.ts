@@ -208,11 +208,10 @@ export class GraphGenerationResultHandler implements JobHandler {
           summary_themes: summaryJson?.overview?.primary_interests || [],
         });
 
-        // 3.5. 상태 변경: CREATED (모두 완전하게 저장된 후 마지막에 상태 업데이트)
+        // 3.5. 상태 변경: CREATED (updatedAt은 repository가 자동으로 설정합니다)
         const stats = await graphService.getStats(userId);
         if (stats) {
           stats.status = 'CREATED';
-          stats.updatedAt = new Date().toISOString();
           await graphService.saveStats(stats);
           logger.info({ taskId, userId }, 'Graph status updated to CREATED');
         }

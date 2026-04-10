@@ -77,17 +77,16 @@ export class NoteService {
    * @returns 생성된 노트 DTO
    */
   async createNote(userId: string, dto: CreateNoteRequest): Promise<Note> {
-    const now: Date = new Date();
-    // DB 문서 생성
+    // DB 문서 생성 — createdAt/updatedAt/deletedAt은 repository layer가 항상 설정합니다.
     const doc: NoteDoc = {
       _id: dto.id || ulid(), // 클라이언트 제공 ID 우선, 없으면 ULID 생성
       ownerUserId: userId,
       title: dto.title || 'Untitled', // 제목이 없으면 기본값 설정
       content: dto.content,
       folderId: dto.folderId || null,
-      createdAt: now,
-      updatedAt: now,
-      deletedAt: null, // 초기값 null
+      createdAt: new Date(0), // Placeholder — repo always overrides
+      updatedAt: new Date(0), // Placeholder — repo always overrides
+      deletedAt: null,
     };
 
     const created: NoteDoc = await withRetry(
@@ -105,9 +104,7 @@ export class NoteService {
    * @returns 생성된 노트 목록
    */
   async bulkCreateNotes(userId: string, dto: BulkCreateNotesRequest): Promise<{ notes: Note[] }> {
-    const now: Date = new Date();
-    
-    // 1. 요청 데이터를 NoteDoc 배열로 변환
+    // 1. 요청 데이터를 NoteDoc 배열로 변환 — createdAt/updatedAt은 repository layer가 항상 설정합니다.
     const docsToInsert: NoteDoc[] = dto.notes.map(noteDto => {
       // 제목 자동 생성 로직 (제목이 없는 경우 첫 줄 내용을 기반으로 생성할 수 있지만, 요구사항은 제목을 받거나 'Untitled'로 처리)
       let finalTitle = noteDto.title;
@@ -127,8 +124,8 @@ export class NoteService {
         title: finalTitle,
         content: noteDto.content || '',
         folderId: noteDto.folderId || null,
-        createdAt: now,
-        updatedAt: now,
+        createdAt: new Date(0), // Placeholder — repo always overrides
+        updatedAt: new Date(0), // Placeholder — repo always overrides
         deletedAt: null,
       };
     });
@@ -202,9 +199,9 @@ export class NoteService {
    * @throws {NotFoundError} 노트가 존재하지 않을 경우
    */
   async updateNote(userId: string, noteId: string, dto: UpdateNoteRequest): Promise<Note> {
+    // updatedAt은 repository layer가 항상 갱신합니다.
     const updates: Partial<NoteDoc> = {
       ...dto,
-      updatedAt: new Date(),
     };
     // undefined 필드는 업데이트에서 제외
     Object.keys(updates).forEach(
@@ -327,14 +324,14 @@ export class NoteService {
    * @returns 생성된 폴더 DTO
    */
   async createFolder(userId: string, dto: CreateFolderRequest): Promise<Folder> {
-    const now: Date = new Date();
+    // createdAt/updatedAt/deletedAt은 repository layer가 항상 설정합니다.
     const doc: FolderDoc = {
       _id: dto.id || ulid(), // 클라이언트 제공 ID 우선
       ownerUserId: userId,
       name: dto.name,
       parentId: dto.parentId || null,
-      createdAt: now,
-      updatedAt: now,
+      createdAt: new Date(0), // Placeholder — repo always overrides
+      updatedAt: new Date(0), // Placeholder — repo always overrides
       deletedAt: null,
     };
     const created: FolderDoc = await withRetry(
@@ -396,9 +393,9 @@ export class NoteService {
    * @throws {NotFoundError} 폴더가 존재하지 않을 경우
    */
   async updateFolder(userId: string, folderId: string, dto: UpdateFolderRequest): Promise<Folder> {
+    // updatedAt은 repository layer가 항상 갱신합니다.
     const updates: Partial<FolderDoc> = {
       ...dto,
-      updatedAt: new Date(),
     };
     Object.keys(updates).forEach(
       (key) => (updates as any)[key] === undefined && delete (updates as any)[key]

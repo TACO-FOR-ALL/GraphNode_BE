@@ -219,7 +219,7 @@ export class MeApi {
   /**
    * 사용자 선호 언어를 설정하거나 업데이트합니다.
    *
-   * @param language - 설정할 언어 코드 ('en' | 'ko' | 'cn' | 'ja')
+   * @param language - 설정할 언어 코드 ('en' | 'ko' | 'zh' | 'ja')
    * @example
    * await client.me.updatePreferredLanguage('ko');
    */

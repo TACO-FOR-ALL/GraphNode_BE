@@ -42,14 +42,20 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   /**
    * 노드 생성 또는 업데이트 (upsert).
    * id와 userId를 기준으로 문서를 찾아 업데이트하거나 생성합니다.
+   * 타임스탬프 책임: createdAt은 최초 삽입 시에만 설정($setOnInsert), updatedAt은 매 호출마다 갱신($set).
    * @param node 저장할 노드 문서.
    */
   async upsertNode(node: GraphNodeDoc, options?: RepoOptions): Promise<void> {
     try {
+      const now = new Date().toISOString();
+      const { createdAt: _c, updatedAt: _u, ...fields } = node;
       await this.graphNodes_col().updateOne(
         { id: node.id, userId: node.userId } as any,
-        { $set: node },
-        { upsert: true, ...options, session: options?.session as any }
+        {
+          $set: { ...(fields as any), updatedAt: now },
+          $setOnInsert: { createdAt: now },
+        },
+        { upsert: true, session: options?.session as any }
       );
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.upsertNode', err);
@@ -69,9 +75,10 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     options?: RepoOptions
   ): Promise<void> {
     try {
+      const { updatedAt: _u, ...rest } = patch;
       const update: Partial<GraphNodeDoc> = {
-        ...patch,
-        updatedAt: patch.updatedAt ?? new Date().toISOString(),
+        ...rest,
+        updatedAt: new Date().toISOString(),
       };
       const res: UpdateResult<GraphNodeDoc> = await this.graphNodes_col().updateOne(
         { id, userId } as any,
@@ -362,6 +369,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 그래프 엣지를 생성하거나 갱신합니다(upsert).
+   * 타임스탬프 책임: createdAt은 최초 삽입 시에만 설정($setOnInsert), updatedAt은 매 호출마다 갱신($set).
    * @param edge 저장할 엣지 문서.
    * @returns 생성되거나 갱신된 엣지의 ID
    */
@@ -370,10 +378,15 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
       if (edge.source === edge.target)
         throw new ValidationError('edge source and target must differ');
 
+      const now = new Date().toISOString();
+      const { createdAt: _c, updatedAt: _u, ...fields } = edge;
       await this.graphEdges_col().updateOne(
         { id: edge.id, userId: edge.userId } as any,
-        { $set: edge },
-        { upsert: true, ...options, session: options?.session as any }
+        {
+          $set: { ...(fields as any), updatedAt: now },
+          $setOnInsert: { createdAt: now },
+        },
+        { upsert: true, session: options?.session as any }
       );
       return edge.id;
     } catch (err: unknown) {
@@ -484,14 +497,20 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 그래프 클러스터를 생성하거나 갱신합니다(upsert).
+   * 타임스탬프 책임: createdAt은 최초 삽입 시에만 설정($setOnInsert), updatedAt은 매 호출마다 갱신($set).
    * @param cluster 저장할 클러스터 문서.
    */
   async upsertCluster(cluster: GraphClusterDoc, options?: RepoOptions): Promise<void> {
     try {
+      const now = new Date().toISOString();
+      const { createdAt: _c, updatedAt: _u, ...fields } = cluster;
       await this.graphClusters_col().updateOne(
         { id: cluster.id, userId: cluster.userId } as any,
-        { $set: cluster },
-        { upsert: true, ...options, session: options?.session as any }
+        {
+          $set: { ...(fields as any), updatedAt: now },
+          $setOnInsert: { createdAt: now },
+        },
+        { upsert: true, session: options?.session as any }
       );
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.upsertCluster', err);
@@ -559,16 +578,21 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 서브클러스터 생성 또는 업데이트 (upsert)
-   * 
+   * 타임스탬프 책임: createdAt은 최초 삽입 시에만 설정($setOnInsert), updatedAt은 매 호출마다 갱신($set).
    * @param subcluster 저장할 서브클러스터 문서
    * @param options (선택) 트랜잭션 옵션
    */
   async upsertSubcluster(subcluster: GraphSubclusterDoc, options?: RepoOptions): Promise<void> {
     try {
+      const now = new Date().toISOString();
+      const { createdAt: _c, updatedAt: _u, ...fields } = subcluster;
       await this.graphSubclusters_col().updateOne(
         { id: subcluster.id, userId: subcluster.userId } as any,
-        { $set: subcluster },
-        { upsert: true, ...options, session: options?.session as any }
+        {
+          $set: { ...(fields as any), updatedAt: now },
+          $setOnInsert: { createdAt: now },
+        },
+        { upsert: true, session: options?.session as any }
       );
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.upsertSubcluster', err);
@@ -636,14 +660,17 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 그래프 통계를 저장합니다. 사용자 ID를 키로 사용합니다.
+   * 타임스탬프 책임: updatedAt은 매 호출마다 repository가 갱신합니다.
    * @param stats 저장할 통계 문서.
    */
   async saveStats(stats: GraphStatsDoc, options?: RepoOptions): Promise<void> {
     try {
+      const now = new Date().toISOString();
+      const { updatedAt: _u, ...fields } = stats;
       await this.graphStats_col().updateOne(
         { userId: stats.userId } as any,
-        { $set: stats },
-        { upsert: true, ...options, session: options?.session as any }
+        { $set: { ...(fields as any), updatedAt: now } },
+        { upsert: true, session: options?.session as any }
       );
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.saveStats', err);

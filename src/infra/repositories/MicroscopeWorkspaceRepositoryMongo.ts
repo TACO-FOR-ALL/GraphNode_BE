@@ -50,6 +50,9 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
    */
   async createWorkspace(workspace: MicroscopeWorkspaceMetaDoc, session?: ClientSession): Promise<void> {
     try {
+      const now = new Date().toISOString();
+      workspace.createdAt = now;
+      workspace.updatedAt = now;
       await this.microscope_workspaces_collection().insertOne(workspace as any, { session });
     } catch (err: unknown) {
       this.handleError('MicroscopeWorkspaceRepositoryMongo.createWorkspace', err);
@@ -260,6 +263,7 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
    */
   async saveGraphPayload(payload: MicroscopeGraphPayloadDoc, session?: ClientSession): Promise<void> {
     try {
+      payload.createdAt = new Date().toISOString();
       await this.microscope_graph_payloads_collection().insertOne(payload as any, { session });
     } catch (err: unknown) {
       this.handleError('MicroscopeWorkspaceRepositoryMongo.saveGraphPayload', err);

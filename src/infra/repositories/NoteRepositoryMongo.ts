@@ -37,6 +37,10 @@ export class NoteRepositoryMongo implements NoteRepository {
    */
   async createNote(doc: NoteDoc, session?: ClientSession): Promise<NoteDoc> {
     try {
+      const now = new Date();
+      doc.createdAt = now;
+      doc.updatedAt = now;
+      doc.deletedAt = null;
       await this.notesCol().insertOne(doc, { session });
       return doc;
     } catch (err: unknown) {
@@ -53,10 +57,11 @@ export class NoteRepositoryMongo implements NoteRepository {
   async createNotes(docs: NoteDoc[], session?: ClientSession): Promise<NoteDoc[]> {
     try {
       if (docs.length === 0) return [];
-      
+      const now = new Date();
+      docs.forEach((d) => { d.createdAt = now; d.updatedAt = now; d.deletedAt = null; });
       // insertMany는 { acknowledged: true, insertedIds: { '0': ..., '1': ... } } 를 반환
       const result = await this.notesCol().insertMany(docs, { session });
-      
+
       // insertedIds 길이와 docs 길이가 같다고 가정 (에러가 나지 않았다면)
       if (result.acknowledged) {
         return docs;
@@ -137,9 +142,10 @@ export class NoteRepositoryMongo implements NoteRepository {
     session?: ClientSession
   ): Promise<NoteDoc | null> {
     try {
+      const { updatedAt: _u, ...rest } = updates;
       const result = await this.notesCol().findOneAndUpdate(
         { _id: id, ownerUserId, deletedAt: null },
-        { $set: updates },
+        { $set: { ...rest, updatedAt: new Date() } },
         { returnDocument: 'after', session }
       );
       return result;
@@ -499,6 +505,10 @@ export class NoteRepositoryMongo implements NoteRepository {
    */
   async createFolder(doc: FolderDoc, session?: ClientSession): Promise<FolderDoc> {
     try {
+      const now = new Date();
+      doc.createdAt = now;
+      doc.updatedAt = now;
+      doc.deletedAt = null;
       await this.foldersCol().insertOne(doc, { session });
       return doc;
     } catch (err: unknown) {
@@ -577,9 +587,10 @@ export class NoteRepositoryMongo implements NoteRepository {
     session?: ClientSession
   ): Promise<FolderDoc | null> {
     try {
+      const { updatedAt: _u, ...rest } = updates;
       const result: WithId<FolderDoc> | null = await this.foldersCol().findOneAndUpdate(
         { _id: id, ownerUserId, deletedAt: null },
-        { $set: updates },
+        { $set: { ...rest, updatedAt: new Date() } },
         { returnDocument: 'after', session }
       );
       return result;
