@@ -23,6 +23,7 @@ import { GraphNodeDoc, GraphStatsDoc } from '../../../src/core/types/persistence
 describe('End-to-End Graph Flow', () => {
   const userId = getTestUserId();
   const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/graphnode';
+  let scenario1Passed = false;
 
   beforeAll(async () => {
     // 테스트 시작 전 기초 데이터(유저, 원본 메시지 등) 주입
@@ -58,6 +59,12 @@ describe('End-to-End Graph Flow', () => {
       for (let i = 0; i < 60; i++) {
         const stats = await db.collection<GraphStatsDoc>('graph_stats').findOne({ userId });
 
+        // 영구 실패 상태 감지: 더 이상 기다려도 CREATED로 바뀌지 않으므로 즉시 종료
+        if (stats && stats.status === 'NOT_CREATED') {
+          console.error(`[Scenario 1] Graph generation permanently failed (status=NOT_CREATED). Aborting poll.`);
+          break;
+        }
+
         if (stats && stats.status === 'CREATED') {
           // 2. Conversation + Note의 개수만큼, Node가 생겼는지 확인
           const nodes = await db.collection<GraphNodeDoc>('graph_nodes').find({ userId }).toArray();
@@ -84,6 +91,7 @@ describe('End-to-End Graph Flow', () => {
           console.log('All expected nodes confirmed in graph_nodes with correct origIds.');
 
           isFinished = true;
+          scenario1Passed = true;
           break;
         }
         if (i % 6 === 0) process.stdout.write(`\n--- Waiting for graph creation... (${i * 10}s) `);
@@ -100,6 +108,10 @@ describe('End-to-End Graph Flow', () => {
 
   it('Scenario 2: Graph Summary Flow', async () => {
     console.log('\n--- Starting Scenario 2: Graph Summary ---');
+
+    if (!scenario1Passed) {
+      throw new Error('Scenario 1 did not complete successfully. Scenario 2 requires a generated graph and cannot proceed.');
+    }
 
     // 1. 그래프 요약 API 호출
     const response = await apiClient.post('/v1/graph-ai/summary');
@@ -136,6 +148,10 @@ describe('End-to-End Graph Flow', () => {
 
   it('Scenario 3: Add Node to existing Graph (Conversation + Note)', async () => {
     console.log('\n--- Starting Scenario 3: Add Node (Conversation + Note) ---');
+
+    if (!scenario1Passed) {
+      throw new Error('Scenario 1 did not complete successfully. Scenario 3 requires graph_nodes to be populated and cannot proceed.');
+    }
 
     const mongoClient = new MongoClient(MONGO_URI);
     await mongoClient.connect();

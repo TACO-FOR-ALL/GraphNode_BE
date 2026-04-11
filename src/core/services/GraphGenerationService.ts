@@ -417,8 +417,8 @@ export class GraphGenerationService {
           conversation_id: conv.id,
           conversationId: conv.id,
           title: conv.title,
-          create_time: conv.createdAt ? new Date(conv.createdAt).getTime() / 1000 : 0,
-          update_time: conv.updatedAt ? new Date(conv.updatedAt).getTime() / 1000 : 0,
+          create_time: conv.createdAt ? Math.floor(new Date(conv.createdAt).getTime() / 1000) : 0,
+          update_time: conv.updatedAt ? Math.floor(new Date(conv.updatedAt).getTime() / 1000) : 0,
           mapping,
         };
       });
@@ -536,8 +536,8 @@ export class GraphGenerationService {
           conversation_id: conv.id,
           conversationId: conv.id,
           title: conv.title,
-          create_time: conv.createdAt ? new Date(conv.createdAt).getTime() / 1000 : 0,
-          update_time: conv.updatedAt ? new Date(conv.updatedAt).getTime() / 1000 : 0,
+          create_time: conv.createdAt ? Math.floor(new Date(conv.createdAt).getTime() / 1000) : 0,
+          update_time: conv.updatedAt ? Math.floor(new Date(conv.updatedAt).getTime() / 1000) : 0,
           mapping,
         };
 
@@ -553,7 +553,7 @@ export class GraphGenerationService {
   }
 
   /**
-   * 사용자 노트 데이터를 AI 입력 형식으로 변환하여 스트리밍하는 제너레이터
+   * 사용자 노트 데이터를 Macro Graph 생성 시 필요한 AI 입력 형식으로 변환하여 스트리밍하는 제너레이터
    *
    * @param userId 사용자 ID
    * @yields 개별 노트 데이터 (JSON string)
@@ -582,8 +582,8 @@ export class GraphGenerationService {
           },
         ],
         source_type: 'markdown',
-        create_time: note.createdAt ? new Date(note.createdAt).getTime() / 1000 : 0,
-        update_time: note.updatedAt ? new Date(note.updatedAt).getTime() / 1000 : 0,
+        create_time: note.createdAt ? Math.floor(new Date(note.createdAt).getTime() / 1000) : 0,
+        update_time: note.updatedAt ? Math.floor(new Date(note.updatedAt).getTime() / 1000) : 0,
       };
 
       if (!isFirst) yield ',';
