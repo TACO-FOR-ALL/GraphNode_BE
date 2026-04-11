@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from '@jest/globals';
 import { apiClient, getTestUserId } from '../utils/api-client';
 import { seedTestData } from '../utils/db-seed';
-import { MongoClient } from 'mongodb';
+import { Db, MongoClient } from 'mongodb';
 import { GraphNodeDoc, GraphStatsDoc } from '../../../src/core/types/persistence/graph.persistence';
 
 /**
@@ -23,6 +23,53 @@ import { GraphNodeDoc, GraphStatsDoc } from '../../../src/core/types/persistence
 describe('End-to-End Graph Flow', () => {
   const userId = getTestUserId();
   const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/graphnode';
+  let scenario1Passed = false;
+
+  const dumpCollectionState = async (db: Db, label: string) => {
+    const graphNodes = await db
+      .collection<GraphNodeDoc>('graph_nodes')
+      .find({ userId })
+      .project({
+        _id: 0,
+        id: 1,
+        origId: 1,
+        clusterId: 1,
+        clusterName: 1,
+        sourceType: 1,
+        numMessages: 1,
+        updatedAt: 1,
+      })
+      .sort({ id: 1 })
+      .toArray();
+    const conversations = await db
+      .collection('conversations')
+      .find({ ownerUserId: userId })
+      .project({ _id: 1, title: 1, updatedAt: 1 })
+      .sort({ _id: 1 })
+      .toArray();
+    const notes = await db
+      .collection('notes')
+      .find({ ownerUserId: userId, deletedAt: null })
+      .project({ _id: 1, title: 1, updatedAt: 1 })
+      .sort({ _id: 1 })
+      .toArray();
+    const stats = await db.collection<GraphStatsDoc>('graph_stats').findOne({ userId });
+
+    console.log(`\n[DB DUMP] ${label}`);
+    console.log(
+      JSON.stringify(
+        {
+          userId,
+          stats,
+          graphNodes,
+          conversations,
+          notes,
+        },
+        null,
+        2
+      )
+    );
+  };
 
   beforeAll(async () => {
     // 테스트 시작 전 기초 데이터(유저, 원본 메시지 등) 주입
@@ -52,19 +99,40 @@ describe('End-to-End Graph Flow', () => {
     const expectedOrigIds = [...conversations.map((c) => c._id.toString()), ...notes.map((n) => n._id.toString())];
     const expectedCount = expectedOrigIds.length;
     console.log(`Expected nodes: ${expectedCount} (Conversations: ${conversations.length}, Notes: ${notes.length})`);
+    console.log(`Expected origIds: ${JSON.stringify([...expectedOrigIds].sort())}`);
 
     try {
       // 최대 10분 동안 10초 간격으로 DB 상태 확인 (60회 시도)
       for (let i = 0; i < 60; i++) {
         const stats = await db.collection<GraphStatsDoc>('graph_stats').findOne({ userId });
 
+        // 영구 실패 상태 감지: 더 이상 기다려도 CREATED로 바뀌지 않으므로 즉시 종료
+        if (stats && stats.status === 'NOT_CREATED') {
+          console.error(`[Scenario 1] Graph generation permanently failed (status=NOT_CREATED). Aborting poll.`);
+          break;
+        }
+
         if (stats && stats.status === 'CREATED') {
           // 2. Conversation + Note의 개수만큼, Node가 생겼는지 확인
           const nodes = await db.collection<GraphNodeDoc>('graph_nodes').find({ userId }).toArray();
           const actualCount = nodes.length;
           const actualOrigIds = nodes.map((n) => n.origId);
+          const actualNodeIds = nodes.map((n) => n.id);
 
           console.log(`Validation: Found ${actualCount} nodes in graph_nodes.`);
+          console.log(
+            `Graph node dump: ${JSON.stringify(
+              nodes
+                .map((node) => ({
+                  id: node.id,
+                  origId: node.origId,
+                  sourceType: node.sourceType,
+                  clusterId: node.clusterId,
+                  updatedAt: node.updatedAt,
+                }))
+                .sort((a, b) => a.id - b.id)
+            )}`
+          );
 
           if (actualCount !== expectedCount) {
             console.error(`[Test Failed] Node count mismatch! Expected: ${expectedCount}, Actual: ${actualCount}`);
@@ -81,9 +149,19 @@ describe('End-to-End Graph Flow', () => {
             }
           }
 
+          expect(new Set(actualNodeIds).size).toBe(actualNodeIds.length);
+          for (const node of nodes) {
+            expect(typeof node.id).toBe('number');
+            expect(Number.isFinite(node.id)).toBe(true);
+            expect(node.origId).toBeTruthy();
+          }
+
+          await dumpCollectionState(db, 'Scenario 1 graph generation completed');
+
           console.log('All expected nodes confirmed in graph_nodes with correct origIds.');
 
           isFinished = true;
+          scenario1Passed = true;
           break;
         }
         if (i % 6 === 0) process.stdout.write(`\n--- Waiting for graph creation... (${i * 10}s) `);
@@ -100,6 +178,10 @@ describe('End-to-End Graph Flow', () => {
 
   it('Scenario 2: Graph Summary Flow', async () => {
     console.log('\n--- Starting Scenario 2: Graph Summary ---');
+
+    if (!scenario1Passed) {
+      throw new Error('Scenario 1 did not complete successfully. Scenario 2 requires a generated graph and cannot proceed.');
+    }
 
     // 1. 그래프 요약 API 호출
     const response = await apiClient.post('/v1/graph-ai/summary');
@@ -137,6 +219,10 @@ describe('End-to-End Graph Flow', () => {
   it('Scenario 3: Add Node to existing Graph (Conversation + Note)', async () => {
     console.log('\n--- Starting Scenario 3: Add Node (Conversation + Note) ---');
 
+    if (!scenario1Passed) {
+      throw new Error('Scenario 1 did not complete successfully. Scenario 3 requires graph_nodes to be populated and cannot proceed.');
+    }
+
     const mongoClient = new MongoClient(MONGO_URI);
     await mongoClient.connect();
     const db = mongoClient.db();
@@ -144,6 +230,8 @@ describe('End-to-End Graph Flow', () => {
     try {
       // 0. 사전 상태 기록 (Rigorous Verification 용)
       // 시드된 기존 노드(conv-e2e-123)의 정보를 미리 가져옵니다.
+      await dumpCollectionState(db, 'Scenario 3 before add-node request');
+
       const initialNode = await db.collection<GraphNodeDoc>('graph_nodes').findOne({
         userId,
         origId: 'conv-e2e-123',
@@ -298,14 +386,18 @@ describe('End-to-End Graph Flow', () => {
         .collection<GraphNodeDoc>('graph_nodes')
         .findOne({ userId, origId: newConvId });
       expect(newConvNode).not.toBeNull();
+      expect(typeof newConvNode?.id).toBe('number');
 
       const newNoteNode = await db
         .collection<GraphNodeDoc>('graph_nodes')
         .findOne({ userId, origId: newNoteId });
       expect(newNoteNode).not.toBeNull();
+      expect(typeof newNoteNode?.id).toBe('number');
+
+      await dumpCollectionState(db, 'Scenario 3 add-node completed');
 
       console.log(
-        'All rigorous verifications passed: Existing node updated correctly, new nodes created.'
+        `All rigorous verifications passed: Existing node id=${updatedNode.id} updated correctly, new conversation node id=${newConvNode?.id}, new note node id=${newNoteNode?.id}.`
       );
     } finally {
       await mongoClient.close();

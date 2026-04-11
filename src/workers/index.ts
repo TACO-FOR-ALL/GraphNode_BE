@@ -77,6 +77,7 @@ async function startWorker() {
      * 메시지 처리 메인 로직 Override?
      */
     handleMessage: async (message) => {
+      let capturedToSentry = false;
       try {
         if (!message.Body) {
           return message; // Body 없는 메시지는 삭제 처리 (ACK)
@@ -154,6 +155,7 @@ async function startWorker() {
                 } catch (err: any) {
                   // 500 미만(400번대) 에러는 Sentry로 전송하지 않음
                   if (!(err.httpStatus && err.httpStatus < 500)) {
+                    capturedToSentry = true;
                     Sentry.captureException(err);
                   }
                   throw err;
@@ -164,6 +166,11 @@ async function startWorker() {
         });
       } catch (err) {
         logger.error({ err, messageId: message.MessageId }, 'Error handling message');
+        // withIsolationScope 진입 전 에러(JSON 파싱 실패 등)는 inner catch를 거치지 않으므로
+        // 여기서 한 번만 캡처합니다. inner catch에서 이미 캡처한 경우 이중 전송을 방지합니다.
+        if (!capturedToSentry) {
+          Sentry.captureException(err);
+        }
         throw err; // 에러를 던져야 SQS Consumer가 재시도 로직을 수행함 (ACK 안함)
       }
     },
@@ -175,10 +182,12 @@ async function startWorker() {
   // 에러 이벤트 리스너
   app.on('error', (err) => {
     logger.error({ err }, 'SQS Consumer Error');
+    Sentry.captureException(err);
   });
 
   app.on('processing_error', (err) => {
     logger.error({ err }, 'SQS Processing Error');
+    Sentry.captureException(err);
   });
 
   // 4. Start
@@ -231,8 +240,9 @@ async function startWorker() {
 
     // 타임아웃 30초 설정 (Fargate의 일반적인 강제 종료 타겟 시간)
     // 30초 내에 안 끝나면 강제 종료
-    const forceExitTimer = setTimeout(() => {
+    const forceExitTimer = setTimeout(async () => {
       logger.error('Graceful shutdown timed out (30s). Forcing exit.');
+      await Sentry.flush(2000);
       process.exit(1);
     }, 30000);
 
@@ -251,7 +261,9 @@ async function startWorker() {
 }
 
 // 5. Run
-startWorker().catch((err) => {
+startWorker().catch(async (err) => {
   logger.error({ err }, 'Fatal error in worker process');
+  Sentry.captureException(err);
+  await Sentry.flush(2000); // process.exit 전 Sentry 전송 보장
   process.exit(1);
 });

@@ -178,6 +178,7 @@ jobs:
           mkdir -p be/e2e-logs
           docker compose -f be/docker-compose.test.yml logs --tail 500 > be/e2e-logs/docker-compose-all.log
           docker compose -f be/docker-compose.test.yml ps -a > be/e2e-logs/docker-ps.log
+          ls -R be/e2e-logs > be/e2e-logs/artifact-inventory.log
           echo "Captured logs for post-mortem analysis."
 
       # 11. 테스트 종료 시 로그 업로드 (실패/캔슬/성공 무관)
