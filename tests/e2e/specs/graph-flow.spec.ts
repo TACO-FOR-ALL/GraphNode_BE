@@ -110,8 +110,7 @@ describe('End-to-End Graph Flow', () => {
     console.log('\n--- Starting Scenario 2: Graph Summary ---');
 
     if (!scenario1Passed) {
-      fail('Scenario 1 did not complete successfully. Scenario 2 requires a generated graph and cannot proceed.');
-      return;
+      throw new Error('Scenario 1 did not complete successfully. Scenario 2 requires a generated graph and cannot proceed.');
     }
 
     // 1. 그래프 요약 API 호출
@@ -151,8 +150,7 @@ describe('End-to-End Graph Flow', () => {
     console.log('\n--- Starting Scenario 3: Add Node (Conversation + Note) ---');
 
     if (!scenario1Passed) {
-      fail('Scenario 1 did not complete successfully. Scenario 3 requires graph_nodes to be populated and cannot proceed.');
-      return;
+      throw new Error('Scenario 1 did not complete successfully. Scenario 3 requires graph_nodes to be populated and cannot proceed.');
     }
 
     const mongoClient = new MongoClient(MONGO_URI);
