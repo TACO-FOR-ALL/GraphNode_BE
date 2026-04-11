@@ -49,7 +49,10 @@ class InMemoryNoteRepo implements NoteRepository {
     cursor?: string
   ): Promise<{ items: NoteDoc[]; nextCursor: string | null }> {
     const items = Array.from(this.notes.values()).filter(
-      (n) => n.ownerUserId === ownerUserId && n.folderId === folderId
+      (n) =>
+        n.ownerUserId === ownerUserId &&
+        n.folderId === folderId &&
+        !n.deletedAt
     );
     return { items, nextCursor: null };
   }
@@ -246,7 +249,10 @@ class InMemoryNoteRepo implements NoteRepository {
     cursor?: string
   ): Promise<{ items: FolderDoc[]; nextCursor: string | null }> {
     const items = Array.from(this.folders.values()).filter(
-      (f) => f.ownerUserId === ownerUserId && f.parentId === parentId
+      (f) =>
+        f.ownerUserId === ownerUserId &&
+        f.parentId === parentId &&
+        !f.deletedAt
     );
     return { items, nextCursor: null };
   }
@@ -450,6 +456,23 @@ describe('NoteService', () => {
     const folderNotes = await service.listNotes('u1', 'f1');
     expect(folderNotes.items).toHaveLength(1);
     expect(folderNotes.items[0].content).toBe('folder note');
+  });
+
+  test('listNotes excludes soft-deleted notes', async () => {
+    // 1. 노트 생성
+    const note = await service.createNote('u1', { content: 'Exclusion Test', folderId: null });
+    
+    // 2. 소프트 삭제 전 확인
+    let list = await service.listNotes('u1', null);
+    expect(list.items.find(n => n.id === note.id)).toBeDefined();
+
+    // 3. 소프트 삭제 실행
+    await service.deleteNote('u1', note.id, false);
+
+    // 4. 삭제 후 목록에서 제외되었는지 확인
+    list = await service.listNotes('u1', null);
+    expect(list.items.find(n => n.id === note.id)).toBeUndefined();
+    expect(list.items.length).toBe(0);
   });
 
   test('updateNote updates fields', async () => {

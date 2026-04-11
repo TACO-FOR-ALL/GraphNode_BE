@@ -84,6 +84,10 @@ export class SyncService {
   /**
    * 대화 및 메시지 변경사항 조회 (Pull Conversations)
    * 활성 데이터만 반환합니다.
+   *
+   * @param ownerUserId 요청한 사용자 ID
+   * @param sinceInput 동기화 기준 시각
+   * @returns 변경된 데이터 목록과 현재 서버 시각
    */
   async pullConversations(
     ownerUserId: string,
@@ -119,6 +123,10 @@ export class SyncService {
   /**
    * 노트 및 폴더 변경사항 조회 (Pull Notes)
    * 활성 데이터만 반환합니다.
+   *
+   * @param ownerUserId 요청한 사용자 ID
+   * @param sinceInput 동기화 기준 시각
+   * @returns 변경된 데이터 목록과 현재 서버 시각
    */
   async pullNotes(ownerUserId: string, sinceInput?: string | Date): Promise<SyncPullNotesResponse> {
     const since = this.parseSince(sinceInput);
