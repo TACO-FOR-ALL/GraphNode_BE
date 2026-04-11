@@ -1,7 +1,7 @@
 import { JobHandler } from './JobHandler';
 import { Container } from '../../bootstrap/container';
 import { AddNodeResultPayload } from '../../shared/dtos/queue';
-import { AiAddNodeBatchResult, isNoteResultItem } from '../../shared/dtos/ai_graph_output';
+import { AiAddNodeBatchResult } from '../../shared/dtos/ai_graph_output';
 import { logger } from '../../shared/utils/logger';
 import { withRetry } from '../../shared/utils/retry';
 import { captureEvent } from '../../shared/utils/posthog';
@@ -10,16 +10,36 @@ import {
   NormalizedAiOrigId,
   stripUserPrefix,
 } from '../../shared/utils/aiNodeId';
+import {
+  BatchResolvedSourceTypeResult,
+  ResolvedGraphSourceType,
+  resolveSourceTypesByOrigIds,
+} from '../utils/sourceTypeResolver';
+import { GraphNodeDto } from '../../shared/dtos/graph';
+
+interface NormalizedAddNodeItem {
+  rawTempId: string;
+  rawOrigId: string;
+  normalizedOrigId: string;
+  strippedSourcePrefix: boolean;
+  clusterId: string;
+  clusterName: string;
+  numMessages?: number;
+  numSections?: number;
+  timestamp?: string | null;
+}
 
 /**
- * AddNode (배치) 결과 처리 핸들러
+ * AddNode 결과 처리 핸들러
  *
- * Flow:
- * 1. AI Server 완료 메세지 (ADD_NODE_RESULT) 수신
- * 2. 결과 JSON (resultS3Key) S3에서 다운로드
- * 3. 결과(노드, 엣지, 클러스터 등)를 DB에 반영
- * 4. GraphStats 업데이트
- * 5. 알림 전송
+ * 260411 작업 배경:
+ * - AI payload의 `sourceType`에 의존하면 MongoDB에 `sourceType`이 비거나 잘못 저장되는 사례가 보고되었습니다.
+ * - 또한 AddNode는 AI 배치 전용 string ID와 Mongo 영구 ID가 섞여 있어, 초보 개발자가 읽기 어려운 상태였습니다.
+ *
+ * 260411 작업 원칙:
+ * 1. `origId`는 항상 `normalizeAiOrigId()`를 거쳐 정규화한다.
+ * 2. `sourceType`은 AI payload가 아니라 실제 DB(conversation/note) 존재 여부로 판별한다.
+ * 3. 배치용 string ID(`node.id`)와 Mongo 영구 ID(`graph_nodes.id`)를 분리해서 다룬다.
  */
 export class AddNodeResultHandler implements JobHandler {
   async handle(message: AddNodeResultPayload, container: Container): Promise<void> {
@@ -28,16 +48,17 @@ export class AddNodeResultHandler implements JobHandler {
 
     logger.info({ taskId, userId, status }, 'Handling AddNode result');
 
-    // 의존성 획득
+    // 의존성 주입
     const storagePort = container.getAwsS3Adapter();
     const graphService = container.getGraphEmbeddingService();
     const notiService = container.getNotificationService();
+    const conversationService = container.getConversationService();
+    const noteService = container.getNoteService();
 
-    // 상태에 따른 처리, FAILED 시에
+    // AI 서버에서 실패한 경우
     if (status === 'FAILED' || error) {
       logger.error({ taskId, userId, error }, 'AddNode task failed from AI Server');
 
-      // 실패 알림 전송 전에 상태 롤백
       const stats = await graphService.getStats(userId);
       if (stats) {
         stats.status = 'CREATED';
@@ -48,90 +69,63 @@ export class AddNodeResultHandler implements JobHandler {
       return;
     }
 
+    // resultS3Key가 없으면 에러
     if (!resultS3Key) {
       throw new Error('No resultS3Key provided for ADD_NODE_RESULT');
     }
 
     try {
-      // 1. S3에서 결과 다운로드
+      // S3에서 결과 다운로드
       const batchResult = await withRetry(
-        async () => await storagePort.downloadJson<AiAddNodeBatchResult>(resultS3Key),
+        async () => storagePort.downloadJson<AiAddNodeBatchResult>(resultS3Key),
         { label: 'AddNodeResultHandler.downloadJson.batch' }
       );
 
-      // 2. DB 저장 (클러스터 생성, 노드 및 엣지 반영)
-      const existingNodes = await graphService.listNodesAll(userId); // 기존 노드들 조회
-      let nextNodeId =
-        existingNodes.length > 0 ? Math.max(...existingNodes.map((n) => n.id)) + 1 : 1;
+      // 노드 정규화
+      // 1. AI node들을 내부 처리용 정규화 구조로 바꾼다.
+      const normalizedItems: NormalizedAddNodeItem[] = this.collectNormalizedNodeItems(batchResult);
+      // 2. sourceType 판별에 사용할 normalized origId 목록만 추린다.
+      const normalizedOrigIds: string[] = this.collectNormalizedOrigIds(normalizedItems);
 
-      // AI가 반환하는 엣지 target은 ChromaDB record ID 포맷인 "{userId}_{origId}"입니다.
-      // 기존 노드의 numeric DB id를 origId 기준으로 해소하기 위한 역방향 맵을 구축합니다.
-
-      /**
-       * 예시 데이터 구조
-       */
-      /**
-       * AddNode 결과에서 ID를 분리 처리하는 이유와 배경
-       *
-       * 2026-04-11 기준 재조사에서 AddNode payload에는 서로 의미가 다른 식별자가 공존했습니다.
-       * 이를 구분하지 않으면 기존 노드를 업데이트해야 할 상황에서 신규 노드로 오판하거나,
-       * edge가 가리키는 노드를 Mongo numeric id로 해소하지 못할 수 있습니다.
-       *
-       * 이 시점에 존재하는 ID 종류:
-       * - `node.id`
-       *   AI 배치 내부 전용 string ID입니다.
-       *   예: `user-e2e-123_conv-e2e-123`
-       *   예: `user-e2e-123_src0_conv-e2e-123`
-       * - `node.origId`
-       *   Mongo `graph_nodes.origId`로 귀결되어야 하는 원본 source ID입니다.
-       *   예: `conv-e2e-123`
-       *   예: `note-e2e-123`
-       *   예: `src0_conv-e2e-123`
-       *   예: `src1_note-e2e-123`
-       * - `graph_nodes.id`
-       *   Mongo에 저장되는 숫자형 내부 노드 ID입니다.
-       *   예: `42`
-       *
-       * 왜 이렇게 수정했는가:
-       * - dedup 기준은 raw `node.id`가 아니라 정규화된 `origId`여야 합니다.
-       * - edge resolve는 먼저 같은 배치에서 생성한 raw string ID를 찾고,
-       *   그 다음에 `{userId}_` 제거 + `src<number>_` 제거를 거쳐 기존 Mongo origId lookup으로 내려가야 합니다.
-       * - 즉 "배치 내부 참조용 ID"와 "영구 저장용 origId"를 분리하지 않으면 안정적으로 동작할 수 없습니다.
-       *
-       * Map 예시 1: 기존 Mongo 노드 lookup
-       * ```ts
-       * const origIdToDbId = new Map<string, number>([
-       *   ['conv-e2e-123', 11],
-       *   ['note-e2e-123', 12],
-       * ]);
-       * ```
-       *
-       * Map 예시 2: 이번 배치에서 생성한 AI string ID -> Mongo numeric ID
-       * ```ts
-       * const createdNodeIds = new Map<string, number>([
-       *   ['user-e2e-123_src0_conv-e2e-123', 11],
-       *   ['user-e2e-123_src1_note-e2e-123', 12],
-       *   ['user-e2e-123_conv-incremental-1712820000000', 13],
-       * ]);
-       * ```
-       *
-       * 내부 처리 흐름:
-       * 1. 기존 Mongo 노드를 읽어 `정규화된 origId -> numeric DB id` 맵을 구성합니다.
-       * 2. 각 `node.origId`에서 `src<number>_`를 제거해 정규화합니다.
-       * 3. 정규화된 origId가 기존 맵에 있으면 update, 없으면 신규 numeric id를 발급합니다.
-       * 4. 동시에 raw `node.id -> numeric DB id` 맵을 만들어 같은 배치의 edge가 참조할 수 있게 합니다.
-       * 5. 이후 edge resolve는 이 두 map을 순서대로 사용합니다.
-       */
-      const origIdToDbId = new Map<string, number>(
-        existingNodes.map((n) => [normalizeAiOrigId(n.origId).normalizedOrigId, n.id])
+      // sourceType resolve
+      // 3. 실제 DB를 조회해 origId별 sourceType을 판별한다.
+      const sourceTypeResult: BatchResolvedSourceTypeResult = await resolveSourceTypesByOrigIds(
+        normalizedOrigIds,
+        userId,
+        {
+          conversationService,
+          noteService,
+        }
       );
 
-      // 신규 노드의 AI string ID("{userId}_{origId}") → 할당될 numeric DB id 맵
-      /**
-       * 예시 데이터 구조
-       *
-       */
+      // sourceType resolve 실패 시 에러
+      if (sourceTypeResult.unresolvedOrigIds.length > 0) {
+        logger.error(
+          {
+            taskId,
+            userId,
+            unresolvedOrigIds: sourceTypeResult.unresolvedOrigIds,
+          },
+          'Failed to resolve sourceType for add-node nodes from DB'
+        );
+        throw new Error(
+          `Unable to resolve sourceType for add-node origIds: ${sourceTypeResult.unresolvedOrigIds.join(', ')}`
+        );
+      }
+
+      // 기존 노드 조회
+      // 4. 기존 Mongo 노드를 읽어 update / dedup 기준을 만든다.
+      const existingNodes: GraphNodeDto[] = await graphService.listNodesAll(userId);
+
+      // 5. normalized origId -> Mongo numeric id 맵을 만든다.
+      const origIdToDbId: Map<string, number> = this.buildOrigIdToDbIdMap(existingNodes);
+
+      // 6. 이번 배치에서 생성한 AI string id -> Mongo numeric id 맵을 만든다.
       const createdNodeIds: Map<string, number> = new Map();
+
+      // 7. 신규 노드가 필요할 때 사용할 다음 numeric id를 계산한다.
+      let nextNodeId = this.calculateNextNodeId(existingNodes);
+
       let totalNodesAdded = 0;
       let totalEdgesAdded = 0;
       let strippedOrigIdCount = 0;
@@ -140,8 +134,27 @@ export class AddNodeResultHandler implements JobHandler {
       const clusterPromises: Promise<void>[] = [];
       const nodePromises: Promise<void>[] = [];
 
+      /**
+       * 260411 작업 설명:
+       * - 이 블록은 AddNode payload의 각 node를 "정규화된 origId + DB에서 검증한 sourceType" 기준으로 저장합니다.
+       * - 핵심은 `node.origId`를 그대로 쓰지 않는다는 점입니다.
+       * - 반드시 `normalizeAiOrigId()`를 먼저 거쳐 실제 Mongo 원본 ID와 비교 가능한 값으로 바꾼 뒤,
+       *   그 normalized origId로 `sourceTypesByOrigId`와 `origIdToDbId`를 조회합니다.
+       *
+       * Map 예시:
+       * ```ts
+       * const origIdToDbId = new Map<string, number>([
+       *   ['conv-e2e-123', 11],
+       *   ['note-e2e-123', 12],
+       * ]);
+       *
+       * const sourceTypesByOrigId = new Map<string, 'chat' | 'markdown'>([
+       *   ['conv-e2e-123', 'chat'],
+       *   ['note-e2e-123', 'markdown'],
+       * ]);
+       * ```
+       */
       for (const result of batchResult.results || []) {
-        // 처리 실패(skipped + error)한 항목은 노드/클러스터 저장 건너뜀
         if (result.skipped && result.error) {
           logger.warn(
             {
@@ -151,16 +164,12 @@ export class AddNodeResultHandler implements JobHandler {
               noteId: result.noteId,
               error: result.error,
             },
-            'AddNode result item skipped by AI pipeline — no nodes to persist'
+            'AddNode result item skipped by AI pipeline - no nodes to persist'
           );
           continue;
         }
 
-        // 대화/노트 여부 판별: sourceType과 컨텐츠 단위 수(numMessages vs numSections) 결정
-        const isNote = isNoteResultItem(result);
-        const sourceType = isNote ? 'markdown' : 'chat';
-
-        // 클러스터 추가 로직 (병렬 수집)
+        // 클러스터 생성
         if (
           result.assignedCluster &&
           result.assignedCluster.isNewCluster &&
@@ -169,57 +178,67 @@ export class AddNodeResultHandler implements JobHandler {
           clusterPromises.push(
             graphService.upsertCluster({
               id: result.assignedCluster.clusterId,
-              userId: userId,
+              userId,
               name: result.assignedCluster.name || '',
               description: result.assignedCluster.reasoning || '',
               themes: result.assignedCluster.themes || [],
               size: 1,
-              // createdAt/updatedAt 생략 — repository layer가 설정합니다.
             })
           );
         }
 
-        // 노드 저장 (병렬 수집)
+        // 노드 처리
         for (const node of result.nodes || []) {
-          const tempId = String(node.id); // AI return id format: "{userId}_{origId}"
-          const normalizedOrigId: NormalizedAiOrigId = normalizeAiOrigId(node.origId);
-          if (normalizedOrigId.strippedSourcePrefix) strippedOrigIdCount++;
+          // 노드 정규화
+          // AI node.origId를 정규화된 내부 표현으로 다시 변환한다.
+          const normalizedItem: NormalizedAddNodeItem = this.normalizeSingleNode(node);
+          // 정규화된 origId로 실제 DB 기준 sourceType을 조회한다.
+          const resolvedSourceType = sourceTypeResult.sourceTypesByOrigId.get(
+            normalizedItem.normalizedOrigId
+          );
 
-          // [Deduplication] 기존 데이터에 동일한 origId가 있는지 확인합니다.
-          // 존재한다면 해당 노드를 업데이트해야 하므로 기존의 숫자형 id를 재사용합니다.
-          let dbNodeId = origIdToDbId.get(normalizedOrigId.normalizedOrigId);
-
-          if (dbNodeId === undefined) {
-            // 존재하지 않는 신규 노드인 경우에만 새로운 일련번호를 할당합니다.
-            dbNodeId = nextNodeId++;
-            // 배치 내 다른 엣지들이 참조할 수 있도록 맵에 등록
-            origIdToDbId.set(normalizedOrigId.normalizedOrigId, dbNodeId);
+          if (!resolvedSourceType) {
+            throw new Error(
+              `Missing resolved sourceType for add-node origId=${normalizedItem.normalizedOrigId}`
+            );
           }
 
-          createdNodeIds.set(tempId, dbNodeId);
+          if (normalizedItem.strippedSourcePrefix) {
+            strippedOrigIdCount++;
+          }
+
+          // 기존 Mongo 노드가 있으면 같은 numeric id를 재사용한다.
+          let dbNodeId = origIdToDbId.get(normalizedItem.normalizedOrigId);
+          if (dbNodeId === undefined) {
+            // 없으면 신규 numeric id를 발급한다.
+            dbNodeId = nextNodeId;
+            nextNodeId += 1;
+            origIdToDbId.set(normalizedItem.normalizedOrigId, dbNodeId);
+          }
+
+          // 같은 배치의 edge가 raw AI string id를 참조할 수 있으므로 기록한다.
+          createdNodeIds.set(normalizedItem.rawTempId, dbNodeId);
 
           nodePromises.push(
             graphService.upsertNode({
               id: dbNodeId,
               userId,
-              origId: normalizedOrigId.normalizedOrigId,
-              clusterId: node.clusterId,
-              clusterName: node.clusterName || '',
-              // 대화: numMessages(Q-A 쌍 수), 노트: numSections(섹션 수) → 공통 numMessages 필드에 저장
-              numMessages: isNote ? (node.numSections ?? 0) : (node.numMessages ?? 0),
-              sourceType,
+              origId: normalizedItem.normalizedOrigId,
+              clusterId: normalizedItem.clusterId,
+              clusterName: normalizedItem.clusterName || '',
+              numMessages: this.resolveNumMessages(normalizedItem, resolvedSourceType),
+              sourceType: resolvedSourceType,
               embedding: [],
-              timestamp: node.timestamp ?? null,
+              timestamp: normalizedItem.timestamp ?? null,
             })
           );
-          totalNodesAdded++;
+          totalNodesAdded += 1;
         }
       }
 
-      // 클러스터 및 노드 병렬 저장 실행
       await Promise.all([...clusterPromises, ...nodePromises]);
 
-      // 3. AddNode 완료 로그
+      // 260411: sourceType resolve 결과 로깅 추가
       logger.info(
         {
           taskId,
@@ -227,76 +246,43 @@ export class AddNodeResultHandler implements JobHandler {
           existingNodeCount: existingNodes.length,
           processedItems: batchResult.results?.length || 0,
           strippedOrigIdCount,
+          resolvedChatCount: this.countResolvedSourceTypes(
+            sourceTypeResult.sourceTypesByOrigId,
+            'chat'
+          ),
+          resolvedMarkdownCount: this.countResolvedSourceTypes(
+            sourceTypeResult.sourceTypesByOrigId,
+            'markdown'
+          ),
         },
-        'Normalized AddNode AI identifiers before node persistence'
+        'AddNode normalized origIds and resolved source types before edge persistence'
       );
 
       /**
-       * AI edge ID 해소 헬퍼.
-       *
-       * AI Python worker가 반환하는 source/target ID는 ChromaDB record ID 포맷인
-       * "{userId}_{origId}" 문자열입니다. 이를 MongoDB numeric id로 변환합니다.
-       *
-       * 우선순위:
-       * 1. 이번 배치에서 신규 생성된 노드 (createdNodeIds)
-       * 2. origId 기반 기존 노드 조회 (origIdToDbId): "{userId}_{origId}" 에서 prefix 제거
-       * 3. 레거시 numeric 문자열 (parseInt fallback)
+       * 260411 작업 설명:
+       * - edge는 AI 배치 전용 string ID를 가리킬 수 있으므로, node 저장이 끝난 뒤 숫자형 Mongo ID로 해소해야 합니다.
+       * - 해소 순서는 "이번 배치에서 생성한 노드 -> 기존 Mongo 노드 -> 숫자형 fallback"입니다.
        */
-      /**
-       * AI edge의 source/target을 Mongo numeric node id로 해소하는 헬퍼입니다.
-       *
-       * 배경:
-       * - AddNode edge는 숫자형 Mongo id가 아니라 batch 전용 string ID를 들고 올 수 있습니다.
-       * - 예: `user-e2e-123_src0_conv-e2e-123`
-       * - 따라서 edge 저장 전에 "이번 배치에서 막 만든 노드인지", "기존 Mongo 노드인지",
-       *   "이미 숫자형 문자열인지"를 순서대로 판별해야 합니다.
-       *
-       * 이 헬퍼가 참조하는 Map 예시:
-       * ```ts
-       * const createdNodeIds = new Map<string, number>([
-       *   ['user-e2e-123_src0_conv-e2e-123', 11],
-       *   ['user-e2e-123_src1_note-e2e-123', 12],
-       * ]);
-       *
-       * const origIdToDbId = new Map<string, number>([
-       *   ['conv-e2e-123', 11],
-       *   ['note-e2e-123', 12],
-       *   ['conv-incremental-1712820000000', 13],
-       * ]);
-       * ```
-       *
-       * 내부 처리 흐름:
-       * 1. `createdNodeIds`에서 raw batch ID를 그대로 먼저 찾습니다.
-       * 2. 없으면 `{userId}_` prefix를 제거합니다.
-       * 3. 이어서 `src<number>_` namespace를 제거합니다.
-       * 4. 정규화된 origId로 `origIdToDbId`를 조회합니다.
-       * 5. 그래도 없으면 `parseInt()` fallback으로 숫자형 ID인지 확인합니다.
-       * 6. 끝까지 해소되지 않으면 `null`을 반환하고 caller가 해당 edge를 skip합니다.
-       */
-      const resolveNodeId = (rawId: string): number | null => {
-        // 1. 신규 노드 (이번 배치)
-        const fromBatch = createdNodeIds.get(rawId);
-        if (fromBatch !== undefined) return fromBatch;
-
-        // 2. 기존 노드: "{userId}_{origId}" → origId 추출
-        const origId = normalizeAiOrigId(stripUserPrefix(rawId, userId)).normalizedOrigId;
-        const fromExisting = origIdToDbId.get(origId);
-        if (fromExisting !== undefined) return fromExisting;
-
-        // 3. 레거시: 숫자 문자열 직접 파싱
-        const parsed = parseInt(rawId, 10);
-        return isNaN(parsed) ? null : parsed;
-      };
-
-      // 두 번째 루프로 모든 엣지 저장 보장
       const edgePromises: Promise<string>[] = [];
       for (const result of batchResult.results || []) {
         for (const edge of result.edges || []) {
-          const sourceId = resolveNodeId(String(edge.source));
-          const targetId = resolveNodeId(String(edge.target));
+          // edge.source를 Mongo numeric id로 해석한다.
+          const sourceId = this.resolveNodeId(
+            String(edge.source),
+            userId,
+            createdNodeIds,
+            origIdToDbId
+          );
+          // edge.target도 같은 규칙으로 해석한다.
+          const targetId = this.resolveNodeId(
+            String(edge.target),
+            userId,
+            createdNodeIds,
+            origIdToDbId
+          );
 
           if (sourceId === null || targetId === null) {
-            unresolvedEdgeCount++;
+            unresolvedEdgeCount += 1;
             logger.warn(
               { taskId, userId, source: edge.source, target: edge.target },
               'AddNode edge skipped: could not resolve node ID to DB numeric id'
@@ -314,14 +300,13 @@ export class AddNodeResultHandler implements JobHandler {
               intraCluster: edge.intraCluster ?? true,
             })
           );
-          totalEdgesAdded++;
+          totalEdgesAdded += 1;
         }
       }
 
-      // 엣지 병렬 저장 실행
       await Promise.all(edgePromises);
 
-      // 4. AddNode 완료 로그
+      // 260411: sourceType resolve 결과 로깅 추가
       logger.info(
         {
           taskId,
@@ -330,24 +315,25 @@ export class AddNodeResultHandler implements JobHandler {
           totalEdgesAdded,
           unresolvedEdgeCount,
         },
-        'AddNode persistence finished with normalized node and edge identifiers'
+        'AddNode persistence finished with normalized node, edge, and sourceType resolution'
       );
 
-      // 3. GraphStats 갱신 (updatedAt은 repository가 자동으로 설정합니다)
+      //
+      // Stat 갱신
       const stats = await graphService.getStats(userId);
       if (stats) {
         stats.status = 'UPDATED';
         await graphService.saveStats(stats);
       }
 
-      // 3.4.1. PostHog 이벤트 수집 (Add Node 완료 가치 측정)
+      // macro_graph_updated PostHog 이벤트
       captureEvent(userId, 'macro_graph_updated', {
         nodes_added: totalNodesAdded,
         edges_added: totalEdgesAdded,
         processed_count: batchResult.processedCount || 0,
       });
 
-      // 4. 알림 전송 병렬화
+      // 완료 알림
       await Promise.allSettled([
         notiService.sendAddConversationCompleted(userId, taskId, totalNodesAdded, totalEdgesAdded),
         notiService.sendFcmPushNotification(
@@ -373,5 +359,183 @@ export class AddNodeResultHandler implements JobHandler {
       );
       throw err;
     }
+  }
+
+  /**
+   * AddNode payload 전체를 순회하여, node별 정규화 정보를 미리 수집합니다.
+   *
+   * 목적:
+   * - sourceType resolver에 넘길 origId 목록을 먼저 정규화된 기준으로 확보합니다.
+   * - 초보 개발자가 "정규화 이전"과 "정규화 이후"를 코드상에서 한눈에 구분할 수 있게 합니다.
+   * @param batchResult AddNode 결과 페이로드
+   * @returns 정규화된 노드 아이템 목록
+   */
+  private collectNormalizedNodeItems(batchResult: AiAddNodeBatchResult): NormalizedAddNodeItem[] {
+    const items: NormalizedAddNodeItem[] = [];
+
+    //
+    for (const result of batchResult.results || []) {
+      for (const node of result.nodes || []) {
+        items.push(this.normalizeSingleNode(node));
+      }
+    }
+
+    return items;
+  }
+
+  /**
+   * AI node 하나를 정규화된 내부 표현으로 변환합니다.
+   *
+   * 중요:
+   * - 이 메서드가 `normalizeAiOrigId()`를 호출하는 최초 지점입니다.
+   * - 이후 resolver, dedup, 저장은 모두 이 결과의 `normalizedOrigId`를 사용합니다.
+   * @param node AI 노드
+   * @returns 정규화된 노드 아이템
+   */
+  private normalizeSingleNode(node: {
+    id: string;
+    origId: string;
+    clusterId: string;
+    clusterName: string;
+    numMessages?: number;
+    numSections?: number;
+    timestamp?: string | null;
+  }): NormalizedAddNodeItem {
+    const normalizedOrigId: NormalizedAiOrigId = normalizeAiOrigId(node.origId);
+
+    return {
+      rawTempId: String(node.id),
+      rawOrigId: node.origId,
+      normalizedOrigId: normalizedOrigId.normalizedOrigId,
+      strippedSourcePrefix: normalizedOrigId.strippedSourcePrefix,
+      clusterId: node.clusterId,
+      clusterName: node.clusterName || '',
+      numMessages: node.numMessages,
+      numSections: node.numSections,
+      timestamp: node.timestamp ?? null,
+    };
+  }
+
+  /**
+   * 정규화된 노드 아이템 목록에서 정규화된 origId 목록을 수집합니다.
+   * @param items 정규화된 노드 아이템 목록
+   * @returns 정규화된 origId 목록
+   */
+  private collectNormalizedOrigIds(items: NormalizedAddNodeItem[]): string[] {
+    const normalizedOrigIds: string[] = [];
+
+    for (const item of items) {
+      normalizedOrigIds.push(item.normalizedOrigId);
+    }
+
+    return normalizedOrigIds;
+  }
+
+  /**
+   * 기존 노드 목록을 기반으로 origId -> DB numeric id 맵을 빌드합니다.
+   * @param existingNodes 기존 노드 목록
+   * @returns origId -> DB numeric id 맵
+   */
+  private buildOrigIdToDbIdMap(
+    existingNodes: Array<{ origId: string; id: number }>
+  ): Map<string, number> {
+    const origIdToDbId = new Map<string, number>();
+
+    for (const node of existingNodes) {
+      const normalizedOrigId = normalizeAiOrigId(node.origId).normalizedOrigId;
+      origIdToDbId.set(normalizedOrigId, node.id);
+    }
+
+    return origIdToDbId;
+  }
+
+  /**
+   * 기존 노드 목록을 기반으로 다음 노드 ID를 계산합니다.
+   * @param existingNodes 기존 노드 목록
+   * @returns 다음 노드 ID
+   */
+  private calculateNextNodeId(existingNodes: Array<{ id: number }>): number {
+    if (existingNodes.length === 0) {
+      return 1;
+    }
+
+    let maxNodeId = existingNodes[0].id;
+    for (const node of existingNodes) {
+      if (node.id > maxNodeId) {
+        maxNodeId = node.id;
+      }
+    }
+
+    return maxNodeId + 1;
+  }
+
+  /**
+   * sourceType에 따라 numMessages를 resolve합니다.
+   * @param node 정규화된 노드 아이템
+   * @param sourceType sourceType
+   * @returns numMessages
+   */
+  private resolveNumMessages(
+    node: NormalizedAddNodeItem,
+    sourceType: ResolvedGraphSourceType
+  ): number {
+    if (sourceType === 'markdown') {
+      return node.numSections ?? 0;
+    }
+    return node.numMessages ?? 0;
+  }
+
+  /**
+   * sourceType별로 resolve된 노드 개수를 셉니다.
+   * @param sourceTypesByOrigId sourceType별로 resolve된 노드 개수
+   * @param expectedType 기대하는 sourceType
+   * @returns sourceType별로 resolve된 노드 개수
+   */
+  private countResolvedSourceTypes(
+    sourceTypesByOrigId: Map<string, ResolvedGraphSourceType>,
+    expectedType: ResolvedGraphSourceType
+  ): number {
+    let count = 0;
+
+    for (const sourceType of sourceTypesByOrigId.values()) {
+      if (sourceType === expectedType) {
+        count += 1;
+      }
+    }
+
+    return count;
+  }
+
+  /**
+   * rawId를 DB numeric id로 resolve합니다.
+   * @param rawId rawId
+   * @param userId userId
+   * @param createdNodeIds 생성된 노드 ID 맵
+   * @param origIdToDbId origId -> DB numeric id 맵
+   * @returns DB numeric id
+   */
+  private resolveNodeId(
+    rawId: string,
+    userId: string,
+    createdNodeIds: Map<string, number>,
+    origIdToDbId: Map<string, number>
+  ): number | null {
+    const fromBatch = createdNodeIds.get(rawId);
+    if (fromBatch !== undefined) {
+      return fromBatch;
+    }
+
+    const origIdWithoutUserPrefix = stripUserPrefix(rawId, userId);
+    const normalizedOrigId = normalizeAiOrigId(origIdWithoutUserPrefix).normalizedOrigId;
+    const fromExisting = origIdToDbId.get(normalizedOrigId);
+    if (fromExisting !== undefined) {
+      return fromExisting;
+    }
+
+    const parsed = parseInt(rawId, 10);
+    if (isNaN(parsed)) {
+      return null;
+    }
+    return parsed;
   }
 }

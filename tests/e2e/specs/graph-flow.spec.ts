@@ -155,6 +155,14 @@ describe('End-to-End Graph Flow', () => {
             expect(Number.isFinite(node.id)).toBe(true);
             expect(node.origId).toBeTruthy();
           }
+          for (const conversation of conversations) {
+            const node = nodes.find((item) => item.origId === conversation._id.toString());
+            expect(node?.sourceType).toBe('chat');
+          }
+          for (const note of notes) {
+            const node = nodes.find((item) => item.origId === note._id.toString());
+            expect(node?.sourceType).toBe('markdown');
+          }
 
           await dumpCollectionState(db, 'Scenario 1 graph generation completed');
 
@@ -387,12 +395,14 @@ describe('End-to-End Graph Flow', () => {
         .findOne({ userId, origId: newConvId });
       expect(newConvNode).not.toBeNull();
       expect(typeof newConvNode?.id).toBe('number');
+      expect(newConvNode?.sourceType).toBe('chat');
 
       const newNoteNode = await db
         .collection<GraphNodeDoc>('graph_nodes')
         .findOne({ userId, origId: newNoteId });
       expect(newNoteNode).not.toBeNull();
       expect(typeof newNoteNode?.id).toBe('number');
+      expect(newNoteNode?.sourceType).toBe('markdown');
 
       await dumpCollectionState(db, 'Scenario 3 add-node completed');
 
