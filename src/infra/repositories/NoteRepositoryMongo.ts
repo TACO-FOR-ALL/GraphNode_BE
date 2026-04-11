@@ -105,7 +105,7 @@ export class NoteRepositoryMongo implements NoteRepository {
     cursor?: string
   ): Promise<{ items: NoteDoc[]; nextCursor: string | null }> {
     try {
-      const query: any = { ownerUserId, folderId, deletedAt: null };
+      const query: any = { ownerUserId, folderId, deletedAt: { $not: { $type: 'date' } } };
       if (cursor) {
         query.updatedAt = { $lt: new Date(parseInt(cursor, 10)) };
       }
@@ -180,7 +180,7 @@ export class NoteRepositoryMongo implements NoteRepository {
   async softDeleteNote(id: string, ownerUserId: string, session?: ClientSession): Promise<boolean> {
     try {
       const result: UpdateResult<NoteDoc> = await this.notesCol().updateOne(
-        { _id: id, ownerUserId },
+        { _id: id, ownerUserId, deletedAt: null },
         { $set: { deletedAt: new Date(), updatedAt: new Date() } },
         { session }
       );
@@ -258,7 +258,7 @@ export class NoteRepositoryMongo implements NoteRepository {
       if (newParentId !== undefined) {
         update.$set.folderId = newParentId;
       }
-      const result = await this.notesCol().updateOne({ _id: id, ownerUserId }, update, { session });
+      const result = await this.notesCol().updateOne({ _id: id, ownerUserId, deletedAt: { $ne: null } }, update, { session });
       return result.modifiedCount > 0;
     } catch (err: unknown) {
       this.handleError('NoteRepositoryMongo.restoreNote', err);
