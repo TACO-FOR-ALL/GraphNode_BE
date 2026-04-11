@@ -1,10 +1,12 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # --- Configuration ---
 # 전용 Jest 설정 파일 및 도커 컴포즈 파일 지정
 E2E_CONFIG="tests/e2e/jest.e2e.config.ts"
 DOCKER_COMPOSE_FILE="docker-compose.test.yml"
+
+mkdir -p e2e-logs
 
 echo "============================================"
 echo "🚀 Starting Integrated E2E Test Suite"
@@ -24,7 +26,7 @@ sleep 5
 # dotenv를 로드하여 환경변수(DB URI 등)가 정상적으로 적용되도록 함
 echo "🌱 Seeding test data..."
 export MONGODB_URI="mongodb://127.0.0.1:27017/graphnode?directConnection=true"
-npx ts-node -r dotenv/config tests/e2e/utils/db-seed.ts
+npx ts-node -r dotenv/config tests/e2e/utils/db-seed.ts 2>&1 | tee e2e-logs/db-seed.log
 
 # 3. 로그 수집 함수 정의
 # 스크립트가 종료될 때(성공, 실패, 캔슬) 현재 컨테이너 상태를 기록함
@@ -49,7 +51,7 @@ trap collect_logs EXIT
 # --runInBand: 테스트를 순차적으로 실행하여 DB 경쟁 상태(Race Condition) 방지
 # --forceExit: 비동기 작업 종료 대기 없이 테스트 완료 후 강제 종료 (네이티브 모듈 잔여 핸들 방지)
 echo "🧪 Running E2E tests with Jest..."
-npx jest --config $E2E_CONFIG --runInBand --forceExit
+npx jest --config $E2E_CONFIG --runInBand --forceExit 2>&1 | tee e2e-logs/jest.log
 
 echo "============================================"
 echo "🎉 All Integrated Tests Completed Successfully!"

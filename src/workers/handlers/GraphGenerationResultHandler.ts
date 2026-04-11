@@ -6,13 +6,14 @@ import type { Container } from '../../bootstrap/container';
 import { GraphGenResultPayload } from '../../shared/dtos/queue';
 import { logger } from '../../shared/utils/logger';
 import { mapAiOutputToSnapshot } from '../../shared/mappers/ai_graph_output.mapper';
-import { PersistGraphPayloadDto } from '../../shared/dtos/graph';
+import { GraphSnapshotDto, PersistGraphPayloadDto } from '../../shared/dtos/graph';
 import { AiGraphOutputDto, GraphSummary } from '../../shared/dtos/ai_graph_output';
 import { GraphFeaturesJsonDto } from '../../core/types/vector/graph-features';
 import { GraphSummaryDoc } from '../../core/types/persistence/graph.persistence';
 import { NotificationType } from '../notificationType';
 import { withRetry } from '../../shared/utils/retry';
 import { captureEvent } from '../../shared/utils/posthog';
+import { normalizeAiOrigId, NormalizedAiOrigId } from '../../shared/utils/aiNodeId';
 
 /**
  * 그래프 생성 결과 처리 핸들러
@@ -98,7 +99,118 @@ export class GraphGenerationResultHandler implements JobHandler {
         )) as [AiGraphOutputDto, GraphFeaturesJsonDto | null, GraphSummary | null];
 
         // 2. Mapper를 통해 DTO 변환
-        const snapshot = mapAiOutputToSnapshot(aiGraphOutput, userId);
+        /**
+         * GraphGeneration 결과에서 식별자를 분리해 처리하는 이유와 배경
+         *
+         * 2026-04-11 기준 재조사에서 확인된 문제 상황:
+         * - AI 매크로 파이프라인은 여러 source input(chat, markdown)을 합칠 때
+         *   `src0_`, `src1_` 같은 임시 namespace를 붙일 수 있습니다.
+         * - 그러나 MongoDB `graph_nodes.origId`는 실제 conversation/note 원본 ID와
+         *   직접 대응되어야 하며, 테스트와 AddNode 업데이트 경로도 이를 전제로 합니다.
+         * - 따라서 graph generation 결과를 저장할 때는 AI 내부 namespace와
+         *   영구 저장용 origId를 명확히 구분해야 합니다.
+         *
+         * 이 시점에 공존하는 ID 종류:
+         * - `node.id`
+         *   AI 그래프 내부 숫자 ID입니다. edge, subcluster가 이 값을 참조하므로 변경하면 안 됩니다.
+         *   예: `7`
+         * - `node.orig_id`
+         *   원본 source 문서를 가리키는 ID입니다. Mongo `graph_nodes.origId`에 저장될 후보입니다.
+         *   예: `conv-e2e-123`
+         *   예: `note-e2e-123`
+         *   예: `src0_conv-e2e-123`
+         *   예: `src1_note-e2e-123`
+         * - vector item id
+         *   BE가 Vector DB 저장 시 만드는 식별자입니다.
+         *   예: `${userId}_conv-e2e-123`
+         *
+         * 왜 `orig_id`만 정규화하는가:
+         * - `node.id`는 edge/subcluster 연결 무결성을 위해 보존해야 합니다.
+         * - `orig_id`는 저장, dedup, 테스트, 운영 로그에서 모두 사람이 이해하는 원본 ID여야 합니다.
+         * - features JSON의 `orig_id`까지 같은 규칙으로 정규화하지 않으면
+         *   snapshot과 vector metadata의 key가 서로 달라질 수 있습니다.
+         *
+         * 이 블록에서 만드는 Map 구조 예시:
+         * ```ts
+         * const nodeMap = new Map<string, AiGraphNodeOutput>([
+         *   [
+         *     'conv-e2e-123',
+         *     {
+         *       id: 7,
+         *       orig_id: 'conv-e2e-123',
+         *       cluster_id: 'cluster_1',
+         *       cluster_name: 'Graph Learning',
+         *       keywords: [],
+         *       top_keywords: ['gnn'],
+         *       timestamp: null,
+         *       num_sections: 2,
+         *       source_type: 'chat',
+         *     },
+         *   ],
+         *   [
+         *     'note-e2e-123',
+         *     {
+         *       id: 8,
+         *       orig_id: 'note-e2e-123',
+         *       cluster_id: 'cluster_1',
+         *       cluster_name: 'Graph Learning',
+         *       keywords: [],
+         *       top_keywords: ['knowledge-graph'],
+         *       timestamp: null,
+         *       num_sections: 1,
+         *       source_type: 'markdown',
+         *     },
+         *   ],
+         * ]);
+         * ```
+         *
+         * 내부 처리 흐름:
+         * 1. AI graph JSON의 각 `node.orig_id`를 정규화합니다.
+         * 2. AI features JSON의 각 `conv.orig_id`도 같은 규칙으로 정규화합니다.
+         * 3. 정규화된 graph JSON으로 snapshot을 생성합니다.
+         * 4. 정규화된 `orig_id`를 key로 `nodeMap`을 구성합니다.
+         * 5. vector metadata도 동일한 normalized origId를 사용하게 맞춥니다.
+         * 6. raw/normalized 샘플을 로그에 남겨, 추후 runtime 로그와 DB 상태를 대조할 수 있게 합니다.
+         */
+        let strippedOrigIdCount = 0;
+        const normalizedAiGraphOutput: AiGraphOutputDto = {
+          ...aiGraphOutput,
+          nodes: aiGraphOutput.nodes.map((node) => {
+            const normalized: NormalizedAiOrigId = normalizeAiOrigId(node.orig_id);
+            if (normalized.strippedSourcePrefix) strippedOrigIdCount++;
+
+            return {
+              ...node,
+              orig_id: normalized.normalizedOrigId,
+            };
+          }),
+        };
+        const normalizedFeaturesJson = featuresJson
+          ? {
+              ...featuresJson,
+              conversations: featuresJson.conversations.map((conv) => ({
+                ...conv,
+                orig_id: normalizeAiOrigId(conv.orig_id).normalizedOrigId,
+              })),
+            }
+          : null;
+
+        logger.info(
+          {
+            taskId,
+            userId,
+            nodeCount: aiGraphOutput.nodes.length,
+            strippedOrigIdCount,
+            sampleNodeIds: aiGraphOutput.nodes.slice(0, 3).map((node) => ({
+              graphNodeId: node.id,
+              rawOrigId: node.orig_id,
+              normalizedOrigId: normalizeAiOrigId(node.orig_id).normalizedOrigId,
+            })),
+          },
+          'Normalized AI graph-generation node identifiers before persistence'
+        );
+
+        const snapshot: GraphSnapshotDto = mapAiOutputToSnapshot(normalizedAiGraphOutput, userId);
         const persistPayload: PersistGraphPayloadDto = {
           userId,
           snapshot,
@@ -111,20 +223,20 @@ export class GraphGenerationResultHandler implements JobHandler {
         saveTasks.push(graphService.persistSnapshot(persistPayload));
 
         // 3.2. Vector DB 저장 (옵션 작업, 실패 시 메인 동작에 영향 없는 Non-fatal)
-        if (featuresJson) {
+        if (normalizedFeaturesJson) {
           saveTasks.push(
             (async () => {
               try {
                 const graphVectorService = container.getGraphVectorService();
 
                 // Mapping: orig_id -> Node Info
-                const nodeMap = new Map<string, (typeof aiGraphOutput.nodes)[0]>();
-                aiGraphOutput.nodes.forEach((node) => {
+                const nodeMap = new Map<string, (typeof normalizedAiGraphOutput.nodes)[0]>();
+                normalizedAiGraphOutput.nodes.forEach((node) => {
                   if (node.orig_id) nodeMap.set(node.orig_id, node);
                 });
 
-                const vectorItems = featuresJson.conversations.map((conv, idx) => {
-                  const vector = featuresJson.embeddings[idx];
+                const vectorItems = normalizedFeaturesJson.conversations.map((conv, idx) => {
+                  const vector = normalizedFeaturesJson.embeddings[idx];
                   const nodeInfo = nodeMap.get(conv.orig_id);
 
                   const clusterId = nodeInfo?.cluster_id || 'unknown';
