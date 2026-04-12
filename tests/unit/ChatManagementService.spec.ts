@@ -375,6 +375,11 @@ class InMemoryGraphRepo implements GraphDocumentStore {
   async upsertNode(node: GraphNodeDoc, _options?: RepoOptions): Promise<void> {
     this.nodes.set(node.id, node);
   }
+  async upsertNodes(nodes: GraphNodeDoc[], _options?: RepoOptions): Promise<void> {
+    for (const node of nodes) {
+      await this.upsertNode(node, _options);
+    }
+  }
   async updateNode(
     _userId: string,
     _id: number,
@@ -453,6 +458,7 @@ class InMemoryGraphRepo implements GraphDocumentStore {
   async upsertEdge(_edge: GraphEdgeDoc, _options?: RepoOptions): Promise<string> {
     return '';
   }
+  async upsertEdges(_edges: GraphEdgeDoc[], _options?: RepoOptions): Promise<void> {}
   async deleteEdge(
     _userId: string,
     _edgeId: string,
@@ -477,6 +483,7 @@ class InMemoryGraphRepo implements GraphDocumentStore {
     return [];
   }
   async upsertCluster(_cluster: GraphClusterDoc, _options?: RepoOptions): Promise<void> {}
+  async upsertClusters(_clusters: GraphClusterDoc[], _options?: RepoOptions): Promise<void> {}
   async deleteCluster(
     _userId: string,
     _clusterId: string,
@@ -495,6 +502,10 @@ class InMemoryGraphRepo implements GraphDocumentStore {
     return [];
   }
   async upsertSubcluster(_subcluster: GraphSubclusterDoc, _options?: RepoOptions): Promise<void> {}
+  async upsertSubclusters(
+    _subclusters: GraphSubclusterDoc[],
+    _options?: RepoOptions
+  ): Promise<void> {}
   async deleteSubcluster(
     _userId: string,
     _subclusterId: string,
