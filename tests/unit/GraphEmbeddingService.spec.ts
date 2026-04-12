@@ -56,10 +56,12 @@ describe('GraphEmbeddingService', () => {
 
     mockConversationService = {
       findDocsByIds: jest.fn(),
+      countConversations: jest.fn(),
     } as unknown as jest.Mocked<ConversationService>;
 
     mockNoteService = {
       getNoteDoc: jest.fn(),
+      countNotes: jest.fn(),
     } as unknown as jest.Mocked<NoteService>;
 
     service = new GraphEmbeddingService(
@@ -202,9 +204,23 @@ describe('GraphEmbeddingService', () => {
       expect(mockGraphService.upsertGraphSummary).toHaveBeenCalledWith('u1', summary);
     });
 
-    it('getGraphSummary delegates', async () => {
-      await service.getGraphSummary('u1');
+    it('getGraphSummary merges live counts into summary overview', async () => {
+      mockGraphService.getGraphSummary.mockResolvedValue({
+        overview: {
+          total_conversations: 0,
+          total_notes: 0,
+        },
+      } as any);
+      mockConversationService.countConversations.mockResolvedValue(7 as never);
+      mockNoteService.countNotes.mockResolvedValue(3 as never);
+
+      const result = await service.getGraphSummary('u1');
+
       expect(mockGraphService.getGraphSummary).toHaveBeenCalledWith('u1');
+      expect(mockConversationService.countConversations).toHaveBeenCalledWith('u1');
+      expect(mockNoteService.countNotes).toHaveBeenCalledWith('u1');
+      expect(result.overview.total_conversations).toBe(7);
+      expect(result.overview.total_notes).toBe(3);
     });
   });
 

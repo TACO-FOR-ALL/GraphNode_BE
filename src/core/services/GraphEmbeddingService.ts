@@ -657,7 +657,21 @@ export class GraphEmbeddingService {
    * @param userId 사용자 Id
    */
   async getGraphSummary(userId: string) {
-    return this.graphManagementService.getGraphSummary(userId);
+    const summary = await this.graphManagementService.getGraphSummary(userId);
+
+    const [conversationCount, noteCount] = await Promise.all([
+      this.conversationService?.countConversations(userId) ?? Promise.resolve(0),
+      this.noteService?.countNotes(userId) ?? Promise.resolve(0),
+    ]);
+
+    return {
+      ...summary,
+      overview: {
+        ...summary.overview,
+        total_conversations: conversationCount,
+        total_notes: noteCount,
+      },
+    };
   }
 
   /**

@@ -320,11 +320,7 @@ export class Container {
    */
   getGraphManagementService(): GraphManagementService {
     if (!this.graphManagementService) {
-      const raw = new GraphManagementService(
-        this.getGraphDocumentStore(),
-        this.getConversationService(),
-        this.getNoteService()
-      );
+      const raw = new GraphManagementService(this.getGraphDocumentStore());
       this.graphManagementService = createAuditProxy(raw, 'GraphManagementService');
     }
     return this.graphManagementService;

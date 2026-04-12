@@ -550,7 +550,7 @@ describe('ChatManagementService', () => {
       countNotes: jest.fn(),
       getNoteDoc: jest.fn(),
     } as any;
-    graphSvc = new GraphManagementService(graphRepo, convSvc, mockNoteSvc);
+    graphSvc = new GraphManagementService(graphRepo);
     chatSvc = new ChatManagementService(convSvc, msgSvc, graphSvc);
   });
 
