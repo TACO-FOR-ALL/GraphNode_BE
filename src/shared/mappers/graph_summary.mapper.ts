@@ -44,7 +44,10 @@ export function toGraphSummaryDto(doc: GraphSummaryDoc): GraphSummaryDto {
   return {
     overview: {
       // DB/AI: total_source_nodes → FE: total_conversations (FE SDK 필드명 유지)
-      total_conversations: doc.overview.total_source_nodes,
+      // FIXME : 이거 카운트 제대로 되게 수정 필요함
+      total_conversations: doc.overview.total_conversations || 0,
+      total_notes: doc.overview.total_notes || 0,
+      total_notions: doc.overview.total_notions || 0,
       time_span: doc.overview.time_span,
       primary_interests: doc.overview.primary_interests,
       conversation_style: doc.overview.conversation_style,
@@ -76,7 +79,9 @@ export function toGraphSummaryDto(doc: GraphSummaryDoc): GraphSummaryDto {
 export function createEmptyGraphSummaryDto(): GraphSummaryDto {
   return {
     overview: {
-      total_conversations: 0,   // FE SDK 필드명 유지
+      total_conversations: 0, // FE SDK 필드명 유지
+      total_notes: 0,
+      total_notions: 0,
       time_span: '',
       primary_interests: [],
       conversation_style: '',
@@ -87,7 +92,7 @@ export function createEmptyGraphSummaryDto(): GraphSummaryDto {
     patterns: [],
     connections: [],
     recommendations: [],
-    generated_at: new Date().toISOString(),  // FE SDK: snake_case
-    detail_level: 'standard',               // GraphSummaryDoc.detail_level Union 기본값
+    generated_at: new Date().toISOString(), // FE SDK: snake_case
+    detail_level: 'standard', // GraphSummaryDoc.detail_level Union 기본값
   };
 }

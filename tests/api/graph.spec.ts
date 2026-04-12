@@ -71,6 +71,11 @@ jest.mock('../../src/infra/repositories/GraphRepositoryMongo', () => ({
     async upsertNode(doc: GraphNodeDoc) {
       nodesStore.set(doc.id, { ...doc });
     }
+    async upsertNodes(docs: GraphNodeDoc[]) {
+      for (const doc of docs) {
+        await this.upsertNode(doc);
+      }
+    }
     async updateNode(userId: string, id: number, patch: Partial<GraphNodeDoc>) {
       const n = nodesStore.get(id);
       if (n && n.userId === userId) {
@@ -108,6 +113,11 @@ jest.mock('../../src/infra/repositories/GraphRepositoryMongo', () => ({
       edgesStore.set(doc.id, { ...doc });
       return doc.id;
     }
+    async upsertEdges(docs: GraphEdgeDoc[]) {
+      for (const doc of docs) {
+        await this.upsertEdge(doc);
+      }
+    }
     async deleteEdge(userId: string, edgeId: string) {
       const e = edgesStore.get(edgeId);
       if (e && e.userId === userId) edgesStore.delete(edgeId);
@@ -134,6 +144,11 @@ jest.mock('../../src/infra/repositories/GraphRepositoryMongo', () => ({
     async upsertCluster(doc: GraphClusterDoc) {
       clustersStore.set(doc.id, { ...doc });
     }
+    async upsertClusters(docs: GraphClusterDoc[]) {
+      for (const doc of docs) {
+        await this.upsertCluster(doc);
+      }
+    }
     async deleteCluster(userId: string, clusterId: string) {
       const c = clustersStore.get(clusterId);
       if (c && c.userId === userId) clustersStore.delete(clusterId);
@@ -149,6 +164,11 @@ jest.mock('../../src/infra/repositories/GraphRepositoryMongo', () => ({
     // --- Subclusters ---
     async upsertSubcluster(doc: GraphSubclusterDoc) {
         subclustersStore.set(doc.id, { ...doc });
+    }
+    async upsertSubclusters(docs: GraphSubclusterDoc[]) {
+        for (const doc of docs) {
+            await this.upsertSubcluster(doc);
+        }
     }
     async deleteSubcluster(userId: string, id: string) {
         const s = subclustersStore.get(id);

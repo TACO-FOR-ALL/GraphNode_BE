@@ -78,6 +78,14 @@ export class NoteRepositoryMongo implements NoteRepository {
    * @param ownerUserId 소유자 사용자 ID
    * @returns 노트 문서 또는 null
    */
+  async countByOwner(ownerUserId: string): Promise<number> {
+    try {
+      return await this.notesCol().countDocuments({ ownerUserId, deletedAt: null });
+    } catch (err: unknown) {
+      this.handleError('NoteRepositoryMongo.countByOwner', err);
+    }
+  }
+
   async getNote(id: string, ownerUserId: string, includeDeleted: boolean = false): Promise<NoteDoc | null> {
     try {
       const filter: any = { _id: id, ownerUserId };

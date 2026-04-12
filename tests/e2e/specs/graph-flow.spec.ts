@@ -222,6 +222,30 @@ describe('End-to-End Graph Flow', () => {
 
     expect(isFinished).toBe(true);
     console.log('\nGraph summary confirmed in DB.');
+
+    // 3. 요약 통계 수치 검증 (total_conversations, total_notes, total_notions)
+    const finalMongoClient = new MongoClient(MONGO_URI);
+    await finalMongoClient.connect();
+    const finalDb = finalMongoClient.db();
+    try {
+      const summary = await finalDb.collection('graph_summaries').findOne({ userId });
+      expect(summary).toBeTruthy();
+      expect(summary?.overview).toBeTruthy();
+
+      const actualConversations = await finalDb.collection('conversations').countDocuments({ ownerUserId: userId });
+      const actualNotes = await finalDb.collection('notes').countDocuments({ ownerUserId: userId, deletedAt: null });
+
+      console.log(`\n[Summary Verification]`);
+      console.log(`- Total Conversations: actual=${actualConversations}, summary=${summary?.overview.total_conversations}`);
+      console.log(`- Total Notes: actual=${actualNotes}, summary=${summary?.overview.total_notes}`);
+      console.log(`- Total Notions: summary=${summary?.overview.total_notions}`);
+
+      expect(summary?.overview.total_conversations).toBe(actualConversations);
+      expect(summary?.overview.total_notes).toBe(actualNotes);
+      expect(typeof summary?.overview.total_notions).toBe('number');
+    } finally {
+      await finalMongoClient.close();
+    }
   });
 
   it('Scenario 3: Add Node to existing Graph (Conversation + Note)', async () => {

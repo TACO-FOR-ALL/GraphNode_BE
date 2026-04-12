@@ -108,6 +108,7 @@ describe('GraphAi API Integration Tests', () => {
 
     const mockConvRepo = {
         create: jest.fn(async (conv: any) => { conversationsStore.set(conv._id, conv); return conv; }),
+        countByOwner: jest.fn(async (uid: string) => Array.from(conversationsStore.values()).filter(c => c.ownerUserId === uid).length),
         findById: jest.fn(async (id: string) => conversationsStore.get(id) || null),
         listByOwner: jest.fn(async (uid: string, limit: number) => ({ items: Array.from(conversationsStore.values()).filter(c => c.ownerUserId === uid).slice(0, limit), nextCursor: null })),
     };
@@ -147,6 +148,7 @@ describe('GraphAi API Integration Tests', () => {
     const notesStore = new Map<string, any>();
     const mockNoteRepo = {
         createNote: jest.fn(async (note: any) => { notesStore.set(note._id, note); return note; }),
+        countByOwner: jest.fn(async (uid: string) => Array.from(notesStore.values()).filter(n => n.ownerUserId === uid).length),
         findNotesModifiedSince: jest.fn(async (uid: string, since: Date) => Array.from(notesStore.values()).filter(n => n.ownerUserId === uid)),
         listNotes: jest.fn(async (uid: string, folderId: string | null, limit: number) => ({ items: Array.from(notesStore.values()).filter(n => n.ownerUserId === uid).slice(0, limit), nextCursor: null })),
         deleteAllNotes: jest.fn(async (uid: string) => { 

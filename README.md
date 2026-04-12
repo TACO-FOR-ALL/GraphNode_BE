@@ -190,6 +190,7 @@ infisical run --env=prod -- npm start
 
 - **[Code Style & Contribution Guide](docs/architecture/CODE_STYLE.md)**: 네이밍 컨벤션, 아키텍처 패턴, 에러 핸들링 규칙 등
 - **[Daily Dev Logs](docs/guides/Daily)**: 일별 작업 상세 기록
+  - [2026-04-12 지식 그래프 요약 통계 정보 확장 (total_notes, total_notions)](docs/guides/Daily/20260412-graph-summary-statistics.md)
   - [2026-04-08 대화 목록 조회 성능 최적화 및 N+1 문제 해결](docs/guides/Daily/20260408-conversation-list-perf-optimization.md)
   - [2026-04-05 PostHog 분석 최적화 및 익명 사용자 식별 강화](docs/guides/Daily/20260405-posthog-optimization-guest-id.md)
   - [2026-04-05 PostHog API 감사 시스템 구축 및 문서화](docs/guides/Daily/20260405-posthog-api-auditing-implementation.md)

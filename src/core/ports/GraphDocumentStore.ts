@@ -20,6 +20,18 @@ export interface RepoOptions {
 export interface GraphDocumentStore {
   // --- 노드(Node) 관련 메서드 ---
   upsertNode(node: GraphNodeDoc, options?: RepoOptions): Promise<void>;
+  /**
+   * 여러 그래프 노드를 한 번의 bulkWrite로 생성 또는 갱신합니다.
+   *
+   * @param nodes 저장할 노드 문서 배열
+   * @param options (선택) 트랜잭션 세션 등 저장 옵션
+   * @returns Promise<void>
+   * @remarks
+   * - 각 문서는 `(id, userId)`를 기준으로 upsert 됩니다.
+   * - `createdAt`은 신규 삽입 시에만 설정되고, `updatedAt`은 매 호출 시 갱신됩니다.
+   * - 입력 배열이 비어 있으면 구현체는 no-op으로 처리할 수 있습니다.
+   */
+  upsertNodes(nodes: GraphNodeDoc[], options?: RepoOptions): Promise<void>;
   updateNode(
     userId: string,
     id: number,
@@ -52,6 +64,18 @@ export interface GraphDocumentStore {
 
   // --- 엣지(Edge) 관련 메서드 ---
   upsertEdge(edge: GraphEdgeDoc, options?: RepoOptions): Promise<string>;
+  /**
+   * 여러 그래프 엣지를 한 번의 bulkWrite로 생성 또는 갱신합니다.
+   *
+   * @param edges 저장할 엣지 문서 배열
+   * @param options (선택) 트랜잭션 세션 등 저장 옵션
+   * @returns Promise<void>
+   * @remarks
+   * - 각 문서는 `(id, userId)`를 기준으로 upsert 됩니다.
+   * - `createdAt`은 신규 삽입 시에만 설정되고, `updatedAt`은 매 호출 시 갱신됩니다.
+   * - 구현체는 self-loop 등 저장 불가 조건을 사전에 검증해야 합니다.
+   */
+  upsertEdges(edges: GraphEdgeDoc[], options?: RepoOptions): Promise<void>;
   deleteEdge(
     userId: string,
     edgeId: string,
@@ -76,6 +100,17 @@ export interface GraphDocumentStore {
 
   // --- 클러스터(Cluster) 관련 메서드 ---
   upsertCluster(cluster: GraphClusterDoc, options?: RepoOptions): Promise<void>;
+  /**
+   * 여러 그래프 클러스터를 한 번의 bulkWrite로 생성 또는 갱신합니다.
+   *
+   * @param clusters 저장할 클러스터 문서 배열
+   * @param options (선택) 트랜잭션 세션 등 저장 옵션
+   * @returns Promise<void>
+   * @remarks
+   * - 각 문서는 `(id, userId)`를 기준으로 upsert 됩니다.
+   * - `createdAt`은 신규 삽입 시에만 설정되고, `updatedAt`은 매 호출 시 갱신됩니다.
+   */
+  upsertClusters(clusters: GraphClusterDoc[], options?: RepoOptions): Promise<void>;
   deleteCluster(
     userId: string,
     clusterId: string,
@@ -88,6 +123,17 @@ export interface GraphDocumentStore {
 
   // Subclusters
   upsertSubcluster(subcluster: GraphSubclusterDoc, options?: RepoOptions): Promise<void>;
+  /**
+   * 여러 그래프 서브클러스터를 한 번의 bulkWrite로 생성 또는 갱신합니다.
+   *
+   * @param subclusters 저장할 서브클러스터 문서 배열
+   * @param options (선택) 트랜잭션 세션 등 저장 옵션
+   * @returns Promise<void>
+   * @remarks
+   * - 각 문서는 `(id, userId)`를 기준으로 upsert 됩니다.
+   * - `createdAt`은 신규 삽입 시에만 설정되고, `updatedAt`은 매 호출 시 갱신됩니다.
+   */
+  upsertSubclusters(subclusters: GraphSubclusterDoc[], options?: RepoOptions): Promise<void>;
   deleteSubcluster(
     userId: string,
     subclusterId: string,

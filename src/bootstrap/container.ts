@@ -334,7 +334,9 @@ export class Container {
       // Inject GraphManagementService (Mongo)
       const raw = new GraphEmbeddingService(
         this.getGraphManagementService(),
-        this.getVectorStore()
+        this.getVectorStore(),
+        this.getConversationService(),
+        this.getNoteService()
       );
       this.graphEmbeddingService = createAuditProxy(raw, 'GraphEmbeddingService');
     }

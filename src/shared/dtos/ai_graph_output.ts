@@ -8,6 +8,9 @@
 export interface OverviewSection {
   /** Python AI 서버(discovery/schema.py)의 실제 출력 필드명. total_source_nodes = 분석에 사용된 소스 노드 수 */
   total_source_nodes: number;
+  total_conversations?: number;
+  total_notes?: number;
+  total_notions?: number;
   time_span: string; // "YYYY-MM-DD ~ YYYY-MM-DD" or "N/A"
   primary_interests: string[];
   conversation_style: string;
@@ -127,7 +130,7 @@ export interface AiGraphOutputDto {
 /**
  * AddNode 결과 내 개별 클러스터 할당/생성 정보입니다.
  * 기존의 클러스터에 배정되었거나 새로 형성된 클러스터 정보(테마, 이유 등)를 담습니다.
- * 
+ *
  * @property clusterId - 할당된 클러스터 식별자
  * @property isNewCluster - 새로운 클러스터가 생성되었는지 여부
  * @property confidence - 클러스터 배정에 대한 확신도 (최대 1.0)
@@ -183,7 +186,7 @@ export interface AiAddNodeNodeOutput {
 
 /**
  * AI 모듈에서 새로운 노드와 기존 노드 간 연결된 엣지를 반환하는 형태입니다.
- * 
+ *
  * @property source - 엣지의 시작점 (대개 새로 추가되는 대화 노드의 id)
  * @property target - 엣지의 도착점 (클러스터 내의 후보군 기존 노드 id)
  * @property weight - 두 노드 간의 코사인 유사도 등에 기반한 가중치
@@ -191,7 +194,7 @@ export interface AiAddNodeNodeOutput {
  * @property intraCluster - 같은 클러스터 내부인지 여부 (통상 true)
  */
 export interface AiAddNodeEdgeOutput {
-  source: string;     // Uses record_id
+  source: string; // Uses record_id
   target: string | number; // the id of the target node in DB (could be number)
   weight: number;
   type: string;
@@ -265,7 +268,7 @@ export interface AiAddNodeBatchResult {
 
 /**
  * AI 서버의 Microscope Ingest 프로세스 완료 후 응답되는 DTO 형식입니다.
- * 
+ *
  * @property user_id - 요청자 ID
  * @property group_id - 요청 그룹 ID
  * @property status - 처리 상태 ("COMPLETED" 또는 "FAILED")
@@ -289,7 +292,7 @@ export interface AiMicroscopeIngestResult {
  * AI 서버의 standardized.json 다운로드 결과 내 개별 청크(배치) 그래프 구조입니다.
  * 긴 문서를 처리할 때 배열로 분할(chunking)하여 각각의 구간에서 추출된 graph 쌍이 리스트 요소로 응답됩니다.
  * (AI 모델이 식별자 id를 부여하지 않기 때문에 id 필드는 존재하지 않습니다.)
- * 
+ *
  * @property nodes - 해당 청크에서 추출되고 규격화된 노드 배열
  *   - name: 노드명
  *   - type: 메타데이터 타입 (예: Paper, Method, Tool 등)
@@ -321,4 +324,3 @@ export interface AiMicroscopeIngestResultItem {
     confidence?: number;
   }[];
 }
-

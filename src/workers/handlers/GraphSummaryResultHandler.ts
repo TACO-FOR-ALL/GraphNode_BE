@@ -7,6 +7,8 @@ import { JobHandler } from './JobHandler';
 import { GraphSummary } from '../../shared/dtos/ai_graph_output';
 import { GraphSummaryDoc } from '../../core/types/persistence/graph.persistence';
 import { withRetry } from '../../shared/utils/retry';
+import { countSourceTypesFromNodeList } from '../utils/countSourceTypes';
+import { GraphNodeDto } from '../../shared/dtos/graph';
 
 export class GraphSummaryResultHandler implements JobHandler {
   async handle(message: QueueMessage, container: Container): Promise<void> {
@@ -22,10 +24,10 @@ export class GraphSummaryResultHandler implements JobHandler {
     try {
       if (status === 'FAILED') {
         logger.error({ taskId, userId, error }, 'Graph summary generation failed');
-        
+
         // 실패 notification 전달
         await notiService.sendGraphSummaryFailed(userId, taskId, error || 'Unknown error');
-        
+
         await notiService.sendFcmPushNotification(
           userId,
           'Graph Generation Failed',
@@ -44,6 +46,17 @@ export class GraphSummaryResultHandler implements JobHandler {
           async () => await storagePort.downloadJson<GraphSummary>(summaryS3Key),
           { label: 'GraphSummaryResultHandler.downloadJson.summary' }
         );
+
+        //사용자의 Node 목록 조회
+        const nodeList: GraphNodeDto[] = await graphService.listNodes(userId);
+
+        // SnapShot 정보 통해서 chat, note, notion 개수 계산
+        const { chatCount, noteCount, notionCount } = countSourceTypesFromNodeList(nodeList);
+
+        // Chat Cnt, Note Cnt, Notion Cnt 계산 된 값으로 덮어쓰기
+        summaryJson.overview.total_conversations = chatCount;
+        summaryJson.overview.total_notes = noteCount;
+        summaryJson.overview.total_notions = notionCount;
 
         // 2. Persist to DB
         // Map snake_case contract to internal CamelCase persistence doc
@@ -73,15 +86,10 @@ export class GraphSummaryResultHandler implements JobHandler {
 
         // 3. Send Notification
         await notiService.sendGraphSummaryCompleted(userId, taskId);
-        await notiService.sendFcmPushNotification(
-          userId,
-          'Graph Ready',
-          'Your graph is ready',
-          {
-            taskId,
-            status: 'COMPLETED',
-          }
-        );
+        await notiService.sendFcmPushNotification(userId, 'Graph Ready', 'Your graph is ready', {
+          taskId,
+          status: 'COMPLETED',
+        });
       }
     } catch (err) {
       logger.error({ err, taskId, userId }, 'Error processing graph summary result');
