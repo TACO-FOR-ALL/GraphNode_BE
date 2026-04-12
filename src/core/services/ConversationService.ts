@@ -24,6 +24,7 @@ import { ChatThread } from '../../shared/dtos/ai';
 import { ConversationDoc } from '../types/persistence/ai.persistence';
 import { toChatThreadDto, toConversationDoc } from '../../shared/mappers/ai';
 import { UpstreamError, ValidationError, NotFoundError } from '../../shared/errors/domain';
+import { withRetry } from '../../shared/utils/retry';
 
 /**
  * 모듈: ConversationService (대화 서비스)
@@ -83,6 +84,27 @@ export class ConversationService {
     } catch (err: unknown) {
       this.checkTransactionError(err);
       throw new UpstreamError('Failed to create conversation', { cause: err as any });
+    }
+  }
+
+  /**
+   * 사용자가 가진 Conversation의 개수를 세서 반환하는 메서드
+   * @param userId 소유자 ID
+   * @returns Conversation의 개수
+   */
+  async countConversations(userId: string): Promise<number> {
+    try {
+      const conversationCnt = await withRetry(
+        async () => await this.conversationRepo.countByOwner(userId),
+        { label: 'ConversationService.countConversations' }
+      );
+      if (conversationCnt == null) {
+        throw new UpstreamError('ConversationRepository.countByOwner returned null');
+      }
+      return conversationCnt;
+    } catch (err: unknown) {
+      this.checkTransactionError(err);
+      throw new UpstreamError('Failed to count conversations', { cause: err as any });
     }
   }
 
@@ -348,7 +370,6 @@ export class ConversationService {
     return this.conversationRepo.deleteByIds(ids, session);
   }
 
-
   /**
    * 트랜잭션 관련 에러를 체크합니다.
    * @param err 에러
@@ -364,6 +385,4 @@ export class ConversationService {
     const e: any = err;
     if (e && typeof e.code === 'string') throw err;
   }
-
-
 }

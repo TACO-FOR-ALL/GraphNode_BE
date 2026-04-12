@@ -8,13 +8,15 @@
       "type": "object",
       "properties": {
         "total_conversations": { "type": "integer" },
+        "total_notes": { "type": "integer" },
+        "total_notions": { "type": "integer" },
         "time_span": { "type": "string" },
         "primary_interests": { "type": "array", "items": { "type": "string" } },
         "conversation_style": { "type": "string" },
         "most_active_period": { "type": "string" },
         "summary_text": { "type": "string" }
       },
-      "required": ["total_conversations", "time_span", "primary_interests", "conversation_style", "most_active_period", "summary_text"]
+      "required": ["total_conversations", "total_notes", "total_notions", "time_span", "primary_interests", "conversation_style", "most_active_period", "summary_text"]
     },
     "clusters": {
       "type": "array",

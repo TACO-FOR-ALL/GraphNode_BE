@@ -90,6 +90,14 @@ export class ConversationRepositoryMongo implements ConversationRepository {
    * @param session (선택) 트랜잭션 세션
    * @returns 대화 문서 또는 null
    */
+  async countByOwner(ownerUserId: string): Promise<number> {
+    try {
+      return await this.col().countDocuments({ ownerUserId, deletedAt: null });
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.countByOwner', err);
+    }
+  }
+
   async findById(
     id: string,
     ownerUserId: string,

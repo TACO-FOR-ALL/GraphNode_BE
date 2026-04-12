@@ -31,6 +31,12 @@ class InMemoryConvRepo implements ConversationRepository {
     return docs;
   }
 
+  async countByOwner(ownerUserId: string): Promise<number> {
+    return Array.from(this.data.values()).filter(
+      (doc) => doc.ownerUserId === ownerUserId && doc.deletedAt == null
+    ).length;
+  }
+
   async findById(
     id: string,
     ownerUserId: string,
@@ -167,6 +173,16 @@ describe('ConversationService', () => {
   });
 
   describe('External DTO Methods', () => {
+    test('countConversations returns active conversation count', async () => {
+      await svc.createConversation('u1', 'c1', 'T1');
+      await svc.createConversation('u1', 'c2', 'T2');
+      await svc.createConversation('u2', 'c3', 'T3');
+      await svc.deleteDoc('c2', 'u1', false);
+
+      const count = await svc.countConversations('u1');
+      expect(count).toBe(1);
+    });
+
     test('createConversation returns DTO', async () => {
       const result = await svc.createConversation('u1', 'c1', 'Title');
       expect(result.id).toBe('c1');

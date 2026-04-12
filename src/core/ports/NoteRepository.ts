@@ -33,6 +33,14 @@ export interface NoteRepository {
   createNotes(docs: NoteDoc[], session?: ClientSession): Promise<NoteDoc[]>;
 
   /**
+   * 사용자 기준 활성 note 수를 반환합니다.
+   *
+   * @param ownerUserId 사용자 ID
+   * @returns soft delete 되지 않은 note 개수
+   */
+  countByOwner(ownerUserId: string): Promise<number>;
+
+  /**
    * ID로 노트를 조회합니다.
    * @param id 노트 ID
    * @param ownerUserId 소유자 ID

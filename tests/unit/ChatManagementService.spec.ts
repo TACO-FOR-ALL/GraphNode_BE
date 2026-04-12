@@ -22,6 +22,7 @@ import {
 } from '../../src/core/types/persistence/graph.persistence';
 import { GraphDocumentStore, RepoOptions } from '../../src/core/ports/GraphDocumentStore';
 import { GraphManagementService } from '../../src/core/services/GraphManagementService';
+import { NoteService } from '../../src/core/services/NoteService';
 
 // Mock MongoDB
 jest.mock('../../src/infra/db/mongodb', () => ({
@@ -47,6 +48,12 @@ class InMemoryConvRepo implements ConversationRepository {
   async createMany(docs: ConversationDoc[], session?: ClientSession): Promise<ConversationDoc[]> {
     docs.forEach((doc) => this.data.set(doc._id, doc));
     return docs;
+  }
+
+  async countByOwner(ownerUserId: string): Promise<number> {
+    return Array.from(this.data.values()).filter(
+      (doc) => doc.ownerUserId === ownerUserId && doc.deletedAt == null
+    ).length;
   }
 
   async findById(
@@ -368,6 +375,11 @@ class InMemoryGraphRepo implements GraphDocumentStore {
   async upsertNode(node: GraphNodeDoc, _options?: RepoOptions): Promise<void> {
     this.nodes.set(node.id, node);
   }
+  async upsertNodes(nodes: GraphNodeDoc[], _options?: RepoOptions): Promise<void> {
+    for (const node of nodes) {
+      await this.upsertNode(node, _options);
+    }
+  }
   async updateNode(
     _userId: string,
     _id: number,
@@ -446,6 +458,7 @@ class InMemoryGraphRepo implements GraphDocumentStore {
   async upsertEdge(_edge: GraphEdgeDoc, _options?: RepoOptions): Promise<string> {
     return '';
   }
+  async upsertEdges(_edges: GraphEdgeDoc[], _options?: RepoOptions): Promise<void> {}
   async deleteEdge(
     _userId: string,
     _edgeId: string,
@@ -470,6 +483,7 @@ class InMemoryGraphRepo implements GraphDocumentStore {
     return [];
   }
   async upsertCluster(_cluster: GraphClusterDoc, _options?: RepoOptions): Promise<void> {}
+  async upsertClusters(_clusters: GraphClusterDoc[], _options?: RepoOptions): Promise<void> {}
   async deleteCluster(
     _userId: string,
     _clusterId: string,
@@ -488,6 +502,10 @@ class InMemoryGraphRepo implements GraphDocumentStore {
     return [];
   }
   async upsertSubcluster(_subcluster: GraphSubclusterDoc, _options?: RepoOptions): Promise<void> {}
+  async upsertSubclusters(
+    _subclusters: GraphSubclusterDoc[],
+    _options?: RepoOptions
+  ): Promise<void> {}
   async deleteSubcluster(
     _userId: string,
     _subclusterId: string,
@@ -531,6 +549,7 @@ describe('ChatManagementService', () => {
   let msgSvc: MessageService;
   let graphSvc: GraphManagementService;
   let chatSvc: ChatManagementService;
+  let mockNoteSvc: jest.Mocked<NoteService>;
 
   beforeEach(() => {
     convRepo = new InMemoryConvRepo();
@@ -538,6 +557,10 @@ describe('ChatManagementService', () => {
     graphRepo = new InMemoryGraphRepo();
     convSvc = new ConversationService(convRepo);
     msgSvc = new MessageService(msgRepo);
+    mockNoteSvc = {
+      countNotes: jest.fn(),
+      getNoteDoc: jest.fn(),
+    } as any;
     graphSvc = new GraphManagementService(graphRepo);
     chatSvc = new ChatManagementService(convSvc, msgSvc, graphSvc);
   });

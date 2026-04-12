@@ -20,6 +20,7 @@ export interface GraphNodeDto {
   id: number;
   userId: string;
   origId: string;
+  nodeTitle?: string;
   clusterId: string;
   clusterName: string;
   timestamp: string | null;
@@ -185,10 +186,21 @@ export type SearchNodesResponse = EnrichedNodeResult[];
 
 /**
  * Graph Summary DTO
+ * @public
+ * @property overview 그래프 개요
+ * @property clusters 클러스터 목록
+ * @property patterns 패턴 목록
+ * @property connections 연결 목록
+ * @property recommendations 추천 목록
+ * @property generated_at 생성 일시
+ * @property detail_level 상세 수준
+ * @property deleted_at 삭제 일시
  */
 export interface GraphSummaryDto {
   overview: {
     total_conversations: number;
+    total_notes: number;
+    total_notions: number;
     time_span: string;
     primary_interests: string[];
     conversation_style: string;

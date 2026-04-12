@@ -1,4 +1,4 @@
-import { FindCursor, UpdateResult, WithId } from 'mongodb';
+import { AnyBulkWriteOperation, FindCursor, UpdateResult, WithId } from 'mongodb';
 
 import { GraphDocumentStore, RepoOptions } from '../../core/ports/GraphDocumentStore';
 import {
@@ -59,6 +59,45 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
       );
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.upsertNode', err);
+    }
+  }
+
+  /**
+   * 여러 그래프 노드를 한 번의 bulkWrite로 생성 또는 갱신합니다.
+   *
+   * @param nodes 저장할 노드 문서 배열
+   * @param options (선택) 트랜잭션 세션 등 저장 옵션
+   * @returns Promise<void>
+   * @remarks
+   * - 각 노드는 `(id, userId)`를 기준으로 upsert 됩니다.
+   * - `createdAt`은 신규 삽입 시에만 설정되고, `updatedAt`은 현재 시각으로 일괄 갱신됩니다.
+   * - 입력 배열이 비어 있으면 저장을 건너뜁니다.
+   */
+  async upsertNodes(nodes: GraphNodeDoc[], options?: RepoOptions): Promise<void> {
+    try {
+      if (nodes.length === 0) return;
+
+      const now = new Date().toISOString();
+      const operations: AnyBulkWriteOperation<GraphNodeDoc>[] = nodes.map((node) => {
+        const { createdAt: _c, updatedAt: _u, ...fields } = node;
+        return {
+          updateOne: {
+            filter: { id: node.id, userId: node.userId } as any,
+            update: {
+              $set: { ...(fields as any), updatedAt: now },
+              $setOnInsert: { createdAt: now },
+            },
+            upsert: true,
+          },
+        };
+      });
+
+      await this.graphNodes_col().bulkWrite(operations, {
+        ordered: true,
+        session: options?.session as any,
+      });
+    } catch (err: unknown) {
+      this.handleError('GraphRepositoryMongo.upsertNodes', err);
     }
   }
 
@@ -544,6 +583,53 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   }
 
   /**
+   * 여러 그래프 엣지를 한 번의 bulkWrite로 생성 또는 갱신합니다.
+   *
+   * @param edges 저장할 엣지 문서 배열
+   * @param options (선택) 트랜잭션 세션 등 저장 옵션
+   * @returns Promise<void>
+   * @throws {ValidationError} self-loop 엣지가 포함된 경우
+   * @remarks
+   * - 각 엣지는 `(id, userId)`를 기준으로 upsert 됩니다.
+   * - `createdAt`은 신규 삽입 시에만 설정되고, `updatedAt`은 현재 시각으로 일괄 갱신됩니다.
+   * - 입력 배열이 비어 있으면 저장을 건너뜁니다.
+   */
+  async upsertEdges(edges: GraphEdgeDoc[], options?: RepoOptions): Promise<void> {
+    try {
+      if (edges.length === 0) return;
+
+      for (const edge of edges) {
+        if (edge.source === edge.target) {
+          throw new ValidationError('edge source and target must differ');
+        }
+      }
+
+      const now = new Date().toISOString();
+      const operations: AnyBulkWriteOperation<GraphEdgeDoc>[] = edges.map((edge) => {
+        const { createdAt: _c, updatedAt: _u, ...fields } = edge;
+        return {
+          updateOne: {
+            filter: { id: edge.id, userId: edge.userId } as any,
+            update: {
+              $set: { ...(fields as any), updatedAt: now },
+              $setOnInsert: { createdAt: now },
+            },
+            upsert: true,
+          },
+        };
+      });
+
+      await this.graphEdges_col().bulkWrite(operations, {
+        ordered: true,
+        session: options?.session as any,
+      });
+    } catch (err: unknown) {
+      if (err instanceof ValidationError) throw err;
+      this.handleError('GraphRepositoryMongo.upsertEdges', err);
+    }
+  }
+
+  /**
    * 특정 엣지를 ID로 삭제합니다.
    * @param userId 사용자 ID
    * @param edgeId 엣지 ID
@@ -686,6 +772,45 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   }
 
   /**
+   * 여러 그래프 클러스터를 한 번의 bulkWrite로 생성 또는 갱신합니다.
+   *
+   * @param clusters 저장할 클러스터 문서 배열
+   * @param options (선택) 트랜잭션 세션 등 저장 옵션
+   * @returns Promise<void>
+   * @remarks
+   * - 각 클러스터는 `(id, userId)`를 기준으로 upsert 됩니다.
+   * - `createdAt`은 신규 삽입 시에만 설정되고, `updatedAt`은 현재 시각으로 일괄 갱신됩니다.
+   * - 입력 배열이 비어 있으면 저장을 건너뜁니다.
+   */
+  async upsertClusters(clusters: GraphClusterDoc[], options?: RepoOptions): Promise<void> {
+    try {
+      if (clusters.length === 0) return;
+
+      const now = new Date().toISOString();
+      const operations: AnyBulkWriteOperation<GraphClusterDoc>[] = clusters.map((cluster) => {
+        const { createdAt: _c, updatedAt: _u, ...fields } = cluster;
+        return {
+          updateOne: {
+            filter: { id: cluster.id, userId: cluster.userId } as any,
+            update: {
+              $set: { ...(fields as any), updatedAt: now },
+              $setOnInsert: { createdAt: now },
+            },
+            upsert: true,
+          },
+        };
+      });
+
+      await this.graphClusters_col().bulkWrite(operations, {
+        ordered: true,
+        session: options?.session as any,
+      });
+    } catch (err: unknown) {
+      this.handleError('GraphRepositoryMongo.upsertClusters', err);
+    }
+  }
+
+  /**
    * 특정 클러스터를 삭제합니다.
    *
    * @param userId 사용자 ID
@@ -779,6 +904,50 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
       );
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.upsertSubcluster', err);
+    }
+  }
+
+  /**
+   * 여러 그래프 서브클러스터를 한 번의 bulkWrite로 생성 또는 갱신합니다.
+   *
+   * @param subclusters 저장할 서브클러스터 문서 배열
+   * @param options (선택) 트랜잭션 세션 등 저장 옵션
+   * @returns Promise<void>
+   * @remarks
+   * - 각 서브클러스터는 `(id, userId)`를 기준으로 upsert 됩니다.
+   * - `createdAt`은 신규 삽입 시에만 설정되고, `updatedAt`은 현재 시각으로 일괄 갱신됩니다.
+   * - 입력 배열이 비어 있으면 저장을 건너뜁니다.
+   */
+  async upsertSubclusters(
+    subclusters: GraphSubclusterDoc[],
+    options?: RepoOptions
+  ): Promise<void> {
+    try {
+      if (subclusters.length === 0) return;
+
+      const now = new Date().toISOString();
+      const operations: AnyBulkWriteOperation<GraphSubclusterDoc>[] = subclusters.map(
+        (subcluster) => {
+          const { createdAt: _c, updatedAt: _u, ...fields } = subcluster;
+          return {
+            updateOne: {
+              filter: { id: subcluster.id, userId: subcluster.userId } as any,
+              update: {
+                $set: { ...(fields as any), updatedAt: now },
+                $setOnInsert: { createdAt: now },
+              },
+              upsert: true,
+            },
+          };
+        }
+      );
+
+      await this.graphSubclusters_col().bulkWrite(operations, {
+        ordered: true,
+        session: options?.session as any,
+      });
+    } catch (err: unknown) {
+      this.handleError('GraphRepositoryMongo.upsertSubclusters', err);
     }
   }
 
