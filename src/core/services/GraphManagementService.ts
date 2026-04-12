@@ -722,7 +722,7 @@ export class GraphManagementService {
   async getGraphSummary(userId: string): Promise<GraphSummaryDto> {
     try {
       this.assertUser(userId);
-      const doc = await this.repo.getGraphSummary(userId);
+      const doc: GraphSummaryDoc | null = await this.repo.getGraphSummary(userId);
       if (!doc) {
         // Summary 미생성 상태: FE SDK 호환 빈 기본값 반환
         return createEmptyGraphSummaryDto();

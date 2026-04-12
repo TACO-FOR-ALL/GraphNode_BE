@@ -23,6 +23,7 @@ import {
   ResolvedGraphSourceType,
   resolveSourceTypesByOrigIds,
 } from '../utils/sourceTypeResolver';
+import { countSourceTypesFromSnapshot } from '../utils/countSourceTypes';
 
 interface NormalizedGraphOutputResult {
   normalizedAiGraphOutput: AiGraphOutputDto;
@@ -210,6 +211,20 @@ export class GraphGenerationResultHandler implements JobHandler {
             (async () => {
               try {
                 logger.info({ taskId, userId }, 'Processing integrated graph summary from result');
+
+                // GraphSnapshotDto에서, sourceType이 chat, note, notion인 것의 개수를 각각 골라낸다.
+                // 2026_04_12 기준, 임시로 for문 루프 돌려서 메서드로 만들어둠. 나중에 최적화 필요,
+                // FIXME TODO
+
+                const { chatCount, noteCount, notionCount } =
+                  countSourceTypesFromSnapshot(snapshot);
+
+                // Chat Cnt, Note Cnt, Notion Cnt 계산 된 값으로 덮어쓰기
+                summaryJson.overview.total_conversations = chatCount;
+                summaryJson.overview.total_notes = noteCount;
+                summaryJson.overview.total_notions = notionCount;
+
+                // GraphSummaryDoc 생성
                 const summaryDoc: GraphSummaryDoc = {
                   id: ulid(),
                   userId,

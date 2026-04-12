@@ -52,7 +52,7 @@ export interface GraphNodeDto {
   sourceType?: 'chat' | 'markdown' | 'notion';
   /** 임베딩 (선택) */
   embedding?: number[];
-  
+
   /** 키워드 (AI 분석 결과) */
   keywords?: Array<{ term: string; score: number }>;
 
@@ -224,9 +224,23 @@ export interface PersistGraphPayloadDto {
   snapshot: GraphSnapshotDto;
 }
 
+/**
+ * 그래프 요약 DTO.
+ * @public
+ * @param overview 그래프 개요
+ * @param clusters 클러스터 목록
+ * @param patterns 패턴 목록
+ * @param connections 연결 목록
+ * @param recommendations 추천 목록
+ * @param generated_at 생성 일시
+ * @param detail_level 상세 수준
+ * @param deleted_at 삭제 일시
+ */
 export interface GraphSummaryDto {
   overview: {
     total_conversations: number;
+    total_notes: number;
+    total_notions: number;
     time_span: string;
     primary_interests: string[];
     conversation_style: string;

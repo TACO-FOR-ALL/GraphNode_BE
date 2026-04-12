@@ -569,6 +569,9 @@ export class GraphEmbeddingService {
 
   /**
    * 그래프 요약/인사이트 저장 (Delegation)
+   *
+   * @param userId 사용자 Id
+   * @param summary
    */
   async upsertGraphSummary(userId: string, summary: GraphSummaryDoc) {
     return this.graphManagementService.upsertGraphSummary(userId, summary);
@@ -576,6 +579,8 @@ export class GraphEmbeddingService {
 
   /**
    * 그래프 요약/인사이트 조회 (Delegation)
+   *
+   * @param userId 사용자 Id
    */
   async getGraphSummary(userId: string) {
     return this.graphManagementService.getGraphSummary(userId);
@@ -583,11 +588,19 @@ export class GraphEmbeddingService {
 
   /**
    * 그래프 요약/인사이트 삭제 (Delegation)
+   *
+   * @param userId 사용자 Id
+   * @param permanent 영구 삭제 여부
    */
   async deleteGraphSummary(userId: string, permanent?: boolean) {
     return this.graphManagementService.deleteGraphSummary(userId, permanent);
   }
 
+  /**
+   * 그래프 요약/인사이트 복원 (Delegation)
+   *
+   * @param _userId 사용자 Id
+   */
   async restoreGraphSummary(_userId: string) {
     // [Hard Delete Policy] Restore is no longer supported
     throw new UpstreamError('Restore is not supported in hard-delete only mode');
