@@ -561,6 +561,9 @@ export class GraphEmbeddingService {
       await withRetry(
         async () => {
           await session.withTransaction(async () => {
+            await this.graphManagementService.persistSnapshotBulk(payload, { session });
+            return;
+            /*
             const { userId, snapshot } = payload;
 
             // subclusters가 undefined일 경우 빈 배열로 처리
@@ -600,6 +603,7 @@ export class GraphEmbeddingService {
               })
             );
             await this.graphManagementService.saveStats({ ...snapshot.stats, userId }, { session });
+            */
           });
         },
         { label: 'GraphEmbeddingService.persistSnapshot.transaction' }
