@@ -31,6 +31,8 @@ import {
   GraphSubclusterDoc,
   GraphSummaryDoc,
 } from '../types/persistence/graph.persistence';
+import { ConversationService } from './ConversationService';
+import { NoteService } from './NoteService';
 
 /**
  * 모듈: GraphManagementService (그래프 서비스)
@@ -41,7 +43,11 @@ import {
  * - GraphStore(Port)를 통해 DB 작업을 수행하며, 이 과정에서 Mapper를 사용해 DTO <-> Doc 변환을 수행합니다.
  */
 export class GraphManagementService {
-  constructor(private readonly repo: GraphDocumentStore) {}
+  constructor(
+    private readonly repo: GraphDocumentStore,
+    private readonly conversationService: ConversationService,
+    private readonly noteService: NoteService
+  ) {}
 
   /**
    * 노드 생성 또는 업데이트 (Upsert)
@@ -727,6 +733,17 @@ export class GraphManagementService {
         // Summary 미생성 상태: FE SDK 호환 빈 기본값 반환
         return createEmptyGraphSummaryDto();
       }
+
+      // 조회 시 실제 데이터 기반으로 돌려줄 수 있도록, Conversation, NoteService 통해서 실제 개수 구해오는 작업 필요?
+      // FIXME
+
+      const conversationCount = await this.conversationService.countConversations(userId);
+      const noteCount = await this.noteService.countNotes(userId);
+
+      // TODO: conversation, note 개수 업데이트(2026-04-13), 이후 Notion에 대해서도 처리 필요
+      doc.overview.total_conversations = conversationCount;
+      doc.overview.total_notes = noteCount;
+
       // DB Doc → FE DTO 변환 (필드명 매핑 포함)
       return toGraphSummaryDto(doc);
     } catch (err: unknown) {

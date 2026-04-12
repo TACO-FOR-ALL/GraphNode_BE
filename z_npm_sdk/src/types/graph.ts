@@ -20,6 +20,7 @@ export interface GraphNodeDto {
   id: number;
   userId: string;
   origId: string;
+  nodeTitle?: string;
   clusterId: string;
   clusterName: string;
   timestamp: string | null;

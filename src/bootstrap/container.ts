@@ -320,7 +320,11 @@ export class Container {
    */
   getGraphManagementService(): GraphManagementService {
     if (!this.graphManagementService) {
-      const raw = new GraphManagementService(this.getGraphDocumentStore());
+      const raw = new GraphManagementService(
+        this.getGraphDocumentStore(),
+        this.getConversationService(),
+        this.getNoteService()
+      );
       this.graphManagementService = createAuditProxy(raw, 'GraphManagementService');
     }
     return this.graphManagementService;
@@ -334,7 +338,9 @@ export class Container {
       // Inject GraphManagementService (Mongo)
       const raw = new GraphEmbeddingService(
         this.getGraphManagementService(),
-        this.getVectorStore()
+        this.getVectorStore(),
+        this.getConversationService(),
+        this.getNoteService()
       );
       this.graphEmbeddingService = createAuditProxy(raw, 'GraphEmbeddingService');
     }

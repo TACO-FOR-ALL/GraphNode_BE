@@ -5,10 +5,14 @@ import { GraphDocumentStore } from '../../src/core/ports/GraphDocumentStore';
 import { GraphNodeDto, GraphEdgeDto, GraphStatsDto } from '../../src/shared/dtos/graph';
 import { ValidationError, UpstreamError } from '../../src/shared/errors/domain';
 import { GraphNodeDoc } from '../../src/core/types/persistence/graph.persistence';
+import { ConversationService } from '../../src/core/services/ConversationService';
+import { NoteService } from '../../src/core/services/NoteService';
 
 describe('GraphManagementService', () => {
   let service: GraphManagementService;
   let mockRepo: jest.Mocked<GraphDocumentStore>;
+  let mockConversationService: jest.Mocked<ConversationService>;
+  let mockNoteService: jest.Mocked<NoteService>;
 
   beforeEach(() => {
     mockRepo = {
@@ -45,7 +49,18 @@ describe('GraphManagementService', () => {
       restoreNodesByOrigIds: jest.fn(),
     } as unknown as jest.Mocked<GraphDocumentStore>;
 
-    service = new GraphManagementService(mockRepo);
+    mockConversationService = {
+      countConversations: jest.fn(),
+      findDocById: jest.fn(),
+      findDocsByIds: jest.fn(),
+    } as any;
+
+    mockNoteService = {
+      countNotes: jest.fn(),
+      getNoteDoc: jest.fn(),
+    } as any;
+
+    service = new GraphManagementService(mockRepo, mockConversationService, mockNoteService);
   });
 
   describe('upsertNode', () => {

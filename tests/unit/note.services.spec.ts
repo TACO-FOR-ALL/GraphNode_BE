@@ -31,6 +31,12 @@ class InMemoryNoteRepo implements NoteRepository {
     return docs;
   }
 
+  async countByOwner(ownerUserId: string): Promise<number> {
+    return Array.from(this.notes.values()).filter(
+      (note) => note.ownerUserId === ownerUserId && note.deletedAt == null
+    ).length;
+  }
+
   async getNote(
     id: string,
     ownerUserId: string,
@@ -433,6 +439,16 @@ describe('NoteService', () => {
     expect(note.content).toBe('# Hello');
 
     expect(note.id).toBeDefined();
+  });
+
+  test('countNotes returns active note count', async () => {
+    const active1 = await service.createNote('u1', { content: 'one' });
+    await service.createNote('u1', { content: 'two' });
+    await service.createNote('u2', { content: 'other user' });
+    await service.deleteNote('u1', active1.id, false);
+
+    const count = await service.countNotes('u1');
+    expect(count).toBe(1);
   });
 
   test('getNote returns note if exists', async () => {

@@ -42,6 +42,14 @@ export interface ConversationRepository {
   createMany(docs: ConversationDoc[], session?: ClientSession): Promise<ConversationDoc[]>;
 
   /**
+   * 사용자 기준 활성 conversation 수를 반환합니다.
+   *
+   * @param ownerUserId 사용자 ID
+   * @returns soft delete 되지 않은 conversation 개수
+   */
+  countByOwner(ownerUserId: string): Promise<number>;
+
+  /**
    * ID로 대화를 조회합니다.
    *
    * @param id 대화 ID

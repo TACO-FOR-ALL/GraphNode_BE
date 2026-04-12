@@ -40,6 +40,7 @@ export interface GraphNodeDto {
 
   /** 노드가 참조하는 원본 대화 ID */
   origId: string;
+  nodeTitle?: string;
   /** 노드가 속한 클러스터 ID */
   clusterId: string;
   /** 노드가 속한 클러스터 이름 */

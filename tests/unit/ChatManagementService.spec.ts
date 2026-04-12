@@ -22,6 +22,7 @@ import {
 } from '../../src/core/types/persistence/graph.persistence';
 import { GraphDocumentStore, RepoOptions } from '../../src/core/ports/GraphDocumentStore';
 import { GraphManagementService } from '../../src/core/services/GraphManagementService';
+import { NoteService } from '../../src/core/services/NoteService';
 
 // Mock MongoDB
 jest.mock('../../src/infra/db/mongodb', () => ({
@@ -47,6 +48,12 @@ class InMemoryConvRepo implements ConversationRepository {
   async createMany(docs: ConversationDoc[], session?: ClientSession): Promise<ConversationDoc[]> {
     docs.forEach((doc) => this.data.set(doc._id, doc));
     return docs;
+  }
+
+  async countByOwner(ownerUserId: string): Promise<number> {
+    return Array.from(this.data.values()).filter(
+      (doc) => doc.ownerUserId === ownerUserId && doc.deletedAt == null
+    ).length;
   }
 
   async findById(
@@ -531,6 +538,7 @@ describe('ChatManagementService', () => {
   let msgSvc: MessageService;
   let graphSvc: GraphManagementService;
   let chatSvc: ChatManagementService;
+  let mockNoteSvc: jest.Mocked<NoteService>;
 
   beforeEach(() => {
     convRepo = new InMemoryConvRepo();
@@ -538,7 +546,11 @@ describe('ChatManagementService', () => {
     graphRepo = new InMemoryGraphRepo();
     convSvc = new ConversationService(convRepo);
     msgSvc = new MessageService(msgRepo);
-    graphSvc = new GraphManagementService(graphRepo);
+    mockNoteSvc = {
+      countNotes: jest.fn(),
+      getNoteDoc: jest.fn(),
+    } as any;
+    graphSvc = new GraphManagementService(graphRepo, convSvc, mockNoteSvc);
     chatSvc = new ChatManagementService(convSvc, msgSvc, graphSvc);
   });
 
