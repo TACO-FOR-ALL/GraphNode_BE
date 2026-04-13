@@ -3,7 +3,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { User, Provider } from '../../core/types/persistence/UserPersistence';
 import { UserRepository } from '../../core/ports/UserRepository';
 import prisma from '../db/prisma';
-import { ApiKeyModel } from '../../shared/dtos/me';
+import {
+  ApiKeyModel,
+  OnboardingOccupation,
+  OnboardingAgentMode,
+} from '../../shared/dtos/me';
 
 /**
  * UserRepository (Prisma 구현)
@@ -17,6 +21,7 @@ export class UserRepositoryMySQL implements UserRepository {
   async findById(id: string): Promise<User | null> {
     const user = await prisma.user.findUnique({
       where: { id },
+      include: { userInfo: true },
     });
     if (!user) return null;
     return this.mapUser(user);
@@ -108,6 +113,7 @@ export class UserRepositoryMySQL implements UserRepository {
           providerUserId,
         },
       },
+      include: { userInfo: true },
     });
     if (!user) return null;
     return this.mapUser(user);
@@ -115,6 +121,7 @@ export class UserRepositoryMySQL implements UserRepository {
 
   /**
    * 사용자 생성
+   * - 로그인 시점에는 users만 생성합니다 (user_info는 온보딩 PATCH 시 생성).
    */
   async create(input: {
     provider: Provider;
@@ -133,6 +140,7 @@ export class UserRepositoryMySQL implements UserRepository {
         avatarUrl: input.avatarUrl,
         preferredLanguage: 'en', // default
       },
+      include: { userInfo: true },
     });
     return this.mapUser(user);
   }
@@ -147,25 +155,18 @@ export class UserRepositoryMySQL implements UserRepository {
     displayName?: string | null;
     avatarUrl?: string | null;
   }): Promise<User> {
-    // upsert is possible, but last_login_at logic in legacy code was:
-    // If exists -> update last_login_at, return object with new last_login_at
-    // If new -> create
-
-    // Using simple upsert logic or manual verify as before to keep exact behavior
     const existing = await this.findByProvider(input.provider, input.providerUserId);
     if (existing) {
       const updated = await prisma.user.update({
         where: { id: existing.id },
         data: { lastLoginAt: new Date() },
+        include: { userInfo: true },
       });
       return this.mapUser(updated);
     }
     return this.create(input);
   }
 
-  /**
-   * Prisma User -> Domain User 매핑
-   */
   /**
    * 사용자의 OpenAI Assistant ID 조회
    */
@@ -196,6 +197,51 @@ export class UserRepositoryMySQL implements UserRepository {
     });
   }
 
+  /**
+   * 사용자의 온보딩 정보 업데이트
+   * - user_info가 없으면 생성 후 users.user_info_id에 연결합니다.
+   */
+  async updateOnboarding(
+    id: string,
+    input: {
+      occupation: OnboardingOccupation;
+      interests: string[];
+      agentMode: OnboardingAgentMode;
+    }
+  ): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id },
+        select: { userInfoId: true },
+      });
+      if (!user) return;
+
+      const userInfoId =
+        user.userInfoId ??
+        (
+          await tx.userInfo.create({
+            data: {},
+          })
+        ).id;
+
+      if (!user.userInfoId) {
+        await tx.user.update({
+          where: { id },
+          data: { userInfoId },
+        });
+      }
+
+      await tx.userInfo.update({
+        where: { id: userInfoId },
+        data: {
+          onboardingOccupation: input.occupation,
+          onboardingInterests: input.interests,
+          onboardingAgentMode: input.agentMode,
+        },
+      });
+    });
+  }
+
   private mapUser(pUser: any): User {
     return new User({
       id: pUser.id,
@@ -212,6 +258,9 @@ export class UserRepositoryMySQL implements UserRepository {
       apiKeyGemini: pUser.apiKeyGemini,
       openaiAssistantId: pUser.openaiAssistantId,
       preferredLanguage: pUser.preferredLanguage,
+      onboardingOccupation: pUser.userInfo?.onboardingOccupation,
+      onboardingInterests: pUser.userInfo?.onboardingInterests ?? [],
+      onboardingAgentMode: pUser.userInfo?.onboardingAgentMode ?? 'formal',
     });
   }
 }

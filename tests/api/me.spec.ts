@@ -1,4 +1,4 @@
-import { jest, describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
+import { jest, describe, it, expect, beforeAll, beforeEach, afterAll } from '@jest/globals';
 import request from 'supertest';
 
 import { createApp } from '../../src/bootstrap/server';
@@ -19,6 +19,9 @@ const mockUser = {
   createdAt: new Date('2024-01-01T00:00:00.000Z'),
   lastLoginAt: new Date('2024-01-02T00:00:00.000Z'),
   preferredLanguage: 'en',
+  onboardingOccupation: null as string | null,
+  onboardingInterests: [] as string[],
+  onboardingAgentMode: 'formal' as const,
 };
 
 let userState = { ...mockUser };
@@ -26,6 +29,8 @@ let userState = { ...mockUser };
 jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => ({
   UserRepositoryMySQL: class {
     async findOrCreateFromProvider() { return userState; }
+    async findByProvider() { return null; }
+    async create() { return userState; }
     async findById(id: any) { 
       return (String(id) === userState.id) ? userState : null; 
     }
@@ -54,6 +59,17 @@ jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => ({
         if (model === 'claude') userState.apiKeyClaude = null;
         if (model === 'gemini') userState.apiKeyGemini = null;
       }
+    }
+    async getOpenAiAssistantId() { return null; }
+    async updateOpenAiAssistantId() {}
+    async updatePreferredLanguage(id: any, language: string) {
+      if (String(id) === userState.id) userState.preferredLanguage = language;
+    }
+    async updateOnboarding(id: any, input: any) {
+      if (String(id) !== userState.id) return;
+      userState.onboardingOccupation = input.occupation;
+      userState.onboardingInterests = [...input.interests];
+      userState.onboardingAgentMode = input.agentMode;
     }
   }
 }));
@@ -101,6 +117,9 @@ describe('Me API Integration Tests', () => {
       expect(res.body.profile.provider).toBe('google');
       expect(res.body.profile.createdAt).toBe('2024-01-01T00:00:00.000Z');
       expect(res.body.profile.preferredLanguage).toBe('en');
+      expect(res.body.profile.onboardingOccupation).toBeNull();
+      expect(res.body.profile.onboardingInterests).toEqual([]);
+      expect(res.body.profile.onboardingAgentMode).toBe('formal');
     });
 
     it('should return 401 if not authenticated', async () => {
@@ -161,6 +180,38 @@ describe('Me API Integration Tests', () => {
           .set('Authorization', `Bearer ${accessToken}`)
           .send({ apiKey: 'some-key' });
         expect(res.status).toBe(400);
+    });
+  });
+
+  describe('GET/PATCH /v1/me/onboarding', () => {
+    it('GET should return defaults when onboarding not set', async () => {
+      const res = await request(app)
+        .get('/v1/me/onboarding')
+        .set('Authorization', `Bearer ${accessToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.occupation).toBeNull();
+      expect(res.body.interests).toEqual([]);
+      expect(res.body.agentMode).toBe('formal');
+    });
+
+    it('PATCH then GET should reflect onboarding', async () => {
+      const patch = await request(app)
+        .patch('/v1/me/onboarding')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          occupation: 'developer',
+          interests: ['AI', 'Graphs'],
+          agentMode: 'friendly',
+        });
+      expect(patch.status).toBe(204);
+
+      const get = await request(app)
+        .get('/v1/me/onboarding')
+        .set('Authorization', `Bearer ${accessToken}`);
+      expect(get.status).toBe(200);
+      expect(get.body.occupation).toBe('developer');
+      expect(get.body.interests).toEqual(['AI', 'Graphs']);
+      expect(get.body.agentMode).toBe('friendly');
     });
   });
 });
