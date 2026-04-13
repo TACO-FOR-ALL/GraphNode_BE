@@ -26,6 +26,7 @@ function normalizeError(e: any): string {
   if (msg.includes('429') || msg.includes('quota')) return 'rate_limited';
   
   if (status === 401) return 'unauthorized_key';
+  if (status === 402) return 'insufficient_credit';
   if (status === 403) return 'forbidden';
   if (status === 404) return 'model_not_found';
   

@@ -15,6 +15,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Readable } from 'stream';
 
 import { AppError } from '../../shared/errors/base';
+import { InsufficientCreditError } from '../../shared/errors/domain';
 import {
   NotFoundError,
   UpstreamError,
@@ -229,6 +230,9 @@ export class AiInteractionService {
       if (!aiResponseResult.ok) {
         if (aiResponseResult.error === 'rate_limited') {
           throw new RateLimitError('AI Generation failed: rate limited. Please check your quota.');
+        }
+        if(aiResponseResult.error === 'insufficient_credit') {
+          throw new InsufficientCreditError('AI Generation failed: insufficient credit. Please recharge your account.');
         }
         throw new UpstreamError(`AI Generation failed: ${aiResponseResult.error}`);
       }

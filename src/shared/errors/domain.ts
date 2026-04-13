@@ -87,7 +87,11 @@ export class RateLimitError extends AppError {
   httpStatus = 429;
   retryable = true;
 }
-
+export class InsufficientCreditError extends AppError {
+  code = 'INSUFFICIENT_CREDIT';
+  httpStatus = 402;  // HTTP 402 Payment Required
+  retryable = false;  // 재시도 불가 (돈을 충전 필요)
+}
 /**
  * 업스트림 오류 (502 Bad Gateway)
  * - 외부 서비스(예: OpenAI, DB 등)가 에러를 반환했을 때 사용합니다.

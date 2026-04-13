@@ -12,7 +12,9 @@ import { documentProcessor } from '../utils/documentProcessor';
  */
 function normalizeError(e: any): string {
   const status = e?.status ?? e?.response?.status;
+  const msg = (e?.message || e?.error?.message || '').toLowerCase();
   if (status === 401) return 'unauthorized_key';
+  if (status === 402) return 'insufficient_credit';
   if (status === 429) return 'rate_limited';
   if (status === 404) return 'not_found';
   if (status === 400) return 'bad_request';
