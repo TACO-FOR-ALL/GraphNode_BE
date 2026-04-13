@@ -5,6 +5,14 @@
  * 공개 인터페이스: User, Provider, UserProps, profile()
  */
 export type Provider = 'google' | 'apple' | 'dev';
+export type OnboardingOccupation =
+  | 'developer'
+  | 'student'
+  | 'entrepreneur'
+  | 'researcher'
+  | 'creator'
+  | 'other';
+export type OnboardingAgentMode = 'formal' | 'friendly' | 'casual';
 
 /**
  * User 엔티티의 생성/보관용 프로퍼티 집합
@@ -48,6 +56,12 @@ export interface UserProps {
   openaiAssistantId?: string | null;
   /** 선호 언어(ISO 639-1) */
   preferredLanguage?: string;
+  /** 온보딩 직업 분류(선택) */
+  onboardingOccupation?: OnboardingOccupation | null;
+  /** 온보딩 흥미 분야 목록 */
+  onboardingInterests?: string[];
+  /** 온보딩 에이전트 모드(기본 formal) */
+  onboardingAgentMode?: OnboardingAgentMode;
 }
 
 /**
@@ -111,6 +125,18 @@ export class User {
   get preferredLanguage() {
     return this.props.preferredLanguage ?? 'en';
   }
+  /** 온보딩 직업 분류(없으면 undefined) */
+  get onboardingOccupation() {
+    return this.props.onboardingOccupation ?? undefined;
+  }
+  /** 온보딩 흥미 분야 목록(없으면 빈 배열) */
+  get onboardingInterests() {
+    return this.props.onboardingInterests ?? [];
+  }
+  /** 온보딩 에이전트 모드(기본 formal) */
+  get onboardingAgentMode() {
+    return this.props.onboardingAgentMode ?? 'formal';
+  }
   /**
    * 사용자 프로필 뷰로 매핑
    * @returns 사용자 프로필(컨트롤러/프레젠터에서 직렬화 용)
@@ -125,6 +151,9 @@ export class User {
       displayName: this.props.displayName ?? undefined,
       avatarUrl: this.props.avatarUrl ?? undefined,
       preferredLanguage: this.props.preferredLanguage ?? 'en',
+      onboardingOccupation: this.props.onboardingOccupation ?? undefined,
+      onboardingInterests: this.props.onboardingInterests ?? [],
+      onboardingAgentMode: this.props.onboardingAgentMode ?? 'formal',
     };
   }
 }
