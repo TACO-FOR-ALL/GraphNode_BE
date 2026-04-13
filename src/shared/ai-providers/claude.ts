@@ -10,7 +10,7 @@ function normalizeError(e: any): string {
   // Anthropic Error Mapping
   const msg = e.message || '';
   if (e instanceof Anthropic.AuthenticationError || msg.includes('401')) return 'unauthorized_key';
-  if (e instanceof Anthropic.RateLimitError) {
+  if (e instanceof Anthropic.RateLimitError||msg.includes('429')) {
     if (msg.includes('billing') || msg.includes('quota') || msg.includes('credit')) {
       return 'insufficient_credit';
     }

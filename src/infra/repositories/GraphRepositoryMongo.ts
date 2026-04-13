@@ -162,6 +162,7 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
           opts
         );
       }
+      
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.deleteNode', err);
     }
