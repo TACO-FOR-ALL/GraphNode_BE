@@ -4,7 +4,7 @@ import { AddNodeResultPayload } from '../../shared/dtos/queue';
 import { AiAddNodeBatchResult } from '../../shared/dtos/ai_graph_output';
 import { logger } from '../../shared/utils/logger';
 import { withRetry } from '../../shared/utils/retry';
-import { captureEvent } from '../../shared/utils/posthog';
+import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 import {
   normalizeAiOrigId,
   NormalizedAiOrigId,
@@ -327,7 +327,7 @@ export class AddNodeResultHandler implements JobHandler {
       }
 
       // macro_graph_updated PostHog 이벤트
-      captureEvent(userId, 'macro_graph_updated', {
+      captureEvent(userId, POSTHOG_EVENT.MACRO_GRAPH_UPDATED, {
         nodes_added: totalNodesAdded,
         edges_added: totalEdgesAdded,
         processed_count: batchResult.processedCount || 0,
