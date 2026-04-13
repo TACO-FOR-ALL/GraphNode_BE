@@ -89,7 +89,7 @@ export class RateLimitError extends AppError {
 }
 export class InsufficientCreditError extends AppError {
   code = 'INSUFFICIENT_CREDIT';
-  httpStatus = 402;  // HTTP 402 Payment Required
+  httpStatus = 402;  // HTTP 429 Payment Required
   retryable = false;  // 재시도 불가 (돈을 충전 필요)
 }
 /**

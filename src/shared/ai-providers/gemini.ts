@@ -23,16 +23,22 @@ function normalizeError(e: any): string {
 
   if (msg.includes('API key not valid')) return 'unauthorized_key';
   if (msg.includes('Location not supported')) return 'unsupported_location';
-  if (msg.includes('429') || msg.includes('quota')) return 'rate_limited';
-  
   if (status === 401) return 'unauthorized_key';
-  if (status === 402) return 'insufficient_credit';
   if (status === 403) return 'forbidden';
   if (status === 404) return 'model_not_found';
-  
   if (msg.includes('PERMISSION_DENIED')) return 'forbidden';
   if (msg.includes('UNAUTHENTICATED')) return 'unauthorized_key';
-  if (msg.includes('RESOURCE_EXHAUSTED')) return 'rate_limited';
+  if (msg.includes('RESOURCE_EXHAUSTED')||status === 429)
+  {
+    if (msg.includes('billing') ||msg.includes('payment') ||msg.includes('not enabled') ||msg.includes('free tier')
+    ) 
+    {
+      return 'insufficient_credit';
+    }
+    return 'rate_limited';
+  }
+  
+
   if (msg.includes('INVALID_ARGUMENT')) return 'bad_request';
 
   return 'unknown_error';
