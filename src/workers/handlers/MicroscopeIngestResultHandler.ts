@@ -6,7 +6,7 @@ import { NotificationType } from '../notificationType';
 import { AiMicroscopeIngestResultItem } from '../../shared/dtos/ai_graph_output';
 import { MicroscopeWorkspaceMetaDoc } from '../../core/types/persistence/microscope_workspace.persistence';
 import { withRetry } from '../../shared/utils/retry';
-import { captureEvent } from '../../shared/utils/posthog';
+import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 
 /**
  * Microscope 문서 분석(Ingest) 결과 처리 핸들러
@@ -88,7 +88,7 @@ export class MicroscopeIngestResultHandler implements JobHandler {
           });
         }
 
-        captureEvent(userId, 'microscope_ingest_completed', {
+        captureEvent(userId, POSTHOG_EVENT.MICROSCOPE_INGEST_COMPLETED, {
           chunks_count: chunks_count || 0,
           nodes_count: totalNodes,
           edges_count: totalEdges,

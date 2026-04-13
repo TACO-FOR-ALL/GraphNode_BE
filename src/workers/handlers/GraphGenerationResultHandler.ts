@@ -16,7 +16,8 @@ import { GraphFeaturesJsonDto } from '../../core/types/vector/graph-features';
 import { GraphSummaryDoc } from '../../core/types/persistence/graph.persistence';
 import { NotificationType } from '../notificationType';
 import { withRetry } from '../../shared/utils/retry';
-import { captureEvent } from '../../shared/utils/posthog';
+import { redis } from '../../infra/redis/client';
+import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 import { normalizeAiOrigId } from '../../shared/utils/aiNodeId';
 import {
   BatchResolvedSourceTypeResult,
@@ -44,6 +45,8 @@ interface NormalizedGraphOutputResult {
  * 3. snapshot과 vector metadata가 동일한 normalized origId / sourceType을 사용하도록 맞춘다.
  */
 export class GraphGenerationResultHandler implements JobHandler {
+  private static readonly GRAPH_GEN_FINISHED_TTL_SECONDS = 60 * 60 * 24; // 24시간
+
   async handle(message: GraphGenResultPayload, container: Container): Promise<void> {
     const { payload, taskId } = message;
     const { userId, status, resultS3Key, error } = payload;
@@ -77,6 +80,14 @@ export class GraphGenerationResultHandler implements JobHandler {
           'Failed to generate knowledge graph. Please try again.',
           { type: NotificationType.GRAPH_GENERATION_FAILED, taskId, error: errorMsg }
         );
+
+        await this.trackGraphGenerationResult({
+          taskId,
+          userId,
+          status: 'FAILED',
+          errorMessage: errorMsg,
+          finishedAt: new Date().toISOString(),
+        });
         return;
       }
 
@@ -252,7 +263,7 @@ export class GraphGenerationResultHandler implements JobHandler {
         await Promise.all(saveTasks);
 
         // 10. macro_graph_generated 이벤트를 발생시킨다.
-        captureEvent(userId, 'macro_graph_generated', {
+        captureEvent(userId, POSTHOG_EVENT.MACRO_GRAPH_GENERATED, {
           nodes_count: aiGraphOutput.nodes.length,
           edges_count: aiGraphOutput.edges.length,
           subclusters_count: aiGraphOutput.subclusters?.length || 0,
@@ -278,6 +289,13 @@ export class GraphGenerationResultHandler implements JobHandler {
             { type: NotificationType.GRAPH_GENERATION_COMPLETED, taskId }
           ),
         ]);
+
+        await this.trackGraphGenerationResult({
+          taskId,
+          userId,
+          status: 'COMPLETED',
+          finishedAt: new Date().toISOString(),
+        });
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Processing failed internally';
@@ -304,11 +322,100 @@ export class GraphGenerationResultHandler implements JobHandler {
         );
       }
 
+      // 내부 처리 실패도 분석상 실패 케이스로 남겨 추후 원인 분석 가능하도록 기록
+      await this.trackGraphGenerationResult({
+        taskId,
+        userId,
+        status: 'FAILED',
+        errorMessage: errorMsg,
+        finishedAt: new Date().toISOString(),
+      });
+
+      // 여기서 에러를 던지면 sqs-consumer가 메시지를 삭제하지 않고 재시도 처리함 (설정에 따라 DLQ 이동)
+      // Sentry 로깅 등을 연동할 수 있도록 상위로 전파
       throw err;
     }
   }
 
   /**
+   * Macro Graph 완료 이벤트(B/C/D)를 PostHog로 전송한다.
+   *
+   * - A: macro_graph_generatio요청은  GraphGenerationService.requestGraphGenerationViaQueue 에서 전송송
+   * - B: macro_graph_generation_succeeded
+   * - C: macro_graph_generation_failed
+   * - D: macro_graph_generation_finished (통합 완료 이벤트)
+   * @param taskId 작업을 구분하는 task Id
+   * @param userId User 구분용 user Id
+   * @param status Macro Generation 의 성공/실패 여부
+   * @param finishedAt Worker가 응답을 받은 시각
+   * @param errorMessage 에러 메세지(있다면)
+   */
+  private async trackGraphGenerationResult(params: {
+    taskId: string;
+    userId: string;
+    status: 'COMPLETED' | 'FAILED';
+    finishedAt: string;
+    errorMessage?: string;
+  }): Promise<void> {
+    const { taskId, userId, status, finishedAt, errorMessage } = params;
+
+    // 재시도 처리 시 동일 taskId에 대한 완료 이벤트 중복 발행을 방지한다.
+    try {
+      const dedupeResult = await redis.set(
+        `macro_graph:finished:${taskId}`,
+        '1',
+        'EX',
+        GraphGenerationResultHandler.GRAPH_GEN_FINISHED_TTL_SECONDS,
+        'NX'
+      );
+      if (dedupeResult !== 'OK') {
+        return;
+      }
+    } catch (err) {
+      // 중복 방지 실패 시에도 분석 이벤트 자체는 최대한 전송 시도
+      logger.warn({ err, userId, taskId }, 'Failed to set macro graph finished dedupe key');
+    }
+
+    let requestedAt: string | null = null;
+    try {
+      requestedAt = await redis.get(`macro_graph:start:${taskId}`);
+    } catch (err) {
+      logger.warn({ err, userId, taskId }, 'Failed to load macro graph start time');
+    }
+
+    const finishedAtMs = new Date(finishedAt).getTime();
+    const requestedAtMs = requestedAt ? new Date(requestedAt).getTime() : NaN;
+    const durationMs =
+      Number.isFinite(requestedAtMs) && finishedAtMs >= requestedAtMs
+        ? finishedAtMs - requestedAtMs
+        : null;
+
+    const commonProperties = {
+      source: 'macro_graph',
+      task_id: taskId,
+      user_id: userId,
+      status,
+      requested_at: requestedAt,
+      finished_at: finishedAt,
+      duration_ms: durationMs,
+      ...(errorMessage ? { error_message: errorMessage } : {}),
+    };
+
+    try {
+      if (status === 'COMPLETED') {
+        captureEvent(userId, POSTHOG_EVENT.MACRO_GRAPH_GENERATION_SUCCEEDED, commonProperties);
+      } else {
+        captureEvent(userId, POSTHOG_EVENT.MACRO_GRAPH_GENERATION_FAILED, commonProperties);
+      }
+
+      captureEvent(userId, POSTHOG_EVENT.MACRO_GRAPH_GENERATION_FINISHED, commonProperties);
+    } catch (err) {
+      logger.error({ err, userId, taskId, status }, 'Failed to capture macro graph result events');
+    }
+  }
+
+  /**
+   * Readable Stream을 문자열로 변환하는 헬퍼
    * AI graph output에서 orig_id를 정규화합니다.
    * @param aiGraphOutput AI graph output
    * @returns 정규화된 AI graph output

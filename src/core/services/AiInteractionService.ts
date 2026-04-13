@@ -35,6 +35,7 @@ import { StoragePort } from '../ports/StoragePort';
 import { withRetry } from '../../shared/utils/retry';
 import { captureEvent } from '../../shared/utils/posthog';
 import { loadEnv } from '../../config/env';
+import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 
 interface OpenAIResponsesApiResult {
   content: string;
@@ -256,6 +257,7 @@ export class AiInteractionService {
       await this.dailyUsageService.incrementUsage(ownerUserId);
 
       captureEvent(ownerUserId, 'ai_chat_completed', {
+      captureEvent(ownerUserId, POSTHOG_EVENT.AI_CHAT_COMPLETED, {
         model_name: chatbody.modelName,
         chat_type: 'normal',
         attachments_count: userAttachments.length,
@@ -415,6 +417,7 @@ export class AiInteractionService {
       await this.dailyUsageService.incrementUsage(ownerUserId);
 
       captureEvent(ownerUserId, 'ai_chat_completed', {
+      captureEvent(ownerUserId, POSTHOG_EVENT.AI_CHAT_COMPLETED, {
         model_name: chatbody.modelName,
         chat_type: 'rag',
         attachments_count: userAttachments.length,
@@ -556,6 +559,7 @@ export class AiInteractionService {
       await this.dailyUsageService.incrementUsage(ownerUserId);
 
       captureEvent(ownerUserId, 'ai_chat_completed', {
+      captureEvent(ownerUserId, POSTHOG_EVENT.AI_CHAT_COMPLETED, {
         model_name: retrybody.modelName,
         chat_type: 'retry',
       });
