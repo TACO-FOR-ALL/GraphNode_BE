@@ -31,6 +31,7 @@ import { StoragePort } from '../ports/StoragePort';
 import { loadEnv } from '../../config/env';
 import { withRetry } from '../../shared/utils/retry';
 import { getPostHogClient } from '../../shared/utils/posthog';
+import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 import { redis } from '../../infra/redis/client';
 import { GraphClusterDto } from '../../shared/dtos/graph';
 
@@ -183,6 +184,9 @@ export class GraphGenerationService {
   /**
    * Macro Graph 생성 요청 시작 이벤트(A)를 PostHog에 전송하고,
    * 완료 이벤트에서 duration 계산을 할 수 있도록 시작 시각을 Redis에 저장한다.
+   * @param userId 사용자 Id
+   * @param taskId task Id
+   * @param requestedAt 요청 보낸 시간
    */
   private async trackGraphGenerationRequested(
     userId: string,
@@ -190,17 +194,12 @@ export class GraphGenerationService {
     requestedAt: string
   ): Promise<void> {
     try {
-      const posthog = getPostHogClient();
-      posthog?.capture({
-        distinctId: userId,
-        event: 'macro_graph_generation_requested',
-        properties: {
-          source: 'macro_graph',
-          task_id: taskId,
-          user_id: userId,
-          requested_at: requestedAt,
-          queue: 'SQS_REQUEST_QUEUE_URL',
-        },
+      captureEvent(userId, POSTHOG_EVENT.MACRO_GRAPH_GENERATION_REQUESTED, {
+        source: 'macro_graph',
+        task_id: taskId,
+        user_id: userId,
+        requested_at: requestedAt,
+        queue: 'SQS_REQUEST_QUEUE_URL',
       });
     } catch (err) {
       // 분석 이벤트 실패가 본 작업 흐름을 막지 않도록 비차단 처리
