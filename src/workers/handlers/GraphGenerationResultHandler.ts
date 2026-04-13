@@ -16,9 +16,8 @@ import { GraphFeaturesJsonDto } from '../../core/types/vector/graph-features';
 import { GraphSummaryDoc } from '../../core/types/persistence/graph.persistence';
 import { NotificationType } from '../notificationType';
 import { withRetry } from '../../shared/utils/retry';
-import { getPostHogClient } from '../../shared/utils/posthog';
 import { redis } from '../../infra/redis/client';
-import { captureEvent } from '../../shared/utils/posthog';
+import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 import { normalizeAiOrigId } from '../../shared/utils/aiNodeId';
 import {
   BatchResolvedSourceTypeResult,
@@ -264,7 +263,7 @@ export class GraphGenerationResultHandler implements JobHandler {
         await Promise.all(saveTasks);
 
         // 10. macro_graph_generated 이벤트를 발생시킨다.
-        captureEvent(userId, 'macro_graph_generated', {
+        captureEvent(userId, POSTHOG_EVENT.MACRO_GRAPH_GENERATED, {
           nodes_count: aiGraphOutput.nodes.length,
           edges_count: aiGraphOutput.edges.length,
           subclusters_count: aiGraphOutput.subclusters?.length || 0,
@@ -345,6 +344,11 @@ export class GraphGenerationResultHandler implements JobHandler {
    * - B: macro_graph_generation_succeeded
    * - C: macro_graph_generation_failed
    * - D: macro_graph_generation_finished (통합 완료 이벤트)
+   * @param taskId 작업을 구분하는 task Id
+   * @param userId User 구분용 user Id
+   * @param status Macro Generation 의 성공/실패 여부
+   * @param finishedAt Worker가 응답을 받은 시각
+   * @param errorMessage 에러 메세지(있다면)
    */
   private async trackGraphGenerationResult(params: {
     taskId: string;
@@ -398,28 +402,13 @@ export class GraphGenerationResultHandler implements JobHandler {
     };
 
     try {
-      const posthog = getPostHogClient();
-      if (!posthog) return;
-
       if (status === 'COMPLETED') {
-        posthog.capture({
-          distinctId: userId,
-          event: 'macro_graph_generation_succeeded',
-          properties: commonProperties,
-        });
+        captureEvent(userId, POSTHOG_EVENT.MACRO_GRAPH_GENERATION_SUCCEEDED, commonProperties);
       } else {
-        posthog.capture({
-          distinctId: userId,
-          event: 'macro_graph_generation_failed',
-          properties: commonProperties,
-        });
+        captureEvent(userId, POSTHOG_EVENT.MACRO_GRAPH_GENERATION_FAILED, commonProperties);
       }
 
-      posthog.capture({
-        distinctId: userId,
-        event: 'macro_graph_generation_finished',
-        properties: commonProperties,
-      });
+      captureEvent(userId, POSTHOG_EVENT.MACRO_GRAPH_GENERATION_FINISHED, commonProperties);
     } catch (err) {
       logger.error({ err, userId, taskId, status }, 'Failed to capture macro graph result events');
     }

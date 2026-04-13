@@ -5,6 +5,27 @@ import { logger } from './logger';
 
 let posthogClient: PostHog | null = null;
 
+export const POSTHOG_EVENT = {
+  API_CALL: 'api_call',
+  AI_CHAT_COMPLETED: 'ai_chat_completed',
+  CONVERSATION_CREATED: 'conversation_created',
+  CONVERSATIONS_BULK_IMPORTED: 'conversations_bulk_imported',
+  GRAPH_ADD_NODE_REQUESTED: 'graph_add_node_requested',
+  GRAPH_GENERATION_REQUESTED: 'graph_generation_requested',
+  MACRO_GRAPH_GENERATED: 'macro_graph_generated',
+  MACRO_GRAPH_GENERATION_FAILED: 'macro_graph_generation_failed',
+  MACRO_GRAPH_GENERATION_FINISHED: 'macro_graph_generation_finished',
+  MACRO_GRAPH_GENERATION_REQUESTED: 'macro_graph_generation_requested',
+  MACRO_GRAPH_GENERATION_SUCCEEDED: 'macro_graph_generation_succeeded',
+  MACRO_GRAPH_UPDATED: 'macro_graph_updated',
+  MICROSCOPE_INGEST_COMPLETED: 'microscope_ingest_completed',
+  MICROSCOPE_INGEST_REQUESTED: 'microscope_ingest_requested',
+  NOTE_CREATED: 'note_created',
+  NOTES_BULK_IMPORTED: 'notes_bulk_imported',
+} as const;
+
+export type PostHogEvent = (typeof POSTHOG_EVENT)[keyof typeof POSTHOG_EVENT];
+
 /**
  * PostHog 클라이언트를 초기화합니다.
  * 
@@ -61,7 +82,7 @@ export const shutdownPostHog = async () => {
  * @param event 이벤트명
  * @param properties 추가 속성
  */
-export const captureEvent = (userId: string, event: string, properties?: any) => {
+export const captureEvent = (userId: string, event: PostHogEvent, properties?: any) => {
   const client = getPostHogClient();
   if (client) {
     client.capture({
@@ -143,7 +164,7 @@ export const captureApiCall = (userId: string, data: ApiAuditData): void => {
 
   client.capture({
     distinctId: userId,
-    event: 'api_call',
+    event: POSTHOG_EVENT.API_CALL,
     properties: {
       ...data,
       $source: 'backend',

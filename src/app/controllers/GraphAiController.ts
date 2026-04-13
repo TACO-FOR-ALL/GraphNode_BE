@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 
 import { GraphGenerationService } from '../../core/services/GraphGenerationService';
 import { getUserIdFromRequest } from '../utils/request';
-import { captureEvent } from '../../shared/utils/posthog';
+import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 
 export class GraphAiController {
   constructor(private readonly graphGenerationService: GraphGenerationService) {}
@@ -31,7 +31,7 @@ export class GraphAiController {
     }
 
     // 작업 id와 함께 곧바로 반환
-    captureEvent(userId, 'graph_generation_requested', { include_summary: includeSummary });
+    captureEvent(userId, POSTHOG_EVENT.GRAPH_GENERATION_REQUESTED, { include_summary: includeSummary });
     res.status(202).json({
       message: 'Graph generation queued',
       taskId: taskId,
@@ -86,7 +86,7 @@ export class GraphAiController {
         return;
     }
 
-    captureEvent(userId, 'graph_add_node_requested');
+    captureEvent(userId, POSTHOG_EVENT.GRAPH_ADD_NODE_REQUESTED);
     res.status(202).json({
       message: 'Add node to graph queued',
       taskId: taskId,

@@ -29,7 +29,7 @@ import { ChatThread, ChatMessage, AIChatResponseDto } from '../../shared/dtos/ai
 import { AIchatType } from '../../shared/ai-providers/AIchatType';
 import { ValidationError } from '../../shared/errors/domain';
 import { AiStreamEvent } from '../../shared/ai-providers/AiStreamEvent';
-import { captureEvent } from '../../shared/utils/posthog';
+import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 
 /**
  * AiController 클래스
@@ -270,7 +270,7 @@ export class AiController {
       await this.chatManagementService.bulkCreateConversations(ownerUserId, conversations);
 
     // 4. 응답 반환 (201 Created)
-    captureEvent(ownerUserId, 'conversations_bulk_imported', { 
+    captureEvent(ownerUserId, POSTHOG_EVENT.CONVERSATIONS_BULK_IMPORTED, { 
       room_count: conversations.length,
       total_message_count: conversations.reduce((acc, c) => acc + (c.messages?.length || 0), 0)
     });
@@ -305,7 +305,7 @@ export class AiController {
     );
 
     // 4. 응답 반환 (Location 헤더에 생성된 리소스 위치 포함)
-    captureEvent(ownerUserId, 'conversation_created', { initial_message_count: messages?.length || 0 });
+    captureEvent(ownerUserId, POSTHOG_EVENT.CONVERSATION_CREATED, { initial_message_count: messages?.length || 0 });
     res.status(201).location(`/v1/ai/conversations/${newThread.id}`).json(newThread);
   }
 
