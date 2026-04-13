@@ -62,18 +62,6 @@ export interface UserProfileDto {
    * 선호 언어
    */
   preferredLanguage: string;
-  /**
-   * 온보딩 직업 분류(선택)
-   */
-  onboardingOccupation?: OnboardingOccupation | null;
-  /**
-   * 온보딩 흥미 분야 목록
-   */
-  onboardingInterests: string[];
-  /**
-   * 온보딩 에이전트 모드(기본 formal)
-   */
-  onboardingAgentMode: OnboardingAgentMode;
 }
 
 /**
@@ -100,14 +88,6 @@ export interface MeResponseDto {
  * API Key 모델 타입
  */
 export type ApiKeyModel = 'openai' | 'deepseek' | 'claude' | 'gemini';
-export type OnboardingOccupation =
-  | 'developer'
-  | 'student'
-  | 'entrepreneur'
-  | 'researcher'
-  | 'creator'
-  | 'other';
-export type OnboardingAgentMode = 'formal' | 'friendly' | 'casual';
 
 /**
  * GET /v1/me/api-keys 응답 DTO
@@ -149,22 +129,4 @@ export interface PreferredLanguageResponseDto {
  */
 export interface UpdatePreferredLanguageRequestDto {
   language: string;
-}
-
-/**
- * GET /v1/me/onboarding 응답 DTO
- */
-export interface OnboardingResponseDto {
-  occupation: OnboardingOccupation | null;
-  interests: string[];
-  agentMode: OnboardingAgentMode;
-}
-
-/**
- * PATCH /v1/me/onboarding 요청 DTO
- */
-export interface UpdateOnboardingRequestDto {
-  occupation: OnboardingOccupation;
-  interests: string[];
-  agentMode: OnboardingAgentMode;
 }
