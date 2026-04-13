@@ -38,6 +38,8 @@ export interface ChatMessage {
     }[];
     [key: string]: any;
   };
+  /** 검색 관련성 점수 (검색 결과에서만 포함됨) */
+  score?: number;
 }
 
 export interface Attachment {
@@ -66,6 +68,8 @@ export interface ChatThread {
   messages: ChatMessage[];
   externalThreadId?: string; // OpenAI Assistants API Thread ID
   lastResponseId?: string;   // OpenAI Responses API Context ID
+  /** 검색 관련성 점수 (검색 결과에서만 포함됨) */
+  score?: number;
 }
 
 // /**
@@ -105,4 +109,15 @@ export interface AIRagChatRequestDto {
   modelName?: string;
   retrievedContext: ChatMessage[];
   recentMessages: ChatMessage[];
+}
+
+/**
+ * AI 챗 재시도 요청 DTO
+ * @public
+ * @prop model AI 모델 계열
+ * @prop modelName 구체적인 모델명 (선택)
+ */
+export interface AIChatRetryRequestDto {
+  model: 'openai' | 'deepseek' | 'claude' | 'gemini'; // ApiKeyModel 호환
+  modelName?: string;
 }

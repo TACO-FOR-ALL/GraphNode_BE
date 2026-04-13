@@ -26,6 +26,13 @@ export class MicroscopeApi {
    * @param noteId 분석을 요청할 노트의 고유 ID
    * @param schemaName 추출에 사용할 커스텀 엔티티 스키마 명칭 (옵션)
    * @returns {Promise<HttpResponse<MicroscopeWorkspace>>} 생성된 워크스페이스 메타데이터 반환
+   *
+   * **응답 상태 코드:**
+   * - `201 Created`: 워크스페이스 생성 및 Ingest 파이프라인 시작 성공
+   * - `400 Bad Request`: nodeId 또는 nodeType 누락
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `502 Bad Gateway`: SQS 전송 또는 데이터베이스 오류
+   *
    * @example
    * const res = await sdk.microscope.ingestFromNote('note_123');
    * console.log(res.data._id); // 워크스페이스(그룹) ID
@@ -45,6 +52,13 @@ export class MicroscopeApi {
    * @param conversationId 분석을 요청할 대화의 고유 ID
    * @param schemaName 추출에 사용할 커스텀 엔티티 스키마 명칭 (옵션)
    * @returns {Promise<HttpResponse<MicroscopeWorkspace>>} 생성된 워크스페이스 메타데이터 반환
+   *
+   * **응답 상태 코드:**
+   * - `201 Created`: 워크스페이스 생성 및 Ingest 파이프라인 시작 성공
+   * - `400 Bad Request`: nodeId 또는 nodeType 누락
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `502 Bad Gateway`: SQS 전송 또는 데이터베이스 오류
+   *
    * @example
    * const res = await sdk.microscope.ingestFromConversation('conv_456', 'code_schema');
    */
@@ -81,6 +95,13 @@ export class MicroscopeApi {
    *
    * @param microscopeWorkspaceId - 조회할 워크스페이스 ID
    * @returns {Promise<HttpResponse<MicroscopeWorkspace>>} 워크스페이스 메타데이터
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 조회 성공
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 워크스페이스가 존재하지 않음
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * const ws = await client.microscope.getWorkspace('ws_123');
    * console.log(ws.data.status); // 'COMPLETED'
@@ -104,6 +125,43 @@ export class MicroscopeApi {
    */
   async getWorkspaceGraph(microscopeWorkspaceId: string): Promise<HttpResponse<MicroscopeGraphData[]>> {
     return this.rb.path(`/${microscopeWorkspaceId}/graph`).get<MicroscopeGraphData[]>();
+  }
+
+  /**
+   * 특정 노드 ID로 가장 최근에 요청된 Microscope Ingest의 워크스페이스를 조회합니다.
+   *
+   * @description
+   * `ingestFromNote` / `ingestFromConversation` 호출 후 반환된 워크스페이스 ID를 보관하지 않아도,
+   * 이 메서드를 통해 해당 노드의 최신 Ingest 진행 상태를 즉시 확인할 수 있습니다.
+   *
+   * **정렬 기준**: 동일 nodeId에 대해 여러 번 Ingest를 요청한 경우, `documents.createdAt DESC` 기준으로
+   * 가장 최근에 **생성된** Document를 포함하는 워크스페이스를 반환합니다.
+   * `updatedAt` 기준 대비 "완료된 오래된 Ingest"가 "진행 중인 최신 Ingest"보다 우선 반환되는 역전 현상을 방지합니다.
+   *
+   * **status 확인 방법**: 반환된 `workspace.documents` 배열에서
+   * `documents.find(d => d.nodeId === nodeId)`로 특정 Document를 추출하여 `status` 필드를 확인하십시오.
+   *
+   * @param nodeId 조회할 노트(Note) 또는 대화(Conversation)의 고유 ID
+   * @returns {Promise<HttpResponse<MicroscopeWorkspace>>} 워크스페이스 메타데이터 전체 (documents 배열 포함)
+   * @throws `404` 해당 nodeId로 생성된 Microscope 워크스페이스가 존재하지 않을 때
+   * @throws `401` 인증되지 않은 요청 (세션 없음 또는 만료)
+   * @throws `502` 데이터베이스 오류
+   * @example
+   * // Step 1: ingest 요청
+   * await sdk.microscope.ingestFromNote('note_123');
+   *
+   * // Step 2: 워크스페이스 ID 없이 상태 추적
+   * const { data: workspace } = await sdk.microscope.getLatestWorkspaceByNodeId('note_123');
+   * const doc = workspace.documents.find(d => d.nodeId === 'note_123');
+   * console.log(doc?.status); // 'PROCESSING' | 'COMPLETED' | 'FAILED'
+   *
+   * // Step 3: 완료 시 그래프 조회
+   * if (doc?.status === 'COMPLETED') {
+   *   const graph = await sdk.microscope.getLatestGraphByNodeId('note_123');
+   * }
+   */
+  async getLatestWorkspaceByNodeId(nodeId: string): Promise<HttpResponse<MicroscopeWorkspace>> {
+    return this.rb.path(`/nodes/${nodeId}/latest-workspace`).get<MicroscopeWorkspace>();
   }
 
   /**
@@ -131,6 +189,13 @@ export class MicroscopeApi {
    * 워크스페이스를 삭제합니다. 연관된 Neo4j 그래프와 메타데이터가 파기됩니다.
    *
    * @param microscopeWorkspaceId - 삭제할 워크스페이스 ID
+   *
+   * **응답 상태 코드:**
+   * - `204 No Content`: 삭제 성공
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 워크스페이스가 존재하지 않음
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * await client.microscope.deleteWorkspace('ws_123');
    */

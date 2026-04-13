@@ -20,6 +20,7 @@
 | `types/me.ts` | `UserProfileDto`, `MeResponseDto`, `ApiKeyModel` 등 | 사용자 프로필 및 설정 DTO |
 | `types/microscope.ts` | `MicroscopeDocument`, `MicroscopeWorkspace`, `MicroscopeGraphData` 등 | Microscope 정밀 분석 DTO |
 | `types/file.ts` | `FileAttachment`, `FileUploadResponse` | 파일 업로드 DTO |
+| `types/search.ts` | `SearchResultItem`, `SearchGlobalParams`, `SearchGlobalResponse` | 글로벌 키워드 검색 관련 DTO |
 | `types/problem.ts` | `ProblemDetails` | API 에러 응답 표준 포맷 (RFC 7807) |
 | `types/aiInput.ts` | `AiInputData`, `AiInputMappingNode` 등 | AI 입력 포맷 (내부용) |
 

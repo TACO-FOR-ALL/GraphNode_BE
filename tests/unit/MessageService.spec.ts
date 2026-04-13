@@ -162,6 +162,34 @@ class InMemoryMsgRepo implements MessageRepository {
     }
     return result;
   }
+
+  async searchByKeyword(
+    ownerUserId: string,
+    keyword: string,
+    limit: number,
+    cursor?: string
+  ): Promise<(MessageDoc & { score?: number })[]> {
+    const k = keyword.toLowerCase();
+    const result: (MessageDoc & { score?: number })[] = [];
+    for (const msgs of this.msgs.values()) {
+      for (const m of msgs) {
+        if (m.ownerUserId === ownerUserId && m.content.toLowerCase().includes(k)) {
+          result.push({ ...m, score: 1 });
+        }
+      }
+    }
+    return result.slice(0, limit);
+  }
+
+  async deleteAllByConversationIds(conversationIds: string[], session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const cid of conversationIds) {
+      const msgs = this.msgs.get(cid) || [];
+      count += msgs.length;
+      this.msgs.delete(cid);
+    }
+    return count;
+  }
 }
 
 describe('MessageService', () => {

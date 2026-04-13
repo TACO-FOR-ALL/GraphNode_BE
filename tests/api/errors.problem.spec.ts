@@ -42,4 +42,9 @@ describe('Problem Details', () => {
     expect(res.headers['content-type']).toContain('application/problem+json');
     expect(validateProblem(res.body)).toBe(true);
   });
+
+  afterAll(async () => {
+    const { closeDatabases } = require('../../src/infra/db');
+    await closeDatabases();
+  });
 });

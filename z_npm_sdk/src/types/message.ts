@@ -40,6 +40,8 @@ export interface MessageDto {
   updatedAt?: string; // ISO 8601
   deletedAt?: string | null; // ISO 8601
   attachments?: Attachment[];
+  /** 검색 관련도 점수 (MongoDB textScore 기반, 검색 결과에서만 포함) */
+  score?: number;
   metadata?: {
     toolCalls?: {
       type: 'code_interpreter' | 'file_search';

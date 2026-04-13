@@ -17,6 +17,7 @@ describe('GraphSummaryResultHandler', () => {
     };
     mockGraphService = {
       upsertGraphSummary: jest.fn(),
+      listNodes: jest.fn(async () => []),
       getStats: jest.fn(),
       saveStats: jest.fn(),
     };
@@ -54,10 +55,18 @@ describe('GraphSummaryResultHandler', () => {
 
     expect(mockContainer.getAwsS3Adapter).toHaveBeenCalled();
     expect(mockStoragePort.downloadJson).toHaveBeenCalledWith('key/summary.json');
-    expect(mockGraphService.upsertGraphSummary).toHaveBeenCalledWith('user_1', expect.objectContaining({
-      overview: { summary_text: 'test' },
-      generatedAt: '2023-01-02T00:00:00Z'
-    }));
+    expect(mockGraphService.upsertGraphSummary).toHaveBeenCalledWith(
+      'user_1',
+      expect.objectContaining({
+        overview: expect.objectContaining({
+          summary_text: 'test',
+          total_conversations: 0,
+          total_notes: 0,
+          total_notions: 0,
+        }),
+        generatedAt: '2023-01-02T00:00:00Z',
+      })
+    );
     expect(mockNotiService.sendFcmPushNotification).toHaveBeenCalledWith('user_1', 'Graph Ready', 'Your graph is ready', expect.objectContaining({ taskId: 'task_1', status: 'COMPLETED' }));
   });
 

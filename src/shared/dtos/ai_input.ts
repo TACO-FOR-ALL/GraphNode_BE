@@ -58,7 +58,7 @@ export interface AiInputMappingNode {
  * AI 모듈에서 사용되는 개별 대화(Conversation) 형식.
  * 이 구조는 AI 모듈(worker.py, add_node/call.py 등) 측에서 S3에 업로드된
  * 전체 대화 정보(메시지 매핑, 생성 시간)를 읽어들일 때 사용합니다.
- * 
+ *
  * @property id - 대화의 고유 ID
  * @property conversation_id - (Legacy) AI 측 파이썬 로직 하위호환을 위한 스네이크 케이스 ID
  * @property conversationId - (AddNode) 신규 AddNode 파이프라인에서 이용하는 카멜 케이스 ID
@@ -70,7 +70,7 @@ export interface AiInputMappingNode {
 export interface AiInputConversation {
   id: string;
   conversation_id: string; // Legacy Python tasks usage
-  conversationId: string;  // AddNode Python task usage
+  conversationId: string; // AddNode Python task usage
   title: string;
   create_time: number;
   update_time: number;
@@ -80,22 +80,41 @@ export interface AiInputConversation {
 export type AiInputData = AiInputConversation[];
 
 /**
+ * AddNode 배치 처리 시 노트 한 건을 AI에 전달하는 입력 형식.
+ * 마크다운 content를 그대로 전달하며, AI는 섹션 단위로 분할하여 처리합니다.
+ *
+ * @property noteId - 원본 노트의 MongoDB `_id` (예: UUID 문자열)
+ * @property title - 노트 제목
+ * @property content - 노트 전체 내용 (Markdown 형식)
+ */
+export interface AiInputNote {
+  /** 원본 노트의 MongoDB _id */
+  noteId: string;
+  /** 노트 제목 */
+  title: string;
+  /** 노트 전체 내용 (Markdown) */
+  content: string;
+}
+
+/**
  * AddNode 배치 처리를 위해 AI 큐(.py)에 전송하기 전 S3에 저장하는 Payload/JSON 양식.
- * 
+ *
  * @property userId - 사용자 식별자 (UUID / ULID)
  * @property existingClusters - 현재 사용자가 보유한 기존 클러스터 정보 리스트 (clusterId, name, themes 등).
- * @property conversations - 새롭게 추가 또는 갱신된 대화의 내용 배열. AiInputConversation 구조로 상세 내용을 포괄함.
+ * @property conversations - 새롭게 추가 또는 갱신된 대화의 내용 배열. `mapping` 형식 또는 `messages[]` 형식 모두 허용.
+ * @property notes - 새롭게 추가 또는 갱신된 노트의 내용 배열.
  */
 export interface AiAddNodeBatchRequest {
   userId: string;
-  existingClusters: any[]; // Array of existing clusters
+  existingClusters: any[];
   conversations: AiInputConversation[];
+  notes: AiInputNote[];
 }
 
 /**
  * AI 서버 측 Microscope (RAG/문서 섭취)를 위한 Ingest 요청 DTO 형식입니다.
  * SQS 메시지를 통해 이 양식으로 전달되면 AI의 `handle_microscope_ingest`가 실행됩니다.
- * 
+ *
  * @property user_id - 사용자 식별자
  * @property group_id - 그룹 식별자 (마이크로스코프 공간 논리적 구분)
  * @property s3_key - S3에 업로드된 대상 파일(PDF, MD, TXT 등)의 객체 키
@@ -115,3 +134,44 @@ export interface AiMicroscopeIngestRequest {
   api_key?: string;
 }
 
+/**
+ * AI 파이프라인의 개별 섹션(텍스트 조각) 형식.
+ * 하나의 노드는 여러 섹션으로 구성될 수 있습니다.
+ */
+export interface AiInputSection {
+  /** 섹션 식별자 */
+  id: string;
+  /** 섹션 본문 내용 */
+  content: string;
+  /** 역할 (chat의 경우 user/assistant, 그 외 생략 가능) */
+  role?: string;
+  /** 섹션 제목 (마크다운 헤더 등) */
+  section_title?: string;
+}
+
+/**
+ * AI 파이프라인의 핵심 입력 단위인 소스 노드 형식.
+ * 하나의 노트나 하나의 대화가 하나의 SourceNode가 됩니다.
+ */
+export interface AiInputSourceNode {
+  /** 원본 데이터 식별자 (MongoDB _id) */
+  id: string;
+  /** 제목 */
+  title?: string;
+  /** 구성 섹션 리스트 */
+  sections: AiInputSection[];
+  /** 소스 유형 */
+  source_type: 'chat' | 'markdown' | 'notion';
+  /** 생성 시간 (Unix Timestamp, seconds) */
+  create_time?: number;
+  /** 수정 시간 (Unix Timestamp, seconds) */
+  update_time?: number;
+}
+
+/**
+ * AI 서버에 전달할 최종 Payload 형식.
+ * 'source_nodes' 키를 최상위에 두어 AI 서버가 개별 노드들을 정확히 인식하게 합니다.
+ */
+export interface AiInputSourceNodesPayload {
+  source_nodes: AiInputSourceNode[];
+}

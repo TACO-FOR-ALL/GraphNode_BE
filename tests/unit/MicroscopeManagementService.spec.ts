@@ -32,6 +32,7 @@ describe('MicroscopeManagementService', () => {
       findGraphPayloadsByIds: jest.fn(),
       deleteGraphPayloadsByGroupId: jest.fn(),
       findLatestWorkspaceByNodeId: jest.fn(),
+      findWorkspaceByMostRecentDocumentNodeId: jest.fn(),
     } as any;
 
     mockGraphNeo4jStore = {
@@ -146,7 +147,7 @@ describe('MicroscopeManagementService', () => {
       expect(mockWorkspaceStore.addDocument).toHaveBeenCalledWith(createdWorkspaceId, expect.any(Object));
       expect(addedDocument).toMatchObject({
         fileName: `${nodeId}.md`,
-        status: 'PENDING',
+        status: 'PROCESSING',
         nodeId: nodeId,
         nodeType: nodeType
       });
@@ -196,6 +197,90 @@ describe('MicroscopeManagementService', () => {
        await expect(
         service.createWorkspaceAndMicroscopeIngestFromNode('user', 'id', 'invalid' as any)
       ).rejects.toThrow(ValidationError);
+    });
+  });
+
+  describe('getLatestWorkspaceByNodeId', () => {
+    const userId = 'user_test';
+    const nodeId = 'note_abc';
+
+    const mockWorkspace = {
+      _id: 'ws_latest',
+      userId,
+      name: 'Test Note',
+      documents: [
+        {
+          id: 'doc_1',
+          s3Key: '',
+          fileName: `${nodeId}.md`,
+          status: 'PROCESSING' as const,
+          nodeId,
+          nodeType: 'note' as const,
+          createdAt: '2026-04-09T10:00:00Z',
+          updatedAt: '2026-04-09T10:00:00Z',
+        },
+      ],
+      createdAt: '2026-04-09T10:00:00Z',
+      updatedAt: '2026-04-09T10:00:00Z',
+    };
+
+    it('should return workspace when found', async () => {
+      // Arrange
+      mockWorkspaceStore.findWorkspaceByMostRecentDocumentNodeId.mockResolvedValue(mockWorkspace as any);
+
+      // Act
+      const result = await service.getLatestWorkspaceByNodeId(userId, nodeId);
+
+      // Assert
+      expect(mockWorkspaceStore.findWorkspaceByMostRecentDocumentNodeId).toHaveBeenCalledWith(
+        userId,
+        nodeId
+      );
+      expect(result._id).toBe('ws_latest');
+      expect(result.documents[0].nodeId).toBe(nodeId);
+      expect(result.documents[0].status).toBe('PROCESSING');
+    });
+
+    it('should throw NotFoundError when no workspace exists for nodeId', async () => {
+      // Arrange
+      mockWorkspaceStore.findWorkspaceByMostRecentDocumentNodeId.mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(service.getLatestWorkspaceByNodeId(userId, nodeId)).rejects.toThrow(
+        NotFoundError
+      );
+      expect(mockWorkspaceStore.findWorkspaceByMostRecentDocumentNodeId).toHaveBeenCalledWith(
+        userId,
+        nodeId
+      );
+    });
+
+    it('should return most recently requested workspace among multiple ingest requests', async () => {
+      // Arrange: 동일 nodeId로 2번 ingest 요청 → 최신(createdAt 기준) workspace 반환
+      const newerWorkspace = {
+        ...mockWorkspace,
+        _id: 'ws_newer',
+        documents: [
+          {
+            ...mockWorkspace.documents[0],
+            id: 'doc_newer',
+            status: 'PROCESSING' as const,
+            createdAt: '2026-04-09T12:00:00Z', // 더 최신
+          },
+        ],
+      };
+
+      // Repository가 aggregation으로 이미 정렬된 결과를 반환한다고 가정
+      mockWorkspaceStore.findWorkspaceByMostRecentDocumentNodeId.mockResolvedValue(
+        newerWorkspace as any
+      );
+
+      // Act
+      const result = await service.getLatestWorkspaceByNodeId(userId, nodeId);
+
+      // Assert: 최신 워크스페이스가 반환됨
+      expect(result._id).toBe('ws_newer');
+      expect(result.documents[0].id).toBe('doc_newer');
     });
   });
 });

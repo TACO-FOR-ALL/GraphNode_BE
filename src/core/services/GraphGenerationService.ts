@@ -7,12 +7,24 @@ import { NoteService } from './NoteService';
 import { UserService } from './UserService';
 import { NotificationService } from './NotificationService';
 import { HttpClient } from '../../infra/http/httpClient';
-import { AiInputConversation, AiInputMappingNode } from '../../shared/dtos/ai_input';
+import {
+  AiAddNodeBatchRequest,
+  AiInputConversation,
+  AiInputMappingNode,
+  AiInputNote,
+  AiInputSection,
+  AiInputSourceNode,
+} from '../../shared/dtos/ai_input';
 import { logger } from '../../shared/utils/logger';
 import { AppError, UpstreamError, GraphNotFoundError } from '../../shared/errors/domain';
 import { ChatMessage } from '../../shared/dtos/ai';
 import { mapSnapshotToAiInput } from '../../shared/mappers/graph_ai_input.mapper';
-import { GraphGenRequestPayload, GraphSummaryRequestPayload, AddNodeRequestPayload, TaskType } from '../../shared/dtos/queue';
+import {
+  GraphGenRequestPayload,
+  GraphSummaryRequestPayload,
+  AddNodeRequestPayload,
+  TaskType,
+} from '../../shared/dtos/queue';
 // Interfaces
 import { QueuePort } from '../ports/QueuePort';
 import { StoragePort } from '../ports/StoragePort';
@@ -20,6 +32,7 @@ import { loadEnv } from '../../config/env';
 import { withRetry } from '../../shared/utils/retry';
 import { getPostHogClient } from '../../shared/utils/posthog';
 import { redis } from '../../infra/redis/client';
+import { GraphClusterDto } from '../../shared/dtos/graph';
 
 /**
  * 모듈: GraphGenerationService
@@ -60,13 +73,32 @@ export class GraphGenerationService {
    *
    * @param userId 사용자 ID
    * @param options 옵션 (요약 포함 여부 등)
-   * @returns 발행된 작업의 Task ID
+   * @returns 발행된 작업의 Task ID 또는 건너뛴 경우 null
    */
-  async requestGraphGenerationViaQueue(userId: string, options?: { 
-    includeSummary?: boolean; 
-  }): Promise<string> {
+  async requestGraphGenerationViaQueue(
+    userId: string,
+    options?: {
+      includeSummary?: boolean;
+    }
+  ): Promise<string | null> {
     let taskId: string | undefined;
     try {
+      // 0. 데이터 존재 여부 확인
+      const convs = await withRetry(
+        async () => await this.chatManagementService.listConversations(userId, 1),
+        { label: 'ChatManagementService.listConversations.check' }
+      );
+      const notes = await withRetry(
+        async () => await this.noteService.findNotesModifiedSince(userId, new Date(0)),
+        { label: 'NoteService.findNotesModifiedSince.check' }
+      );
+      const activeNotes = notes.filter((n) => !n.deletedAt);
+
+      if (convs.items.length === 0 && activeNotes.length === 0) {
+        logger.info({ userId }, 'No conversation or note data found. Skipping graph generation.');
+        return null;
+      }
+
       taskId = `task_${userId}_${ulid()}`;
       const s3Key = `graph-generation/${taskId}/input.json`;
 
@@ -115,16 +147,15 @@ export class GraphGenerationService {
           bucket: process.env.S3_PAYLOAD_BUCKET,
           includeSummary: options?.includeSummary ?? true,
           summaryLanguage: language,
-          language : language,
+          language: language,
           extraS3Keys: [noteS3Key], // 통합된 노트 데이터 S3 키 전달
         },
         timestamp: new Date().toISOString(),
       };
 
-      await withRetry(
-        async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody),
-        { label: 'QueuePort.sendMessage.GraphGen' }
-      );
+      await withRetry(async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
+        label: 'QueuePort.sendMessage.GraphGen',
+      });
 
       // PostHog 분석용 시작 이벤트(A) 기록 및 시작 시각 캐싱
       await this.trackGraphGenerationRequested(userId, taskId, messageBody.timestamp);
@@ -136,7 +167,11 @@ export class GraphGenerationService {
     } catch (err) {
       logger.error({ err, userId }, 'Failed to enqueue graph generation request');
       // 실패 알림 전송
-      await this.notificationService.sendGraphGenerationRequestFailed(userId, taskId || 'unknown', String(err));
+      await this.notificationService.sendGraphGenerationRequestFailed(
+        userId,
+        taskId || 'unknown',
+        String(err)
+      );
 
       if (err instanceof AppError) throw err;
       throw new UpstreamError('Failed to request graph generation via queue', {
@@ -191,7 +226,7 @@ export class GraphGenerationService {
   async testRequestAddNodeViaQueue(userId: string): Promise<string> {
     const taskId = `task_test_add_node_${userId}_${ulid()}`;
     const s3Key = `add-node/${taskId}/test-batch.json`;
-    
+
     const mockPayload = {
       userId,
       existingClusters: [],
@@ -203,12 +238,15 @@ export class GraphGenerationService {
           create_time: Date.now() / 1000,
           update_time: Date.now() / 1000,
           mapping: {
-            'test_msg_id': {
+            test_msg_id: {
               id: 'test_msg_id',
               message: {
                 id: 'test_msg_id',
                 author: { role: 'user' },
-                content: { content_type: 'text', parts: ['This is a test message for graph generation.'] },
+                content: {
+                  content_type: 'text',
+                  parts: ['This is a test message for graph generation.'],
+                },
               },
               parent: null,
               children: [],
@@ -251,20 +289,20 @@ export class GraphGenerationService {
       if (!snapshot || snapshot.nodes.length === 0) {
         throw new GraphNotFoundError('Graph data not found for user. Please generate graph first.');
       }
-      
+
       const language = await this.userService.getPreferredLanguage(userId);
       const aiInput = mapSnapshotToAiInput(snapshot, language);
       const jsonPayload = JSON.stringify(aiInput);
       const dataStream = Readable.from([jsonPayload]);
-      
+
       const s3Key = `graph-summary/${taskId}/graph.json`;
       const bucket = process.env.S3_PAYLOAD_BUCKET || 'graph-node-payloads';
-      
+
       await withRetry(
         async () => await this.storagePort.upload(s3Key, dataStream, 'application/json'),
         { label: 'Storage.upload.summary' }
       );
-      
+
       const messageBody: GraphSummaryRequestPayload = {
         taskId,
         taskType: TaskType.GRAPH_SUMMARY_REQUEST,
@@ -276,19 +314,18 @@ export class GraphGenerationService {
         },
         timestamp: new Date().toISOString(),
       };
-      
-      await withRetry(
-        async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody),
-        { label: 'QueuePort.sendMessage.Summary' }
-      );
-      
+
+      await withRetry(async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
+        label: 'QueuePort.sendMessage.Summary',
+      });
+
       // 성공 알림 전송
       await this.notificationService.sendGraphSummaryRequested(userId, taskId);
-      
+
       return taskId;
     } catch (err) {
       logger.error({ err, userId }, 'Failed to requesting graph summary');
-      
+
       // 실패 알림 전송
       const taskId = (err as any).taskId || 'unknown'; // taskId가 스코프 밖에 있을 수 있으므로 방어적 처리
       await this.notificationService.sendGraphSummaryRequestFailed(userId, taskId, String(err));
@@ -344,14 +381,13 @@ export class GraphGenerationService {
       const taskId = `task_add_node_${userId}_${ulid()}`;
       const s3Key = `add-node/${taskId}/batch.json`;
 
-      const stats = await withRetry(
-        async () => await this.graphEmbeddingService.getStats(userId),
-        { label: 'GraphEmbeddingService.getStats' }
-      );
+      const stats = await withRetry(async () => await this.graphEmbeddingService.getStats(userId), {
+        label: 'GraphEmbeddingService.getStats',
+      });
       if (!stats) {
         throw new GraphNotFoundError('Graph statistics not found. Please generate graph first.');
       }
-      
+
       const lastGraphUpdatedAt = stats.updatedAt ? new Date(stats.updatedAt).getTime() : 0;
 
       // 변경된 대화 수집
@@ -360,9 +396,9 @@ export class GraphGenerationService {
         { label: 'ChatManagementService.listConversations.initial' }
       );
       let allConversations = listResult.items;
-      
+
       let cursor = listResult.nextCursor ?? undefined;
-      while(cursor !== null && cursor !== undefined) {
+      while (cursor !== null && cursor !== undefined) {
         const nextResult = await withRetry(
           async () => await this.chatManagementService.listConversations(userId, 100, cursor),
           { label: 'ChatManagementService.listConversations.loop' }
@@ -371,27 +407,38 @@ export class GraphGenerationService {
         cursor = nextResult.nextCursor ?? undefined;
       }
 
-      const updatedConversations = allConversations.filter(conv => {
-         const convUpdateTime = conv.updatedAt ? new Date(conv.updatedAt).getTime() : 0;
-         return convUpdateTime > lastGraphUpdatedAt;
+      const updatedConversations = allConversations.filter((conv) => {
+        const convUpdateTime = conv.updatedAt ? new Date(conv.updatedAt).getTime() : 0;
+        return convUpdateTime > lastGraphUpdatedAt;
       });
 
-      if (updatedConversations.length === 0) {
+      // 변경된 노트 수집 (lastGraphUpdatedAt 이후 수정된 활성 노트)
+      const modifiedNotes = await withRetry(
+        async () =>
+          await this.noteService.findNotesModifiedSince(userId, new Date(lastGraphUpdatedAt)),
+        { label: 'NoteService.findNotesModifiedSince' }
+      );
+      const updatedNotes = modifiedNotes.filter((note) => !note.deletedAt);
+
+      // 대화도 노트도 변경 없으면 작업 불필요
+      if (updatedConversations.length === 0 && updatedNotes.length === 0) {
         return null;
       }
 
       // AI 입력 포맷 변환
-      const mappedConversations: AiInputConversation[] = updatedConversations.map(conv => {
+      const mappedConversations: AiInputConversation[] = updatedConversations.map((conv) => {
         const messages: ChatMessage[] = conv.messages || [];
         const mapping: Record<string, AiInputMappingNode> = {};
         let prevMsgId: string | null = null;
-  
+
+        // 대화 순서 정렬
         messages.sort((a, b) => {
           const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
           const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
           return timeA - timeB;
         });
-  
+
+        // 대화 메시지 매핑
         for (const msg of messages) {
           const id = msg.id;
           mapping[id] = {
@@ -404,7 +451,7 @@ export class GraphGenerationService {
             parent: prevMsgId,
             children: [],
           };
-  
+
           if (prevMsgId && mapping[prevMsgId]) {
             mapping[prevMsgId].children.push(id);
           }
@@ -416,25 +463,38 @@ export class GraphGenerationService {
           conversation_id: conv.id,
           conversationId: conv.id,
           title: conv.title,
-          create_time: conv.createdAt ? new Date(conv.createdAt).getTime() / 1000 : 0,
-          update_time: conv.updatedAt ? new Date(conv.updatedAt).getTime() / 1000 : 0,
+          create_time: conv.createdAt ? Math.floor(new Date(conv.createdAt).getTime() / 1000) : 0,
+          update_time: conv.updatedAt ? Math.floor(new Date(conv.updatedAt).getTime() / 1000) : 0,
           mapping,
         };
       });
 
-      const existingClusters = await this.graphEmbeddingService.listClusters(userId);
-      const batchPayload = {
+      // 노트 AI 입력 포맷 변환 (AI가 요구하는 필드만 포함)
+      const mappedNotes: AiInputNote[] = updatedNotes.map((note) => ({
+        noteId: note._id,
+        title: note.title,
+        content: note.content,
+      }));
+
+      // 기존 클러스터 정보 가져오기
+      const existingClusters: GraphClusterDto[] =
+        await this.graphEmbeddingService.listClusters(userId);
+      const batchPayload: AiAddNodeBatchRequest = {
         userId,
         existingClusters,
         conversations: mappedConversations,
+        notes: mappedNotes,
       };
 
-      const payloadJson = JSON.stringify(batchPayload);
+      // S3에 데이터 업로드
+      const payloadJson: string = JSON.stringify(batchPayload);
       await this.storagePort.upload(s3Key, payloadJson, 'application/json');
 
+      // 그래프 상태 업데이트
       stats.status = 'UPDATING';
       await this.graphEmbeddingService.saveStats(stats);
 
+      // SQS 메시지 생성
       const messageBody: AddNodeRequestPayload = {
         taskId,
         taskType: TaskType.ADD_NODE_REQUEST,
@@ -446,10 +506,9 @@ export class GraphGenerationService {
         timestamp: new Date().toISOString(),
       };
 
-      await withRetry(
-        async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody),
-        { label: 'QueuePort.sendMessage.AddNode' }
-      );
+      await withRetry(async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
+        label: 'QueuePort.sendMessage.AddNode',
+      });
 
       // 성공 알림 전송
       await this.notificationService.sendAddConversationRequested(userId, taskId);
@@ -457,10 +516,14 @@ export class GraphGenerationService {
       return taskId;
     } catch (err) {
       logger.error({ err, userId }, 'Failed to queue add node request');
-      
+
       // 실패 알림 전송 (taskId가 try 블록 내부에 정의되어 있으므로 에러 객체에 taskId를 담아두거나 스코프를 조정해야 함)
       // 여기서는 스코프 문제로 'unknown' 처리하거나 상단으로 taskId 정의를 뺌
-      await this.notificationService.sendAddConversationRequestFailed(userId, 'unknown', String(err));
+      await this.notificationService.sendAddConversationRequestFailed(
+        userId,
+        'unknown',
+        String(err)
+      );
 
       if (err instanceof AppError) throw err;
       throw new UpstreamError('Failed to request add node via queue', { cause: String(err) });
@@ -484,7 +547,7 @@ export class GraphGenerationService {
         async () => await this.chatManagementService.listConversations(userId, BATCH_SIZE, cursor),
         { label: 'ChatManagementService.listConversations.stream' }
       );
-      
+
       for (const conv of result.items) {
         const messages: ChatMessage[] = conv.messages || [];
         const mapping: Record<string, AiInputMappingNode> = {};
@@ -519,8 +582,8 @@ export class GraphGenerationService {
           conversation_id: conv.id,
           conversationId: conv.id,
           title: conv.title,
-          create_time: conv.createdAt ? new Date(conv.createdAt).getTime() / 1000 : 0,
-          update_time: conv.updatedAt ? new Date(conv.updatedAt).getTime() / 1000 : 0,
+          create_time: conv.createdAt ? Math.floor(new Date(conv.createdAt).getTime() / 1000) : 0,
+          update_time: conv.updatedAt ? Math.floor(new Date(conv.updatedAt).getTime() / 1000) : 0,
           mapping,
         };
 
@@ -536,15 +599,15 @@ export class GraphGenerationService {
   }
 
   /**
-   * 사용자 노트 데이터를 AI 입력 형식으로 변환하여 스트리밍하는 제너레이터
+   * 사용자 노트 데이터를 Macro Graph 생성 시 필요한 AI 입력 형식으로 변환하여 스트리밍하는 제너레이터
    *
    * @param userId 사용자 ID
    * @yields 개별 노트 데이터 (JSON string)
    */
   private async *streamNotes(userId: string): AsyncGenerator<string> {
-    yield '[';
+    yield '{"source_nodes":[';
     let isFirst = true;
-    
+
     // NoteService.findNotesModifiedSince 를 활용하여 모든 노트를 가져옴
     const allNotes = await withRetry(
       async () => await this.noteService.findNotesModifiedSince(userId, new Date(0)),
@@ -555,13 +618,18 @@ export class GraphGenerationService {
       // 삭제된 노트 제외
       if (note.deletedAt) continue;
 
-      const aiNote = {
+      const aiNote: AiInputSourceNode = {
         id: note._id,
         title: note.title,
-        content: note.content,
+        sections: [
+          {
+            id: note._id,
+            content: note.content,
+          },
+        ],
         source_type: 'markdown',
-        createdAt: note.createdAt.toISOString(),
-        updatedAt: note.updatedAt.toISOString(),
+        create_time: note.createdAt ? Math.floor(new Date(note.createdAt).getTime() / 1000) : 0,
+        update_time: note.updatedAt ? Math.floor(new Date(note.updatedAt).getTime() / 1000) : 0,
       };
 
       if (!isFirst) yield ',';
@@ -569,6 +637,6 @@ export class GraphGenerationService {
       isFirst = false;
     }
 
-    yield ']';
+    yield ']}';
   }
 }

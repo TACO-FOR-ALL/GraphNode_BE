@@ -31,6 +31,12 @@ class InMemoryConvRepo implements ConversationRepository {
     return docs;
   }
 
+  async countByOwner(ownerUserId: string): Promise<number> {
+    return Array.from(this.data.values()).filter(
+      (doc) => doc.ownerUserId === ownerUserId && doc.deletedAt == null
+    ).length;
+  }
+
   async findById(
     id: string,
     ownerUserId: string,
@@ -110,6 +116,25 @@ class InMemoryConvRepo implements ConversationRepository {
     );
   }
 
+  async searchByKeyword(
+    ownerUserId: string,
+    keyword: string,
+    limit: number,
+    cursor?: string
+  ): Promise<(ConversationDoc & { score?: number })[]> {
+    const k = keyword.toLowerCase();
+    return Array.from(this.data.values())
+      .filter((v) => v.ownerUserId === ownerUserId && v.title.toLowerCase().includes(k))
+      .slice(0, limit)
+      .map(doc => ({ ...doc, score: 1 }));
+  }
+
+  async findByIds(ids: string[], ownerUserId: string): Promise<ConversationDoc[]> {
+    return Array.from(this.data.values()).filter(
+      (v) => ids.includes(v._id) && v.ownerUserId === ownerUserId
+    );
+  }
+
   async listTrashByOwner(): Promise<{ items: any[]; nextCursor?: string | null }> {
     return { items: [], nextCursor: null };
   }
@@ -118,6 +143,23 @@ class InMemoryConvRepo implements ConversationRepository {
   }
   async findExpiredConversations(): Promise<any[]> {
     return [];
+  }
+
+  async findAllIdsByOwner(ownerUserId: string): Promise<string[]> {
+    return Array.from(this.data.values())
+      .filter((v) => v.ownerUserId === ownerUserId)
+      .map((v) => v._id);
+  }
+
+  async deleteByIds(ids: string[], session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const id of ids) {
+      if (this.data.has(id)) {
+        this.data.delete(id);
+        count++;
+      }
+    }
+    return count;
   }
 }
 
@@ -131,6 +173,16 @@ describe('ConversationService', () => {
   });
 
   describe('External DTO Methods', () => {
+    test('countConversations returns active conversation count', async () => {
+      await svc.createConversation('u1', 'c1', 'T1');
+      await svc.createConversation('u1', 'c2', 'T2');
+      await svc.createConversation('u2', 'c3', 'T3');
+      await svc.deleteDoc('c2', 'u1', false);
+
+      const count = await svc.countConversations('u1');
+      expect(count).toBe(1);
+    });
+
     test('createConversation returns DTO', async () => {
       const result = await svc.createConversation('u1', 'c1', 'Title');
       expect(result.id).toBe('c1');

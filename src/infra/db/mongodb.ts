@@ -15,6 +15,19 @@ import { logger } from '../../shared/utils/logger';
 export let client: MongoClient | undefined;
 
 /**
+ * MongoDB 연결 종료 함수
+ *
+ * 역할:
+ * 1. 활성 중인 클라이언트 객체가 있다면 연결을 명확히 닫습니다.
+ */
+export async function disconnectMongo(): Promise<void> {
+  if (client) {
+    await client.close();
+    client = undefined;
+  }
+}
+
+/**
  * MongoDB 초기화 함수
  *
  * 역할:
@@ -63,18 +76,40 @@ async function ensureIndexes() {
   const db = getMongo().db();
 
   // conversations 컬렉션: 소유자 ID로 조회하며 최신순 정렬 및 페이징을 위해 updatedAt 인덱스 추가
-  await db.collection('conversations').createIndex({ ownerUserId: 1, deletedAt: 1, updatedAt: -1, _id: 1 });
+  await db
+    .collection('conversations')
+    .createIndex({ ownerUserId: 1, deletedAt: 1, updatedAt: -1, _id: 1 });
 
-  // messages 컬렉션: 대화방 ID로 메시지 목록을 조회하므로 인덱스 생성
-  await db.collection('messages').createIndex({ conversationId: 1, _id: 1 });
+  // messages 컬렉션: 대화방 ID + deletedAt 필터 + createdAt 정렬을 커버하는 복합 인덱스
+  // findAllByConversationId / findAllByConversationIds 쿼리:
+  //   { conversationId, deletedAt: null } .sort({ createdAt: 1 }) → 이 인덱스가 완전 커버
+  await db.collection('messages').createIndex({ conversationId: 1, deletedAt: 1, createdAt: 1 });
 
   // Graph Collections: {id, userId} 조합으로 조회하므로 복합 인덱스 생성 (Unique)
   await db.collection('graph_nodes').createIndex({ userId: 1, id: 1 }, { unique: true });
+  await db.collection('graph_nodes').createIndex({ origId: 1, userId: 1 }, { unique: true });
   await db.collection('graph_edges').createIndex({ userId: 1, id: 1 }, { unique: true });
   await db.collection('graph_clusters').createIndex({ userId: 1, id: 1 }, { unique: true });
 
   // Graph Stats: 사용자당 하나이므로 userId 인덱스
   await db.collection('graph_stats').createIndex({ userId: 1 }, { unique: true });
+
+  // conversations 동기화 쿼리: findModifiedSince { ownerUserId, updatedAt: { $gte } }
+  // 현재 주 인덱스(ownerUserId→deletedAt→updatedAt)는 deletedAt 없는 이 쿼리에 deletedAt 이후 키를 활용 못 함
+  await db.collection('conversations').createIndex(
+    { ownerUserId: 1, updatedAt: 1 },
+    { name: 'conversations_sync' }
+  );
+
+  // conversations 만료 정리 쿼리: hardDeleteExpired/findExpiredConversations
+  // 삭제된 대화만 스캔하도록 Partial Index 적용
+  await db.collection('conversations').createIndex(
+    { deletedAt: 1 },
+    { 
+      name: 'conversations_cleanup_partial',
+      partialFilterExpression: { deletedAt: { $type: 'date' } }
+    }
+  );
 
   // Missing indexes: graph_subclusters, graph_summaries
   await db.collection('graph_subclusters').createIndex({ userId: 1 });
@@ -86,8 +121,13 @@ async function ensureIndexes() {
   // notifications 보관 정책(선택): expiresAt(BSON Date) 기준 TTL 인덱스
   // - 주의: expiresAt 필드 값이 반드시 'Date 객체'여야 하며, 숫자(number)일 경우 동작하지 않습니다.
   // - expiresAt가 없는 문서는 TTL로 자동 삭제되지 않습니다.
-  // 목적: 알림 이력을 무한히 쌓지 않고 운영 정책(예: 7일)으로 자동 정리하기 위함
+  // 목적: 알림 이력 정리
   await db.collection('notifications').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+  // notes 컬렉션: listNotes 쿼리 패턴 { ownerUserId, folderId, deletedAt: null } + sort(updatedAt: -1) 커버
+  await db.collection('notes').createIndex({ ownerUserId: 1, folderId: 1, deletedAt: 1, updatedAt: -1 });
+
+  // (이전 텍스트 인덱스들은 용량 문제로 제거되었습니다. Atlas Search 등으로 대체 필요)
 
   logger.info({ event: 'db.migrations_checked' }, 'DB indexes ensured');
 }

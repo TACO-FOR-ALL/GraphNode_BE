@@ -24,6 +24,7 @@ import { ChatThread } from '../../shared/dtos/ai';
 import { ConversationDoc } from '../types/persistence/ai.persistence';
 import { toChatThreadDto, toConversationDoc } from '../../shared/mappers/ai';
 import { UpstreamError, ValidationError, NotFoundError } from '../../shared/errors/domain';
+import { withRetry } from '../../shared/utils/retry';
 
 /**
  * 모듈: ConversationService (대화 서비스)
@@ -71,8 +72,9 @@ export class ConversationService {
       const newThreadDto: Omit<ChatThread, 'messages'> = {
         id: finalThreadId,
         title,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        // Timestamp placeholders — actual values are always overridden by the repository layer.
+        createdAt: '',
+        updatedAt: '',
       };
 
       const convDoc: ConversationDoc = toConversationDoc(newThreadDto, ownerUserId);
@@ -82,6 +84,27 @@ export class ConversationService {
     } catch (err: unknown) {
       this.checkTransactionError(err);
       throw new UpstreamError('Failed to create conversation', { cause: err as any });
+    }
+  }
+
+  /**
+   * 사용자가 가진 Conversation의 개수를 세서 반환하는 메서드
+   * @param userId 소유자 ID
+   * @returns Conversation의 개수
+   */
+  async countConversations(userId: string): Promise<number> {
+    try {
+      const conversationCnt = await withRetry(
+        async () => await this.conversationRepo.countByOwner(userId),
+        { label: 'ConversationService.countConversations' }
+      );
+      if (conversationCnt == null) {
+        throw new UpstreamError('ConversationRepository.countByOwner returned null');
+      }
+      return conversationCnt;
+    } catch (err: unknown) {
+      this.checkTransactionError(err);
+      throw new UpstreamError('Failed to count conversations', { cause: err as any });
     }
   }
 
@@ -307,6 +330,16 @@ export class ConversationService {
   }
 
   /**
+   * 여러 ID에 해당하는 대화 문서들을 한 번에 조회합니다. (Internal Use - Returns Docs)
+   * @param ids 대화 ID 배열
+   * @param ownerUserId 소유자 ID
+   * @returns 대화 문서 배열
+   */
+  async findDocsByIds(ids: string[], ownerUserId: string): Promise<ConversationDoc[]> {
+    return this.conversationRepo.findByIds(ids, ownerUserId);
+  }
+
+  /**
    * 특정 사용자의 모든 대화를 삭제합니다. (Internal Use)
    * @param ownerUserId 소유자 ID
    * @param session MongoDB 클라이언트 세션 (선택 사항)
@@ -316,6 +349,26 @@ export class ConversationService {
     return this.conversationRepo.deleteAll(ownerUserId, session);
   }
 
+  /**
+   * 특정 사용자의 모든 대화 ID만 조회합니다 (메모리 최적화용 Projection).
+   * @description 전체 문서 대신 `_id` 필드만 가져와 메모리 사용을 최소화합니다.
+   * @param ownerUserId 소유자 ID
+   * @returns 대화 ID 문자열 배열
+   */
+  async findAllIdsByOwner(ownerUserId: string): Promise<string[]> {
+    return this.conversationRepo.findAllIdsByOwner(ownerUserId);
+  }
+
+  /**
+   * 주어진 ID 배열에 해당하는 대화를 일괄 삭제합니다 (Chunk Delete용).
+   * @param ids 삭제할 대화 ID 배열
+   * @param session MongoDB 클라이언트 세션 (선택 사항)
+   * @returns 삭제된 대화 수
+   */
+  async deleteDocsByIds(ids: string[], session?: ClientSession): Promise<number> {
+    if (ids.length === 0) return 0;
+    return this.conversationRepo.deleteByIds(ids, session);
+  }
 
   /**
    * 트랜잭션 관련 에러를 체크합니다.
@@ -332,5 +385,4 @@ export class ConversationService {
     const e: any = err;
     if (e && typeof e.code === 'string') throw err;
   }
-
 }

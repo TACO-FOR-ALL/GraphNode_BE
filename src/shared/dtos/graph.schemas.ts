@@ -21,6 +21,7 @@ export const graphNodeSchema = z.object({
   id: z.number().int(),
   userId: z.string().min(1),
   origId: z.string().min(1),
+  nodeTitle: z.string().min(1).optional(),
   clusterId: z.string().min(1),
   clusterName: z.string().min(1),
   timestamp: z.iso.datetime({ offset: true }).or(z.null()),

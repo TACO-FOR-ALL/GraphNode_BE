@@ -16,6 +16,7 @@ import { AwsSqsAdapter } from '../../src/infra/aws/AwsSqsAdapter';
 import { AwsS3Adapter } from '../../src/infra/aws/AwsS3Adapter';
 import { ConversationRepositoryMongo } from '../../src/infra/repositories/ConversationRepositoryMongo';
 import { MessageRepositoryMongo } from '../../src/infra/repositories/MessageRepositoryMongo';
+import { NoteRepositoryMongo } from '../../src/infra/repositories/NoteRepositoryMongo';
 import { UserRepositoryMySQL } from '../../src/infra/repositories/UserRepositoryMySQL';
 
 // --- Mocks ---
@@ -24,6 +25,7 @@ jest.mock('../../src/infra/aws/AwsSqsAdapter');
 jest.mock('../../src/infra/aws/AwsS3Adapter');
 jest.mock('../../src/infra/repositories/ConversationRepositoryMongo');
 jest.mock('../../src/infra/repositories/MessageRepositoryMongo');
+jest.mock('../../src/infra/repositories/NoteRepositoryMongo');
 jest.mock('../../src/infra/repositories/UserRepositoryMySQL');
 jest.mock('../../src/infra/db/mongodb', () => ({
     getMongo: jest.fn(() => ({
@@ -56,6 +58,7 @@ jest.mock('../../src/core/services/NotificationService', () => ({
 
 describe('GraphAi API Integration Tests', () => {
     let app: Express;
+    let server: import('http').Server;
     let accessToken: string;
     const userId = 'user-12345';
 
@@ -105,6 +108,7 @@ describe('GraphAi API Integration Tests', () => {
 
     const mockConvRepo = {
         create: jest.fn(async (conv: any) => { conversationsStore.set(conv._id, conv); return conv; }),
+        countByOwner: jest.fn(async (uid: string) => Array.from(conversationsStore.values()).filter(c => c.ownerUserId === uid).length),
         findById: jest.fn(async (id: string) => conversationsStore.get(id) || null),
         listByOwner: jest.fn(async (uid: string, limit: number) => ({ items: Array.from(conversationsStore.values()).filter(c => c.ownerUserId === uid).slice(0, limit), nextCursor: null })),
     };
@@ -117,10 +121,44 @@ describe('GraphAi API Integration Tests', () => {
             return msg;
         }),
         findAllByConversationId: jest.fn(async (cid: string) => messagesStore.get(cid) || []),
+        findAllByConversationIds: jest.fn(async (cids: string[]) => {
+            const result: any[] = [];
+            cids.forEach(cid => {
+                const msgs = messagesStore.get(cid) || [];
+                result.push(...msgs);
+            });
+            return result;
+        }),
+        deleteAllByUserId: jest.fn(async (uid: string) => {
+            let count = 0;
+            for (const [cid, msgs] of messagesStore.entries()) {
+                const filtered = msgs.filter(m => m.ownerUserId !== uid);
+                count += (msgs.length - filtered.length);
+                if (filtered.length === 0) messagesStore.delete(cid);
+                else messagesStore.set(cid, filtered);
+            }
+            return count;
+        }),
     };
 
     const mockSqsAdapter = {
         sendMessage: jest.fn(async (url: string, body: any) => { sqsMessages.push({ url, body }); }),
+    };
+
+    const notesStore = new Map<string, any>();
+    const mockNoteRepo = {
+        createNote: jest.fn(async (note: any) => { notesStore.set(note._id, note); return note; }),
+        countByOwner: jest.fn(async (uid: string) => Array.from(notesStore.values()).filter(n => n.ownerUserId === uid).length),
+        findNotesModifiedSince: jest.fn(async (uid: string, since: Date) => Array.from(notesStore.values()).filter(n => n.ownerUserId === uid)),
+        listNotes: jest.fn(async (uid: string, folderId: string | null, limit: number) => ({ items: Array.from(notesStore.values()).filter(n => n.ownerUserId === uid).slice(0, limit), nextCursor: null })),
+        deleteAllNotes: jest.fn(async (uid: string) => { 
+            let count = 0;
+            for (const [id, note] of notesStore.entries()) {
+                if (note.ownerUserId === uid) { notesStore.delete(id); count++; }
+            }
+            return count;
+        }),
+        deleteAllFolders: jest.fn(async (uid: string) => 0),
     };
 
     const mockS3Adapter = {
@@ -131,6 +169,7 @@ describe('GraphAi API Integration Tests', () => {
         (GraphRepositoryMongo as jest.Mock).mockImplementation(() => mockGraphRepo);
         (ConversationRepositoryMongo as jest.Mock).mockImplementation(() => mockConvRepo);
         (MessageRepositoryMongo as jest.Mock).mockImplementation(() => mockMsgRepo);
+        (NoteRepositoryMongo as jest.Mock).mockImplementation(() => mockNoteRepo);
         (AwsSqsAdapter as jest.Mock).mockImplementation(() => mockSqsAdapter);
         (AwsS3Adapter as jest.Mock).mockImplementation(() => mockS3Adapter);
         (UserRepositoryMySQL as jest.Mock).mockImplementation(() => ({
@@ -147,14 +186,27 @@ describe('GraphAi API Integration Tests', () => {
         }));
 
         app = createApp();
+        server = app.listen(0); // Listen on random port for test isolation
         accessToken = generateAccessToken({ userId });
 
         if (!nock.isActive()) nock.activate();
     });
 
-    afterAll(() => {
+    afterAll(async () => {
         nock.cleanAll();
         nock.restore();
+        
+        const { closeDatabases } = require('../../src/infra/db');
+        await closeDatabases();
+
+        if (server) {
+            await new Promise<void>((resolve, reject) => {
+                server.close((err?: Error) => {
+                    if (err) reject(err);
+                    else resolve();
+                });
+            });
+        }
     });
 
     beforeEach(() => {
@@ -167,6 +219,7 @@ describe('GraphAi API Integration Tests', () => {
         messagesStore.clear();
         sqsMessages.length = 0;
         s3Files.clear();
+        notesStore.clear();
         nock.cleanAll();
     });
 
@@ -269,15 +322,36 @@ describe('GraphAi API Integration Tests', () => {
     });
 
     describe('POST /v1/graph-ai/generate', () => {
+        it('should return 200 skipped if no conversations and no notes exist', async () => {
+            const res = await request(app)
+                .post('/v1/graph-ai/generate')
+                .set('Authorization', `Bearer ${accessToken}`)
+                .expect(200);
+            
+            expect(res.body.status).toBe('skipped');
+            expect(res.body.message).toContain('No conversation or note data found');
+            expect(sqsMessages.length).toBe(0);
+        });
+
         it('should queue full graph generation', async () => {
             const cid = 'conv1';
-            conversationsStore.set(cid, { _id: cid, ownerUserId: userId, title: 'Test Conv', messages: [] });
+            const now = Date.now();
+            conversationsStore.set(cid, { 
+                _id: cid, 
+                ownerUserId: userId, 
+                title: 'Test Conv', 
+                createdAt: now,
+                updatedAt: now,
+                messages: [] 
+            });
             messagesStore.set(cid, [{ 
-                id: 'm1', 
+                _id: 'm1', 
                 conversationId: cid, 
+                ownerUserId: userId,
                 role: 'user', 
                 content: 'hello', 
-                createdAt: new Date().toISOString() 
+                createdAt: now,
+                updatedAt: now
             }]);
 
             const res = await request(app)

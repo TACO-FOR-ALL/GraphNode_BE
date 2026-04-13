@@ -166,4 +166,15 @@ export interface MessageRepository {
    * @returns 삭제된 메시지 개수
    */
   deleteAllByConversationId(conversationId: string, session?: ClientSession): Promise<number>;
+
+  /**
+   * 여러 대화방 ID에 속한 모든 메시지를 일괄 삭제합니다 (Chunk Delete용).
+   *
+   * @description Chunking 기반 삭제 시 청크 단위로 호출됩니다.
+   *              `deleteMany({ conversationId: { $in: conversationIds } })` 로 구현됩니다.
+   * @param conversationIds 삭제 대상 대화방 ID 배열
+   * @param session (선택) MongoDB 트랜잭션 세션
+   * @returns 삭제된 메시지 수
+   */
+  deleteAllByConversationIds(conversationIds: string[], session?: ClientSession): Promise<number>;
 }

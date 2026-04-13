@@ -26,11 +26,20 @@ export interface MicroscopeWorkspaceStore {
   findByUserId(userId: string, session?: ClientSession): Promise<MicroscopeWorkspaceMetaDoc[]>;
 
   /**
-   * 특정 노드 ID와 연관된 가장 최신 워크스페이스를 조회합니다.
+   * 특정 노드 ID와 연관된 가장 최신 워크스페이스를 조회합니다. (workspace.updatedAt 기준)
    * @param userId 유저 고유 식별자
    * @param nodeId 대상 노드 ID
    */
   findLatestWorkspaceByNodeId(userId: string, nodeId: string, session?: ClientSession): Promise<MicroscopeWorkspaceMetaDoc | null>;
+
+  /**
+   * 특정 노드 ID가 포함된 Document 중 가장 최근에 **생성된** Document를 기준으로 워크스페이스를 조회합니다.
+   * `documents.createdAt DESC` 정렬을 사용하므로, 같은 nodeId로 여러 번 Ingest를 요청한 경우
+   * updatedAt 기준 대비 "진행 중인 최신 요청"을 정확하게 반환합니다.
+   * @param userId 유저 고유 식별자
+   * @param nodeId 대상 노드 ID (Note 또는 Conversation ID)
+   */
+  findWorkspaceByMostRecentDocumentNodeId(userId: string, nodeId: string, session?: ClientSession): Promise<MicroscopeWorkspaceMetaDoc | null>;
 
   /**
    * 특정 워크스페이스와 하위 문서 트래킹 기록을 데이터베이스에서 삭제합니다.
