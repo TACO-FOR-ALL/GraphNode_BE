@@ -171,10 +171,22 @@ jobs:
           DATABASE_URL: postgresql://app:app@localhost:5432/graphnode
           INTERNAL_SERVICE_TOKEN: ci-test-key
 
-      # 9. 실패 시 로그 업로드
-      - name: Upload Logs on Failure
-        if: failure()
+      # 10. 추가 로그 수집 (실패/캔슬 포함 모든 비정상 종료 대응)
+      - name: Collect Logs on Failure
+        if: always()
+        run: |
+          mkdir -p be/e2e-logs
+          docker compose -f be/docker-compose.test.yml logs --tail 500 > be/e2e-logs/docker-compose-all.log
+          docker compose -f be/docker-compose.test.yml ps -a > be/e2e-logs/docker-ps.log
+          ls -R be/e2e-logs > be/e2e-logs/artifact-inventory.log
+          echo "Captured logs for post-mortem analysis."
+
+      # 11. 테스트 종료 시 로그 업로드 (실패/캔슬/성공 무관)
+      - name: Upload Integrated E2E Logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: e2e-logs
           path: be/e2e-logs/
+          if-no-files-found: warn
+

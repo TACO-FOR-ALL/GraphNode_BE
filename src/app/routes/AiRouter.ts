@@ -35,6 +35,10 @@ export function createAiRouter(deps: {
     '/conversations/trash',
     asyncHandler(aiController.listTrashConversations.bind(aiController))
   );
+  router.get(
+    '/conversations/test',
+    asyncHandler(aiController.listConversationsTest.bind(aiController))
+  );
   router.get('/conversations', asyncHandler(aiController.listConversations.bind(aiController)));
   router.delete(
     '/conversations',
@@ -87,6 +91,12 @@ export function createAiRouter(deps: {
       next();
     },
     asyncHandler(aiController.handleAIChat.bind(aiController))
+  );
+
+  router.post(
+    '/conversations/:conversationId/chat/retry',
+    upload.array('files'),
+    asyncHandler(aiController.handleRetryAIChat.bind(aiController))
   );
 
   router.post(

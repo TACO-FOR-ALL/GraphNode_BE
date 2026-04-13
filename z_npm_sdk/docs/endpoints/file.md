@@ -6,8 +6,8 @@ AI 채팅 중 발생하는 첨부 파일이나 SDK를 통해 직접 업로드하
 
 | Method | Endpoint | Description | Status Codes |
 | :--- | :--- | :--- | :--- |
-| `uploadFiles(files)` | `POST /api/v1/ai/files` | S3 스토리지에 여러 파일 업로드 | 201, 400 |
-| `getFile(key)` | `GET /api/v1/ai/files/:key` | 파일 키를 사용한 파일 다운로드 | 200, 404 |
+| `uploadFiles(files)` | `POST /api/v1/ai/files` | S3 스토리지에 여러 파일 업로드 | 201, 400, 401, 502 |
+| `getFile(key)` | `GET /api/v1/ai/files/:key` | 파일 키를 사용한 파일 다운로드 | 200, 400, 401, 404 |
 
 ---
 
@@ -43,6 +43,11 @@ AI 채팅 중 발생하는 첨부 파일이나 SDK를 통해 직접 업로드하
   }
   ```
 - **Type Location**: `z_npm_sdk/src/types/file.ts`
+- **Status Codes**
+  - `201 Created`: 파일 업로드 성공. 업로드된 파일의 메타데이터(`attachments`) 배열 반환
+  - `400 Bad Request`: 파일이 누락되었거나 허용되지 않는 파일 형식
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `502 Bad Gateway`: S3 업로드 오류
 
 ---
 
@@ -59,6 +64,11 @@ AI 채팅 중 발생하는 첨부 파일이나 SDK를 통해 직접 업로드하
   }
   ```
 - **Returns**: `Promise<HttpResponse<Blob>>`
+- **Status Codes**
+  - `200 OK`: 파일 다운로드 성공. `Blob` 객체 반환
+  - `400 Bad Request`: 파일 키(`key`)가 누락됨
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `404 Not Found`: 해당 키의 파일이 S3에 존재하지 않음
 
 ---
 

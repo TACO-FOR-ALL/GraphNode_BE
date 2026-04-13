@@ -74,7 +74,8 @@ describe('SyncService', () => {
       expect(result.conversations[0].id).toBe('c1');
       expect(result.conversations[0].messages).toHaveLength(1);
       expect(result.conversations[0].messages[0].id).toBe('m1');
-      expect(result.messages).toHaveLength(1);
+      // messages는 conversations 내부에 embed됨 — 최상위 messages는 항상 빈 배열 (중복 전송 방지)
+      expect(result.messages).toHaveLength(0);
       
       expect(mockConvSvc.findModifiedSince).toHaveBeenCalledWith(userId, since);
       expect(mockMsgSvc.findModifiedSince).toHaveBeenCalledWith(userId, since);
@@ -83,35 +84,36 @@ describe('SyncService', () => {
   });
 
   describe('push', () => {
-    it('should process creates for conversations', async () => {
+    it('should process creates and updates in the same batch', async () => {
+        const now = new Date();
         const changes = {
-        conversations: [
-          {
-            id: 'c1',
-            title: 'New Conv',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            messages: [],
-          },
-        ],
-        lastPulledAt: new Date().toISOString(),
+          conversations: [
+            { id: 'new-c', title: 'New', createdAt: now.toISOString(), updatedAt: now.toISOString(), messages: [] },
+            { id: 'existing-c', title: 'Update', createdAt: now.toISOString(), updatedAt: now.toISOString(), messages: [] }
+          ],
+          lastPulledAt: now.toISOString(),
         };
+
+        // One exists, one doesn't
+        mockConvSvc.findDocById
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce({ _id: 'existing-c', ownerUserId: 'u1', updatedAt: now.getTime() - 1000 } as any);
         
         await service.push('u1', changes as any);
-        expect(mockConvSvc.createDoc).toHaveBeenCalled();
+
+        expect(mockConvSvc.createDoc).toHaveBeenCalledTimes(1);
+        expect(mockConvSvc.updateDoc).toHaveBeenCalledTimes(1);
     });
 
     it('should process updates for messages', async () => {
        const changes = {
             messages: [
-                // Minimal DTO shape
                 { id: 'm1', conversationId: 'c1', role: 'user', content: 'Updated', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
             ],
             lastPulledAt: new Date().toISOString()
         };
         
-        // Mock finding existing message for conflict check
-        mockMsgSvc.findDocById.mockResolvedValue({ id: 'm1', ownerUserId: 'u1', updatedAt: new Date(Date.now() - 10000) } as any);
+        mockMsgSvc.findDocById.mockResolvedValue({ _id: 'm1', ownerUserId: 'u1', updatedAt: new Date(Date.now() - 10000).getTime() } as any);
 
         await service.push('u1', changes as any);
         expect(mockMsgSvc.updateDoc).toHaveBeenCalled();
@@ -122,7 +124,7 @@ describe('SyncService', () => {
         notes: [
           {
             id: 'n1',
-            title: 'Old',
+            title: 'Stale Update',
             content: '',
             folderId: null,
             createdAt: new Date().toISOString(),
@@ -132,11 +134,26 @@ describe('SyncService', () => {
         lastPulledAt: new Date().toISOString(),
       };
 
-        // Existing note is newer
-        mockNoteSvc.getNoteDoc.mockResolvedValue({ id: 'n1', ownerUserId: 'u1', updatedAt: new Date(Date.now() - 5000) } as any);
+        mockNoteSvc.getNoteDoc.mockResolvedValue({ _id: 'n1', ownerUserId: 'u1', updatedAt: new Date(Date.now() - 5000).getTime() } as any);
 
         await service.push('u1', changes as any);
         expect(mockNoteSvc.updateNoteDoc).not.toHaveBeenCalled();
+    });
+
+    it('should skip update if ownership is different', async () => {
+      const changes = {
+        conversations: [
+          { id: 'c1', title: 'Attempt Hack', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), messages: [] }
+        ],
+        lastPulledAt: new Date().toISOString(),
+      };
+
+      // Existing conv belongs to u2
+      mockConvSvc.findDocById.mockResolvedValue({ _id: 'c1', ownerUserId: 'u2', updatedAt: 100 } as any);
+
+      await service.push('u1', changes as any);
+      expect(mockConvSvc.updateDoc).not.toHaveBeenCalled();
+      expect(mockConvSvc.createDoc).not.toHaveBeenCalled();
     });
   });
 });

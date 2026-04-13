@@ -9,6 +9,8 @@ import {
 import type { VectorStore } from '../ports/VectorStore';
 import { getMongo } from '../../infra/db/mongodb';
 import { GraphManagementService } from './GraphManagementService';
+import { ConversationService } from './ConversationService';
+import { NoteService } from './NoteService';
 import { GraphSummaryDoc } from '../types/persistence/graph.persistence';
 import { withRetry } from '../../shared/utils/retry';
 import { UpstreamError } from '../../shared/errors/domain';
@@ -28,7 +30,9 @@ import { UpstreamError } from '../../shared/errors/domain';
 export class GraphEmbeddingService {
   constructor(
     private readonly graphManagementService: GraphManagementService,
-    private readonly vectorStore?: VectorStore
+    private readonly vectorStore?: VectorStore,
+    private readonly conversationService?: ConversationService,
+    private readonly noteService?: NoteService
   ) {}
 
   /**
@@ -76,11 +80,7 @@ export class GraphEmbeddingService {
    * 벡터가 누락된 노드를 찾습니다. (현재 비활성화)
    * @deprecated 벡터 정합성 검증은 비활성화되었습니다.
    */
-  async findNodesMissingVectors(
-    _userId: string,
-    _collection: string,
-    _nodeIds: Array<number>
-  ) {
+  async findNodesMissingVectors(_userId: string, _collection: string, _nodeIds: Array<number>) {
     this.throwVectorDisabledError();
   }
 
@@ -184,6 +184,16 @@ export class GraphEmbeddingService {
    */
   listNodes(userId: string) {
     return this.graphManagementService.listNodes(userId);
+  }
+
+  /**
+   * 특정 사용자의 모든 노드 목록(soft delete 되어서 휴지통에 잇는 것 까지)을 조회합니다.
+   * @param userId - 작업을 요청한 사용자 ID
+   * @returns 노드 객체 배열
+   * @throws {UpstreamError} - DB 오류 발생 시
+   */
+  listNodesAll(userId: string) {
+    return this.graphManagementService.listNodesAll(userId);
   }
 
   listNodesByCluster(userId: string, clusterId: string) {
@@ -408,14 +418,13 @@ export class GraphEmbeddingService {
       await withRetry(
         async () => {
           await session.withTransaction(async () => {
-            const nodesInCluster = await this.graphManagementService.listNodesByCluster(
-              userId,
-              id
-            );
+            const nodesInCluster = await this.graphManagementService.listNodesByCluster(userId, id);
             if (nodesInCluster.length > 0) {
               const ids = nodesInCluster.map((n) => n.id);
               // 1. 클러스터에 속한 모든 노드와 관련 엣지 삭제
-              await this.graphManagementService.deleteEdgesByNodeIds(userId, ids, permanent, { session });
+              await this.graphManagementService.deleteEdgesByNodeIds(userId, ids, permanent, {
+                session,
+              });
               await this.graphManagementService.deleteNodes(userId, ids, permanent, { session });
             }
             // 2. 클러스터 자체 삭제
@@ -444,22 +453,92 @@ export class GraphEmbeddingService {
       this.graphManagementService.listSubclusters(userId),
       this.graphManagementService.getStats(userId),
     ]);
+    const enrichedNodes = await this.attachNodeTitles(userId, nodes);
 
     return {
-      nodes,
+      nodes: enrichedNodes,
       edges,
       clusters,
-      subclusters: subclusters.map(s => {
+      subclusters: subclusters.map((s) => {
         const { _id, deletedAt, ...rest } = s as any;
         return {
           ...rest,
-          ...(deletedAt != null && { deletedAt: new Date(deletedAt).toISOString() })
+          ...(deletedAt != null && { deletedAt: new Date(deletedAt).toISOString() }),
         };
       }),
       stats: stats
         ? { nodes: stats.nodes, edges: stats.edges, clusters: stats.clusters, status: stats.status }
         : { nodes: 0, edges: 0, clusters: 0, status: 'NOT_CREATED' },
     };
+  }
+
+  /**
+   * 그래프 노드에 제목을 추가합니다.
+   * @param userId - 작업을 요청한 사용자 ID
+   * @param nodes - 그래프 노드 배열
+   * @returns 제목이 추가된 그래프 노드 배열
+   */
+  private async attachNodeTitles(userId: string, nodes: GraphNodeDto[]): Promise<GraphNodeDto[]> {
+    const titleByOrigId = new Map<string, string>();
+
+    // 채팅 노드의 원본 ID 추출
+    const chatOrigIds = [
+      ...new Set(
+        nodes
+          .filter((node) => node.sourceType === 'chat')
+          .map((node) => node.origId)
+          .filter((origId) => origId.trim().length > 0)
+      ),
+    ];
+
+    // 마크다운 노드의 원본 ID 추출
+    const markdownOrigIds = [
+      ...new Set(
+        nodes
+          .filter((node) => node.sourceType === 'markdown')
+          .map((node) => node.origId)
+          .filter((origId) => origId.trim().length > 0)
+      ),
+    ];
+
+    // 채팅 노드의 제목 추가
+    if (chatOrigIds.length > 0 && this.conversationService) {
+      // 채팅 노드의 원본 ID를 사용하여 대화 문서 조회
+      const conversationDocs = await this.conversationService.findDocsByIds(chatOrigIds, userId);
+      // 대화 문서의 제목을 제목 맵에 추가
+      for (const conversationDoc of conversationDocs) {
+        if (conversationDoc.title?.trim()) {
+          titleByOrigId.set(conversationDoc._id, conversationDoc.title);
+        }
+      }
+    }
+
+    // 마크다운 노드의 제목 추가
+    if (markdownOrigIds.length > 0 && this.noteService) {
+      const noteService = this.noteService;
+
+      // 마크다운 노드의 원본 ID를 사용하여 노트 문서 조회
+      const noteDocs = await Promise.all(
+        markdownOrigIds.map((origId) => noteService.getNoteDoc(origId, userId))
+      );
+      // 노트 문서의 제목을 제목 맵에 추가
+      for (const noteDoc of noteDocs) {
+        if (noteDoc?._id && noteDoc.title?.trim()) {
+          titleByOrigId.set(noteDoc._id, noteDoc.title);
+        }
+      }
+    }
+
+    // 노드에 제목 추가
+    return nodes.map((node) => {
+      if (node.sourceType === 'chat' || node.sourceType === 'markdown') {
+        const nodeTitle = titleByOrigId.get(node.origId);
+        return nodeTitle ? { ...node, nodeTitle } : node;
+      }
+
+      // FIXME TODO: 추후에 Notion 추가 시에 변경 요망.
+      return node;
+    });
   }
 
   /**
@@ -482,8 +561,11 @@ export class GraphEmbeddingService {
       await withRetry(
         async () => {
           await session.withTransaction(async () => {
+            await this.graphManagementService.persistSnapshotBulk(payload, { session });
+            return;
+            /*
             const { userId, snapshot } = payload;
-            
+
             // subclusters가 undefined일 경우 빈 배열로 처리
             const subclusters = snapshot.subclusters || [];
 
@@ -509,20 +591,19 @@ export class GraphEmbeddingService {
             await Promise.all(
               subclusters.map((subcluster) => {
                 const { deletedAt, ...rest } = subcluster;
+                // createdAt/updatedAt 생략 — repository layer가 설정합니다.
                 return this.graphManagementService.upsertSubcluster(
                   {
                     ...rest,
                     userId,
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
                     ...(deletedAt != null ? { deletedAt: new Date(deletedAt).getTime() } : {}),
-                  },
+                  } as any,
                   { session }
                 );
               })
             );
             await this.graphManagementService.saveStats({ ...snapshot.stats, userId }, { session });
-
+            */
           });
         },
         { label: 'GraphEmbeddingService.persistSnapshot.transaction' }
@@ -556,7 +637,7 @@ export class GraphEmbeddingService {
       await session.endSession();
     }
   }
-  
+
   async restoreGraph(_userId: string) {
     // [Hard Delete Policy] Restore is no longer supported
     throw new UpstreamError('Restore is not supported in hard-delete only mode');
@@ -566,6 +647,9 @@ export class GraphEmbeddingService {
 
   /**
    * 그래프 요약/인사이트 저장 (Delegation)
+   *
+   * @param userId 사용자 Id
+   * @param summary
    */
   async upsertGraphSummary(userId: string, summary: GraphSummaryDoc) {
     return this.graphManagementService.upsertGraphSummary(userId, summary);
@@ -573,18 +657,42 @@ export class GraphEmbeddingService {
 
   /**
    * 그래프 요약/인사이트 조회 (Delegation)
+   *
+   * @param userId 사용자 Id
    */
   async getGraphSummary(userId: string) {
-    return this.graphManagementService.getGraphSummary(userId);
+    const summary = await this.graphManagementService.getGraphSummary(userId);
+
+    const [conversationCount, noteCount] = await Promise.all([
+      this.conversationService?.countConversations(userId) ?? Promise.resolve(0),
+      this.noteService?.countNotes(userId) ?? Promise.resolve(0),
+    ]);
+
+    return {
+      ...summary,
+      overview: {
+        ...summary.overview,
+        total_conversations: conversationCount,
+        total_notes: noteCount,
+      },
+    };
   }
 
   /**
    * 그래프 요약/인사이트 삭제 (Delegation)
+   *
+   * @param userId 사용자 Id
+   * @param permanent 영구 삭제 여부
    */
   async deleteGraphSummary(userId: string, permanent?: boolean) {
     return this.graphManagementService.deleteGraphSummary(userId, permanent);
   }
 
+  /**
+   * 그래프 요약/인사이트 복원 (Delegation)
+   *
+   * @param _userId 사용자 Id
+   */
   async restoreGraphSummary(_userId: string) {
     // [Hard Delete Policy] Restore is no longer supported
     throw new UpstreamError('Restore is not supported in hard-delete only mode');

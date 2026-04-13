@@ -87,3 +87,12 @@ export type BulkCreateConversationsRequest = z.infer<typeof bulkCreateConversati
 export type CreateMessageRequest = z.infer<typeof createMessageSchema>;
 export type UpdateMessageRequest = z.infer<typeof updateMessageSchema>;
 export type DevValidateApiKeyRequest = z.infer<typeof devValidateApiKeySchema>;
+
+/**
+ * 대화 재시도 요청 스키마
+ */
+export const aiChatRetryRequestSchema = z.object({
+  model: z.enum(['openai', 'deepseek', 'claude', 'gemini']),
+  modelName: z.string().optional(),
+});
+export type AIChatRetryRequest = z.infer<typeof aiChatRetryRequestSchema>;

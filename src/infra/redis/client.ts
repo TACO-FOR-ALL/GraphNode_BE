@@ -14,6 +14,19 @@ export let redis: Redis;
 export let redisSubscriber: Redis;
 
 /**
+ * Redis 연결 종료 함수
+ */
+export async function closeRedis(): Promise<void> {
+  if (redis) {
+    await redis.quit();
+  }
+  if (redisSubscriber) {
+    await redisSubscriber.quit();
+  }
+  isInitialized = false;
+}
+
+/**
  * Redis 연결 상태를 관리하는 플래그
  */
 let isInitialized = false;

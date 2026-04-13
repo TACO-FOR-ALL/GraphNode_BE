@@ -2,7 +2,7 @@
 /**
  * 목적: Graph HTTP API의 동작을 실서비스(GraphEmbeddingService)와 가상 저장소(Mock Repository)를 사용하여 검증한다.
  */
-import { jest, describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
+import { jest, describe, it, expect, beforeAll, beforeEach, afterAll } from '@jest/globals';
 import request from 'supertest';
 
 import { createApp } from '../../src/bootstrap/server';
@@ -71,6 +71,11 @@ jest.mock('../../src/infra/repositories/GraphRepositoryMongo', () => ({
     async upsertNode(doc: GraphNodeDoc) {
       nodesStore.set(doc.id, { ...doc });
     }
+    async upsertNodes(docs: GraphNodeDoc[]) {
+      for (const doc of docs) {
+        await this.upsertNode(doc);
+      }
+    }
     async updateNode(userId: string, id: number, patch: Partial<GraphNodeDoc>) {
       const n = nodesStore.get(id);
       if (n && n.userId === userId) {
@@ -108,6 +113,11 @@ jest.mock('../../src/infra/repositories/GraphRepositoryMongo', () => ({
       edgesStore.set(doc.id, { ...doc });
       return doc.id;
     }
+    async upsertEdges(docs: GraphEdgeDoc[]) {
+      for (const doc of docs) {
+        await this.upsertEdge(doc);
+      }
+    }
     async deleteEdge(userId: string, edgeId: string) {
       const e = edgesStore.get(edgeId);
       if (e && e.userId === userId) edgesStore.delete(edgeId);
@@ -134,6 +144,11 @@ jest.mock('../../src/infra/repositories/GraphRepositoryMongo', () => ({
     async upsertCluster(doc: GraphClusterDoc) {
       clustersStore.set(doc.id, { ...doc });
     }
+    async upsertClusters(docs: GraphClusterDoc[]) {
+      for (const doc of docs) {
+        await this.upsertCluster(doc);
+      }
+    }
     async deleteCluster(userId: string, clusterId: string) {
       const c = clustersStore.get(clusterId);
       if (c && c.userId === userId) clustersStore.delete(clusterId);
@@ -149,6 +164,11 @@ jest.mock('../../src/infra/repositories/GraphRepositoryMongo', () => ({
     // --- Subclusters ---
     async upsertSubcluster(doc: GraphSubclusterDoc) {
         subclustersStore.set(doc.id, { ...doc });
+    }
+    async upsertSubclusters(docs: GraphSubclusterDoc[]) {
+        for (const doc of docs) {
+            await this.upsertSubcluster(doc);
+        }
     }
     async deleteSubcluster(userId: string, id: string) {
         const s = subclustersStore.get(id);
@@ -181,13 +201,28 @@ jest.mock('../../src/infra/repositories/GraphRepositoryMongo', () => ({
 
 describe('Graph API Integration Tests', () => {
   let app: any;
+  let server: import('http').Server;
   const userId = '12345';
   let accessToken: string;
 
   beforeAll(async () => {
     process.env.SESSION_SECRET = 'test-secret';
     app = createApp();
+    server = app.listen(0);
     accessToken = generateAccessToken({ userId });
+  });
+
+  afterAll(async () => {
+    const { closeDatabases } = require('../../src/infra/db');
+    await closeDatabases();
+    if (server) {
+      await new Promise<void>((resolve, reject) => {
+        server.close((err?: Error) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+    }
   });
 
   beforeEach(() => {

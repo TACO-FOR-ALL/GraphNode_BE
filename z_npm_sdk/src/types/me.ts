@@ -26,6 +26,13 @@ export interface UserProfileDto {
 }
 
 /**
+ * 유저 선호 언어 타입
+ * 26_04_09 기준, 오직 ko, en, zh, ja만 존재함
+ * @public
+ */
+export type PreferredLanguage = 'ko' | 'en' | 'zh' | 'ja';
+
+/**
  * 내 정보 응답 DTO
  * @public
  * @property userId 사용자 ID

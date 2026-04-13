@@ -165,6 +165,24 @@ describe('GraphGenerationService', () => {
   describe('requestGraphGenerationViaQueue', () => {
     const userId = 'user1';
 
+    it('should return null and skip operations if no conversation and no note data found', async () => {
+      // Arrange
+      mockChatSvc.listConversations.mockResolvedValue({
+        items: [],
+        nextCursor: null,
+      });
+      mockNoteSvc.findNotesModifiedSince.mockResolvedValue([]);
+
+      // Act
+      const result = await service.requestGraphGenerationViaQueue(userId);
+
+      // Assert
+      expect(result).toBeNull();
+      expect(mockStoragePort.upload).not.toHaveBeenCalled();
+      expect(mockQueuePort.sendMessage).not.toHaveBeenCalled();
+      expect(mockGraphEmbSvc.saveStats).not.toHaveBeenCalled();
+    });
+
     it('should upload data to S3 and send SQS message', async () => {
       // Arrange
       mockChatSvc.listConversations.mockResolvedValue({

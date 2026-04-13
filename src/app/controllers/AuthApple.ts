@@ -1,14 +1,19 @@
 /**
  * 모듈: Auth(apple) 컨트롤러
  * 책임: HTTP 레이어에서 Apple OAuth 플로우의 시작/콜백 요청을 처리한다.
+ *
+ * State 검증 전략: HMAC-signed stateless token (쿠키 미사용)
+ *   - Apple callback은 response_mode=form_post로 appleid.apple.com에서 크로스사이트 POST로 도달.
+ *   - Chrome의 third-party cookie 차단으로 인해 SameSite=None 쿠키도 전송되지 않을 수 있음.
+ *   - 대신 SESSION_SECRET으로 HMAC-SHA256 서명된 state를 생성·검증하여
+ *     저장소(Redis/DB) 없이 다중 인스턴스 환경에서도 CSRF 방어를 보장한다.
  */
 import type { Request, Response, NextFunction } from 'express';
-import { randomUUID } from 'crypto';
 
 import { container } from '../../bootstrap/container';
 import { completeLogin } from '../utils/authLogin';
 import { ValidationError } from '../../shared/errors/domain';
-import { getOauthStateCookieOpts } from '../utils/sessionCookies';
+import { createOauthState, verifyOauthState } from '../utils/oauthState';
 
 function getService() {
   return container.getAppleOAuthService();
@@ -16,15 +21,19 @@ function getService() {
 
 /**
  * GET /auth/apple/start — Apple 인증 시작(302 리다이렉트)
- * @param req Express Request(세션에 oauth_state_apple 저장)
+ * @description
+ *   HMAC-signed state 토큰을 생성해 Apple Authorization URL의 state 파라미터로 전달한다.
+ *   쿠키를 사용하지 않으므로 크로스사이트 쿠키 차단 환경에서도 동작한다.
+ * @param req Express Request
  * @param res Express Response(302 Location 응답)
  * @param _next 다음 미들웨어(미사용)
+ * @returns void
+ * @throws 없음 (리다이렉트만 수행)
  * @example
  * router.get('/start', start)
  */
 export async function start(req: Request, res: Response, _next: NextFunction) {
-  const state = randomUUID();
-  res.cookie('oauth_state_apple', state, getOauthStateCookieOpts());
+  const state = createOauthState();
 
   const svc = getService();
   const url = svc.buildAuthUrl(state);
@@ -52,14 +61,10 @@ export async function callback(req: Request, res: Response, next: NextFunction) 
       throw new ValidationError('Missing code or state');
     }
 
-    // 서명된 쿠키에서 state 검증
-    const expected = req.signedCookies['oauth_state_apple'];
-    if (!expected || expected !== state) {
+    // HMAC-signed state 검증 (서명 + 만료 10분)
+    if (!verifyOauthState(state)) {
       throw new ValidationError('Invalid state');
     }
-
-    // 검증 완료 후 쿠키 제거
-    res.clearCookie('oauth_state_apple', { path: '/' });
 
     const svc = getService();
     const tokenSet = await svc.exchangeCode(code);
@@ -73,6 +78,7 @@ export async function callback(req: Request, res: Response, next: NextFunction) 
       avatarUrl: null,
     });
 
+    res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
     return res.status(200).send(`
       <!doctype html>
       <html>

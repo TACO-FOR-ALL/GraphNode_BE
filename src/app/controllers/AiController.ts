@@ -29,6 +29,7 @@ import { ChatThread, ChatMessage, AIChatResponseDto } from '../../shared/dtos/ai
 import { AIchatType } from '../../shared/ai-providers/AIchatType';
 import { ValidationError } from '../../shared/errors/domain';
 import { AiStreamEvent } from '../../shared/ai-providers/AiStreamEvent';
+import { captureEvent } from '../../shared/utils/posthog';
 
 /**
  * AiController 클래스
@@ -105,6 +106,71 @@ export class AiController {
       const result: AIChatResponseDto = await this.aiInteractionService.handleAIChat(
         ownerUserId,
         chatbody,
+        conversationId,
+        files
+      );
+      res.status(201).json(result);
+    }
+  }
+
+  /**
+   * AI 대화 재시도를 처리하는 Controller 메서드
+   *
+   * 역할:
+   * 1. 가장 최근 AI 메시지 영구 삭제
+   * 2. 이전 대화 기록을 바탕으로 다시 AI 호출
+   * 3. 스트리밍 지원
+   */
+  async handleRetryAIChat(req: Request, res: Response) {
+    const ownerUserId: string = getUserIdFromRequest(req)!;
+    const conversationId: string = req.params.conversationId;
+    if (!conversationId) throw new ValidationError('conversationId is required');
+
+    let retrybody: any;
+    if (req.headers['content-type']?.includes('multipart/form-data')) {
+      retrybody = { ...req.body };
+    } else {
+      retrybody = req.body;
+    }
+
+    const files = req.files as Express.Multer.File[] | undefined;
+    const isStreaming = req.headers['accept'] === 'text/event-stream';
+
+    if (isStreaming) {
+      await this.aiInteractionService.checkApiKey(ownerUserId, retrybody.model);
+
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders();
+
+      const sendEvent = (event: string, data: unknown) => {
+        res.write(`event: ${event}\n`);
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+      };
+
+      try {
+        const result: AIChatResponseDto = await this.aiInteractionService.handleRetryAIChat(
+          ownerUserId,
+          retrybody,
+          conversationId,
+          files,
+          (chunk) => sendEvent(AiStreamEvent.CHUNK, { text: chunk })
+        );
+
+        sendEvent(AiStreamEvent.STATUS, { phase: 'done' });
+        sendEvent(AiStreamEvent.RESULT, result);
+        res.end();
+      } catch (err) {
+        if (!res.headersSent) throw err;
+        const message = err instanceof Error ? err.message : String(err);
+        sendEvent(AiStreamEvent.ERROR, { message });
+        res.end();
+      }
+    } else {
+      const result: AIChatResponseDto = await this.aiInteractionService.handleRetryAIChat(
+        ownerUserId,
+        retrybody,
         conversationId,
         files
       );
@@ -204,6 +270,10 @@ export class AiController {
       await this.chatManagementService.bulkCreateConversations(ownerUserId, conversations);
 
     // 4. 응답 반환 (201 Created)
+    captureEvent(ownerUserId, 'conversations_bulk_imported', { 
+      room_count: conversations.length,
+      total_message_count: conversations.reduce((acc, c) => acc + (c.messages?.length || 0), 0)
+    });
     res.status(201).json({ conversations: createdConversations });
   }
 
@@ -235,6 +305,7 @@ export class AiController {
     );
 
     // 4. 응답 반환 (Location 헤더에 생성된 리소스 위치 포함)
+    captureEvent(ownerUserId, 'conversation_created', { initial_message_count: messages?.length || 0 });
     res.status(201).location(`/v1/ai/conversations/${newThread.id}`).json(newThread);
   }
 
@@ -245,6 +316,7 @@ export class AiController {
    *
    * 역할:
    * - 사용자의 대화방 목록을 조회합니다.
+   * - 성능 최적화를 위해 메시지 배열은 포함하지 않습니다 ([] 반환).
    * - 페이지네이션(Pagination)을 지원합니다 (limit, cursor).
    *
    * 쿼리 파라미터:
@@ -260,9 +332,35 @@ export class AiController {
     const limit: number = parseInt((req.query.limit as string) || '50', 10);
     const cursor: string | undefined = req.query.cursor as string | undefined;
 
-    // 서비스 호출 (목록 조회)
+    // 서비스 호출 (목록 조회 - 메시지 제외)
     const result: { items: ChatThread[]; nextCursor?: string | null } =
-      await this.chatManagementService.listConversations(ownerUserId, limit, cursor);
+      await this.chatManagementService.listConversations(ownerUserId, limit, cursor, {
+        includeMessages: false,
+      });
+
+    res.status(200).json(result);
+  }
+
+  /**
+   * [TEST] Conversation List 획득 Controller 메서드 (메시지 포함)
+   *
+   * [GET] /v1/ai/conversations/test
+   *
+   * 역할:
+   * - 사용자의 대화방 목록을 메시지 데이터와 함께 조회합니다.
+   * - 대화 목록 테스트 및 디버깅 용도로 사용됩니다.
+   */
+  async listConversationsTest(req: Request, res: Response) {
+    const ownerUserId: string = getUserIdFromRequest(req)!;
+
+    const limit: number = parseInt((req.query.limit as string) || '50', 10);
+    const cursor: string | undefined = req.query.cursor as string | undefined;
+
+    // 서비스 호출 (목록 조회 - 메시지 포함)
+    const result: { items: ChatThread[]; nextCursor?: string | null } =
+      await this.chatManagementService.listConversations(ownerUserId, limit, cursor, {
+        includeMessages: true,
+      });
 
     res.status(200).json(result);
   }

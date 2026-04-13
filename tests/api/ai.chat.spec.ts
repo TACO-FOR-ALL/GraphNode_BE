@@ -65,10 +65,36 @@ jest.mock('../../src/core/services/AiInteractionService', () => ({
         onChunk('Hello');
         onChunk(' world');
       }
+      // NEW_CONVERSATION 예약어: 제목이 생성되어 응답에 포함됨
+      if (body.title === 'NEW_CONVERSATION') {
+        return {
+          title: 'Generated Title',
+          messages: [
+            { id: 'm_user', role: 'user', content: body.chatContent },
+            { id: 'm_res', role: 'assistant', content: 'Hello world' },
+          ],
+        };
+      }
       return {
         id: 'm_res',
         role: 'assistant',
         content: 'Hello world',
+        ts: new Date().toISOString(),
+      };
+    }
+    async handleRetryAIChat(userId: string, body: any, convId: string, files?: any, onChunk?: (c: string) => void) {
+      if (convId !== 'c1') {
+        const { NotFoundError } = require('../../src/shared/errors/domain');
+        throw new NotFoundError('Conversation not found');
+      }
+      if (onChunk) {
+        onChunk('Retry');
+        onChunk(' response');
+      }
+      return {
+        id: 'm_retry_res',
+        role: 'assistant',
+        content: 'Retry response',
         ts: new Date().toISOString(),
       };
     }
@@ -82,9 +108,27 @@ function setupEnv() {
   process.env.DEV_INSECURE_COOKIES = 'true';
   process.env.JWT_ACCESS_EXPIRY = '1h';
   process.env.JWT_REFRESH_EXPIRY = '7d';
+  process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db';
+  process.env.MONGODB_URL = 'mongodb://localhost:27017/db';
   process.env.OAUTH_GOOGLE_CLIENT_ID = 'test-client';
   process.env.OAUTH_GOOGLE_CLIENT_SECRET = 'test-secret';
   process.env.OAUTH_GOOGLE_REDIRECT_URI = 'http://localhost:3000/auth/google/callback';
+  process.env.OAUTH_APPLE_CLIENT_ID = 'test-apple-client';
+  process.env.OAUTH_APPLE_TEAM_ID = 'test-apple-team';
+  process.env.OAUTH_APPLE_KEY_ID = 'test-apple-key-id';
+  process.env.OAUTH_APPLE_PRIVATE_KEY = 'test-apple-private-key';
+  process.env.OAUTH_APPLE_REDIRECT_URI = 'http://localhost:3000/auth/apple/callback';
+  process.env.REDIS_URL = 'redis://localhost:6379';
+  process.env.SQS_REQUEST_QUEUE_URL = 'http://localhost:4566/000000000000/request-queue';
+  process.env.SQS_RESULT_QUEUE_URL = 'http://localhost:4566/000000000000/result-queue';
+  process.env.S3_PAYLOAD_BUCKET = 'test-payload-bucket';
+  process.env.S3_FILE_BUCKET = 'test-file-bucket';
+  process.env.OPENAI_API_KEY = 'sk-test-key';
+  process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key';
+  process.env.DEEPSEEK_API_KEY = 'sk-ds-test-key';
+  process.env.SENTRY_DSN = 'https://test@sentry.io/test';
+  process.env.POSTHOG_API_KEY = 'test-posthog-key';
+  process.env.POSTHOG_HOST = 'https://app.posthog.com';
 }
 
 describe('AI Chat API (/conversations/:id/chat)', () => {
@@ -103,6 +147,16 @@ describe('AI Chat API (/conversations/:id/chat)', () => {
     
     if (cb.status !== 200) {
         throw new Error(`Login failed with status ${cb.status}: ${JSON.stringify(cb.body)}`);
+    }
+  });
+
+  afterAll(async () => {
+    const { closeDatabases } = require('../../src/infra/db');
+    await closeDatabases();
+    if (app && app.close) {
+      await new Promise<void>((resolve) => {
+        app.close(() => resolve());
+      });
     }
   });
 
@@ -165,5 +219,82 @@ describe('AI Chat API (/conversations/:id/chat)', () => {
       .post('/v1/ai/conversations/invalid-id/chat')
       .send({ model: 'openai', content: 'hi' });
     expect(res.status).toBe(404);
+  });
+
+  describe('NEW_CONVERSATION title auto-generation', () => {
+    test('JSON: title=NEW_CONVERSATION → response.title is generated', async () => {
+      const res = await agent
+        .post('/v1/ai/conversations/c1/chat')
+        .send({
+          id: 'msg-new',
+          model: 'openai',
+          chatContent: 'hello',
+          title: 'NEW_CONVERSATION',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.title).toBe('Generated Title');
+      expect(res.body.messages).toHaveLength(2);
+    });
+
+    test('SSE: title=NEW_CONVERSATION → RESULT event contains generated title', async () => {
+      const res = await agent
+        .post('/v1/ai/conversations/c1/chat')
+        .set('Accept', 'text/event-stream')
+        .send({
+          id: 'msg-new-sse',
+          model: 'openai',
+          chatContent: 'hello stream',
+          title: 'NEW_CONVERSATION',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toContain('text/event-stream');
+      expect(res.text).toContain('event: result');
+      expect(res.text).toContain('"title":"Generated Title"');
+    });
+  });
+
+  describe('AI Chat Retry API (/conversations/:id/chat/retry)', () => {
+    test('Normal JSON Retry (POST 201)', async () => {
+      const res = await agent
+        .post('/v1/ai/conversations/c1/chat/retry')
+        .send({ model: 'openai' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.content).toBe('Retry response');
+    });
+
+    test('Streaming SSE Retry (Accept: text/event-stream)', async () => {
+      const res = await agent
+        .post('/v1/ai/conversations/c1/chat/retry')
+        .set('Accept', 'text/event-stream')
+        .send({ model: 'openai' });
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toContain('text/event-stream');
+      expect(res.text).toContain('event: chunk');
+      expect(res.text).toContain('data: {"text":"Retry"}');
+    });
+
+    test('Retry with File Upload (multipart/form-data)', async () => {
+      const tempDir = path.join(__dirname, '__temp__retry__');
+      if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+      const tempFilePath = path.join(tempDir, 'test_retry_upload.txt');
+      fs.writeFileSync(tempFilePath, 'retry file content');
+
+      try {
+        const res = await agent
+          .post('/v1/ai/conversations/c1/chat/retry')
+          .field('model', 'openai')
+          .attach('files', tempFilePath);
+
+        expect(res.status).toBe(201);
+        expect(res.body.id).toBe('m_retry_res');
+      } finally {
+        if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+        if (fs.existsSync(tempDir)) fs.rmdirSync(tempDir);
+      }
+    });
   });
 });

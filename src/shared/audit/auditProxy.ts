@@ -124,28 +124,6 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
           } catch (_) {}
         }
 
-        // PostHog 이벤트 전송 헬퍼 함수
-        const capturePostHog = (success: boolean, durationMs: number, error?: any) => {
-          // 억제 모드에서는 PostHog 이벤트도 건너뜀 (에러 시에는 항상 전송)
-          if (suppressed && success) return;
-          try {
-            const posthog = getPostHogClient();
-            if (posthog) {
-              posthog.capture({
-                distinctId: ctx?.userId || 'anonymous', // 수정: ctx.user.id -> ctx.userId
-                event: 'service_method_call',
-                properties: {
-                  ...meta, // service, method 등의 메타데이터를 먼저 전개
-                  duration_ms: durationMs,
-                  success,
-                  ...(error && { error: error instanceof Error ? error.message : String(error) }),
-                },
-              });
-            }
-          } catch (e) {
-            logger.error({ err: e }, 'Failed to capture PostHog event');
-          }
-        };
 
         try {
           // 2. 실제 메서드 실행
@@ -171,8 +149,6 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
                   } catch (_) {}
                 }
 
-                // PostHog 성공 이벤트
-                capturePostHog(true, durationMs);
 
                 return res;
               })
@@ -191,8 +167,6 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
                   );
                 } catch (_) {}
 
-                // PostHog 실패 이벤트
-                capturePostHog(false, durationMs, err);
 
                 throw err;
               });
@@ -214,8 +188,6 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
             } catch (_) {}
           }
 
-          // PostHog 성공 이벤트 (동기)
-          capturePostHog(true, durationMs);
 
           return result;
         } catch (err: any) {
@@ -233,8 +205,6 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
             );
           } catch (_) {}
 
-          // PostHog 실패 이벤트 (동기)
-          capturePostHog(false, durationMs, err);
 
           throw err;
         }

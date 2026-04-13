@@ -47,6 +47,14 @@ export class NoteApi {
    *    - `folderId` (string | null): 폴더 ID
    *    - `createdAt` (string): 생성 일시 (ISO 8601)
    *    - `updatedAt` (string): 수정 일시 (ISO 8601)
+   *
+   * **응답 상태 코드:**
+   * - `201 Created`: 노트 생성 성공
+   * - `400 Bad Request`: 필수 필드 누락 또는 형식 오류
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 지정한 folderId가 존재하지 않음
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * const response = await client.note.createNote({
    *   id: '550e8400-e29b-41d4-a716-446655440000',
@@ -129,6 +137,13 @@ export class NoteApi {
    * 특정 ID의 노트를 가져옵니다.
    * @param id - 가져올 노트의 ID (UUID)
    * @returns 요청한 노트 상세 정보
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 조회 성공
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 노트가 존재하지 않음
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * const response = await client.note.getNote('550e8400-e29b-41d4-a716-446655440000');
    *
@@ -149,13 +164,21 @@ export class NoteApi {
   }
 
   /**
-   * 특정 노드를 업데이트합니다.
+   * 특정 노트를 업데이트합니다.
    * @param id - 업데이트할 노트의 ID
    * @param dto - 업데이트할 데이터
    *    - `title` (string, optional): 변경할 제목
    *    - `content` (string, optional): 변경할 내용
    *    - `folderId` (string | null, optional): 이동할 폴더 ID
    * @returns 업데이트된 노트 정보
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 수정 성공
+   * - `400 Bad Request`: 형식 오류
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 노트가 존재하지 않음
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * const response = await client.note.updateNote('550e8400-e29b-41d4-a716-446655440000', {
    *   title: 'Q3 Review Meeting',
@@ -181,6 +204,13 @@ export class NoteApi {
   /**
    * 특정 노트를 소프트 삭제합니다 (휴지통으로 이동).
    * @param id - 삭제할 노트의 ID
+   *
+   * **응답 상태 코드:**
+   * - `204 No Content`: 삭제 성공
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 노트가 존재하지 않음
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * await client.note.softDeleteNote('550e8400-e29b-41d4-a716-446655440000');
    */
@@ -191,6 +221,13 @@ export class NoteApi {
   /**
    * 특정 노트를 영구 삭제합니다.
    * @param id - 삭제할 노트의 ID
+   *
+   * **응답 상태 코드:**
+   * - `204 No Content`: 영구 삭제 성공
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 노트가 존재하지 않음
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * await client.note.hardDeleteNote('550e8400-e29b-41d4-a716-446655440000');
    */
@@ -267,6 +304,13 @@ export class NoteApi {
    * 특정 노트를 복구합니다.
    * @param id - 복구할 노트의 ID
    * @returns 복구된 노트 정보
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 복구 성공
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `404 Not Found`: 해당 노트가 존재하지 않거나 소프트 삭제된 상태가 아님
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * const response = await client.note.restoreNote('550e8400-e29b-41d4-a716-446655440000');
    *

@@ -16,6 +16,7 @@ import { SyncService } from '../core/services/SyncService';
 import { NotificationService } from '../core/services/NotificationService';
 import { AiInteractionService } from '../core/services/AiInteractionService';
 import { AgentService } from '../core/services/AgentService';
+import { SearchService } from '../core/services/SearchService';
 import { GoogleOAuthService } from '../core/services/GoogleOAuthService';
 import { AppleOAuthService } from '../core/services/AppleOAuthService';
 import { MicroscopeManagementService } from '../core/services/MicroscopeManagementService';
@@ -91,6 +92,7 @@ export class Container {
   private googleOAuthService: GoogleOAuthService | null = null;
   private appleOAuthService: AppleOAuthService | null = null;
   private microscopeManagementService: MicroscopeManagementService | null = null;
+  private searchService: SearchService | null = null;
 
   private constructor() {}
 
@@ -332,7 +334,9 @@ export class Container {
       // Inject GraphManagementService (Mongo)
       const raw = new GraphEmbeddingService(
         this.getGraphManagementService(),
-        this.getVectorStore()
+        this.getVectorStore(),
+        this.getConversationService(),
+        this.getNoteService()
       );
       this.graphEmbeddingService = createAuditProxy(raw, 'GraphEmbeddingService');
     }
@@ -377,7 +381,10 @@ export class Container {
    */
   getNotificationService(): NotificationService {
     if (!this.notificationService) {
-      const raw = new NotificationService(this.getRedisEventBusAdapter(), this.getNotificationRepository());
+      const raw = new NotificationService(
+        this.getRedisEventBusAdapter(),
+        this.getNotificationRepository()
+      );
       this.notificationService = createAuditProxy(raw, 'NotificationService');
     }
     return this.notificationService;
@@ -470,6 +477,17 @@ export class Container {
       this.microscopeManagementService = createAuditProxy(raw, 'MicroscopeManagementService');
     }
     return this.microscopeManagementService;
+  }
+
+  /**
+   * SearchService 인스턴스를 반환합니다.
+   */
+  getSearchService(): SearchService {
+    if (!this.searchService) {
+      const raw = new SearchService();
+      this.searchService = createAuditProxy(raw, 'SearchService');
+    }
+    return this.searchService;
   }
 }
 

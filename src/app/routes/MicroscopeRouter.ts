@@ -20,8 +20,11 @@ export function createMicroscopeRouter(controller: MicroscopeController): Router
   // 워크스페이스 실제 그래프(Nodes & Edges) 조회 
   router.get('/:groupId/graph', controller.getWorkspaceGraph);
 
-  // (신규) 노드 ID 기반 최신 Microscope 그래프 조회
+  // 노드 ID 기반 최신 Microscope 그래프 조회
   router.get('/nodes/:nodeId/latest-graph', controller.getLatestGraphByNodeId);
+
+  // 노드 ID 기반 최신 Ingest 워크스페이스 메타데이터 조회 (status 추적용)
+  router.get('/nodes/:nodeId/latest-workspace', controller.getLatestWorkspaceByNodeId);
 
   // 노드(Note/Conversation) 기반 워크스페이스 생성 및 Ingest
   router.post('/nodes/ingest', controller.ingestFromNode);

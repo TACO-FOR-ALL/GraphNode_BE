@@ -43,6 +43,9 @@ const EnvSchema = z.object({
   // QDRANT_VECTOR_SIZE: z.coerce.number().int().positive().default(1536), // OpenAI 임베딩 차원 수
   // QDRANT_DISTANCE_METRIC: z.enum(['Cosine', 'Euclidean']).default('Cosine'), // 거리 측정 방식
 
+  // OpenAI API Key
+  OPENAI_API_KEY: z.string().min(1, 'OPENAI_API_KEY required'),
+
   // OpenAI Assistants
   OPENAI_ASSISTANT_ID: z.string().optional(),
 
@@ -125,22 +128,27 @@ export type Env = z.infer<typeof EnvSchema>;
  *
  * @returns 검증된 환경 변수 객체 (Env)
  */
+let cachedEnv: Env | null = null;
+
 export function loadEnv(): Env {
+  if (cachedEnv) return cachedEnv;
+
   const parsed = EnvSchema.safeParse(process.env);
 
   if (!parsed.success) {
-    // 검증 실패 시 에러 메시지 구성
     const issues = parsed.error.issues
       .map((i) => `${String(i.path.join('.'))}: ${i.message}`)
       .join(', ');
 
-    // 에러 로그 출력 (console.error 사용)
-    // eslint-disable-next-line no-console
     console.error('ENV_VALIDATION_FAILED:', issues);
 
-    // 치명적인 오류이므로 프로세스 종료
+    if (process.env.NODE_ENV === 'test') {
+      throw new Error(`ENV_VALIDATION_FAILED: ${issues}`);
+    }
+
     process.exit(1);
   }
 
+  cachedEnv = parsed.data;
   return parsed.data;
 }

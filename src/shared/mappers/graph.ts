@@ -28,7 +28,6 @@ import type {
  * @returns 저장 가능한 노드 문서
  */
 export function toGraphNodeDoc(dto: GraphNodeDto): GraphNodeDoc {
-  const now = new Date().toISOString();
   const id = typeof dto.id === 'string' ? parseInt(dto.id, 10) : dto.id;
   if (isNaN(id)) {
     throw new Error(`Invalid node ID: ${dto.id}`);
@@ -43,8 +42,9 @@ export function toGraphNodeDoc(dto: GraphNodeDto): GraphNodeDoc {
     numMessages: dto.numMessages,
     sourceType: dto.sourceType,
     embedding: dto.embedding,
-    createdAt: dto.createdAt ?? now,
-    updatedAt: dto.updatedAt ?? now,
+    // Timestamp placeholder — actual values are always overridden by the repository layer.
+    createdAt: dto.createdAt ?? '',
+    updatedAt: dto.updatedAt ?? '',
   };
 }
 
@@ -79,7 +79,6 @@ export function toGraphNodeDto(doc: GraphNodeDoc): GraphNodeDto {
  * @returns 저장 가능한 엣지 문서
  */
 export function toGraphEdgeDoc(dto: GraphEdgeDto): GraphEdgeDoc {
-  const now = new Date().toISOString();
   const source = typeof dto.source === 'string' ? parseInt(dto.source, 10) : dto.source;
   const target = typeof dto.target === 'string' ? parseInt(dto.target, 10) : dto.target;
 
@@ -96,8 +95,9 @@ export function toGraphEdgeDoc(dto: GraphEdgeDto): GraphEdgeDoc {
     weight: dto.weight,
     type: dto.type,
     intraCluster: dto.intraCluster,
-    createdAt: dto.createdAt ?? now,
-    updatedAt: dto.updatedAt ?? now,
+    // Timestamp placeholder — actual values are always overridden by the repository layer.
+    createdAt: dto.createdAt ?? '',
+    updatedAt: dto.updatedAt ?? '',
   };
 }
 
@@ -130,7 +130,6 @@ export function toGraphEdgeDto(doc: GraphEdgeDoc): GraphEdgeDto {
  * @returns 저장 가능한 클러스터 문서
  */
 export function toGraphClusterDoc(dto: GraphClusterDto): GraphClusterDoc {
-  const now = new Date().toISOString();
   return {
     id: dto.id,
     userId: dto.userId,
@@ -138,8 +137,9 @@ export function toGraphClusterDoc(dto: GraphClusterDto): GraphClusterDoc {
     description: dto.description,
     size: dto.size,
     themes: dto.themes,
-    createdAt: dto.createdAt ?? now,
-    updatedAt: dto.updatedAt ?? now,
+    // Timestamp placeholder — actual values are always overridden by the repository layer.
+    createdAt: dto.createdAt ?? '',
+    updatedAt: dto.updatedAt ?? '',
   };
 }
 
@@ -171,7 +171,6 @@ export function toGraphClusterDto(doc: GraphClusterDoc): GraphClusterDto {
  * @returns 저장 가능한 통계 문서
  */
 export function toGraphStatsDoc(dto: GraphStatsDto): GraphStatsDoc {
-  const now = new Date().toISOString();
   return {
     id: dto.userId,
     userId: dto.userId,
@@ -179,8 +178,10 @@ export function toGraphStatsDoc(dto: GraphStatsDto): GraphStatsDoc {
     edges: dto.edges,
     clusters: dto.clusters,
     status: dto.status,
-    generatedAt: dto.generatedAt ?? now,
-    updatedAt: dto.updatedAt,
+    // generatedAt is AI pipeline metadata — passed through as-is.
+    generatedAt: dto.generatedAt ?? '',
+    // updatedAt placeholder — actual value always overridden by repository layer.
+    updatedAt: dto.updatedAt ?? '',
     metadata: dto.metadata ?? {},
   };
 }

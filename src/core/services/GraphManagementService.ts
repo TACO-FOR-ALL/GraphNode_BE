@@ -5,6 +5,7 @@ import type {
   GraphClusterDto,
   GraphEdgeDto,
   GraphNodeDto,
+  PersistGraphPayloadDto,
   GraphStatsDto,
   GraphSummaryDto,
 } from '../../shared/dtos/graph';
@@ -18,7 +19,10 @@ import {
   toGraphStatsDoc,
   toGraphStatsDto,
 } from '../../shared/mappers/graph';
-import { toGraphSummaryDto, createEmptyGraphSummaryDto } from '../../shared/mappers/graph_summary.mapper';
+import {
+  toGraphSummaryDto,
+  createEmptyGraphSummaryDto,
+} from '../../shared/mappers/graph_summary.mapper';
 
 import {
   GraphClusterDoc,
@@ -63,6 +67,35 @@ export class GraphManagementService {
   }
 
   /**
+   * 여러 그래프 노드를 일괄 upsert 합니다.
+   *
+   * @param nodes 저장할 노드 DTO 배열
+   * @param options (선택) 트랜잭션 세션 등 저장 옵션
+   * @returns Promise<void>
+   * @throws {ValidationError} 사용자 ID 또는 노드 ID 형식이 유효하지 않은 경우
+   * @throws {UpstreamError} 저장소 일괄 저장 중 오류가 발생한 경우
+   * @remarks
+   * - 각 노드는 저장 전에 DTO -> Doc 변환을 수행합니다.
+   * - 입력 배열이 비어 있으면 no-op으로 처리합니다.
+   */
+  async upsertNodes(nodes: GraphNodeDto[], options?: RepoOptions): Promise<void> {
+    try {
+      if (nodes.length === 0) return;
+
+      const docs: GraphNodeDoc[] = nodes.map((node) => {
+        this.assertUser(node.userId);
+        this.parseId(node.id);
+        return toGraphNodeDoc(node);
+      });
+
+      await this.repo.upsertNodes(docs, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.upsertNodes failed', { cause: String(err) });
+    }
+  }
+
+  /**
    * 노드 정보 부분 업데이트
    *
    * @param userId 사용자 ID
@@ -80,11 +113,8 @@ export class GraphManagementService {
       this.assertUser(userId);
       const nId = this.parseId(id);
 
-      // 부분 업데이트를 위한 간단한 매핑
-      const patchDoc: any = { ...patch };
-      if (patch.updatedAt) patchDoc.updatedAt = patch.updatedAt;
-
-      await this.repo.updateNode(userId, nId, patchDoc, options);
+      // updatedAt은 repository layer가 항상 갱신합니다. 외부에서 전달된 값은 무시됩니다.
+      await this.repo.updateNode(userId, nId, patch as Partial<GraphNodeDoc>, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.updateNode failed', { cause: String(err) });
@@ -97,7 +127,12 @@ export class GraphManagementService {
    * @param userId 사용자 ID
    * @param id 노드 ID
    */
-  async deleteNode(userId: string, id: number, permanent?: boolean, options?: RepoOptions): Promise<void> {
+  async deleteNode(
+    userId: string,
+    id: number,
+    permanent?: boolean,
+    options?: RepoOptions
+  ): Promise<void> {
     try {
       this.assertUser(userId);
       const nId = this.parseId(id);
@@ -230,6 +265,24 @@ export class GraphManagementService {
   }
 
   /**
+   * 원본 ID 목록 기반 여러 노드 조회 (Soft Delete 포함)
+   *
+   * @param userId 사용자 ID
+   * @param origIds 원본 식별자 배열
+   * @returns GraphNodeDto 배열
+   */
+  async findNodesByOrigIdsAll(userId: string, origIds: string[]): Promise<GraphNodeDto[]> {
+    try {
+      this.assertUser(userId);
+      const docs = await this.repo.findNodesByOrigIdsAll(userId, origIds);
+      return docs.map((doc) => toGraphNodeDto(doc));
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.findNodesByOrigIdsAll failed', { cause: String(err) });
+    }
+  }
+
+  /**
    * 전체 노드 목록 조회
    *
    * @param userId 사용자 ID
@@ -243,6 +296,23 @@ export class GraphManagementService {
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.listNodes failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 특정 사용자의 모든 노드 목록(soft delete 되어서 휴지통에 잇는 것 까지)을 조회합니다.
+   * @param userId - 작업을 요청한 사용자 ID
+   * @returns 노드 객체 배열
+   * @throws {UpstreamError} - DB 오류 발생 시
+   */
+  async listNodesAll(userId: string): Promise<GraphNodeDto[]> {
+    try {
+      this.assertUser(userId);
+      const docs: GraphNodeDoc[] = await this.repo.listNodesAll(userId);
+      return docs.map(toGraphNodeDto);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.listNodesAll failed', { cause: String(err) });
     }
   }
 
@@ -286,12 +356,50 @@ export class GraphManagementService {
   }
 
   /**
+   * 여러 그래프 엣지를 일괄 upsert 합니다.
+   *
+   * @param edges 저장할 엣지 DTO 배열
+   * @param options (선택) 트랜잭션 세션 등 저장 옵션
+   * @returns Promise<void>
+   * @throws {ValidationError} 사용자 ID, 엣지 타입, source/target 형식이 유효하지 않은 경우
+   * @throws {UpstreamError} 저장소 일괄 저장 중 오류가 발생한 경우
+   * @remarks
+   * - 각 엣지는 저장 전에 DTO -> Doc 변환을 수행합니다.
+   * - 입력 배열이 비어 있으면 no-op으로 처리합니다.
+   */
+  async upsertEdges(edges: GraphEdgeDto[], options?: RepoOptions): Promise<void> {
+    try {
+      if (edges.length === 0) return;
+
+      const docs: GraphEdgeDoc[] = edges.map((edge) => {
+        this.assertUser(edge.userId);
+        if (!['hard', 'insight'].includes(edge.type)) {
+          throw new ValidationError('edge.type must be hard or insight');
+        }
+        return toGraphEdgeDoc(edge);
+      });
+
+      await this.repo.upsertEdges(docs, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.upsertEdges failed', { cause: String(err) });
+    }
+  }
+
+  /**
    * 엣지 삭제
    *
    * @param userId 사용자 ID
    * @param edgeId 엣지 ID
+   * @param permanent 완전 삭제 여부
+   * @param options (선택) 트랜잭션 옵션
    */
-  async deleteEdge(userId: string, edgeId: string, permanent?: boolean, options?: RepoOptions): Promise<void> {
+  async deleteEdge(
+    userId: string,
+    edgeId: string,
+    permanent?: boolean,
+    options?: RepoOptions
+  ): Promise<void> {
     try {
       this.assertUser(userId);
       if (!edgeId) throw new ValidationError('edgeId required');
@@ -304,6 +412,10 @@ export class GraphManagementService {
 
   /**
    * 엣지 복구
+   *
+   * @param userId 사용자 ID
+   * @param edgeId 엣지 ID
+   * @param options (선택) 트랜잭션 옵션
    */
   async restoreEdge(userId: string, edgeId: string, options?: RepoOptions): Promise<void> {
     try {
@@ -398,12 +510,46 @@ export class GraphManagementService {
   }
 
   /**
+   * 여러 그래프 클러스터를 일괄 upsert 합니다.
+   *
+   * @param clusters 저장할 클러스터 DTO 배열
+   * @param options (선택) 트랜잭션 세션 등 저장 옵션
+   * @returns Promise<void>
+   * @throws {ValidationError} 사용자 ID 또는 클러스터 ID가 유효하지 않은 경우
+   * @throws {UpstreamError} 저장소 일괄 저장 중 오류가 발생한 경우
+   * @remarks
+   * - 각 클러스터는 저장 전에 DTO -> Doc 변환을 수행합니다.
+   * - 입력 배열이 비어 있으면 no-op으로 처리합니다.
+   */
+  async upsertClusters(clusters: GraphClusterDto[], options?: RepoOptions): Promise<void> {
+    try {
+      if (clusters.length === 0) return;
+
+      const docs: GraphClusterDoc[] = clusters.map((cluster) => {
+        this.assertUser(cluster.userId);
+        if (!cluster.id) throw new ValidationError('cluster.id required');
+        return toGraphClusterDoc(cluster);
+      });
+
+      await this.repo.upsertClusters(docs, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.upsertClusters failed', { cause: String(err) });
+    }
+  }
+
+  /**
    * 클러스터 삭제
    *
    * @param userId 사용자 ID
    * @param clusterId 클러스터 ID
    */
-  async deleteCluster(userId: string, clusterId: string, permanent?: boolean, options?: RepoOptions): Promise<void> {
+  async deleteCluster(
+    userId: string,
+    clusterId: string,
+    permanent?: boolean,
+    options?: RepoOptions
+  ): Promise<void> {
     try {
       this.assertUser(userId);
       if (!clusterId) throw new ValidationError('clusterId required');
@@ -472,7 +618,7 @@ export class GraphManagementService {
 
   /**
    * 서브클러스터 생성 또는 업데이트
-   * 
+   *
    * @param subcluster 서브클러스터 데이터 (Doc 형태)
    * @param options (선택) 트랜잭션 옵션
    */
@@ -486,8 +632,29 @@ export class GraphManagementService {
   }
 
   /**
+   * 여러 그래프 서브클러스터를 일괄 upsert 합니다.
+   *
+   * @param subclusters 저장할 서브클러스터 문서 배열
+   * @param options (선택) 트랜잭션 세션 등 저장 옵션
+   * @returns Promise<void>
+   * @throws {UpstreamError} 저장소 일괄 저장 중 오류가 발생한 경우
+   * @remarks
+   * - 서브클러스터는 현재 DTO 계층이 아닌 persistence 문서 형태를 그대로 사용합니다.
+   * - 입력 배열이 비어 있으면 no-op으로 처리합니다.
+   */
+  async upsertSubclusters(subclusters: GraphSubclusterDoc[], options?: RepoOptions): Promise<void> {
+    try {
+      if (subclusters.length === 0) return;
+      await this.repo.upsertSubclusters(subclusters, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.upsertSubclusters failed', { cause: String(err) });
+    }
+  }
+
+  /**
    * 서브클러스터를 삭제합니다.
-   * 
+   *
    * @param userId 사용자 ID
    * @param subclusterId 서브클러스터 ID
    * @param permanent 영구 삭제 여부
@@ -510,7 +677,7 @@ export class GraphManagementService {
 
   /**
    * 삭제된 서브클러스터를 복구합니다.
-   * 
+   *
    * @param userId 사용자 ID
    * @param subclusterId 서브클러스터 ID
    * @param options (선택) 트랜잭션 옵션
@@ -531,7 +698,7 @@ export class GraphManagementService {
 
   /**
    * 사용자의 모든 서브클러스터 목록을 조회합니다.
-   * 
+   *
    * @param userId 사용자 ID
    * @returns 서브클러스터 문서 배열
    */
@@ -562,6 +729,54 @@ export class GraphManagementService {
   }
 
   /**
+   * 그래프 스냅샷 전체를 bulkWrite 기반으로 일괄 반영합니다.
+   *
+   * @param payload 사용자 ID와 스냅샷 DTO를 포함한 저장 페이로드
+   * @param options (선택) 트랜잭션 세션 등 저장 옵션
+   * @returns Promise<void>
+   * @throws {ValidationError} 사용자 ID, 노드 ID, 엣지 타입, 클러스터 ID가 유효하지 않은 경우
+   * @throws {UpstreamError} 저장소 일괄 저장 중 오류가 발생한 경우
+   * @remarks
+   * - 노드, 엣지, 클러스터, 서브클러스터를 컬렉션별 bulkWrite로 순차 반영합니다.
+   * - 동일 트랜잭션 안에서는 컬렉션 간 순서를 유지하여 세션 안정성을 높입니다.
+   * - 통계 문서는 마지막 단계에서 upsert 하여 스냅샷 반영 완료 시점을 명확히 합니다.
+   */
+  async persistSnapshotBulk(payload: PersistGraphPayloadDto, options?: RepoOptions): Promise<void> {
+    try {
+      const { userId, snapshot } = payload;
+      this.assertUser(userId);
+
+      // SnapshotDto에서, Node/Edge/Cluster/SubCluster 분리
+      const nodes: GraphNodeDto[] = snapshot.nodes.map((node) => ({ ...node, userId }));
+      const edges: GraphEdgeDto[] = snapshot.edges.map((edge) => ({ ...edge, userId }));
+      const clusters: GraphClusterDto[] = snapshot.clusters.map((cluster) => ({
+        ...cluster,
+        userId,
+      }));
+      const subclusters: GraphSubclusterDoc[] = (snapshot.subclusters || []).map((subcluster) => {
+        const { deletedAt, ...rest } = subcluster;
+        return {
+          ...rest,
+          userId,
+          createdAt: '',
+          updatedAt: '',
+          ...(deletedAt != null ? { deletedAt: new Date(deletedAt).getTime() } : {}),
+        };
+      });
+
+      // bulkWrite로 일괄 저장
+      await this.upsertNodes(nodes, options);
+      await this.upsertEdges(edges, options);
+      await this.upsertClusters(clusters, options);
+      await this.upsertSubclusters(subclusters, options);
+      await this.saveStats({ ...snapshot.stats, userId }, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.persistSnapshotBulk failed', { cause: String(err) });
+    }
+  }
+
+  /**
    * 그래프 통계 조회
    *
    * @param userId 사용자 ID
@@ -571,13 +786,15 @@ export class GraphManagementService {
     try {
       this.assertUser(userId);
       const doc: GraphStatsDoc | null = await this.repo.getStats(userId);
-      return doc ? toGraphStatsDto(doc) : {
-        userId,
-        nodes: 0,
-        edges: 0,
-        clusters: 0,
-        status: 'NOT_CREATED'
-      };
+      return doc
+        ? toGraphStatsDto(doc)
+        : {
+            userId,
+            nodes: 0,
+            edges: 0,
+            clusters: 0,
+            status: 'NOT_CREATED',
+          };
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.getStats failed', { cause: String(err) });
@@ -616,7 +833,7 @@ export class GraphManagementService {
 
   /**
    * 삭제된 모든 그래프 데이터를 복구합니다.
-   * 
+   *
    * @param userId 사용자 ID
    * @param options (선택) 트랜잭션 옵션
    */
@@ -635,7 +852,11 @@ export class GraphManagementService {
   /**
    * 그래프 요약/인사이트 저장
    */
-  async upsertGraphSummary(userId: string, summary: GraphSummaryDoc, options?: RepoOptions): Promise<void> {
+  async upsertGraphSummary(
+    userId: string,
+    summary: GraphSummaryDoc,
+    options?: RepoOptions
+  ): Promise<void> {
     try {
       this.assertUser(userId);
       const doc: GraphSummaryDoc = { ...summary, userId };
@@ -660,12 +881,11 @@ export class GraphManagementService {
   async getGraphSummary(userId: string): Promise<GraphSummaryDto> {
     try {
       this.assertUser(userId);
-      const doc = await this.repo.getGraphSummary(userId);
+      const doc: GraphSummaryDoc | null = await this.repo.getGraphSummary(userId);
       if (!doc) {
-        // Summary 미생성 상태: FE SDK 호환 빈 기본값 반환
         return createEmptyGraphSummaryDto();
       }
-      // DB Doc → FE DTO 변환 (필드명 매핑 포함)
+
       return toGraphSummaryDto(doc);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
@@ -676,7 +896,11 @@ export class GraphManagementService {
   /**
    * 그래프 요약/인사이트 삭제
    */
-  async deleteGraphSummary(userId: string, permanent?: boolean, options?: RepoOptions): Promise<void> {
+  async deleteGraphSummary(
+    userId: string,
+    permanent?: boolean,
+    options?: RepoOptions
+  ): Promise<void> {
     try {
       this.assertUser(userId);
       await this.repo.deleteGraphSummary(userId, permanent, options);
@@ -688,7 +912,7 @@ export class GraphManagementService {
 
   /**
    * 삭제된 그래프 요약/인사이트를 복구합니다.
-   * 
+   *
    * @param userId 사용자 ID
    * @param options (선택) 트랜잭션 옵션
    */
