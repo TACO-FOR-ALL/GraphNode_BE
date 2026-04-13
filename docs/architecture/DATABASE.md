@@ -103,11 +103,19 @@ erDiagram
     %%     number size "파일 크기 (bytes)"
     %% }
 
+    DailyUsage {
+        string id PK "사용량 레코드 고유 식별자 (UUID)"
+        string userId FK "users.id FK — @unique (1:1 관계 보장)"
+        Date lastResetDate "chatCount가 마지막으로 초기화된 UTC 날짜 (자정 기준)"
+        int chatCount "lastResetDate 당일 누적 AI 대화 호출 횟수 (0 이상)"
+    }
+
     %% Relationships
     User ||--o{ FolderDoc : "owns"
     User ||--o{ NoteDoc : "owns"
     User ||--o{ ConversationDoc : "owns"
     User ||--o{ MessageDoc : "owns"
+    User ||--|| DailyUsage : "dailyUsage (1:1, onDelete Cascade)"
 
     FolderDoc ||--o{ FolderDoc : "parentId (트리 구조)"
     FolderDoc ||--o{ NoteDoc : "folderId (소속 노트)"
@@ -364,6 +372,23 @@ erDiagram
 | **apiKeyGemini** | `String` | No | (Encrypted) Gemini API Key |
 | **openaiAssistantId**| `String` | No | OpenAI Assistants API ID |
 | **preferredLanguage**| `String` | Yes | 선호 언어 (Default: 'en') |
+
+### **DailyUsage Table**
+- **Table Name**: `daily_usages` (managed by Prisma)
+- **Source**: `src/core/types/persistence/usage.persistence.ts`
+- **설계 전략**: Option B (1:1) — 유저당 단일 row. 날짜가 바뀌면 `lastResetDate`를 갱신하고 `chatCount`를 1로 초기화(reset)한다. cleanup job이 불필요하며 row 수가 유저 수로 고정된다.
+- **서비스 패턴**: AI 호출 직전 `checkLimit`(읽기 전용)으로 한도를 확인하고, 응답 저장 완료 후 `incrementUsage`로 카운트를 증가시킨다. 실패한 AI 호출은 카운트를 소모하지 않는다.
+
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `String` (UUID) | Yes | 사용량 레코드 고유 식별자 (PK) |
+| **userId** | `String` (UUID) | Yes | 사용자 식별자 (FK → `users.id`, `@unique`, `onDelete: Cascade`) |
+| **lastResetDate** | `DateTime` (Date only) | Yes | `chatCount`가 마지막으로 초기화된 UTC 날짜 (시분초 없음, 자정 기준) |
+| **chatCount** | `Int` | Yes | `lastResetDate` 당일 누적 AI 대화 호출 횟수. 날짜가 바뀌면 1로 재설정. (Default: 0) |
+
+> **날짜 판별 로직**: `lastResetDate`와 오늘(UTC 자정)을 비교하여 날짜가 다르면 `chatCount`를 0으로 간주한다(논리적 reset). 실제 DB reset은 다음 `incrementUsage` 호출 시점에 upsert로 수행된다.
+>
+> **일일 한도**: 환경변수 `DAILY_CHAT_LIMIT` (기본값 20회). 한도 초과 시 `RateLimitError (HTTP 429)` 반환.
 
 ---
 

@@ -43,8 +43,14 @@ const EnvSchema = z.object({
   // QDRANT_VECTOR_SIZE: z.coerce.number().int().positive().default(1536), // OpenAI 임베딩 차원 수
   // QDRANT_DISTANCE_METRIC: z.enum(['Cosine', 'Euclidean']).default('Cosine'), // 거리 측정 방식
 
-  // OpenAI API Key
+  // 서비스 자체 AI Provider API Keys
+  // 사용자 키가 아닌 서비스 계정 키로, 모든 AI 대화에 공유 사용됩니다.
   OPENAI_API_KEY: z.string().min(1, 'OPENAI_API_KEY required'),
+  GEMINI_API_KEY: z.string().min(1, 'GEMINI_API_KEY required'),
+  CLAUDE_API_KEY: z.string().min(1, 'CLAUDE_API_KEY required'),
+
+  // 일일 채팅 가능 횟수 (Beta Test 용도, Default 값은 20번)
+  DAILY_CHAT_LIMIT: z.coerce.number().int().positive().default(20),
 
   // OpenAI Assistants
   OPENAI_ASSISTANT_ID: z.string().optional(),
@@ -89,7 +95,6 @@ const EnvSchema = z.object({
     .optional()
     .transform((v) => v === 'true'),
   TEST_LOGIN_SECRET: z.string().optional(),
-
 
   //FIREBASE Notification 설정
   FIREBASE_CREDENTIALS_JSON: z.string().optional(),
