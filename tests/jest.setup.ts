@@ -24,12 +24,16 @@ process.env.SQS_RESULT_QUEUE_URL = 'http://sqs.result';
 process.env.S3_PAYLOAD_BUCKET = 'test-payload-bucket';
 process.env.S3_FILE_BUCKET = 'test-file-bucket';
 process.env.OPENAI_API_KEY = 'sk-test-openai-key';
-process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key';
-process.env.DEEPSEEK_API_KEY = 'sk-ds-test-key';
+process.env.GEMINI_API_KEY = 'test-gemini-key';
+process.env.CLAUDE_API_KEY = 'test-claude-key';
 process.env.SENTRY_DSN = 'https://test@sentry.io/1';
 process.env.POSTHOG_API_KEY = 'test-posthog-key';
 process.env.POSTHOG_HOST = 'https://app.posthog.com';
-process.env.FIREBASE_CREDENTIALS_JSON = '{"project_id":"test-proj", "private_key": "dummy-key", "client_email": "dummy@example.com"}';
+process.env.FIREBASE_CREDENTIALS_JSON = JSON.stringify({
+  project_id: 'test-proj',
+  private_key: '-----BEGIN PRIVATE KEY-----\nMIIBVwIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEAtesttesttesttest\n-----END PRIVATE KEY-----\n',
+  client_email: 'dummy@example.com',
+});
 process.env.AWS_REGION = 'ap-northeast-2';
 
 // SessionStoreRedis ZSET 시뮬레이션용 인메모리 저장소 (테스트 격리용)
@@ -101,6 +105,7 @@ jest.mock('../src/infra/redis/client', () => {
     redis: mockRedisInstance,
     redisSubscriber: mockRedisInstance,
     initRedis: jest.fn<any>().mockResolvedValue(undefined),
+    closeRedis: jest.fn<any>().mockResolvedValue(undefined),
   };
 });
 
@@ -132,6 +137,7 @@ jest.mock('../src/infra/db/mongodb', () => {
   return {
     initMongo: jest.fn<any>().mockResolvedValue(mockClient),
     getMongo: jest.fn<any>().mockReturnValue(mockClient),
+    disconnectMongo: jest.fn<any>().mockResolvedValue(undefined),
     client: mockClient,
   };
 });
@@ -142,5 +148,28 @@ jest.mock('../src/infra/db/mongodb', () => {
 // setupFilesAfterEnv에서 전역 mock으로 처리하면 ts-jest 타입 검사를 우회할 수 있습니다.
 jest.mock('pdf-parse');
 jest.mock('officeparser');
+
+jest.mock('firebase-admin', () => {
+  const admin = {
+    apps: [],
+    credential: {
+      cert: jest.fn<any>().mockReturnValue({}),
+    },
+    initializeApp: jest.fn<any>().mockReturnValue({}),
+    messaging: jest.fn<any>().mockReturnValue({
+      sendEachForMulticast: jest.fn<any>().mockResolvedValue({
+        successCount: 0,
+        failureCount: 0,
+        responses: [],
+      }),
+    }),
+  };
+
+  return {
+    __esModule: true,
+    default: admin,
+    ...admin,
+  };
+});
 
 export {};

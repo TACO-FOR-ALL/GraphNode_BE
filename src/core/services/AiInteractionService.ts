@@ -2,12 +2,15 @@
  * 모듈: AiInteractionService (AI 채팅 서비스)
  *
  * 책임:
- * - AI 모델(OpenAI 등)과의 대화 로직을 조율합니다.
+ * - AI 모델(OpenAI, Gemini, Claude)과의 대화 로직을 조율합니다.
  * - 사용자의 메시지를 받아 AI에게 전달하고, 응답을 받아 저장합니다.
  * - ChatManagementService를 사용하여 대화 내용과 메시지를 관리합니다.
+ * - DailyUsageService를 통해 사용자당 일일 대화 한도(20회)를 강제합니다.
+ * - AI API 키는 환경변수(서비스 자체 키)에서 조회합니다. 사용자 키를 쓰지 않습니다.
  *
  * 외부 의존:
- * - OpenAI SDK: 실제 AI 모델 호출
+ * - AI Provider SDK: 실제 AI 모델 호출
+ * - loadEnv: 서비스 자체 API 키 조회
  */
 
 import 'multer'; // Ensure Multer types are loaded
@@ -19,17 +22,19 @@ import {
   NotFoundError,
   UpstreamError,
   ValidationError,
-  ForbiddenError,
   RateLimitError,
 } from '../../shared/errors/domain';
 import { AIchatType } from '../../shared/ai-providers/AIchatType';
 import { ChatManagementService } from './ChatManagementService';
 import { UserService } from './UserService';
+import { DailyUsageService } from './DailyUsageService';
 import { AIChatResponseDto, ChatMessage, ChatThread, Attachment } from '../../shared/dtos/ai';
-import { AiResponse, getAiProvider, IAiProvider, Result } from '../../shared/ai-providers/index';
+import { AiResponse, getAiProvider, IAiProvider } from '../../shared/ai-providers/index';
 import { ApiKeyModel } from '../../shared/dtos/me';
 import { StoragePort } from '../ports/StoragePort';
 import { withRetry } from '../../shared/utils/retry';
+import { captureEvent } from '../../shared/utils/posthog';
+import { loadEnv } from '../../config/env';
 import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 
 interface OpenAIResponsesApiResult {
@@ -39,47 +44,51 @@ interface OpenAIResponsesApiResult {
 }
 
 export class AiInteractionService {
-  // 생성자 주입을 통해 필요한 하위 서비스들을 의존성으로 받습니다.
-  // 생성자 주입을 통해 필요한 하위 서비스들을 의존성으로 받습니다.
   constructor(
     private readonly chatManagementService: ChatManagementService,
     private readonly userService: UserService,
-    private readonly storageAdapter: StoragePort
+    private readonly storageAdapter: StoragePort,
+    private readonly dailyUsageService: DailyUsageService
   ) {}
 
   /**
-   * API Key 검증
-   * @param ownerUserId 사용자 ID
-   * @param model 모델명
-   * @returns API Key valid 여부
-   * @throws ForbiddenError
+   * 모델에 해당하는 서비스 자체 API 키를 환경변수에서 반환합니다.
+   *
+   * @description env.ts가 시작 시점에 키 존재를 검증하므로 런타임에는 항상 유효한 키가 반환됩니다.
+   * @param model AI 모델 식별자
+   * @returns 서비스 자체 API 키 문자열
+   * @throws {ValidationError} VALIDATION_FAILED — 지원하지 않는 모델
+   */
+  private getSystemApiKey(model: ApiKeyModel): string {
+    const env = loadEnv();
+    switch (model) {
+      case 'openai':
+      case 'deepseek':
+        return env.OPENAI_API_KEY;
+      case 'gemini':
+        return env.GEMINI_API_KEY;
+      case 'claude':
+        return env.CLAUDE_API_KEY;
+      default:
+        throw new ValidationError(`Unsupported AI model: ${model}`);
+    }
+  }
+
+  /**
+   * 서비스 자체 API 키 유효성 확인
+   *
+   * @description
+   *   서비스 키로 전환 이후, 이 메서드는 해당 모델의 시스템 키가 환경변수에
+   *   올바르게 구성되어 있는지 확인합니다.
+   *   env.ts가 시작 시 검증하므로 정상 운영 중에는 항상 true를 반환합니다.
+   * @param ownerUserId 요청자 사용자 ID (사용량 확인용)
+   * @param model 확인할 AI 모델
+   * @returns true (시스템 키가 구성된 경우)
+   * @throws {ValidationError} VALIDATION_FAILED — 지원하지 않는 모델
    */
   async checkApiKey(ownerUserId: string, model: ApiKeyModel): Promise<boolean> {
-    const apiKeyResponse = await this.userService.getApiKeys(ownerUserId, model);
-    const apiKey = apiKeyResponse.apiKey;
-
-    if (!apiKey) {
-      throw new ForbiddenError(
-        `API Key for model ${model} not found. Please register it in settings.`
-      );
-    }
-
-    // Provider 획득 (Factory Pattern)
-    let provider: IAiProvider;
-    try {
-      provider = getAiProvider(model);
-    } catch (e) {
-      throw new ValidationError(`Unsupported AI model: ${model}`);
-    }
-
-    // API Key 검증
-    const isValid = (await withRetry(async () => await provider.checkAPIKeyValid(apiKey), {
-      label: 'AiProvider.checkAPIKeyValid',
-    })) as Result<true>;
-    if (!isValid.ok) {
-      throw new ValidationError(`Invalid API Key for ${model}: ${isValid.error}`);
-    }
-
+    // 시스템 키 존재 확인 (getSystemApiKey가 throw하지 않으면 정상)
+    this.getSystemApiKey(model);
     return true;
   }
 
@@ -100,34 +109,20 @@ export class AiInteractionService {
     onStream?: (chunk: string) => void
   ): Promise<AIChatResponseDto> {
     try {
-      // 0. 파일 업로드 (S3 저장 및 첨부파일 메타데이터 생성)
+      // 0. 일일 사용량 한도 사전 확인 (한도 초과 시 즉시 RateLimitError throw, 카운트 변화 없음)
+      await this.dailyUsageService.checkLimit(ownerUserId);
+
+      // 1. 파일 업로드 (S3 저장 및 첨부파일 메타데이터 생성)
       const userAttachments: Attachment[] = await this.handleFiles(files);
 
-      // 1. API Key 조회 & Provider 획득
-      const apiKeyResponse = await this.userService.getApiKeys(ownerUserId, chatbody.model);
-      const apiKey = apiKeyResponse.apiKey;
-
-      if (!apiKey) {
-        throw new ForbiddenError(
-          `API Key for model ${chatbody.model} not found. Please register it in settings.`
-        );
-      }
+      // 2. 서비스 자체 API 키 조회 & Provider 획득
+      const apiKey = this.getSystemApiKey(chatbody.model);
 
       let provider: IAiProvider;
       try {
         provider = getAiProvider(chatbody.model);
       } catch (e) {
         throw new ValidationError(`Unsupported AI model: ${chatbody.model}`);
-      }
-
-      // 2. 개발 환경 제외하고 API Key 실제 유효성 검사
-      if (process.env.NODE_ENV !== 'development') {
-        const isValid = await withRetry(async () => await provider.checkAPIKeyValid(apiKey), {
-          label: 'AiProvider.checkAPIKeyValid',
-        });
-        if (!isValid.ok) {
-          throw new ValidationError(`Invalid API Key for ${chatbody.model}: ${isValid.error}`);
-        }
       }
 
       // 3. 대화방 조회 또는 생성
@@ -258,6 +253,10 @@ export class AiInteractionService {
         }
       );
 
+      // 메시지 저장 완료 후 카운트 증가 (성공한 대화에만 소모)
+      await this.dailyUsageService.incrementUsage(ownerUserId);
+
+      captureEvent(ownerUserId, 'ai_chat_completed', {
       captureEvent(ownerUserId, POSTHOG_EVENT.AI_CHAT_COMPLETED, {
         model_name: chatbody.modelName,
         chat_type: 'normal',
@@ -301,17 +300,13 @@ export class AiInteractionService {
     onStream?: (chunk: string) => void
   ): Promise<AIChatResponseDto> {
     try {
+      // 0. 일일 사용량 한도 사전 확인 (한도 초과 시 즉시 RateLimitError throw, 카운트 변화 없음)
+      await this.dailyUsageService.checkLimit(ownerUserId);
+
       const userAttachments = await this.handleFiles(files);
 
-      // 1. API Key 조회 & Provider 획득
-      const apiKeyResponse = await this.userService.getApiKeys(ownerUserId, chatbody.model);
-      const apiKey = apiKeyResponse.apiKey;
-
-      if (!apiKey) {
-        throw new ForbiddenError(
-          `API Key for model ${chatbody.model} not found. Please register it in settings.`
-        );
-      }
+      // 1. 서비스 자체 API 키 조회 & Provider 획득
+      const apiKey = this.getSystemApiKey(chatbody.model);
 
       let provider: IAiProvider;
       try {
@@ -320,17 +315,7 @@ export class AiInteractionService {
         throw new ValidationError(`Unsupported AI model: ${chatbody.model}`);
       }
 
-      // 2. 개발 환경 제외하고 API Key 실제 유효성 검사
-      if (process.env.NODE_ENV !== 'development') {
-        const isValid = await withRetry(async () => await provider.checkAPIKeyValid(apiKey), {
-          label: 'AiProvider.checkAPIKeyValid(RAG)',
-        });
-        if (!isValid.ok) {
-          throw new ValidationError(`Invalid API Key for ${chatbody.model}: ${isValid.error}`);
-        }
-      }
-
-      // 3. 대화방 조회 또는 생성
+      // 2. 대화방 조회 또는 생성
       let conversation: ChatThread;
       let isNewConversation = false;
       let newTitle: string | null = null;
@@ -428,6 +413,10 @@ export class AiInteractionService {
         metadata: { ...aiResponse.metadata, ragContextCount: chatbody.retrievedContext.length },
       });
 
+      // 메시지 저장 완료 후 카운트 증가 (성공한 대화에만 소모)
+      await this.dailyUsageService.incrementUsage(ownerUserId);
+
+      captureEvent(ownerUserId, 'ai_chat_completed', {
       captureEvent(ownerUserId, POSTHOG_EVENT.AI_CHAT_COMPLETED, {
         model_name: chatbody.modelName,
         chat_type: 'rag',
@@ -464,31 +453,17 @@ export class AiInteractionService {
     onStream?: (chunk: string) => void
   ): Promise<AIChatResponseDto> {
     try {
-      // 1. API Key 조회 & Provider 획득
-      const apiKeyResponse = await this.userService.getApiKeys(ownerUserId, retrybody.model);
-      const apiKey = apiKeyResponse.apiKey;
+      // 1. 일일 사용량 한도 사전 확인 (한도 초과 시 즉시 RateLimitError throw, 카운트 변화 없음)
+      await this.dailyUsageService.checkLimit(ownerUserId);
 
-      if (!apiKey) {
-        throw new ForbiddenError(
-          `API Key for model ${retrybody.model} not found. Please register it in settings.`
-        );
-      }
+      // 2. 서비스 자체 API 키 조회 & Provider 획득
+      const apiKey = this.getSystemApiKey(retrybody.model);
 
       let provider: IAiProvider;
       try {
         provider = getAiProvider(retrybody.model);
       } catch (e) {
         throw new ValidationError(`Unsupported AI model: ${retrybody.model}`);
-      }
-
-      // 2. 개발 환경 제외하고 API Key 실제 유효성 검사
-      if (process.env.NODE_ENV !== 'development') {
-        const isValid = await withRetry(async () => await provider.checkAPIKeyValid(apiKey), {
-          label: 'AiProvider.checkAPIKeyValid(Retry)',
-        });
-        if (!isValid.ok) {
-          throw new ValidationError(`Invalid API Key for ${retrybody.model}: ${isValid.error}`);
-        }
       }
 
       // 3. 대화방 조회 (없는 경우 에러)
@@ -580,6 +555,10 @@ export class AiInteractionService {
         }
       );
 
+      // 메시지 저장 완료 후 카운트 증가 (성공한 대화에만 소모)
+      await this.dailyUsageService.incrementUsage(ownerUserId);
+
+      captureEvent(ownerUserId, 'ai_chat_completed', {
       captureEvent(ownerUserId, POSTHOG_EVENT.AI_CHAT_COMPLETED, {
         model_name: retrybody.modelName,
         chat_type: 'retry',
