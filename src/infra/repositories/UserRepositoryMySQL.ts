@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import type { Prisma } from '@prisma/client';
 
 import { User, Provider } from '../../core/types/persistence/UserPersistence';
 import { UserRepository } from '../../core/ports/UserRepository';
@@ -209,7 +210,7 @@ export class UserRepositoryMySQL implements UserRepository {
       agentMode: OnboardingAgentMode;
     }
   ): Promise<void> {
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const user = await tx.user.findUnique({
         where: { id },
         select: { userInfoId: true },
