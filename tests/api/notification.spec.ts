@@ -92,7 +92,9 @@ describe('Notification API Integration Tests', () => {
         if (!nock.isActive()) nock.activate();
     });
 
-    afterAll(() => {
+    afterAll(async () => {
+        const { closeDatabases } = require('../../src/infra/db');
+        await closeDatabases();
         nock.cleanAll();
         nock.restore();
         server?.close();

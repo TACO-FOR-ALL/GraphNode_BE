@@ -78,6 +78,10 @@ const client = createGraphNodeClient({
 ### 🔔 8. 기타 유틸리티 (Utils)
 
 - [Notification API](docs/endpoints/notification.md): 실시간 알림 스트림 및 FCM 토큰 관리
+
+### 🔍 9. 글로벌 검색 (Global Search)
+
+- [Search API (`client.search`)](docs/endpoints/search.md): 전체 노트 및 대화 내 키워드 검색
 - [File API](docs/endpoints/file.md): 바이너리 파일 업로드 및 다운로드
 - [Microscope API](docs/endpoints/microscope.md): 정밀 분석 워크스페이스 관리
 - [Health API](docs/endpoints/health.md): 서버 상태 체크

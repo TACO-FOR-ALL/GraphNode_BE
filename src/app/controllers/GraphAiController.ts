@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 
 import { GraphGenerationService } from '../../core/services/GraphGenerationService';
 import { getUserIdFromRequest } from '../utils/request';
+import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 
 export class GraphAiController {
   constructor(private readonly graphGenerationService: GraphGenerationService) {}
@@ -14,14 +15,23 @@ export class GraphAiController {
   generateGraph = async (req: Request, res: Response) => {
     // 세션에서 사용자 ID 가져오기
     const userId = getUserIdFromRequest(req);
-    const { includeSummary} = req.body || {};
+    const { includeSummary } = req.body || {};
 
     // 그래프 생성 프로세스 시작 (SQS 요청)
-    const taskId = await this.graphGenerationService.requestGraphGenerationViaQueue(userId, { 
-      includeSummary, 
+    const taskId = await this.graphGenerationService.requestGraphGenerationViaQueue(userId, {
+      includeSummary,
     });
 
+    if (!taskId) {
+      res.status(200).json({
+        message: 'No conversation or note data found to generate graph',
+        status: 'skipped',
+      });
+      return;
+    }
+
     // 작업 id와 함께 곧바로 반환
+    captureEvent(userId, POSTHOG_EVENT.GRAPH_GENERATION_REQUESTED, { include_summary: includeSummary });
     res.status(202).json({
       message: 'Graph generation queued',
       taskId: taskId,
@@ -76,6 +86,7 @@ export class GraphAiController {
         return;
     }
 
+    captureEvent(userId, POSTHOG_EVENT.GRAPH_ADD_NODE_REQUESTED);
     res.status(202).json({
       message: 'Add node to graph queued',
       taskId: taskId,

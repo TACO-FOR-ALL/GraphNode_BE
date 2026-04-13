@@ -33,6 +33,14 @@ export interface NoteRepository {
   createNotes(docs: NoteDoc[], session?: ClientSession): Promise<NoteDoc[]>;
 
   /**
+   * 사용자 기준 활성 note 수를 반환합니다.
+   *
+   * @param ownerUserId 사용자 ID
+   * @returns soft delete 되지 않은 note 개수
+   */
+  countByOwner(ownerUserId: string): Promise<number>;
+
+  /**
    * ID로 노트를 조회합니다.
    * @param id 노트 ID
    * @param ownerUserId 소유자 ID
@@ -377,8 +385,9 @@ export interface NoteRepository {
 
   /**
    * 소프트 삭제된 지 오래되어 만료된 폴더 목록을 조회합니다.
-   * @param expiredBefore 기준 시각
+   * @param expiredBefore 기준 시각 
    * @returns 만료된 폴더 문서 배열
    */
   findExpiredFolders(expiredBefore: Date): Promise<FolderDoc[]>;
+
 }

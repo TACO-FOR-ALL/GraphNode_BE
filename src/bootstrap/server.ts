@@ -17,6 +17,7 @@ import authAppleRouter from '../app/routes/AuthAppleRouter';
 import { makeMeRouter } from './modules/user.module';
 import authSessionRouter from '../app/routes/AuthSessionRouter';
 import { requestContext } from '../app/middlewares/request-context';
+import { posthogAuditMiddleware } from '../app/middlewares/posthog-audit-middleware';
 import { httpLogger } from '../shared/utils/logger';
 import { errorHandler } from '../app/middlewares/error';
 // AI 라우터 import
@@ -30,6 +31,7 @@ import { makeAgentRouter } from './modules/agent.module';
 import { makeNotificationRouter } from './modules/notification.module';
 import { makeFileRouter } from './modules/file.module';
 import { makeMicroscopeRouter } from './modules/microscope.module';
+import { makeSearchRouter } from './modules/search.module';
 import { CleanupCron } from '../infra/cron/CleanupCron';
 // import { createTestAgentRouter } from '../app/routes/agent.test';
 
@@ -59,6 +61,7 @@ export function createApp() {
   app.use(express.urlencoded({ limit: '100mb', extended: true })); // Apple OAuth post request body 파싱
   app.use(cookieParser(sessionSecert));
   app.use(requestContext);
+  app.use(posthogAuditMiddleware);
   app.use(httpLogger);
 
   // Health endpoints: available at /healthz and /v1/healthz
@@ -83,6 +86,9 @@ export function createApp() {
   // Microscope Router
   app.use('/v1/microscope', makeMicroscopeRouter());
 
+  // Search Router
+  app.use('/v1/search', makeSearchRouter());
+
   // Notification Router (SSE)
   app.use('/v1/notifications', makeNotificationRouter());
 
@@ -105,11 +111,13 @@ export function createApp() {
     if ((req as any).log) {
       (req as any).log.level = 'silent';
     }
+    (req as any).skipErrorLog = true;
     next(new NotFoundError(`Route ${req.method} ${req.path} not found`));
   });
 
-  // Sentry ErrorHandler (v8: setupExpressErrorHandler)
-  // 에러를 포착하여 Sentry로 전송 후, next(err)로 다음 에러 핸들러에게 전달함
+  // Sentry ErrorHandler: span/transaction 마킹 전용 (shouldHandleError: () => false)
+  // 실제 captureException은 errorHandler에서 단독 수행 → event id 회수 및 CloudWatch 로그 기록.
+  // 중복 전송 방지 설계: docs/architecture/sentry.md 섹션 8.1 참조.
   setupSentryErrorHandler(app);
 
   // Central error handler (RFC 9457)

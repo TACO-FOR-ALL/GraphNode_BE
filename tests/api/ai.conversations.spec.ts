@@ -7,6 +7,7 @@ import request from 'supertest';
 import { jest, describe, test, expect } from '@jest/globals';
 
 import { createApp } from '../../src/bootstrap/server';
+import { closeDatabases } from '../../src/infra/db';
 
 // 인메모리 스토어
 const store = {
@@ -80,10 +81,15 @@ jest.mock('../../src/core/services/ChatManagementService', () => {
         }
         return v;
       }
-      async listConversations(ownerUserId: string, limit: number) {
+      async listConversations(ownerUserId: string, limit: number, cursor?: string, options: any = { includeMessages: true }) {
+        const { includeMessages = true } = options;
         const items = Array.from(store.conversations.values())
           .filter((v) => v.ownerUserId === ownerUserId && !(v as any).deletedAt)
-          .slice(0, limit);
+          .slice(0, limit)
+          .map(v => ({
+            ...v,
+            messages: includeMessages ? v.messages : []
+          }));
         return { items, nextCursor: null };
       }
       async updateConversation(id: string, ownerUserId: string, updates: any) {
@@ -197,10 +203,24 @@ function appWithTestEnv() {
 }
 
 describe('AI Conversations API', () => {
-  test('Full Conversation LifeCycle including Missing Gaps', async () => {
-    const app = appWithTestEnv();
-    const agent = request.agent(app);
+  let app: any;
+  let agent: any;
 
+  beforeAll(async () => {
+    app = appWithTestEnv();
+    agent = request.agent(app);
+  });
+
+  afterAll(async () => {
+    await closeDatabases();
+    if (app && (app as any).close) {
+      await new Promise<void>((resolve) => {
+        (app as any).close(() => resolve());
+      });
+    }
+  });
+
+  test('Full Conversation LifeCycle including Missing Gaps', async () => {
     // 1. Login (Google Mock)
     const start = await agent.get('/auth/google/start');
     const location = start.headers['location'] as string;
@@ -247,5 +267,27 @@ describe('AI Conversations API', () => {
 
     const listEmpty = await agent.get('/v1/ai/conversations');
     expect(listEmpty.body.items).toHaveLength(0);
+  });
+
+  test('Conversation List Performance Optimization (Messages empty in list, full in listTest)', async () => {
+    // 1. Create a conversation with messages
+    await agent.post('/v1/ai/conversations').send({
+      id: 'c_perf_1',
+      title: 'Perf Testing',
+      messages: [{ id: 'm1', role: 'user', content: 'test message' }]
+    });
+
+    // 2. Check /v1/ai/conversations (should have empty messages)
+    const listRes = await agent.get('/v1/ai/conversations');
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.items).toHaveLength(1);
+    expect(listRes.body.items[0].messages).toHaveLength(0); // 빈 배열이어야 함
+
+    // 3. Check /v1/ai/conversations/test (should have full messages)
+    const testListRes = await agent.get('/v1/ai/conversations/test');
+    expect(testListRes.status).toBe(200);
+    expect(testListRes.body.items).toHaveLength(1);
+    expect(testListRes.body.items[0].messages).toHaveLength(1); // 메시지가 포함되어야 함
+    expect(testListRes.body.items[0].messages[0].content).toBe('test message');
   });
 });

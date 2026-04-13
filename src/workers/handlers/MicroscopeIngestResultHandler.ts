@@ -6,6 +6,7 @@ import { NotificationType } from '../notificationType';
 import { AiMicroscopeIngestResultItem } from '../../shared/dtos/ai_graph_output';
 import { MicroscopeWorkspaceMetaDoc } from '../../core/types/persistence/microscope_workspace.persistence';
 import { withRetry } from '../../shared/utils/retry';
+import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 
 /**
  * Microscope 문서 분석(Ingest) 결과 처리 핸들러
@@ -78,6 +79,23 @@ export class MicroscopeIngestResultHandler implements JobHandler {
       } else {
         logger.info({ taskId, userId, groupId, s3Key, chunks_count }, 'Microscope document processing completed successfully');
         
+        let totalNodes = 0;
+        let totalEdges = 0;
+        if (downloadedGraphData && Array.isArray(downloadedGraphData)) {
+          downloadedGraphData.forEach((chunk: any) => {
+            totalNodes += (chunk.nodes?.length || 0);
+            totalEdges += (chunk.edges?.length || 0);
+          });
+        }
+
+        captureEvent(userId, POSTHOG_EVENT.MICROSCOPE_INGEST_COMPLETED, {
+          chunks_count: chunks_count || 0,
+          nodes_count: totalNodes,
+          edges_count: totalEdges,
+          group_id: groupId,
+          source_id: sourceId,
+        });
+
         await notiService.sendMicroscopeDocumentCompleted(userId, taskId, sourceId, chunks_count);
       }
 

@@ -6,7 +6,7 @@
 
 | Method | Endpoint | Description | Status Codes |
 | :--- | :--- | :--- | :--- |
-| `openAgentChatStream(...)` | `POST /v1/agent/chat/stream` | 에이전트 채팅 스트림 연결 | 200 |
+| `openAgentChatStream(...)` | `POST /v1/agent/chat/stream` | 에이전트 채팅 스트림 연결 | 200, 400, 401, 403, 429, 502 |
 
 ---
 
@@ -42,6 +42,13 @@
   - `chunk`: 실시간 텍스트 조각
   - `result`: 최종 답변 및 생성된 콘텐츠
   - `error`: 오류 발생 시
+- **Status Codes**
+  - `200 OK`: SSE 스트림 연결 성공. 이후 이벤트를 통해 응답 수신
+  - `400 Bad Request`: `userMessage`가 비어있거나 형식 오류
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `403 Forbidden`: 해당 모델의 API 키가 설정되지 않음
+  - `429 Too Many Requests`: AI 공급자 Rate Limit 초과 (재시도 가능)
+  - `502 Bad Gateway`: AI 공급자 오류 또는 데이터베이스 오류 (재시도 가능)
 
 ---
 

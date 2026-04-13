@@ -38,6 +38,9 @@ export class MessageRepositoryMongo implements MessageRepository {
    */
   async create(doc: MessageDoc, session?: ClientSession): Promise<MessageDoc> {
     try {
+      const now = Date.now();
+      doc.createdAt = now;
+      doc.updatedAt = now;
       await this.col().insertOne(doc, { session });
       return doc;
     } catch (err: unknown) {
@@ -57,6 +60,8 @@ export class MessageRepositoryMongo implements MessageRepository {
       if (docs.length === 0) {
         return [];
       }
+      const now = Date.now();
+      docs.forEach((d) => { d.createdAt = now; d.updatedAt = now; });
       // insertMany: 여러 문서를 한 번에 추가합니다.
       await this.col().insertMany(docs, { session });
       return docs;
@@ -353,6 +358,28 @@ export class MessageRepositoryMongo implements MessageRepository {
       return result.modifiedCount;
     } catch (err: unknown) {
       this.handleError('MessageRepositoryMongo.restoreAllByConversationId', err);
+    }
+  }
+
+  /**
+   * 여러 대화방 ID에 속한 모든 메시지를 일괄 삭제합니다 (Chunk Delete용).
+   * @param conversationIds 삭제 대상 대화방 ID 배열
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제된 메시지 수
+   */
+  async deleteAllByConversationIds(
+    conversationIds: string[],
+    session?: ClientSession
+  ): Promise<number> {
+    if (conversationIds.length === 0) return 0;
+    try {
+      const result: DeleteResult = await this.col().deleteMany(
+        { conversationId: { $in: conversationIds } },
+        { session }
+      );
+      return result.deletedCount;
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.deleteAllByConversationIds', err);
     }
   }
 

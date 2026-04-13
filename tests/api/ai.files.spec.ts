@@ -63,6 +63,16 @@ describe('AI File Download API', () => {
     app = createApp();
   });
 
+  afterAll(async () => {
+    const { closeDatabases } = require('../../src/infra/db');
+    await closeDatabases();
+    if (app && app.close) {
+      await new Promise<void>((resolve) => {
+        app.close(() => resolve());
+      });
+    }
+  });
+
   beforeEach(() => {
     mockAiService.downloadFile.mockReset();
   });
@@ -109,5 +119,10 @@ describe('AI File Download API', () => {
     // For now, removing or skipping is better to focus on functionality.
     // const res = await request(app).get('/v1/ai/files/key');
     // expect(res.status).toBe(401);
+  });
+
+  afterAll(async () => {
+    const { closeDatabases } = require('../../src/infra/db');
+    await closeDatabases();
   });
 });

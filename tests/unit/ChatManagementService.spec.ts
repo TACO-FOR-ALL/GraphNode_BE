@@ -12,6 +12,17 @@ import { ConversationRepository } from '../../src/core/ports/ConversationReposit
 import { MessageRepository } from '../../src/core/ports/MessageRepository';
 import { ConversationDoc, MessageDoc } from '../../src/core/types/persistence/ai.persistence';
 import { NotFoundError, ValidationError } from '../../src/shared/errors/domain';
+import {
+  GraphClusterDoc,
+  GraphEdgeDoc,
+  GraphNodeDoc,
+  GraphStatsDoc,
+  GraphSubclusterDoc,
+  GraphSummaryDoc,
+} from '../../src/core/types/persistence/graph.persistence';
+import { GraphDocumentStore, RepoOptions } from '../../src/core/ports/GraphDocumentStore';
+import { GraphManagementService } from '../../src/core/services/GraphManagementService';
+import { NoteService } from '../../src/core/services/NoteService';
 
 // Mock MongoDB
 jest.mock('../../src/infra/db/mongodb', () => ({
@@ -37,6 +48,12 @@ class InMemoryConvRepo implements ConversationRepository {
   async createMany(docs: ConversationDoc[], session?: ClientSession): Promise<ConversationDoc[]> {
     docs.forEach((doc) => this.data.set(doc._id, doc));
     return docs;
+  }
+
+  async countByOwner(ownerUserId: string): Promise<number> {
+    return Array.from(this.data.values()).filter(
+      (doc) => doc.ownerUserId === ownerUserId && doc.deletedAt == null
+    ).length;
   }
 
   async findById(
@@ -122,7 +139,9 @@ class InMemoryConvRepo implements ConversationRepository {
     cursor?: string
   ): Promise<{ items: ConversationDoc[]; nextCursor?: string | null }> {
     const items = Array.from(this.data.values())
-      .filter((v) => v.ownerUserId === ownerUserId && v.deletedAt !== null && v.deletedAt !== undefined)
+      .filter(
+        (v) => v.ownerUserId === ownerUserId && v.deletedAt !== null && v.deletedAt !== undefined
+      )
       .slice(0, limit);
     return { items, nextCursor: null };
   }
@@ -139,8 +158,43 @@ class InMemoryConvRepo implements ConversationRepository {
 
   async findExpiredConversations(expiredBefore: Date): Promise<ConversationDoc[]> {
     return Array.from(this.data.values()).filter(
-      (v) => v.deletedAt !== null && v.deletedAt !== undefined && v.deletedAt <= expiredBefore.getTime()
+      (v) =>
+        v.deletedAt !== null && v.deletedAt !== undefined && v.deletedAt <= expiredBefore.getTime()
     );
+  }
+
+  async searchByKeyword(
+    ownerUserId: string,
+    query: string,
+    limit?: number
+  ): Promise<(ConversationDoc & { score?: number })[]> {
+    const items = Array.from(this.data.values())
+      .filter((v) => v.ownerUserId === ownerUserId && !v.deletedAt && v.title.includes(query))
+      .map((v) => ({ ...v, score: 1 }));
+    return limit ? items.slice(0, limit) : items;
+  }
+
+  async findByIds(ids: string[], ownerUserId: string): Promise<ConversationDoc[]> {
+    return Array.from(this.data.values()).filter(
+      (v) => ids.includes(v._id) && v.ownerUserId === ownerUserId && !v.deletedAt
+    );
+  }
+
+  async findAllIdsByOwner(ownerUserId: string): Promise<string[]> {
+    return Array.from(this.data.values())
+      .filter((v) => v.ownerUserId === ownerUserId)
+      .map((v) => v._id);
+  }
+
+  async deleteByIds(ids: string[], session?: ClientSession): Promise<number> {
+    let count = 0;
+    for (const id of ids) {
+      if (this.data.has(id)) {
+        this.data.delete(id);
+        count++;
+      }
+    }
+    return count;
   }
 }
 
@@ -284,26 +338,231 @@ class InMemoryMsgRepo implements MessageRepository {
     }
     return result;
   }
+
+  async searchByKeyword(
+    ownerUserId: string,
+    query: string,
+    limit?: number
+  ): Promise<(MessageDoc & { score?: number })[]> {
+    const items: (MessageDoc & { score?: number })[] = [];
+    for (const msgs of this.msgs.values()) {
+      for (const m of msgs) {
+        if (m.ownerUserId === ownerUserId && !m.deletedAt && m.content.includes(query)) {
+          items.push({ ...m, score: 1 });
+        }
+      }
+    }
+    return limit ? items.slice(0, limit) : items;
+  }
+
+  async deleteAllByConversationIds(
+    conversationIds: string[],
+    session?: ClientSession
+  ): Promise<number> {
+    let count = 0;
+    for (const cid of conversationIds) {
+      const msgs = this.msgs.get(cid) || [];
+      count += msgs.length;
+      this.msgs.delete(cid);
+    }
+    return count;
+  }
+}
+
+class InMemoryGraphRepo implements GraphDocumentStore {
+  nodes = new Map<number, GraphNodeDoc>();
+
+  async upsertNode(node: GraphNodeDoc, _options?: RepoOptions): Promise<void> {
+    this.nodes.set(node.id, node);
+  }
+  async upsertNodes(nodes: GraphNodeDoc[], _options?: RepoOptions): Promise<void> {
+    for (const node of nodes) {
+      await this.upsertNode(node, _options);
+    }
+  }
+  async updateNode(
+    _userId: string,
+    _id: number,
+    _patch: Partial<GraphNodeDoc>,
+    _options?: RepoOptions
+  ): Promise<void> {}
+  async deleteNode(
+    userId: string,
+    id: number,
+    permanent?: boolean,
+    _options?: RepoOptions
+  ): Promise<void> {
+    const node = this.nodes.get(id);
+    if (!node) return;
+    if (permanent) this.nodes.delete(id);
+    else node.deletedAt = Date.now();
+  }
+  async deleteNodes(
+    userId: string,
+    ids: number[],
+    permanent?: boolean,
+    _options?: RepoOptions
+  ): Promise<void> {
+    for (const id of ids) await this.deleteNode(userId, id, permanent);
+  }
+  async deleteNodesByOrigIds(
+    userId: string,
+    origIds: string[],
+    permanent?: boolean,
+    _options?: RepoOptions
+  ): Promise<void> {
+    for (const node of this.nodes.values()) {
+      if (origIds.includes(node.origId)) {
+        await this.deleteNode(userId, node.id, permanent);
+      }
+    }
+  }
+  async restoreNodesByOrigIds(
+    userId: string,
+    origIds: string[],
+    _options?: RepoOptions
+  ): Promise<void> {
+    for (const node of this.nodes.values()) {
+      if (origIds.includes(node.origId)) node.deletedAt = null;
+    }
+  }
+  async listNodes(_userId: string): Promise<GraphNodeDoc[]> {
+    return Array.from(this.nodes.values()).filter((n) => !n.deletedAt);
+  }
+  async listNodesAll(_userId: string): Promise<GraphNodeDoc[]> {
+    return Array.from(this.nodes.values());
+  }
+  async findNodesByOrigIds(userId: string, origIds: string[]): Promise<GraphNodeDoc[]> {
+    return Array.from(this.nodes.values()).filter(
+      (n) => origIds.includes(n.origId) && !n.deletedAt
+    );
+  }
+  async findNodesByOrigIdsAll(userId: string, origIds: string[]): Promise<GraphNodeDoc[]> {
+    return Array.from(this.nodes.values()).filter((n) => origIds.includes(n.origId));
+  }
+
+  // Dummy implementations for required methods
+  async findNode(_userId: string, _id: number): Promise<GraphNodeDoc | null> {
+    return null;
+  }
+  async restoreNode(_userId: string, _id: number, _options?: RepoOptions): Promise<void> {}
+  async listNodesByCluster(_userId: string, _clusterId: string): Promise<GraphNodeDoc[]> {
+    return [];
+  }
+  async deleteAllGraphData(
+    _userId: string,
+    _permanent?: boolean,
+    _options?: RepoOptions
+  ): Promise<void> {}
+  async restoreAllGraphData(_userId: string, _options?: RepoOptions): Promise<void> {}
+  async upsertEdge(_edge: GraphEdgeDoc, _options?: RepoOptions): Promise<string> {
+    return '';
+  }
+  async upsertEdges(_edges: GraphEdgeDoc[], _options?: RepoOptions): Promise<void> {}
+  async deleteEdge(
+    _userId: string,
+    _edgeId: string,
+    _permanent?: boolean,
+    _options?: RepoOptions
+  ): Promise<void> {}
+  async deleteEdgeBetween(
+    _userId: string,
+    _source: number,
+    _target: number,
+    _permanent?: boolean,
+    _options?: RepoOptions
+  ): Promise<void> {}
+  async deleteEdgesByNodeIds(
+    _userId: string,
+    _ids: number[],
+    _permanent?: boolean,
+    _options?: RepoOptions
+  ): Promise<void> {}
+  async restoreEdge(_userId: string, _edgeId: string, _options?: RepoOptions): Promise<void> {}
+  async listEdges(_userId: string): Promise<GraphEdgeDoc[]> {
+    return [];
+  }
+  async upsertCluster(_cluster: GraphClusterDoc, _options?: RepoOptions): Promise<void> {}
+  async upsertClusters(_clusters: GraphClusterDoc[], _options?: RepoOptions): Promise<void> {}
+  async deleteCluster(
+    _userId: string,
+    _clusterId: string,
+    _permanent?: boolean,
+    _options?: RepoOptions
+  ): Promise<void> {}
+  async restoreCluster(
+    _userId: string,
+    _clusterId: string,
+    _options?: RepoOptions
+  ): Promise<void> {}
+  async findCluster(_userId: string, _clusterId: string): Promise<GraphClusterDoc | null> {
+    return null;
+  }
+  async listClusters(_userId: string): Promise<GraphClusterDoc[]> {
+    return [];
+  }
+  async upsertSubcluster(_subcluster: GraphSubclusterDoc, _options?: RepoOptions): Promise<void> {}
+  async upsertSubclusters(
+    _subclusters: GraphSubclusterDoc[],
+    _options?: RepoOptions
+  ): Promise<void> {}
+  async deleteSubcluster(
+    _userId: string,
+    _subclusterId: string,
+    _permanent?: boolean,
+    _options?: RepoOptions
+  ): Promise<void> {}
+  async restoreSubcluster(
+    _userId: string,
+    _subclusterId: string,
+    _options?: RepoOptions
+  ): Promise<void> {}
+  async listSubclusters(_userId: string): Promise<GraphSubclusterDoc[]> {
+    return [];
+  }
+  async saveStats(_stats: GraphStatsDoc, _options?: RepoOptions): Promise<void> {}
+  async getStats(_userId: string): Promise<GraphStatsDoc | null> {
+    return null;
+  }
+  async deleteStats(_userId: string, _permanent?: boolean, _options?: RepoOptions): Promise<void> {}
+  async upsertGraphSummary(
+    _userId: string,
+    _summary: GraphSummaryDoc,
+    _options?: RepoOptions
+  ): Promise<void> {}
+  async getGraphSummary(_userId: string): Promise<GraphSummaryDoc | null> {
+    return null;
+  }
+  async deleteGraphSummary(
+    _userId: string,
+    _permanent?: boolean,
+    _options?: RepoOptions
+  ): Promise<void> {}
+  async restoreGraphSummary(_userId: string, _options?: RepoOptions): Promise<void> {}
 }
 
 describe('ChatManagementService', () => {
   let convRepo: InMemoryConvRepo;
   let msgRepo: InMemoryMsgRepo;
+  let graphRepo: InMemoryGraphRepo;
   let convSvc: ConversationService;
   let msgSvc: MessageService;
+  let graphSvc: GraphManagementService;
   let chatSvc: ChatManagementService;
+  let mockNoteSvc: jest.Mocked<NoteService>;
 
   beforeEach(() => {
     convRepo = new InMemoryConvRepo();
     msgRepo = new InMemoryMsgRepo();
+    graphRepo = new InMemoryGraphRepo();
     convSvc = new ConversationService(convRepo);
     msgSvc = new MessageService(msgRepo);
-    chatSvc = new ChatManagementService(convSvc, msgSvc, { 
-      deleteAllGraphData: jest.fn(),
-      deleteNodesByOrigIds: jest.fn(),
-      restoreNodesByOrigIds: jest.fn(),
-      deleteGraph: jest.fn(),
-    } as any);
+    mockNoteSvc = {
+      countNotes: jest.fn(),
+      getNoteDoc: jest.fn(),
+    } as any;
+    graphSvc = new GraphManagementService(graphRepo);
+    chatSvc = new ChatManagementService(convSvc, msgSvc, graphSvc);
   });
 
   describe('createConversation', () => {
@@ -326,15 +585,14 @@ describe('ChatManagementService', () => {
     });
 
     it('should throw ValidationError if title is empty', async () => {
-      await expect(chatSvc.createConversation('u1', 'c1', '', []))
-        .rejects.toThrow(ValidationError);
+      await expect(chatSvc.createConversation('u1', 'c1', '', [])).rejects.toThrow(ValidationError);
     });
   });
 
   describe('bulkCreateConversations', () => {
     it('should create multiple conversations in chunk', async () => {
       const threads = [
-        { id: 'c1', title: 'T1', messages: [{ id: 'm1', content: 'hi' }] },
+        { id: 'c1', title: 'T1', messages: [{ id: 'm1', content: 'hi', role: 'user' }] },
         { id: 'c2', title: 'T2', messages: [] },
       ];
 
@@ -344,16 +602,40 @@ describe('ChatManagementService', () => {
       expect(results[0].id).toBe('c1');
       expect(results[1].id).toBe('c2');
 
+      // listConversations와 동일하게 응답 messages는 항상 빈 배열 (Lazy Loading)
+      expect(results[0].messages).toHaveLength(0);
+      expect(results[1].messages).toHaveLength(0);
+
+      // 메시지는 DB에 정상 저장되어야 함
       const c1 = await convRepo.findById('c1', 'u1');
       expect(c1).toBeDefined();
       const m1 = await msgRepo.findAllByConversationId('c1');
       expect(m1).toHaveLength(1);
     });
+
+    it('should generate title from first message if title is empty', async () => {
+      const threads = [
+        {
+          id: 'c3',
+          title: '',
+          messages: [{ id: 'm3', content: 'Hello world this is a long message', role: 'user' }],
+        },
+        { id: 'c4', title: '  ', messages: [] },
+      ];
+
+      const results = await chatSvc.bulkCreateConversations('u1', threads as any);
+
+      // 빈 title이면 첫 메시지 앞 10자 + '...' 또는 'New Conversation'
+      expect(results[0].title).toBe('Hello worl...');
+      expect(results[1].title).toBe('New Conversation');
+    });
   });
 
   describe('getConversation', () => {
     it('should return conversation with messages', async () => {
-      await chatSvc.createConversation('u1', 'c1', 'T1', [{ id: 'm1', content: 'hi', role: 'user' }]);
+      await chatSvc.createConversation('u1', 'c1', 'T1', [
+        { id: 'm1', content: 'hi', role: 'user' },
+      ]);
 
       const result = await chatSvc.getConversation('c1', 'u1');
       expect(result.id).toBe('c1');
@@ -361,19 +643,17 @@ describe('ChatManagementService', () => {
     });
 
     it('should throw NotFoundError if not found', async () => {
-      await expect(chatSvc.getConversation('non-exist', 'u1'))
-        .rejects.toThrow(NotFoundError);
+      await expect(chatSvc.getConversation('non-exist', 'u1')).rejects.toThrow(NotFoundError);
     });
 
     it('should throw NotFoundError if not owner', async () => {
       await chatSvc.createConversation('u1', 'c1', 'T1', []);
-      await expect(chatSvc.getConversation('c1', 'u2'))
-        .rejects.toThrow(NotFoundError);
+      await expect(chatSvc.getConversation('c1', 'u2')).rejects.toThrow(NotFoundError);
     });
   });
 
   describe('listConversations', () => {
-    it('returns messages populated', async () => {
+    it('returns conversations with messages (N+1 free batch load)', async () => {
       await chatSvc.createConversation('u1', 'c1', 'Hello', [
         { id: 'm1', role: 'user', content: 'hi' },
       ]);
@@ -383,9 +663,13 @@ describe('ChatManagementService', () => {
       expect(list.items).toHaveLength(2);
 
       const c1 = list.items.find((i) => i.id === 'c1');
+      expect(c1).toBeDefined();
       expect(c1?.messages).toHaveLength(1);
+      expect(c1?.messages[0].id).toBe('m1');
+      expect(c1?.messages[0].content).toBe('hi');
 
       const c2 = list.items.find((i) => i.id === 'c2');
+      expect(c2).toBeDefined();
       expect(c2?.messages).toHaveLength(0);
     });
   });
@@ -394,7 +678,7 @@ describe('ChatManagementService', () => {
     it('should update title', async () => {
       await chatSvc.createConversation('u1', 'c1', 'Old', []);
       const updated = await chatSvc.updateConversation('c1', 'u1', { title: 'New' });
-      
+
       expect(updated.title).toBe('New');
       const doc = await convRepo.findById('c1', 'u1');
       expect(doc?.title).toBe('New');
@@ -405,111 +689,134 @@ describe('ChatManagementService', () => {
     it('should update externalThreadId', async () => {
       await chatSvc.createConversation('u1', 'c1', 'T1', []);
       await chatSvc.updateThreadId('c1', 'u1', 'th_123');
-      
+
       const doc = await convRepo.findById('c1', 'u1');
       expect(doc?.externalThreadId).toBe('th_123');
     });
   });
 
   describe('deleteAllConversations', () => {
-     it('should delete all conversations and messages for user', async () => {
-        await chatSvc.createConversation('u1', 'c1', 'T1', [{ id: 'm1', content: 'c1', role: 'user'}]);
-        await chatSvc.createConversation('u1', 'c2', 'T2', [{ id: 'm2', content: 'c2', role: 'user'}]);
-        await chatSvc.createConversation('u2', 'c3', 'T3', []); // other user
+    it('should delete all conversations and messages for user', async () => {
+      await chatSvc.createConversation('u1', 'c1', 'T1', [
+        { id: 'm1', content: 'c1', role: 'user' },
+      ]);
+      await chatSvc.createConversation('u1', 'c2', 'T2', [
+        { id: 'm2', content: 'c2', role: 'user' },
+      ]);
+      await chatSvc.createConversation('u2', 'c3', 'T3', []); // other user
 
-        const count = await chatSvc.deleteAllConversations('u1');
-        expect(count).toBe(2);
+      const count = await chatSvc.deleteAllConversations('u1');
+      expect(count).toBe(2);
 
-        const u1List = await chatSvc.listConversations('u1', 10);
-        expect(u1List.items).toHaveLength(0);
+      const u1List = await chatSvc.listConversations('u1', 10);
+      expect(u1List.items).toHaveLength(0);
 
-        const u2List = await chatSvc.listConversations('u2', 10);
-        expect(u2List.items).toHaveLength(1);
-     });
+      const u2List = await chatSvc.listConversations('u2', 10);
+      expect(u2List.items).toHaveLength(1);
+    });
   });
 
   describe('Message Operations', () => {
     beforeEach(async () => {
-       await chatSvc.createConversation('u1', 'c1', 'T1', []);
+      await chatSvc.createConversation('u1', 'c1', 'T1', []);
     });
 
     it('createMessage creates message and updates conversation timestamp', async () => {
-       const initialConv = await convRepo.findById('c1', 'u1');
-       const initialTime = initialConv?.updatedAt || 0;
+      const initialConv = await convRepo.findById('c1', 'u1');
+      const initialTime = initialConv?.updatedAt || 0;
 
-       // Wait a bit to ensure timestamp diff
-       await new Promise(r => setTimeout(r, 10));
+      // Wait a bit to ensure timestamp diff
+      await new Promise((r) => setTimeout(r, 10));
 
-       const msg = await chatSvc.createMessage('u1', 'c1', { content: 'msg', role: 'user' });
-       
-       expect(msg.content).toBe('msg');
-       
-       const updatedConv = await convRepo.findById('c1', 'u1');
-       expect(updatedConv?.updatedAt).toBeGreaterThan(initialTime);
+      const msg = await chatSvc.createMessage('u1', 'c1', { content: 'msg', role: 'user' });
+
+      expect(msg.content).toBe('msg');
+
+      const updatedConv = await convRepo.findById('c1', 'u1');
+      expect(updatedConv?.updatedAt).toBeGreaterThan(initialTime);
     });
 
     it('updateMessage updates content and conversation timestamp', async () => {
-       const msg = await chatSvc.createMessage('u1', 'c1', { id: 'm1', content: 'old', role: 'user' });
-       
-       await new Promise(r => setTimeout(r, 10));
-       const updated = await chatSvc.updateMessage('u1', 'c1', 'm1', { content: 'new' });
-       
-       expect(updated.content).toBe('new');
-       
-       const doc = await msgRepo.findById('m1');
-       expect(doc?.content).toBe('new');
+      const msg = await chatSvc.createMessage('u1', 'c1', {
+        id: 'm1',
+        content: 'old',
+        role: 'user',
+      });
+
+      await new Promise((r) => setTimeout(r, 10));
+      const updated = await chatSvc.updateMessage('u1', 'c1', 'm1', { content: 'new' });
+
+      expect(updated.content).toBe('new');
+
+      const doc = await msgRepo.findById('m1');
+      expect(doc?.content).toBe('new');
     });
 
     it('deleteMessage soft deletes', async () => {
-       await chatSvc.createMessage('u1', 'c1', { id: 'm1', content: 'hi', role: 'user' });
-       
-       const res = await chatSvc.deleteMessage('u1', 'c1', 'm1', false);
-       expect(res).toBe(true);
+      await chatSvc.createMessage('u1', 'c1', { id: 'm1', content: 'hi', role: 'user' });
 
-       const doc = await msgRepo.findById('m1');
-       expect(doc?.deletedAt).not.toBeNull();
+      const res = await chatSvc.deleteMessage('u1', 'c1', 'm1', false);
+      expect(res).toBe(true);
+
+      const doc = await msgRepo.findById('m1');
+      expect(doc?.deletedAt).not.toBeNull();
     });
 
     it('restoreMessage restores', async () => {
-       await chatSvc.createMessage('u1', 'c1', { id: 'm1', content: 'hi', role: 'user' });
-       await chatSvc.deleteMessage('u1', 'c1', 'm1', false);
-       
-       await chatSvc.restoreMessage('u1', 'c1', 'm1');
-       
-       const doc = await msgRepo.findById('m1');
-       expect(doc?.deletedAt).toBeNull();
+      await chatSvc.createMessage('u1', 'c1', { id: 'm1', content: 'hi', role: 'user' });
+      await chatSvc.deleteMessage('u1', 'c1', 'm1', false);
+
+      await chatSvc.restoreMessage('u1', 'c1', 'm1');
+
+      const doc = await msgRepo.findById('m1');
+      expect(doc?.deletedAt).toBeNull();
     });
   });
 
   describe('Cascading Deletes', () => {
-      test('deleteConversation cascades to messages', async () => {
-        await chatSvc.createConversation('u1', 'c1', 'Hello', [
-          { id: 'm1', role: 'user', content: 'hi' },
-        ]);
-    
-        // Soft Delete
-        await chatSvc.deleteConversation('c1', 'u1', false);
-    
-        const convDoc = await convRepo.findById('c1', 'u1');
-        expect(convDoc?.deletedAt).not.toBeNull();
-    
-        const msgDocs = await msgRepo.findAllByConversationId('c1');
-        expect(msgDocs[0].deletedAt).not.toBeNull();
-      });
-    
-      test('restoreConversation cascades to messages', async () => {
-        await chatSvc.createConversation('u1', 'c1', 'Hello', [
-          { id: 'm1', role: 'user', content: 'hi' },
-        ]);
-        await chatSvc.deleteConversation('c1', 'u1', false);
-    
-        await chatSvc.restoreConversation('c1', 'u1');
-    
-        const convDoc = await convRepo.findById('c1', 'u1');
-        expect(convDoc?.deletedAt).toBeNull();
-    
-        const msgDocs = await msgRepo.findAllByConversationId('c1');
-        expect(msgDocs[0].deletedAt).toBeNull();
-      });
+    test('deleteConversation cascades to messages', async () => {
+      await chatSvc.createConversation('u1', 'c1', 'Hello', [
+        { id: 'm1', role: 'user', content: 'hi' },
+      ]);
+
+      // Soft Delete
+      await chatSvc.deleteConversation('c1', 'u1', false);
+
+      const convDoc = await convRepo.findById('c1', 'u1');
+      expect(convDoc?.deletedAt).not.toBeNull();
+
+      const msgDocs = await msgRepo.findAllByConversationId('c1');
+      expect(msgDocs[0].deletedAt).not.toBeNull();
+    });
+
+    test('deleteConversation cascades to graph nodes (state-based verification)', async () => {
+      // 1. 가짜 노드 생성 (origId = 'c1')
+      await graphRepo.upsertNode({ id: 100, userId: 'u1', origId: 'c1', clusterId: 'cls1' } as any);
+
+      await chatSvc.createConversation('u1', 'c1', 'Hello', []);
+
+      // 2. 삭제 호출
+      await chatSvc.deleteConversation('c1', 'u1', false);
+
+      // 3. 그래프 노드 상태 확인
+      const nodes = await graphRepo.findNodesByOrigIdsAll('u1', ['c1']);
+      expect(nodes).toHaveLength(1);
+      expect(nodes[0].deletedAt).not.toBeNull();
+    });
+
+    test('restoreConversation cascades to messages', async () => {
+      await chatSvc.createConversation('u1', 'c1', 'Hello', [
+        { id: 'm1', role: 'user', content: 'hi' },
+      ]);
+      await chatSvc.deleteConversation('c1', 'u1', false);
+
+      await chatSvc.restoreConversation('c1', 'u1');
+
+      const convDoc = await convRepo.findById('c1', 'u1');
+      expect(convDoc?.deletedAt).toBeNull();
+
+      const msgDocs = await msgRepo.findAllByConversationId('c1');
+      expect(msgDocs[0].deletedAt).toBeNull();
+    });
   });
 });

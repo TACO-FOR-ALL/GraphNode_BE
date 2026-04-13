@@ -54,8 +54,8 @@ export async function callback(req: Request, res: Response, next: NextFunction) 
     const expected = req.signedCookies['oauth_state'];
     if (!expected || expected !== state) throw new ValidationError('Invalid state');
 
-    // 검증 완료 후 쿠키 제거
-    res.clearCookie('oauth_state', { path: '/' });
+    // 검증 완료 후 쿠키 제거 (Partitioned 옵션 포함하여 확실히 제거)
+    res.clearCookie('oauth_state', getOauthStateCookieOpts());
 
     const svc = getService();
     const token = await svc.exchangeCode(code);
@@ -68,6 +68,8 @@ export async function callback(req: Request, res: Response, next: NextFunction) 
       displayName: info.name ?? null,
       avatarUrl: info.picture ?? null,
     });
+
+    res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
     return res.status(200).send(`
       <!doctype html>
       <html>

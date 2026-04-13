@@ -159,32 +159,30 @@ export interface AddNodeResultPayload extends BaseQueueMessage {
   };
 }
 
-// 7. API -> AI: Microscope Ingest Request
+// 7. API -> AI: Microscope Ingest From Node Request
 /**
- * Microscope 문서 분석 요청 메시지 페이로드 (API -> SQS -> AI Worker)
- * 사용자가 워크스페이스에 새로 업로드한 문서를 분석하여 지식 그래프를 생성하라는 요청입니다.
+ * Microscope 노드 기반 분석 요청 메시지 페이로드 (API -> SQS -> AI Worker)
+ * 기존 Conversation 또는 Note 노드를 대상으로 AI가 MongoDB에서 직접 데이터를 조회하여
+ * 지식 그래프를 생성하도록 요청합니다. S3 업로드 없이 node_id만 전달합니다.
  * - taskType: 메시지 타입 식별자
  * - payload: 실제 요청 데이터
  *  - user_id: 요청한 사용자 ID
- *  - group_id: 문서를 묶는 작업 공간의 식별자. Mongo의 Workspace _id와 동일하며 Neo4j에서 그룹을 분리하는 데 사용됩니다.
- *  - s3_key: S3에서 원본 문서를 다운로드하기 위한 Key
- *  - bucket: S3 버킷 명
- *  - file_name: AI 워커가 문서 파싱 및 시각화를 위해 활용하는 원본 파일명 (예: 'policy.pdf')
+ *  - node_id: 분석 대상 노드 ID (Conversation 또는 Note의 _id)
+ *  - node_type: 노드 유형 ('note' | 'conversation')
+ *  - group_id: 문서를 묶는 작업 공간의 식별자. Mongo의 Workspace _id와 동일합니다.
  *  - schema_name: (옵션) 추출에 사용할 특정 ER 스키마 제약사항 명칭
  */
 export interface MicroscopeIngestFromNodeQueuePayload extends BaseQueueMessage {
   taskType: TaskType.MICROSCOPE_INGEST_FROM_NODE_REQUEST;
   payload: {
     /** Python 런타임 호환을 위한 snake_case 유저 식별자 */
-    user_id: string; 
-    /** 문서를 묶는 작업 공간의 식별자. Mongo의 Workspace _id와 동일하며 Neo4j에서 그룹을 분리하는 데 사용됩니다. */
+    user_id: string;
+    /** 분석 대상 노드 ID (Conversation 또는 Note의 _id) */
+    node_id: string;
+    /** 노드 유형 */
+    node_type: 'note' | 'conversation';
+    /** 문서를 묶는 작업 공간의 식별자. Mongo의 Workspace _id와 동일합니다. */
     group_id: string;
-    /** S3에서 원본 문서를 다운로드하기 위한 Key */
-    s3_key: string;
-    /** S3 버킷 명 */
-    bucket: string;
-    /** AI 워커가 문서 파싱 및 시각화를 위해 활용하는 원본 파일명 (예: 'policy.pdf') */
-    file_name: string;
     /** (옵션) 추출에 사용할 특정 ER 스키마 제약사항 명칭 */
     schema_name?: string;
   };

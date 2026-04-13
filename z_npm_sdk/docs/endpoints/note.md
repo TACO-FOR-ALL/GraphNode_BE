@@ -7,28 +7,28 @@
 ### Notes
 | Method | Endpoint | Description | Status Codes |
 | :--- | :--- | :--- | :--- |
-| `createNote(dto)` | `POST /v1/notes` | 새 노트 생성 | 201, 400 |
-| `bulkCreate(dto)` | `POST /v1/notes/bulk` | 여러 노트 일괄 생성 | 201, 400 |
+| `createNote(dto)` | `POST /v1/notes` | 새 노트 생성 | 201, 400, 401, 404, 502 |
+| `bulkCreate(dto)` | `POST /v1/notes/bulk` | 여러 노트 일괄 생성 | 201, 400, 401, 502 |
 | `listNotes(fId?)` | `GET /v1/notes` | 모든 노트 목록 (자동 페이징) | 200, 401 |
-| `getNote(id)` | `GET /v1/notes/:id` | 특정 노트 상세 조회 | 200, 404 |
-| `updateNote(id, dto)`| `PATCH /v1/notes/:id` | 노트 내용/제목/폴더 수정 | 200, 404 |
-| `softDeleteNote(id)`| `DELETE /v1/notes/:id` | 노트를 휴지통으로 이동 | 204 |
-| `hardDeleteNote(id)`| `DELETE /v1/notes/:id?permanent=true` | 노트 영구 삭제 | 204 |
-| `deleteAllNotes()` | `DELETE /v1/notes` | 모든 활성 노트 삭제 | 200 |
-| `listTrash()` | `GET /v1/notes/trash` | 휴지통 내 노트/폴더 목록 | 200 |
-| `restoreNote(id)` | `POST /v1/notes/:id/restore` | 삭제된 노트 복구 | 200, 404 |
+| `getNote(id)` | `GET /v1/notes/:id` | 특정 노트 상세 조회 | 200, 401, 404, 502 |
+| `updateNote(id, dto)`| `PATCH /v1/notes/:id` | 노트 내용/제목/폴더 수정 | 200, 400, 401, 404, 502 |
+| `softDeleteNote(id)`| `DELETE /v1/notes/:id` | 노트를 휴지통으로 이동 | 204, 401, 404, 502 |
+| `hardDeleteNote(id)`| `DELETE /v1/notes/:id?permanent=true` | 노트 영구 삭제 | 204, 401, 404, 502 |
+| `deleteAllNotes()` | `DELETE /v1/notes` | 모든 활성 노트 삭제 | 200, 401 |
+| `listTrash()` | `GET /v1/notes/trash` | 휴지통 내 노트/폴더 목록 | 200, 401 |
+| `restoreNote(id)` | `POST /v1/notes/:id/restore` | 삭제된 노트 복구 | 200, 401, 404, 502 |
 
 ### Folders
 | Method | Endpoint | Description | Status Codes |
 | :--- | :--- | :--- | :--- |
-| `createFolder(dto)` | `POST /v1/folders` | 새 폴더 생성 | 201, 400 |
+| `createFolder(dto)` | `POST /v1/folders` | 새 폴더 생성 | 201, 400, 401, 502 |
 | `listFolders(pId?)` | `GET /v1/folders` | 모든 폴더 목록 (자동 페이징) | 200, 401 |
-| `getFolder(id)` | `GET /v1/folders/:id` | 폴더 정보 조회 | 200, 404 |
-| `updateFolder(...)` | `PATCH /v1/folders/:id` | 폴더 이름/위치 수정 | 200, 404 |
-| `softDeleteFolder(...)`| `DELETE /v1/folders/:id` | 폴더를 휴지통으로 이동 | 204 |
-| `hardDeleteFolder(...)`| `DELETE /v1/folders/:id?permanent=true` | 폴더 영구 삭제 | 204 |
-| `deleteAllFolders()` | `DELETE /v1/folders` | 모든 활성 폴더 삭제 | 200 |
-| `restoreFolder(id)` | `POST /v1/folders/:id/restore` | 삭제된 폴더 복구 | 200, 404 |
+| `getFolder(id)` | `GET /v1/folders/:id` | 폴더 정보 조회 | 200, 401, 404, 502 |
+| `updateFolder(...)` | `PATCH /v1/folders/:id` | 폴더 이름/위치 수정 | 200, 400, 401, 404, 502 |
+| `softDeleteFolder(...)`| `DELETE /v1/folders/:id` | 폴더를 휴지통으로 이동 | 204, 401, 404, 502 |
+| `hardDeleteFolder(...)`| `DELETE /v1/folders/:id?permanent=true` | 폴더 영구 삭제 | 204, 401, 404, 502 |
+| `deleteAllFolders()` | `DELETE /v1/folders` | 모든 활성 폴더 삭제 | 200, 401 |
+| `restoreFolder(id)` | `POST /v1/folders/:id/restore` | 삭제된 폴더 복구 | 200, 401, 404, 502 |
 
 ---
 
@@ -70,7 +70,12 @@
   }
   ```
 - **Type Location**: `z_npm_sdk/src/types/note.ts`
-- **Status Codes**: `201 Created`, `400 Bad Request`
+- **Status Codes**
+  - `201 Created`: 노트 생성 성공
+  - `400 Bad Request`: 필수 필드 누락 또는 잘못된 데이터 형식 (제목/내용 비어있음)
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `404 Not Found`: 지정된 `folderId`에 해당하는 폴더가 존재하지 않음
+  - `502 Bad Gateway`: 데이터베이스 트랜잭션 오류 (재시도 가능)
 
 ---
 
@@ -87,7 +92,11 @@
   });
   ```
 - **Response Type**: `{ notes: NoteDto[] }`
-- **Status Codes**: `201`, `400`
+- **Status Codes**
+  - `201 Created`: 일괄 생성 성공
+  - `400 Bad Request`: 데이터 형식 오류 (필수 필드 누락)
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `502 Bad Gateway`: 데이터베이스 오류 (재시도 가능)
 
 ---
 
@@ -100,7 +109,9 @@
   const folderNotes = await client.note.listNotes('target-folder-id');
   ```
 - **Response Type**: `NoteDto[]`
-- **Status Codes**: `200 OK`, `401 Unauthorized`
+- **Status Codes**
+  - `200 OK`: 조회 성공 (노트가 없으면 빈 배열)
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
 
 ---
 
@@ -111,7 +122,11 @@
   ```typescript
   const { data } = await client.note.getNote('uuid-123');
   ```
-- **Status Codes**: `200 OK`, `404 Not Found`
+- **Status Codes**
+  - `200 OK`: 노트 조회 성공
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `404 Not Found`: 해당 ID의 노트가 존재하지 않음 (삭제되었거나 접근 불가)
+  - `502 Bad Gateway`: 데이터베이스 조회 오류
 
 ---
 
@@ -125,7 +140,12 @@
     folderId: null // 최상위로 이동
   });
   ```
-- **Status Codes**: `200 OK`, `404 Not Found`
+- **Status Codes**
+  - `200 OK`: 수정 성공
+  - `400 Bad Request`: 제목이 비어있거나 형식 오류
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `404 Not Found`: 해당 ID의 노트 또는 지정된 폴더가 존재하지 않음
+  - `502 Bad Gateway`: 데이터베이스 저장 오류
 
 ---
 
@@ -136,7 +156,11 @@
   ```typescript
   await client.note.softDeleteNote('uuid-123');
   ```
-- **Status Codes**: `204 No Content`, `404 Not Found`
+- **Status Codes**
+  - `204 No Content`: 휴지통 이동 성공
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `404 Not Found`: 해당 ID의 노트가 존재하지 않음
+  - `502 Bad Gateway`: 데이터베이스 오류
 
 ---
 
@@ -147,7 +171,11 @@
   ```typescript
   await client.note.hardDeleteNote('uuid-123');
   ```
-- **Status Codes**: `204 No Content`, `404 Not Found`
+- **Status Codes**
+  - `204 No Content`: 영구 삭제 성공
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `404 Not Found`: 해당 ID의 노트가 존재하지 않음
+  - `502 Bad Gateway`: 데이터베이스 오류
 
 ---
 
@@ -159,7 +187,9 @@
   await client.note.deleteAllNotes();
   ```
 - **Response Type**: `{ deletedCount: number }`
-- **Status Codes**: `200 OK`
+- **Status Codes**
+  - `200 OK`: 삭제 성공. 삭제된 노트 수(`deletedCount`) 반환
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
 
 ---
 
@@ -172,7 +202,9 @@
   console.log('삭제된 노트 수:', data.notes.length);
   ```
 - **Response Type**: `TrashListResponseDto`
-- **Status Codes**: `200 OK`
+- **Status Codes**
+  - `200 OK`: 조회 성공 (삭제 항목이 없으면 빈 배열)
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
 
 ---
 
@@ -183,7 +215,11 @@
   ```typescript
   await client.note.restoreNote('uuid-123');
   ```
-- **Status Codes**: `200 OK`, `404 Not Found`
+- **Status Codes**
+  - `200 OK`: 복구 성공, 복원된 `NoteDto` 반환
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `404 Not Found`: 해당 ID의 노트가 존재하지 않거나 소프트 삭제된 상태가 아님
+  - `502 Bad Gateway`: 데이터베이스 오류
 
 ---
 
@@ -221,7 +257,11 @@
   }
   ```
 - **Type Location**: `z_npm_sdk/src/types/note.ts`
-- **Status Codes**: `201 Created`, `400 Bad Request`
+- **Status Codes**
+  - `201 Created`: 폴더 생성 성공
+  - `400 Bad Request`: 폴더 이름이 비어있거나 잘못된 형식
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `502 Bad Gateway`: 데이터베이스 오류 (재시도 가능)
 
 ---
 
@@ -237,7 +277,9 @@
   const { data: children } = await client.note.listFolders('parent-id');
   ```
 - **Response Type**: `FolderDto[]`
-- **Status Codes**: `200 OK`, `401 Unauthorized`
+- **Status Codes**
+  - `200 OK`: 조회 성공 (폴더가 없으면 빈 배열)
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
 
 ---
 
@@ -248,7 +290,11 @@
   ```typescript
   const { data } = await client.note.getFolder('folder-uuid');
   ```
-- **Status Codes**: `200 OK`, `404 Not Found`
+- **Status Codes**
+  - `200 OK`: 폴더 조회 성공
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `404 Not Found`: 해당 ID의 폴더가 존재하지 않음
+  - `502 Bad Gateway`: 데이터베이스 조회 오류
 
 ---
 
@@ -262,7 +308,12 @@
     parentId: null // 최상위로 이동
   });
   ```
-- **Status Codes**: `200 OK`, `404 Not Found`
+- **Status Codes**
+  - `200 OK`: 수정 성공
+  - `400 Bad Request`: 폴더 이름이 비어있거나 형식 오류
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `404 Not Found`: 해당 ID의 폴더 또는 지정된 상위 폴더가 존재하지 않음
+  - `502 Bad Gateway`: 데이터베이스 저장 오류
 
 ---
 
@@ -273,7 +324,11 @@
   ```typescript
   await client.note.softDeleteFolder('folder-uuid');
   ```
-- **Status Codes**: `204 No Content`, `404 Not Found`
+- **Status Codes**
+  - `204 No Content`: 휴지통 이동 성공 (하위 폴더/노트도 함께 이동)
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `404 Not Found`: 해당 ID의 폴더가 존재하지 않음
+  - `502 Bad Gateway`: 데이터베이스 오류
 
 ---
 
@@ -284,7 +339,11 @@
   ```typescript
   await client.note.hardDeleteFolder('folder-uuid');
   ```
-- **Status Codes**: `204 No Content`, `404 Not Found`
+- **Status Codes**
+  - `204 No Content`: 영구 삭제 성공 (하위 폴더/노트도 함께 파기)
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `404 Not Found`: 해당 ID의 폴더가 존재하지 않음
+  - `502 Bad Gateway`: 데이터베이스 오류
 
 ---
 
@@ -296,7 +355,9 @@
   await client.note.deleteAllFolders();
   ```
 - **Response Type**: `{ deletedCount: number }`
-- **Status Codes**: `200 OK`
+- **Status Codes**
+  - `200 OK`: 삭제 성공. 삭제된 폴더 수(`deletedCount`) 반환
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
 
 ---
 
@@ -307,7 +368,11 @@
   ```typescript
   await client.note.restoreFolder('folder-uuid');
   ```
-- **Status Codes**: `200 OK`, `404 Not Found`
+- **Status Codes**
+  - `200 OK`: 복구 성공, 복원된 `FolderDto` 반환 (하위 폴더/노트도 함께 복구)
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `404 Not Found`: 해당 ID의 폴더가 존재하지 않거나 소프트 삭제된 상태가 아님
+  - `502 Bad Gateway`: 데이터베이스 오류
 
 ---
 

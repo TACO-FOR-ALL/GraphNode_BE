@@ -34,9 +34,9 @@ async function startWorker() {
   // 1. Initialize Databases (Redis, Mongo, Prisma)
   // This is required for RedisEventBusAdapter and Repositories to work.
   await initDatabases();
-  
+
   // 2. Initialize Dependency Container
-  const container : Container = Container.getInstance();
+  const container: Container = Container.getInstance();
 
   // 중요: DB 연결 등 비동기 초기화가 필요할 수 있음
   // Container 클래스에 initializeAsync 같은게 없다면, 서비스들이 Lazy loading되거나
@@ -77,6 +77,7 @@ async function startWorker() {
      * 메시지 처리 메인 로직 Override?
      */
     handleMessage: async (message) => {
+      let capturedToSentry = false;
       try {
         if (!message.Body) {
           return message; // Body 없는 메시지는 삭제 처리 (ACK)
@@ -92,33 +93,32 @@ async function startWorker() {
         const userId = (payload as any)?.userId || (payload as any)?.user_id;
 
         const ctx = {
-          correlationId: taskId,     // 로그 추적 시 이 작업을 식별하기 위한 고유 ID (Trace ID 역할)
-          userId: userId,   // 작업을 요청한 사용자 ID
+          correlationId: taskId, // 로그 추적 시 이 작업을 식별하기 위한 고유 ID (Trace ID 역할)
+          userId: userId, // 작업을 요청한 사용자 ID
         };
 
         /**
          * 1. requestStore.run(ctx, callback)
-         * 
+         *
          * [역할]
-         * Node.js의 AsyncLocalStorage를 기반으로 동작하며, 이 스코프 안에서 실행되는 모든 비동기 작업(DB 접근, S3 업로드 등)에 
-         * `ctx` 객체 내의 데이터(correlationId, userId 등)를 공유합니다. 
-         * 
+         * Node.js의 AsyncLocalStorage를 기반으로 동작하며, 이 스코프 안에서 실행되는 모든 비동기 작업(DB 접근, S3 업로드 등)에
+         * `ctx` 객체 내의 데이터(correlationId, userId 등)를 공유합니다.
+         *
          * [왜 필요한가?]
          * Service 계층의 비동기 함수들 내부에서 매번 파라미터로 userId나 taskId를 넘기지 않아도,
-         * auditProxy(감사 로거)가 내부적으로 `requestStore.getStore()`를 호출하여 누가(userId), 어떤 작업 맥락(correlationId)에서 
+         * auditProxy(감사 로거)가 내부적으로 `requestStore.getStore()`를 호출하여 누가(userId), 어떤 작업 맥락(correlationId)에서
          * 해당 서비스 함수를 호출했는지 알아내고 표준화된 양식으로 로그를 남길 수 있게 해줍니다.
          */
         return requestStore.run(ctx, async () => {
-          
           /**
            * 2. Sentry.withIsolationScope(callback)
-           * 
+           *
            * [역할]
            * Sentry의 전역(Global) Scope와 분리된, 현재 메시지 처리에만 적용되는 독립적인 에러/태그 추적 스코프를 만듭니다.
-           * 
+           *
            * [왜 필요한가?]
            * Worker 프로세스는 여러 개의 큐 메시지를 동시에 비동기로 처리할 수 있습니다.
-           * 만약 격리(Isolation) 스코프를 만들지 않으면, A 메시지 처리 중에 세팅한 태그(Tag)나 사용자 정보가 
+           * 만약 격리(Isolation) 스코프를 만들지 않으면, A 메시지 처리 중에 세팅한 태그(Tag)나 사용자 정보가
            * 뜻하지 않게 동시에 처리 중인 B 메시지의 에러 모니터링 데이터에 섞여 들어가는(Data Bleed) 문제가 발생합니다.
            */
           return Sentry.withIsolationScope(async (isolationScope) => {
@@ -129,7 +129,7 @@ async function startWorker() {
 
             /**
              * 3. Sentry.startSpan(..., callback)
-             * 
+             *
              * [역할]
              * Sentry의 트랜잭션/스팬(Span) 범위를 명시적으로 지정합니다. (작업 단위 묶음 생성)
              * 콜백 함수가 실행되는 총 소요 시간(Duration)과 상태를 측정하여 Sentry 대시보드의 "Performance" 탭에 보여줍니다.
@@ -155,6 +155,7 @@ async function startWorker() {
                 } catch (err: any) {
                   // 500 미만(400번대) 에러는 Sentry로 전송하지 않음
                   if (!(err.httpStatus && err.httpStatus < 500)) {
+                    capturedToSentry = true;
                     Sentry.captureException(err);
                   }
                   throw err;
@@ -165,6 +166,11 @@ async function startWorker() {
         });
       } catch (err) {
         logger.error({ err, messageId: message.MessageId }, 'Error handling message');
+        // withIsolationScope 진입 전 에러(JSON 파싱 실패 등)는 inner catch를 거치지 않으므로
+        // 여기서 한 번만 캡처합니다. inner catch에서 이미 캡처한 경우 이중 전송을 방지합니다.
+        if (!capturedToSentry) {
+          Sentry.captureException(err);
+        }
         throw err; // 에러를 던져야 SQS Consumer가 재시도 로직을 수행함 (ACK 안함)
       }
     },
@@ -176,10 +182,12 @@ async function startWorker() {
   // 에러 이벤트 리스너
   app.on('error', (err) => {
     logger.error({ err }, 'SQS Consumer Error');
+    Sentry.captureException(err);
   });
 
   app.on('processing_error', (err) => {
     logger.error({ err }, 'SQS Processing Error');
+    Sentry.captureException(err);
   });
 
   // 4. Start
@@ -195,10 +203,12 @@ async function startWorker() {
   const healthServer = http.createServer((req, res) => {
     if (req.url === '/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ 
-        status: 'healthy', 
-        uptime: process.uptime()
-      }));
+      res.end(
+        JSON.stringify({
+          status: 'healthy',
+          uptime: process.uptime(),
+        })
+      );
     } else {
       res.writeHead(404);
       res.end();
@@ -218,20 +228,21 @@ async function startWorker() {
   // -------------------------------------------------------------------------------- //
   const handleShutdown = async (signal: string) => {
     logger.info(`Received ${signal}. Starting graceful shutdown...`);
-    
+
     // app.stop()은 SQS에서 새로운 메시지 가져오는 것(Polling)을 즉시 중단합니다.
     // 단, 이미 가져와서 비동기 처리 중이던 메시지가 있다면 그것이 모두 완료될 때까지 대기(Await)합니다.
-    app.stop(); 
-    
+    app.stop();
+
     // Health Check 서버 닫기
     healthServer.close(() => {
       logger.info('Health server closed');
     });
-    
+
     // 타임아웃 30초 설정 (Fargate의 일반적인 강제 종료 타겟 시간)
     // 30초 내에 안 끝나면 강제 종료
-    const forceExitTimer = setTimeout(() => {
+    const forceExitTimer = setTimeout(async () => {
       logger.error('Graceful shutdown timed out (30s). Forcing exit.');
+      await Sentry.flush(2000);
       process.exit(1);
     }, 30000);
 
@@ -246,11 +257,13 @@ async function startWorker() {
 
   // ECS, Docker가 컨테이너를 중지시킬 때 보내는 신호들
   process.on('SIGTERM', () => handleShutdown('SIGTERM'));
-  process.on('SIGINT',  () => handleShutdown('SIGINT'));
+  process.on('SIGINT', () => handleShutdown('SIGINT'));
 }
 
 // 5. Run
-startWorker().catch((err) => {
+startWorker().catch(async (err) => {
   logger.error({ err }, 'Fatal error in worker process');
+  Sentry.captureException(err);
+  await Sentry.flush(2000); // process.exit 전 Sentry 전송 보장
   process.exit(1);
 });

@@ -49,6 +49,9 @@ export class ConversationRepositoryMongo implements ConversationRepository {
    */
   async create(doc: ConversationDoc, session?: ClientSession): Promise<ConversationDoc> {
     try {
+      const now = Date.now();
+      doc.createdAt = now;
+      doc.updatedAt = now;
       // insertOne: 문서 하나를 컬렉션에 추가합니다.
       await this.col().insertOne(doc, { session });
       return doc;
@@ -69,6 +72,8 @@ export class ConversationRepositoryMongo implements ConversationRepository {
       if (docs.length === 0) {
         return [];
       }
+      const now = Date.now();
+      docs.forEach((d) => { d.createdAt = now; d.updatedAt = now; });
       // insertMany: 여러 문서를 한 번에 추가합니다.
       await this.col().insertMany(docs, { session });
       return docs;
@@ -85,6 +90,14 @@ export class ConversationRepositoryMongo implements ConversationRepository {
    * @param session (선택) 트랜잭션 세션
    * @returns 대화 문서 또는 null
    */
+  async countByOwner(ownerUserId: string): Promise<number> {
+    try {
+      return await this.col().countDocuments({ ownerUserId, deletedAt: null });
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.countByOwner', err);
+    }
+  }
+
   async findById(
     id: string,
     ownerUserId: string,
@@ -111,29 +124,35 @@ export class ConversationRepositoryMongo implements ConversationRepository {
     limit: number,
     cursor?: string
   ): Promise<{ items: ConversationDoc[]; nextCursor?: string | null }> {
-    // 기본 쿼리: 해당 사용자의 대화 중 삭제되지 않은 데이터만 조회
-    const query: any = { ownerUserId, deletedAt: null };
+    try {
+      // 기본 쿼리: 해당 사용자의 대화 중 삭제되지 않은 데이터만 조회
+      const query: any = { ownerUserId, deletedAt: null };
 
-    // 커서가 있다면, 그 커서(시간)보다 이전의 데이터만 조회 (최신순 정렬이므로)
-    if (cursor) {
-      query.updatedAt = { $lt: parseInt(cursor, 10) };
+      // 커서가 있다면, 그 커서(시간)보다 이전의 데이터만 조회 (최신순 정렬이므로)
+      // TODO: updatedAt 단독 커서는 동일 updatedAt 경계에서 항목 누락/중복 가능.
+      //       향후 { updatedAt, _id } 복합 커서로 교체 권장 (인덱스에 _id:1 이미 포함됨).
+      if (cursor) {
+        query.updatedAt = { $lt: parseInt(cursor, 10) };
+      }
+
+      // 옵션 설정: 업데이트 시간 내림차순 정렬, 개수 제한
+      const options: FindOptions<ConversationDoc> = {
+        sort: { updatedAt: -1, _id: 1 },
+        limit,
+      };
+
+      // 쿼리 실행 및 배열로 변환
+      const items: ConversationDoc[] = await this.col().find(query, options).toArray();
+
+      // 다음 커서 계산 (마지막 아이템의 updatedAt)
+      const last: ConversationDoc | undefined = items[items.length - 1];
+      const nextCursor: string | null =
+        items.length === limit && last?.updatedAt ? String(last.updatedAt) : null;
+
+      return { items, nextCursor };
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.listByOwner', err);
     }
-
-    // 옵션 설정: 업데이트 시간 내림차순 정렬, 개수 제한
-    const options: FindOptions<ConversationDoc> = {
-      sort: { updatedAt: -1 },
-      limit,
-    };
-
-    // 쿼리 실행 및 배열로 변환
-    const items: ConversationDoc[] = await this.col().find(query, options).toArray();
-
-    // 다음 커서 계산 (마지막 아이템의 updatedAt)
-    const last: ConversationDoc | undefined = items[items.length - 1];
-    const nextCursor: string | null =
-      items.length === limit && last?.updatedAt ? String(last.updatedAt) : null;
-
-    return { items, nextCursor };
   }
 
   /**
@@ -266,6 +285,38 @@ export class ConversationRepositoryMongo implements ConversationRepository {
   }
 
   /**
+   * 특정 사용자의 모든 대화 ID만 조회합니다 (메모리 최적화용 Projection).
+   * @param ownerUserId 소유자 ID
+   * @returns 대화 ID 문자열 배열
+   */
+  async findAllIdsByOwner(ownerUserId: string): Promise<string[]> {
+    try {
+      const docs = await this.col()
+        .find({ ownerUserId }, { projection: { _id: 1 } })
+        .toArray();
+      return docs.map((d) => d._id as unknown as string);
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.findAllIdsByOwner', err);
+    }
+  }
+
+  /**
+   * 주어진 ID 배열에 해당하는 대화를 일괄 삭제합니다 (Chunk Delete용).
+   * @param ids 삭제할 대화 ID 배열
+   * @param session (선택) 트랜잭션 세션
+   * @returns 삭제된 대화 수
+   */
+  async deleteByIds(ids: string[], session?: ClientSession): Promise<number> {
+    if (ids.length === 0) return 0;
+    try {
+      const result = await this.col().deleteMany({ _id: { $in: ids } } as any, { session });
+      return result.deletedCount;
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.deleteByIds', err);
+    }
+  }
+
+  /**
    * 특정 시점 이후에 변경된 대화 목록을 조회합니다 (동기화용).
    * @param ownerUserId 소유자 사용자 ID
    * @param since 기준 시각
@@ -348,6 +399,27 @@ export class ConversationRepositoryMongo implements ConversationRepository {
         .toArray();
     } catch (err: unknown) {
       this.handleError('ConversationRepositoryMongo.findExpiredConversations', err);
+    }
+  }
+
+  /**
+   * 여러 ID에 해당하는 대화 문서들을 한 번에 조회합니다.
+   *
+   * @param ids 대화 ID 배열
+   * @param ownerUserId 소유자 ID
+   * @returns 대화 문서 배열
+   */
+  async findByIds(ids: string[], ownerUserId: string): Promise<ConversationDoc[]> {
+    try {
+      if (ids.length === 0) return [];
+      return await this.col()
+        .find({
+          _id: { $in: ids },
+          ownerUserId,
+        })
+        .toArray();
+    } catch (err: unknown) {
+      this.handleError('ConversationRepositoryMongo.findByIds', err);
     }
   }
 

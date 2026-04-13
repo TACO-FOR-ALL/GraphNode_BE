@@ -24,14 +24,13 @@ export function toConversationDoc(
   dto: Omit<ChatThread, 'messages'>,
   ownerUserId: string
 ): ConversationDoc {
-  const now = Date.now();
   const doc: ConversationDoc = {
     _id: dto.id, // DTO의 id를 DB의 _id로 매핑
     ownerUserId,
     title: dto.title,
-    // 날짜 문자열을 타임스탬프(숫자)로 변환
-    updatedAt: dto.updatedAt ? new Date(dto.updatedAt).getTime() : now,
-    createdAt: now,
+    // Timestamp placeholders — actual values are always overridden by the repository layer.
+    createdAt: 0,
+    updatedAt: 0,
     deletedAt: dto.deletedAt ? new Date(dto.deletedAt).getTime() : null,
   };
   return doc;
@@ -70,15 +69,15 @@ export function toMessageDoc(
   conversationId: string,
   ownerUserId: string
 ): MessageDoc {
-  const now = Date.now();
   return {
     _id: dto.id,
     conversationId,
     ownerUserId,
     role: dto.role,
     content: dto.content,
-    createdAt: dto.createdAt ? new Date(dto.createdAt).getTime() : now,
-    updatedAt: dto.updatedAt ? new Date(dto.updatedAt).getTime() : now,
+    // Timestamp placeholders — actual values are always overridden by the repository layer.
+    createdAt: 0,
+    updatedAt: 0,
     deletedAt: dto.deletedAt ? new Date(dto.deletedAt).getTime() : null,
     attachments: dto.attachments,
     metadata: dto.metadata,

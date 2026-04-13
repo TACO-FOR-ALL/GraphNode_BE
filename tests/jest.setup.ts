@@ -2,7 +2,7 @@
 import { jest } from '@jest/globals';
 
 process.env.NODE_ENV = 'test';
-process.env.MYSQL_URL = 'postgresql://app:app@localhost:5432/graphnode';
+process.env.PORT = '3000';
 process.env.DATABASE_URL = 'postgresql://app:app@localhost:5432/graphnode';
 process.env.MONGODB_URL = 'mongodb://localhost:27017';
 process.env.REDIS_URL = 'redis://localhost:6379';
@@ -11,25 +11,30 @@ process.env.JWT_SECRET = 'test-jwt-secret';
 process.env.DEV_INSECURE_COOKIES = 'true';
 process.env.JWT_ACCESS_EXPIRY = '1h';
 process.env.JWT_REFRESH_EXPIRY = '7d';
-process.env.OAUTH_GOOGLE_CLIENT_ID = 'test-client';
-process.env.OAUTH_GOOGLE_CLIENT_SECRET = 'test-secret';
+process.env.OAUTH_GOOGLE_CLIENT_ID = 'test-google-client';
+process.env.OAUTH_GOOGLE_CLIENT_SECRET = 'test-google-secret';
 process.env.OAUTH_GOOGLE_REDIRECT_URI = 'http://localhost:3000/auth/google/callback';
-process.env.OAUTH_APPLE_CLIENT_ID = 'id';
-process.env.OAUTH_APPLE_TEAM_ID = 'team';
-process.env.OAUTH_APPLE_KEY_ID = 'key';
-process.env.OAUTH_APPLE_PRIVATE_KEY = 'private';
-process.env.OAUTH_APPLE_REDIRECT_URI = 'http://localhost/callback';
-process.env.REDIS_URL = 'redis://localhost:6379';
+process.env.OAUTH_APPLE_CLIENT_ID = 'test-apple-client';
+process.env.OAUTH_APPLE_TEAM_ID = 'test-apple-team';
+process.env.OAUTH_APPLE_KEY_ID = 'test-apple-key';
+process.env.OAUTH_APPLE_PRIVATE_KEY = 'test-apple-private';
+process.env.OAUTH_APPLE_REDIRECT_URI = 'http://localhost:3000/auth/apple/callback';
 process.env.SQS_REQUEST_QUEUE_URL = 'http://sqs.request';
 process.env.SQS_RESULT_QUEUE_URL = 'http://sqs.result';
-process.env.S3_PAYLOAD_BUCKET = 'bucket';
-process.env.S3_FILE_BUCKET = 'file-bucket';
-process.env.FIREBASE_CREDENTIALS_JSON = '{"project_id":"test-proj"}';
-process.env.FIREBASE_VAPID_VALUE = 'vapid-key';
-process.env.DATABASE_URL = 'postgresql://app:app@localhost:5432/graphnode';
+process.env.S3_PAYLOAD_BUCKET = 'test-payload-bucket';
+process.env.S3_FILE_BUCKET = 'test-file-bucket';
+process.env.OPENAI_API_KEY = 'sk-test-openai-key';
+process.env.GEMINI_API_KEY = 'test-gemini-key';
+process.env.CLAUDE_API_KEY = 'test-claude-key';
 process.env.SENTRY_DSN = 'https://test@sentry.io/1';
-process.env.POSTHOG_API_KEY = 'test-key';
+process.env.POSTHOG_API_KEY = 'test-posthog-key';
 process.env.POSTHOG_HOST = 'https://app.posthog.com';
+process.env.FIREBASE_CREDENTIALS_JSON = JSON.stringify({
+  project_id: 'test-proj',
+  private_key: '-----BEGIN PRIVATE KEY-----\nMIIBVwIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEAtesttesttesttest\n-----END PRIVATE KEY-----\n',
+  client_email: 'dummy@example.com',
+});
+process.env.AWS_REGION = 'ap-northeast-2';
 
 // SessionStoreRedis ZSET 시뮬레이션용 인메모리 저장소 (테스트 격리용)
 const zsetStore: Record<string, Map<string, number>> = {};
@@ -100,6 +105,7 @@ jest.mock('../src/infra/redis/client', () => {
     redis: mockRedisInstance,
     redisSubscriber: mockRedisInstance,
     initRedis: jest.fn<any>().mockResolvedValue(undefined),
+    closeRedis: jest.fn<any>().mockResolvedValue(undefined),
   };
 });
 
@@ -131,6 +137,7 @@ jest.mock('../src/infra/db/mongodb', () => {
   return {
     initMongo: jest.fn<any>().mockResolvedValue(mockClient),
     getMongo: jest.fn<any>().mockReturnValue(mockClient),
+    disconnectMongo: jest.fn<any>().mockResolvedValue(undefined),
     client: mockClient,
   };
 });
@@ -141,5 +148,28 @@ jest.mock('../src/infra/db/mongodb', () => {
 // setupFilesAfterEnv에서 전역 mock으로 처리하면 ts-jest 타입 검사를 우회할 수 있습니다.
 jest.mock('pdf-parse');
 jest.mock('officeparser');
+
+jest.mock('firebase-admin', () => {
+  const admin = {
+    apps: [],
+    credential: {
+      cert: jest.fn<any>().mockReturnValue({}),
+    },
+    initializeApp: jest.fn<any>().mockReturnValue({}),
+    messaging: jest.fn<any>().mockReturnValue({
+      sendEachForMulticast: jest.fn<any>().mockResolvedValue({
+        successCount: 0,
+        failureCount: 0,
+        responses: [],
+      }),
+    }),
+  };
+
+  return {
+    __esModule: true,
+    default: admin,
+    ...admin,
+  };
+});
 
 export {};
