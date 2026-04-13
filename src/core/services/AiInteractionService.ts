@@ -33,7 +33,6 @@ import { AiResponse, getAiProvider, IAiProvider } from '../../shared/ai-provider
 import { ApiKeyModel } from '../../shared/dtos/me';
 import { StoragePort } from '../ports/StoragePort';
 import { withRetry } from '../../shared/utils/retry';
-import { captureEvent } from '../../shared/utils/posthog';
 import { loadEnv } from '../../config/env';
 import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 
@@ -178,8 +177,7 @@ export class AiInteractionService {
       //   - 제목 생성 실패 시(titleRequest.ok === false) newTitle = null 로 유지하며
       //     DB 업데이트도 건너뛴다. RESULT의 title 필드는 undefined가 되어 생략된다.
       if (!isNewConversation && chatbody.title === 'NEW_CONVERSATION') {
-        const preferredLanguage: string =
-          await this.userService.getPreferredLanguage(ownerUserId);
+        const preferredLanguage: string = await this.userService.getPreferredLanguage(ownerUserId);
         const titleRequest = await withRetry(
           async () =>
             await provider.requestGenerateThreadTitle(apiKey, chatbody.chatContent, {
@@ -256,7 +254,6 @@ export class AiInteractionService {
       // 메시지 저장 완료 후 카운트 증가 (성공한 대화에만 소모)
       await this.dailyUsageService.incrementUsage(ownerUserId);
 
-      captureEvent(ownerUserId, 'ai_chat_completed', {
       captureEvent(ownerUserId, POSTHOG_EVENT.AI_CHAT_COMPLETED, {
         model_name: chatbody.modelName,
         chat_type: 'normal',
@@ -416,7 +413,6 @@ export class AiInteractionService {
       // 메시지 저장 완료 후 카운트 증가 (성공한 대화에만 소모)
       await this.dailyUsageService.incrementUsage(ownerUserId);
 
-      captureEvent(ownerUserId, 'ai_chat_completed', {
       captureEvent(ownerUserId, POSTHOG_EVENT.AI_CHAT_COMPLETED, {
         model_name: chatbody.modelName,
         chat_type: 'rag',
@@ -558,7 +554,6 @@ export class AiInteractionService {
       // 메시지 저장 완료 후 카운트 증가 (성공한 대화에만 소모)
       await this.dailyUsageService.incrementUsage(ownerUserId);
 
-      captureEvent(ownerUserId, 'ai_chat_completed', {
       captureEvent(ownerUserId, POSTHOG_EVENT.AI_CHAT_COMPLETED, {
         model_name: retrybody.modelName,
         chat_type: 'retry',
