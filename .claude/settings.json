@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/sync-docs.sh"
+            "command": "bash .claude/hooks/post-edit.sh"
           }
         ]
       }
