@@ -19,9 +19,6 @@ const mockUser = {
   createdAt: new Date('2024-01-01T00:00:00.000Z'),
   lastLoginAt: new Date('2024-01-02T00:00:00.000Z'),
   preferredLanguage: 'en',
-  onboardingOccupation: null,
-  onboardingInterests: [],
-  onboardingAgentMode: 'formal' as const,
 };
 
 let userState = { ...mockUser };
@@ -56,13 +53,6 @@ jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => ({
         if (model === 'deepseek') userState.apiKeyDeepseek = null;
         if (model === 'claude') userState.apiKeyClaude = null;
         if (model === 'gemini') userState.apiKeyGemini = null;
-      }
-    }
-    async updateOnboarding(id: any, input: any) {
-      if (String(id) === userState.id) {
-        userState.onboardingOccupation = input.occupation;
-        userState.onboardingInterests = input.interests;
-        userState.onboardingAgentMode = input.agentMode;
       }
     }
   }
@@ -171,58 +161,6 @@ describe('Me API Integration Tests', () => {
           .set('Authorization', `Bearer ${accessToken}`)
           .send({ apiKey: 'some-key' });
         expect(res.status).toBe(400);
-    });
-  });
-
-  describe('Onboarding Management', () => {
-    it('should return default onboarding values for a new user', async () => {
-      // 초기 사용자 상태에서는 기본값(formal)과 빈 interests를 반환해야 함
-      const res = await request(app)
-        .get('/v1/me/onboarding')
-        .set('Authorization', `Bearer ${accessToken}`);
-
-      expect(res.status).toBe(200);
-      expect(res.body).toEqual({
-        occupation: null,
-        interests: [],
-        agentMode: 'formal',
-      });
-    });
-
-    it('should update and then return onboarding values', async () => {
-      const payload = {
-        occupation: 'developer',
-        interests: ['AI / Machine Learning', 'Research / Academia'],
-        agentMode: 'friendly',
-      };
-
-      // 1) 온보딩 값 업데이트
-      const updateRes = await request(app)
-        .patch('/v1/me/onboarding')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .send(payload);
-      expect(updateRes.status).toBe(204);
-
-      // 2) 업데이트된 값 조회
-      const getRes = await request(app)
-        .get('/v1/me/onboarding')
-        .set('Authorization', `Bearer ${accessToken}`);
-      expect(getRes.status).toBe(200);
-      expect(getRes.body).toEqual(payload);
-    });
-
-    it('should return 400 for invalid onboarding enum values', async () => {
-      // enum 외 값 전달 시 zod 검증 오류(400) 기대
-      const res = await request(app)
-        .patch('/v1/me/onboarding')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .send({
-          occupation: 'invalid-occupation',
-          interests: ['AI'],
-          agentMode: 'formal',
-        });
-
-      expect(res.status).toBe(400);
     });
   });
 });

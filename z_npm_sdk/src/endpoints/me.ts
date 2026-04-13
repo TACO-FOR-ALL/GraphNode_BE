@@ -3,8 +3,6 @@ import type {
   MeResponseDto,
   ApiKeysResponseDto,
   ApiKeyModel,
-  OnboardingResponseDto,
-  UpdateOnboardingRequestDto,
   OpenAiAssistantIdResponseDto,
   PreferredLanguageResponseDto,
   SessionsResponseDto,
@@ -227,22 +225,6 @@ export class MeApi {
    */
   updatePreferredLanguage(language: PreferredLanguage): Promise<HttpResponse<void>> {
     return this.rb.path('/v1/me/preferred-language').patch<void>({ language });
-  }
-
-  /**
-   * 사용자 온보딩 정보를 조회합니다.
-   * @returns 온보딩 정보 (직업, 흥미 분야, 에이전트 모드)
-   */
-  getOnboarding(): Promise<HttpResponse<OnboardingResponseDto>> {
-    return this.rb.path('/v1/me/onboarding').get<OnboardingResponseDto>();
-  }
-
-  /**
-   * 사용자 온보딩 정보를 설정/업데이트합니다.
-   * @param payload - 온보딩 정보
-   */
-  updateOnboarding(payload: UpdateOnboardingRequestDto): Promise<HttpResponse<void>> {
-    return this.rb.path('/v1/me/onboarding').patch<void>(payload);
   }
 
   // /**

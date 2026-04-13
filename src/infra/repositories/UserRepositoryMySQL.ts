@@ -3,11 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { User, Provider } from '../../core/types/persistence/UserPersistence';
 import { UserRepository } from '../../core/ports/UserRepository';
 import prisma from '../db/prisma';
-import {
-  ApiKeyModel,
-  OnboardingOccupation,
-  OnboardingAgentMode,
-} from '../../shared/dtos/me';
+import { ApiKeyModel } from '../../shared/dtos/me';
 
 /**
  * UserRepository (Prisma 구현)
@@ -21,7 +17,6 @@ export class UserRepositoryMySQL implements UserRepository {
   async findById(id: string): Promise<User | null> {
     const user = await prisma.user.findUnique({
       where: { id },
-      include: { userInfo: true },
     });
     if (!user) return null;
     return this.mapUser(user);
@@ -113,7 +108,6 @@ export class UserRepositoryMySQL implements UserRepository {
           providerUserId,
         },
       },
-      include: { userInfo: true },
     });
     if (!user) return null;
     return this.mapUser(user);
@@ -139,7 +133,6 @@ export class UserRepositoryMySQL implements UserRepository {
         avatarUrl: input.avatarUrl,
         preferredLanguage: 'en', // default
       },
-      include: { userInfo: true },
     });
     return this.mapUser(user);
   }
@@ -164,7 +157,6 @@ export class UserRepositoryMySQL implements UserRepository {
       const updated = await prisma.user.update({
         where: { id: existing.id },
         data: { lastLoginAt: new Date() },
-        include: { userInfo: true },
       });
       return this.mapUser(updated);
     }
@@ -204,50 +196,6 @@ export class UserRepositoryMySQL implements UserRepository {
     });
   }
 
-  /**
-   * 사용자의 온보딩 정보 업데이트
-   */
-  async updateOnboarding(
-    id: string,
-    input: {
-      occupation: OnboardingOccupation;
-      interests: string[];
-      agentMode: OnboardingAgentMode;
-    }
-  ): Promise<void> {
-    await prisma.$transaction(async (tx) => {
-      const user = await tx.user.findUnique({
-        where: { id },
-        select: { userInfoId: true },
-      });
-      if (!user) return;
-
-      const userInfoId =
-        user.userInfoId ??
-        (
-          await tx.userInfo.create({
-            data: {},
-          })
-        ).id;
-
-      if (!user.userInfoId) {
-        await tx.user.update({
-          where: { id },
-          data: { userInfoId },
-        });
-      }
-
-      await tx.userInfo.update({
-        where: { id: userInfoId },
-        data: {
-          onboardingOccupation: input.occupation,
-          onboardingInterests: input.interests,
-          onboardingAgentMode: input.agentMode,
-        },
-      });
-    });
-  }
-
   private mapUser(pUser: any): User {
     return new User({
       id: pUser.id,
@@ -264,9 +212,6 @@ export class UserRepositoryMySQL implements UserRepository {
       apiKeyGemini: pUser.apiKeyGemini,
       openaiAssistantId: pUser.openaiAssistantId,
       preferredLanguage: pUser.preferredLanguage,
-      onboardingOccupation: pUser.userInfo?.onboardingOccupation,
-      onboardingInterests: pUser.userInfo?.onboardingInterests ?? [],
-      onboardingAgentMode: pUser.userInfo?.onboardingAgentMode ?? 'formal',
     });
   }
 }
