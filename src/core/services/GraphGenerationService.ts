@@ -18,6 +18,8 @@ import { QueuePort } from '../ports/QueuePort';
 import { StoragePort } from '../ports/StoragePort';
 import { loadEnv } from '../../config/env';
 import { withRetry } from '../../shared/utils/retry';
+import { getPostHogClient } from '../../shared/utils/posthog';
+import { redis } from '../../infra/redis/client';
 
 /**
  * 모듈: GraphGenerationService
@@ -32,6 +34,7 @@ const AI_SERVER_URI = process.env.AI_SERVER_URI || 'https://aaejmqgtjczzbxcq.tun
 export class GraphGenerationService {
   private readonly httpClient: HttpClient;
   private readonly jobQueueUrl: string;
+  private static readonly GRAPH_GEN_START_TTL_SECONDS = 60 * 60 * 24; // 24시간
 
   constructor(
     private readonly chatManagementService: ChatManagementService,
@@ -123,6 +126,9 @@ export class GraphGenerationService {
         { label: 'QueuePort.sendMessage.GraphGen' }
       );
 
+      // PostHog 분석용 시작 이벤트(A) 기록 및 시작 시각 캐싱
+      await this.trackGraphGenerationRequested(userId, taskId, messageBody.timestamp);
+
       // 성공 알림 전송
       await this.notificationService.sendGraphGenerationRequested(userId, taskId);
 
@@ -136,6 +142,46 @@ export class GraphGenerationService {
       throw new UpstreamError('Failed to request graph generation via queue', {
         cause: String(err),
       });
+    }
+  }
+
+  /**
+   * Macro Graph 생성 요청 시작 이벤트(A)를 PostHog에 전송하고,
+   * 완료 이벤트에서 duration 계산을 할 수 있도록 시작 시각을 Redis에 저장한다.
+   */
+  private async trackGraphGenerationRequested(
+    userId: string,
+    taskId: string,
+    requestedAt: string
+  ): Promise<void> {
+    try {
+      const posthog = getPostHogClient();
+      posthog?.capture({
+        distinctId: userId,
+        event: 'macro_graph_generation_requested',
+        properties: {
+          source: 'macro_graph',
+          task_id: taskId,
+          user_id: userId,
+          requested_at: requestedAt,
+          queue: 'SQS_REQUEST_QUEUE_URL',
+        },
+      });
+    } catch (err) {
+      // 분석 이벤트 실패가 본 작업 흐름을 막지 않도록 비차단 처리
+      logger.error({ err, userId, taskId }, 'Failed to capture macro_graph_generation_requested');
+    }
+
+    try {
+      await redis.set(
+        `macro_graph:start:${taskId}`,
+        requestedAt,
+        'EX',
+        GraphGenerationService.GRAPH_GEN_START_TTL_SECONDS
+      );
+    } catch (err) {
+      // Redis 캐시 실패 시에도 그래프 생성 요청은 정상 진행
+      logger.warn({ err, userId, taskId }, 'Failed to cache macro graph start time');
     }
   }
 
