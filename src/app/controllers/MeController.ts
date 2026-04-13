@@ -3,7 +3,12 @@ import { z } from 'zod';
 
 import { getUserIdFromRequest } from '../utils/request';
 import { UserService } from '../../core/services/UserService';
-import { MeResponseDto, ApiKeyModel } from '../../shared/dtos/me';
+import {
+  MeResponseDto,
+  ApiKeyModel,
+  OnboardingOccupation,
+  OnboardingAgentMode,
+} from '../../shared/dtos/me';
 import { verifyToken } from '../utils/jwt';
 import {
   listSessions,
@@ -151,6 +156,50 @@ export class MeController {
       const data = schema.parse(req.body);
 
       await this.userService.updatePreferredLanguage(userId, data.language);
+      res.status(204).send();
+    } catch (e) {
+      next(e);
+    }
+  }
+
+  /**
+   * GET /v1/me/onboarding
+   */
+  async getOnboarding(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = getUserIdFromRequest(req)!;
+      const onboarding = await this.userService.getOnboarding(userId);
+      res.status(200).json(onboarding);
+    } catch (e) {
+      next(e);
+    }
+  }
+
+  /**
+   * PATCH /v1/me/onboarding
+   */
+  async updateOnboarding(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = getUserIdFromRequest(req)!;
+      const schema = z.object({
+        occupation: z.enum([
+          'developer',
+          'student',
+          'entrepreneur',
+          'researcher',
+          'creator',
+          'other',
+        ] as const),
+        interests: z.array(z.string().trim().min(1).max(40)).max(10),
+        agentMode: z.enum(['formal', 'friendly', 'casual'] as const),
+      });
+      const data = schema.parse(req.body);
+
+      await this.userService.updateOnboarding(userId, {
+        occupation: data.occupation as OnboardingOccupation,
+        interests: data.interests,
+        agentMode: data.agentMode as OnboardingAgentMode,
+      });
       res.status(204).send();
     } catch (e) {
       next(e);

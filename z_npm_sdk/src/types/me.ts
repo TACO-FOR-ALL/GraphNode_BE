@@ -20,6 +20,9 @@ export interface UserProfileDto {
   createdAt: string;
   lastLoginAt?: string | null;
   preferredLanguage: string;
+  onboardingOccupation?: OnboardingOccupation | null;
+  onboardingInterests: string[];
+  onboardingAgentMode: OnboardingAgentMode;
 }
 
 /**
@@ -45,6 +48,14 @@ export interface MeResponseDto {
  * @public
  */
 export type ApiKeyModel = 'openai' | 'deepseek' | 'claude' | 'gemini';
+export type OnboardingOccupation =
+  | 'developer'
+  | 'student'
+  | 'entrepreneur'
+  | 'researcher'
+  | 'creator'
+  | 'other';
+export type OnboardingAgentMode = 'formal' | 'friendly' | 'casual';
 
 /**
  * GET /v1/me/api-keys 응답 DTO
@@ -94,6 +105,26 @@ export interface PreferredLanguageResponseDto {
  */
 export interface UpdatePreferredLanguageRequestDto {
   language: string;
+}
+
+/**
+ * GET /v1/me/onboarding 응답 DTO
+ * @public
+ */
+export interface OnboardingResponseDto {
+  occupation: OnboardingOccupation | null;
+  interests: string[];
+  agentMode: OnboardingAgentMode;
+}
+
+/**
+ * PATCH /v1/me/onboarding 요청 DTO
+ * @public
+ */
+export interface UpdateOnboardingRequestDto {
+  occupation: OnboardingOccupation;
+  interests: string[];
+  agentMode: OnboardingAgentMode;
 }
 
 /**

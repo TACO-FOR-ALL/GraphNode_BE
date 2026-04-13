@@ -1,5 +1,12 @@
 import { UserRepository } from '../ports/UserRepository';
-import { UserProfileDto, ApiKeysResponseDto, ApiKeyModel } from '../../shared/dtos/me';
+import {
+  UserProfileDto,
+  ApiKeysResponseDto,
+  ApiKeyModel,
+  OnboardingResponseDto,
+  OnboardingOccupation,
+  OnboardingAgentMode,
+} from '../../shared/dtos/me';
 import {
   NotFoundError,
   ValidationError,
@@ -19,7 +26,6 @@ export class UserService {
    */
   constructor(private readonly userRepository: UserRepository) {}
 
-  /**
   /**
    * 사용자 ID로 프로필 정보를 조회합니다.
    * @param userId 조회할 사용자의 ID (문자열 UUID)
@@ -54,6 +60,9 @@ export class UserService {
         createdAt: user.createdAt.toISOString(),
         lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
         preferredLanguage: user.preferredLanguage,
+        onboardingOccupation: user.onboardingOccupation ?? null,
+        onboardingInterests: user.onboardingInterests,
+        onboardingAgentMode: user.onboardingAgentMode,
       };
     } catch (err: unknown) {
       const e: any = err;
@@ -239,6 +248,54 @@ export class UserService {
       throw new ValidationError('Invalid language code');
     }
     await this.userRepository.updatePreferredLanguage(userId, language);
+  }
+
+  /**
+   * 사용자 온보딩 정보 조회
+   * @param userId 사용자 ID
+   * @returns 온보딩 정보(직업, 흥미, 에이전트 모드)
+   * @throws {NotFoundError} 사용자를 찾지 못한 경우
+   */
+  async getOnboarding(userId: string): Promise<OnboardingResponseDto> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new NotFoundError(`User with id ${userId} not found`);
+    }
+    return {
+      occupation: user.onboardingOccupation ?? null,
+      interests: user.onboardingInterests,
+      agentMode: user.onboardingAgentMode,
+    };
+  }
+
+  /**
+   * 사용자 온보딩 정보 업데이트
+   * @param userId 사용자 ID
+   * @param input 온보딩 정보
+   * @throws {NotFoundError} 사용자를 찾지 못한 경우
+   */
+  async updateOnboarding(
+    userId: string,
+    input: {
+      occupation: OnboardingOccupation;
+      interests: string[];
+      agentMode: OnboardingAgentMode;
+    }
+  ): Promise<void> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new NotFoundError(`User with id ${userId} not found`);
+    }
+
+    const normalizedInterests = Array.from(
+      new Set(input.interests.map((v) => v.trim()).filter((v) => v.length > 0))
+    );
+
+    await this.userRepository.updateOnboarding(userId, {
+      occupation: input.occupation,
+      interests: normalizedInterests,
+      agentMode: input.agentMode,
+    });
   }
 
   /**
