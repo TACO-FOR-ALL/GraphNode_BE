@@ -19,6 +19,7 @@ import { NotificationService } from '../core/services/NotificationService';
 import { AiInteractionService } from '../core/services/AiInteractionService';
 import { AgentService } from '../core/services/AgentService';
 import { SearchService } from '../core/services/SearchService';
+import { FeedbackService } from '../core/services/FeedbackService';
 import { GoogleOAuthService } from '../core/services/GoogleOAuthService';
 import { AppleOAuthService } from '../core/services/AppleOAuthService';
 import { MicroscopeManagementService } from '../core/services/MicroscopeManagementService';
@@ -45,10 +46,12 @@ import { QueuePort } from '../core/ports/QueuePort';
 import { StoragePort } from '../core/ports/StoragePort';
 import { EventBusPort } from '../core/ports/EventBusPort';
 import { NotificationRepository } from '../core/ports/NotificationRepository';
+import { FeedbackRepository } from '../core/ports/FeedbackRepository';
 // Infra Adapters
 import { AwsSqsAdapter } from '../infra/aws/AwsSqsAdapter';
 import { AwsS3Adapter } from '../infra/aws/AwsS3Adapter';
 import { RedisEventBusAdapter } from '../infra/redis/RedisEventBusAdapter';
+import { FeedbackRepositoryPrisma } from '../infra/repositories/FeedbackRepositoryPrisma';
 
 /**
  * 애플리케이션의 의존성 주입(Dependency Injection)을 관리하는 싱글톤 컨테이너입니다.
@@ -74,6 +77,7 @@ export class Container {
   private graphVectorService: GraphVectorService | null = null;
   private microscopeWorkspaceRepo: MicroscopeWorkspaceStore | null = null;
   private notificationRepo: NotificationRepository | null = null;
+  private feedbackRepo: FeedbackRepository | null = null;
 
   // Infra Adapters
   private queueAdapter: QueuePort | null = null;
@@ -98,6 +102,7 @@ export class Container {
   private appleOAuthService: AppleOAuthService | null = null;
   private microscopeManagementService: MicroscopeManagementService | null = null;
   private searchService: SearchService | null = null;
+  private feedbackService: FeedbackService | null = null;
 
   private constructor() {}
 
@@ -267,6 +272,13 @@ export class Container {
       this.notificationRepo = new NotificationRepositoryMongo();
     }
     return this.notificationRepo;
+  }
+
+  getFeedbackRepository(): FeedbackRepository {
+    if (!this.feedbackRepo) {
+      this.feedbackRepo = new FeedbackRepositoryPrisma();
+    }
+    return this.feedbackRepo;
   }
 
   // --- Services ---
@@ -516,6 +528,14 @@ export class Container {
       this.searchService = createAuditProxy(raw, 'SearchService');
     }
     return this.searchService;
+  }
+
+  getFeedbackService(): FeedbackService {
+    if (!this.feedbackService) {
+      const raw = new FeedbackService(this.getFeedbackRepository());
+      this.feedbackService = createAuditProxy(raw, 'FeedbackService');
+    }
+    return this.feedbackService;
   }
 }
 

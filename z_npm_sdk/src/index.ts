@@ -22,6 +22,7 @@ export { AiApi } from './endpoints/ai.js';
 export { NotificationApi } from './endpoints/notification.js';
 export { FileApi } from './endpoints/file.js';
 export { MicroscopeApi } from './endpoints/microscope.js';
+export { FeedbackApi } from './endpoints/feedback.js';
 
 // Types
 export type { ProblemDetails } from './types/problem.js';
@@ -104,6 +105,11 @@ export type {
   MicroscopeWorkspaceCompletedPayload,
 } from './types/notification.js';
 export type { GraphGenerationResponseDto, GenerateGraphOptions } from './types/graphAi.js';
+export type {
+  CreateFeedbackRequestDto,
+  CreateFeedbackResponseDto,
+  FeedbackDto,
+} from './types/feedback.js';
 export type {
   AiInputData,
   AiInputMappingNode,
