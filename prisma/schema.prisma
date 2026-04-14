@@ -7,6 +7,49 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id                String      @id @default(uuid()) @map("id")
+  provider          String      @db.VarChar(32)
+  providerUserId    String      @map("provider_user_id") @db.VarChar(191)
+  email             String?     @db.VarChar(191)
+  displayName       String?     @map("display_name") @db.VarChar(191)
+  avatarUrl         String?     @map("avatar_url") @db.VarChar(512)
+  apiKeyOpenai      String?     @map("api_key_openai") @db.VarChar(191)
+  apiKeyDeepseek    String?     @map("api_key_deepseek") @db.VarChar(191)
+  apiKeyClaude      String?     @map("api_key_claude") @db.VarChar(191)
+  apiKeyGemini      String?     @map("api_key_gemini") @db.VarChar(191)
+  createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamp(0)
+  lastLoginAt       DateTime?   @map("last_login_at") @db.Timestamp(0)
+  openaiAssistantId String?     @map("openai_assistant_id") @db.VarChar(191)
+  preferredLanguage String      @default("en") @map("preferred_language") @db.VarChar(10)
+  userInfoId        String?     @unique @map("user_info_id")
+  dailyUsage        DailyUsage? @relation("UserToDailyUsage")
+  userInfo          UserInfo?   @relation("UserToUserInfo", fields: [userInfoId], references: [id])
+
+  @@unique([provider, providerUserId], map: "uniq_provider_user")
+  @@map("users")
+}
+
+model DailyUsage {
+  id            String   @id @default(uuid()) @map("id")
+  userId        String   @unique @map("user_id") @db.VarChar(191)
+  lastResetDate DateTime @map("last_reset_date") @db.Date
+  chatCount     Int      @default(0) @map("chat_count")
+  user          User     @relation("UserToDailyUsage", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("daily_usages")
+}
+
+model UserInfo {
+  id                   String                @id @default(uuid()) @map("id")
+  onboardingOccupation OnboardingOccupation? @map("onboarding_occupation")
+  onboardingInterests  String[]              @default([]) @map("onboarding_interests")
+  onboardingAgentMode  OnboardingAgentMode   @default(formal) @map("onboarding_agent_mode")
+  user                 User?                 @relation("UserToUserInfo")
+
+  @@map("user_info")
+}
+
 enum OnboardingOccupation {
   developer
   student
@@ -20,48 +63,4 @@ enum OnboardingAgentMode {
   formal
   friendly
   casual
-}
-
-model User {
-  id                String    @id @default(uuid()) @map("id")
-  provider          String    @db.VarChar(32)
-  providerUserId    String    @map("provider_user_id") @db.VarChar(191)
-  email             String?   @db.VarChar(191)
-  displayName       String?   @map("display_name") @db.VarChar(191)
-  avatarUrl         String?   @map("avatar_url") @db.VarChar(512)
-  apiKeyOpenai      String?   @map("api_key_openai") @db.VarChar(191)
-  apiKeyDeepseek    String?   @map("api_key_deepseek") @db.VarChar(191)
-  apiKeyClaude      String?   @map("api_key_claude") @db.VarChar(191)
-  apiKeyGemini      String?   @map("api_key_gemini") @db.VarChar(191)
-  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
-  lastLoginAt       DateTime? @map("last_login_at") @db.Timestamp(0)
-  openaiAssistantId String?   @map("openai_assistant_id") @db.VarChar(191)
-  preferredLanguage String    @default("en") @map("preferred_language") @db.VarChar(10)
-  userInfoId        String?   @unique @map("user_info_id")
-  userInfo          UserInfo? @relation("UserToUserInfo", fields: [userInfoId], references: [id])
-
-  @@unique([provider, providerUserId], map: "uniq_provider_user")
-  @@map("users")
-}
-
-
-model DailyUsage {
-  id            String   @id @default(uuid()) @map("id")
-  userId        String   @unique @map("user_id") @db.VarChar(191)
-  lastResetDate DateTime @map("last_reset_date") @db.Date
-  chatCount     Int      @default(0) @map("chat_count")
-
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("daily_usages")
-}
-
-model UserInfo {
-  id                   String                @id @default(uuid()) @map("id")
-  onboardingOccupation OnboardingOccupation? @map("onboarding_occupation")
-  onboardingInterests  String[]              @default([]) @map("onboarding_interests")
-  onboardingAgentMode  OnboardingAgentMode   @default(formal) @map("onboarding_agent_mode")
-  user                 User?                 @relation("UserToUserInfo")
-
-  @@map("user_info")
 }

@@ -3,7 +3,7 @@
  *
  * 책임:
  * - DailyUsageRepository 포트의 PostgreSQL/Prisma 구현체입니다.
- * - Option B (1:1) 설계: 유저당 단일 row. upsertForToday가 날짜 비교 후 reset or increment를 트랜잭션 내에서 처리합니다.
+ * - Option B (1:1) 설계: 유저당 단일 row. upsertForToday가 날짜 비교 후 reset or increment를 처리합니다.
  *
  * 외부 의존:
  * - PrismaClient: PostgreSQL daily_usages 테이블 접근
@@ -30,9 +30,9 @@ export class DailyUsageRepositoryPrisma implements DailyUsageRepository {
   }
 
   /**
-   * 오늘 사용량을 원자적으로 upsert합니다.
+   * 오늘 사용량을 upsert합니다.
    *
-   * @description 트랜잭션 내에서 기존 row를 조회한 뒤:
+   * @description 기존 row를 조회한 뒤:
    *   - row 없음 → chatCount=1, lastResetDate=today로 INSERT
    *   - lastResetDate == today → chatCount + 1로 UPDATE
    *   - lastResetDate != today → lastResetDate=today, chatCount=1로 UPDATE (날짜 reset)
@@ -41,31 +41,25 @@ export class DailyUsageRepositoryPrisma implements DailyUsageRepository {
    * @returns upsert 후 최신 DailyUsage
    */
   async upsertForToday(userId: string, today: Date): Promise<DailyUsage> {
-    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // DB데이터 조회
-      const existing = await tx.dailyUsage.findUnique({ where: { userId } });
+    const existing = await prisma.dailyUsage.findUnique({ where: { userId } });
 
-      // 존재 안하고 있으면, chatCount 1로 row 생성
-      if (!existing) {
-        return tx.dailyUsage.create({
-          data: { id: uuidv4(), userId, lastResetDate: today, chatCount: 1 },
-        });
-      }
-
-      // 존재하면, 오늘 날짜인지 보고,
-      // 데이터 Row에 있는 lastResetDate(마지막 갱신일)이 오늘이면, chatCount +1
-      // lastResetDate가 오늘이 아니면, 오늘로 바꾸고, chatCount 1로.
-      const isSameDay = this.isSameUtcDate(existing.lastResetDate, today);
-      return tx.dailyUsage.update({
-        where: { userId },
-        data: {
-          lastResetDate: today,
-          chatCount: isSameDay ? { increment: 1 } : 1,
-        },
+    if (!existing) {
+      const created = await prisma.dailyUsage.create({
+        data: { id: uuidv4(), userId, lastResetDate: today, chatCount: 1 },
       });
+      return this.mapToDomain(created);
+    }
+
+    const isSameDay = this.isSameUtcDate(existing.lastResetDate, today);
+    const updated = await prisma.dailyUsage.update({
+      where: { userId },
+      data: {
+        lastResetDate: today,
+        chatCount: isSameDay ? { increment: 1 } : 1,
+      },
     });
 
-    return this.mapToDomain(result);
+    return this.mapToDomain(updated);
   }
 
   /**
