@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 
 import { logger } from '../../shared/utils/logger';
 
@@ -12,9 +12,9 @@ const prisma = new PrismaClient({
   ],
 });
 
-// 쿼리 로깅 설정 (옵션)
-// Prisma v5에서는 query 이벤트를 수신할 때 Prisma.QueryEvent 타입을 사용하여 타입 안전성을 보장합니다.
-prisma.$on('query', (e: Prisma.QueryEvent) => {
+// 쿼리 이벤트 타입은 Prisma client 버전/엔트리포인트 차이에 따라 흔들릴 수 있으므로
+// 여기서는 콜백 시그니처 추론에 맡겨 CI 타입 호환성을 유지한다.
+prisma.$on('query', (e) => {
   // 너무 빈번할 수 있으므로 debug 레벨 권장
   logger.debug({ system: 'prisma', duration: e.duration, query: e.query }, 'Prisma Query');
 });

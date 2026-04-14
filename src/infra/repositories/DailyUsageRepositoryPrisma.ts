@@ -10,6 +10,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
+import { Prisma } from '@prisma/client';
 import { DailyUsage } from '../../core/types/persistence/usage.persistence';
 import { DailyUsageRepository } from '../../core/ports/DailyUsageRepository';
 import prisma from '../db/prisma';
@@ -40,7 +41,7 @@ export class DailyUsageRepositoryPrisma implements DailyUsageRepository {
    * @returns upsert 후 최신 DailyUsage
    */
   async upsertForToday(userId: string, today: Date): Promise<DailyUsage> {
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // DB데이터 조회
       const existing = await tx.dailyUsage.findUnique({ where: { userId } });
 
