@@ -35,6 +35,10 @@ export type {
   UpdateOpenAiAssistantIdRequestDto,
   PreferredLanguageResponseDto,
   UpdatePreferredLanguageRequestDto,
+  OnboardingOccupation,
+  OnboardingAgentMode,
+  OnboardingResponseDto,
+  UpdateOnboardingRequestDto,
   SessionDto,
   SessionsResponseDto,
 } from './types/me.js';

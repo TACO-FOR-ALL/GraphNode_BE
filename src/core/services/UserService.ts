@@ -1,5 +1,12 @@
 import { UserRepository } from '../ports/UserRepository';
-import { UserProfileDto, ApiKeysResponseDto, ApiKeyModel } from '../../shared/dtos/me';
+import {
+  UserProfileDto,
+  ApiKeysResponseDto,
+  ApiKeyModel,
+  OnboardingResponseDto,
+  OnboardingOccupation,
+  OnboardingAgentMode,
+} from '../../shared/dtos/me';
 import {
   NotFoundError,
   ValidationError,
@@ -19,7 +26,6 @@ export class UserService {
    */
   constructor(private readonly userRepository: UserRepository) {}
 
-  /**
   /**
    * 사용자 ID로 프로필 정보를 조회합니다.
    * @param userId 조회할 사용자의 ID (문자열 UUID)
@@ -54,6 +60,9 @@ export class UserService {
         createdAt: user.createdAt.toISOString(),
         lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
         preferredLanguage: user.preferredLanguage,
+        onboardingOccupation: user.onboardingOccupation ?? null,
+        onboardingInterests: user.onboardingInterests,
+        onboardingAgentMode: user.onboardingAgentMode,
       };
     } catch (err: unknown) {
       const e: any = err;
@@ -239,6 +248,69 @@ export class UserService {
       throw new ValidationError('Invalid language code');
     }
     await this.userRepository.updatePreferredLanguage(userId, language);
+  }
+
+  /**
+   * 온보딩 스냅샷 조회 (user_info 없으면 기본값)
+   */
+  async getOnboarding(userId: string): Promise<OnboardingResponseDto> {
+    if (!userId || typeof userId !== 'string') {
+      throw new ValidationError('User ID must be a valid string.');
+    }
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new NotFoundError(`User with id ${userId} not found`);
+    }
+    return {
+      occupation: user.onboardingOccupation ?? null,
+      interests: user.onboardingInterests,
+      agentMode: user.onboardingAgentMode,
+    };
+  }
+
+  /**
+   * 온보딩 저장 — user_info가 없으면 리포지토리에서 생성·연결
+   */
+  async updateOnboarding(
+    userId: string,
+    input: {
+      occupation: OnboardingOccupation;
+      interests: string[];
+      agentMode: OnboardingAgentMode;
+    }
+  ): Promise<void> {
+    if (!userId || typeof userId !== 'string') {
+      throw new ValidationError('User ID must be a valid string.');
+    }
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new NotFoundError(`User with id ${userId} not found`);
+    }
+    const interests = this.normalizeOnboardingInterests(input.interests);
+    await this.userRepository.updateOnboarding(userId, {
+      occupation: input.occupation,
+      interests,
+      agentMode: input.agentMode,
+    });
+  }
+
+  private normalizeOnboardingInterests(raw: string[]): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const item of raw) {
+      const t = item.trim();
+      if (t.length === 0) continue;
+      if (t.length > 40) {
+        throw new ValidationError('Each interest must be at most 40 characters');
+      }
+      if (seen.has(t)) continue;
+      seen.add(t);
+      out.push(t);
+      if (out.length > 10) {
+        throw new ValidationError('At most 10 interests are allowed');
+      }
+    }
+    return out;
   }
 
   /**

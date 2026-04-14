@@ -1,3 +1,15 @@
+/** 온보딩 직업 */
+export type OnboardingOccupation =
+  | 'developer'
+  | 'student'
+  | 'entrepreneur'
+  | 'researcher'
+  | 'creator'
+  | 'other';
+
+/** 온보딩 에이전트 모드 */
+export type OnboardingAgentMode = 'formal' | 'friendly' | 'casual';
+
 /**
  * 사용자 프로필 DTO
  * @public
@@ -20,6 +32,23 @@ export interface UserProfileDto {
   createdAt: string;
   lastLoginAt?: string | null;
   preferredLanguage: string;
+  onboardingOccupation?: OnboardingOccupation | null;
+  onboardingInterests?: string[];
+  onboardingAgentMode?: OnboardingAgentMode;
+}
+
+/** GET /v1/me/onboarding 응답 */
+export interface OnboardingResponseDto {
+  occupation: OnboardingOccupation | null;
+  interests: string[];
+  agentMode: OnboardingAgentMode;
+}
+
+/** PATCH /v1/me/onboarding 요청 */
+export interface UpdateOnboardingRequestDto {
+  occupation: OnboardingOccupation;
+  interests: string[];
+  agentMode: OnboardingAgentMode;
 }
 
 /**

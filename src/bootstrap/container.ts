@@ -3,11 +3,13 @@ import { MessageRepositoryMongo } from '../infra/repositories/MessageRepositoryM
 import { UserRepositoryMySQL } from '../infra/repositories/UserRepositoryMySQL';
 import { NoteRepositoryMongo } from '../infra/repositories/NoteRepositoryMongo';
 import { GraphRepositoryMongo } from '../infra/repositories/GraphRepositoryMongo';
+import { DailyUsageRepositoryPrisma } from '../infra/repositories/DailyUsageRepositoryPrisma';
 import { GraphVectorService } from '../core/services/GraphVectorService';
 import { ConversationService } from '../core/services/ConversationService';
 import { MessageService } from '../core/services/MessageService';
 import { ChatManagementService } from '../core/services/ChatManagementService';
 import { UserService } from '../core/services/UserService';
+import { DailyUsageService } from '../core/services/DailyUsageService';
 import { NoteService } from '../core/services/NoteService';
 import { GraphManagementService } from '../core/services/GraphManagementService';
 import { GraphEmbeddingService } from '../core/services/GraphEmbeddingService';
@@ -26,6 +28,7 @@ import { loadEnv } from '../config/env';
 import { ConversationRepository } from '../core/ports/ConversationRepository';
 import { MessageRepository } from '../core/ports/MessageRepository';
 import { UserRepository } from '../core/ports/UserRepository';
+import { DailyUsageRepository } from '../core/ports/DailyUsageRepository';
 import { MicroscopeWorkspaceStore } from '../core/ports/MicroscopeWorkspaceStore';
 import { MicroscopeWorkspaceRepositoryMongo } from '../infra/repositories/MicroscopeWorkspaceRepositoryMongo';
 import { NotificationRepositoryMongo } from '../infra/repositories/NotificationRepositoryMongo';
@@ -63,6 +66,7 @@ export class Container {
   private conversationRepo: ConversationRepository | null = null;
   private messageRepo: MessageRepository | null = null;
   private userRepo: UserRepository | null = null;
+  private dailyUsageRepo: DailyUsageRepository | null = null;
   private noteRepo: NoteRepository | null = null;
   private graphRepo: GraphDocumentStore | null = null; // Renamed to Mongo Store
   private neo4jStore: GraphNeo4jStore | null = null;
@@ -81,6 +85,7 @@ export class Container {
   private messageService: MessageService | null = null;
   private chatManagementService: ChatManagementService | null = null;
   private userService: UserService | null = null;
+  private dailyUsageService: DailyUsageService | null = null;
   private noteService: NoteService | null = null;
   private graphManagementService: GraphManagementService | null = null;
   private graphEmbeddingService: GraphEmbeddingService | null = null;
@@ -214,6 +219,17 @@ export class Container {
   }
 
   /**
+   * DailyUsageRepository 인스턴스를 반환합니다.
+   * @returns DailyUsageRepository 인스턴스
+   */
+  getDailyUsageRepository(): DailyUsageRepository {
+    if (!this.dailyUsageRepo) {
+      this.dailyUsageRepo = new DailyUsageRepositoryPrisma();
+    }
+    return this.dailyUsageRepo;
+  }
+
+  /**
    * NoteRepository 인스턴스를 반환합니다.
    * @returns NoteRepository 인스턴스
    */
@@ -302,6 +318,17 @@ export class Container {
       this.userService = createAuditProxy(raw, 'UserService');
     }
     return this.userService;
+  }
+
+  /**
+   * DailyUsageService 인스턴스를 반환합니다.
+   */
+  getDailyUsageService(): DailyUsageService {
+    if (!this.dailyUsageService) {
+      const raw = new DailyUsageService(this.getDailyUsageRepository());
+      this.dailyUsageService = createAuditProxy(raw, 'DailyUsageService');
+    }
+    return this.dailyUsageService;
   }
 
   /**
@@ -419,7 +446,8 @@ export class Container {
       const raw = new AiInteractionService(
         this.getChatManagementService(),
         this.getUserService(),
-        this.getAwsS3Adapter()
+        this.getAwsS3Adapter(),
+        this.getDailyUsageService()
       );
       this.aiInteractionService = createAuditProxy(raw, 'AiInteractionService');
     }

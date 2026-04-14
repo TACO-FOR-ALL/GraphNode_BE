@@ -165,6 +165,8 @@ services:
       - POSTHOG_HOST=http://localhost:8080
       - INTERNAL_SERVICE_TOKEN=ci-test-key
       - OPENAI_API_KEY=dummy
+      - GEMINI_API_KEY=dummy
+      - CLAUDE_API_KEY=dummy
     ports:
       - "3000:3000"
     healthcheck:
@@ -239,6 +241,8 @@ services:
       - POSTHOG_HOST=http://localhost:8080
       - INTERNAL_SERVICE_TOKEN=ci-test-key
       - OPENAI_API_KEY=dummy
+      - GEMINI_API_KEY=dummy
+      - CLAUDE_API_KEY=dummy
 
   graphnode-ai:
     image: graphnode-ai:test # GHA workflow에서 빌드된 이미지 사용

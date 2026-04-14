@@ -10,14 +10,21 @@ import { Readable } from 'stream';
 import { AiInteractionService } from '../../src/core/services/AiInteractionService';
 import { ChatManagementService } from '../../src/core/services/ChatManagementService';
 import { UserService } from '../../src/core/services/UserService';
+import { DailyUsageService } from '../../src/core/services/DailyUsageService';
 import { StoragePort } from '../../src/core/ports/StoragePort';
-import { ForbiddenError, ValidationError, UpstreamError, NotFoundError } from '../../src/shared/errors/domain';
+import {
+  ValidationError,
+  UpstreamError,
+  NotFoundError,
+  RateLimitError,
+} from '../../src/shared/errors/domain';
 import { IAiProvider } from '../../src/shared/ai-providers/IAiProvider';
 
 // Mocks
 const mockChatSvc = {
   getConversation: jest.fn(),
   createConversation: jest.fn(),
+  updateConversation: jest.fn(),
   updateThreadId: jest.fn(),
   createMessage: jest.fn(),
   getMessages: jest.fn(),
@@ -34,6 +41,11 @@ const mockStorageAdapter = {
   upload: jest.fn(),
   downloadStream: jest.fn(),
 } as unknown as jest.Mocked<StoragePort>;
+
+const mockDailyUsageSvc = {
+  checkLimit: jest.fn(),
+  incrementUsage: jest.fn(),
+} as unknown as jest.Mocked<DailyUsageService>;
 
 // Mock AI Provider Implementation
 const mockProvider: jest.Mocked<IAiProvider> = {
@@ -56,40 +68,26 @@ describe('AiInteractionService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (getAiProvider as jest.Mock).mockReturnValue(mockProvider); // Factory returns our mock provider
-    service = new AiInteractionService(mockChatSvc, mockUserSvc, mockStorageAdapter);
+    (getAiProvider as jest.Mock).mockReturnValue(mockProvider);
+    mockDailyUsageSvc.checkLimit.mockResolvedValue(undefined);
+    mockDailyUsageSvc.incrementUsage.mockResolvedValue(undefined);
+    service = new AiInteractionService(
+      mockChatSvc,
+      mockUserSvc,
+      mockStorageAdapter,
+      mockDailyUsageSvc
+    );
   });
 
   describe('checkApiKey', () => {
-    it('should return true if API key is valid', async () => {
-      mockUserSvc.getApiKeys.mockResolvedValue({ apiKey: 'valid-key' } as any);
-      mockProvider.checkAPIKeyValid.mockResolvedValue({ ok: true, data: true });
-
+    it('should return true when model is supported', async () => {
       const result = await service.checkApiKey('user_1', 'openai');
       expect(result).toBe(true);
-      expect(mockUserSvc.getApiKeys).toHaveBeenCalledWith('user_1', 'openai');
-      expect(mockProvider.checkAPIKeyValid).toHaveBeenCalledWith('valid-key');
+      expect(mockUserSvc.getApiKeys).not.toHaveBeenCalled();
+      expect(mockProvider.checkAPIKeyValid).not.toHaveBeenCalled();
     });
 
-    it('should throw ForbiddenError if API key is not found', async () => {
-      mockUserSvc.getApiKeys.mockResolvedValue({ apiKey: undefined } as any);
-
-      await expect(service.checkApiKey('user_1', 'openai'))
-        .rejects.toThrow(ForbiddenError);
-    });
-
-    it('should throw ValidationError if API key is invalid', async () => {
-      mockUserSvc.getApiKeys.mockResolvedValue({ apiKey: 'invalid-key' } as any);
-      mockProvider.checkAPIKeyValid.mockResolvedValueOnce({ ok: false, error: 'Invalid key' });
-
-      await expect(service.checkApiKey('user_1', 'openai'))
-        .rejects.toThrow(ValidationError);
-    });
-
-    it('should throw ValidationError if factory fails (unsupported model)', async () => {
-      mockUserSvc.getApiKeys.mockResolvedValue({ apiKey: 'valid-key' } as any);
-      (getAiProvider as jest.Mock).mockImplementation(() => { throw new Error('Unsupported'); });
-
+    it('should throw ValidationError for unsupported model', async () => {
       await expect(service.checkApiKey('user_1', 'unknown' as any))
         .rejects.toThrow(ValidationError);
     });
@@ -151,14 +149,16 @@ describe('AiInteractionService', () => {
 
       // 2. Provider Factory & Key Check
       expect(getAiProvider).toHaveBeenCalledWith('openai');
+      expect(mockDailyUsageSvc.checkLimit).toHaveBeenCalledWith(ownerUserId);
 
       // 3. History Retrieval
       expect(mockChatSvc.getMessages).toHaveBeenCalledWith(conversationId);
 
       // 4. Generate Chat Call
       expect(mockProvider.generateChat).toHaveBeenCalledWith(
-          'sk-test',
+          'sk-test-openai-key',
           expect.objectContaining({
+              model: undefined,
               messages: expect.arrayContaining([
                   expect.objectContaining({ role: 'user', content: 'Hello AI' })
               ])
@@ -177,6 +177,7 @@ describe('AiInteractionService', () => {
               content: 'AI Response'
           })
       );
+      expect(mockDailyUsageSvc.incrementUsage).toHaveBeenCalledWith(ownerUserId);
     });
 
     it('should create new conversation if not found', async () => {
@@ -188,10 +189,15 @@ describe('AiInteractionService', () => {
         } as any);
         mockProvider.requestGenerateThreadTitle.mockResolvedValue({ ok: true, data: 'Generated Title' });
 
-        await service.handleAIChat(ownerUserId, chatBody, conversationId, [], undefined);
+        const result = await service.handleAIChat(ownerUserId, chatBody, conversationId, [], undefined);
 
-        expect(mockChatSvc.createConversation).toHaveBeenCalled();
-        // Since we mock requestGenerateThreadTitle, it should be called
+        expect(mockProvider.requestGenerateThreadTitle).toHaveBeenCalled();
+        expect(mockChatSvc.createConversation).toHaveBeenCalledWith(
+          ownerUserId,
+          conversationId,
+          'Generated Title'
+        );
+        expect(result.title).toBe('Generated Title');
     });
 
     it('should throw UpstreamError if provider.generateChat fails', async () => {
@@ -199,6 +205,13 @@ describe('AiInteractionService', () => {
 
         await expect(service.handleAIChat(ownerUserId, chatBody, conversationId, [], undefined))
             .rejects.toThrow(UpstreamError);
+    });
+
+    it('should throw RateLimitError if provider.generateChat is rate limited', async () => {
+        mockProvider.generateChat.mockResolvedValue({ ok: false, error: 'rate_limited' });
+
+        await expect(service.handleAIChat(ownerUserId, chatBody, conversationId, [], undefined))
+            .rejects.toThrow(RateLimitError);
     });
 
     it('should handle streaming callbacks if provided', async () => {
@@ -227,7 +240,6 @@ describe('AiInteractionService', () => {
     beforeEach(() => {
       mockUserSvc.getApiKeys.mockResolvedValue({ apiKey: 'sk-test' } as any);
       mockChatSvc.getConversation.mockResolvedValue({ id: conversationId } as any);
-      mockProvider.checkAPIKeyValid.mockResolvedValue({ ok: true, data: true });
       mockProvider.generateChat.mockResolvedValue({
         ok: true,
         data: { content: 'New AI response', attachments: [] }
@@ -245,8 +257,9 @@ describe('AiInteractionService', () => {
 
       expect(mockChatSvc.deleteMessage).toHaveBeenCalledWith(ownerUserId, conversationId, assistantMessage.id, true);
       expect(mockProvider.generateChat).toHaveBeenCalledWith(
-        'sk-test',
+        'sk-test-openai-key',
         expect.objectContaining({
+          model: undefined,
           messages: [userMessage]
         }),
         undefined,
@@ -299,7 +312,7 @@ describe('AiInteractionService', () => {
       mockChatSvc.getConversation.mockRejectedValue(new Error('Not found'));
 
       await expect(service.handleRetryAIChat(ownerUserId, retryBody, conversationId))
-        .rejects.toThrow('Conversation not found');
+        .rejects.toThrow(NotFoundError);
     });
   });
 

@@ -10,7 +10,8 @@ function normalizeError(e: any): string {
   // Anthropic Error Mapping
   const msg = e.message || '';
   if (e instanceof Anthropic.AuthenticationError || msg.includes('401')) return 'unauthorized_key';
-  if (e instanceof Anthropic.RateLimitError || msg.includes('429')) return 'rate_limited';
+  if (msg.includes('402') || msg.includes('billing')) return 'insufficient_credit';
+  if (e instanceof Anthropic.RateLimitError||msg.includes('429')) return 'rate_limited';
   if (e instanceof Anthropic.NotFoundError || msg.includes('404')) return 'not_found';
   if (e instanceof Anthropic.BadRequestError || msg.includes('400')) return 'bad_request';
   if (e instanceof Anthropic.APIConnectionError) return 'connection_error';

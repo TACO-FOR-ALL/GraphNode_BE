@@ -9,6 +9,19 @@
  * @property avatarUrl 아바타 이미지의 절대 URL. 없을 경우 null.
  * @property email 이메일(선택). PII 최소화 정책에 따라 필요 시에만 포함한다.
  */
+
+/** 온보딩 직업 enum (API·DB와 동일 문자열) */
+export type OnboardingOccupation =
+  | 'developer'
+  | 'student'
+  | 'entrepreneur'
+  | 'researcher'
+  | 'creator'
+  | 'other';
+
+/** 온보딩 에이전트 모드 */
+export type OnboardingAgentMode = 'formal' | 'friendly' | 'casual';
+
 export interface UserProfileDto {
   /**
    * 내부 사용자 식별자(ULID/UUID 등). 표시용으로 전달되며 불변이다.
@@ -62,6 +75,26 @@ export interface UserProfileDto {
    * 선호 언어
    */
   preferredLanguage: string;
+  /** 온보딩 직업(미설정 시 null) */
+  onboardingOccupation?: OnboardingOccupation | null;
+  /** 온보딩 흥미 태그 목록 */
+  onboardingInterests?: string[];
+  /** 온보딩 에이전트 톤(기본 formal) */
+  onboardingAgentMode?: OnboardingAgentMode;
+}
+
+/** GET /v1/me/onboarding 응답 */
+export interface OnboardingResponseDto {
+  occupation: OnboardingOccupation | null;
+  interests: string[];
+  agentMode: OnboardingAgentMode;
+}
+
+/** PATCH /v1/me/onboarding 요청 */
+export interface UpdateOnboardingRequestDto {
+  occupation: OnboardingOccupation;
+  interests: string[];
+  agentMode: OnboardingAgentMode;
 }
 
 /**

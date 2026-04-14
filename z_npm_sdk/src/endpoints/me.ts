@@ -7,6 +7,8 @@ import type {
   PreferredLanguageResponseDto,
   SessionsResponseDto,
   PreferredLanguage,
+  OnboardingResponseDto,
+  UpdateOnboardingRequestDto,
 } from '../types/me.js';
 
 /**
@@ -225,6 +227,20 @@ export class MeApi {
    */
   updatePreferredLanguage(language: PreferredLanguage): Promise<HttpResponse<void>> {
     return this.rb.path('/v1/me/preferred-language').patch<void>({ language });
+  }
+
+  /**
+   * 온보딩 정보 조회
+   */
+  getOnboarding(): Promise<HttpResponse<OnboardingResponseDto>> {
+    return this.rb.path('/v1/me/onboarding').get<OnboardingResponseDto>();
+  }
+
+  /**
+   * 온보딩 정보 저장/갱신
+   */
+  updateOnboarding(body: UpdateOnboardingRequestDto): Promise<HttpResponse<void>> {
+    return this.rb.path('/v1/me/onboarding').patch<void>(body);
   }
 
   // /**
