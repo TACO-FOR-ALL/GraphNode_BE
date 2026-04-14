@@ -1,5 +1,9 @@
 import { User } from '../types/persistence/UserPersistence';
-import { ApiKeyModel } from '../../shared/dtos/me';
+import {
+  ApiKeyModel,
+  OnboardingOccupation,
+  OnboardingAgentMode,
+} from '../../shared/dtos/me';
 
 /**
  * 모듈: UserRepository Port (사용자 저장소 인터페이스)
@@ -68,11 +72,6 @@ export interface UserRepository {
   }): Promise<User>;
 
   /**
-import { ApiKeyModel } from '../../shared/dtos/me';
-
-// ... (interface methods) ...
-
-  /**
    * 내부 사용자 식별자로 API Key 조회
    *
    * @param id 내부 사용자 식별자
@@ -112,4 +111,16 @@ import { ApiKeyModel } from '../../shared/dtos/me';
    * 사용자의 선호 언어 업데이트
    */
   updatePreferredLanguage(id: string, language: string): Promise<void>;
+
+  /**
+   * 사용자의 온보딩 정보 업데이트 (user_info 없으면 생성 후 연결)
+   */
+  updateOnboarding(
+    id: string,
+    input: {
+      occupation: OnboardingOccupation;
+      interests: string[];
+      agentMode: OnboardingAgentMode;
+    }
+  ): Promise<void>;
 }

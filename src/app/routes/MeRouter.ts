@@ -46,5 +46,8 @@ export function createMeRouter(deps: { userService: UserService }): Router {
     asyncHandler(meController.updatePreferredLanguage.bind(meController))
   );
 
+  router.get('/onboarding', asyncHandler(meController.getOnboarding.bind(meController)));
+  router.patch('/onboarding', asyncHandler(meController.updateOnboarding.bind(meController)));
+
   return router;
 }

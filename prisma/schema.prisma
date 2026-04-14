@@ -22,20 +22,45 @@ model User {
   lastLoginAt       DateTime?   @map("last_login_at") @db.Timestamp(0)
   openaiAssistantId String?     @map("openai_assistant_id") @db.VarChar(191)
   preferredLanguage String      @default("en") @map("preferred_language") @db.VarChar(10)
-  dailyUsage        DailyUsage?
+  userInfoId        String?     @unique @map("user_info_id")
+  dailyUsage        DailyUsage? @relation("UserToDailyUsage")
+  userInfo          UserInfo?   @relation("UserToUserInfo", fields: [userInfoId], references: [id])
 
   @@unique([provider, providerUserId], map: "uniq_provider_user")
   @@map("users")
 }
-
 
 model DailyUsage {
   id            String   @id @default(uuid()) @map("id")
   userId        String   @unique @map("user_id") @db.VarChar(191)
   lastResetDate DateTime @map("last_reset_date") @db.Date
   chatCount     Int      @default(0) @map("chat_count")
-
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User     @relation("UserToDailyUsage", fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("daily_usages")
+}
+
+model UserInfo {
+  id                   String                @id @default(uuid()) @map("id")
+  onboardingOccupation OnboardingOccupation? @map("onboarding_occupation")
+  onboardingInterests  String[]              @default([]) @map("onboarding_interests")
+  onboardingAgentMode  OnboardingAgentMode   @default(formal) @map("onboarding_agent_mode")
+  user                 User?                 @relation("UserToUserInfo")
+
+  @@map("user_info")
+}
+
+enum OnboardingOccupation {
+  developer
+  student
+  entrepreneur
+  researcher
+  creator
+  other
+}
+
+enum OnboardingAgentMode {
+  formal
+  friendly
+  casual
 }

@@ -158,6 +158,45 @@ export class MeController {
   }
 
   /**
+   * GET /v1/me/onboarding
+   */
+  async getOnboarding(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = getUserIdFromRequest(req)!;
+      const body = await this.userService.getOnboarding(userId);
+      res.status(200).json(body);
+    } catch (e) {
+      next(e);
+    }
+  }
+
+  /**
+   * PATCH /v1/me/onboarding
+   */
+  async updateOnboarding(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = getUserIdFromRequest(req)!;
+      const updateOnboardingSchema = z.object({
+        occupation: z.enum([
+          'developer',
+          'student',
+          'entrepreneur',
+          'researcher',
+          'creator',
+          'other',
+        ]),
+        interests: z.array(z.string().max(40)).max(10),
+        agentMode: z.enum(['formal', 'friendly', 'casual']),
+      });
+      const data = updateOnboardingSchema.parse(req.body);
+      await this.userService.updateOnboarding(userId, data);
+      res.status(204).send();
+    } catch (e) {
+      next(e);
+    }
+  }
+
+  /**
    * GET /v1/me/sessions — 내 계정의 활성 세션 목록 조회
    * - createdAt: 세션 생성 시각 (ISO 8601)
    * - isCurrent: 현재 요청 기기와 동일한 세션 여부
