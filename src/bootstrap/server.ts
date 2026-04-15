@@ -32,6 +32,7 @@ import { makeNotificationRouter } from './modules/notification.module';
 import { makeFileRouter } from './modules/file.module';
 import { makeMicroscopeRouter } from './modules/microscope.module';
 import { makeSearchRouter } from './modules/search.module';
+import { makeFeedbackRouter } from './modules/feedback.module';
 import { CleanupCron } from '../infra/cron/CleanupCron';
 // import { createTestAgentRouter } from '../app/routes/agent.test';
 
@@ -88,6 +89,9 @@ export function createApp() {
 
   // Search Router
   app.use('/v1/search', makeSearchRouter());
+
+  // Feedback Router
+  app.use('/v1/feedback', makeFeedbackRouter());
 
   // Notification Router (SSE)
   app.use('/v1/notifications', makeNotificationRouter());

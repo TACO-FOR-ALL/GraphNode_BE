@@ -50,6 +50,21 @@ model UserInfo {
   @@map("user_info")
 }
 
+model Feedback {
+  id        String   @id @default(uuid()) @map("id")
+  category  String   @db.VarChar(191)
+  userName  String?  @map("user_name") @db.VarChar(191)
+  userEmail String?  @map("user_email") @db.VarChar(191)
+  title     String   @db.Text
+  content   String   @db.Text
+  status    String   @db.VarChar(32)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  @@index([createdAt], map: "idx_feedback_created_at")
+  @@map("feedbacks")
+}
+
 enum OnboardingOccupation {
   developer
   student
