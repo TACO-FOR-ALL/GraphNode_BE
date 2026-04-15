@@ -38,6 +38,7 @@ import { CleanupCron } from '../infra/cron/CleanupCron';
 
 import { setupSentryErrorHandler } from '../shared/utils/sentry';
 import { NotFoundError } from '../shared/errors/domain';
+import devTestRouter from '../app/routes/DevTestRouter';
 
 /**
  * Express 앱 부트스트랩.
@@ -67,6 +68,9 @@ export function createApp() {
 
   // Health endpoints: available at /healthz and /v1/healthz
   app.use('/', healthRouter);
+
+  // 개발 환경 전용 테스트 라우터 (NODE_ENV=production 시 내부에서 404 차단)
+  app.use('/dev/test', devTestRouter);
 
   // AI 라우터(조립된 Router 장착)
   app.use('/v1/ai', makeAiRouter());

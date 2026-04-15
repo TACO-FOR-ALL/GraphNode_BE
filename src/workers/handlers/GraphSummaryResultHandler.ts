@@ -1,9 +1,11 @@
 import { ulid } from 'ulid';
+import * as Sentry from '@sentry/node';
 
 import type { Container } from '../../bootstrap/container';
 import { QueueMessage, GraphSummaryResultPayload } from '../../shared/dtos/queue';
 import { logger } from '../../shared/utils/logger';
 import { JobHandler } from './JobHandler';
+import { notifyWorkerFailed } from '../../shared/utils/discord';
 import { GraphSummary } from '../../shared/dtos/ai_graph_output';
 import { GraphSummaryDoc } from '../../core/types/persistence/graph.persistence';
 import { withRetry } from '../../shared/utils/retry';
@@ -23,15 +25,44 @@ export class GraphSummaryResultHandler implements JobHandler {
 
     try {
       if (status === 'FAILED') {
-        logger.error({ taskId, userId, error }, 'Graph summary generation failed');
+        const errorMsg = error || 'Unknown error from AI server';
+        logger.error({ taskId, userId, error: errorMsg }, 'Graph summary generation failed');
+
+        Sentry.addBreadcrumb({
+          type: 'error',
+          category: 'worker.ai_failed',
+          message: `GRAPH_SUMMARY_RESULT: AI 서버 FAILED 응답 수신`,
+          data: { taskId, userId, errorMsg },
+          level: 'warning',
+        });
+
+        const sentryEventId = Sentry.withScope((scope) => {
+          scope.setLevel('warning');
+          scope.setTag('task_type', 'GRAPH_SUMMARY_RESULT');
+          scope.setTag('failure_source', 'ai_server');
+          scope.setTag('correlation_id', taskId);
+          scope.setContext('worker_failure', { taskId, userId, errorMsg });
+          return Sentry.captureMessage(
+            `[Worker FAILED] GRAPH_SUMMARY_RESULT: ${errorMsg}`,
+            'warning'
+          );
+        });
+
+        void notifyWorkerFailed({
+          taskType: 'GRAPH_SUMMARY_RESULT',
+          taskId,
+          userId,
+          errorMessage: errorMsg,
+          sentryEventId,
+        }).catch(() => {});
 
         // 실패 notification 전달
-        await notiService.sendGraphSummaryFailed(userId, taskId, error || 'Unknown error');
+        await notiService.sendGraphSummaryFailed(userId, taskId, errorMsg);
 
         await notiService.sendFcmPushNotification(
           userId,
           'Graph Generation Failed',
-          `Graph summary generation failed: ${error || 'Unknown error'}`,
+          `Graph summary generation failed: ${errorMsg}`,
           {
             taskId,
             status: 'FAILED',

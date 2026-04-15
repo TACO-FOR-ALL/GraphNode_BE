@@ -1,3 +1,5 @@
+import * as Sentry from '@sentry/node';
+
 import { JobHandler } from './JobHandler';
 import { Container } from '../../bootstrap/container';
 import { AddNodeResultPayload } from '../../shared/dtos/queue';
@@ -5,6 +7,7 @@ import { AiAddNodeBatchResult } from '../../shared/dtos/ai_graph_output';
 import { logger } from '../../shared/utils/logger';
 import { withRetry } from '../../shared/utils/retry';
 import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
+import { notifyWorkerFailed } from '../../shared/utils/discord';
 import {
   normalizeAiOrigId,
   NormalizedAiOrigId,
@@ -57,7 +60,36 @@ export class AddNodeResultHandler implements JobHandler {
 
     // AI 서버에서 실패한 경우
     if (status === 'FAILED' || error) {
-      logger.error({ taskId, userId, error }, 'AddNode task failed from AI Server');
+      const errorMsg = error || 'Unknown AI error';
+      logger.error({ taskId, userId, error: errorMsg }, 'AddNode task failed from AI Server');
+
+      Sentry.addBreadcrumb({
+        type: 'error',
+        category: 'worker.ai_failed',
+        message: `ADD_NODE_RESULT: AI 서버 FAILED 응답 수신`,
+        data: { taskId, userId, errorMsg },
+        level: 'warning',
+      });
+
+      const sentryEventId = Sentry.withScope((scope) => {
+        scope.setLevel('warning');
+        scope.setTag('task_type', 'ADD_NODE_RESULT');
+        scope.setTag('failure_source', 'ai_server');
+        scope.setTag('correlation_id', taskId);
+        scope.setContext('worker_failure', { taskId, userId, errorMsg });
+        return Sentry.captureMessage(
+          `[Worker FAILED] ADD_NODE_RESULT: ${errorMsg}`,
+          'warning'
+        );
+      });
+
+      void notifyWorkerFailed({
+        taskType: 'ADD_NODE_RESULT',
+        taskId,
+        userId,
+        errorMessage: errorMsg,
+        sentryEventId,
+      }).catch(() => {});
 
       const stats = await graphService.getStats(userId);
       if (stats) {
@@ -65,7 +97,7 @@ export class AddNodeResultHandler implements JobHandler {
         await graphService.saveStats(stats);
       }
 
-      await notiService.sendAddConversationFailed(userId, taskId, error || 'Unknown AI error');
+      await notiService.sendAddConversationFailed(userId, taskId, errorMsg);
       return;
     }
 

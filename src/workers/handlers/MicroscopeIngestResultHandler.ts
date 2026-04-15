@@ -1,3 +1,5 @@
+import * as Sentry from '@sentry/node';
+
 import { JobHandler } from './JobHandler';
 import type { Container } from '../../bootstrap/container';
 import { MicroscopeIngestFromNodeResultQueuePayload } from '../../shared/dtos/queue';
@@ -7,6 +9,7 @@ import { AiMicroscopeIngestResultItem } from '../../shared/dtos/ai_graph_output'
 import { MicroscopeWorkspaceMetaDoc } from '../../core/types/persistence/microscope_workspace.persistence';
 import { withRetry } from '../../shared/utils/retry';
 import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
+import { notifyWorkerFailed } from '../../shared/utils/discord';
 
 /**
  * Microscope 문서 분석(Ingest) 결과 처리 핸들러
@@ -74,7 +77,35 @@ export class MicroscopeIngestResultHandler implements JobHandler {
       if (status === 'FAILED') {
         const errorMsg = error || 'Unknown error from Microscope AI Pipeline';
         logger.warn({ taskId, userId, groupId, s3Key, error: errorMsg }, 'Microscope document processing failed');
-        
+
+        Sentry.addBreadcrumb({
+          type: 'error',
+          category: 'worker.ai_failed',
+          message: `MICROSCOPE_INGEST_RESULT: AI 서버 FAILED 응답 수신`,
+          data: { taskId, userId, groupId, errorMsg },
+          level: 'warning',
+        });
+
+        const sentryEventId = Sentry.withScope((scope) => {
+          scope.setLevel('warning');
+          scope.setTag('task_type', 'MICROSCOPE_INGEST_FROM_NODE_RESULT');
+          scope.setTag('failure_source', 'ai_server');
+          scope.setTag('correlation_id', taskId);
+          scope.setContext('worker_failure', { taskId, userId, groupId, errorMsg });
+          return Sentry.captureMessage(
+            `[Worker FAILED] MICROSCOPE_INGEST_FROM_NODE_RESULT: ${errorMsg}`,
+            'warning'
+          );
+        });
+
+        void notifyWorkerFailed({
+          taskType: 'MICROSCOPE_INGEST_FROM_NODE_RESULT',
+          taskId,
+          userId,
+          errorMessage: errorMsg,
+          sentryEventId,
+        }).catch(() => {});
+
         await notiService.sendMicroscopeDocumentFailed(userId, taskId, errorMsg);
       } else {
         logger.info({ taskId, userId, groupId, s3Key, chunks_count }, 'Microscope document processing completed successfully');

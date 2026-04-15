@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/node';
 import { AppError, unknownToAppError } from '../../shared/errors/base';
 import { toProblem } from '../presenters/problem';
 import { logger } from '../../shared/utils/logger';
+import { notifyHttp500 } from '../../shared/utils/discord';
 
 /**
  * 모듈: 글로벌 에러 핸들러 (Global Error Handler)
@@ -133,6 +134,26 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     path: req.originalUrl,
   });
 
-  // 5. 응답 전송
+  // 5. Discord 알림: 5xx 에러 발생 시 팀 에러 채널에 즉시 알림 (fire-and-forget)
+  //    - routePattern: 5xx 블록에서 이미 계산된 값 재사용 (없으면 fallback 계산)
+  //    - e.message, e.httpStatus, e.retryable: 에러 실체 파악에 필수
+  //    - void + .catch(() => {}): Discord 전송 실패가 응답에 영향을 주지 않도록 격리
+  if (e.httpStatus >= 500) {
+    const discordCorrelationId: string = (req as any).id ?? 'unknown';
+    void notifyHttp500({
+      path: req.originalUrl,
+      method: req.method,
+      httpStatus: e.httpStatus,
+      errorCode: e.code,
+      errorMessage: e.message,
+      routePattern: extractRoutePattern(req),
+      retryable: e.retryable,
+      userId: (req as any).userId,
+      correlationId: discordCorrelationId,
+      sentryEventId,
+    }).catch(() => {});
+  }
+
+  // 6. 응답 전송
   res.status(e.httpStatus).type('application/problem+json').json(problem);
 }
