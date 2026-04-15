@@ -21,6 +21,7 @@ import { initSentry } from '../shared/utils/sentry';
 // Handlers
 import { JobHandler } from './handlers/JobHandler';
 import { GraphGenerationResultHandler } from './handlers/GraphGenerationResultHandler';
+import { GraphGenerationProgressResultHandler } from './handlers/GraphGenerationProgressResultHandler';
 import { GraphSummaryResultHandler } from './handlers/GraphSummaryResultHandler';
 import { AddNodeResultHandler } from './handlers/AddNodeResultHandler';
 import { MicroscopeIngestResultHandler } from './handlers/MicroscopeIngestResultHandler';
@@ -47,6 +48,7 @@ async function startWorker() {
   // 메시지 타입에 따라 적절한 핸들러를 매핑합니다.
   const handlers: Record<string, JobHandler> = {
     [TaskType.GRAPH_GENERATION_RESULT]: new GraphGenerationResultHandler(),
+    [TaskType.GRAPH_GENERATION_PROGRESS_RESULT]: new GraphGenerationProgressResultHandler(),
     [TaskType.GRAPH_SUMMARY_RESULT]: new GraphSummaryResultHandler(),
     [TaskType.ADD_NODE_RESULT]: new AddNodeResultHandler(),
     [TaskType.MICROSCOPE_INGEST_FROM_NODE_RESULT]: new MicroscopeIngestResultHandler(),

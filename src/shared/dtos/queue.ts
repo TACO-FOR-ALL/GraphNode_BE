@@ -12,6 +12,7 @@
 export enum TaskType {
   GRAPH_GENERATION_REQUEST = 'GRAPH_GENERATION_REQUEST', // API -> AI
   GRAPH_GENERATION_RESULT = 'GRAPH_GENERATION_RESULT', // AI -> Worker
+  GRAPH_GENERATION_PROGRESS_RESULT = 'GRAPH_GENERATION_PROGRESS_RESULT', // AI -> Worker (Graph progress)
   GRAPH_SUMMARY_REQUEST = 'GRAPH_SUMMARY_REQUEST', // API -> AI (Summary only)
   GRAPH_SUMMARY_RESULT = 'GRAPH_SUMMARY_RESULT', // AI -> Worker (Summary result)
   ADD_NODE_REQUEST = 'ADD_NODE_REQUEST', // API -> AI (single conversation)
@@ -75,6 +76,24 @@ export interface GraphGenResultPayload extends BaseQueueMessage {
     summaryIncluded?: boolean; // 요약 파이프라인 동시 실행 결과 여부
     summaryS3Key?: string; // 요약 데이터가 담긴 S3 키
     error?: string; // 실패 혹은 부분 실패(요약 실패) 시 에러 메시지
+  };
+}
+
+// 2-1. AI -> Worker: 그래프 생성 진행률 메시지
+/**
+ * 그래프 생성 진행률 메시지 페이로드(AI -> Worker)
+ * - taskType: 메시지 타입 식별자
+ * - payload: 실제 진행률 데이터
+ * - userId: 요청한 사용자 ID
+ * - completedStage: 마지막으로 완료된 단계
+ * - progressPercent: 전체 작업 기준 진행률(0~100)
+ */
+export interface GraphProgressPayload extends BaseQueueMessage {
+  taskType: TaskType.GRAPH_GENERATION_PROGRESS_RESULT;
+  payload: {
+    userId: string;
+    completedStage: string; // AI가 전달한 단계명을 그대로 사용
+    progressPercent: number;
   };
 }
 
@@ -231,6 +250,7 @@ export interface MicroscopeIngestFromNodeResultQueuePayload extends BaseQueueMes
 export type QueueMessage =
   | GraphGenRequestPayload
   | GraphGenResultPayload
+  | GraphProgressPayload
   | GraphSummaryRequestPayload
   | GraphSummaryResultPayload
   | AddNodeRequestPayload
