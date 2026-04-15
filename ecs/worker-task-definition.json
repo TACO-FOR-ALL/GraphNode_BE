@@ -26,7 +26,19 @@
         },
         { "name": "S3_PAYLOAD_BUCKET", "value": "taco5-graphnode-graphdata-s3" },
         { "name": "S3_FILE_BUCKET", "value": "taco5-graphnode-filedata-chat-and-note-s3" },
-        { "name": "CHROMA_API_URL", "value": "http://localhost:8000" }
+        { "name": "CHROMA_API_URL", "value": "http://localhost:8000" },
+        {
+          "name": "SENTRY_ORG_SLUG",
+          "value": "taco-cj"
+        },
+        {
+          "name": "DISCORD_WEBHOOK_URL_ERRORS",
+          "value": "https://discord.com/api/webhooks/1493877326180515986/Pa10k3GI1-jEytwWpGN8MaRPgXBnxPuvo1Tkzt7dxdEHy2LuEfH-O92YZ2-cA7aknKf7"
+        },
+        {
+          "name": "DISCORD_WEBHOOK_URL_GRAPH",
+          "value": "https://discord.com/api/webhooks/1493877326180515986/Pa10k3GI1-jEytwWpGN8MaRPgXBnxPuvo1Tkzt7dxdEHy2LuEfH-O92YZ2-cA7aknKf7"
+        }
       ],
       "secrets": [
         {

@@ -1,189 +1,267 @@
 # Sentry Integration Architecture
 
 ## 1. 개요 (Overview)
-**Sentry**는 애플리케이션에서 발생하는 에러(Exception)와 성능 이슈(Transaction)를 실시간으로 추적하고 모니터링하는 플랫폼입니다.
-GraphNode 프로젝트는 안정적인 프로덕션 운영을 위해 Sentry를 도입하여, 예상치 못한 버그를 신속하게 감지하고 해결할 수 있는 체계를 갖추었습니다.
 
 ## 2. 도입 배경 (Why Sentry?)
-- **실시간 에러 감지:** 사용자가 신고하기 전에 개발팀이 먼저 에러를 인지할 수 있습니다.
-- **풍부한 컨텍스트 제공:** 단순한 로그 메시지뿐만 아니라, 에러 발생 시점의 스택 트레이스(Stack Trace), 요청 정보(URL, Headers, Body), 사용자 ID, OS/브라우저 환경 등을 함께 제공하여 디버깅 시간을 단축합니다.
-- **성능 모니터링:** API 응답 속도, DB 쿼리 수행 시간 등을 시각화하여 병목 지점을 찾을 수 있습니다.
+**Sentry**는 GraphNode 베타 테스트 및 운영 환경에서 에러를 실시간 추적하고, 에러 발생까지의 전체 흐름(Breadcrumb Trail)을 시각화하는 플랫폼입니다.
 
-## 3. 동작 방식 및 코드 분석 (How it works)
-
-### 3.1. 초기화 (Initialization: Auto-instrumentation)
-Sentry v8부터는 **Auto-instrumentation(자동 계측)** 방식을 사용하므로, 애플리케이션의 **가장 최상단(`src/index.ts`)**에서 초기화해야 합니다.
-
-```typescript
-// src/index.ts
-import { initSentry } from './shared/utils/sentry';
-initSentry(); // import 'express' 보다 먼저 실행되어야 함
-```
-
-#### `initSentry` (`src/shared/utils/sentry.ts`)
-- **`@sentry/node`**의 `init` 함수를 호출합니다.
-- **Integrations:**
-  - `httpIntegration()`: HTTP/HTTPS 모듈을 패치하여 모든 요청을 자동 추적합니다.
-  - `expressIntegration()`: Express 프레임워크를 패치하여 라우터 및 미들웨어 성능을 측정합니다.
-  - `nodeProfilingIntegration`: CPU 프로파일링을 수행합니다.
-
-### 3.2. 미들웨어 구조 (Middleware Chain)
-
-v8에서는 수동으로 Request/Tracing 핸들러를 등록할 필요가 없습니다. (자동 처리됨)
-
-```
-requestContext                ← correlationId 생성
-...라우터...
-setupSentryErrorHandler(app)  ← span/transaction 에러 마킹 전용 (captureException 비활성)
-app.use(errorHandler)         ← captureException 단일 책임 지점 (event id 회수 + 로그 기록)
-```
-
-1. **Auto-instrumented Middlewares:** 초기화 시점에 Express 내부가 패치되어, 요청 시작/종료 및 트레이싱이 자동으로 수행됩니다.
-2. **`setupSentryErrorHandler(app)`:**
-   - **위치:** `src/bootstrap/server.ts`의 모든 라우트 등록 후, Global Error Handler 직전.
-   - **역할 (현재):** Sentry span/transaction에 에러 상태를 마킹합니다. `shouldHandleError: () => false`로 설정되어 **직접 captureException을 호출하지 않습니다.**
-   - **이유:** `captureException`을 여기서도 호출하면 같은 에러가 Sentry에 2회 전송됩니다. event id 회수 및 CloudWatch 로그 연동을 위해 errorHandler에서 단독 캡처합니다.
-3. **`errorHandler`** (`src/app/middlewares/error.ts`):
-   - **captureException의 유일한 호출 지점.**
-   - `withScope`로 tag/context를 주입하고 반환된 event id를 CloudWatch 로그에 기록합니다.
-   - 상세 내용: 섹션 8 및 [ERRORS.md 섹션 4](./ERRORS.md#4-중앙-에러-핸들러와-sentry-연동)
-
-### 3.3. 민감 정보 보호 (Data Scrubbing)
-보안을 위해 비밀번호, 토큰, 인증 헤더 등 민감한 개인정보(PII)는 Sentry로 전송되기 전에 필터링됩니다.
-- **Redaction:** `Authorization` 헤더, `cookie`, `password` 필드 등은 전송 단계(`beforeSend`)에서 제거되거나 마스킹 처리됩니다.
-
-## 4. 참고 자료
-- [Sentry Node.js SDK Documentation](https://docs.sentry.io/platforms/node/)
-- [Sentry Express Integration](https://docs.sentry.io/platforms/node/guides/express/)
-
-## 5. 핵심 개념 (Key Concepts)
-Sentry를 100% 활용하기 위해 알아두어야 할 개념입니다.
-
-### 5.1. 이슈 (Issue) & 이벤트 (Event)
-- **이벤트(Event):** 발생한 에러 하나하나를 의미합니다.
-- **이슈(Issue):** 같은 종류의 에러들을 하나로 묶은 그룹입니다. "100번의 이벤트가 발생했다"는 것은 "1개의 이슈가 100번 터졌다"는 뜻입니다. 개발자는 '이슈' 단위로 상태(Resolved, Ignored)를 관리합니다.
-
-### 5.2. 빵부스러기 (Breadcrumbs)
-- 에러가 터지기 **직전**에 어떤 일들이 있었는지 보여주는 타임라인입니다.
-- 예: `DB 연결 성공` -> `API 호출` -> `사용자 로그인 시도` -> **(에러 발생)**
-- GraphNode에서는 `console.log`나 HTTP 요청이 자동으로 Breadcrumb으로 수집됩니다.
-
-### 5.3. 컨텍스트 (Context) & 태그 (Tags)
-
-에러에 부가 정보를 붙여서 필터링을 돕습니다.
-
-**Tags**는 Sentry 내부에서 **인덱싱**되어 Issues 목록/필터/검색에 활용됩니다. 값의 종류(cardinality)가 적어야 합니다.
-
-**Context**는 인덱싱되지 않으며, 이벤트 상세 화면의 "Additional Data" 탭에서만 확인 가능합니다.
-
-GraphNode에서 실제로 전송하는 tag/context 목록은 **섹션 8.2-8.3**을 참조하세요.
-
-### 5.4. 릴리즈 (Release)
-- "어떤 배포 버전에서 이 에러가 처음 생겼나?"를 추적합니다.
-- 배포 시점의 소스 코드와 매핑(Source Maps)하여, 난독화된 코드를 원본 TS 코드로 보여줍니다.
-
-## 6. 활용 가이드 (Usage Strategy)
-
-### 6.1. 알림 설정 (Alerts)
-- 너무 많은 알림은 무시하게 됩니다(Alert Fatigue). 중요한 규칙만 설정하세요.
-- **권장 규칙:**
-    1. **New Issue:** 새로운 종류의 에러가 처음 발생했을 때 (슬랙 알림).
-    2. **High Frequency:** 특정 에러가 1분 동안 50회 이상 발생했을 때 (긴급).
-
-### 6.2. 이슈 처리 워크플로우
-1. **Triage (분류):** 이슈가 들어오면 담당자를 할당하거나(Assign), 관련 없는 이슈는 무시(Ignore)합니다.
-2. **Resolve (해결):** 코드를 수정하고 배포했으면 `Resolve in next release`를 체크합니다. 다시 재발하면 자동으로 이슈가 열립니다(Regression).
-
-### 6.3. 민감 정보 관리
-- 기본적으로 `src/shared/utils/sentry.ts`에서 Auth Header 등을 지우지만, 비즈니스 로직에서도 로깅 시 개인정보(주민번호, 비밀번호)를 `logger`나 `Sentry`에 넘기지 않도록 주의해야 합니다.
-
-## 7. 성능 모니터링 및 지표 (Performance & Metrics)
-GraphNode는 Sentry의 Tracing 및 Profiling을 통해 API 응답 속도와 병목을 실시간으로 수집합니다. Sentry 대시보드의 **Performance** 및 **Profiling** 탭에서 확인할 수 있습니다.
-
-### 7.1. 주요 측정 기능
-- **Tracing (트랜잭션 및 스팬):** `Sentry.httpIntegration()`과 `Sentry.expressIntegration()`이 각 API 요청(Transaction)과 내부 미들웨어/로직(Span)의 소요 시간을 자동 측정합니다.
-- **Profiling (프로파일링):** `nodeProfilingIntegration()`이 활용되어, 단순 소요 시간을 넘어 함수 단위(Call Stack)에서 어떤 부분의 CPU 점유율이 높은지 초정밀 병목 추적이 가능합니다.
-
-### 7.2. 대시보드 주요 지표 (Metrics) 의미
-Performance 탭에서 확인할 수 있는 핵심 지표들은 다음과 같습니다:
-- **RPM (Requests Per Minute):** 분당 API 요청 수. 현재 서버의 트래픽 부하를 나타냅니다.
-- **Failure Rate (에러율):** 전체 요청 중 5xx(서버 에러) 등 실패 응답이 차지하는 비율입니다.
-- **Apdex (Application Performance Index):** 사용자가 느끼는 응답 속도 만족도 지표입니다. (0 ~ 1 사이의 정수/소수값이며, 1에 가까울수록 속도가 쾌적함을 의미합니다)
-- **Duration (Avg, p95, p99):** API 응답 소요 시간입니다. 특히 **p95**(상위 5%의 느린 엣지 케이스 응답 시간)나 **p99**(상위 1%)를 지켜보며 극단적으로 느린 요청이 있는지 파악합니다.
-
-### 7.3. 샘플링 비율 (Sample Rate)
-성능 지표 데이터는 운영 환경(`production`) 서버에 가해지는 에이전트 부하를 막기 위해 전체 트래픽 중 일부만 선별수집됩니다.
-- 현재 `src/shared/utils/sentry.ts` 코드 상에서 운영 환경의 `tracesSampleRate`는 **0.1 (10%)**로 설정되어 있습니다. (개발 환경은 1.0)
-- Sentry는 내부적으로 이 10%의 데이터를 바탕으로 100% 분량의 트래픽 트렌드(RPM 등)를 자동으로 외삽(Extrapolate)하여 보여주므로, 샘플링 비율을 줄이더라도 전체 규모 추이 파악에는 지장이 없습니다.
+**핵심 설계 원칙:**
+- 에러 이벤트 한 개를 클릭하면, HTTP 요청 진입 시점부터 에러 발생 지점까지의 모든 서비스 호출 흐름을 **Breadcrumbs 탭 타임라인**에서 바로 확인할 수 있습니다.
+- CloudWatch를 직접 뒤지지 않아도, Sentry 이벤트 하나로 전체 audit trail을 재현합니다.
+- Discord 채널 알림으로 팀 전원이 에러 발생 즉시 인지하고 Sentry 링크로 바로 이동합니다.
 
 ---
 
-## 8. Sentry 전송 데이터 명세 (What We Send)
+## 2. 수집 대상 (Capture Scope)
 
-> **관련 코드**: `src/app/middlewares/error.ts` — `errorHandler` 함수
-> **관련 문서**: [ERRORS.md 섹션 4](./ERRORS.md#4-중앙-에러-핸들러와-sentry-연동)
+### 2.1. HTTP API (BE 서버)
 
-### 8.1. 전송 조건 및 단일 책임 원칙
-
-| 항목 | 내용 |
-|---|---|
-| **전송 조건** | HTTP 상태 코드 500 이상 에러만 전송. 4xx는 CloudWatch 로그만 기록. |
-| **단일 전송 지점** | `src/app/middlewares/error.ts`의 `errorHandler`에서만 `captureException` 호출. |
-| **이중 전송 방지** | `setupSentryErrorHandler`의 `shouldHandleError: () => false`로 SDK 측 captureException 비활성화. |
-| **이유** | `captureException`의 반환값(event id)을 회수하려면 직접 호출해야 하며, SDK error handler는 event id를 외부로 노출하지 않음. |
-
-### 8.2. Tags (Sentry 검색·필터·집계 가능 — cardinality 엄격 관리)
-
-Tags는 Sentry에서 인덱싱되어 Issues 목록과 검색에 활용됩니다. **값의 종류가 적어야** 합니다.
-
-| Tag Key | 타입 | 예시 값 | Cardinality | 용도 |
-|---|---|---|---|---|
-| `error_code` | string | `UPSTREAM_ERROR` | ~10개 고정 | Issues 필터링 핵심. 에러 종류별 집계. |
-| `http_status` | string | `502` | ~5개 (5xx) | 상태 코드별 분류 및 집계. |
-| `retryable` | string | `true` | 2개 고정 | 대응 방식 즉시 판단. |
-| `correlation_id` | string | `a1b2c3d4-...` | 요청별 고유 | **CloudWatch ↔ Sentry 역추적 핵심 키.** |
-| `route_pattern` | string | `/v1/ai/conversations/:conversationId` | 라우트 수(수십 개) | API 엔드포인트별 에러율 비교. |
-
-**cardinality 규칙**:
-- `req.route.path`가 존재하면 반드시 사용. Express가 `:paramName` 형태로 파라미터를 보존하므로 UUID/ObjectId가 포함되지 않음.
-- `req.originalUrl`은 절대 tag에 직접 사용 금지. 실제 UUID/ObjectId/숫자가 포함되어 cardinality 폭증.
-- `req.route`가 없는 edge case(전역 미들웨어 5xx)는 `extractRoutePattern()` 함수의 fallback이 UUID/ObjectId/ULID/숫자 segment를 `:id`로 마스킹.
-
-### 8.3. Context: `error_details` (이벤트 상세 화면 "Additional Data" 탭)
-
-Context는 인덱싱되지 않으며 상세 디버깅 용도입니다.
-
-| 필드 | 타입 | 예시 값 | 설명 |
+| 조건 | Sentry 전송 방식 | 레벨 | Discord 알림 |
 |---|---|---|---|
-| `code` | string | `UPSTREAM_ERROR` | AppError.code |
-| `message` | string | `ChatService.deleteAll... failed` | AppError.message |
-| `path` | string | `/v1/ai/conversations/01HZ...` | 실제 요청 URL (파라미터 실제값 포함) |
-| `status` | number | `502` | HTTP 상태 코드 |
-| `retryable` | boolean | `true` | 재시도 가능 여부 (boolean 타입) |
-| `correlationId` | string | `a1b2c3d4-...` | CloudWatch 연결용 추적 ID |
-| `cause` | string (max 500자) | `MongoServerError: -31800...` | `e.details.cause` 발췌 |
-| `details` | object | `{ cause: "..." }` | `AppError.details` 전체 (2KB 초과 시 키 목록) |
+| HTTP 5xx 에러 | `captureException` | `error` | ✅ `DISCORD_WEBHOOK_URL_ERRORS` |
+| HTTP 4xx 에러 | CloudWatch 로그만 | — | ❌ |
 
-### 8.4. 민감 정보 보호 (beforeSend — `src/shared/utils/sentry.ts`)
+**단일 전송 지점**: `src/app/middlewares/error.ts`의 `errorHandler`만 `captureException`을 호출합니다. `setupSentryErrorHandler`는 span 마킹 전용(`shouldHandleError: () => false`).
 
-`beforeSend` 훅에서 전송 직전 추가 정제를 수행합니다.
+### 2.2. Worker (SQS Consumer)
+
+| 조건 | Sentry 전송 방식 | 레벨 | Discord 알림 |
+|---|---|---|---|
+| AI 서버 → `status: 'FAILED'` 응답 | `captureMessage` | `warning` | ✅ `DISCORD_WEBHOOK_URL_GRAPH` |
+| BE 내부 예외 (throw) | `captureException` | `error` | ❌ (Sentry만) |
+| JSON 파싱 실패 등 진입 전 에러 | `captureException` | `error` | ❌ (Sentry만) |
+| SQS Consumer 자체 오류 | `captureException` | `error` | ❌ (Sentry만) |
+
+**적용 핸들러**: `GraphGenerationResultHandler`, `GraphSummaryResultHandler`, `AddNodeResultHandler`, `MicroscopeIngestResultHandler`
+
+> `captureMessage` vs `captureException` 구분 이유:
+> AI 서버 FAILED는 예외 객체가 아닌 정상 메시지 수신이므로 `captureMessage`(warning)로 전송합니다.
+> 이렇게 하면 Sentry Issues에서 Exception과 명확히 구분되고, 동일 에러 반복 시 그룹핑도 됩니다.
+
+---
+
+## 3. Breadcrumb Trail 설계 — 에러까지의 전체 흐름
+
+### 3.1. 원리
+
+Sentry v8의 `expressIntegration()`은 **AsyncLocalStorage**로 요청별 scope를 격리합니다.
+요청 A의 실행 체인 안에서 호출된 `Sentry.addBreadcrumb()`는 요청 A의 scope에만 쌓이며,
+`captureException()`이 호출될 때 해당 scope의 breadcrumb이 이벤트에 포함됩니다.
+**동시 요청 1,000개가 와도 breadcrumb이 섞이지 않습니다.**
+
+Worker에서는 `Sentry.withIsolationScope()`가 메시지별로 scope를 격리합니다.
+
+### 3.2. Breadcrumb 주입 지점
+
+```
+[HTTP 요청 진입]
+  request-context.ts
+    → http.request.start  (type: 'http', level: 'info')
+       fields: method, url, correlationId, userId
+
+[서비스 계층 — auditProxy.ts가 모든 서비스 메서드를 가로챔]
+  audit.call     (type: 'default', level: 'info')
+    → ServiceName.methodName 호출, 인자 요약
+  audit.success  (type: 'default', level: 'info')
+    → ServiceName.methodName 완료, 소요시간(ms), 결과 요약
+  audit.error    (type: 'error',   level: 'error')
+    → ServiceName.methodName 실패, 소요시간(ms), 에러 코드/메시지
+
+[Worker 메시지 처리]
+  index.ts: Sentry.withIsolationScope — 메시지별 scope 격리
+  handler: worker.ai_failed (type: 'error', level: 'warning')
+    → AI 서버 FAILED 응답 수신 시점 기록
+
+[에러 발생]
+  errorHandler → captureException  (HTTP 500)
+  handler FAILED → captureMessage  (Worker AI FAILED)
+```
+
+### 3.3. Sentry 화면에서 Breadcrumb Trail 확인 방법
+
+1. **이슈 목록** → 에러 이벤트 클릭
+2. 이벤트 상세 페이지 → **"Breadcrumbs"** 탭 선택
+3. 타임라인 아래쪽(가장 최근)이 에러 발생 지점, 위쪽이 요청 시작점
+4. 각 breadcrumb의 `category` 필드로 흐름 구분:
+
+| category | 의미 |
+|---|---|
+| `http.request.start` | HTTP 요청 진입 (URL, 메서드, correlationId) |
+| `audit.call` | 서비스 메서드 호출 (인자 요약 포함) |
+| `audit.success` | 서비스 메서드 성공 (소요시간 포함) |
+| `audit.error` | 서비스 메서드 실패 (에러 코드 포함) |
+| `worker.ai_failed` | Worker에서 AI 서버 FAILED 수신 |
+
+**읽는 순서 예시 (그래프 생성 500 에러):**
+```
+[info]  http.request.start       POST /v1/graph-ai/generate
+[info]  audit.call               GraphAiService.requestGraphGeneration
+[info]  audit.success            GraphAiService.requestGraphGeneration (45ms)
+[info]  audit.call               GraphEmbeddingService.persistSnapshot
+[error] audit.error              GraphEmbeddingService.persistSnapshot FAILED (201ms) — UPSTREAM_ERROR
+  ↑ 에러 발생 지점
+```
+
+---
+
+## 4. 초기화 구조
+
+### 4.1. API 서버 (`src/index.ts` → `src/bootstrap/server.ts`)
+
+```typescript
+// src/index.ts — 최상단에서 먼저 호출 (express import 이전)
+import { initSentry } from './shared/utils/sentry';
+initSentry();
+```
+
+```
+requestContext (correlationId 생성 + http.request.start breadcrumb)
+  → posthogAuditMiddleware
+  → httpLogger (pino-http)
+  → 라우터들
+  → setupSentryErrorHandler(app)   ← span 마킹 전용
+  → errorHandler                   ← captureException 단일 지점 + Discord 알림
+```
+
+### 4.2. Worker (`src/workers/index.ts`)
+
+```typescript
+// startWorker() 최상단
+initSentry();
+
+// handleMessage 내부
+Sentry.withIsolationScope(async (isolationScope) => {
+  isolationScope.setTag('task_type', taskType);
+  isolationScope.setUser({ id: userId });
+
+  return Sentry.startSpan({ name: `SQS Worker: ${taskType}`, op: 'queue.process' }, async () => {
+    await handler.handle(body, container);
+    // handler 내부에서 addBreadcrumb → FAILED 시 captureMessage
+  });
+});
+```
+
+---
+
+## 5. 민감 정보 보호 (Data Scrubbing)
+
+`src/shared/utils/sentry.ts`의 `beforeSend` 훅에서 전송 직전 처리합니다.
 
 | 대상 | 처리 방식 |
 |---|---|
 | `request.headers.authorization` | 완전 삭제 |
 | `request.headers.cookie` | 완전 삭제 |
-| `error_details.cause` | 500자 초과 시 truncation (`…(truncated)` 접미사) |
-| `error_details.details` | JSON 직렬화 2KB 초과 시 `{ _truncated: true, keys: [...] }`로 대체 |
+| `error_details.cause` | 500자 초과 시 truncation |
+| `error_details.details` | JSON 2KB 초과 시 키 목록만 보존 |
+| Breadcrumb `args` 필드 | `summarizeArgs()`로 요약 (배열→길이, 객체→키 목록 10개) |
+| Breadcrumb 민감 키 | `auditProxy` 내 `maskValue()`가 password/token/secret 등 마스킹 |
 
-`cause`와 `details`는 errorHandler에서 1차 제한 후 beforeSend에서 2차 보호합니다.
+---
+
+## 6. 전송 데이터 명세
+
+### 6.1. Tags (Sentry Issues 필터·검색 가능)
+
+| Tag Key | 예시 | 적용 조건 | 용도 |
+|---|---|---|---|
+| `error_code` | `UPSTREAM_ERROR` | HTTP 500 | 에러 종류별 집계 |
+| `http_status` | `502` | HTTP 500 | 상태 코드별 분류 |
+| `retryable` | `true` | HTTP 500 | 재시도 가능 여부 즉시 판단 |
+| `correlation_id` | `a1b2-...` | HTTP 500 + Worker | CloudWatch 역추적 핵심 키 |
+| `route_pattern` | `/v1/graph/:id` | HTTP 500 | 엔드포인트별 에러율 |
+| `task_type` | `GRAPH_GENERATION_RESULT` | Worker | Worker 작업 종류별 분류 |
+| `failure_source` | `ai_server` | Worker FAILED | AI 서버 vs BE 내부 구분 |
+
+### 6.2. Context: `error_details` (이벤트 Additional Data 탭)
+
+| 필드 | HTTP 500 | Worker FAILED |
+|---|---|---|
+| `code` | AppError.code | — |
+| `message` | AppError.message | — |
+| `correlationId` | req.id | — |
+| `path` | req.originalUrl | — |
+| `cause` | err.details.cause (max 500자) | — |
+| `taskId` | — | SQS taskId |
+| `userId` | — | payload userId |
+| `errorMsg` | — | AI 에러 메시지 |
+
+---
+
+## 7. 성능 모니터링
+
+| 항목 | 설명 |
+|---|---|
+| `tracesSampleRate` | production: 0.1 (10%), development: 1.0 |
+| `profilesSampleRate` | 1.0 |
+| Worker span | `Sentry.startSpan({ name: 'SQS Worker: {taskType}', op: 'queue.process' })` |
+| Express span | `expressIntegration()`이 미들웨어/라우터 자동 계측 |
+
+Performance 탭 → RPM, Failure Rate, p95/p99 Duration, Apdex 확인.
+
+---
+
+## 8. Discord 연동 (에러 알림)
+
+### 8.1. 환경 변수
+
+| 변수 | 용도 | 설정 위치 |
+|---|---|---|
+| `DISCORD_WEBHOOK_URL_ERRORS` | BE HTTP 500 에러 알림 채널 | ECS task-definition.json `environment` |
+| `DISCORD_WEBHOOK_URL_GRAPH` | Graph Worker FAILED 알림 채널 | ECS worker-task-definition.json `environment` |
+| `SENTRY_ORG_SLUG` | Sentry 링크 생성용 조직 슬러그 | ECS 양쪽 task definition `environment` |
+
+**Discord Webhook URL 생성 방법:**
+Discord 서버 → 채널 우클릭 → 채널 편집 → 연동 → 웹훅 → 새 웹훅 생성 → URL 복사
+
+**SENTRY_ORG_SLUG 확인 방법:**
+Sentry 대시보드 URL → `https://sentry.io/organizations/{여기가 org-slug}/`
+
+> **보안 참고**: Discord Webhook URL은 채널에 메시지를 보낼 수 있는 권한을 포함합니다. ECS `environment` 섹션에 평문으로 저장되지만, Fargate Task의 IAM Role로 보호됩니다. 보안을 강화하려면 추후 `secrets` 섹션(AWS Secrets Manager)으로 이동하는 것을 권장합니다.
+
+### 8.2. 알림 형식
+
+**BE HTTP 500 (에러 채널)**:
+```
+🚨 [BE] 500 Internal Server Error
+경로: POST /v1/graph-ai/generate
+에러 코드: UPSTREAM_ERROR
+correlationId: a1b2c3d4-...
+사용자 ID: user_01HX...
+📋 Sentry: [Breadcrumb Trail 포함 이벤트 보기](링크)
+```
+
+**Worker FAILED (Graph 채널)**:
+```
+⚠️ [Worker] GRAPH_GENERATION_RESULT → AI FAILED
+Task Type: GRAPH_GENERATION_RESULT
+사용자 ID: user_01HX...
+taskId (CW 추적 키): task-01HX...
+에러 내용: sourceType unresolved...
+📋 Sentry: [Breadcrumb Trail 포함 이벤트 보기](링크)
+```
+
+### 8.3. 알림 트리거 흐름
+
+```
+HTTP 500 발생
+  → errorHandler: captureException → sentryEventId 획득
+  → CloudWatch 로그 기록 (sentryEventId 포함)
+  → Discord 알림 전송 (fire-and-forget)
+     → 링크 클릭 → Sentry 이벤트 → Breadcrumbs 탭 → 전체 audit trail 확인
+
+Worker FAILED 수신
+  → handler: Sentry.addBreadcrumb (worker.ai_failed)
+  → captureMessage → sentryEventId 획득
+  → Discord 알림 전송 (fire-and-forget)
+     → 링크 클릭 → Sentry 이벤트 → Breadcrumbs 탭 확인
+     → taskId로 CloudWatch Worker 로그 검색 가능
+```
 
 ---
 
 ## 9. CloudWatch ↔ Sentry 상호 탐색 가이드
 
-5xx 에러 발생 시 CloudWatch와 Sentry 양방향 탐색이 가능합니다.
-
-### 9.1. CloudWatch 로그 필드 구조 (5xx 에러)
+### 9.1. CloudWatch 로그 구조 (5xx 에러)
 
 ```json
 {
@@ -197,40 +275,61 @@ Context는 인덱싱되지 않으며 상세 디버깅 용도입니다.
 }
 ```
 
-- `sentryEventId`: **5xx 에러에만 포함.** 4xx 에러 로그에는 이 필드가 존재하지 않음.
-- `correlationId`: 모든 에러 로그에 포함.
+### 9.2. CloudWatch → Sentry
 
-### 9.2. CloudWatch → Sentry 탐색
+1. 로그의 `sentryEventId` 복사
+2. Sentry 대시보드 → 우상단 검색창에 입력
+3. 이벤트 상세 → **Breadcrumbs 탭** → 전체 타임라인 확인
 
-CloudWatch Insights에서 에러 로그를 발견했을 때:
+### 9.3. Sentry → CloudWatch
 
-1. 로그의 `sentryEventId` 값 복사
-2. Sentry 대시보드 → 우상단 검색창에 event id 직접 입력
-3. 해당 이벤트의 tags, context(`error_details`), stack trace, breadcrumbs 확인
-
-### 9.3. Sentry → CloudWatch 탐색
-
-Sentry 이벤트에서 주변 로그를 확인하고 싶을 때:
-
-1. Sentry 이벤트 상세 → **Tags 탭** → `correlation_id` 값 복사
-2. CloudWatch Logs Insights에서 아래 쿼리 실행:
+1. Sentry 이벤트 → Tags 탭 → `correlation_id` 복사
+2. CloudWatch Logs Insights 쿼리:
 
 ```sql
-fields @timestamp, msg, sentryEventId, code, status, path
+fields @timestamp, msg, event, service, method, durationMs, code, status
 | filter correlationId = "a1b2c3d4-e5f6-..."
 | sort @timestamp asc
 ```
 
-3. 해당 요청의 전체 로그 타임라인 추적 (요청 시작 → 에러 → 응답)
+### 9.4. Discord → Sentry (가장 빠른 경로)
 
-### 9.4. CloudWatch Insights: 5xx 에러만 필터링
+1. Discord 채널에서 에러 알림 수신
+2. **"Breadcrumb Trail 포함 이벤트 보기"** 링크 클릭
+3. Sentry 이벤트 직접 이동 → Breadcrumbs 탭에서 전체 흐름 확인
+
+### 9.5. Worker 에러 → CloudWatch 로그 검색
+
+Worker FAILED 알림의 `taskId`는 `correlationId`와 동일 역할을 합니다.
 
 ```sql
-fields @timestamp, correlationId, sentryEventId, code, status, path
-| filter ispresent(sentryEventId)
-| sort @timestamp desc
-| limit 50
+-- Worker 로그 그룹: /ecs/taco-5-graphnode-worker
+fields @timestamp, msg, event, service, method, taskId, userId, status
+| filter correlationId = "task-01HX..."
+| sort @timestamp asc
 ```
 
-`sentryEventId` 필드가 존재하는 로그 = Sentry로 전송된 5xx 에러 로그입니다.
+---
 
+## 10. 쿼터 관리 (Sentry 무료 플랜: 5,000건/월)
+
+| 에러 유형 | 전송 방식 | 예상 월간 건수 |
+|---|---|---|
+| HTTP 500 | captureException | ~50~200건 |
+| Worker AI FAILED (Graph 관련 3종) | captureMessage (warning) | ~20~100건 |
+| Worker 내부 예외 | captureException | ~10~30건 |
+| HTTP 4xx | **미전송** | 0 |
+| **합계** | | **~100~330건** |
+
+베타 테스트 규모에서 5,000건 쿼터는 충분합니다.
+쿼터 소진 위험 시 Sentry 대시보드 → Settings → Quotas에서 일일 한도 설정 가능.
+
+---
+
+## 11. 참고 자료
+
+- [Sentry Node.js SDK](https://docs.sentry.io/platforms/node/)
+- [Sentry Express Integration](https://docs.sentry.io/platforms/node/guides/express/)
+- [Sentry Breadcrumbs API](https://docs.sentry.io/platforms/node/enriching-events/breadcrumbs/)
+- [Discord Webhook API](https://discord.com/developers/docs/resources/webhook)
+- 관련 소스: `src/shared/utils/discord.ts`, `src/shared/utils/sentry.ts`, `src/app/middlewares/error.ts`, `src/shared/audit/auditProxy.ts`

@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
+import * as Sentry from '@sentry/node';
 
 import { requestStore } from '../../shared/context/requestStore';
 
@@ -41,6 +42,25 @@ export function requestContext(req: Request, _res: Response, next: NextFunction)
     userAgent: req.get('user-agent') ?? undefined,
   };
 
-  // 3. 컨텍스트 실행: next()를 run()의 콜백으로 실행하여, 이후 체인에서 store에 접근 가능하게 함
+  // 3. Sentry Breadcrumb Trail 시작점: HTTP 요청 진입 시 첫 번째 breadcrumb을 기록합니다.
+  //    expressIntegration이 AsyncLocalStorage로 요청별 scope를 격리하므로,
+  //    이 breadcrumb은 동일 요청에서 발생한 captureException/captureMessage에만 포함됩니다.
+  //    에러 발생 시 Sentry 이벤트의 Breadcrumbs 탭에서 이 지점부터 타임라인을 확인할 수 있습니다.
+  try {
+    Sentry.addBreadcrumb({
+      type: 'http',
+      category: 'http.request.start',
+      message: `${req.method} ${req.path}`,
+      data: {
+        method: req.method,
+        url: req.originalUrl,
+        correlationId,
+        userId: req.userId,
+      },
+      level: 'info',
+    });
+  } catch (_) {}
+
+  // 4. 컨텍스트 실행: next()를 run()의 콜백으로 실행하여, 이후 체인에서 store에 접근 가능하게 함
   requestStore.run(ctx, () => next());
 }

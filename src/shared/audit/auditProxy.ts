@@ -8,6 +8,8 @@
  * - 메서드 실행 시간(Duration)을 측정하여 성능 모니터링을 돕습니다.
  */
 
+import * as Sentry from '@sentry/node';
+
 import { logger } from '../utils/logger';
 import { requestStore, RequestContext } from '../context/requestStore';
 import { getPostHogClient } from '../utils/posthog';
@@ -122,6 +124,19 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
           try {
             logger.info({ event: 'audit.call', ...meta, args: summarizeArgs(args) }, 'audit.call');
           } catch (_) {}
+
+          // Sentry Breadcrumb: 에러 발생 시 "어떤 서비스 메서드가 호출됐는지" 타임라인에 포함됩니다.
+          // expressIntegration/withIsolationScope가 AsyncLocalStorage로 요청별 scope를 격리하므로
+          // 다른 동시 요청의 breadcrumb과 섞이지 않습니다.
+          try {
+            Sentry.addBreadcrumb({
+              type: 'default',
+              category: 'audit.call',
+              message: `${meta.service}.${meta.method}`,
+              data: { args: summarizeArgs(args), correlationId: meta.correlationId },
+              level: 'info',
+            });
+          } catch (_) {}
         }
 
 
@@ -147,8 +162,17 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
                       'audit.success'
                     );
                   } catch (_) {}
-                }
 
+                  try {
+                    Sentry.addBreadcrumb({
+                      type: 'default',
+                      category: 'audit.success',
+                      message: `${meta.service}.${meta.method} (${durationMs}ms)`,
+                      data: { durationMs, result: summarizeResult(res) },
+                      level: 'info',
+                    });
+                  } catch (_) {}
+                }
 
                 return res;
               })
@@ -167,6 +191,20 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
                   );
                 } catch (_) {}
 
+                // Sentry Breadcrumb: 에러 레벨로 기록 — 에러 직전까지의 서비스 실패 지점을 명확히 보여줍니다.
+                try {
+                  Sentry.addBreadcrumb({
+                    type: 'error',
+                    category: 'audit.error',
+                    message: `${meta.service}.${meta.method} FAILED (${durationMs}ms)`,
+                    data: {
+                      durationMs,
+                      errorMessage: err instanceof Error ? err.message : String(err),
+                      errorCode: (err as any)?.code,
+                    },
+                    level: 'error',
+                  });
+                } catch (_) {}
 
                 throw err;
               });
@@ -186,8 +224,17 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
                 'audit.success'
               );
             } catch (_) {}
-          }
 
+            try {
+              Sentry.addBreadcrumb({
+                type: 'default',
+                category: 'audit.success',
+                message: `${meta.service}.${meta.method} (${durationMs}ms)`,
+                data: { durationMs, result: summarizeResult(result) },
+                level: 'info',
+              });
+            } catch (_) {}
+          }
 
           return result;
         } catch (err: any) {
@@ -205,6 +252,19 @@ export function createAuditProxy<T extends object>(instance: T, serviceName?: st
             );
           } catch (_) {}
 
+          try {
+            Sentry.addBreadcrumb({
+              type: 'error',
+              category: 'audit.error',
+              message: `${meta.service}.${meta.method} FAILED (${durationMs}ms)`,
+              data: {
+                durationMs,
+                errorMessage: err instanceof Error ? err.message : String(err),
+                errorCode: (err as any)?.code,
+              },
+              level: 'error',
+            });
+          } catch (_) {}
 
           throw err;
         }

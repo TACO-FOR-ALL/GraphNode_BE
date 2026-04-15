@@ -102,6 +102,14 @@ const EnvSchema = z.object({
 
   //Sentry
   SENTRY_DSN: z.string().min(1, 'SENTRY_DSN required'),
+  // Sentry 조직 슬러그 (Discord 알림 내 Sentry 링크 생성에 사용)
+  // 확인 방법: Sentry 대시보드 URL → https://sentry.io/organizations/{SENTRY_ORG_SLUG}/
+  SENTRY_ORG_SLUG: z.string().optional(),
+
+  // Discord 웹훅 알림 설정 (미설정 시 알림 비활성화 — 운영 권장)
+  // 채널별 웹훅 URL: Discord 채널 설정 → 연동 → 웹훅 → 새 웹훅 생성
+  DISCORD_WEBHOOK_URL_ERRORS: z.string().optional(), // BE HTTP 500 에러 알림 채널
+  DISCORD_WEBHOOK_URL_GRAPH: z.string().optional(),  // Graph Worker FAILED 알림 채널
 
   //PostHog
   POSTHOG_API_KEY: z.string().min(1, 'POSTHOG_API_KEY required'),
