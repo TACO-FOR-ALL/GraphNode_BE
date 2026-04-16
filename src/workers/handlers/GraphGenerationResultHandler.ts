@@ -1,5 +1,6 @@
 import { Readable } from 'stream';
 import { ulid } from 'ulid';
+import * as Sentry from '@sentry/node';
 
 import { JobHandler } from './JobHandler';
 import type { Container } from '../../bootstrap/container';
@@ -18,6 +19,7 @@ import { NotificationType } from '../notificationType';
 import { withRetry } from '../../shared/utils/retry';
 import { redis } from '../../infra/redis/client';
 import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
+import { notifyWorkerFailed } from '../../shared/utils/discord';
 import { normalizeAiOrigId } from '../../shared/utils/aiNodeId';
 import {
   BatchResolvedSourceTypeResult,
@@ -61,10 +63,43 @@ export class GraphGenerationResultHandler implements JobHandler {
     const noteService = container.getNoteService();
 
     try {
-      // 그래프 생성 실패 처리
+      // 그래프 생성 실패 처리 (AI 서버 응답 FAILED)
       if (status === 'FAILED') {
         const errorMsg = error || 'Unknown error from AI server';
         logger.warn({ taskId, userId, error: errorMsg }, 'Graph generation failed');
+
+        // Sentry Breadcrumb: Worker가 AI 서버로부터 FAILED 응답을 받은 시점을 기록합니다.
+        // withIsolationScope(index.ts)가 이 작업의 scope를 격리하므로 다른 요청과 섞이지 않습니다.
+        Sentry.addBreadcrumb({
+          type: 'error',
+          category: 'worker.ai_failed',
+          message: `GRAPH_GENERATION_RESULT: AI 서버 FAILED 응답 수신`,
+          data: { taskId, userId, errorMsg },
+          level: 'warning',
+        });
+
+        // Sentry 캡처: AI 서버 실패는 예외(exception)가 아닌 경고 메시지로 전송해 쿼터 절약
+        // captureMessage는 captureException과 동일하게 breadcrumb trail을 포함합니다.
+        const sentryEventId = Sentry.withScope((scope) => {
+          scope.setLevel('warning');
+          scope.setTag('task_type', 'GRAPH_GENERATION_RESULT');
+          scope.setTag('failure_source', 'ai_server');
+          scope.setTag('correlation_id', taskId);
+          scope.setContext('worker_failure', { taskId, userId, errorMsg });
+          return Sentry.captureMessage(
+            `[Worker FAILED] GRAPH_GENERATION_RESULT: ${errorMsg}`,
+            'warning'
+          );
+        });
+
+        // Discord 알림: Graph 채널에 즉시 알림 (fire-and-forget)
+        void notifyWorkerFailed({
+          taskType: 'GRAPH_GENERATION_RESULT',
+          taskId,
+          userId,
+          errorMessage: errorMsg,
+          sentryEventId,
+        }).catch(() => {});
 
         const stats = await graphService.getStats(userId);
         if (stats) {

@@ -22,6 +22,7 @@ export { AiApi } from './endpoints/ai.js';
 export { NotificationApi } from './endpoints/notification.js';
 export { FileApi } from './endpoints/file.js';
 export { MicroscopeApi } from './endpoints/microscope.js';
+export { FeedbackApi } from './endpoints/feedback.js';
 
 // Types
 export type { ProblemDetails } from './types/problem.js';
@@ -90,20 +91,54 @@ export {
 export type {
   NotificationTypeValue,
   NotificationEvent,
+  TypedNotificationEventBase,
+  TypedNotificationEvent,
+  NotificationEventByType,
+  NotificationPayloadMap,
   BaseNotificationPayload,
   GraphGenerationRequestedPayload,
   GraphGenerationRequestFailedPayload,
   GraphGenerationCompletedPayload,
   GraphGenerationFailedPayload,
+  GraphGenerationProgressPayload,
+  GraphSummaryRequestedPayload,
+  GraphSummaryRequestFailedPayload,
   GraphSummaryCompletedPayload,
   GraphSummaryFailedPayload,
+  AddConversationRequestedPayload,
+  AddConversationRequestFailedPayload,
   AddConversationCompletedPayload,
   AddConversationFailedPayload,
+  MicroscopeIngestRequestedPayload,
+  MicroscopeIngestRequestFailedPayload,
   MicroscopeDocumentCompletedPayload,
   MicroscopeDocumentFailedPayload,
   MicroscopeWorkspaceCompletedPayload,
+  GraphGenerationRequestedNotificationEvent,
+  GraphGenerationRequestFailedNotificationEvent,
+  GraphGenerationCompletedNotificationEvent,
+  GraphGenerationFailedNotificationEvent,
+  GraphGenerationProgressNotificationEvent,
+  GraphSummaryRequestedNotificationEvent,
+  GraphSummaryRequestFailedNotificationEvent,
+  GraphSummaryCompletedNotificationEvent,
+  GraphSummaryFailedNotificationEvent,
+  AddConversationRequestedNotificationEvent,
+  AddConversationRequestFailedNotificationEvent,
+  AddConversationCompletedNotificationEvent,
+  AddConversationFailedNotificationEvent,
+  MicroscopeIngestRequestedNotificationEvent,
+  MicroscopeIngestRequestFailedNotificationEvent,
+  MicroscopeDocumentCompletedNotificationEvent,
+  MicroscopeDocumentFailedNotificationEvent,
+  MicroscopeWorkspaceCompletedNotificationEvent,
 } from './types/notification.js';
 export type { GraphGenerationResponseDto, GenerateGraphOptions } from './types/graphAi.js';
+export type {
+  CreateFeedbackRequestDto,
+  CreateFeedbackResponseDto,
+  FeedbackDto,
+} from './types/feedback.js';
 export type {
   AiInputData,
   AiInputMappingNode,

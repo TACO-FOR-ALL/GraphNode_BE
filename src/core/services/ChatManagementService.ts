@@ -308,6 +308,8 @@ export class ChatManagementService {
 
   /**
    * ID로 대화를 조회합니다. (메시지 포함)
+   * @param id : 대화 Id
+   * @param userId 사용자 Id
    */
   async getConversation(id: string, ownerUserId: string): Promise<ChatThread> {
     try {

@@ -32,11 +32,13 @@ import { makeNotificationRouter } from './modules/notification.module';
 import { makeFileRouter } from './modules/file.module';
 import { makeMicroscopeRouter } from './modules/microscope.module';
 import { makeSearchRouter } from './modules/search.module';
+import { makeFeedbackRouter } from './modules/feedback.module';
 import { CleanupCron } from '../infra/cron/CleanupCron';
 // import { createTestAgentRouter } from '../app/routes/agent.test';
 
 import { setupSentryErrorHandler } from '../shared/utils/sentry';
 import { NotFoundError } from '../shared/errors/domain';
+import devTestRouter from '../app/routes/DevTestRouter';
 
 /**
  * Express 앱 부트스트랩.
@@ -67,6 +69,9 @@ export function createApp() {
   // Health endpoints: available at /healthz and /v1/healthz
   app.use('/', healthRouter);
 
+  // 개발 환경 전용 테스트 라우터 (NODE_ENV=production 시 내부에서 404 차단)
+  app.use('/dev/test', devTestRouter);
+
   // AI 라우터(조립된 Router 장착)
   app.use('/v1/ai', makeAiRouter());
 
@@ -88,6 +93,9 @@ export function createApp() {
 
   // Search Router
   app.use('/v1/search', makeSearchRouter());
+
+  // Feedback Router
+  app.use('/v1/feedback', makeFeedbackRouter());
 
   // Notification Router (SSE)
   app.use('/v1/notifications', makeNotificationRouter());

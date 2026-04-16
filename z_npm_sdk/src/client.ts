@@ -14,6 +14,7 @@ import { NotificationApi } from './endpoints/notification.js';
 import { FileApi } from './endpoints/file.js';
 import { MicroscopeApi } from './endpoints/microscope.js';
 import { SearchApi } from './endpoints/search.js';
+import { FeedbackApi } from './endpoints/feedback.js';
 
 /**
  * GraphNode 클라이언트 옵션
@@ -59,6 +60,7 @@ export class GraphNodeClient {
   readonly file: FileApi;
   readonly microscope: MicroscopeApi;
   readonly search: SearchApi;
+  readonly feedback: FeedbackApi;
 
   /**
    * HTTP 요청 빌더 인스턴스.
@@ -128,6 +130,7 @@ export class GraphNodeClient {
     this.file = new FileApi(this.rb);
     this.microscope = new MicroscopeApi(this.rb);
     this.search = new SearchApi(this.rb);
+    this.feedback = new FeedbackApi(this.rb);
   }
 
   /**

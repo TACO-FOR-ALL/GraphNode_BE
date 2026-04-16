@@ -1,53 +1,47 @@
-# 실시간 알림 이벤트 타입 (Notification & TaskType)
+# 알림 타입 문서 (Notification & TaskType)
 
-> **대상 독자:** GraphNode SDK를 사용하는 프론트엔드 개발자  
-> **핵심 질문에 대한 답변:** "서버로부터 어떤 알림이 오고, 그 데이터는 어떻게 생겼는가?"
+> **대상 독자:** GraphNode SDK를 사용하는 프론트엔드 개발자
+> **핵심 질문:** "어떤 notification 이벤트가 오고, 각 이벤트의 payload는 무엇이며, FE에서는 어떤 타입을 써야 하나?"
 
 ---
 
-## 개요: 두 가지 타입의 역할
+## 개요: 두 종류의 타입
 
-GraphNode 백엔드에는 두 가지 비동기 이벤트 식별자가 존재합니다.
+GraphNode 알림 시스템에는 역할이 다른 두 축의 타입이 있습니다.
 
-| 타입 | 위치 | 누가 씀 | 목적 |
+| 타입 | 위치 | 사용하는 쪽 | 의미 |
 | --- | --- | --- | --- |
-| **`TaskType`** | `types/notification` | 서버 내부 (SQS) | API ↔ AI Worker 간의 작업 메시지 분류자 |
-| **`NotificationType`** | `types/notification` | FE ← 서버 (SSE) | FE에 실시간으로 Push되는 이벤트 이름 |
+| `TaskType` | `types/notification` | 서버, 워커, 큐 | API와 Worker 사이에서 주고받는 작업 식별자 |
+| `NotificationType` | `types/notification` | 프론트엔드 | SSE/WebSocket으로 FE에 전달되는 알림 이벤트 종류 |
 
-**FE 개발자가 직접 사용하는 것은 `NotificationType`** 입니다.  
-`TaskType`은 SDK에 정의되어 있으나, 주로 어떤 작업이 어떤 알림을 발생시키는지 이해하기 위한 참조용입니다.
+FE에서는 일반적으로 `NotificationType`과 notification event 타입만 사용하면 됩니다.
 
 ---
 
-## 아키텍처 플로우
+## 흐름
 
 ```mermaid
 sequenceDiagram
-    participant FE as 프론트엔드
-    participant API as API 서버
-    participant SQS as AWS SQS
+    participant FE as Frontend
+    participant API as API Server
+    participant SQS as Queue
     participant AI as AI Worker
 
-    FE->>API: REST 요청 (예: POST /graph-ai/generate)
-    API->>SQS: TaskType.GRAPH_GENERATION_REQUEST 발행
-    API-->>FE: SSE: GRAPH_GENERATION_REQUESTED
+    FE->>API: REST 요청
+    API->>SQS: TaskType 전송
+    API-->>FE: REQUESTED notification
 
-    SQS->>AI: 작업 메시지 전달
-    AI->>AI: 그래프 생성 처리
-    AI->>SQS: TaskType.GRAPH_GENERATION_RESULT 발행
+    SQS->>AI: 작업 전달
+    AI->>AI: 작업 수행
+    AI->>SQS: 결과 전달
 
-    SQS->>API: Worker가 결과 수신
-    API->>API: DB에 결과 반영
-    API-->>FE: SSE: GRAPH_GENERATION_COMPLETED (또는 FAILED)
-
-    FE->>FE: UI 갱신 (그래프 새로고침 등)
+    SQS->>API: 결과 수신
+    API-->>FE: COMPLETED / FAILED notification
 ```
 
 ---
 
-## TaskType 상세
-
-SQS 파이프라인의 내부 메시지 식별자입니다. FE는 직접 사용할 일이 거의 없지만, 어떤 작업이 어떤 알림을 유발하는지 이해하는 데 유용합니다.
+## TaskType
 
 ```typescript
 import { TaskType } from '@taco_tsinghua/graphnode-sdk';
@@ -55,193 +49,276 @@ import { TaskType } from '@taco_tsinghua/graphnode-sdk';
 
 | 값 | 방향 | 설명 |
 | --- | --- | --- |
-| `GRAPH_GENERATION_REQUEST` | API → AI | 전체 그래프 최초 생성 요청 |
-| `GRAPH_GENERATION_RESULT` | AI → Worker | 그래프 생성 결과 반환 |
-| `GRAPH_SUMMARY_REQUEST` | API → AI | 그래프 AI 요약 생성 요청 |
-| `GRAPH_SUMMARY_RESULT` | AI → Worker | 그래프 요약 결과 반환 |
-| `ADD_NODE_REQUEST` | API → AI | 새 대화를 기존 그래프에 추가 요청 |
-| `ADD_NODE_RESULT` | AI → Worker | AddNode 결과 반환 |
-| `MICROSCOPE_INGEST_FROM_NODE_REQUEST` | API → AI | Microscope 문서 분석 요청 |
-| `MICROSCOPE_INGEST_FROM_NODE_RESULT` | AI → Worker | Microscope 분석 결과 반환 |
+| `GRAPH_GENERATION_REQUEST` | API -> AI | 그래프 생성 요청 |
+| `GRAPH_GENERATION_RESULT` | AI -> API | 그래프 생성 결과 |
+| `GRAPH_SUMMARY_REQUEST` | API -> AI | 그래프 요약 요청 |
+| `GRAPH_SUMMARY_RESULT` | AI -> API | 그래프 요약 결과 |
+| `ADD_NODE_REQUEST` | API -> AI | 새 대화를 그래프에 반영하는 요청 |
+| `ADD_NODE_RESULT` | AI -> API | Add node 결과 |
+| `MICROSCOPE_INGEST_FROM_NODE_REQUEST` | API -> AI | Microscope ingest 요청 |
+| `MICROSCOPE_INGEST_FROM_NODE_RESULT` | AI -> API | Microscope ingest 결과 |
 
-### TaskType과 NotificationType 매핑
+### TaskType와 NotificationType의 관계
 
 ```text
-TaskType.GRAPH_GENERATION_REQUEST 발행 시
-  → (즉시)  NotificationType.GRAPH_GENERATION_REQUESTED
-  → (완료)  NotificationType.GRAPH_GENERATION_COMPLETED
-  → (실패)  NotificationType.GRAPH_GENERATION_FAILED
+GRAPH_GENERATION_REQUEST
+  -> GRAPH_GENERATION_REQUESTED
+  -> GRAPH_GENERATION_PROGRESS_RESULT
+  -> GRAPH_GENERATION_COMPLETED | GRAPH_GENERATION_FAILED
 
-TaskType.GRAPH_SUMMARY_REQUEST 발행 시
-  → (즉시)  NotificationType.GRAPH_SUMMARY_REQUESTED
-  → (완료)  NotificationType.GRAPH_SUMMARY_COMPLETED
-  → (실패)  NotificationType.GRAPH_SUMMARY_FAILED
+GRAPH_SUMMARY_REQUEST
+  -> GRAPH_SUMMARY_REQUESTED
+  -> GRAPH_SUMMARY_COMPLETED | GRAPH_SUMMARY_FAILED
 
-TaskType.ADD_NODE_REQUEST 발행 시
-  → (즉시)  NotificationType.ADD_CONVERSATION_REQUESTED
-  → (완료)  NotificationType.ADD_CONVERSATION_COMPLETED
-  → (실패)  NotificationType.ADD_CONVERSATION_FAILED
+ADD_NODE_REQUEST
+  -> ADD_CONVERSATION_REQUESTED
+  -> ADD_CONVERSATION_COMPLETED | ADD_CONVERSATION_FAILED
 
-TaskType.MICROSCOPE_INGEST_FROM_NODE_REQUEST 발행 시
-  → (즉시)  NotificationType.MICROSCOPE_INGEST_REQUESTED
-  → (완료)  NotificationType.MICROSCOPE_DOCUMENT_COMPLETED
-  → (실패)  NotificationType.MICROSCOPE_DOCUMENT_FAILED
-  → (전체 완료) NotificationType.MICROSCOPE_WORKSPACE_COMPLETED
+MICROSCOPE_INGEST_FROM_NODE_REQUEST
+  -> MICROSCOPE_INGEST_REQUESTED
+  -> MICROSCOPE_DOCUMENT_COMPLETED | MICROSCOPE_DOCUMENT_FAILED
+  -> MICROSCOPE_WORKSPACE_COMPLETED
 ```
 
 ---
 
-## NotificationType 상세
-
-FE가 SSE 스트림에서 실제로 수신하는 이벤트 이름입니다.
+## NotificationType
 
 ```typescript
-import { NotificationType, NotificationTypeValue } from '@taco_tsinghua/graphnode-sdk';
+import { NotificationType, type NotificationTypeValue } from '@taco_tsinghua/graphnode-sdk';
 ```
 
-### 그래프 생성 관련
+### 그래프 생성 이벤트
 
-| 이벤트 값 | 발생 시점 | Payload 타입 |
-| --- | --- | --- |
-| `GRAPH_GENERATION_REQUESTED` | 요청이 서버에 정상 접수됨 | `GraphGenerationRequestedPayload` |
-| `GRAPH_GENERATION_REQUEST_FAILED` | 요청 접수 자체가 실패 | `GraphGenerationRequestFailedPayload` |
-| `GRAPH_GENERATION_COMPLETED` | AI가 그래프 생성 완료 + DB 반영 완료 | `GraphGenerationCompletedPayload` |
-| `GRAPH_GENERATION_FAILED` | AI 생성 실패 또는 DB 반영 실패 | `GraphGenerationFailedPayload` |
+| 이벤트 | 설명 | Payload 타입 | 완성형 Event 타입 |
+| --- | --- | --- | --- |
+| `GRAPH_GENERATION_REQUESTED` | 그래프 생성 요청이 접수됨 | `GraphGenerationRequestedPayload` | `GraphGenerationRequestedNotificationEvent` |
+| `GRAPH_GENERATION_REQUEST_FAILED` | 그래프 생성 요청 접수 자체가 실패 | `GraphGenerationRequestFailedPayload` | `GraphGenerationRequestFailedNotificationEvent` |
+| `GRAPH_GENERATION_COMPLETED` | 그래프 생성과 저장이 완료됨 | `GraphGenerationCompletedPayload` | `GraphGenerationCompletedNotificationEvent` |
+| `GRAPH_GENERATION_FAILED` | 그래프 생성 또는 저장이 실패함 | `GraphGenerationFailedPayload` | `GraphGenerationFailedNotificationEvent` |
+| `GRAPH_GENERATION_PROGRESS_RESULT` | 그래프 생성 진행률 중간 이벤트 | `GraphGenerationProgressPayload` | `GraphGenerationProgressNotificationEvent` |
 
-### 그래프 요약 관련
+### 그래프 요약 이벤트
 
-| 이벤트 값 | 발생 시점 | Payload 타입 |
-| --- | --- | --- |
-| `GRAPH_SUMMARY_REQUESTED` | 요약 요청 접수 | `GraphSummaryRequestedPayload` |
-| `GRAPH_SUMMARY_REQUEST_FAILED` | 요약 요청 접수 실패 | `GraphSummaryRequestFailedPayload` |
-| `GRAPH_SUMMARY_COMPLETED` | AI가 요약 생성 완료 | `GraphSummaryCompletedPayload` |
-| `GRAPH_SUMMARY_FAILED` | 요약 생성 실패 | `GraphSummaryFailedPayload` |
+| 이벤트 | 설명 | Payload 타입 | 완성형 Event 타입 |
+| --- | --- | --- | --- |
+| `GRAPH_SUMMARY_REQUESTED` | 그래프 요약 요청이 접수됨 | `GraphSummaryRequestedPayload` | `GraphSummaryRequestedNotificationEvent` |
+| `GRAPH_SUMMARY_REQUEST_FAILED` | 그래프 요약 요청 접수 자체가 실패 | `GraphSummaryRequestFailedPayload` | `GraphSummaryRequestFailedNotificationEvent` |
+| `GRAPH_SUMMARY_COMPLETED` | 그래프 요약 생성이 완료됨 | `GraphSummaryCompletedPayload` | `GraphSummaryCompletedNotificationEvent` |
+| `GRAPH_SUMMARY_FAILED` | 그래프 요약 생성이 실패함 | `GraphSummaryFailedPayload` | `GraphSummaryFailedNotificationEvent` |
 
-### 대화 추가(Add Node) 관련
+### 대화 추가 이벤트
 
-| 이벤트 값 | 발생 시점 | Payload 타입 |
-| --- | --- | --- |
-| `ADD_CONVERSATION_REQUESTED` | 대화 추가 요청 접수 | `AddConversationRequestedPayload` |
-| `ADD_CONVERSATION_REQUEST_FAILED` | 대화 추가 요청 실패 | `AddConversationRequestFailedPayload` |
-| `ADD_CONVERSATION_COMPLETED` | 새 대화가 그래프에 추가 완료 | `AddConversationCompletedPayload` |
-| `ADD_CONVERSATION_FAILED` | 대화 추가 실패 | `AddConversationFailedPayload` |
+| 이벤트 | 설명 | Payload 타입 | 완성형 Event 타입 |
+| --- | --- | --- | --- |
+| `ADD_CONVERSATION_REQUESTED` | 새 대화 추가 요청이 접수됨 | `AddConversationRequestedPayload` | `AddConversationRequestedNotificationEvent` |
+| `ADD_CONVERSATION_REQUEST_FAILED` | 새 대화 추가 요청 접수 자체가 실패 | `AddConversationRequestFailedPayload` | `AddConversationRequestFailedNotificationEvent` |
+| `ADD_CONVERSATION_COMPLETED` | 새 대화가 그래프에 반영 완료됨 | `AddConversationCompletedPayload` | `AddConversationCompletedNotificationEvent` |
+| `ADD_CONVERSATION_FAILED` | 새 대화 반영이 실패함 | `AddConversationFailedPayload` | `AddConversationFailedNotificationEvent` |
 
-### Microscope 문서 분석 관련
+### Microscope 이벤트
 
-| 이벤트 값 | 발생 시점 | Payload 타입 |
-| --- | --- | --- |
-| `MICROSCOPE_INGEST_REQUESTED` | 문서 분석 요청 접수 | `MicroscopeIngestRequestedPayload` |
-| `MICROSCOPE_INGEST_REQUEST_FAILED` | 분석 요청 접수 실패 | `MicroscopeIngestRequestFailedPayload` |
-| `MICROSCOPE_DOCUMENT_COMPLETED` | 단일 문서 분석 완료 | `MicroscopeDocumentCompletedPayload` |
-| `MICROSCOPE_DOCUMENT_FAILED` | 단일 문서 분석 실패 | `MicroscopeDocumentFailedPayload` |
-| `MICROSCOPE_WORKSPACE_COMPLETED` | 워크스페이스 전체 Ingest 완료 | `MicroscopeWorkspaceCompletedPayload` |
+| 이벤트 | 설명 | Payload 타입 | 완성형 Event 타입 |
+| --- | --- | --- | --- |
+| `MICROSCOPE_INGEST_REQUESTED` | ingest 요청이 접수됨 | `MicroscopeIngestRequestedPayload` | `MicroscopeIngestRequestedNotificationEvent` |
+| `MICROSCOPE_INGEST_REQUEST_FAILED` | ingest 요청 접수 자체가 실패 | `MicroscopeIngestRequestFailedPayload` | `MicroscopeIngestRequestFailedNotificationEvent` |
+| `MICROSCOPE_DOCUMENT_COMPLETED` | 단일 문서 ingest가 완료됨 | `MicroscopeDocumentCompletedPayload` | `MicroscopeDocumentCompletedNotificationEvent` |
+| `MICROSCOPE_DOCUMENT_FAILED` | 단일 문서 ingest가 실패함 | `MicroscopeDocumentFailedPayload` | `MicroscopeDocumentFailedNotificationEvent` |
+| `MICROSCOPE_WORKSPACE_COMPLETED` | 워크스페이스 ingest가 완료됨 | `MicroscopeWorkspaceCompletedPayload` | `MicroscopeWorkspaceCompletedNotificationEvent` |
 
 ---
 
-## Payload 타입 상세
+## Payload 타입
 
-모든 Payload는 `BaseNotificationPayload`를 상속합니다.
+모든 payload는 `BaseNotificationPayload`를 상속합니다.
 
 ```typescript
 interface BaseNotificationPayload {
-  taskId: string;    // 작업 고유 ID (요청 시 받은 taskId와 동일)
-  timestamp: string; // ISO 8601 이벤트 발생 시각
+  taskId: string;
+  timestamp: string;
 }
 ```
 
-### `AddConversationCompletedPayload` (추가 필드 있음)
+### 실패 계열 payload
+
+아래 이벤트들은 공통적으로 `error: string`을 가집니다.
+
+- `GRAPH_GENERATION_REQUEST_FAILED`
+- `GRAPH_GENERATION_FAILED`
+- `GRAPH_SUMMARY_REQUEST_FAILED`
+- `GRAPH_SUMMARY_FAILED`
+- `ADD_CONVERSATION_REQUEST_FAILED`
+- `ADD_CONVERSATION_FAILED`
+- `MICROSCOPE_INGEST_REQUEST_FAILED`
+- `MICROSCOPE_DOCUMENT_FAILED`
 
 ```typescript
+interface FailedPayload extends BaseNotificationPayload {
+  error: string;
+}
+```
+
+### 추가 필드가 있는 payload
+
+```typescript
+interface GraphGenerationProgressPayload extends BaseNotificationPayload {
+  userId: string;
+  completedStage: string;
+  progressPercent: number;
+}
+
 interface AddConversationCompletedPayload extends BaseNotificationPayload {
-  nodeCount: number; // 새로 추가된 노드 수
-  edgeCount: number; // 새로 추가된 엣지 수
+  nodeCount: number;
+  edgeCount: number;
 }
-```
 
-### `MicroscopeDocumentCompletedPayload` (추가 필드 있음)
-
-```typescript
 interface MicroscopeDocumentCompletedPayload extends BaseNotificationPayload {
-  sourceId?: string;    // 분석 완료된 문서의 Neo4j 소스 노드 ID
-  chunksCount?: number; // 문서에서 추출된 청크 수
-}
-```
-
-### 실패 Payload (공통 패턴)
-
-```typescript
-interface *FailedPayload extends BaseNotificationPayload {
-  error: string; // 실패 원인 메시지
+  sourceId?: string;
+  chunksCount?: number;
 }
 ```
 
 ---
 
-## SDK 사용 예제
+## Event 타입 계층
 
-### 기본 알림 스트림 수신
+SDK에는 세 층의 notification event 타입이 있습니다.
+
+| 타입 | 의미 | 사용 시점 |
+| --- | --- | --- |
+| `NotificationEvent` | raw event 공통 형태 | 서버 응답 원형을 그대로 다룰 때 |
+| `TypedNotificationEvent` | 모든 이벤트의 discriminated union | FE에서 `switch (event.type)`로 처리할 때 권장 |
+| `NotificationEventByType<T>` | 특정 `NotificationType` 하나에 대응하는 이벤트 | 특정 이벤트 핸들러 시그니처를 만들 때 |
+
+### `NotificationPayloadMap`
+
+`NotificationType`과 payload 타입의 연결 테이블입니다.
+
+```typescript
+type Payload = NotificationPayloadMap[typeof NotificationType.ADD_CONVERSATION_COMPLETED];
+// AddConversationCompletedPayload
+```
+
+### `TypedNotificationEvent`
+
+모든 완성형 이벤트를 합친 discriminated union입니다.
 
 ```typescript
 import {
   NotificationType,
-  type NotificationEvent,
+  type TypedNotificationEvent,
 } from '@taco_tsinghua/graphnode-sdk';
 
-const closeStream = client.notification.stream((event: NotificationEvent) => {
+client.notification.stream((event: TypedNotificationEvent) => {
   switch (event.type) {
-    case NotificationType.GRAPH_GENERATION_COMPLETED:
-      // 그래프 생성 완료 → 데이터 새로고침
-      await refreshGraphData();
-      showToast('그래프가 생성되었습니다!', 'success');
+    case NotificationType.ADD_CONVERSATION_COMPLETED:
+      console.log(event.payload.nodeCount, event.payload.edgeCount);
+      break;
+
+    case NotificationType.GRAPH_GENERATION_PROGRESS_RESULT:
+      console.log(event.payload.progressPercent);
       break;
 
     case NotificationType.GRAPH_GENERATION_FAILED:
-      showToast(`그래프 생성 실패: ${event.payload.error}`, 'error');
-      break;
-
-    case NotificationType.ADD_CONVERSATION_COMPLETED:
-      const { nodeCount, edgeCount } = event.payload;
-      showToast(`${nodeCount}개 노드, ${edgeCount}개 엣지 추가 완료`, 'success');
-      break;
-
-    case NotificationType.MICROSCOPE_DOCUMENT_COMPLETED:
-      console.log('문서 분석 완료. 소스 ID:', event.payload.sourceId);
+      console.error(event.payload.error);
       break;
   }
 });
-
-// 컴포넌트 언마운트 시 스트림 종료
-onUnmount(() => closeStream());
 ```
 
-### 타입 가드 패턴 (고급)
+### `NotificationEventByType<T>`
+
+특정 이벤트 전용 핸들러 타입을 만들 때 사용합니다.
 
 ```typescript
 import {
   NotificationType,
-  type AddConversationCompletedPayload,
+  type NotificationEventByType,
+} from '@taco_tsinghua/graphnode-sdk';
+
+type AddConversationCompletedEvent =
+  NotificationEventByType<typeof NotificationType.ADD_CONVERSATION_COMPLETED>;
+
+function handleAddConversationCompleted(event: AddConversationCompletedEvent) {
+  console.log(event.payload.nodeCount);
+}
+```
+
+### 이벤트별 완성형 interface 타입
+
+필요하면 이벤트별 interface를 직접 가져다 쓸 수도 있습니다.
+
+| 이벤트 | 타입 |
+| --- | --- |
+| `GRAPH_GENERATION_REQUESTED` | `GraphGenerationRequestedNotificationEvent` |
+| `GRAPH_GENERATION_REQUEST_FAILED` | `GraphGenerationRequestFailedNotificationEvent` |
+| `GRAPH_GENERATION_COMPLETED` | `GraphGenerationCompletedNotificationEvent` |
+| `GRAPH_GENERATION_FAILED` | `GraphGenerationFailedNotificationEvent` |
+| `GRAPH_GENERATION_PROGRESS_RESULT` | `GraphGenerationProgressNotificationEvent` |
+| `GRAPH_SUMMARY_REQUESTED` | `GraphSummaryRequestedNotificationEvent` |
+| `GRAPH_SUMMARY_REQUEST_FAILED` | `GraphSummaryRequestFailedNotificationEvent` |
+| `GRAPH_SUMMARY_COMPLETED` | `GraphSummaryCompletedNotificationEvent` |
+| `GRAPH_SUMMARY_FAILED` | `GraphSummaryFailedNotificationEvent` |
+| `ADD_CONVERSATION_REQUESTED` | `AddConversationRequestedNotificationEvent` |
+| `ADD_CONVERSATION_REQUEST_FAILED` | `AddConversationRequestFailedNotificationEvent` |
+| `ADD_CONVERSATION_COMPLETED` | `AddConversationCompletedNotificationEvent` |
+| `ADD_CONVERSATION_FAILED` | `AddConversationFailedNotificationEvent` |
+| `MICROSCOPE_INGEST_REQUESTED` | `MicroscopeIngestRequestedNotificationEvent` |
+| `MICROSCOPE_INGEST_REQUEST_FAILED` | `MicroscopeIngestRequestFailedNotificationEvent` |
+| `MICROSCOPE_DOCUMENT_COMPLETED` | `MicroscopeDocumentCompletedNotificationEvent` |
+| `MICROSCOPE_DOCUMENT_FAILED` | `MicroscopeDocumentFailedNotificationEvent` |
+| `MICROSCOPE_WORKSPACE_COMPLETED` | `MicroscopeWorkspaceCompletedNotificationEvent` |
+
+---
+
+## SDK 사용 예시
+
+### 권장 방식: `TypedNotificationEvent`
+
+```typescript
+import {
+  NotificationType,
+  type TypedNotificationEvent,
+} from '@taco_tsinghua/graphnode-sdk';
+
+const close = client.notification.stream((event: TypedNotificationEvent) => {
+  switch (event.type) {
+    case NotificationType.GRAPH_GENERATION_COMPLETED:
+      refreshGraph();
+      break;
+
+    case NotificationType.ADD_CONVERSATION_COMPLETED:
+      showToast(`${event.payload.nodeCount}개 노드 추가 완료`);
+      break;
+
+    case NotificationType.MICROSCOPE_DOCUMENT_FAILED:
+      showErrorToast(event.payload.error);
+      break;
+  }
+});
+```
+
+### raw `NotificationEvent`를 좁혀 쓰는 방식
+
+```typescript
+import {
+  NotificationType,
   type NotificationEvent,
+  type NotificationEventByType,
 } from '@taco_tsinghua/graphnode-sdk';
 
 function isAddCompleted(
   event: NotificationEvent
-): event is { type: typeof NotificationType.ADD_CONVERSATION_COMPLETED; payload: AddConversationCompletedPayload } {
+): event is NotificationEventByType<typeof NotificationType.ADD_CONVERSATION_COMPLETED> {
   return event.type === NotificationType.ADD_CONVERSATION_COMPLETED;
 }
-
-client.notification.stream((event) => {
-  if (isAddCompleted(event)) {
-    // event.payload.nodeCount 타입 안전하게 사용 가능
-    console.log(event.payload.nodeCount);
-  }
-});
 ```
 
 ---
 
-## 관련 링크
+## 관련 문서
 
-- [Notification API 엔드포인트](../endpoints/notification.md)
+- [Notification API](../endpoints/notification.md)
 - [Graph AI API](../endpoints/graphAi.md)
 - [Microscope API](../endpoints/microscope.md)
-- [타입 전체 목록](./overview.md)
+- [타입 개요](./overview.md)
