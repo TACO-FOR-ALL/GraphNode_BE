@@ -302,6 +302,26 @@ export class NotificationService {
     });
   }
 
+  /**
+   * 그래프 생성 진행률이 갱신되었음을 알립니다.
+   * @param userId 사용자 ID
+   * @param taskId 작업 ID
+   * @param completedStage 마지막으로 완료된 단계
+   * @param progressPercent 전체 진행률(0~100)
+   */
+  async sendGraphGenerationProgressUpdated(
+    userId: string,
+    taskId: string,
+    completedStage: string,
+    progressPercent: number
+  ): Promise<void> {
+    await this.sendNotification(userId, NotificationType.GRAPH_GENERATION_PROGRESS_UPDATED, {
+      taskId,
+      completedStage,
+      progressPercent,
+    });
+  }
+
   // ── 그래프 요약 (Graph Summary) 전용 메서드 ────────────────────────────────
 
   /**
