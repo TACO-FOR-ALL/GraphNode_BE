@@ -16,6 +16,7 @@ export class GraphGenerationProgressResultHandler implements JobHandler {
     const { taskId, payload } = progressMessage;
     const { userId, completedStage, progressPercent } = payload;
 
+    // 필수 항목인 taskId, userId, completedStage 검증 진행
     if (!taskId || !userId || !completedStage) {
       logger.warn(
         { taskId, userId, completedStage },
@@ -24,6 +25,7 @@ export class GraphGenerationProgressResultHandler implements JobHandler {
       return;
     }
 
+    // 진척도 퍼세느 숫자 검증
     if (!Number.isFinite(progressPercent)) {
       logger.warn(
         { taskId, userId, completedStage, progressPercent },
@@ -35,6 +37,7 @@ export class GraphGenerationProgressResultHandler implements JobHandler {
     // 잘못된 입력으로 인한 UI 오동작을 막기 위해 0~100으로 보정합니다.
     const normalizedProgress = Math.max(0, Math.min(100, Math.floor(progressPercent)));
 
+    // NotificationService를 통해 진행률 알림을 전송합니다.
     const notificationService = container.getNotificationService();
     await notificationService.sendGraphGenerationProgressUpdated(
       userId,
