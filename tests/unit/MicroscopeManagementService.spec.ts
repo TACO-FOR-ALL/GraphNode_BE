@@ -108,7 +108,7 @@ describe('MicroscopeManagementService', () => {
     } as any;
 
     mockUserService = {
-      getUserProfile: jest.fn().mockResolvedValue({ preferredLanguage: 'ko' } as any),
+      getUserProfile: jest.fn().mockImplementation(() => Promise.resolve({ preferredLanguage: 'ko' })),
     } as any;
 
     service = new MicroscopeManagementService(
@@ -163,13 +163,14 @@ describe('MicroscopeManagementService', () => {
         expect.any(String),
         expect.objectContaining({
           taskType: TaskType.MICROSCOPE_INGEST_FROM_NODE_REQUEST,
-          payload: {
+          payload: expect.objectContaining({
             user_id: userId,
             node_id: nodeId,
             node_type: nodeType,
             group_id: createdWorkspaceId,
             schema_name: schemaName,
-          }
+            language: 'ko',
+          }),
         })
       );
       expect(result._id).toBe(createdWorkspaceId);
