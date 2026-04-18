@@ -27,6 +27,7 @@ import { logger } from '../../shared/utils/logger';
 import { ConversationRepository } from '../ports/ConversationRepository';
 import { NoteRepository } from '../ports/NoteRepository';
 import { NotificationService } from './NotificationService';
+import { UserService } from './UserService';
 import { AiMicroscopeIngestResultItem } from '../../shared/dtos/ai_graph_output';
 import { withRetry } from '../../shared/utils/retry';
 
@@ -49,6 +50,8 @@ export class MicroscopeManagementService {
    * @param storagePort 파일 업로드를 위한 AWS S3 스토리지 포트.
    * @param conversationRepo Conversation 조회를 위한 레포지토리.
    * @param noteRepo Note 조회를 위한 레포지토리.
+   * @param notificationService 알림 전송 서비스.
+   * @param userService 사용자 프로필(선호 언어 포함) 조회 서비스.
    */
   constructor(
     private readonly microscopeWorkspaceStore: MicroscopeWorkspaceStore,
@@ -57,7 +60,8 @@ export class MicroscopeManagementService {
     private readonly storagePort: StoragePort,
     private readonly conversationRepo: ConversationRepository,
     private readonly noteRepo: NoteRepository,
-    private readonly notificationService: NotificationService
+    private readonly notificationService: NotificationService,
+    private readonly userService: UserService
   ) {
     // SQS Request URL for AI tasks (Microscope 워커 요청 큐)
     this.jobQueueUrl = process.env.SQS_REQUEST_QUEUE_URL || 'TO_BE_CONFIGURED';
@@ -224,7 +228,16 @@ export class MicroscopeManagementService {
       throw new ValidationError(`Invalid node type: ${nodeType}`);
     }
 
-    // 2. 워크스페이스 신규 생성
+    // 2. 사용자 선호 언어 조회 (AI 워커에 언어 힌트 전달용)
+    let preferredLanguage = 'ko'; // 기본값
+    try {
+      const userProfile = await this.userService.getUserProfile(userId);
+      preferredLanguage = userProfile.preferredLanguage ?? 'ko';
+    } catch (err) {
+      logger.warn({ err, userId }, 'Failed to fetch user preferredLanguage, defaulting to "ko"');
+    }
+
+    // 3. 워크스페이스 신규 생성
     const workspace = await this.createWorkspace(userId, workspaceTitle);
     const groupId = workspace._id;
 
@@ -243,10 +256,10 @@ export class MicroscopeManagementService {
     };
 
     try {
-      // 3. MongoDB 상태 트리거 등록
+      // 4. MongoDB 상태 트리거 등록
       await this.microscopeWorkspaceStore.addDocument(groupId, newDocument);
 
-      // 4. AI 서버 처리를 위한 SQS 큐 발송 (MICROSCOPE_INGEST_FROM_NODE_REQUEST)
+      // 5. AI 서버 처리를 위한 SQS 큐 발송 (MICROSCOPE_INGEST_FROM_NODE_REQUEST)
       const messageBody = {
         taskId: docId,
         taskType: TaskType.MICROSCOPE_INGEST_FROM_NODE_REQUEST,
@@ -256,6 +269,7 @@ export class MicroscopeManagementService {
           node_type: nodeType,
           group_id: groupId,
           schema_name: schemaName,
+          language: preferredLanguage,
         },
         timestamp: new Date().toISOString(),
       };

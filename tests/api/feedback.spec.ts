@@ -5,8 +5,10 @@
  * 전략:
  * - FeedbackService는 실제 비즈니스 로직을 수행한다.
  * - FeedbackRepositoryPrisma를 인메모리 Mock으로 대체하여 DB 의존성 제거.
+ * - AwsS3Adapter를 Mock으로 대체하여 S3 의존성 제거.
  * - Zod 검증, HTTP 상태 코드, RFC 9457 에러 응답 형식 검증.
  * - 인증이 불필요한 엔드포인트 (피드백 제출은 공개 API).
+ * - 파일 첨부(multipart/form-data) 및 미첨부(JSON) 양쪽 경로를 검증.
  */
 
 import { jest, describe, it, expect, beforeAll, beforeEach, afterAll } from '@jest/globals';
@@ -50,7 +52,14 @@ jest.mock('../../src/infra/db', () => ({
   listNodes: jest.fn<any>().mockResolvedValue([]),
 }));
 (AwsSqsAdapter as jest.Mock).mockImplementation(() => ({ sendMessage: jest.fn() }));
-(AwsS3Adapter as jest.Mock).mockImplementation(() => ({ upload: jest.fn() }));
+(AwsS3Adapter as jest.Mock).mockImplementation(() => ({
+  upload: jest.fn<any>().mockResolvedValue(undefined),
+  uploadJson: jest.fn<any>().mockResolvedValue(undefined),
+  downloadStream: jest.fn<any>().mockResolvedValue(null),
+  downloadFile: jest.fn<any>().mockResolvedValue({ buffer: Buffer.from(''), contentType: 'application/octet-stream' }),
+  downloadJson: jest.fn<any>().mockResolvedValue({}),
+  delete: jest.fn<any>().mockResolvedValue(undefined),
+}));
 (RedisEventBusAdapter as jest.Mock).mockImplementation(() => ({
   publish: jest.fn(),
   subscribe: jest.fn(),
@@ -144,7 +153,7 @@ describe('Feedback API Integration Tests', () => {
   // ─── POST /v1/feedback ───────────────────────────────────────────────────────
 
   describe('POST /v1/feedback', () => {
-    it('201: 유효한 피드백 생성', async () => {
+    it('201: 유효한 피드백 생성 (JSON, 파일 없음)', async () => {
       const res = await request(app).post('/v1/feedback').send({
         category: 'BUG',
         title: '로그인 오류',
@@ -160,6 +169,7 @@ describe('Feedback API Integration Tests', () => {
       expect(res.body.feedback.title).toBe('로그인 오류');
       expect(res.body.feedback.status).toBe('UNREAD');
       expect(res.body.feedback.id).toBeDefined();
+      expect(res.body.feedback.attachments).toBeNull();
     });
 
     it('201: userName, userEmail 없이 익명 생성', async () => {
@@ -172,6 +182,45 @@ describe('Feedback API Integration Tests', () => {
       expect(res.status).toBe(201);
       expect(res.body.feedback.userName).toBeNull();
       expect(res.body.feedback.userEmail).toBeNull();
+      expect(res.body.feedback.attachments).toBeNull();
+    });
+
+    it('201: multipart/form-data로 파일 첨부 포함 생성', async () => {
+      const fileContent = Buffer.from('fake image data');
+      const res = await request(app)
+        .post('/v1/feedback')
+        .field('category', 'BUG')
+        .field('title', '스크린샷 첨부')
+        .field('content', '오류 화면입니다.')
+        .attach('files', fileContent, { filename: 'screenshot.png', contentType: 'image/png' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.feedback.category).toBe('BUG');
+      expect(res.body.feedback.attachments).not.toBeNull();
+      expect(Array.isArray(res.body.feedback.attachments)).toBe(true);
+      expect(res.body.feedback.attachments).toHaveLength(1);
+      expect(res.body.feedback.attachments[0].name).toBe('screenshot.png');
+      expect(res.body.feedback.attachments[0].mimeType).toBe('image/png');
+      expect(res.body.feedback.attachments[0].url).toMatch(/^feedback-files\//);
+      expect(typeof res.body.feedback.attachments[0].size).toBe('number');
+    });
+
+    it('201: 여러 파일 동시 첨부', async () => {
+      const file1 = Buffer.from('image data');
+      const file2 = Buffer.from('log data');
+      const res = await request(app)
+        .post('/v1/feedback')
+        .field('category', 'BUG')
+        .field('title', '다중 파일 첨부')
+        .field('content', '여러 첨부파일 테스트.')
+        .attach('files', file1, { filename: 'screen.png', contentType: 'image/png' })
+        .attach('files', file2, { filename: 'error.log', contentType: 'text/plain' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.feedback.attachments).toHaveLength(2);
+      const names = res.body.feedback.attachments.map((a: any) => a.name);
+      expect(names).toContain('screen.png');
+      expect(names).toContain('error.log');
     });
 
     it('400: category 누락 시 RFC 9457 에러 반환', async () => {
@@ -239,7 +288,7 @@ describe('Feedback API Integration Tests', () => {
       expect(res.body.nextCursor).toBeNull();
     });
 
-    it('200: 생성된 피드백 목록 반환', async () => {
+    it('200: 생성된 피드백 목록 반환 (attachments 포함)', async () => {
       await request(app)
         .post('/v1/feedback')
         .send({ category: 'BUG', title: '제목1', content: '내용1' });
@@ -251,6 +300,7 @@ describe('Feedback API Integration Tests', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.feedbacks).toHaveLength(2);
+      expect(res.body.feedbacks[0]).toHaveProperty('attachments');
     });
 
     it('200: limit 쿼리 파라미터가 동작한다', async () => {
@@ -277,7 +327,7 @@ describe('Feedback API Integration Tests', () => {
   // ─── GET /v1/feedback/:id ────────────────────────────────────────────────────
 
   describe('GET /v1/feedback/:id', () => {
-    it('200: 존재하는 피드백 단건 조회', async () => {
+    it('200: 존재하는 피드백 단건 조회 (attachments null)', async () => {
       const created = await request(app).post('/v1/feedback').send({
         category: 'BUG',
         title: '로그인 오류',
@@ -290,6 +340,23 @@ describe('Feedback API Integration Tests', () => {
       expect(res.status).toBe(200);
       expect(res.body.feedback.id).toBe(id);
       expect(res.body.feedback.title).toBe('로그인 오류');
+      expect(res.body.feedback.attachments).toBeNull();
+    });
+
+    it('200: 파일 첨부된 피드백 단건 조회 (attachments 포함)', async () => {
+      const created = await request(app)
+        .post('/v1/feedback')
+        .field('category', 'BUG')
+        .field('title', '첨부 피드백')
+        .field('content', '파일 포함')
+        .attach('files', Buffer.from('data'), { filename: 'log.txt', contentType: 'text/plain' });
+
+      const id = created.body.feedback.id;
+      const res = await request(app).get(`/v1/feedback/${id}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.feedback.attachments).toHaveLength(1);
+      expect(res.body.feedback.attachments[0].name).toBe('log.txt');
     });
 
     it('404: 존재하지 않는 ID 조회 시 RFC 9457 에러 반환', async () => {

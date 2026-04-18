@@ -4,9 +4,31 @@
  * Prisma `Feedback` 모델과 1:1 대응하며, Core 계층의 도메인 타입으로 사용된다.
  *
  * Public interface:
+ * - {@link FeedbackAttachmentItem} — 첨부 파일 메타데이터 단건 타입
  * - {@link FeedbackRecord} — DB에서 조회한 완전한 피드백 레코드
  * - {@link CreateFeedbackRecord} — DB 저장 시 사용하는 입력 타입 (id/createdAt/updatedAt 제외)
  */
+
+/**
+ * 피드백에 첨부된 파일 1개의 메타데이터.
+ * DB `attachments` JSONB 컬럼에 배열 요소로 저장된다.
+ *
+ * @description
+ * - `url`: S3 file bucket 내 객체 키 (경로). 다운로드 시 이 키를 사용한다.
+ * - `name`: 업로드 당시 원본 파일명.
+ * - `mimeType`: MIME 타입 (예: "image/png", "application/pdf").
+ * - `size`: 파일 크기 (bytes).
+ */
+export interface FeedbackAttachmentItem {
+  /** @description S3 file bucket 객체 키. 예: "feedback-files/uuid-report.pdf" */
+  url: string;
+  /** @description 원본 파일명. 예: "report.pdf" */
+  name: string;
+  /** @description MIME 타입. 예: "application/pdf" */
+  mimeType: string;
+  /** @description 파일 크기 (bytes). */
+  size: number;
+}
 
 /**
  * DB에 저장된 피드백 레코드의 완전한 표현.
@@ -15,6 +37,7 @@
  * @description
  * - `id`는 PostgreSQL에서 UUID로 자동 생성된다 (`@default(uuid())`).
  * - `createdAt`, `updatedAt`은 DB에서 자동 관리된다.
+ * - `attachments`는 첨부 파일이 없으면 null, 있으면 {@link FeedbackAttachmentItem} 배열.
  */
 export interface FeedbackRecord {
   /** @description 피드백 고유 식별자. UUID v4 형식. DB 자동 생성. */
@@ -34,6 +57,11 @@ export interface FeedbackRecord {
    * 허용값: "UNREAD" | "READ" | "IN_PROGRESS" | "DONE". 최대 32자.
    */
   status: string;
+  /**
+   * @description 첨부 파일 목록. 파일이 없으면 null.
+   * 각 항목은 S3 키, 원본 파일명, MIME 타입, 크기를 포함한다.
+   */
+  attachments: FeedbackAttachmentItem[] | null;
   /** @description 레코드 생성 시각. DB 자동 설정. */
   createdAt: Date;
   /** @description 레코드 최종 수정 시각. DB 자동 갱신 (`@updatedAt`). */

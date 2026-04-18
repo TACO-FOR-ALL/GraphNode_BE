@@ -9,6 +9,7 @@ import { NoteRepository } from '../../src/core/ports/NoteRepository';
 import { NotificationService } from '../../src/core/services/NotificationService';
 import { TaskType } from '../../src/shared/dtos/queue';
 import { NotFoundError, ValidationError } from '../../src/shared/errors/domain';
+import { UserService } from '../../src/core/services/UserService';
 
 describe('MicroscopeManagementService', () => {
   let service: MicroscopeManagementService;
@@ -19,6 +20,7 @@ describe('MicroscopeManagementService', () => {
   let mockConversationRepo: jest.Mocked<ConversationRepository>;
   let mockNoteRepo: jest.Mocked<NoteRepository>;
   let mockNotificationSvc: jest.Mocked<NotificationService>;
+  let mockUserService: jest.Mocked<UserService>;
 
   beforeEach(() => {
     mockWorkspaceStore = {
@@ -105,6 +107,10 @@ describe('MicroscopeManagementService', () => {
       sendNotification: jest.fn(),
     } as any;
 
+    mockUserService = {
+      getUserProfile: jest.fn().mockImplementation(() => Promise.resolve({ preferredLanguage: 'ko' })),
+    } as any;
+
     service = new MicroscopeManagementService(
       mockWorkspaceStore,
       mockGraphNeo4jStore,
@@ -112,7 +118,8 @@ describe('MicroscopeManagementService', () => {
       mockStoragePort,
       mockConversationRepo,
       mockNoteRepo,
-      mockNotificationSvc
+      mockNotificationSvc,
+      mockUserService
     );
   });
 
@@ -156,13 +163,14 @@ describe('MicroscopeManagementService', () => {
         expect.any(String),
         expect.objectContaining({
           taskType: TaskType.MICROSCOPE_INGEST_FROM_NODE_REQUEST,
-          payload: {
+          payload: expect.objectContaining({
             user_id: userId,
             node_id: nodeId,
             node_type: nodeType,
             group_id: createdWorkspaceId,
             schema_name: schemaName,
-          }
+            language: 'ko',
+          }),
         })
       );
       expect(result._id).toBe(createdWorkspaceId);

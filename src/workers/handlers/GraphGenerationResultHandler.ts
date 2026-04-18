@@ -681,6 +681,13 @@ export class GraphGenerationResultHandler implements JobHandler {
     return nodeMap;
   }
 
+  /**
+   *
+   * @param userId
+   * @param featuresJson
+   * @param nodeMap
+   * @returns
+   */
   private buildVectorItems(
     userId: string,
     featuresJson: GraphFeaturesJsonDto,
@@ -721,6 +728,11 @@ export class GraphGenerationResultHandler implements JobHandler {
     return vectorItems;
   }
 
+  /**
+   *
+   * @param keywords
+   * @returns
+   */
   private joinKeywords(keywords: Array<{ term: string; score: number }>): string {
     const terms: string[] = [];
 
