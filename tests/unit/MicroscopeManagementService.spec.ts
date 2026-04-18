@@ -108,7 +108,7 @@ describe('MicroscopeManagementService', () => {
     } as any;
 
     mockUserService = {
-      getUserProfile: jest.fn().mockResolvedValue({ preferredLanguage: 'ko' }),
+      getUserProfile: jest.fn().mockResolvedValue({ preferredLanguage: 'ko' } as any),
     } as any;
 
     service = new MicroscopeManagementService(
