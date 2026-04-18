@@ -4,7 +4,7 @@
  * `/v1/feedback` 엔드포인트 하위의 모든 API를 호출한다.
  *
  * 주요 기능:
- * - 피드백 제출 (`create`)
+ * - 피드백 제출 (`create`) — 여러 파일 첨부 지원, 인증 불필요
  * - 피드백 목록 조회 (`list`)
  * - 피드백 단건 조회 (`getById`)
  * - 피드백 처리 상태 변경 (`updateStatus`)
@@ -46,11 +46,17 @@ export class FeedbackApi {
   constructor(private readonly rb: RequestBuilder) {}
 
   /**
-   * 새 피드백을 서버에 제출한다.
+   * 새 피드백을 서버에 제출한다. 인증 없이 호출 가능하다.
    *
    * @description
    * 사용자가 버그 리포트, 기능 요청, 일반 의견 등을 제출할 때 사용한다.
    * `userName`, `userEmail`은 선택 항목이며 익명 제출도 가능하다.
+   *
+   * 파일을 첨부하는 경우 `files` 인자에 `File` 배열을 전달한다.
+   * 파일이 있으면 내부적으로 `multipart/form-data`로 전환되고,
+   * 없으면 `application/json`으로 전송된다 (ai.ts `chat` 메서드와 동일한 방식).
+   * 파일은 서버에서 S3 `feedback-files/` 경로에 저장되며,
+   * 응답의 `feedback.attachments` 배열에 메타데이터가 포함된다.
    *
    * @param body - 제출할 피드백 데이터
    *   - `category` (string): 카테고리. 1~191자. (예: "BUG", "FEATURE", "UX")
@@ -58,14 +64,16 @@ export class FeedbackApi {
    *   - `content` (string): 본문. 1~10000자.
    *   - `userName` (string | null, optional): 작성자 이름. 최대 191자.
    *   - `userEmail` (string | null, optional): 작성자 이메일. 유효한 이메일 형식.
+   * @param files - (선택) 첨부할 파일 배열. 여러 파일 전달 가능. `files` 필드로 전송된다.
    * @returns 생성된 피드백 데이터 (`{ feedback: FeedbackDto }`)
    *
    * **응답 상태 코드:**
    * - `201 Created`: 피드백 제출 성공
    * - `400 Bad Request`: 필수 필드 누락 또는 형식 오류 (빈 제목, 잘못된 이메일 등)
-   * - `502 Bad Gateway`: 서버 DB 저장 오류
+   * - `502 Bad Gateway`: 서버 DB 저장 또는 S3 업로드 오류
    *
    * @example
+   * // 텍스트만 (인증 불필요)
    * const { data } = await client.feedback.create({
    *   category: 'BUG',
    *   title: '로그인 오류',
@@ -73,11 +81,39 @@ export class FeedbackApi {
    *   userName: '홍길동',
    *   userEmail: 'hong@example.com',
    * });
-   * console.log(data.feedback.id);     // "uuid-abc"
-   * console.log(data.feedback.status); // "UNREAD"
+   * console.log(data.feedback.id);          // "uuid-abc"
+   * console.log(data.feedback.attachments); // null
+   *
+   * @example
+   * // 파일 첨부 (여러 파일 가능)
+   * const screenshotFile = new File([blob], 'screenshot.png', { type: 'image/png' });
+   * const logFile = new File([logText], 'error.log', { type: 'text/plain' });
+   * const { data } = await client.feedback.create(
+   *   { category: 'BUG', title: '스크린샷 첨부', content: '오류 화면입니다.' },
+   *   [screenshotFile, logFile]
+   * );
+   * console.log(data.feedback.attachments);
+   * // [
+   * //   { url: 'feedback-files/uuid-screenshot.png', name: 'screenshot.png', mimeType: 'image/png', size: 204800 },
+   * //   { url: 'feedback-files/uuid-error.log', name: 'error.log', mimeType: 'text/plain', size: 1024 },
+   * // ]
    */
-  create(body: CreateFeedbackRequestDto): Promise<HttpResponse<CreateFeedbackResponseDto>> {
-    return this.rb.path('/v1/feedback').post<CreateFeedbackResponseDto>(body);
+  create(
+    body: CreateFeedbackRequestDto,
+    files?: File[]
+  ): Promise<HttpResponse<CreateFeedbackResponseDto>> {
+    const rb = this.rb.path('/v1/feedback');
+
+    if (files && files.length > 0) {
+      const formData = new FormData();
+      Object.entries(body).forEach(([k, v]) => {
+        if (v != null) formData.append(k, String(v));
+      });
+      files.forEach((f) => formData.append('files', f));
+      return rb.post<CreateFeedbackResponseDto>(formData);
+    }
+
+    return rb.post<CreateFeedbackResponseDto>(body);
   }
 
   /**
@@ -100,7 +136,6 @@ export class FeedbackApi {
    * @example
    * // 첫 페이지 조회
    * const page1 = await client.feedback.list({ limit: 10 });
-   * console.log(page1.data.feedbacks.length); // 최대 10개
    *
    * // 다음 페이지 조회
    * if (page1.data.nextCursor) {
@@ -130,8 +165,8 @@ export class FeedbackApi {
    *
    * @example
    * const { data } = await client.feedback.getById('uuid-123');
-   * console.log(data.feedback.title);   // "로그인 오류"
-   * console.log(data.feedback.status);  // "UNREAD"
+   * console.log(data.feedback.title);        // "로그인 오류"
+   * console.log(data.feedback.attachments);  // 첨부 파일 목록 또는 null
    */
   getById(id: string): Promise<HttpResponse<FeedbackResponseDto>> {
     return this.rb.path(`/v1/feedback/${id}`).get<FeedbackResponseDto>();
@@ -146,7 +181,6 @@ export class FeedbackApi {
    *
    * @param id - 상태를 변경할 피드백 UUID
    * @param dto - 상태 변경 요청 데이터
-   *   - `status` (string): 변경할 상태. "UNREAD" | "READ" | "IN_PROGRESS" | "DONE"
    * @returns 갱신된 피드백 데이터 (`{ feedback: FeedbackDto }`)
    *
    * **응답 상태 코드:**
@@ -156,12 +190,7 @@ export class FeedbackApi {
    * - `502 Bad Gateway`: 서버 DB 갱신 오류
    *
    * @example
-   * // 피드백을 읽음 처리
-   * const { data } = await client.feedback.updateStatus('uuid-123', { status: 'READ' });
-   * console.log(data.feedback.status); // "READ"
-   *
-   * // 처리 완료 처리
-   * await client.feedback.updateStatus('uuid-123', { status: 'DONE' });
+   * await client.feedback.updateStatus('uuid-123', { status: 'READ' });
    */
   updateStatus(id: string, dto: UpdateFeedbackStatusDto): Promise<HttpResponse<FeedbackResponseDto>> {
     return this.rb.path(`/v1/feedback/${id}/status`).patch<FeedbackResponseDto>(dto);

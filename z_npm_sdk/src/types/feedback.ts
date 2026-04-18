@@ -4,6 +4,7 @@
  * `client.feedback.*` 메서드의 인자 및 반환값 타입으로 사용된다.
  *
  * Public interface:
+ * - {@link FeedbackAttachmentDto} — 첨부 파일 메타데이터 타입
  * - {@link CreateFeedbackRequestDto} — 피드백 생성 요청 타입
  * - {@link UpdateFeedbackStatusDto} — 피드백 상태 변경 요청 타입
  * - {@link FeedbackDto} — 피드백 단건 응답 타입
@@ -12,8 +13,32 @@
  */
 
 /**
+ * 피드백 첨부 파일 1개의 메타데이터 타입.
+ * `FeedbackDto.attachments` 배열의 요소 타입.
+ *
+ * @example
+ * const attachment: FeedbackAttachmentDto = {
+ *   url: 'feedback-files/uuid-report.pdf',
+ *   name: 'report.pdf',
+ *   mimeType: 'application/pdf',
+ *   size: 204800,
+ * };
+ */
+export interface FeedbackAttachmentDto {
+  /** @description S3 file bucket 객체 키. 다운로드 시 사용. */
+  url: string;
+  /** @description 원본 파일명. */
+  name: string;
+  /** @description MIME 타입. 예: "image/png", "application/pdf" */
+  mimeType: string;
+  /** @description 파일 크기 (bytes). */
+  size: number;
+}
+
+/**
  * 피드백 생성 요청 타입.
- * `client.feedback.create(dto)` 메서드의 인자 타입.
+ * `client.feedback.create(dto, files?)` 메서드의 첫 번째 인자 타입.
+ * 파일 첨부 시 `files` 인자에 File 배열을 전달한다.
  *
  * @example
  * const dto: CreateFeedbackRequestDto = {
@@ -68,7 +93,8 @@ export interface UpdateFeedbackStatusDto {
  *
  * @example
  * const { data } = await client.feedback.getById('uuid-123');
- * console.log(data.feedback.status); // "UNREAD"
+ * console.log(data.feedback.status);      // "UNREAD"
+ * console.log(data.feedback.attachments); // [{ url, name, mimeType, size }] 또는 null
  */
 export interface FeedbackDto {
   /** @description 피드백 고유 식별자. UUID v4 형식. */
@@ -85,6 +111,11 @@ export interface FeedbackDto {
   content: string;
   /** @description 현재 처리 상태. "UNREAD" | "READ" | "IN_PROGRESS" | "DONE" */
   status: string;
+  /**
+   * @description 첨부 파일 목록. 파일이 없으면 null.
+   * 각 항목에 S3 키(`url`), 원본 파일명(`name`), MIME 타입(`mimeType`), 크기(`size`)가 포함된다.
+   */
+  attachments: FeedbackAttachmentDto[] | null;
   /** @description 생성 일시. ISO 8601 형식 (예: "2024-03-12T10:00:00.000Z"). */
   createdAt: string;
   /** @description 최종 수정 일시. ISO 8601 형식. */

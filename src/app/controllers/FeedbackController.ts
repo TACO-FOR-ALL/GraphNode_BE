@@ -4,6 +4,7 @@
  *
  * 책임:
  * - Zod 스키마를 사용한 요청 데이터 검증
+ * - multipart/form-data 파일 배열을 FeedbackService에 전달
  * - FeedbackService 호출
  * - HTTP 응답 반환 (상태 코드, Location 헤더 등)
  * - 에러는 `next(err)`로 중앙 에러 핸들러에 위임
@@ -26,6 +27,7 @@ import {
  * @description
  * 모든 핸들러는 Zod 스키마로 입력을 검증한 뒤 Service 계층에 위임한다.
  * Zod `parse` 실패 시 ZodError가 throw되며, 중앙 에러 미들웨어가 RFC 9457 형식으로 직렬화한다.
+ * 파일 첨부 시 `req.files`(Multer 처리 결과)를 Service에 함께 전달한다.
  */
 export class FeedbackController {
   constructor(private readonly feedbackService: FeedbackService) {}
@@ -36,24 +38,39 @@ export class FeedbackController {
    *
    * @description
    * 요청 body를 `createFeedbackSchema`로 검증한 뒤 Service의 `createFeedback`을 호출한다.
-   * 성공 시 `201 Created`와 함께 생성된 피드백을 반환하고,
-   * `Location` 헤더를 `/v1/feedback/:id`로 설정한다.
+   * `multipart/form-data`로 전송된 경우 `req.files`에서 Multer 파일 배열을 추출하여 함께 전달한다.
+   * 파일 미첨부 시에도 정상 동작한다 (파일은 optional).
+   * 인증 없이 호출 가능한 공개 API이다.
    *
    * @param req - `req.body`: { category, userName?, userEmail?, title, content }
+   *              `req.files`: Express.Multer.File[] (multipart/form-data 'files' 필드)
    * @param res - 응답 객체
    * @param next - 에러 전달 함수
    * @returns `201 Created`: `{ feedback: FeedbackDto }`
    * @throws {ValidationError} VALIDATION_FAILED — Zod 검증 실패 (400)
-   * @throws {UpstreamError} UPSTREAM_ERROR — DB 저장 실패 (502)
+   * @throws {UpstreamError} UPSTREAM_ERROR — S3 업로드 또는 DB 저장 실패 (502)
    * @example
+   * // JSON 전송 (파일 없음)
    * POST /v1/feedback
+   * Content-Type: application/json
    * { "category": "BUG", "title": "로그인 오류", "content": "소셜 로그인 시 500 에러 발생" }
-   * → 201 { feedback: { id: "...", ... } }
+   * → 201 { feedback: { id: "...", attachments: null, ... } }
+   *
+   * @example
+   * // multipart/form-data 전송 (파일 첨부)
+   * POST /v1/feedback
+   * Content-Type: multipart/form-data
+   * fields: category, title, content
+   * files: files[] (여러 파일 가능)
+   * → 201 { feedback: { id: "...", attachments: [{ url, name, mimeType, size }], ... } }
    */
   async create(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const body = createFeedbackSchema.parse(req.body);
-      const feedback = await this.feedbackService.createFeedback(body);
+      const files = Array.isArray(req.files)
+        ? (req.files as Express.Multer.File[])
+        : undefined;
+      const feedback = await this.feedbackService.createFeedback(body, files);
       res.status(201).location(`/v1/feedback/${feedback.id}`).json({ feedback });
     } catch (err) {
       next(err);
@@ -64,10 +81,6 @@ export class FeedbackController {
    * 피드백 목록 조회 핸들러.
    * `GET /v1/feedback`
    *
-   * @description
-   * 쿼리 파라미터를 `listFeedbackQuerySchema`로 검증한 뒤 Service의 `listFeedbacks`를 호출한다.
-   * 커서 기반 페이지네이션을 지원한다.
-   *
    * @param req - `req.query`: { limit?: number, cursor?: string }
    * @param res - 응답 객체
    * @param next - 에러 전달 함수
@@ -77,8 +90,6 @@ export class FeedbackController {
    * @example
    * GET /v1/feedback?limit=10
    * → 200 { feedbacks: [...], nextCursor: "uuid-abc" }
-   * GET /v1/feedback?limit=10&cursor=uuid-abc
-   * → 200 { feedbacks: [...], nextCursor: null }
    */
   async list(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
@@ -93,9 +104,6 @@ export class FeedbackController {
   /**
    * 피드백 단건 조회 핸들러.
    * `GET /v1/feedback/:id`
-   *
-   * @description
-   * URL 파라미터의 `id`로 피드백 단건을 조회한다.
    *
    * @param req - `req.params.id`: 피드백 UUID
    * @param res - 응답 객체
@@ -120,9 +128,6 @@ export class FeedbackController {
   /**
    * 피드백 처리 상태 변경 핸들러.
    * `PATCH /v1/feedback/:id/status`
-   *
-   * @description
-   * 요청 body를 `updateFeedbackStatusSchema`로 검증한 뒤 Service의 `updateFeedbackStatus`를 호출한다.
    *
    * @param req - `req.params.id`: 피드백 UUID, `req.body`: { status: FeedbackStatus }
    * @param res - 응답 객체
@@ -150,10 +155,6 @@ export class FeedbackController {
   /**
    * 피드백 삭제 핸들러.
    * `DELETE /v1/feedback/:id`
-   *
-   * @description
-   * URL 파라미터의 `id`로 피드백을 영구 삭제한다.
-   * 성공 시 본문 없이 `204 No Content`를 반환한다.
    *
    * @param req - `req.params.id`: 피드백 UUID
    * @param res - 응답 객체

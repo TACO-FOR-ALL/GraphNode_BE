@@ -512,7 +512,8 @@ export class Container {
         this.getAwsS3Adapter(),
         this.getConversationRepository(),
         this.getNoteRepository(),
-        this.getNotificationService()
+        this.getNotificationService(),
+        this.getUserService()
       );
       this.microscopeManagementService = createAuditProxy(raw, 'MicroscopeManagementService');
     }
@@ -532,7 +533,7 @@ export class Container {
 
   getFeedbackService(): FeedbackService {
     if (!this.feedbackService) {
-      const raw = new FeedbackService(this.getFeedbackRepository());
+      const raw = new FeedbackService(this.getFeedbackRepository(), this.getAwsS3Adapter());
       this.feedbackService = createAuditProxy(raw, 'FeedbackService');
     }
     return this.feedbackService;
