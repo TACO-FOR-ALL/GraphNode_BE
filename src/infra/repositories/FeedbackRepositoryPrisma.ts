@@ -11,9 +11,15 @@
  * - {@link FeedbackRepositoryPrisma.deleteById} — 영구 삭제
  */
 
+import { Prisma } from '@prisma/client';
+
 import prisma from '../db/prisma';
 import type { FeedbackRepository } from '../../core/ports/FeedbackRepository';
-import type { CreateFeedbackRecord, FeedbackRecord } from '../../core/types/persistence/feedback.persistence';
+import type {
+  CreateFeedbackRecord,
+  FeedbackAttachmentItem,
+  FeedbackRecord,
+} from '../../core/types/persistence/feedback.persistence';
 import { NotFoundError } from '../../shared/errors/domain';
 
 /**
@@ -24,9 +30,8 @@ import { NotFoundError } from '../../shared/errors/domain';
 export class FeedbackRepositoryPrisma implements FeedbackRepository {
   /**
    * 새 피드백 레코드를 `feedbacks` 테이블에 저장한다.
-   * `id`, `createdAt`, `updatedAt`은 DB schema 기본값(`@default(uuid())`, `@default(now())`, `@updatedAt`)으로 자동 생성된다.
+   * `id`, `createdAt`, `updatedAt`은 DB schema 기본값으로 자동 생성된다.
    *
-   * @description `id`는 `schema.prisma`의 `@default(uuid())`로 PostgreSQL이 자동 생성한다.
    * @param data - 저장할 피드백 데이터 (`id`/`createdAt`/`updatedAt` 제외)
    * @returns 생성된 완전한 피드백 레코드
    * @throws {UpstreamError} UPSTREAM_ERROR — Prisma DB 쓰기 실패 시 (Service 계층에서 래핑)
@@ -38,6 +43,7 @@ export class FeedbackRepositoryPrisma implements FeedbackRepository {
    *   title: '버그 제보',
    *   content: '앱이 갑자기 종료됩니다.',
    *   status: 'UNREAD',
+   *   attachments: null,
    * });
    */
   async create(data: CreateFeedbackRecord): Promise<FeedbackRecord> {
@@ -49,6 +55,9 @@ export class FeedbackRepositoryPrisma implements FeedbackRepository {
         title: data.title,
         content: data.content,
         status: data.status,
+        attachments: data.attachments
+          ? (data.attachments as unknown as Prisma.InputJsonValue)
+          : Prisma.DbNull,
       },
     });
 
@@ -76,9 +85,6 @@ export class FeedbackRepositoryPrisma implements FeedbackRepository {
    * 커서 기반 페이지네이션으로 피드백 목록을 조회한다.
    * `createdAt DESC` 순으로 정렬되며, 동일 시각 레코드는 `id DESC`로 2차 정렬된다.
    *
-   * @description Prisma의 cursor 기반 페이지네이션을 사용한다.
-   * cursor가 있으면 해당 ID 레코드의 다음부터 조회한다 (`skip: 1`).
-   *
    * @param limit - 한 번에 가져올 최대 레코드 수. 1~100.
    * @param cursor - 이전 페이지의 마지막 레코드 ID. 첫 페이지는 undefined.
    * @returns 현재 페이지 레코드 배열과 다음 페이지 커서.
@@ -91,11 +97,11 @@ export class FeedbackRepositoryPrisma implements FeedbackRepository {
     cursor?: string
   ): Promise<{ items: FeedbackRecord[]; nextCursor: string | null }> {
     const feedbacks = await prisma.feedback.findMany({
-      take: limit + 1, // 다음 페이지 존재 여부 확인을 위해 1개 더 조회
+      take: limit + 1,
       ...(cursor
         ? {
             cursor: { id: cursor },
-            skip: 1, // cursor 자체는 제외
+            skip: 1,
           }
         : {}),
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -159,10 +165,10 @@ export class FeedbackRepositoryPrisma implements FeedbackRepository {
 
   /**
    * Prisma 모델 객체를 도메인 `FeedbackRecord` 타입으로 변환한다.
+   * `attachments` JSONB 컬럼을 `FeedbackAttachmentItem[]`으로 파싱한다.
    *
    * @param feedback - Prisma가 반환한 Feedback 모델 인스턴스
    * @returns 도메인 레코드 타입으로 변환된 FeedbackRecord
-   * @returns 불변 객체
    */
   private toRecord(feedback: {
     id: string;
@@ -172,6 +178,7 @@ export class FeedbackRepositoryPrisma implements FeedbackRepository {
     title: string;
     content: string;
     status: string;
+    attachments: unknown;
     createdAt: Date;
     updatedAt: Date;
   }): FeedbackRecord {
@@ -183,8 +190,22 @@ export class FeedbackRepositoryPrisma implements FeedbackRepository {
       title: feedback.title,
       content: feedback.content,
       status: feedback.status,
+      attachments: this.parseAttachments(feedback.attachments),
       createdAt: feedback.createdAt,
       updatedAt: feedback.updatedAt,
     };
+  }
+
+  /**
+   * Prisma JSON 필드(`unknown`)를 `FeedbackAttachmentItem[]`으로 안전하게 변환한다.
+   * 파싱에 실패하거나 null인 경우 null을 반환한다.
+   *
+   * @param raw - Prisma JSON 필드 값
+   * @returns 파싱된 첨부 파일 배열 또는 null
+   */
+  private parseAttachments(raw: unknown): FeedbackAttachmentItem[] | null {
+    if (!raw) return null;
+    if (!Array.isArray(raw)) return null;
+    return raw as FeedbackAttachmentItem[];
   }
 }

@@ -4,6 +4,7 @@
  * Presentation ↔ Core 계층 경계에서 사용되며, DB 레코드 타입과 분리된다.
  *
  * Public interface:
+ * - {@link FeedbackAttachmentDto} — 첨부 파일 메타데이터 DTO
  * - {@link CreateFeedbackRequestDto} — 피드백 생성 요청 DTO
  * - {@link UpdateFeedbackStatusDto} — 피드백 상태 변경 요청 DTO
  * - {@link FeedbackDto} — 피드백 응답 DTO (단건)
@@ -27,8 +28,24 @@ export const FEEDBACK_STATUSES = ['UNREAD', 'READ', 'IN_PROGRESS', 'DONE'] as co
 export type FeedbackStatus = (typeof FEEDBACK_STATUSES)[number];
 
 /**
+ * 첨부 파일 1개의 메타데이터 응답 DTO.
+ * `FeedbackDto.attachments` 배열의 요소 타입으로 사용된다.
+ */
+export interface FeedbackAttachmentDto {
+  /** @description S3 file bucket 객체 키. 다운로드 시 사용. 예: "feedback-files/uuid-report.pdf" */
+  url: string;
+  /** @description 원본 파일명. 예: "report.pdf" */
+  name: string;
+  /** @description MIME 타입. 예: "application/pdf", "image/png" */
+  mimeType: string;
+  /** @description 파일 크기 (bytes). */
+  size: number;
+}
+
+/**
  * 피드백 생성 요청 DTO.
  * `POST /v1/feedback` 요청 body에 대응한다.
+ * 파일 첨부 시에는 `multipart/form-data`로 전송하며, 파일은 `files` 필드로 전달한다.
  */
 export interface CreateFeedbackRequestDto {
   /**
@@ -83,6 +100,11 @@ export interface FeedbackDto {
   content: string;
   /** @description 현재 처리 상태. */
   status: string;
+  /**
+   * @description 첨부 파일 목록. 파일이 없으면 null.
+   * 각 항목에 S3 키(`url`), 원본 파일명(`name`), MIME 타입(`mimeType`), 크기(`size`)가 포함된다.
+   */
+  attachments: FeedbackAttachmentDto[] | null;
   /** @description 생성 일시. ISO 8601 형식 (예: "2024-03-12T10:00:00.000Z"). */
   createdAt: string;
   /** @description 최종 수정 일시. ISO 8601 형식. */
