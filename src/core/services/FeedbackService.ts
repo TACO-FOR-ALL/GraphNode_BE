@@ -16,7 +16,10 @@ import { v4 as uuidv4 } from 'uuid';
 
 import type { FeedbackRepository } from '../ports/FeedbackRepository';
 import type { StoragePort } from '../ports/StoragePort';
-import type { CreateFeedbackRecord, FeedbackAttachmentItem } from '../types/persistence/feedback.persistence';
+import type {
+  CreateFeedbackRecord,
+  FeedbackAttachmentItem,
+} from '../types/persistence/feedback.persistence';
 import {
   DEFAULT_FEEDBACK_STATUS,
   FEEDBACK_STATUSES,
@@ -164,9 +167,7 @@ export class FeedbackService {
    */
   async updateFeedbackStatus(id: string, dto: UpdateFeedbackStatusDto): Promise<FeedbackDto> {
     if (!(FEEDBACK_STATUSES as readonly string[]).includes(dto.status)) {
-      throw new ValidationError(
-        `status must be one of: ${FEEDBACK_STATUSES.join(', ')}`
-      );
+      throw new ValidationError(`status must be one of: ${FEEDBACK_STATUSES.join(', ')}`);
     }
 
     try {

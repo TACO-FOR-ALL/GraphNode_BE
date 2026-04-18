@@ -512,7 +512,8 @@ export class Container {
         this.getAwsS3Adapter(),
         this.getConversationRepository(),
         this.getNoteRepository(),
-        this.getNotificationService()
+        this.getNotificationService(),
+        this.getUserService()
       );
       this.microscopeManagementService = createAuditProxy(raw, 'MicroscopeManagementService');
     }
