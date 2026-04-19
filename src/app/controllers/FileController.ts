@@ -31,33 +31,40 @@ export class FileController {
   /**
    * 파일 다운로드/조회 핸들러
    * GET /api/v1/ai/files/:key
+   * req.params[0] 에서 S3 key를 추출한다 (슬래시 포함 경로 지원).
    */
-  async downloadFile(req: Request, res: Response) {
-    // req.params.key 에는 '/' 문자가 포함될 수 있으므로, 라우터에서 Wildcard 처리가 필요함 (*).
+  async downloadFile(req: Request, res: Response): Promise<void> {
     const key = req.params.key || req.params[0];
+    if (!key) throw new ValidationError('File key is required');
+    await this.streamFileToResponse(key, res);
+  }
 
-    if (!key) {
-      throw new ValidationError('File key is required');
-    }
+  /**
+   * 마운트 경로 기반 파일 다운로드 핸들러
+   * GET /feedback-files/:name, GET /chat-files/:name, GET /sdk-files/:name 등
+   *
+   * req.baseUrl + req.path 로 S3 key를 복원한다.
+   * 예) req.baseUrl="/feedback-files", req.path="/uuid-icon.png"
+   *   → key = "feedback-files/uuid-icon.png"
+   */
+  async downloadFileByFullPath(req: Request, res: Response): Promise<void> {
+    const key = (req.baseUrl + req.path).slice(1);
+    if (!key) throw new ValidationError('File key is required');
+    await this.streamFileToResponse(key, res);
+  }
 
-    try {
-      const file = await this.s3Adapter.downloadFile(key, { bucketType: 'file' });
-      const filename = key.split('/').pop() || 'file';
+  /**
+   * S3에서 파일을 받아 HTTP 응답으로 스트리밍하는 공통 로직.
+   */
+  private async streamFileToResponse(key: string, res: Response): Promise<void> {
+    const file = await this.s3Adapter.downloadFile(key, { bucketType: 'file' });
+    const filename = key.split('/').pop() || 'file';
 
-      res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
-      if (file.contentType) {
-        res.setHeader('Content-Type', file.contentType);
-      } else {
-        res.setHeader('Content-Type', 'application/octet-stream');
-      }
-      if (file.contentLength) {
-        res.setHeader('Content-Length', file.contentLength);
-      }
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.setHeader('Content-Type', file.contentType ?? 'application/octet-stream');
+    if (file.contentLength) res.setHeader('Content-Length', file.contentLength);
 
-      res.end(file.buffer);
-    } catch (err) {
-      throw err;
-    }
+    res.end(file.buffer);
   }
 
   /**
