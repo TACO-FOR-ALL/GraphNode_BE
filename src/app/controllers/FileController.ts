@@ -80,8 +80,9 @@ export class FileController {
 
     const attachments: FileAttachment[] = [];
     for (const file of files) {
-      // url 부분은 key를 그대로 쓰고, chat-files와는 구분되는 'sdk-files' 등의 이름으로 처리
-      const key = `sdk-files/${uuidv4()}-${file.originalname}`;
+      const ext = file.originalname.includes('.') ? '.' + file.originalname.split('.').pop() : '';
+      const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const key = `sdk-files/${uuidv4()}-${date}${ext}`;
       
       // S3 File Bucket에 업로드
       await this.s3Adapter.upload(key, file.buffer, file.mimetype, { bucketType: 'file' });

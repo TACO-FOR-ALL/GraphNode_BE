@@ -597,7 +597,9 @@ export class AiInteractionService {
 
     const attachments: Attachment[] = [];
     for (const file of files) {
-      const key = `chat-files/${uuidv4()}-${file.originalname}`;
+      const ext = file.originalname.includes('.') ? '.' + file.originalname.split('.').pop() : '';
+      const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const key = `chat-files/${uuidv4()}-${date}${ext}`;
       // S3 File Bucket에 업로드
       await withRetry(
         async () =>
