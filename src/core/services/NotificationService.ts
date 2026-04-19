@@ -209,10 +209,18 @@ export class NotificationService {
    * 신뢰성 보강:
    * - 기존: Redis Pub/Sub만 사용 → SSE가 끊긴 동안 발행된 알림은 유실될 수 있음
    * - 변경: MongoDB에 알림 이력을 먼저 저장 → 재연결 시 `?since=` 기반 replay로 유실을 보완
+   *
+   * @param options.logicalTimestamp — 지정 시 이벤트 루트·payload.timestamp·Mongo createdAt에 동일하게 반영합니다.
+   *   그래프 진행률처럼 AI 시각 기준으로 FE가 순서를 맞춰야 할 때 사용합니다. 미지정 시 서버 현재 시각입니다.
    */
-  async sendNotification(userId: string, type: string, payload: any): Promise<void> {
+  async sendNotification(
+    userId: string,
+    type: string,
+    payload: any,
+    options?: { logicalTimestamp?: string }
+  ): Promise<void> {
     const channel = this.getUserChannel(userId);
-    const timestamp = new Date().toISOString();
+    const timestamp = options?.logicalTimestamp ?? new Date().toISOString();
     const id = ulid(); // replay 커서(cursor)
 
     // SDK: BaseNotificationPayload expects timestamp inside payload
@@ -226,7 +234,13 @@ export class NotificationService {
     // - 알림은 실시간으로도 전달되지만(아래 publish), 네트워크/브라우저 이슈로 SSE가 끊겨 있으면 수신하지 못합니다.
     // - 따라서 여기서 이력을 저장해두고, FE가 재연결할 때 `?since=<마지막커서>`로 미수신분을 replay 받을 수 있게 합니다.
     // - 저장이 실패하면 replay 기반 유실 방지가 불가능해지므로, publish보다 먼저 수행합니다.
-    const now = Date.now();
+    const now = (() => {
+      if (options?.logicalTimestamp) {
+        const parsed = Date.parse(options.logicalTimestamp);
+        return Number.isFinite(parsed) ? parsed : Date.now();
+      }
+      return Date.now();
+    })();
     const retentionDays = 7; //TODO: 일단 ttl을 7일로 설정했는데 추후에 변경하면됌!
     const expiresAt = new Date(now + retentionDays * 24 * 60 * 60 * 1000);
 
@@ -304,22 +318,29 @@ export class NotificationService {
 
   /**
    * 그래프 생성 진행률이 갱신되었음을 알립니다.
-   * @param userId 사용자 ID
-   * @param taskId 작업 ID
-   * @param completedStage 마지막으로 완료된 단계
-   * @param progressPercent 전체 진행률(0~100)
+   * SQS envelope의 timestamp를 그대로 써서 FE가 진행 이벤트 순서를 맞출 수 있게 합니다.
    */
-  async sendGraphGenerationProgressUpdated(
-    userId: string,
-    taskId: string,
-    completedStage: string,
-    progressPercent: number
-  ): Promise<void> {
-    await this.sendNotification(userId, NotificationType.GRAPH_GENERATION_PROGRESS_UPDATED, {
-      taskId,
-      completedStage,
-      progressPercent,
-    });
+  async sendGraphGenerationProgressUpdated(params: {
+    userId: string;
+    taskId: string;
+    /** AI가 보낸 ISO8601 시각 — payload·이벤트 루트에 동일 적용 */
+    sourceTimestamp: string;
+    currentStage: string;
+    progressPercent: number;
+    etaSeconds: number | null;
+  }): Promise<void> {
+    const { userId, taskId, sourceTimestamp, currentStage, progressPercent, etaSeconds } = params;
+    await this.sendNotification(
+      userId,
+      NotificationType.GRAPH_GENERATION_PROGRESS_UPDATED,
+      {
+        taskId,
+        currentStage,
+        progressPercent,
+        etaSeconds,
+      },
+      { logicalTimestamp: sourceTimestamp }
+    );
   }
 
   // ── 그래프 요약 (Graph Summary) 전용 메서드 ────────────────────────────────

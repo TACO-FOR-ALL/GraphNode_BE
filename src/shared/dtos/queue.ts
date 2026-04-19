@@ -12,7 +12,7 @@
 export enum TaskType {
   GRAPH_GENERATION_REQUEST = 'GRAPH_GENERATION_REQUEST', // API -> AI
   GRAPH_GENERATION_RESULT = 'GRAPH_GENERATION_RESULT', // AI -> Worker
-  GRAPH_GENERATION_PROGRESS_RESULT = 'GRAPH_GENERATION_PROGRESS_RESULT', // AI -> Worker (Graph progress)
+  GRAPH_GENERATION_PROGRESS = 'GRAPH_GENERATION_PROGRESS',  // AI -> Worker (Graph progress)
   GRAPH_SUMMARY_REQUEST = 'GRAPH_SUMMARY_REQUEST', // API -> AI (Summary only)
   GRAPH_SUMMARY_RESULT = 'GRAPH_SUMMARY_RESULT', // AI -> Worker (Summary result)
   ADD_NODE_REQUEST = 'ADD_NODE_REQUEST', // API -> AI (single conversation)
@@ -81,19 +81,21 @@ export interface GraphGenResultPayload extends BaseQueueMessage {
 
 // 2-1. AI -> Worker: 그래프 생성 진행률 메시지
 /**
- * 그래프 생성 진행률 메시지 페이로드(AI -> Worker)
- * - taskType: 메시지 타입 식별자
- * - payload: 실제 진행률 데이터
- * - userId: 요청한 사용자 ID
- * - completedStage: 마지막으로 완료된 단계
- * - progressPercent: 전체 작업 기준 진행률(0~100)
+ * 그래프 생성 진행률 메시지(AI -> Worker, result SQS).
+ *
+ * - timestamp: AI가 메시지를 보낸 시각(ISO8601). FE는 순서 판단에 사용.
+ * - currentStage: "[N단계] 단계명 시작|중|완료" 형태 문자열(AI 규칙 따름).
+ * - progressPercent: 해당 단계 내 0~100.
+ * - etaSeconds: 예상 잔여 초(일부 단계만 제공, 없으면 null).
  */
 export interface GraphProgressPayload extends BaseQueueMessage {
-  taskType: TaskType.GRAPH_GENERATION_PROGRESS_RESULT;
+  taskType: TaskType.GRAPH_GENERATION_PROGRESS;
   payload: {
     userId: string;
-    completedStage: string; // AI가 전달한 단계명을 그대로 사용
+    currentStage: string; // AI가 전달한 단계명을 그대로 사용
     progressPercent: number;
+    /** 임베딩/키워드/요약 등에서만 의미 있음. 없으면 null */
+    etaSeconds: number | null;
   };
 }
 

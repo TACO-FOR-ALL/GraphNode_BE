@@ -213,23 +213,18 @@ describe('NotificationService', () => {
       }));
     });
 
-    it('sendGraphGenerationProgressUpdated should publish progress payload and BE timestamp', async () => {
-      // Arrange: AI에서 전달받은 단계 문자열을 그대로 사용한다.
-      const completedStage = 'clusters_created_and_mapped';
-      const progressPercent = 50;
+    it('sendGraphGenerationProgressUpdated는 AI 시각을 payload·이벤트 루트에 동일 반영해야 한다', async () => {
+      const sourceTimestamp = '2026-04-18T07:47:46.067554Z';
 
-      // Act
-      await service.sendGraphGenerationProgressUpdated(
+      await service.sendGraphGenerationProgressUpdated({
         userId,
         taskId,
-        completedStage,
-        progressPercent
-      );
+        sourceTimestamp,
+        currentStage: '[3단계] 클러스터 생성 및 매핑 중',
+        progressPercent: 50,
+        etaSeconds: null,
+      });
 
-      // Assert:
-      // 1) 이벤트 타입은 GRAPH_GENERATION_PROGRESS_UPDATED 이어야 한다.
-      // 2) payload는 stage/progress/taskId를 포함해야 한다.
-      // 3) timestamp는 NotificationService(sendNotification)에서 BE 시각으로 덮어쓴 값이어야 한다.
       expect(mockEventBus.publish).toHaveBeenCalledWith(
         `notification:user:${userId}`,
         expect.objectContaining({
@@ -237,11 +232,12 @@ describe('NotificationService', () => {
           type: 'GRAPH_GENERATION_PROGRESS_UPDATED',
           payload: expect.objectContaining({
             taskId,
-            completedStage: 'clusters_created_and_mapped',
+            currentStage: '[3단계] 클러스터 생성 및 매핑 중',
             progressPercent: 50,
-            timestamp: expect.any(String),
+            etaSeconds: null,
+            timestamp: sourceTimestamp,
           }),
-          timestamp: expect.any(String),
+          timestamp: sourceTimestamp,
         })
       );
     });

@@ -50,6 +50,7 @@ import { TaskType } from '@taco_tsinghua/graphnode-sdk';
 | 값 | 방향 | 설명 |
 | --- | --- | --- |
 | `GRAPH_GENERATION_REQUEST` | API -> AI | 그래프 생성 요청 |
+| `GRAPH_GENERATION_PROGRESS` | AI -> API | 그래프 생성 중간 진행률(result SQS) |
 | `GRAPH_GENERATION_RESULT` | AI -> API | 그래프 생성 결과 |
 | `GRAPH_SUMMARY_REQUEST` | API -> AI | 그래프 요약 요청 |
 | `GRAPH_SUMMARY_RESULT` | AI -> API | 그래프 요약 결과 |
@@ -63,7 +64,7 @@ import { TaskType } from '@taco_tsinghua/graphnode-sdk';
 ```text
 GRAPH_GENERATION_REQUEST
   -> GRAPH_GENERATION_REQUESTED
-  -> GRAPH_GENERATION_PROGRESS_RESULT
+  -> GRAPH_GENERATION_PROGRESS_UPDATED (여러 번)
   -> GRAPH_GENERATION_COMPLETED | GRAPH_GENERATION_FAILED
 
 GRAPH_SUMMARY_REQUEST
@@ -96,7 +97,7 @@ import { NotificationType, type NotificationTypeValue } from '@taco_tsinghua/gra
 | `GRAPH_GENERATION_REQUEST_FAILED` | 그래프 생성 요청 접수 자체가 실패 | `GraphGenerationRequestFailedPayload` | `GraphGenerationRequestFailedNotificationEvent` |
 | `GRAPH_GENERATION_COMPLETED` | 그래프 생성과 저장이 완료됨 | `GraphGenerationCompletedPayload` | `GraphGenerationCompletedNotificationEvent` |
 | `GRAPH_GENERATION_FAILED` | 그래프 생성 또는 저장이 실패함 | `GraphGenerationFailedPayload` | `GraphGenerationFailedNotificationEvent` |
-| `GRAPH_GENERATION_PROGRESS_RESULT` | 그래프 생성 진행률 중간 이벤트 | `GraphGenerationProgressPayload` | `GraphGenerationProgressNotificationEvent` |
+| `GRAPH_GENERATION_PROGRESS_UPDATED` | 그래프 생성 진행률 중간 이벤트 | `GraphGenerationProgressPayload` | `GraphGenerationProgressNotificationEvent` |
 
 ### 그래프 요약 이벤트
 
@@ -162,9 +163,9 @@ interface FailedPayload extends BaseNotificationPayload {
 
 ```typescript
 interface GraphGenerationProgressPayload extends BaseNotificationPayload {
-  userId: string;
-  completedStage: string;
+  currentStage: string;
   progressPercent: number;
+  etaSeconds: number | null;
 }
 
 interface AddConversationCompletedPayload extends BaseNotificationPayload {
@@ -215,7 +216,7 @@ client.notification.stream((event: TypedNotificationEvent) => {
       console.log(event.payload.nodeCount, event.payload.edgeCount);
       break;
 
-    case NotificationType.GRAPH_GENERATION_PROGRESS_RESULT:
+    case NotificationType.GRAPH_GENERATION_PROGRESS_UPDATED:
       console.log(event.payload.progressPercent);
       break;
 
@@ -254,7 +255,7 @@ function handleAddConversationCompleted(event: AddConversationCompletedEvent) {
 | `GRAPH_GENERATION_REQUEST_FAILED` | `GraphGenerationRequestFailedNotificationEvent` |
 | `GRAPH_GENERATION_COMPLETED` | `GraphGenerationCompletedNotificationEvent` |
 | `GRAPH_GENERATION_FAILED` | `GraphGenerationFailedNotificationEvent` |
-| `GRAPH_GENERATION_PROGRESS_RESULT` | `GraphGenerationProgressNotificationEvent` |
+| `GRAPH_GENERATION_PROGRESS_UPDATED` | `GraphGenerationProgressNotificationEvent` |
 | `GRAPH_SUMMARY_REQUESTED` | `GraphSummaryRequestedNotificationEvent` |
 | `GRAPH_SUMMARY_REQUEST_FAILED` | `GraphSummaryRequestFailedNotificationEvent` |
 | `GRAPH_SUMMARY_COMPLETED` | `GraphSummaryCompletedNotificationEvent` |
