@@ -335,129 +335,6 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../schemas/problem.json'
-  /v1/graph-ai/generate:
-    post:
-      summary: Request full graph generation
-      description: >-
-        Triggers a full rebuild of the knowledge graph for the current user.
-        The process is asynchronous and managed via SQS.
-      tags: [GraphAI]
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                includeSummary:
-                  type: boolean
-                  description: Whether to also generate a graph summary.
-      responses:
-        '202':
-          description: Accepted — generation queued
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  taskId: { type: string }
-                  status: { type: string, enum: [queued] }
-                  message: { type: string }
-        '401':
-          description: Unauthorized
-    
-  /v1/graph-ai/add-node:
-    post:
-      summary: Add updated content to existing graph
-      description: >-
-        Identifies new or changed conversations/notes since the last graph update
-        and adds them to the existing knowledge graph.
-      tags: [GraphAI]
-      responses:
-        '202':
-          description: Accepted — add-node task queued
-        '200':
-          description: OK — nothing to add
-        '401':
-          description: Unauthorized
-
-  /v1/graph-ai/summary:
-    get:
-      summary: Get current graph summary
-      description: Returns the latest generated summary of the user's knowledge graph.
-      tags: [GraphAI]
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '../schemas/graph-summary.json'
-        '401':
-          description: Unauthorized
-        '404':
-          description: Not Found — summary does not exist
-    post:
-      summary: Request graph summary generation
-      description: Triggers an asynchronous task to (re)generate the graph summary.
-      tags: [GraphAI]
-      responses:
-        '202':
-          description: Accepted — summary task queued
-        '401':
-          description: Unauthorized
-    delete:
-      summary: Delete graph summary
-      description: Soft deletes or permanently deletes the graph summary.
-      tags: [GraphAI]
-      parameters:
-        - name: permanent
-          in: query
-          schema:
-            type: boolean
-            default: false
-      responses:
-        '204':
-          description: No Content — deleted
-        '401':
-          description: Unauthorized
-
-  /v1/graph-ai/summary/restore:
-    post:
-      summary: Restore deleted graph summary
-      tags: [GraphAI]
-      responses:
-        '200':
-          description: OK — restored
-        '401':
-          description: Unauthorized
-
-  /v1/graph-ai:
-    delete:
-      summary: Clear entire knowledge graph
-      description: Deletes all nodes, edges, and subclusters for the user.
-      tags: [GraphAI]
-      parameters:
-        - name: permanent
-          in: query
-          schema:
-            type: boolean
-            default: false
-      responses:
-        '204':
-          description: No Content — graph cleared
-        '401':
-          description: Unauthorized
-
-  /v1/graph-ai/restore:
-    post:
-      summary: Restore cleared knowledge graph
-      tags: [GraphAI]
-      responses:
-        '200':
-          description: OK — restored
-        '401':
-          description: Unauthorized
-
   /auth/google/start:
     get:
       summary: Start Google OAuth (redirects)
@@ -2311,11 +2188,23 @@ paths:
                     items:
                       $ref: '#/components/schemas/Note'
         '400':
-          $ref: '#/components/responses/BadRequestError'
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         '401':
-          $ref: '#/components/responses/UnauthorizedError'
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         '500':
-          $ref: '#/components/responses/InternalServerError'
+          description: Internal Server Error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
   /v1/notes:
     post:
       summary: Create a note
@@ -2941,6 +2830,255 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }
+  /v1/feedback:
+    post:
+      summary: Submit feedback
+      description: >-
+        사용자 피드백을 제출한다. 파일 첨부 시 multipart/form-data로 전송하며,
+        첨부 없이 application/json으로도 호출 가능하다. 인증 불필요.
+      tags: [Feedback]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [category, title, content]
+              properties:
+                category: { type: string, minLength: 1, maxLength: 191 }
+                userName: { type: string, maxLength: 191, nullable: true }
+                userEmail: { type: string, format: email, maxLength: 191, nullable: true }
+                title: { type: string, minLength: 1, maxLength: 1000 }
+                content: { type: string, minLength: 1, maxLength: 10000 }
+                files:
+                  type: array
+                  items: { type: string, format: binary }
+          application/json:
+            schema:
+              type: object
+              required: [category, title, content]
+              properties:
+                category: { type: string, minLength: 1, maxLength: 191 }
+                userName: { type: string, maxLength: 191, nullable: true }
+                userEmail: { type: string, format: email, maxLength: 191, nullable: true }
+                title: { type: string, minLength: 1, maxLength: 1000 }
+                content: { type: string, minLength: 1, maxLength: 10000 }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  feedback: { $ref: '#/components/schemas/Feedback' }
+        '400':
+          description: Bad Request — 필수 필드 누락 또는 형식 오류
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '502':
+          description: Bad Gateway — S3 업로드 또는 DB 저장 실패
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+    get:
+      summary: List feedbacks
+      description: 커서 기반 페이지네이션으로 피드백 목록을 조회한다.
+      tags: [Feedback]
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - in: query
+          name: cursor
+          schema: { type: string }
+          description: 이전 응답의 nextCursor 값
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  feedbacks:
+                    type: array
+                    items: { $ref: '#/components/schemas/Feedback' }
+                  nextCursor:
+                    oneOf:
+                      - { type: string }
+                      - { type: 'null' }
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '502':
+          description: Bad Gateway
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+  /v1/feedback/{id}:
+    get:
+      summary: Get feedback by ID
+      tags: [Feedback]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  feedback: { $ref: '#/components/schemas/Feedback' }
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '502':
+          description: Bad Gateway
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+    delete:
+      summary: Delete feedback
+      tags: [Feedback]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: No Content
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '502':
+          description: Bad Gateway
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+  /v1/feedback/{id}/status:
+    patch:
+      summary: Update feedback status
+      tags: [Feedback]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [UNREAD, READ, IN_PROGRESS, DONE]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  feedback: { $ref: '#/components/schemas/Feedback' }
+        '400':
+          description: Bad Request — 유효하지 않은 status 값
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '502':
+          description: Bad Gateway
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+  /feedback-files/{key}:
+    get:
+      summary: Download feedback attachment
+      description: >-
+        피드백 첨부 파일을 S3에서 직접 서빙한다.
+        key는 피드백 응답의 attachments[].url 값이다.
+        FE에서 {domain}/{url} 형태로 이미지를 바로 렌더링할 수 있다.
+      tags: [Files]
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string }
+          description: 파일명 (예:uuid-image.png)
+      responses:
+        '200':
+          description: 파일 데이터
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '404':
+          description: File not found
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+  /chat-files/{key}:
+    get:
+      summary: Download chat attachment
+      description: AI 채팅 첨부 파일을 S3에서 직접 서빙한다.
+      tags: [Files]
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 파일 데이터
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '404':
+          description: File not found
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+  /sdk-files/{key}:
+    get:
+      summary: Download SDK-uploaded file
+      description: SDK를 통해 업로드된 파일을 S3에서 직접 서빙한다.
+      tags: [Files]
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 파일 데이터
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '404':
+          description: File not found
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
   /v1/graph-ai/add-node:
     post:
       summary: Add updated conversation nodes to graph (Batch)
@@ -2998,6 +3136,50 @@ components:
       $ref: ../schemas/api-key-response.json
     UpdateApiKeyRequest:
       $ref: ../schemas/update-api-key-request.json
+    Feedback:
+      type: object
+      required: [id, category, title, content, status, attachments, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        category:
+          type: string
+        userName:
+          type: string
+          nullable: true
+        userEmail:
+          type: string
+          nullable: true
+        title:
+          type: string
+        content:
+          type: string
+        status:
+          type: string
+          enum: [UNREAD, READ, IN_PROGRESS, DONE]
+        attachments:
+          oneOf:
+            - type: 'null'
+            - type: array
+              items:
+                type: object
+                required: [url, name, mimeType, size]
+                properties:
+                  url:
+                    type: string
+                  name:
+                    type: string
+                  mimeType:
+                    type: string
+                  size:
+                    type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
   examples:
     meGet200:
       externalValue: ./examples/me-get-200.json
