@@ -33,6 +33,7 @@ import { makeFileRouter } from './modules/file.module';
 import { makeMicroscopeRouter } from './modules/microscope.module';
 import { makeSearchRouter } from './modules/search.module';
 import { makeFeedbackRouter } from './modules/feedback.module';
+import { makeFileProxyRouter } from './modules/fileProxy.module';
 import { CleanupCron } from '../infra/cron/CleanupCron';
 // import { createTestAgentRouter } from '../app/routes/agent.test';
 
@@ -103,6 +104,12 @@ export function createApp() {
   // File Router (Direct S3 Access for AI Files)
   // AiInteractionService가 생성하는 URL(/api/v1/ai/files/...)과 일치하도록 설정
   app.use('/api/v1/ai/files', makeFileRouter());
+
+  // File Proxy Routes — S3 key prefix와 동일한 경로에 마운트하여
+  // FE가 {domain}/{s3-key} 형태의 URL로 파일을 바로 렌더링할 수 있게 한다.
+  app.use('/feedback-files', makeFileProxyRouter());
+  app.use('/chat-files',     makeFileProxyRouter());
+  app.use('/sdk-files',      makeFileProxyRouter());
 
   // Auth routes
   app.use('/auth/google', authGoogleRouter);
