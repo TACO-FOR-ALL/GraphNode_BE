@@ -17,6 +17,8 @@
 export enum TaskType {
   GRAPH_GENERATION_REQUEST = 'GRAPH_GENERATION_REQUEST',
   GRAPH_GENERATION_RESULT = 'GRAPH_GENERATION_RESULT',
+  /** AI → Worker: 그래프 생성 중간 진행률(result SQS) */
+  GRAPH_GENERATION_PROGRESS = 'GRAPH_GENERATION_PROGRESS',
 
   GRAPH_SUMMARY_REQUEST = 'GRAPH_SUMMARY_REQUEST',
   GRAPH_SUMMARY_RESULT = 'GRAPH_SUMMARY_RESULT',
@@ -42,7 +44,8 @@ export const NotificationType = {
   GRAPH_GENERATION_REQUEST_FAILED: 'GRAPH_GENERATION_REQUEST_FAILED',
   GRAPH_GENERATION_COMPLETED: 'GRAPH_GENERATION_COMPLETED',
   GRAPH_GENERATION_FAILED: 'GRAPH_GENERATION_FAILED',
-  GRAPH_GENERATION_PROGRESS_RESULT: 'GRAPH_GENERATION_PROGRESS_RESULT',
+  /** 그래프 생성 진행률(단계/ETA). 서버 NotificationType과 동일 */
+  GRAPH_GENERATION_PROGRESS_UPDATED: 'GRAPH_GENERATION_PROGRESS_UPDATED',
 
   GRAPH_SUMMARY_REQUESTED: 'GRAPH_SUMMARY_REQUESTED',
   GRAPH_SUMMARY_REQUEST_FAILED: 'GRAPH_SUMMARY_REQUEST_FAILED',
@@ -163,27 +166,22 @@ export interface GraphGenerationFailedPayload extends BaseNotificationPayload {
 }
 
 /**
- * `GRAPH_GENERATION_PROGRESS_RESULT` 이벤트의 payload입니다.
+ * `GRAPH_GENERATION_PROGRESS_UPDATED` 이벤트의 payload입니다.
  *
- * 그래프 생성이 아직 진행 중일 때 중간 진행 상황을 알리기 위해 내려오는 이벤트입니다.
- * 최종 완료 이벤트는 아니므로, 이후 completed 또는 failed가 추가로 올 수 있습니다.
- *
- * FE 활용 예:
- * - 진행률 바 표시
- * - 현재 단계 라벨 표시
- * - 오래 걸리는 작업이 진행 중임을 사용자에게 유지 표시
+ * 그래프 생성이 진행 중일 때 단계/퍼센트/ETA를 알립니다. SQS 도착 순서와 무관하게
+ * `timestamp`(AI가 보낸 시각)로 최신 이벤트만 반영하는 것을 권장합니다.
  *
  * @public
  */
 export interface GraphGenerationProgressPayload extends BaseNotificationPayload {
-  /** 해당 생성 작업과 연결된 사용자 식별자입니다. */
-  userId: string;
+  /** "[N단계] 단계명 시작|중|완료" 형태(AI 규칙) */
+  currentStage: string;
 
-  /** 백엔드가 정의한 현재 완료 단계 이름입니다. */
-  completedStage: string;
-
-  /** 백엔드가 내려주는 진행률 퍼센트 값입니다. 일반적으로 0~100 범위를 기대합니다. */
+  /** 해당 단계 내 진행률(0~100) */
   progressPercent: number;
+
+  /** 예상 잔여 초. 임베딩/키워드/요약 등에서만 의미 있음, 그 외 null */
+  etaSeconds: number | null;
 }
 
 /**
@@ -424,7 +422,7 @@ export interface NotificationPayloadMap {
   [NotificationType.GRAPH_GENERATION_REQUEST_FAILED]: GraphGenerationRequestFailedPayload;
   [NotificationType.GRAPH_GENERATION_COMPLETED]: GraphGenerationCompletedPayload;
   [NotificationType.GRAPH_GENERATION_FAILED]: GraphGenerationFailedPayload;
-  [NotificationType.GRAPH_GENERATION_PROGRESS_RESULT]: GraphGenerationProgressPayload;
+  [NotificationType.GRAPH_GENERATION_PROGRESS_UPDATED]: GraphGenerationProgressPayload;
   [NotificationType.GRAPH_SUMMARY_REQUESTED]: GraphSummaryRequestedPayload;
   [NotificationType.GRAPH_SUMMARY_REQUEST_FAILED]: GraphSummaryRequestFailedPayload;
   [NotificationType.GRAPH_SUMMARY_COMPLETED]: GraphSummaryCompletedPayload;
@@ -502,14 +500,12 @@ export interface GraphGenerationFailedNotificationEvent
   extends TypedNotificationEventBase<typeof NotificationType.GRAPH_GENERATION_FAILED> {}
 
 /**
- * `GRAPH_GENERATION_PROGRESS_RESULT` 전용 완성형 event 타입입니다.
- *
- * 단계형 또는 퍼센트 기반 진행률 UI를 표시할 때 사용합니다.
+ * `GRAPH_GENERATION_PROGRESS_UPDATED` 전용 완성형 event 타입입니다.
  *
  * @public
  */
 export interface GraphGenerationProgressNotificationEvent
-  extends TypedNotificationEventBase<typeof NotificationType.GRAPH_GENERATION_PROGRESS_RESULT> {}
+  extends TypedNotificationEventBase<typeof NotificationType.GRAPH_GENERATION_PROGRESS_UPDATED> {}
 
 /**
  * `GRAPH_SUMMARY_REQUESTED` 전용 완성형 event 타입입니다.
