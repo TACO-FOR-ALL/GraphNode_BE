@@ -13,6 +13,7 @@ export const NotificationType = {
   // 그래프 생성 결과 관련
   GRAPH_GENERATION_COMPLETED: 'GRAPH_GENERATION_COMPLETED',
   GRAPH_GENERATION_FAILED: 'GRAPH_GENERATION_FAILED',
+  /** 그래프 생성 중 진행률(단계 문구·퍼센트·ETA). payload.timestamp 는 AI 시각 유지 */
   GRAPH_GENERATION_PROGRESS_UPDATED: 'GRAPH_GENERATION_PROGRESS_UPDATED',
 
   // 그래프 요약 관련
