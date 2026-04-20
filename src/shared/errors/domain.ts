@@ -79,18 +79,31 @@ export class ConflictError extends AppError {
 
 /**
  * 요청 제한 초과 (429 Too Many Requests)
- * - 짧은 시간에 너무 많은 요청을 보냈을 때 사용합니다.
- * - 일정 시간이 지난 후 재시도해야 합니다 (retryable=true).
+ * - 서비스 자체 정책(일일 한도 등)으로 요청이 차단된 경우에 사용합니다.
+ * - 자정(UTC) 이후 재시도해야 합니다 (retryable=true).
  */
 export class RateLimitError extends AppError {
   code = 'RATE_LIMITED';
   httpStatus = 429;
   retryable = true;
 }
+
+/**
+ * AI Provider Rate Limit (503 Service Unavailable)
+ * - OpenAI, Anthropic, Gemini 등 외부 AI 공급자가 호출 제한(rate limit)을 반환했을 때 사용합니다.
+ * - 서비스 자체 한도가 아닌 상류 공급자의 일시적 과부하이므로 503을 사용합니다.
+ * - 잠시 후 재시도할 수 있습니다 (retryable=true).
+ */
+export class ProviderRateLimitError extends AppError {
+  code = 'PROVIDER_RATE_LIMITED';
+  httpStatus = 503;
+  retryable = true;
+}
+
 export class InsufficientCreditError extends AppError {
   code = 'INSUFFICIENT_CREDIT';
-  httpStatus = 402;  // HTTP 429 Payment Required
-  retryable = false;  // 재시도 불가 (돈을 충전 필요)
+  httpStatus = 402;
+  retryable = false;
 }
 /**
  * 업스트림 오류 (502 Bad Gateway)
