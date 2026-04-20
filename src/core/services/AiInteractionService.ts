@@ -18,9 +18,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { Readable } from 'stream';
 
 import { AppError } from '../../shared/errors/base';
-import { InsufficientCreditError } from '../../shared/errors/domain';
 import {
+  InsufficientCreditError,
   NotFoundError,
+  ProviderRateLimitError,
   UpstreamError,
   ValidationError,
   RateLimitError,
@@ -222,9 +223,9 @@ export class AiInteractionService {
 
       if (!aiResponseResult.ok) {
         if (aiResponseResult.error === 'rate_limited') {
-          throw new RateLimitError('AI Generation failed: rate limited. Please check your quota.');
+          throw new ProviderRateLimitError('AI provider is temporarily rate limited. Please retry after a moment.');
         }
-        if(aiResponseResult.error === 'insufficient_credit') {
+        if (aiResponseResult.error === 'insufficient_credit') {
           throw new InsufficientCreditError('AI Generation failed: insufficient credit. Please recharge your account.');
         }
         throw new UpstreamError(`AI Generation failed: ${aiResponseResult.error}`);
@@ -389,7 +390,10 @@ export class AiInteractionService {
       );
       if (!result.ok) {
         if (result.error === 'rate_limited') {
-          throw new RateLimitError('AI Generation failed: rate limited. Please check your quota.');
+          throw new ProviderRateLimitError('AI provider is temporarily rate limited. Please retry after a moment.');
+        }
+        if (result.error === 'insufficient_credit') {
+          throw new InsufficientCreditError('AI Generation failed: insufficient credit. Please recharge your account.');
         }
         throw new UpstreamError(`AI Generation failed: ${result.error}`);
       }
@@ -534,9 +538,10 @@ export class AiInteractionService {
 
       if (!aiResponseResult.ok) {
         if (aiResponseResult.error === 'rate_limited') {
-          throw new RateLimitError(
-            'AI Generation retry failed: rate limited. Please check your quota.'
-          );
+          throw new ProviderRateLimitError('AI provider is temporarily rate limited. Please retry after a moment.');
+        }
+        if (aiResponseResult.error === 'insufficient_credit') {
+          throw new InsufficientCreditError('AI Generation failed: insufficient credit. Please recharge your account.');
         }
         throw new UpstreamError(`AI Generation retry failed: ${aiResponseResult.error}`);
       }

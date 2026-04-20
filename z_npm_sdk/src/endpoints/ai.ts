@@ -103,13 +103,11 @@ export class AiApi {
    * - `401 Unauthorized`: 인증되지 않은 요청 (세션 만료)
    * - `403 Forbidden`: 해당 모델의 API 키가 설정되지 않음
    * - `404 Not Found`: conversationId에 해당하는 대화가 존재하지 않음
-   * - `429 Too Many Requests`: 두 가지 원인으로 발생하며 모두 `code: "RATE_LIMITED"` 반환.
-   *     1. **서비스 일일 사용 한도 초과** — 사용자의 하루 AI 대화 횟수(기본 20회)가 초과된 경우.
-   *        `detail` 메시지에 "일일 AI 대화 한도"가 포함됨. 자정(UTC) 이후 재시도 가능.
-   *        **재시도 불가 (당일 내).**
-   *     2. **AI 공급자 Rate Limit 초과** — OpenAI, Claude 등 외부 공급자의 호출 제한에 걸린 경우.
-   *        잠시 후 재시도 가능. **재시도 가능.**
+   * - `429 Too Many Requests`: 서비스 자체 일일 사용 한도 초과. `code: "RATE_LIMITED"` 반환.
+   *     자정(UTC) 이후 한도 초기화. **재시도 불가 (당일 내).**
    * - `502 Bad Gateway`: AI 공급자 오류 (재시도 가능)
+   * - `503 Service Unavailable`: AI 공급자 Rate Limit 초과. `code: "PROVIDER_RATE_LIMITED"` 반환.
+   *     OpenAI, Claude 등 외부 공급자의 호출 제한. **잠시 후 재시도 가능.**
    * - `504 Gateway Timeout`: AI 공급자 응답 시간 초과 (재시도 가능)
    *
    * @example
@@ -208,10 +206,9 @@ export class AiApi {
    * - `401 Unauthorized`: 인증되지 않은 요청
    * - `403 Forbidden`: 해당 모델의 API 키가 설정되지 않음
    * - `404 Not Found`: conversationId에 해당하는 대화가 존재하지 않음
-   * - `429 Too Many Requests`: 두 가지 원인으로 발생하며 모두 `code: "RATE_LIMITED"` 반환.
-   *     1. **서비스 일일 사용 한도 초과** — 하루 AI 대화 횟수 초과. 자정(UTC) 이후 재시도 가능. **재시도 불가 (당일 내).**
-   *     2. **AI 공급자 Rate Limit 초과** — 외부 공급자 호출 제한. 잠시 후 재시도 가능. **재시도 가능.**
+   * - `429 Too Many Requests`: 서비스 자체 일일 사용 한도 초과. `code: "RATE_LIMITED"` 반환. **재시도 불가 (당일 내).**
    * - `502 Bad Gateway`: AI 공급자 오류 (재시도 가능)
+   * - `503 Service Unavailable`: AI 공급자 Rate Limit 초과. `code: "PROVIDER_RATE_LIMITED"` 반환. **잠시 후 재시도 가능.**
    * - `504 Gateway Timeout`: AI 공급자 응답 시간 초과 (재시도 가능)
    *
    * @example
@@ -275,10 +272,9 @@ export class AiApi {
    * - `401 Unauthorized`: 인증되지 않은 요청
    * - `403 Forbidden`: 해당 모델의 API 키가 설정되지 않음
    * - `404 Not Found`: conversationId에 해당하는 대화가 존재하지 않음
-   * - `429 Too Many Requests`: 두 가지 원인으로 발생하며 모두 `code: "RATE_LIMITED"` 반환.
-   *     1. **서비스 일일 사용 한도 초과** — 하루 AI 대화 횟수 초과. 자정(UTC) 이후 재시도 가능. **재시도 불가 (당일 내).**
-   *     2. **AI 공급자 Rate Limit 초과** — 외부 공급자 호출 제한. 잠시 후 재시도 가능. **재시도 가능.**
+   * - `429 Too Many Requests`: 서비스 자체 일일 사용 한도 초과. `code: "RATE_LIMITED"` 반환. **재시도 불가 (당일 내).**
    * - `502 Bad Gateway`: AI 공급자 오류 (재시도 가능)
+   * - `503 Service Unavailable`: AI 공급자 Rate Limit 초과. `code: "PROVIDER_RATE_LIMITED"` 반환. **잠시 후 재시도 가능.**
    * - `504 Gateway Timeout`: AI 공급자 응답 시간 초과 (재시도 가능)
    *
    * @example

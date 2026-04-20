@@ -16,7 +16,7 @@ import {
   ValidationError,
   UpstreamError,
   NotFoundError,
-  RateLimitError,
+  ProviderRateLimitError,
 } from '../../src/shared/errors/domain';
 import { IAiProvider } from '../../src/shared/ai-providers/IAiProvider';
 
@@ -207,11 +207,11 @@ describe('AiInteractionService', () => {
             .rejects.toThrow(UpstreamError);
     });
 
-    it('should throw RateLimitError if provider.generateChat is rate limited', async () => {
+    it('should throw ProviderRateLimitError (503) if provider.generateChat is rate limited', async () => {
         mockProvider.generateChat.mockResolvedValue({ ok: false, error: 'rate_limited' });
 
         await expect(service.handleAIChat(ownerUserId, chatBody, conversationId, [], undefined))
-            .rejects.toThrow(RateLimitError);
+            .rejects.toThrow(ProviderRateLimitError);
     });
 
     it('should handle streaming callbacks if provided', async () => {

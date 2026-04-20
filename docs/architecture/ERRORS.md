@@ -29,8 +29,9 @@ export class AppError extends Error {
 | **FORBIDDEN** | 403 | 권한 부족 (리소스 소유자가 아님) | No |
 | **NOT_FOUND** | 404 | 요청한 리소스(User, Note, Graph 등)가 없음 | No |
 | **CONFLICT** | 409 | 리소스 상태 충돌 (예: 중복 이메일) | No |
-| **RATE_LIMITED** | 429 | 요청 제한 초과 | **Yes** |
+| **RATE_LIMITED** | 429 | 서비스 자체 일일 사용 한도 초과 | **Yes** |
 | **UPSTREAM_ERROR** | 502 | 외부 서비스(OpenAI, DB 등) 오류 | **Yes** |
+| **PROVIDER_RATE_LIMITED** | 503 | AI 공급자(OpenAI·Anthropic·Gemini) Rate Limit 초과 | **Yes** |
 | **UPSTREAM_TIMEOUT** | 504 | 외부 서비스 응답 지연 | **Yes** |
 | **INTERNAL_ERROR** | 500 | 서버 내부 로직 오류 (Bug) | No |
 
