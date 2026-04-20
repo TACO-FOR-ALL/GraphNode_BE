@@ -1,6 +1,6 @@
 {
   "name": "@taco_tsinghua/graphnode-sdk",
-  "version": "0.1.91",
+  "version": "0.1.93",
   "description": "GraphNode frontend SDK (cookie-based session)",
   "type": "module",
   "main": "./dist/index.js",
