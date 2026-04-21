@@ -1,6 +1,7 @@
 import { OpenAI } from 'openai';
 import { IAgentTool } from '../types';
 import { AgentServiceDeps } from '../../core/services/AgentService';
+import { generateMiniLMEmbedding } from '../../shared/utils/huggingface';
 
 /**
  * 대화 내용 검색 (벡터 검색) 도구
@@ -37,12 +38,13 @@ export class SearchConversationsTool implements IAgentTool {
     const keyword = args.keyword as string;
     const limit = (args.limit as number) || 5;
 
-    // FIXME TODO : embedding model을 openai 걸 쓰는데, 실제 Macro 생성 시에 만들어지는 Node의 embedding Vector는 이걸 안씀. (26/03/12)
-    const embeddingResponse = await openai.embeddings.create({
-      model: 'text-embedding-3-small',
-      input: keyword,
-    });
-    const queryVector = embeddingResponse.data[0].embedding;
+    let queryVector: number[];
+    try {
+      queryVector = await generateMiniLMEmbedding(keyword);
+    } catch (e: any) {
+      console.error('[SearchConversationsTool] Embedding Error:', e);
+      return JSON.stringify({ message: '검색용 의미 분석에 실패했습니다. (임베딩 엔진 오류)', conversations: [] });
+    }
 
     // Macro의 Node에 있는 embedding Vector로 유사도검색을 하는데, 이 경우 Macro가 없으면 동작을 안함.
     const searchResults = await graphVectorService.searchNodes(userId, queryVector, limit);

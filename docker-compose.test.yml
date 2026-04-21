@@ -167,6 +167,7 @@ services:
       - OPENAI_API_KEY=dummy
       - GEMINI_API_KEY=dummy
       - CLAUDE_API_KEY=dummy
+      - HF_API_TOKEN=${HF_API_TOKEN:-dummy}
     ports:
       - "3000:3000"
     healthcheck:
@@ -243,6 +244,7 @@ services:
       - OPENAI_API_KEY=dummy
       - GEMINI_API_KEY=dummy
       - CLAUDE_API_KEY=dummy
+      - HF_API_TOKEN=${HF_API_TOKEN:-dummy}
 
   graphnode-ai:
     image: graphnode-ai:test # GHA workflow에서 빌드된 이미지 사용
