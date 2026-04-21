@@ -26,6 +26,7 @@ process.env.S3_FILE_BUCKET = 'test-file-bucket';
 process.env.OPENAI_API_KEY = 'sk-test-openai-key';
 process.env.GEMINI_API_KEY = 'test-gemini-key';
 process.env.CLAUDE_API_KEY = 'test-claude-key';
+process.env.HF_API_TOKEN = 'test-hf-token';
 process.env.SENTRY_DSN = 'https://test@sentry.io/1';
 process.env.POSTHOG_API_KEY = 'test-posthog-key';
 process.env.POSTHOG_HOST = 'https://app.posthog.com';

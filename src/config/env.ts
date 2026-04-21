@@ -48,6 +48,7 @@ const EnvSchema = z.object({
   OPENAI_API_KEY: z.string().min(1, 'OPENAI_API_KEY required'),
   GEMINI_API_KEY: z.string().min(1, 'GEMINI_API_KEY required'),
   CLAUDE_API_KEY: z.string().min(1, 'CLAUDE_API_KEY required'),
+  HF_API_TOKEN: z.string().min(1, 'HF_API_TOKEN required'),
 
   // 일일 채팅 가능 횟수 (Beta Test 용도, Default 값은 20번)
   DAILY_CHAT_LIMIT: z.coerce.number().int().positive().default(20),

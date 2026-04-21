@@ -177,10 +177,12 @@ export function posthogAuditMiddleware(req: Request, res: Response, next: NextFu
     // SSE 등 suppressAuditLog 플래그 설정 시 전송 건너뜀
     if (ctx?.suppressAuditLog) return;
 
+    // 미인증 요청(로그인 전, 봇 스캐너 등) API 로깅 전면 차단
+    if (!req.userId) return;
+
     const latencyMs = Number(process.hrtime.bigint() - startNs) / 1_000_000;
 
-    // userId: 인증된 경우 req.userId 사용, 미인증(로그인 전 등)인 경우 guest ID 생성
-    const distinctId = req.userId ?? getGuestId(ctx?.ip, ctx?.userAgent);
+    const distinctId = req.userId;
 
     captureApiCall(distinctId, {
       method: req.method,
