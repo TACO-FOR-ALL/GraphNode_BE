@@ -37,7 +37,8 @@ export function toGraphNodeDoc(dto: GraphNodeDto): GraphNodeDoc {
     userId: dto.userId,
     origId: dto.origId,
     clusterId: dto.clusterId,
-    clusterName: dto.clusterName,
+    subclusterId: null,
+    // clusterName은 저장하지 않음 — 조회 시 GraphClusterDoc.name을 { userId, clusterId } 복합 조건으로 join해서 주입
     timestamp: dto.timestamp,
     numMessages: dto.numMessages,
     sourceType: dto.sourceType,
@@ -60,7 +61,8 @@ export function toGraphNodeDto(doc: GraphNodeDoc): GraphNodeDto {
     userId: doc.userId,
     origId: doc.origId,
     clusterId: doc.clusterId,
-    clusterName: doc.clusterName,
+    // clusterName은 DB에 저장되지 않음. GraphEmbeddingService.getSnapshotForUser에서 cluster join으로 주입됨.
+    clusterName: '',
     timestamp: doc.timestamp,
     numMessages: doc.numMessages,
     sourceType: doc.sourceType,
@@ -136,6 +138,7 @@ export function toGraphClusterDoc(dto: GraphClusterDto): GraphClusterDoc {
     name: dto.name,
     description: dto.description,
     size: dto.size,
+    nodeCount: dto.size,
     themes: dto.themes,
     // Timestamp placeholder — actual values are always overridden by the repository layer.
     createdAt: dto.createdAt ?? '',
@@ -155,7 +158,7 @@ export function toGraphClusterDto(doc: GraphClusterDoc): GraphClusterDto {
     userId: doc.userId,
     name: doc.name,
     description: doc.description,
-    size: doc.size,
+    size: doc.nodeCount ?? doc.size,
     themes: doc.themes,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,

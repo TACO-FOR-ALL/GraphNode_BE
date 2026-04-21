@@ -103,7 +103,10 @@ describe('GraphAi API Integration Tests', () => {
             statsStore.delete(uid);
             summaryStore.delete(uid);
         }),
-        deleteGraphSummary: jest.fn(async (uid: string, permanent?: boolean, options?: any) => { summaryStore.delete(uid); })
+        deleteGraphSummary: jest.fn(async (uid: string, permanent?: boolean, options?: any) => { summaryStore.delete(uid); }),
+        countNodes: jest.fn(async (uid: string) => Array.from(nodesStore.values()).filter(n => n.userId === uid).length),
+        countEdges: jest.fn(async (uid: string) => Array.from(edgesStore.values()).filter(e => e.userId === uid).length),
+        countClusters: jest.fn(async (uid: string) => Array.from(clustersStore.values()).filter(c => c.userId === uid).length),
     };
 
     const mockConvRepo = {
@@ -276,7 +279,7 @@ describe('GraphAi API Integration Tests', () => {
         });
 
         it('should delete all graph data and return 204', async () => {
-            nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, timestamp: null });
+            nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', numMessages: 1, timestamp: null });
             clustersStore.set('c1', { id: 'c1', userId, name: 'C1', description: 'D', size: 1, themes: [] });
             statsStore.set(userId, { id: userId, userId, nodes: 1, edges: 0, clusters: 1, status: 'CREATED', generatedAt: '', metadata: {} });
             summaryStore.set(userId, { overview: { summary_text: 'Test' }, clusters: [], patterns: [], connections: [], recommendations: [], generated_at: new Date().toISOString() });
@@ -305,7 +308,7 @@ describe('GraphAi API Integration Tests', () => {
         });
 
         it('should queue summary generation if graph data exists', async () => {
-            nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, timestamp: null });
+            nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', numMessages: 1, timestamp: null });
             clustersStore.set('c1', { id: 'c1', userId, name: 'C1', description: 'D', size: 1, themes: [] });
             statsStore.set(userId, { id: userId, userId, nodes: 1, edges: 1, clusters: 1, status: 'CREATED', generatedAt: '', metadata: {} });
 

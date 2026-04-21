@@ -34,7 +34,6 @@ describe('End-to-End Graph Flow', () => {
         id: 1,
         origId: 1,
         clusterId: 1,
-        clusterName: 1,
         sourceType: 1,
         numMessages: 1,
         updatedAt: 1,

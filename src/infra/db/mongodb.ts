@@ -90,6 +90,9 @@ async function ensureIndexes() {
   await db.collection('graph_nodes').createIndex({ origId: 1, userId: 1 }, { unique: true });
   await db.collection('graph_edges').createIndex({ userId: 1, id: 1 }, { unique: true });
   await db.collection('graph_clusters').createIndex({ userId: 1, id: 1 }, { unique: true });
+  await db.collection('graph_nodes').createIndex({ userId: 1, clusterId: 1, deletedAt: 1 });
+  await db.collection('graph_nodes').createIndex({ userId: 1, subclusterId: 1, deletedAt: 1 });
+  await db.collection('graph_nodes').createIndex({ userId: 1, origId: 1 });
 
   // Graph Stats: 사용자당 하나이므로 userId 인덱스
   await db.collection('graph_stats').createIndex({ userId: 1 }, { unique: true });
@@ -112,8 +115,8 @@ async function ensureIndexes() {
   );
 
   // Missing indexes: graph_subclusters, graph_summaries
-  await db.collection('graph_subclusters').createIndex({ userId: 1 });
-  await db.collection('graph_summaries').createIndex({ userId: 1 });
+  await db.collection('graph_subclusters').createIndex({ userId: 1, id: 1 }, { unique: true });
+  await db.collection('graph_summaries').createIndex({ userId: 1 }, { unique: true });
 
   // notifications: replay 조회는 { userId, _id(cursor) } 조합을 사용합니다.
   await db.collection('notifications').createIndex({ userId: 1, _id: 1 });

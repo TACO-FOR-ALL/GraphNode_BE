@@ -178,6 +178,17 @@ jest.mock('../../src/infra/repositories/GraphRepositoryMongo', () => ({
         return Array.from(subclustersStore.values()).filter(s => s.userId === userId);
     }
 
+    // --- 실시간 카운트 ---
+    async countNodes(userId: string) {
+      return Array.from(nodesStore.values()).filter(n => n.userId === userId).length;
+    }
+    async countEdges(userId: string) {
+      return Array.from(edgesStore.values()).filter(e => e.userId === userId).length;
+    }
+    async countClusters(userId: string) {
+      return Array.from(clustersStore.values()).filter(c => c.userId === userId).length;
+    }
+
     // --- Stats Operations ---
     async saveStats(doc: GraphStatsDoc) {
       statsStore.set(doc.userId, { ...doc });
@@ -236,7 +247,7 @@ describe('Graph API Integration Tests', () => {
 
   describe('Node Operations', () => {
     it('should create and retrieve a node', async () => {
-      const nodeData = { id: 1, origId: 'orig1', clusterId: 'c1', clusterName: 'C1', numMessages: 5 };
+      const nodeData = { id: 1, origId: 'orig1', clusterId: 'c1', numMessages: 5 };
       const res = await request(app)
         .post('/v1/graph/nodes')
         .set('Authorization', `Bearer ${accessToken}`)
@@ -253,8 +264,8 @@ describe('Graph API Integration Tests', () => {
     });
 
     it('should list nodes', async () => {
-        nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
-        nodesStore.set(2, { id: 2, userId, origId: 'o2', clusterId: 'c2', clusterName: 'C2', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
+        nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
+        nodesStore.set(2, { id: 2, userId, origId: 'o2', clusterId: 'c2', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
 
         const res = await request(app)
             .get('/v1/graph/nodes')
@@ -265,8 +276,8 @@ describe('Graph API Integration Tests', () => {
     });
 
     it('should list nodes by cluster', async () => {
-        nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
-        nodesStore.set(2, { id: 2, userId, origId: 'o2', clusterId: 'c2', clusterName: 'C2', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
+        nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
+        nodesStore.set(2, { id: 2, userId, origId: 'o2', clusterId: 'c2', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
 
         const res = await request(app)
             .get('/v1/graph/nodes')
@@ -279,19 +290,19 @@ describe('Graph API Integration Tests', () => {
     });
 
     it('should update a node', async () => {
-        nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
-        
+        nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
+
         await request(app)
             .patch('/v1/graph/nodes/1')
             .set('Authorization', `Bearer ${accessToken}`)
-            .send({ clusterName: 'New Name' })
+            .send({ clusterId: 'c2' })
             .expect(204);
-        
-        expect(nodesStore.get(1)?.clusterName).toBe('New Name');
+
+        expect(nodesStore.get(1)?.clusterId).toBe('c2');
     });
 
     it('should delete a node', async () => {
-        nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
+        nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
         
         await request(app)
             .delete('/v1/graph/nodes/1')
@@ -302,7 +313,7 @@ describe('Graph API Integration Tests', () => {
     });
 
     it('should cascade delete a node (mock logic check)', async () => {
-        nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
+        nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
         edgesStore.set('e1', { id: 'e1', userId, source: 1, target: 2, weight: 1, type: 'hard', intraCluster: true, createdAt: '', updatedAt: '' });
 
         await request(app)
@@ -387,7 +398,7 @@ describe('Graph API Integration Tests', () => {
 
     it('should cascade delete a cluster', async () => {
         clustersStore.set('c1', { id: 'c1', userId, name: 'C1', description: '', size: 1, themes: [], createdAt: '', updatedAt: '' });
-        nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
+        nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
         edgesStore.set('e1', { id: 'e1', userId, source: 1, target: 2, weight: 1, type: 'hard', intraCluster: true, createdAt: '', updatedAt: '' });
 
         await request(app)
@@ -414,7 +425,7 @@ describe('Graph API Integration Tests', () => {
     });
 
     it('should get snapshot', async () => {
-        nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
+        nodesStore.set(1, { id: 1, userId, origId: 'o1', clusterId: 'c1', numMessages: 1, createdAt: '', updatedAt: '', timestamp: null });
         edgesStore.set('e1', { id: 'e1', userId, source: 1, target: 2, weight: 1, type: 'hard', intraCluster: true, createdAt: '', updatedAt: '' });
         clustersStore.set('c1', { id: 'c1', userId, name: 'C1', description: '', size: 1, themes: [], createdAt: '', updatedAt: '' });
         statsStore.set(userId, { id: userId, userId, nodes: 1, edges: 1, clusters: 1, status: 'CREATED', generatedAt: '', metadata: {} });
