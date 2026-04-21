@@ -4,8 +4,7 @@
  * @property id 노드 ID (number)
  * @property userId 사용자 ID
  * @property origId 원본 ID
- * @property clusterId 소속 클러스터 ID
- * @property clusterName 소속 클러스터 이름
+ * @property clusterId 소속 클러스터 ID — 클러스터명은 저장하지 않음. 조회 시 GraphClusterDoc.name을 { userId, id: clusterId } 조합으로 join해서 주입.
  * @property timestamp 타임스탬프
  * @property numMessages 포함된 메시지 수
  * @property createdAt 생성 일시
@@ -16,7 +15,7 @@ export interface GraphNodeDoc {
   userId: string;
   origId: string;
   clusterId: string;
-  clusterName: string;
+  subclusterId?: string | null;
   timestamp: string | null;
   numMessages: number;
   sourceType?: 'chat' | 'markdown' | 'notion';
@@ -70,7 +69,10 @@ export interface GraphClusterDoc {
   name: string;
   description: string;
   size: number;
+  nodeCount?: number;
   themes: string[];
+  generatedAt?: string;
+  graphVersion?: number;
   createdAt: string;
   updatedAt: string;
   deletedAt?: number | null;
@@ -84,11 +86,14 @@ export interface GraphSubclusterDoc {
   id: string; // "subcluster_4_1"
   userId: string;
   clusterId: string;
-  nodeIds: number[];
+  nodeIds?: number[];
   representativeNodeId: number;
   size: number;
+  nodeCount?: number;
   density: number;
   topKeywords: string[];
+  generatedAt?: string;
+  graphVersion?: number;
   createdAt: string;
   updatedAt: string;
   deletedAt?: number | null;
@@ -114,6 +119,7 @@ export interface GraphStatsDoc {
   clusters: number;
   status: 'NOT_CREATED' | 'CREATING' | 'CREATED' | 'UPDATING' | 'UPDATED';
   generatedAt: string;
+  graphVersion?: number;
   updatedAt?: string;
   metadata: Record<string, unknown>;
 }
@@ -146,6 +152,7 @@ export interface GraphSummaryDoc {
   recommendations: Recommendation[];
 
   generatedAt: string; // Local standardized timestamp (ISO 8601)
+  graphVersion?: number;
   detail_level: 'brief' | 'standard' | 'detailed';
   deletedAt?: number | null;
 }
