@@ -35,12 +35,23 @@ import { redis } from '../../infra/redis/client';
 import { GraphClusterDto } from '../../shared/dtos/graph';
 
 /**
- * 모듈: GraphGenerationService
- * 책임:
- * - 지식 그래프 생성 및 요약 작업을 위한 Orchestration을 담당합니다.
- * - 사용자의 대화 데이터 및 노트(Markdown) 데이터를 수집하여 S3에 업로드합니다.
- * - SQS를 통해 AI Worker에게 그래프 생성/요약/추가 노드 작업을 요청합니다.
- * - 작업 상태(CREATING, UPDATING 등)를 관리하고 알림을 전송합니다.
+ * @class GraphGenerationService
+ * @description
+ * 지식 그래프 생성/갱신/요약 작업의 SQS 큐 요청 전담 서비스.
+ *
+ * 역할:
+ * - 대화·노트 데이터 수집 → S3 업로드 → SQS 메시지 발행 (AI Worker에게 위임)
+ * - 그래프 상태(CREATING / UPDATING 등) 관리 및 FCM 알림 전송
+ * - 작업 결과 처리는 담당하지 않음 (GraphGenerationResultHandler / AddNodeResultHandler가 처리)
+ *
+ * 범위:
+ * - requestGraphGenerationViaQueue: 최초 그래프 생성 요청
+ * - requestAddNodeViaQueue: 증분 노드 추가 요청
+ * - requestGraphSummary: 요약 생성 요청
+ * - deleteGraph: 그래프 전체 삭제 (GraphEmbeddingService에 위임)
+ *
+ * 금지: AI Worker 출력 데이터를 직접 DB에 쓰는 로직 추가 금지.
+ *       DB 쓰기는 Worker 핸들러(workers/handlers/)에서만 수행.
  */
 const AI_SERVER_URI = process.env.AI_SERVER_URI || 'https://aaejmqgtjczzbxcq.tunnel.elice.io';
 

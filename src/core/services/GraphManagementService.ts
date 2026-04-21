@@ -34,12 +34,23 @@ import {
 } from '../types/persistence/graph.persistence';
 
 /**
- * 모듈: GraphManagementService (그래프 서비스)
+ * @class GraphManagementService
+ * @description
+ * 그래프 도메인의 모든 CRUD 및 편집 로직을 처리하는 핵심 서비스.
  *
- * 책임:
- * - 그래프 데이터(노드, 엣지, 클러스터)의 비즈니스 로직을 처리합니다.
- * - DTO(Data Transfer Object)를 사용하여 데이터를 주고받습니다.
- * - GraphStore(Port)를 통해 DB 작업을 수행하며, 이 과정에서 Mapper를 사용해 DTO <-> Doc 변환을 수행합니다.
+ * 역할:
+ * - 그래프 엔티티(노드/엣지/클러스터/서브클러스터)의 CRUD 연산 처리
+ * - AI 생성 결과의 스냅샷 일괄 저장 (persistSnapshotBulk)
+ * - 실시간 카운트 계산 (countNodes/countEdges/countClusters) — 비정규화된 stats 필드의 대안
+ * - 사용자 편집 작업(노드 클러스터 이동, 엣지 추가/삭제 등)의 실행 주체
+ *   → 편집 메서드는 이 클래스에 추가되며, 비정규화 동기화 책임도 여기서 처리
+ *
+ * 진입점: 이 클래스는 GraphEmbeddingService를 통해서만 호출된다.
+ * 외부(Controller/Worker)에서 직접 호출 금지.
+ *
+ * 비정규화 처리 전략:
+ * - GraphNodeDoc.clusterName: 저장 안 함. 조회 시 GraphEmbeddingService에서 cluster join으로 주입.
+ * - GraphStatsDoc.nodes/edges/clusters: 저장값은 AI 생성 시점 참고용. 실제 조회는 countNodes/countEdges/countClusters 사용.
  */
 export class GraphManagementService {
   constructor(private readonly repo: GraphDocumentStore) {}
@@ -300,6 +311,25 @@ export class GraphManagementService {
   }
 
   /**
+   * 내부 조립 로직에서 사용할 활성 노드 원문 문서를 조회합니다.
+   *
+   * @param userId 사용자 ID
+   * @returns 활성 GraphNodeDoc 배열
+   * @remarks
+   * - DTO로 변환하기 전에 `subclusterId` 같은 내부 전용 필드를 읽어야 할 때 사용합니다.
+   * - 외부 API 응답은 이 메서드가 아니라 `listNodes` / `getSnapshotForUser`를 통해 구성합니다.
+   */
+  async listNodeDocs(userId: string): Promise<GraphNodeDoc[]> {
+    try {
+      this.assertUser(userId);
+      return await this.repo.listNodes(userId);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.listNodeDocs failed', { cause: String(err) });
+    }
+  }
+
+  /**
    * 특정 사용자의 모든 노드 목록(soft delete 되어서 휴지통에 잇는 것 까지)을 조회합니다.
    * @param userId - 작업을 요청한 사용자 ID
    * @returns 노드 객체 배열
@@ -331,6 +361,29 @@ export class GraphManagementService {
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.listNodesByCluster failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 특정 서브클러스터에 속한 활성 노드 목록을 조회합니다.
+   *
+   * @param userId 사용자 ID
+   * @param subclusterId 서브클러스터 ID
+   * @returns 서브클러스터에 속한 활성 노드 DTO 배열
+   * @remarks
+   * - 현재 구조에서는 `GraphNodeDoc.subclusterId`가 membership의 원본입니다.
+   * - 따라서 이 메서드는 `graph_subclusters.nodeIds`를 신뢰하지 않고 노드 컬렉션 기준으로 조회합니다.
+   */
+  async listNodesBySubcluster(userId: string, subclusterId: string): Promise<GraphNodeDto[]> {
+    try {
+      this.assertUser(userId);
+      const docs: GraphNodeDoc[] = await this.repo.listNodesBySubcluster(userId, subclusterId);
+      return docs.map(toGraphNodeDto);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.listNodesBySubcluster failed', {
+        cause: String(err),
+      });
     }
   }
 
@@ -712,6 +765,59 @@ export class GraphManagementService {
     }
   }
 
+  // --- 실시간 카운트 (비정규화 대체) ---
+
+  /**
+   * 사용자의 활성 노드 수를 실시간으로 계산합니다.
+   * GraphStatsDoc.nodes의 비정규화 대안으로 사용됩니다.
+   *
+   * @param userId 사용자 ID
+   * @returns 활성 노드 수
+   */
+  async countNodes(userId: string): Promise<number> {
+    try {
+      this.assertUser(userId);
+      return await this.repo.countNodes(userId);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphManagementService.countNodes failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 사용자의 활성 엣지 수를 실시간으로 계산합니다.
+   * GraphStatsDoc.edges의 비정규화 대안으로 사용됩니다.
+   *
+   * @param userId 사용자 ID
+   * @returns 활성 엣지 수
+   */
+  async countEdges(userId: string): Promise<number> {
+    try {
+      this.assertUser(userId);
+      return await this.repo.countEdges(userId);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphManagementService.countEdges failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 사용자의 활성 클러스터 수를 실시간으로 계산합니다.
+   * GraphStatsDoc.clusters의 비정규화 대안으로 사용됩니다.
+   *
+   * @param userId 사용자 ID
+   * @returns 활성 클러스터 수
+   */
+  async countClusters(userId: string): Promise<number> {
+    try {
+      this.assertUser(userId);
+      return await this.repo.countClusters(userId);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphManagementService.countClusters failed', { cause: String(err) });
+    }
+  }
+
   /**
    * 그래프 통계 저장
    *
@@ -747,17 +853,38 @@ export class GraphManagementService {
       this.assertUser(userId);
 
       // SnapshotDto에서, Node/Edge/Cluster/SubCluster 분리
-      const nodes: GraphNodeDto[] = snapshot.nodes.map((node) => ({ ...node, userId }));
-      const edges: GraphEdgeDto[] = snapshot.edges.map((edge) => ({ ...edge, userId }));
-      const clusters: GraphClusterDto[] = snapshot.clusters.map((cluster) => ({
-        ...cluster,
-        userId,
+      const subclusterIdByNodeId = new Map<number, string>();
+      for (const subcluster of snapshot.subclusters || []) {
+        for (const nodeId of subcluster.nodeIds || []) {
+          subclusterIdByNodeId.set(nodeId, subcluster.id);
+        }
+      }
+
+      const clusterNodeCount = new Map<string, number>();
+      for (const node of snapshot.nodes) {
+        clusterNodeCount.set(node.clusterId, (clusterNodeCount.get(node.clusterId) ?? 0) + 1);
+      }
+
+      const nodeDocs: GraphNodeDoc[] = snapshot.nodes.map((node) => ({
+        ...toGraphNodeDoc({ ...node, userId }),
+        subclusterId: subclusterIdByNodeId.get(node.id) ?? null,
       }));
+      const edges: GraphEdgeDto[] = snapshot.edges.map((edge) => ({ ...edge, userId }));
+      const clusterDocs: GraphClusterDoc[] = snapshot.clusters.map((cluster) =>
+        toGraphClusterDoc({
+          ...cluster,
+          userId,
+          size: clusterNodeCount.get(cluster.id) ?? cluster.size,
+        })
+      );
       const subclusters: GraphSubclusterDoc[] = (snapshot.subclusters || []).map((subcluster) => {
         const { deletedAt, ...rest } = subcluster;
         return {
           ...rest,
           userId,
+          nodeCount: subcluster.nodeIds.length,
+          size: subcluster.nodeIds.length,
+          nodeIds: undefined,
           createdAt: '',
           updatedAt: '',
           ...(deletedAt != null ? { deletedAt: new Date(deletedAt).getTime() } : {}),
@@ -765,9 +892,9 @@ export class GraphManagementService {
       });
 
       // bulkWrite로 일괄 저장
-      await this.upsertNodes(nodes, options);
+      await this.repo.upsertNodes(nodeDocs, options);
       await this.upsertEdges(edges, options);
-      await this.upsertClusters(clusters, options);
+      await this.repo.upsertClusters(clusterDocs, options);
       await this.upsertSubclusters(subclusters, options);
       await this.saveStats({ ...snapshot.stats, userId }, options);
     } catch (err: unknown) {
@@ -928,10 +1055,23 @@ export class GraphManagementService {
 
   // --- 내부 헬퍼 메서드 ---
 
+  /**
+   * 서비스 메서드에서 공통으로 사용하는 사용자 ID 검증 헬퍼입니다.
+   *
+   * @param userId 검증할 사용자 ID
+   * @throws {ValidationError} userId가 비어 있으면 발생
+   */
   private assertUser(userId: string | undefined): asserts userId is string {
     if (!userId) throw new ValidationError('userId required');
   }
 
+  /**
+   * 문자열 또는 숫자 형태의 식별자를 정수 노드 ID로 정규화합니다.
+   *
+   * @param id 변환할 ID 값
+   * @returns 정수형 ID
+   * @throws {ValidationError} 숫자로 해석할 수 없는 값이면 발생
+   */
   private parseId(id: number | string): number {
     const parsedId = typeof id === 'string' ? parseInt(id, 10) : id;
     if (isNaN(parsedId)) throw new ValidationError(`Invalid id: ${id}`);
