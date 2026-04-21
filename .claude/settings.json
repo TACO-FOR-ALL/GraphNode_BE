@@ -11,5 +11,22 @@
         ]
       }
     ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(npm run lint)",
+      "Bash(npm run docs:lint)",
+      "Bash(npm test)",
+      "Bash(npm run build)",
+      "Bash(npx jest*)",
+      "Bash(npx tsc*)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(find src*)",
+      "Bash(wc -l*)",
+      "Bash(grep*)"
+    ]
   }
 }

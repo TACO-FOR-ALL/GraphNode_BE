@@ -525,7 +525,11 @@ export class Container {
    */
   getSearchService(): SearchService {
     if (!this.searchService) {
-      const raw = new SearchService();
+      const raw = new SearchService(
+        this.getConversationRepository(),
+        this.getNoteRepository(),
+        this.getMessageRepository(),
+      );
       this.searchService = createAuditProxy(raw, 'SearchService');
     }
     return this.searchService;
