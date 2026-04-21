@@ -177,4 +177,36 @@ export interface MessageRepository {
    * @returns 삭제된 메시지 수
    */
   deleteAllByConversationIds(conversationIds: string[], session?: ClientSession): Promise<number>;
+
+  /**
+   * 단일 대화방의 가장 최근 메시지(createdAt 내림차순 1개)를 조회합니다.
+   *
+   * @description `findAllByConversationId` 대신 사용하여 불필요한 전체 메시지 로드를 방지합니다.
+   *              소프트 삭제된 메시지는 제외합니다.
+   * @param conversationId 대화방 ID
+   * @returns 가장 최근 메시지 문서, 없으면 null
+   */
+  findLastMessageByConversationId(conversationId: string): Promise<MessageDoc | null>;
+
+  /**
+   * 여러 대화방 각각의 가장 최근 메시지를 한 번에 조회합니다.
+   *
+   * @description MongoDB `$group + $first` 집계를 사용하여 대화당 최신 1개만 반환합니다.
+   *              `findAllByConversationIds` + Map 덮어쓰기 패턴을 DB 레벨로 최적화한 버전입니다.
+   *              소프트 삭제된 메시지는 제외합니다.
+   * @param conversationIds 대화방 ID 배열
+   * @returns 대화당 최신 메시지 1개씩으로 구성된 배열 (메시지가 없는 대화는 누락)
+   */
+  findLastMessagesByConversationIds(conversationIds: string[]): Promise<MessageDoc[]>;
+
+  /**
+   * 메시지 내용에서 키워드로 검색합니다 (case-insensitive 부분 일치).
+   *
+   * @description MongoDB `$regex`를 사용한 full-scan 방식입니다.
+   *              소프트 삭제된 메시지는 제외합니다.
+   * @param ownerUserId 소유자 ID (역정규화 필드로 필터)
+   * @param keyword 검색 키워드 (정규식 특수문자는 이스케이프됨)
+   * @returns 내용에 키워드가 포함된 메시지 문서 배열
+   */
+  searchByKeyword(ownerUserId: string, keyword: string): Promise<MessageDoc[]>;
 }

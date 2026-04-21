@@ -199,4 +199,15 @@ export interface ConversationRepository {
    * @returns 삭제된 대화 수
    */
   deleteByIds(ids: string[], session?: ClientSession): Promise<number>;
+
+  /**
+   * 대화 제목에서 키워드로 검색합니다 (case-insensitive 부분 일치).
+   *
+   * @description MongoDB `$regex`를 사용한 인메모리 full-scan 방식입니다.
+   *              소프트 삭제된 대화는 제외합니다.
+   * @param ownerUserId 소유자 ID
+   * @param keyword 검색 키워드 (정규식 특수문자는 이스케이프됨)
+   * @returns 제목에 키워드가 포함된 대화 문서 배열 (updatedAt 내림차순)
+   */
+  searchByKeyword(ownerUserId: string, keyword: string): Promise<ConversationDoc[]>;
 }
