@@ -878,6 +878,29 @@ export class NoteRepositoryMongo implements NoteRepository {
   }
 
   /**
+   * 노트 제목 또는 내용에서 키워드로 검색합니다 (case-insensitive 부분 일치).
+   *
+   * @param ownerUserId 소유자 ID
+   * @param keyword 검색 키워드
+   * @returns 제목 또는 내용에 키워드가 포함된 노트 문서 배열 (updatedAt 내림차순)
+   */
+  async searchNotesByKeyword(ownerUserId: string, keyword: string): Promise<NoteDoc[]> {
+    try {
+      const regex = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      return await this.notesCol()
+        .find({
+          ownerUserId,
+          deletedAt: null,
+          $or: [{ title: { $regex: regex } }, { content: { $regex: regex } }],
+        })
+        .sort({ updatedAt: -1 })
+        .toArray();
+    } catch (err: unknown) {
+      this.handleError('NoteRepositoryMongo.searchNotesByKeyword', err);
+    }
+  }
+
+  /**
    * 공통 에러 핸들러
    * @param methodName 호출한 메서드 이름
    * @param err 에러 객체

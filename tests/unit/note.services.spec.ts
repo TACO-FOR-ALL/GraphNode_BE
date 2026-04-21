@@ -419,6 +419,16 @@ class InMemoryNoteRepo implements NoteRepository {
       (f) => f.deletedAt !== null && f.deletedAt !== undefined && f.deletedAt <= expiredBefore
     );
   }
+
+  async searchNotesByKeyword(ownerUserId: string, keyword: string): Promise<NoteDoc[]> {
+    const k = keyword.toLowerCase();
+    return Array.from(this.notes.values()).filter(
+      (n) =>
+        n.ownerUserId === ownerUserId &&
+        !n.deletedAt &&
+        (n.title?.toLowerCase().includes(k) || n.content?.toLowerCase().includes(k))
+    );
+  }
 }
 
 describe('NoteService', () => {

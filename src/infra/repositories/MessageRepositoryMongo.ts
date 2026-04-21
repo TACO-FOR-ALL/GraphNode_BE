@@ -383,6 +383,69 @@ export class MessageRepositoryMongo implements MessageRepository {
     }
   }
 
+  /**
+   * 단일 대화방의 가장 최근 메시지를 조회합니다.
+   *
+   * @param conversationId 대화방 ID
+   * @returns 가장 최근 메시지 문서, 없으면 null
+   */
+  async findLastMessageByConversationId(conversationId: string): Promise<MessageDoc | null> {
+    try {
+      return await this.col().findOne(
+        { conversationId, deletedAt: null },
+        { sort: { createdAt: -1 } }
+      );
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.findLastMessageByConversationId', err);
+    }
+  }
+
+  /**
+   * 여러 대화방 각각의 가장 최근 메시지를 한 번의 집계 쿼리로 조회합니다.
+   *
+   * @description
+   * `$match` → `$sort(createdAt desc)` → `$group(_id: conversationId, $first: $$ROOT)` 순으로
+   * 집계하여 대화당 최신 메시지 1개만 반환합니다.
+   * 전체 메시지를 로드한 뒤 애플리케이션 레벨에서 Map 덮어쓰기로 최신 메시지를 찾는
+   * `findAllByConversationIds` 방식 대비 IO를 대폭 절감합니다.
+   *
+   * @param conversationIds 대화방 ID 배열
+   * @returns 대화당 최신 메시지 1개씩 배열 (메시지가 없는 대화는 누락됨)
+   */
+  async findLastMessagesByConversationIds(conversationIds: string[]): Promise<MessageDoc[]> {
+    try {
+      if (conversationIds.length === 0) return [];
+      const results = await this.col()
+        .aggregate<{ _id: string; lastMsg: MessageDoc }>([
+          { $match: { conversationId: { $in: conversationIds }, deletedAt: null } },
+          { $sort: { createdAt: -1 } },
+          { $group: { _id: '$conversationId', lastMsg: { $first: '$$ROOT' } } },
+        ])
+        .toArray();
+      return results.map((r) => r.lastMsg);
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.findLastMessagesByConversationIds', err);
+    }
+  }
+
+  /**
+   * 메시지 내용에서 키워드로 검색합니다 (case-insensitive 부분 일치).
+   *
+   * @param ownerUserId 소유자 ID (역정규화 필드)
+   * @param keyword 검색 키워드
+   * @returns 내용에 키워드가 포함된 메시지 문서 배열
+   */
+  async searchByKeyword(ownerUserId: string, keyword: string): Promise<MessageDoc[]> {
+    try {
+      const regex = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      return await this.col()
+        .find({ ownerUserId, deletedAt: null, content: { $regex: regex } })
+        .toArray();
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.searchByKeyword', err);
+    }
+  }
+
   private handleError(methodName: string, err: unknown): never {
     if (
       err instanceof Error &&

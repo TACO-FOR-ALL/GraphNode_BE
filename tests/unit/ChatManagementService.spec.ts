@@ -367,6 +367,21 @@ class InMemoryMsgRepo implements MessageRepository {
     }
     return count;
   }
+
+  async findLastMessageByConversationId(conversationId: string): Promise<MessageDoc | null> {
+    const msgs = (this.msgs.get(conversationId) || []).filter((m) => !m.deletedAt);
+    if (msgs.length === 0) return null;
+    return msgs.sort((a, b) => b.createdAt - a.createdAt)[0];
+  }
+
+  async findLastMessagesByConversationIds(conversationIds: string[]): Promise<MessageDoc[]> {
+    const result: MessageDoc[] = [];
+    for (const cid of conversationIds) {
+      const last = await this.findLastMessageByConversationId(cid);
+      if (last) result.push(last);
+    }
+    return result;
+  }
 }
 
 class InMemoryGraphRepo implements GraphDocumentStore {
