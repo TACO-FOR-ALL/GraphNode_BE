@@ -555,32 +555,6 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     }
   }
 
-  async listNodesBySubcluster(userId: string, subclusterId: string): Promise<GraphNodeDoc[]> {
-    try {
-      const cursor: FindCursor<WithId<GraphNodeDoc>> = this.graphNodes_col().find({
-        userId,
-        subclusterId,
-        deletedAt: { $in: [null, undefined] },
-      } as any);
-      const docs = await cursor.toArray();
-
-      const toUpdate = docs.filter((d) => !d.sourceType);
-      if (toUpdate.length > 0) {
-        const ids = toUpdate.map((d) => d.id);
-        await this.graphNodes_col().updateMany({ id: { $in: ids }, userId } as any, {
-          $set: { sourceType: 'chat' },
-        });
-        toUpdate.forEach((d) => {
-          d.sourceType = 'chat';
-        });
-      }
-
-      return docs;
-    } catch (err: unknown) {
-      this.handleError('GraphRepositoryMongo.listNodesBySubcluster', err);
-    }
-  }
-
   /**
    * 그래프 엣지를 생성하거나 갱신합니다(upsert).
    * 타임스탬프 책임: createdAt은 최초 삽입 시에만 설정($setOnInsert), updatedAt은 매 호출마다 갱신($set).
@@ -1093,56 +1067,6 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
       await this.graphStats_col().deleteOne({ userId } as any, opts);
     } catch (err: unknown) {
       this.handleError('GraphRepositoryMongo.deleteStats', err);
-    }
-  }
-
-  // --- 실시간 카운트 ---
-
-  /**
-   * 사용자의 활성 노드 수를 실시간으로 계산합니다.
-   * @param userId 사용자 ID
-   * @returns 활성 노드 수 (deletedAt이 null 또는 undefined인 문서만)
-   */
-  async countNodes(userId: string): Promise<number> {
-    try {
-      return await this.graphNodes_col().countDocuments({
-        userId,
-        deletedAt: { $in: [null, undefined] },
-      } as any);
-    } catch (err: unknown) {
-      this.handleError('GraphRepositoryMongo.countNodes', err);
-    }
-  }
-
-  /**
-   * 사용자의 활성 엣지 수를 실시간으로 계산합니다.
-   * @param userId 사용자 ID
-   * @returns 활성 엣지 수 (deletedAt이 null 또는 undefined인 문서만)
-   */
-  async countEdges(userId: string): Promise<number> {
-    try {
-      return await this.graphEdges_col().countDocuments({
-        userId,
-        deletedAt: { $in: [null, undefined] },
-      } as any);
-    } catch (err: unknown) {
-      this.handleError('GraphRepositoryMongo.countEdges', err);
-    }
-  }
-
-  /**
-   * 사용자의 활성 클러스터 수를 실시간으로 계산합니다.
-   * @param userId 사용자 ID
-   * @returns 활성 클러스터 수 (deletedAt이 null 또는 undefined인 문서만)
-   */
-  async countClusters(userId: string): Promise<number> {
-    try {
-      return await this.graphClusters_col().countDocuments({
-        userId,
-        deletedAt: { $in: [null, undefined] },
-      } as any);
-    } catch (err: unknown) {
-      this.handleError('GraphRepositoryMongo.countClusters', err);
     }
   }
 

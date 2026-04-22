@@ -221,7 +221,8 @@ erDiagram
         number id PK "Macro 노드의 정수형 ID"
         string userId FK "사용자 ID"
         string origId FK "원본 소스 식별자 (NoteDoc._id / ConversationDoc._id 와 매핑)"
-        string clusterId FK "소속 클러스터 ID (조회 시 GraphClusterDoc.name을 join)"
+        string clusterId FK "소속 클러스터 ID"
+        string clusterName "소속 클러스터 이름"
         string timestamp "타임스탬프 (선택)"
         number numMessages "포함된 메시지 수"
         string sourceType "chat | markdown | notion"
@@ -443,7 +444,8 @@ AI가 추출한 지식 그래프의 노드입니다.
 | **id** | `Number` | 노드 ID (Auto Inc per User or Global) |
 | **userId** | `String` | 소유자 ID |
 | **origId** | `String` | 원본 출처 ID (NoteDoc._id 또는 ConversationDoc._id) |
-| **clusterId** | `String` | 소속 클러스터 ID — **clusterName은 저장하지 않음.** 조회 시 `{userId, clusterId}`로 GraphClusterDoc을 join하여 주입 |
+| **clusterId** | `String` | 소속 클러스터 ID |
+| **clusterName** | `String` | 소속 클러스터 이름 |
 | **timestamp** | `String` | 타임스탬프 (null 가능) |
 | **numMessages** | `Number` | 관련 메시지 수 |
 | **sourceType** | `String` | 원본 소스 유형 (`chat`, `markdown`, `notion`) (Optional) |
@@ -586,34 +588,3 @@ Vector DB에 저장되는 임베딩과 함께 저장되는 메타데이터(`meta
 - **Log/Debug**: 파이프라인 진행 과정의 중간 산출물
 
 분석 결과 데이터는 `MicroscopeManagementService` 또는 `GraphGenerationService`를 통해 사용자별로 관리되며, 클라우드 환경의 네트워크 지연에 대비해 `withRetry` 유틸리티를 통한 재시도가 적용됩니다.
-
----
-
-## 5. Graph 도메인 — 비정규화 전략 및 서비스 책임
-
-### 서비스 레이어 책임
-
-| 서비스 | 역할 |
-| :--- | :--- |
-| `GraphEmbeddingService` | **외부 공통 진입점(Facade)**. 트랜잭션 오케스트레이션, 스냅샷 조회 시 clusterName join 및 실시간 count 집계 |
-| `GraphManagementService` | **핵심 CRUD + 편집**. 노드·엣지·클러스터·통계 저장/수정/삭제. 유효성 검증 책임 |
-| `GraphVectorService` | ChromaDB 벡터 저장·검색 전담. 편집 API와 무관 |
-| `GraphGenerationService` | SQS 큐 요청 전담. DB 직접 쓰기 금지 (Worker 핸들러에서만 수행) |
-
-### 비정규화(Denormalization) 필드 전략
-
-Graph 도메인에는 원본 데이터에서 파생되는 집계값·복사값이 존재합니다. 정합성 유지 방식을 명시합니다.
-
-| 필드 | 위치 | 전략 | 설명 |
-| :--- | :--- | :--- | :--- |
-| `clusterName` | `GraphNodeDoc` | **제거 (조회 시 Join)** | DB에 저장하지 않음. `getSnapshotForUser` 호출 시 `GraphClusterDoc.name`을 `{userId, clusterId}` 복합키로 join하여 DTO에 주입 |
-| `size` | `GraphClusterDoc` | **AI 파이프라인 write-sync** | AI 워커가 클러스터 생성 시 함께 저장. 이후 노드 편집 시 재동기화 없음 (근사값 허용) |
-| `nodes / edges / clusters` | `GraphStatsDoc` | **실시간 COUNT** | `getSnapshotForUser` 응답 시 `countNodes/countEdges/countClusters` COUNT 쿼리로 대체하여 반환 |
-| `total_source_nodes` | `GraphSummaryDoc.overview` | **실시간 COUNT** | `getGraphSummary` 호출 시 `countNodes`로 실시간 집계하여 summary에 merge |
-| `total_conversations` | `GraphSummaryDoc.overview` | **실시간 COUNT** | `getGraphSummary` 호출 시 `ConversationService.countConversations`로 실시간 집계 |
-| `total_notes` | `GraphSummaryDoc.overview` | **실시간 COUNT** | `getGraphSummary` 호출 시 `NoteService.countNotes`로 실시간 집계 |
-| `nodeIds[]` | `GraphSubclusterDoc` | **AI 파이프라인 write-sync** | AI 워커가 서브클러스터 생성 시 저장. 역산 불가 필드이므로 write 시점에만 동기화 |
-| `intraCluster` | `GraphEdgeDoc` | **AI 파이프라인 write-sync** | 엣지 생성 시 양 끝 노드의 clusterId 비교로 결정. 이후 클러스터 재배정 시 재동기화 없음 (근사값 허용) |
-| AI 요약 텍스트 | `GraphSummaryDoc` (overview 제외) | **Stale 허용** | AI 생성 서술 텍스트는 재생성 요청 전까지 이전 값 유지. 실시간 수치(위 3개)만 즉시 반영 |
-
-> **클러스터 ID 스코프**: `clusterId`는 전역 고유값이 아니라 **`{userId, clusterId}` 복합키**가 실제 고유 식별자입니다. 단독 `clusterId`로 조회하면 안 됩니다.

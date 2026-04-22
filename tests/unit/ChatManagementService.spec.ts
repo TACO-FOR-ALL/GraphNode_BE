@@ -464,9 +464,6 @@ class InMemoryGraphRepo implements GraphDocumentStore {
   async listNodesByCluster(_userId: string, _clusterId: string): Promise<GraphNodeDoc[]> {
     return [];
   }
-  async listNodesBySubcluster(_userId: string, _subclusterId: string): Promise<GraphNodeDoc[]> {
-    return [];
-  }
   async deleteAllGraphData(
     _userId: string,
     _permanent?: boolean,
@@ -537,15 +534,6 @@ class InMemoryGraphRepo implements GraphDocumentStore {
   ): Promise<void> {}
   async listSubclusters(_userId: string): Promise<GraphSubclusterDoc[]> {
     return [];
-  }
-  async countNodes(_userId: string): Promise<number> {
-    return Array.from(this.nodes.values()).filter((node) => !node.deletedAt).length;
-  }
-  async countEdges(_userId: string): Promise<number> {
-    return 0;
-  }
-  async countClusters(_userId: string): Promise<number> {
-    return 0;
   }
   async saveStats(_stats: GraphStatsDoc, _options?: RepoOptions): Promise<void> {}
   async getStats(_userId: string): Promise<GraphStatsDoc | null> {
