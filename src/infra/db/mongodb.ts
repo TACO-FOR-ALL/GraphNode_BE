@@ -99,24 +99,23 @@ async function ensureIndexes() {
 
   // conversations 동기화 쿼리: findModifiedSince { ownerUserId, updatedAt: { $gte } }
   // 현재 주 인덱스(ownerUserId→deletedAt→updatedAt)는 deletedAt 없는 이 쿼리에 deletedAt 이후 키를 활용 못 함
-  await db.collection('conversations').createIndex(
-    { ownerUserId: 1, updatedAt: 1 },
-    { name: 'conversations_sync' }
-  );
+  await db
+    .collection('conversations')
+    .createIndex({ ownerUserId: 1, updatedAt: 1 }, { name: 'conversations_sync' });
 
   // conversations 만료 정리 쿼리: hardDeleteExpired/findExpiredConversations
   // 삭제된 대화만 스캔하도록 Partial Index 적용
   await db.collection('conversations').createIndex(
     { deletedAt: 1 },
-    { 
+    {
       name: 'conversations_cleanup_partial',
-      partialFilterExpression: { deletedAt: { $type: 'date' } }
+      partialFilterExpression: { deletedAt: { $type: 'date' } },
     }
   );
 
   // Missing indexes: graph_subclusters, graph_summaries
-  await db.collection('graph_subclusters').createIndex({ userId: 1, id: 1 }, { unique: true });
-  await db.collection('graph_summaries').createIndex({ userId: 1 }, { unique: true });
+  await db.collection('graph_subclusters').createIndex({ userId: 1, id: 1 });
+  await db.collection('graph_summaries').createIndex({ userId: 1 });
 
   // notifications: replay 조회는 { userId, _id(cursor) } 조합을 사용합니다.
   await db.collection('notifications').createIndex({ userId: 1, _id: 1 });
@@ -128,7 +127,9 @@ async function ensureIndexes() {
   await db.collection('notifications').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
   // notes 컬렉션: listNotes 쿼리 패턴 { ownerUserId, folderId, deletedAt: null } + sort(updatedAt: -1) 커버
-  await db.collection('notes').createIndex({ ownerUserId: 1, folderId: 1, deletedAt: 1, updatedAt: -1 });
+  await db
+    .collection('notes')
+    .createIndex({ ownerUserId: 1, folderId: 1, deletedAt: 1, updatedAt: -1 });
 
   // (이전 텍스트 인덱스들은 용량 문제로 제거되었습니다. Atlas Search 등으로 대체 필요)
 
