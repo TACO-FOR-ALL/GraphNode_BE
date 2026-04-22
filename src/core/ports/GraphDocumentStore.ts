@@ -59,7 +59,6 @@ export interface GraphDocumentStore {
   listNodes(userId: string): Promise<GraphNodeDoc[]>;
   listNodesAll(userId: string): Promise<GraphNodeDoc[]>;
   listNodesByCluster(userId: string, clusterId: string): Promise<GraphNodeDoc[]>;
-  listNodesBySubcluster(userId: string, subclusterId: string): Promise<GraphNodeDoc[]>;
   deleteAllGraphData(userId: string, permanent?: boolean, options?: RepoOptions): Promise<void>;
   restoreAllGraphData(userId: string, options?: RepoOptions): Promise<void>;
 
@@ -143,14 +142,6 @@ export interface GraphDocumentStore {
   ): Promise<void>;
   restoreSubcluster(userId: string, subclusterId: string, options?: RepoOptions): Promise<void>;
   listSubclusters(userId: string): Promise<GraphSubclusterDoc[]>;
-
-  // --- 실시간 카운트 ---
-  /** 사용자의 활성 노드 수를 실시간으로 계산합니다 (deletedAt이 없는 문서만). */
-  countNodes(userId: string): Promise<number>;
-  /** 사용자의 활성 엣지 수를 실시간으로 계산합니다 (deletedAt이 없는 문서만). */
-  countEdges(userId: string): Promise<number>;
-  /** 사용자의 활성 클러스터 수를 실시간으로 계산합니다 (deletedAt이 없는 문서만). */
-  countClusters(userId: string): Promise<number>;
 
   // --- 통계(Stats) 관련 메서드 ---
   saveStats(stats: GraphStatsDoc, options?: RepoOptions): Promise<void>;

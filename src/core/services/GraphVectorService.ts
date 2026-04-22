@@ -4,20 +4,12 @@ import { logger } from '../../shared/utils/logger';
 import { GraphNodeDto } from '../../shared/dtos/graph';
 
 /**
- * @class GraphVectorService
- * @description
- * 그래프 노드 임베딩 벡터의 저장 및 검색 전담 서비스.
+ * 모듈: GraphVectorService (그래프 벡터 서비스)
  *
- * 역할:
- * - ChromaDB(VectorStore)를 통한 벡터 upsert/search
- * - 검색 결과(orig_id)를 GraphManagementService로 MongoDB 노드 정보와 결합(Enrichment)
- *
- * 범위:
- * - AI 생성 시 벡터 저장 (GraphGenerationResultHandler → saveGraphFeatures)
- * - 에이전트 기능의 의미 기반 노드 검색 (searchNodes)
- * - 사용자 편집 API와는 무관. 편집 시 벡터 재동기화는 별도 정책 결정 필요.
- *
- * 진입점: GraphEmbeddingService 또는 워커 핸들러에서만 호출.
+ * 책임:
+ * - 그래프 임베딩 벡터와 관련된 비즈니스 로직을 처리합니다.
+ * - VectorStore(Port)를 직접 호출하여 벡터 저장/검색을 수행합니다.
+ * - 검색된 벡터 결과(orig_id)를 기반으로 MongoDB의 노드 정보를 결합(Enrichment)합니다.
  */
 export class GraphVectorService {
   /** AI 워커와 동기화된 기본 컬렉션 명칭 */

@@ -207,6 +207,7 @@ export class Neo4jGraphAdapter implements GraphNeo4jStore {
       createdAt: new Date().toISOString(), 
       updatedAt: new Date().toISOString(),
       origId: '',
+      clusterName: '',
       timestamp: null,
       numMessages: 0
     };

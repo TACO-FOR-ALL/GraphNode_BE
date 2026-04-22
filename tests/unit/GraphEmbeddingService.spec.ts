@@ -16,52 +16,35 @@ describe('GraphEmbeddingService', () => {
   beforeEach(() => {
     mockGraphService = {
       upsertNode: jest.fn(),
-      upsertNodes: jest.fn(),
       updateNode: jest.fn(),
       deleteNode: jest.fn(),
-      deleteNodes: jest.fn(),
       findNode: jest.fn(),
-      findNodesByOrigIds: jest.fn(),
-      findNodesByOrigIdsAll: jest.fn(),
       listNodes: jest.fn(),
-      listNodeDocs: jest.fn(),
-      listNodesAll: jest.fn(),
-      listNodesByCluster: jest.fn(),
-      listNodesBySubcluster: jest.fn(),
       upsertEdge: jest.fn(),
-      upsertEdges: jest.fn(),
       deleteEdge: jest.fn(),
       deleteEdgeBetween: jest.fn(),
-      deleteEdgesByNodeIds: jest.fn(),
-      restoreEdge: jest.fn(),
       listEdges: jest.fn(),
       upsertCluster: jest.fn(),
-      upsertClusters: jest.fn(),
       deleteCluster: jest.fn(),
-      restoreCluster: jest.fn(),
       findCluster: jest.fn(),
       listClusters: jest.fn(),
-      upsertSubcluster: jest.fn(),
-      upsertSubclusters: jest.fn(),
-      deleteSubcluster: jest.fn(),
-      restoreSubcluster: jest.fn(),
-      listSubclusters: jest.fn(),
-      countNodes: jest.fn(),
-      countEdges: jest.fn(),
-      countClusters: jest.fn(),
       saveStats: jest.fn(),
       getStats: jest.fn(),
       deleteStats: jest.fn(),
+      listNodesByCluster: jest.fn(),
+      deleteEdgesByNodeIds: jest.fn(),
       upsertGraphSummary: jest.fn(),
       getGraphSummary: jest.fn(),
       deleteGraphSummary: jest.fn(),
       restoreGraphSummary: jest.fn(),
-      deleteGraph: jest.fn(),
-      restoreGraph: jest.fn(),
-      restoreNode: jest.fn(),
+      deleteNodes: jest.fn(),
       restoreNodesByOrigIds: jest.fn(),
       deleteNodesByOrigIds: jest.fn(),
-      persistSnapshotBulk: jest.fn(),
+      restoreNode: jest.fn(),
+      restoreCluster: jest.fn(),
+      listSubclusters: jest.fn(),
+      upsertSubcluster: jest.fn(),
+      deleteGraph: jest.fn(),
     } as unknown as jest.Mocked<GraphManagementService>;
 
     mockVectorStore = {
@@ -106,82 +89,6 @@ describe('GraphEmbeddingService', () => {
       await service.upsertNode(node);
       expect(mockGraphService.upsertNode).toHaveBeenCalledWith(node);
     });
-
-    it('should reconstruct subclusters from node membership and legacy nodeIds', async () => {
-      mockGraphService.listNodeDocs.mockResolvedValue([
-        {
-          id: 1,
-          userId: 'u1',
-          origId: 'conv-1',
-          clusterId: 'c1',
-          subclusterId: 's1',
-          timestamp: null,
-          numMessages: 1,
-          sourceType: 'chat',
-          createdAt: '',
-          updatedAt: '',
-        },
-        {
-          id: 2,
-          userId: 'u1',
-          origId: 'conv-2',
-          clusterId: 'c1',
-          subclusterId: null,
-          timestamp: null,
-          numMessages: 1,
-          sourceType: 'chat',
-          createdAt: '',
-          updatedAt: '',
-        },
-      ] as any);
-      mockGraphService.listEdges.mockResolvedValue([]);
-      mockGraphService.listClusters.mockResolvedValue([
-        { id: 'c1', userId: 'u1', name: 'Cluster 1', description: '', size: 999, themes: [] },
-      ] as any);
-      mockGraphService.listSubclusters.mockResolvedValue([
-        {
-          id: 's1',
-          userId: 'u1',
-          clusterId: 'c1',
-          nodeIds: [1, 2, 999],
-          representativeNodeId: 1,
-          size: 3,
-          density: 0.4,
-          topKeywords: ['topic'],
-          createdAt: '',
-          updatedAt: '',
-        },
-      ] as any);
-      mockGraphService.getStats.mockResolvedValue({
-        userId: 'u1',
-        nodes: 2,
-        edges: 0,
-        clusters: 1,
-        status: 'CREATED',
-      } as any);
-      mockGraphService.countNodes.mockResolvedValue(2 as never);
-      mockGraphService.countEdges.mockResolvedValue(0 as never);
-      mockGraphService.countClusters.mockResolvedValue(1 as never);
-      mockConversationService.findDocsByIds.mockResolvedValue([] as any);
-
-      const snapshot = await service.getSnapshotForUser('u1');
-
-      expect(snapshot.clusters).toEqual([
-        expect.objectContaining({
-          id: 'c1',
-          size: 2,
-        }),
-      ]);
-      expect(snapshot.subclusters).toEqual([
-        expect.objectContaining({
-          id: 's1',
-          clusterId: 'c1',
-          nodeIds: [1, 2],
-          representativeNodeId: 1,
-          size: 2,
-        }),
-      ]);
-    });
   });
 
   describe('updateNode', () => {
@@ -215,52 +122,40 @@ describe('GraphEmbeddingService', () => {
 
   describe('getSnapshotForUser', () => {
     it('should attach nodeTitle for chat and markdown nodes only', async () => {
-      mockGraphService.listNodeDocs.mockResolvedValue([
+      mockGraphService.listNodes.mockResolvedValue([
         {
           id: 1,
           userId: 'u1',
           origId: 'conv-1',
           clusterId: 'c1',
-          subclusterId: null,
           clusterName: 'Cluster 1',
           timestamp: null,
           numMessages: 3,
           sourceType: 'chat',
-          createdAt: '',
-          updatedAt: '',
         },
         {
           id: 2,
           userId: 'u1',
           origId: 'note-1',
           clusterId: 'c1',
-          subclusterId: null,
           clusterName: 'Cluster 1',
           timestamp: null,
           numMessages: 0,
           sourceType: 'markdown',
-          createdAt: '',
-          updatedAt: '',
         },
         {
           id: 3,
           userId: 'u1',
           origId: 'notion-1',
           clusterId: 'c2',
-          subclusterId: null,
           clusterName: 'Cluster 2',
           timestamp: null,
           numMessages: 0,
           sourceType: 'notion',
-          createdAt: '',
-          updatedAt: '',
         },
-      ] as any);
+      ] as GraphNodeDto[]);
       mockGraphService.listEdges.mockResolvedValue([]);
-      mockGraphService.listClusters.mockResolvedValue([
-        { id: 'c1', userId: 'u1', name: 'Cluster 1', description: '', size: 2, themes: [] },
-        { id: 'c2', userId: 'u1', name: 'Cluster 2', description: '', size: 1, themes: [] },
-      ] as any);
+      mockGraphService.listClusters.mockResolvedValue([]);
       mockGraphService.listSubclusters.mockResolvedValue([]);
       mockGraphService.getStats.mockResolvedValue({
         userId: 'u1',
@@ -269,9 +164,6 @@ describe('GraphEmbeddingService', () => {
         clusters: 2,
         status: 'CREATED',
       });
-      mockGraphService.countNodes.mockResolvedValue(3 as never);
-      mockGraphService.countEdges.mockResolvedValue(0 as never);
-      mockGraphService.countClusters.mockResolvedValue(2 as never);
       mockConversationService.findDocsByIds.mockResolvedValue([
         {
           _id: 'conv-1',
@@ -293,20 +185,15 @@ describe('GraphEmbeddingService', () => {
       expect(snapshot.nodes[0]).toMatchObject({
         origId: 'conv-1',
         nodeTitle: 'Conversation Title',
-        clusterName: 'Cluster 1',
       });
       expect(snapshot.nodes[1]).toMatchObject({
         origId: 'note-1',
         nodeTitle: 'Note Title',
-        clusterName: 'Cluster 1',
       });
       expect(snapshot.nodes[2]).toMatchObject({
         origId: 'notion-1',
-        clusterName: 'Cluster 2',
       });
       expect(snapshot.nodes[2]).not.toHaveProperty('nodeTitle');
-      // stats는 실시간 count로 대체됨
-      expect(snapshot.stats).toMatchObject({ nodes: 3, edges: 0, clusters: 2, status: 'CREATED' });
     });
   });
 
@@ -320,22 +207,18 @@ describe('GraphEmbeddingService', () => {
     it('getGraphSummary merges live counts into summary overview', async () => {
       mockGraphService.getGraphSummary.mockResolvedValue({
         overview: {
-          total_source_nodes: 0,
           total_conversations: 0,
           total_notes: 0,
         },
       } as any);
       mockConversationService.countConversations.mockResolvedValue(7 as never);
       mockNoteService.countNotes.mockResolvedValue(3 as never);
-      mockGraphService.countNodes.mockResolvedValue(10 as never);
 
       const result = await service.getGraphSummary('u1');
 
       expect(mockGraphService.getGraphSummary).toHaveBeenCalledWith('u1');
       expect(mockConversationService.countConversations).toHaveBeenCalledWith('u1');
       expect(mockNoteService.countNotes).toHaveBeenCalledWith('u1');
-      expect(mockGraphService.countNodes).toHaveBeenCalledWith('u1');
-      expect(result.overview.total_source_nodes).toBe(10);
       expect(result.overview.total_conversations).toBe(7);
       expect(result.overview.total_notes).toBe(3);
     });

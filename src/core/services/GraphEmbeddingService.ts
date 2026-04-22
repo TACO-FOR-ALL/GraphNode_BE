@@ -3,40 +3,29 @@ import {
   GraphClusterDto,
   GraphEdgeDto,
   GraphStatsDto,
-  GraphSubclusterDto,
   GraphSnapshotDto,
   PersistGraphPayloadDto,
 } from '../../shared/dtos/graph';
 import type { VectorStore } from '../ports/VectorStore';
 import { getMongo } from '../../infra/db/mongodb';
-import { ClientSession } from 'mongodb';
 import { GraphManagementService } from './GraphManagementService';
 import { ConversationService } from './ConversationService';
 import { NoteService } from './NoteService';
-import {
-  GraphNodeDoc,
-  GraphSubclusterDoc,
-  GraphSummaryDoc,
-} from '../types/persistence/graph.persistence';
+import { GraphSummaryDoc } from '../types/persistence/graph.persistence';
 import { withRetry } from '../../shared/utils/retry';
 import { UpstreamError } from '../../shared/errors/domain';
 
 /**
- * @class GraphEmbeddingService
- * @description
- * 그래프 도메인의 외부 공통 진입점(Facade).
+ * 모듈: GraphEmbeddingService (그래프-벡터 통합 서비스)
  *
- * 역할:
- * - Controller/Worker에서 그래프 기능을 호출하는 단일 창구
- * - MongoDB 트랜잭션 컨텍스트를 제공하고 GraphManagementService 호출을 조율
- * - 스냅샷 조회(getSnapshotForUser) 시:
- *   - nodes에 clusterName을 cluster join({ userId, clusterId })으로 실시간 주입
- *   - stats.nodes/edges/clusters를 countNodes/countEdges/countClusters 실시간 계산으로 대체
- * - summary 조회(getGraphSummary) 시:
- *   - total_source_nodes/total_conversations/total_notes를 실시간 count로 덮어씀
- * - GraphVectorService(ChromaDB)와의 동기화 조율
+ * 책임:
+ * - GraphManagementService와 VectorService 간의 조율(Orchestration)을 담당합니다.
+ * - 그래프 데이터 변경 시 벡터 데이터도 함께 변경하거나, 정합성을 맞추는 역할을 합니다.
+ * - 현재는 벡터 기능이 비활성화되어 있어 대부분의 메서드가 에러를 발생시키거나 비어있습니다.
  *
- * 금지: GraphManagementService를 이 클래스를 거치지 않고 외부에서 직접 호출 금지.
+ * 설계 의도:
+ * - 도메인 로직(GraphManagementService)과 벡터 동기화 로직을 분리하여,
+ * - 필요에 따라 동기화 전략(실시간, 배치, 이벤트 기반 등)을 유연하게 변경할 수 있도록 합니다.
  */
 export class GraphEmbeddingService {
   constructor(
@@ -45,207 +34,6 @@ export class GraphEmbeddingService {
     private readonly conversationService?: ConversationService,
     private readonly noteService?: NoteService
   ) {}
-
-  /**
-   * MongoDB 트랜잭션 컨텍스트를 생성하고 주어진 함수를 실행합니다.
-   * 중복 트랜잭션 보일러플레이트를 통합한 내부 헬퍼입니다.
-   *
-   * @param label withRetry 로깅에 사용할 레이블
-   * @param fn 트랜잭션 세션을 받아 실행할 비동기 함수
-   * @returns fn의 반환값
-   */
-  /**
-   * 트랜잭션 시작/종료와 재시도 정책을 공통화하는 내부 헬퍼입니다.
-   *
-   * 배경:
-   * - 2026-04-21 구조 정리에서 GraphEmbeddingService가 트랜잭션 경계를 담당하고,
-   *   GraphManagementService는 순수 도메인 연산에 집중하도록 역할을 분리했습니다.
-   * - 이에 따라 여러 public 메서드에 반복되던 세션 생성, `withTransaction`, `withRetry`,
-   *   세션 종료 코드를 한 곳으로 모았습니다.
-   *
-   * 목적:
-   * - MongoDB 세션 생명주기를 중앙 관리합니다.
-   * - transient transaction error 재시도 정책을 통일합니다.
-   * - 개별 메서드는 비즈니스 의도만 보이도록 단순화합니다.
-   *
-   * 작성일: 2026-04-21
-   *
-   * @param label 재시도 로그 및 추적용 레이블
-   * @param fn 세션을 받아 실제 작업을 수행하는 콜백
-   * @returns 콜백이 반환한 결과
-   */
-  private async runInTransaction<T>(
-    label: string,
-    fn: (session: ClientSession) => Promise<T>
-  ): Promise<T> {
-    // 애플리케이션 전역 Mongo 클라이언트를 꺼내 트랜잭션 세션을 시작합니다.
-    const mongoClient = getMongo();
-    if (!mongoClient) {
-      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
-    }
-    // 호출마다 독립 세션을 사용해 다른 요청의 트랜잭션과 경계를 분리합니다.
-    const session = mongoClient.startSession();
-    try {
-      let result!: T;
-      await withRetry(
-        async () => {
-          // MongoDB가 transient label을 붙인 오류는 전체 트랜잭션 블록을 재시도합니다.
-          await session.withTransaction(async () => {
-            // 실제 도메인 연산은 호출자가 넘긴 콜백에서 수행합니다.
-            result = await fn(session);
-          });
-        },
-        { label }
-      );
-      // 커밋까지 성공한 경우에만 결과를 반환합니다.
-      return result;
-    } finally {
-      // 성공/실패와 관계없이 세션은 반드시 종료합니다.
-      await session.endSession();
-    }
-  }
-
-  /**
-   * 내부 원문 노드 문서를 스냅샷 응답용 노드 DTO 초안으로 바꿉니다.
-   *
-   * 배경:
-   * - membership 원본이 `GraphNodeDoc.subclusterId`로 이동하면서 `getSnapshotForUser`는
-   *   DTO가 아니라 Doc 기준으로 노드를 읽게 되었습니다.
-   * - FE/SDK 계약은 유지해야 하므로, 응답 직전 DTO 형태로 다시 정규화하는 단계가 필요합니다.
-   *
-   * 목적:
-   * - Doc과 DTO의 역할을 분리합니다.
-   * - `clusterName`은 DB 저장값이 아니라 이후 join 단계에서 채워진다는 점을 명시합니다.
-   * - 삭제 시각은 FE 계약에 맞는 ISO 문자열로 변환합니다.
-   *
-   * 작성일: 2026-04-21
-   *
-   * @param doc 원문 노드 문서
-   * @returns 스냅샷 조립 중간 단계의 노드 DTO
-   */
-  private toSnapshotNode(doc: GraphNodeDoc): GraphNodeDto {
-    return {
-      // 노드 자체 식별자와 사용자 범위를 그대로 전달합니다.
-      id: doc.id,
-      userId: doc.userId,
-      // 원본 conversation/note/notion 식별자를 그대로 유지합니다.
-      origId: doc.origId,
-      // 현재 노드가 속한 cluster membership의 원본입니다.
-      clusterId: doc.clusterId,
-      // clusterName은 DB에 저장하지 않으므로 이후 join 단계에서 채웁니다.
-      clusterName: '',
-      // 시계열/집계 정보는 노드 문서 값을 그대로 사용합니다.
-      timestamp: doc.timestamp,
-      numMessages: doc.numMessages,
-      sourceType: doc.sourceType,
-      embedding: doc.embedding,
-      createdAt: doc.createdAt,
-      updatedAt: doc.updatedAt,
-      // soft delete 정보가 있으면 FE 계약에 맞게 ISO 문자열로 변환합니다.
-      ...(doc.deletedAt != null && { deletedAt: new Date(doc.deletedAt).toISOString() }),
-    };
-  }
-
-  /**
-   * 활성 노드 목록만으로 클러스터별 실제 노드 수를 계산합니다.
-   *
-   * 배경:
-   * - `GraphClusterDoc.size`는 저장 시점의 캐시이므로 노드 삭제/복구 후 stale할 수 있습니다.
-   * - 1차 전환 단계에서는 FE DTO의 `size` 필드는 유지하되 값은 실시간 active node 기준으로 재계산합니다.
-   *
-   * 작성일: 2026-04-21
-   *
-   * @param nodeDocs 활성 노드 문서 목록
-   * @returns `clusterId -> active node count` 맵
-   */
-  private buildClusterNodeCounts(nodeDocs: GraphNodeDoc[]): Map<string, number> {
-    const counts = new Map<string, number>();
-    for (const node of nodeDocs) {
-      // 같은 clusterId를 가진 활성 노드 수를 1씩 누적합니다.
-      counts.set(node.clusterId, (counts.get(node.clusterId) ?? 0) + 1);
-    }
-    return counts;
-  }
-
-  /**
-   * 서브클러스터 DTO를 active node 기준으로 재조립합니다.
-   *
-   * 배경:
-   * - 2026-04-21부터 membership의 원본은 `GraphNodeDoc.subclusterId`입니다.
-   * - 그러나 1차 배포 시점에는 legacy `graph_subclusters.nodeIds`가 DB에 남아 있을 수 있으므로,
-   *   백필 없이도 읽기 호환이 되도록 신구 데이터를 함께 해석해야 합니다.
-   *
-   * 목적:
-   * - `node.subclusterId`를 우선 신뢰합니다.
-   * - legacy `subcluster.nodeIds`는 backward compatibility fallback으로만 사용합니다.
-   * - FE/SDK가 기대하는 `nodeIds`, `size`, `representativeNodeId` 구조는 그대로 유지합니다.
-   *
-   * 작성일: 2026-04-21
-   *
-   * @param nodeDocs 활성 노드 문서 목록
-   * @param subclusterDocs 활성 서브클러스터 문서 목록
-   * @returns FE/SDK 응답용 서브클러스터 DTO 배열
-   */
-  private buildSnapshotSubclusters(
-    nodeDocs: GraphNodeDoc[],
-    subclusterDocs: GraphSubclusterDoc[]
-  ): GraphSubclusterDto[] {
-    // 활성 노드만 membership 계산 대상으로 삼기 위해 ID 집합을 먼저 만듭니다.
-    const activeNodeIds = new Set(nodeDocs.map((node) => node.id));
-    // legacy fallback 해석 시 빠르게 현재 노드 문서를 찾기 위한 lookup map입니다.
-    const activeNodesById = new Map(nodeDocs.map((node) => [node.id, node]));
-    // 신 구조 membership 원본인 node.subclusterId로 subcluster -> nodeIds를 구축합니다.
-    const membersBySubclusterId = new Map<string, Set<number>>();
-
-    for (const node of nodeDocs) {
-      // 아직 서브클러스터가 없는 노드는 건너뜁니다.
-      if (!node.subclusterId) continue;
-      // Set을 사용해 중복 membership을 자동으로 제거합니다.
-      const memberIds = membersBySubclusterId.get(node.subclusterId) ?? new Set<number>();
-      memberIds.add(node.id);
-      membersBySubclusterId.set(node.subclusterId, memberIds);
-    }
-
-    return subclusterDocs
-      .map((subcluster) => {
-        // 신 구조 membership을 우선값으로 가져옵니다.
-        const memberIds = new Set(membersBySubclusterId.get(subcluster.id) ?? []);
-
-        for (const legacyNodeId of subcluster.nodeIds || []) {
-          // legacy 배열에 있어도 현재 활성 노드가 아니면 응답에서 제거합니다.
-          if (!activeNodeIds.has(legacyNodeId)) continue;
-          const activeNode = activeNodesById.get(legacyNodeId);
-          // 노드 문서에 이미 다른 subclusterId가 있으면 node 문서를 우선합니다.
-          if (activeNode?.subclusterId && activeNode.subclusterId !== subcluster.id) continue;
-          // 그 외 legacy 데이터는 backward compatibility를 위해 병합합니다.
-          memberIds.add(legacyNodeId);
-        }
-
-        // FE 계약을 위해 정렬된 배열로 정규화합니다.
-        const nodeIds = Array.from(memberIds).sort((a, b) => a - b);
-        // 활성 멤버가 하나도 없으면 유령 subcluster이므로 응답에서 제거합니다.
-        if (nodeIds.length === 0) return null;
-
-        return {
-          id: subcluster.id,
-          clusterId: subcluster.clusterId,
-          nodeIds,
-          // 대표 노드가 유효하면 유지하고, 아니면 첫 번째 활성 노드로 보정합니다.
-          representativeNodeId: nodeIds.includes(subcluster.representativeNodeId)
-            ? subcluster.representativeNodeId
-            : nodeIds[0],
-          // 응답 size는 실제 활성 membership 수를 사용합니다.
-          size: nodeIds.length,
-          density: subcluster.density,
-          topKeywords: subcluster.topKeywords,
-          // soft delete 시각은 FE 계약에 맞춰 ISO 문자열로 변환합니다.
-          ...(subcluster.deletedAt != null && {
-            deletedAt: new Date(subcluster.deletedAt).toISOString(),
-          }),
-        };
-      })
-      .filter((subcluster): subcluster is GraphSubclusterDto => subcluster != null);
-  }
 
   /**
    * 벡터 관련 기능이 비활성화되었음을 알리는 예외를 발생시킵니다.
@@ -335,18 +123,46 @@ export class GraphEmbeddingService {
    * @see removeNodeCascade - 노드와 연결된 모든 엣지를 함께 삭제하려면 이 메서드를 사용하세요.
    */
   async deleteNode(userId: string, id: number, permanent?: boolean) {
-    await this.runInTransaction('GraphEmbeddingService.deleteNode', (session) =>
-      this.graphManagementService.deleteNode(userId, id, permanent, { session })
-    );
+    const mongoClient = getMongo();
+    if (!mongoClient) {
+      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
+    }
+    const session = mongoClient.startSession();
+    try {
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            await this.graphManagementService.deleteNode(userId, id, permanent, { session });
+          });
+        },
+        { label: 'GraphEmbeddingService.deleteNode.transaction' }
+      );
+    } finally {
+      await session.endSession();
+    }
   }
 
   /**
    * 노드 복구합니다.
    */
   async restoreNode(userId: string, id: number) {
-    await this.runInTransaction('GraphEmbeddingService.restoreNode', (session) =>
-      this.graphManagementService.restoreNode(userId, id, { session })
-    );
+    const mongoClient = getMongo();
+    if (!mongoClient) {
+      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
+    }
+    const session = mongoClient.startSession();
+    try {
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            await this.graphManagementService.restoreNode(userId, id, { session });
+          });
+        },
+        { label: 'GraphEmbeddingService.restoreNode.transaction' }
+      );
+    } finally {
+      await session.endSession();
+    }
   }
 
   /**
@@ -380,13 +196,6 @@ export class GraphEmbeddingService {
     return this.graphManagementService.listNodesAll(userId);
   }
 
-  /**
-   * 특정 클러스터에 속한 활성 노드 목록을 조회합니다.
-   *
-   * @param userId 사용자 ID
-   * @param clusterId 클러스터 ID
-   * @returns 해당 클러스터의 활성 노드 DTO 배열
-   */
   listNodesByCluster(userId: string, clusterId: string) {
     return this.graphManagementService.listNodesByCluster(userId, clusterId);
   }
@@ -412,13 +221,6 @@ export class GraphEmbeddingService {
     return this.graphManagementService.deleteEdge(userId, edgeId, permanent);
   }
 
-  /**
-   * 삭제된 엣지를 복구합니다.
-   *
-   * @param userId 사용자 ID
-   * @param edgeId 복구할 엣지 ID
-   * @returns Promise<void>
-   */
   restoreEdge(userId: string, edgeId: string) {
     return this.graphManagementService.restoreEdge(userId, edgeId);
   }
@@ -455,9 +257,23 @@ export class GraphEmbeddingService {
    * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
    */
   async upsertCluster(cluster: GraphClusterDto): Promise<void> {
-    await this.runInTransaction('GraphEmbeddingService.upsertCluster', (session) =>
-      this.graphManagementService.upsertCluster(cluster, { session })
-    );
+    const mongoClient = getMongo();
+    if (!mongoClient) {
+      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
+    }
+    const session = mongoClient.startSession();
+    try {
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            await this.graphManagementService.upsertCluster(cluster, { session });
+          });
+        },
+        { label: 'GraphEmbeddingService.upsertCluster.transaction' }
+      );
+    } finally {
+      await session.endSession();
+    }
   }
 
   /**
@@ -469,25 +285,46 @@ export class GraphEmbeddingService {
    * @see removeClusterCascade - 클러스터와 속한 모든 노드/엣지를 삭제하려면 이 메서드를 사용하세요.
    */
   async deleteCluster(userId: string, id: string, permanent?: boolean): Promise<void> {
-    await this.runInTransaction('GraphEmbeddingService.deleteCluster', (session) =>
-      this.graphManagementService.deleteCluster(userId, id, permanent, { session })
-    );
+    const mongoClient = getMongo();
+    if (!mongoClient) {
+      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
+    }
+    const session = mongoClient.startSession();
+    try {
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            await this.graphManagementService.deleteCluster(userId, id, permanent, { session });
+          });
+        },
+        { label: 'GraphEmbeddingService.deleteCluster.transaction' }
+      );
+    } finally {
+      await session.endSession();
+    }
   }
 
   /**
    * 클러스터 복구
    */
-  /**
-   * 삭제된 클러스터를 복구합니다.
-   *
-   * @param userId 사용자 ID
-   * @param id 복구할 클러스터 ID
-   * @returns Promise<void>
-   */
   async restoreCluster(userId: string, id: string): Promise<void> {
-    await this.runInTransaction('GraphEmbeddingService.restoreCluster', (session) =>
-      this.graphManagementService.restoreCluster(userId, id, { session })
-    );
+    const mongoClient = getMongo();
+    if (!mongoClient) {
+      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
+    }
+    const session = mongoClient.startSession();
+    try {
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            await this.graphManagementService.restoreCluster(userId, id, { session });
+          });
+        },
+        { label: 'GraphEmbeddingService.restoreCluster.transaction' }
+      );
+    } finally {
+      await session.endSession();
+    }
   }
 
   /**
@@ -572,17 +409,33 @@ export class GraphEmbeddingService {
    * @throws {UpstreamError} - DB 작업 중 오류 발생 시
    */
   async removeClusterCascade(userId: string, id: string, permanent?: boolean): Promise<void> {
-    await this.runInTransaction('GraphEmbeddingService.removeClusterCascade', async (session) => {
-      const nodesInCluster = await this.graphManagementService.listNodesByCluster(userId, id);
-      if (nodesInCluster.length > 0) {
-        const nodeIds = nodesInCluster.map((n) => n.id);
-        await this.graphManagementService.deleteEdgesByNodeIds(userId, nodeIds, permanent, {
-          session,
-        });
-        await this.graphManagementService.deleteNodes(userId, nodeIds, permanent, { session });
-      }
-      await this.graphManagementService.deleteCluster(userId, id, permanent, { session });
-    });
+    const mongoClient = getMongo();
+    if (!mongoClient) {
+      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
+    }
+    const session = mongoClient.startSession();
+    try {
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            const nodesInCluster = await this.graphManagementService.listNodesByCluster(userId, id);
+            if (nodesInCluster.length > 0) {
+              const ids = nodesInCluster.map((n) => n.id);
+              // 1. 클러스터에 속한 모든 노드와 관련 엣지 삭제
+              await this.graphManagementService.deleteEdgesByNodeIds(userId, ids, permanent, {
+                session,
+              });
+              await this.graphManagementService.deleteNodes(userId, ids, permanent, { session });
+            }
+            // 2. 클러스터 자체 삭제
+            await this.graphManagementService.deleteCluster(userId, id, permanent, { session });
+          });
+        },
+        { label: 'GraphEmbeddingService.removeClusterCascade.transaction' }
+      );
+    } finally {
+      await session.endSession();
+    }
   }
 
   /**
@@ -593,42 +446,28 @@ export class GraphEmbeddingService {
    * @throws {UpstreamError} - DB 조회 중 오류 발생 시
    */
   async getSnapshotForUser(userId: string): Promise<GraphSnapshotDto> {
-    const [nodeDocs, edges, clusters, subclusterDocs, stats, nodeCnt, edgeCnt, clusterCnt] =
-      await Promise.all([
-        this.graphManagementService.listNodeDocs(userId),
-        this.graphManagementService.listEdges(userId),
-        this.graphManagementService.listClusters(userId),
-        this.graphManagementService.listSubclusters(userId),
-        this.graphManagementService.getStats(userId),
-        this.graphManagementService.countNodes(userId),
-        this.graphManagementService.countEdges(userId),
-        this.graphManagementService.countClusters(userId),
-      ]);
-
-    // clusterName join: clusterId는 userId 범위 안에서만 유니크하므로 반드시 userId 복합 조건 사용
-    const nodes = nodeDocs.map((doc) => this.toSnapshotNode(doc));
-    const clusterMap = new Map(clusters.map((c) => [c.id, c]));
-    const clusterSizes = this.buildClusterNodeCounts(nodeDocs);
-    const nodesWithClusterName = nodes.map((node) => ({
-      ...node,
-      clusterName: clusterMap.get(node.clusterId)?.name ?? '',
-    }));
-
-    const enrichedNodes = await this.attachNodeTitles(userId, nodesWithClusterName);
-    const liveClusters = clusters.map((cluster) => ({
-      ...cluster,
-      size: clusterSizes.get(cluster.id) ?? 0,
-    }));
-    const liveSubclusters = this.buildSnapshotSubclusters(nodeDocs, subclusterDocs);
+    const [nodes, edges, clusters, subclusters, stats] = await Promise.all([
+      this.graphManagementService.listNodes(userId),
+      this.graphManagementService.listEdges(userId),
+      this.graphManagementService.listClusters(userId),
+      this.graphManagementService.listSubclusters(userId),
+      this.graphManagementService.getStats(userId),
+    ]);
+    const enrichedNodes = await this.attachNodeTitles(userId, nodes);
 
     return {
       nodes: enrichedNodes,
       edges,
-      clusters: liveClusters,
-      subclusters: liveSubclusters,
-      // stats.nodes/edges/clusters는 비정규화 값이므로 실시간 count로 대체
+      clusters,
+      subclusters: subclusters.map((s) => {
+        const { _id, deletedAt, ...rest } = s as any;
+        return {
+          ...rest,
+          ...(deletedAt != null && { deletedAt: new Date(deletedAt).toISOString() }),
+        };
+      }),
       stats: stats
-        ? { nodes: nodeCnt, edges: edgeCnt, clusters: clusterCnt, status: stats.status }
+        ? { nodes: stats.nodes, edges: stats.edges, clusters: stats.clusters, status: stats.status }
         : { nodes: 0, edges: 0, clusters: 0, status: 'NOT_CREATED' },
     };
   }
@@ -713,9 +552,65 @@ export class GraphEmbeddingService {
    * @throws {UpstreamError} - DB 저장 중 오류 발생 시
    */
   async persistSnapshot(payload: PersistGraphPayloadDto): Promise<void> {
-    await this.runInTransaction('GraphEmbeddingService.persistSnapshot', (session) =>
-      this.graphManagementService.persistSnapshotBulk(payload, { session })
-    );
+    const mongoClient = getMongo();
+    if (!mongoClient) {
+      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
+    }
+    const session = mongoClient.startSession();
+    try {
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            await this.graphManagementService.persistSnapshotBulk(payload, { session });
+            return;
+            /*
+            const { userId, snapshot } = payload;
+
+            // subclusters가 undefined일 경우 빈 배열로 처리
+            const subclusters = snapshot.subclusters || [];
+
+            // WriteConflict 방지: 같은 컬렉션에 대한 동시 write는 트랜잭션 내에서
+            // WriteConflict(61)를 발생시킬 수 있으므로, 컬렉션별로 순차 실행한다.
+            // (nodes, edges, clusters, subclusters는 서로 다른 컬렉션이므로
+            //  각 컬렉션 내에서는 Promise.all로 병렬 처리해도 안전함)
+            await Promise.all(
+              snapshot.nodes.map((node) =>
+                this.graphManagementService.upsertNode({ ...node, userId }, { session })
+              )
+            );
+            await Promise.all(
+              snapshot.edges.map((edge) =>
+                this.graphManagementService.upsertEdge({ ...edge, userId }, { session })
+              )
+            );
+            await Promise.all(
+              snapshot.clusters.map((cluster) =>
+                this.graphManagementService.upsertCluster({ ...cluster, userId }, { session })
+              )
+            );
+            await Promise.all(
+              subclusters.map((subcluster) => {
+                const { deletedAt, ...rest } = subcluster;
+                // createdAt/updatedAt 생략 — repository layer가 설정합니다.
+                return this.graphManagementService.upsertSubcluster(
+                  {
+                    ...rest,
+                    userId,
+                    ...(deletedAt != null ? { deletedAt: new Date(deletedAt).getTime() } : {}),
+                  } as any,
+                  { session }
+                );
+              })
+            );
+            await this.graphManagementService.saveStats({ ...snapshot.stats, userId }, { session });
+            */
+          });
+        },
+        { label: 'GraphEmbeddingService.persistSnapshot.transaction' }
+      );
+    } finally {
+      await session.endSession();
+    }
   }
 
   /**
@@ -724,17 +619,25 @@ export class GraphEmbeddingService {
    * @param userId
    */
   async deleteGraph(userId: string, permanent?: boolean) {
-    await this.runInTransaction('GraphEmbeddingService.deleteGraph', (session) =>
-      this.graphManagementService.deleteGraph(userId, permanent, { session })
-    );
+    const mongoClient = getMongo();
+    if (!mongoClient) {
+      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
+    }
+    const session = mongoClient.startSession();
+    try {
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            await this.graphManagementService.deleteGraph(userId, permanent, { session });
+          });
+        },
+        { label: 'GraphEmbeddingService.deleteGraph.transaction' }
+      );
+    } finally {
+      await session.endSession();
+    }
   }
 
-  /**
-   * 전체 그래프 복구는 현재 hard-delete 정책 때문에 지원하지 않습니다.
-   *
-   * @param _userId 사용자 ID
-   * @throws {UpstreamError} 항상 발생
-   */
   async restoreGraph(_userId: string) {
     // [Hard Delete Policy] Restore is no longer supported
     throw new UpstreamError('Restore is not supported in hard-delete only mode');
@@ -758,18 +661,17 @@ export class GraphEmbeddingService {
    * @param userId 사용자 Id
    */
   async getGraphSummary(userId: string) {
-    const [summary, conversationCount, noteCount, totalNodes] = await Promise.all([
-      this.graphManagementService.getGraphSummary(userId),
+    const summary = await this.graphManagementService.getGraphSummary(userId);
+
+    const [conversationCount, noteCount] = await Promise.all([
       this.conversationService?.countConversations(userId) ?? Promise.resolve(0),
       this.noteService?.countNotes(userId) ?? Promise.resolve(0),
-      this.graphManagementService.countNodes(userId),
     ]);
 
     return {
       ...summary,
       overview: {
         ...summary.overview,
-        total_source_nodes: totalNodes,       // 실시간 count — AI 생성 시점 값 덮어쓰기
         total_conversations: conversationCount,
         total_notes: noteCount,
       },
