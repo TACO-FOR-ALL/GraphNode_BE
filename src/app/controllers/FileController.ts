@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { AwsS3Adapter } from '../../infra/aws/AwsS3Adapter';
 import { ValidationError } from '../../shared/errors/domain';
+import { STORAGE_BUCKETS, buildStorageKey } from '../../config/storageConfig';
 
 export interface FileAttachment {
   id: string;
@@ -82,7 +83,7 @@ export class FileController {
     for (const file of files) {
       const ext = file.originalname.includes('.') ? '.' + file.originalname.split('.').pop() : '';
       const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-      const key = `sdk-files/${uuidv4()}-${date}${ext}`;
+      const key = buildStorageKey(STORAGE_BUCKETS.SDK_FILES, `${uuidv4()}-${date}${ext}`);
       
       // S3 File Bucket에 업로드
       await this.s3Adapter.upload(key, file.buffer, file.mimetype, { bucketType: 'file' });

@@ -1,28 +1,35 @@
-import { openAI } from './openai'; // 기존 openai.ts (내부 구조는 IAiProvider에 맞게 수정 필요할 수 있음)
+/**
+ * 모듈: AI Provider 라우팅 레지스트리
+ *
+ * OpenAI 호환 모델(DeepSeek, Qwen 등) 추가 시:
+ *   createOpenAICompatibleProvider({ baseURL: '...' }) 인스턴스를 providers 테이블에 등록하세요.
+ */
+
+import { openAiProvider, deepseekProvider } from './openai';
 import { claudeProvider } from './claude';
 import { geminiProvider } from './gemini';
-import { ApiKeyModel } from '../dtos/me'; // DTO 위치 확인 필요
+import { ApiKeyModel } from '../dtos/me';
 import { IAiProvider } from './IAiProvider';
 
-// OpenAI Provider의 인터페이스 호환성 확인 필요.
-// 기존 openAI 객체가 IAiProvider와 정확히 일치하지 않을 수 있으므로(메서드명 등), 래퍼를 쓰거나 기존 파일을 수정해야 함.
-// 여기서는 export 할 때 매핑합니다.
-
 const providers: Record<ApiKeyModel, IAiProvider> = {
-  openai: openAI as unknown as IAiProvider, // TODO: openAI 구현체를 IAiProvider에 맞게 수정 권장
-  deepseek: openAI as unknown as IAiProvider, // DeepSeek uses OpenAI-compatible API
+  openai: openAiProvider,
+  deepseek: deepseekProvider,
   claude: claudeProvider,
   gemini: geminiProvider,
 };
 
+/**
+ * 모델 계열 식별자에 해당하는 IAiProvider 인스턴스를 반환합니다.
+ * @param model 모델 계열 식별자
+ * @returns IAiProvider 인스턴스
+ * @throws Error 등록되지 않은 모델 계열
+ */
 export const getAiProvider = (model: ApiKeyModel): IAiProvider => {
   const provider = providers[model];
-  if (!provider) {
-    throw new Error(`Provider for model ${model} not found`);
-  }
+  if (!provider) throw new Error(`Provider for model ${model} not found`);
   return provider;
 };
 
-export { openAI, claudeProvider, geminiProvider };
+export { openAiProvider, deepseekProvider, claudeProvider, geminiProvider };
 export * from './IAiProvider';
 export * from './ChatMessageRequest';

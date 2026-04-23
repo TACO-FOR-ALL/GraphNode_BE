@@ -1,86 +1,68 @@
-import { GoogleGenAI } from '@google/genai';
-import { Readable } from 'stream';
+/**
+ * 모듈: Google Gemini AI Provider (Vercel AI SDK)
+ *
+ * 책임:
+ * - createGoogleGenerativeAI를 사용해 Gemini 모델 호출을 수행합니다.
+ * - streamText / generateText로 채팅 생성 및 ReAct Tool 루프를 수행합니다.
+ * - S3 첨부파일 처리는 buildCoreMessages 유틸리티에 위임합니다.
+ * - tool 실행 결과(이미지, 검색 링크)는 collectToolResults 헬퍼로 수집합니다.
+ */
+
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { streamText, generateText, stepCountIs } from 'ai';
 
 import { IAiProvider, Result, AiResponse, ChatGenerationParams } from './IAiProvider';
 import { StoragePort } from '../../core/ports/StoragePort';
-import { documentProcessor } from '../utils/documentProcessor';
-import { logger } from '../../shared/utils/logger';
+import { buildCoreMessages } from './coreMessageBuilder';
+import { createGraphNodeTools } from './tools';
+import { collectToolResults } from './toolResultCollector';
+import { logger } from '../utils/logger';
 
-/**
- * Gemini API의 원시 에러를 시스템에서 사용하는 표준 에러 코드로 변환합니다.
- */
 function normalizeError(e: any): string {
-  const msg = e.message || '';
-  const status = e.status || (e.response?.status);
-  
-  logger.error({ 
-    err: e, 
-    message: msg, 
-    status,
-    stack: e.stack,
-    details: e.details || e.response?.data?.error?.details
-  }, 'Gemini Provider Error caught');
-
-  if (msg.includes('API key not valid')) return 'unauthorized_key';
-  if (msg.includes('Location not supported')) return 'unsupported_location';
-  if (status === 401) return 'unauthorized_key';
-  if (status === 403) return 'forbidden';
-  if (status === 404) return 'model_not_found';
-  if (msg.includes('PERMISSION_DENIED')) return 'forbidden';
-  if (msg.includes('UNAUTHENTICATED')) return 'unauthorized_key';
-  if (msg.includes('RESOURCE_EXHAUSTED')||status === 429)
-  {
-    if (msg.includes('billing') ||msg.includes('payment') ||msg.includes('not enabled') ||msg.includes('free tier')
-    ) 
-    {
-      return 'insufficient_credit';
-    }
+  const status = e?.status ?? e?.statusCode ?? e?.cause?.status;
+  const msg = (e?.message ?? e?.cause?.message ?? '').toLowerCase();
+  if (status === 401 || msg.includes('unauthenticated') || msg.includes('api key not valid') || msg.includes('invalid api key')) return 'unauthorized_key';
+  if (status === 403 || msg.includes('permission_denied')) return 'forbidden';
+  if (status === 429 || msg.includes('resource_exhausted')) {
+    if (msg.includes('billing') || msg.includes('payment') || msg.includes('free tier')) return 'insufficient_credit';
     return 'rate_limited';
   }
-  
-
-  if (msg.includes('INVALID_ARGUMENT')) return 'bad_request';
-
+  if (status === 400 || msg.includes('invalid_argument')) return 'bad_request';
+  if (status === 404) return 'not_found';
+  if (status !== undefined && status >= 500) return 'server_error';
+  if (msg.includes('network') || msg.includes('connection') || msg.includes('econnrefused')) return 'connection_error';
   return 'unknown_error';
 }
 
-/**
- * 스트림 데이터를 버퍼로 변환합니다.
- */
-async function streamToBuffer(stream: Readable): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  return new Promise((resolve, reject) => {
-    stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
-    stream.on('error', (err) => reject(err));
-    stream.on('end', () => resolve(Buffer.concat(chunks)));
-  });
-}
-
-/**
- * Gemini (@google/genai) AI Provider 구현체
- */
 export const geminiProvider: IAiProvider = {
   /**
-   * API 키 유효성을 검증합니다.
+   * @description Gemini API 키 유효성을 검사합니다.
+   * @param apiKey Google API 키
+   * @returns 유효하면 { ok: true }, 아니면 에러 코드
    */
   async checkAPIKeyValid(apiKey: string): Promise<Result<true>> {
-    if (!apiKey || apiKey.trim().length === 0) {
-      return { ok: false, error: 'empty_api_key' };
-    }
+    if (!apiKey || apiKey.trim().length === 0) return { ok: false, error: 'empty_api_key' };
     try {
-      const ai = new GoogleGenAI({ apiKey });
-      await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: 'Hi'
-      });
+      const google = createGoogleGenerativeAI({ apiKey });
+      await generateText({ model: google('gemini-2.0-flash'), messages: [{ role: 'user', content: 'Hi' }], maxOutputTokens: 1 });
       return { ok: true, data: true };
     } catch (e: any) {
-      return { ok: false, error: normalizeError(e) };
+      const errorMsg = normalizeError(e);
+      logger.error({ errorMsg }, 'geminiProvider.checkAPIKeyValid failed');
+      return { ok: false, error: errorMsg };
     }
   },
 
   /**
-   * 대화를 생성하고 선택적으로 스트리밍 응답을 제공합니다.
+   * @description 스트리밍 또는 단일 응답으로 채팅을 생성합니다.
+   *   toolCtx가 있으면 createGraphNodeTools(toolCtx)로 실제 tool을 생성합니다.
+   *   tools가 전달되면 maxSteps=5로 ReAct 루프를 자동 수행합니다.
+   *   generateText의 steps[]를 순회하여 tool 결과를 attachments/metadata로 수집합니다.
+   * @param apiKey Google API 키
+   * @param params 채팅 생성 파라미터 (model, messages, tools, toolCtx)
+   * @param onStream 스트리밍 텍스트 델타 콜백 (Optional)
+   * @param storageAdapter S3 첨부파일 처리용 어댑터 (buildCoreMessages용, Optional)
+   * @returns 생성 결과 또는 에러
    */
   async generateChat(
     apiKey: string,
@@ -88,103 +70,63 @@ export const geminiProvider: IAiProvider = {
     onStream?: (delta: string) => void,
     storageAdapter?: StoragePort
   ): Promise<Result<AiResponse>> {
+    logger.info(
+      { model: params.model, msgCount: params.messages.length, hasTools: !!params.toolCtx },
+      'geminiProvider.generateChat'
+    );
     try {
-      const ai = new GoogleGenAI({ apiKey });
-      
-      let systemInstruction: string | undefined;
-      const contents: any[] = [];
+      const google = createGoogleGenerativeAI({ apiKey });
+      const model = google(params.model ?? 'gemini-2.0-flash');
+      const coreMessages = await buildCoreMessages(params.messages, storageAdapter);
 
-      const rawMessages = params.messages;
-      
-      // 시스템 지시문 추출
-      const systemMsg = rawMessages.find(m => m.role === 'system');
-      if (systemMsg) {
-          systemInstruction = typeof systemMsg.content === 'string' 
-            ? systemMsg.content 
-            : "";
-      }
+      const tools = params.toolCtx ? createGraphNodeTools(params.toolCtx) : params.tools;
+      const stopWhen = tools ? stepCountIs(5) : stepCountIs(1);
 
-      const chatMessages = rawMessages.filter(m => m.role !== 'system');
-      
-      if (chatMessages.length === 0) {
-          return { ok: false, error: 'no_user_message' };
-      }
-
-      // 메시지 이력 구성
-      for (const m of chatMessages) {
-          const parts: any[] = [];
-
-          if (m.content && typeof m.content === 'string') {
-              parts.push({ text: m.content });
-          }
-
-          // 첨부파일 처리
-          if (m.attachments && m.attachments.length > 0 && storageAdapter) {
-              for (const att of m.attachments) {
-                  try {
-                       const stream = await storageAdapter.downloadStream(att.url, { bucketType: 'file' });
-                       const buffer = await streamToBuffer(stream as Readable);
-                       const processed = await documentProcessor.process(buffer, att.mimeType, att.name);
-                       
-                       if (processed.type === 'text') {
-                           parts.push({ text: processed.content });
-                       } else if (processed.type === 'image') {
-                           parts.push({
-                               inlineData: {
-                                   mimeType: att.mimeType,
-                                   data: processed.content
-                               }
-                           });
-                       }
-                  } catch (e) {
-                       logger.error({ err: e, fileKey: att.url }, `Failed to process attachment ${att.id} for gemini`);
-                  }
-              }
-          }
-          
-          if (parts.length > 0) {
-              contents.push({
-                  role: m.role === 'assistant' ? 'model' : 'user',
-                  parts: parts
-              });
-          }
-      }
-
-      // 스트리밍 호출
-      const streamResponse = await ai.models.generateContentStream({
-        model: params.model || 'gemini-3-flash-preview',
-        contents: contents,
-        config: {
-          systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
-          maxOutputTokens: 4096
+      if (onStream) {
+        const result = streamText({ model, messages: coreMessages, tools, stopWhen });
+        let fullContent = '';
+        for await (const chunk of result.textStream) {
+          fullContent += chunk;
+          onStream(chunk);
         }
-      });
 
-      let fullContent = '';
-      for await (const chunk of streamResponse) {
-        const delta = chunk.text || '';
-        if (delta) {
-          fullContent += delta;
-          onStream?.(delta);
-        }
+        const finalSteps = await result.steps;
+        const collected = collectToolResults(finalSteps);
+
+        return {
+          ok: true,
+          data: {
+            content: fullContent,
+            attachments: collected.attachments,
+            metadata: collected.metadata,
+          },
+        };
       }
+
+      const result = await generateText({ model, messages: coreMessages, tools, stopWhen });
+      const collected = collectToolResults(result.steps);
 
       return {
         ok: true,
         data: {
-          content: fullContent,
-          attachments: [],
-          metadata: {}
-        }
+          content: result.text,
+          attachments: collected.attachments,
+          metadata: collected.metadata,
+        },
       };
-
     } catch (e: any) {
-      return { ok: false, error: normalizeError(e) };
+      const errorMsg = normalizeError(e);
+      logger.error({ err: e, errorMsg }, 'geminiProvider.generateChat failed');
+      return { ok: false, error: errorMsg };
     }
   },
 
   /**
-   * 대화 요약(제목)을 생성합니다.
+   * @description 사용자의 첫 메시지를 기반으로 대화 스레드 제목을 생성합니다.
+   * @param apiKey Google API 키
+   * @param firstUserMessage 첫 번째 사용자 메시지
+   * @param opts.language 생성 언어 힌트 (Optional)
+   * @returns 생성된 제목 또는 폴백 (실패 시 graceful 처리)
    */
   async requestGenerateThreadTitle(
     apiKey: string,
@@ -192,27 +134,19 @@ export const geminiProvider: IAiProvider = {
     opts?: { timeoutMs?: number; language?: string }
   ): Promise<Result<string>> {
     try {
-      const ai = new GoogleGenAI({ apiKey });
-      const languageInstruction = opts?.language 
-        ? ` The title MUST be in ${opts.language}.`
-        : '';
-      const prompt = `Generate a thread title based on the message below in 20 letters or less.${languageInstruction} Return ONLY the JSON object {"title": "..."}. Message: "${firstUserMessage}"`;
-      
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt
+      const google = createGoogleGenerativeAI({ apiKey });
+      const langHint = opts?.language ? ` The title MUST be in ${opts.language}.` : '';
+      const result = await generateText({
+        model: google('gemini-2.0-flash'),
+        system: `Generate a short title (max 5 words) for a chat thread.${langHint} Return ONLY the title text, no quotes or extra formatting.`,
+        prompt: firstUserMessage,
+        maxOutputTokens: 50,
       });
-      
-      // response.text property (Gen AI 2.0 pattern)
-      const text = (response as any).text || '';
-      try {
-        const jsonStr = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
-        const { title } = JSON.parse(jsonStr);
-        if (title) return { ok: true, data: title };
-      } catch {}
-      return { ok: true, data: firstUserMessage.slice(0, 15) };
-    } catch (e) {
-      return { ok: false, error: normalizeError(e) };
+      const title = result.text.trim().replace(/^["']|["']$/g, '');
+      return { ok: true, data: title || 'New Conversation' };
+    } catch (e: any) {
+      logger.warn({ err: e }, 'geminiProvider.requestGenerateThreadTitle failed — fallback');
+      return { ok: true, data: 'New Conversation' };
     }
   },
 };

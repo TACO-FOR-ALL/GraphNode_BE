@@ -1,58 +1,64 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { Readable } from 'stream';
+/**
+ * 모듈: Anthropic Claude AI Provider (Vercel AI SDK)
+ *
+ * 책임:
+ * - createAnthropic을 사용해 Claude 모델 호출을 수행합니다.
+ * - streamText / generateText로 채팅 생성 및 ReAct Tool 루프를 수행합니다.
+ * - S3 첨부파일 처리는 buildCoreMessages 유틸리티에 위임합니다.
+ * - tool 실행 결과(이미지, 검색 링크)는 collectToolResults 헬퍼로 수집합니다.
+ */
+
+import { createAnthropic } from '@ai-sdk/anthropic';
+import { streamText, generateText, stepCountIs } from 'ai';
 
 import { IAiProvider, Result, AiResponse, ChatGenerationParams } from './IAiProvider';
 import { StoragePort } from '../../core/ports/StoragePort';
-import { documentProcessor } from '../utils/documentProcessor';
-import { logger } from '../../shared/utils/logger';
+import { buildCoreMessages } from './coreMessageBuilder';
+import { createGraphNodeTools } from './tools';
+import { collectToolResults } from './toolResultCollector';
+import { logger } from '../utils/logger';
 
 function normalizeError(e: any): string {
-  // Anthropic Error Mapping
-  const msg = e.message || '';
-  if (e instanceof Anthropic.AuthenticationError || msg.includes('401')) return 'unauthorized_key';
-  if (msg.includes('402') || msg.includes('billing')) return 'insufficient_credit';
-  if (e instanceof Anthropic.RateLimitError||msg.includes('429')) return 'rate_limited';
-  if (e instanceof Anthropic.NotFoundError || msg.includes('404')) return 'not_found';
-  if (e instanceof Anthropic.BadRequestError || msg.includes('400')) return 'bad_request';
-  if (e instanceof Anthropic.APIConnectionError) return 'connection_error';
-  if (e instanceof Anthropic.APIError || msg.includes('500')) return 'server_error';
+  const status = e?.status ?? e?.statusCode ?? e?.cause?.status;
+  const msg = (e?.message ?? e?.cause?.message ?? '').toLowerCase();
+  if (status === 401 || msg.includes('unauthorized') || msg.includes('authentication')) return 'unauthorized_key';
+  if (status === 402 || msg.includes('billing') || msg.includes('credit')) return 'insufficient_credit';
+  if (status === 429) return 'rate_limited';
+  if (status === 400) return 'bad_request';
+  if (status === 404) return 'not_found';
+  if (status !== undefined && status >= 500) return 'server_error';
+  if (msg.includes('network') || msg.includes('connection') || msg.includes('econnrefused')) return 'connection_error';
   return 'unknown_error';
 }
 
-/**
- * 스트림을 버퍼로 변환하는 헬퍼 함수
- */
-async function streamToBuffer(stream: Readable): Promise<Buffer> {
-    const chunks: Buffer[] = [];
-    return new Promise((resolve, reject) => {
-      stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
-      stream.on('error', (err) => reject(err));
-      stream.on('end', () => resolve(Buffer.concat(chunks)));
-    });
-}
-
 export const claudeProvider: IAiProvider = {
+  /**
+   * @description Claude API 키 유효성을 검사합니다.
+   * @param apiKey Anthropic API 키
+   * @returns 유효하면 { ok: true }, 아니면 에러 코드
+   */
   async checkAPIKeyValid(apiKey: string): Promise<Result<true>> {
     try {
-      const client = new Anthropic({ apiKey });
-      await client.messages.create({
-        model: 'claude-3-haiku-20240307',
-        max_tokens: 1,
-        messages: [{ role: 'user', content: 'Hi' }],
-      });
+      const anthropic = createAnthropic({ apiKey });
+      await generateText({ model: anthropic('claude-haiku-4-5'), messages: [{ role: 'user', content: 'Hi' }], maxOutputTokens: 1 });
       return { ok: true, data: true };
     } catch (e: any) {
-      return { ok: false, error: normalizeError(e) };
+      const errorMsg = normalizeError(e);
+      logger.error({ errorMsg }, 'claudeProvider.checkAPIKeyValid failed');
+      return { ok: false, error: errorMsg };
     }
   },
 
   /**
-   * 통합 채팅 생성 메서드 (Stateless)
+   * @description 스트리밍 또는 단일 응답으로 채팅을 생성합니다.
+   *   toolCtx가 있으면 createGraphNodeTools(toolCtx)로 실제 tool을 생성합니다.
+   *   tools가 전달되면 maxSteps=5로 ReAct 루프를 자동 수행합니다.
+   *   generateText의 steps[]를 순회하여 tool 결과를 attachments/metadata로 수집합니다.
    * @param apiKey Anthropic API 키
-   * @param params 채팅 생성 파라미터
-   * @param onStream 스트리밍 이벤트 핸들러
-   * @param storageAdapter 파일 저장 어댑터
-   * @returns AI 응답
+   * @param params 채팅 생성 파라미터 (model, messages, tools, toolCtx)
+   * @param onStream 스트리밍 텍스트 델타 콜백 (Optional)
+   * @param storageAdapter S3 첨부파일 처리용 어댑터 (buildCoreMessages용, Optional)
+   * @returns 생성 결과 또는 에러
    */
   async generateChat(
     apiKey: string,
@@ -60,150 +66,83 @@ export const claudeProvider: IAiProvider = {
     onStream?: (delta: string) => void,
     storageAdapter?: StoragePort
   ): Promise<Result<AiResponse>> {
+    logger.info(
+      { model: params.model, msgCount: params.messages.length, hasTools: !!params.toolCtx },
+      'claudeProvider.generateChat'
+    );
     try {
-      const client = new Anthropic({ apiKey });
+      const anthropic = createAnthropic({ apiKey });
+      const model = anthropic(params.model ?? 'claude-haiku-4-5');
+      const coreMessages = await buildCoreMessages(params.messages, storageAdapter);
 
-      // 1. 시스템 메시지 추출 & 메시지 변환
-      let systemMessage: string | undefined;
-      const messages: Anthropic.MessageParam[] = [];
+      const tools = params.toolCtx ? createGraphNodeTools(params.toolCtx) : params.tools;
+      const stopWhen = tools ? stepCountIs(5) : stepCountIs(1);
 
-      // 메시지 변환
-      for (const m of params.messages) {
-
-        // 시스템 메시지
-        if (m.role === 'system') {
-          // System message is strictly a string in ChatMessageRequest usually, 
-          // but if it's array, we join text.
-          if (Array.isArray(m.content)) {
-             // @ts-ignore
-             systemMessage = m.content.map(c => c.text || '').join('\n');
-          } else {
-             systemMessage = m.content as string;
-          }
-        } 
-        else {
-           // User/Assistant messages
-           const contentParts: Anthropic.ContentBlockParam[] = [];
-           
-           // 1. Text Content 추출
-           if (m.content) {
-               if (typeof m.content === 'string') {
-                   contentParts.push({ type: 'text', text: m.content });
-               } else if (Array.isArray(m.content)) {
-                    // Legacy array support
-                   // @ts-ignore
-                   m.content.forEach(c => {
-                       if (c.type === 'text') contentParts.push({ type: 'text', text: c.text });
-                   });
-               }
-           }
-
-           // 2. Attachments (File Handling) 추출 처리
-           if (m.attachments && m.attachments.length > 0 && storageAdapter) {
-               for (const att of m.attachments) {
-                   try {
-
-                        // 파일 다운로드
-                        const stream = await storageAdapter.downloadStream(att.url, { bucketType: 'file' });
-                        const buffer = await streamToBuffer(stream as Readable);
-                        
-                        // DocumentProcessor processing
-                        const processed = await documentProcessor.process(buffer, att.mimeType, att.name);
-                        
-                        if (processed.type === 'text') {
-                            contentParts.push({ type: 'text', text: processed.content });
-                        } 
-                        else if (processed.type === 'image') {
-                            // Claude expects Base64 for images
-                            contentParts.push({
-                                type: 'image',
-                                source: {
-                                    type: 'base64',
-                                    media_type: att.mimeType as any, // e.g. "image/jpeg"
-                                    data: processed.content // base64 string
-                                }
-                            });
-                        }
-                   } catch (e) {
-                       logger.error({ err: e, fileKey: att.url }, `Failed to process attachment ${att.id} for claude`);
-                   }
-               }
-           }
-           
-           // 메시지 추가
-           messages.push({
-               role: m.role as 'user' | 'assistant',
-               content: contentParts.length > 0 ? contentParts : ([{ type: 'text', text: '' }] as any)
-           });
+      if (onStream) {
+        const result = streamText({ model, messages: coreMessages, tools, stopWhen });
+        let fullContent = '';
+        for await (const chunk of result.textStream) {
+          fullContent += chunk;
+          onStream(chunk);
         }
+
+        const finalSteps = await result.steps;
+        const collected = collectToolResults(finalSteps);
+
+        return {
+          ok: true,
+          data: {
+            content: fullContent,
+            attachments: collected.attachments,
+            metadata: collected.metadata,
+          },
+        };
       }
 
-      const modelName : string = params.model || 'claude-3-haiku-20240307';
-
-      // 2. 스트리밍 요청 using SDK helper
-      const stream = client.messages.stream({
-        model: modelName,
-        max_tokens: 4096,
-        system: systemMessage,
-        messages: messages,
-      });
-
-      let fullContent = '';
-
-      // 3. 스트림 이벤트 핸들링 (SDK Helper 활용)
-      stream.on('text', (textDelta) => {
-        fullContent += textDelta;
-        onStream?.(textDelta);
-      });
-
-      // 4. 최종 응답
-      const finalMessage = await stream.finalMessage();
-      
-      // Usage info could be extracted from finalMessage.usage
+      const result = await generateText({ model, messages: coreMessages, tools, stopWhen });
+      const collected = collectToolResults(result.steps);
 
       return {
         ok: true,
         data: {
-          content: fullContent,
-          attachments: [], // Claude attachments not yet implemented
-          metadata: {
-              id: finalMessage.id,
-              usage: finalMessage.usage
-          }
-        }
+          content: result.text,
+          attachments: collected.attachments,
+          metadata: collected.metadata,
+        },
       };
-
     } catch (e: any) {
-      return { ok: false, error: normalizeError(e) };
+      const errorMsg = normalizeError(e);
+      logger.error({ err: e, errorMsg }, 'claudeProvider.generateChat failed');
+      return { ok: false, error: errorMsg };
     }
   },
 
+  /**
+   * @description 사용자의 첫 메시지를 기반으로 대화 스레드 제목을 생성합니다.
+   * @param apiKey Anthropic API 키
+   * @param firstUserMessage 첫 번째 사용자 메시지
+   * @param opts.language 생성 언어 힌트 (Optional)
+   * @returns 생성된 제목 또는 폴백 (실패 시 graceful 처리)
+   */
   async requestGenerateThreadTitle(
     apiKey: string,
     firstUserMessage: string,
     opts?: { timeoutMs?: number; language?: string }
   ): Promise<Result<string>> {
     try {
-      const languageInstruction = opts?.language 
-        ? ` The title MUST be in ${opts.language}.`
-        : '';
-      const prompt = `You are a helpful assistant. Generate a thread title based on the message below in 20 letters or less.${languageInstruction} Return ONLY the JSON object {"title": "..."}. Message: "${firstUserMessage}"`;
-      const client = new Anthropic({ apiKey });
-      const response = await client.messages.create({
-        model: 'claude-3-haiku-20240307',
-        max_tokens: 100,
-        messages: [{ role: 'user', content: prompt }],
+      const anthropic = createAnthropic({ apiKey });
+      const langHint = opts?.language ? ` The title MUST be in ${opts.language}.` : '';
+      const result = await generateText({
+        model: anthropic('claude-haiku-4-5'),
+        system: `Generate a short title (max 5 words) for a chat thread.${langHint} Return ONLY the title text, no quotes or extra formatting.`,
+        prompt: firstUserMessage,
+        maxOutputTokens: 50,
       });
-      const text = response.content[0].type === 'text' ? response.content[0].text : '{}';
-      try {
-        const jsonStr = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
-        const { title } = JSON.parse(jsonStr);
-        if (title) return { ok: true, data: title };
-      } catch {}
-      const fallback = firstUserMessage.slice(0, 15) + (firstUserMessage.length > 15 ? '…' : '');
-      return { ok: true, data: fallback };
-    } catch (e) {
-      return { ok: false, error: normalizeError(e) };
+      const title = result.text.trim().replace(/^["']|["']$/g, '');
+      return { ok: true, data: title || 'New Conversation' };
+    } catch (e: any) {
+      logger.warn({ err: e }, 'claudeProvider.requestGenerateThreadTitle failed — fallback');
+      return { ok: true, data: 'New Conversation' };
     }
   },
 };
