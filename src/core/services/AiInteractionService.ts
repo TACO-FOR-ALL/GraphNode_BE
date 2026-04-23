@@ -407,6 +407,7 @@ export class AiInteractionService {
         { label: 'AiProvider.generateChat' }
       );
 
+      // 응답 오류 처리
       if (!aiResponseResult.ok) {
         if (aiResponseResult.error === 'rate_limited')
           throw new ProviderRateLimitError(
@@ -419,6 +420,7 @@ export class AiInteractionService {
         throw new UpstreamError(`AI Generation failed: ${aiResponseResult.error}`);
       }
 
+      // AI 응답
       const aiResponse: AiResponse = aiResponseResult.data;
 
       // 7. 메시지 저장

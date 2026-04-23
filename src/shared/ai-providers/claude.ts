@@ -40,7 +40,7 @@ export const claudeProvider: IAiProvider = {
   async checkAPIKeyValid(apiKey: string): Promise<Result<true>> {
     try {
       const anthropic = createAnthropic({ apiKey });
-      await generateText({ model: anthropic('claude-haiku-4-5'), messages: [{ role: 'user', content: 'Hi' }], maxOutputTokens: 1 });
+      await generateText({ model: anthropic('claude-haiku-4-5-20251001'), messages: [{ role: 'user', content: 'Hi' }], maxOutputTokens: 1 });
       return { ok: true, data: true };
     } catch (e: any) {
       const errorMsg = normalizeError(e);
@@ -72,7 +72,7 @@ export const claudeProvider: IAiProvider = {
     );
     try {
       const anthropic = createAnthropic({ apiKey });
-      const model = anthropic(params.model ?? 'claude-haiku-4-5');
+      const model = anthropic(params.model ?? 'claude-haiku-4-5-20251001-20251001');
       const coreMessages = await buildCoreMessages(params.messages, storageAdapter);
 
       const tools = params.toolCtx ? createGraphNodeTools(params.toolCtx) : params.tools;
@@ -133,7 +133,7 @@ export const claudeProvider: IAiProvider = {
       const anthropic = createAnthropic({ apiKey });
       const langHint = opts?.language ? ` The title MUST be in ${opts.language}.` : '';
       const result = await generateText({
-        model: anthropic('claude-haiku-4-5'),
+        model: anthropic('claude-haiku-4-5-20251001'),
         system: `Generate a short title (max 5 words) for a chat thread.${langHint} Return ONLY the title text, no quotes or extra formatting.`,
         prompt: firstUserMessage,
         maxOutputTokens: 50,

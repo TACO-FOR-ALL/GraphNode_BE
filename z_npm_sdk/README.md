@@ -52,7 +52,7 @@ const client = createGraphNodeClient({
 
 ### 🤖 2. AI 대화 (AI Chat)
 
-- [AI API (`client.ai`)](docs/endpoints/ai.md): 기본 채팅, 스트리밍, RAG 대화
+- [AI API (`client.ai`)](docs/endpoints/ai.md): 기본 채팅, 스트리밍, RAG 대화, **Tool 결과(웹 검색·이미지) 처리**
 - [Agent API (`openAgentChatStream`)](docs/endpoints/agent.md): 에이전트 워크플로우 대화
 
 ### 💬 3. 대화 관리 (Conversations)
@@ -163,6 +163,23 @@ onUnmount(() => closeStream());
 ```
 
 > 📌 **`TaskType`은 SDK 내부 서버간 관계를 이해하기 위한 참조용** 타입입니다. FE에서 직접 사용할 일은 거의 없습니다.
+
+---
+
+## 📋 변경 내역 (Changelog)
+
+### v0.1.96
+
+**AI Tool Calling 결과 타입 정식 추가 (하위 호환)**
+
+- `MessageDto.metadata` 타입을 `MessageMetadata`로 분리하여 명확히 정의
+- `GraphNodeToolCall` 타입 추가: 웹 검색(`web_search`), 이미지 생성(`image_generation`), 웹 스크래핑(`web_scraper`) 결과 구조
+- `SearchResult` 타입 추가: `metadata.searchResults[]` 배열 항목 타입
+- `LegacyAssistantToolCall` — 기존 OpenAI Assistants 형식에 `@deprecated` 마킹 (삭제하지 않음, 하위 호환 유지)
+- `index.ts`에 신규 타입 4개 re-export 추가: `MessageMetadata`, `GraphNodeToolCall`, `LegacyAssistantToolCall`, `SearchResult`
+- 모든 신규 필드는 `?` Optional — **기존 FE 코드 수정 불필요**
+
+> 자세한 사용법 → [AI Tool 결과 가이드](docs/endpoints/ai.md#message-structure--tool-results)
 
 ---
 

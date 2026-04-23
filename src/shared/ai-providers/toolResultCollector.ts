@@ -123,13 +123,19 @@ export function collectToolResults(steps: ReadonlyArray<MinimalStep>): Collected
           // tools.ts의 execute()가 항상 ImageGenerationResult를 반환하므로 단일 캐스팅 안전
           const imgResult = result as ImageGenerationResult;
           if (imgResult.s3Key && !imgResult.error) {
+            // revisedPrompt가 있으면 내용 기반 이름, 없으면 timestamp 폴백
+            const baseName = imgResult.revisedPrompt
+              ? imgResult.revisedPrompt.slice(0, 50).replace(/[^\w가-힣\s-]/g, '').trim().replace(/\s+/g, '_') || `generated-${Date.now()}`
+              : `generated-image-${Date.now()}`;
             attachments.push({
               id: uuidv4(),
               type: 'image',
               url: imgResult.s3Key,
-              name: `generated-image-${Date.now()}.png`,
+              name: `${baseName}.png`,
               mimeType: 'image/png',
-              size: 0, // 실제 크기는 S3에서 조회 필요 — 현재 0으로 표기
+              // S3 head-object 없이는 실제 크기 조회 불가.
+              // FE: client.ai.downloadFile(url) → Blob.size 로 실제 크기 확인 가능.
+              size: 0,
             });
             toolCallMeta.push({
               toolName,

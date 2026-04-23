@@ -195,13 +195,31 @@ AI와의 새로운 대화 세션을 생성합니다. 생성 시 초기 메시지
 
 ### `get(id)`
 
-특정 대화의 메타데이터와 전체 메시지 목록을 상세히 조회합니다.
+특정 대화의 메타데이터와 전체 메시지 목록을 상세히 조회합니다. 반환된 메시지 중 AI 응답(`role: 'assistant'`)에는 Tool Calling 결과(`metadata`, `attachments`)가 포함될 수 있습니다.
 
 - **Usage Example**
 
   ```typescript
   const { data } = await client.conversations.get('conv-uuid');
   console.log(data.messages.length);
+
+  // AI Tool 결과가 있는 메시지 필터링
+  const messagesWithTools = data.messages.filter(
+    m => m.role === 'assistant' && (m.metadata?.toolCalls?.length || m.attachments?.length)
+  );
+
+  for (const msg of messagesWithTools) {
+    // 웹 검색 결과
+    const results = msg.metadata?.searchResults ?? [];
+    if (results.length > 0) {
+      console.log(`검색 결과 ${results.length}건 포함`);
+    }
+    // 이미지 첨부
+    const images = msg.attachments?.filter(a => a.type === 'image') ?? [];
+    if (images.length > 0) {
+      console.log(`생성된 이미지 ${images.length}개 포함`);
+    }
+  }
   ```
 
 - **Response Type**: `ConversationDto`
@@ -328,16 +346,22 @@ AI와의 새로운 대화 세션을 생성합니다. 생성 시 초기 메시지
 - **Response Type**
 
   ```typescript
-  export interface MessageDto {
+  // MessageDto 전체 구조 (모든 확장 필드는 Optional)
+  interface MessageDto {
     id: string;
     role: 'user' | 'assistant' | 'system';
     content: string;
     createdAt?: string;
     updatedAt?: string;
     deletedAt?: string | null;
-    attachments?: Attachment[];
+    attachments?: Attachment[];      // AI 생성 이미지 등
+    score?: number;                  // 검색 관련도 (검색 API 전용)
+    metadata?: MessageMetadata;      // Tool 호출 기록, 검색 결과
   }
   ```
+
+  > [!NOTE]
+  > `attachments`와 `metadata`는 AI 채팅(`client.ai.chat`)을 통해 생성된 **assistant 메시지**에만 포함될 수 있습니다. 직접 `createMessage`로 추가한 메시지에는 이 필드가 없습니다. 자세한 내용은 [AI Tool 결과 가이드](./ai.md#message-structure--tool-results)를 참고하세요.
 
 - **Example Response Data**
 
@@ -347,6 +371,39 @@ AI와의 새로운 대화 세션을 생성합니다. 생성 시 초기 메시지
     "role": "assistant",
     "content": "무엇을 도와드릴까요?",
     "createdAt": "2024-03-12T10:05:00Z"
+  }
+  ```
+
+  AI Tool Calling이 실행된 경우의 응답 예시:
+
+  ```json
+  {
+    "id": "msg-ai-001",
+    "role": "assistant",
+    "content": "검색 결과를 바탕으로 정리하면...",
+    "createdAt": "2024-03-12T10:05:00Z",
+    "attachments": [
+      {
+        "id": "att-uuid",
+        "type": "image",
+        "url": "chat-files/2024/abc-generated.png",
+        "name": "a_fluffy_cat_sitting.png",
+        "mimeType": "image/png",
+        "size": 0
+      }
+    ],
+    "metadata": {
+      "toolCalls": [
+        {
+          "toolName": "web_search",
+          "input": { "query": "최신 AI 뉴스" },
+          "summary": "Web search returned 5 results"
+        }
+      ],
+      "searchResults": [
+        { "title": "AI 동향 2024", "url": "https://example.com/ai", "snippet": "..." }
+      ]
+    }
   }
   ```
 
@@ -446,9 +503,12 @@ AI와의 새로운 대화 세션을 생성합니다. 생성 시 초기 메시지
 
 > [!IMPORTANT]
 > **Cascade Risk**: `hardDelete` 또는 `deleteAll` 호출 시, 해당 텍스트를 기반으로 생성된 지식 그래프 노드(Node)들도 즉시 영구 파기됩니다.
->
+
 > [!TIP]
 > **Auto-Pagination**: `list()`, `listTest()`, `listTrash()` 메서드는 대화가 수천 개여도 클라이언트가 루프를 돌 필요 없이 SDK가 모든 페이지를 긁어서 배열로 반환해 줍니다.
->
+
 > [!IMPORTANT]
 > **Performance vs Data**: 보통 화면의 사이드바 등에서 목록을 나열할 때는 `list()`를 사용해 페이로드 크기를 줄이고, 특정 대화의 모든 메시지가 필요한 경우에는 `get(id)`을 사용하거나 테스트 시 `listTest()`를 사용하십시오.
+
+> [!TIP]
+> **AI Tool 결과 접근**: `get(id)` 또는 `client.ai.chat()`의 응답 메시지에서 `role === 'assistant'`인 항목을 찾아 `metadata?.searchResults`(웹 검색 결과)와 `attachments`(이미지 등)를 확인하세요. 자세한 패턴은 [AI Tool 결과 가이드](./ai.md#message-structure--tool-results)를 참고하세요.
