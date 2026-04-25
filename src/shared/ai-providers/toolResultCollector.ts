@@ -5,6 +5,7 @@
  * - Vercel AI SDK generateText() 결과의 steps[]를 순회하여
  *   tool 실행 결과(이미지 S3 키, 검색 링크 등)를 Attachment / metadata로 변환합니다.
  * - openai / claude / gemini Provider 구현체가 공통으로 사용합니다.
+ * - AI SDK v5+ 에서 result→output, args→input 으로 필드명 변경됨. 양쪽 모두 지원.
  */
 
 import { v4 as uuidv4 } from 'uuid';
@@ -19,27 +20,28 @@ import { ImageGenerationResult, WebSearchResult } from './tools';
  * collectToolResults가 실제로 접근하는 필드만 선언한 최소 ToolResult 인터페이스.
  *
  * @description
- *   Vercel AI SDK의 TypedToolResult<TOOLS>는 아래 유니온입니다:
- *     StaticToolResult (toolName, args: INPUT, result: OUTPUT)
- *   | DynamicToolResult (toolName?: string, input: unknown, result?: unknown)
+ *   AI SDK v5+ (ai ^5.0 / ^6.0) 에서 TypedToolResult의 필드명이 변경됨:
+ *     args   → input   (입력 인수)
+ *     result → output  (실행 결과)
  *
- *   호환 조건:
- *   - args/input 모두 `unknown`으로 선언 → DynamicToolResult.input: unknown 수용
- *   - result  optional + unknown → DynamicToolResult에 result 필드 없음 수용
- *   실제 값 추출은 루프 내부에서 isPlainRecord() 타입 가드로 안전하게 처리합니다.
+ *   하위 호환을 위해 구버전 필드(args, result)도 optional로 유지하고,
+ *   실제 값 추출 시 신버전 필드를 우선한다 (output ?? result, input ?? args).
  *
  *   필드명 alias 처리:
- *   - toolName / type: Vercel SDK 표준은 toolName, 일부 래퍼에서 type으로 노출될 수 있음
- *   - args / input:    Vercel SDK 표준은 args, DynamicToolResult는 input 사용
+ *   - toolName / type: SDK 표준은 toolName, 일부 래퍼에서 type으로 노출될 수 있음
+ *   - input / args:    AI SDK v5+ 표준은 input, 구버전은 args
+ *   - output / result: AI SDK v5+ 표준은 output, 구버전은 result
  */
 interface MinimalToolResult {
   toolName?: string;
   type?: string;
-  /** StaticToolResult의 입력 인수 (Record) */
-  args?: unknown;
-  /** DynamicToolResult의 입력 인수 (unknown) */
+  /** AI SDK v5+ 입력 인수 */
   input?: unknown;
-  /** optional: DynamicToolResult에는 result 필드가 존재하지 않음 */
+  /** AI SDK v4 이하 입력 인수 (하위 호환) */
+  args?: unknown;
+  /** AI SDK v5+ 실행 결과 */
+  output?: unknown;
+  /** AI SDK v4 이하 실행 결과 (하위 호환) */
   result?: unknown;
 }
 
@@ -111,18 +113,17 @@ export function collectToolResults(steps: ReadonlyArray<MinimalStep>): Collected
 
     for (const tr of results) {
       const toolName: string = tr.toolName ?? tr.type ?? 'unknown';
-      // args/input 모두 unknown이므로 isPlainRecord 가드로 Record 타입으로 좁힘
-      const rawArgs: unknown = tr.args ?? tr.input;
+      // input(v5+) → args(v4) 순으로 폴백. isPlainRecord 가드로 Record 타입으로 좁힘
+      const rawArgs: unknown = tr.input ?? tr.args;
       const args: Record<string, unknown> = isPlainRecord(rawArgs) ? rawArgs : {};
-      // unknown으로 유지 — 케이스별 단일 캐스팅(as T)으로 이중 캐스팅 제거
-      const result: unknown = tr.result;
+      // output(v5+) → result(v4) 순으로 폴백. AI SDK v6에서 result가 output으로 변경됨
+      const result: unknown = tr.output ?? tr.result;
 
       switch (toolName) {
         // ── 이미지 생성 ──────────────────────────────────────────
         case 'image_generation': {
-          // tools.ts의 execute()가 항상 ImageGenerationResult를 반환하므로 단일 캐스팅 안전
-          const imgResult = result as ImageGenerationResult;
-          if (imgResult.s3Key && !imgResult.error) {
+          const imgResult = result as ImageGenerationResult | undefined;
+          if (imgResult?.s3Key && !imgResult.error) {
             // revisedPrompt가 있으면 내용 기반 이름, 없으면 timestamp 폴백
             const baseName = imgResult.revisedPrompt
               ? imgResult.revisedPrompt.slice(0, 50).replace(/[^\w가-힣\s-]/g, '').trim().replace(/\s+/g, '_') || `generated-${Date.now()}`
@@ -146,7 +147,7 @@ export function collectToolResults(steps: ReadonlyArray<MinimalStep>): Collected
             toolCallMeta.push({
               toolName,
               input: args,
-              summary: `Image generation failed: ${imgResult.error ?? 'unknown'}`,
+              summary: `Image generation failed: ${imgResult?.error ?? 'unknown'}`,
             });
           }
           break;
@@ -154,25 +155,25 @@ export function collectToolResults(steps: ReadonlyArray<MinimalStep>): Collected
 
         // ── 웹 검색 ──────────────────────────────────────────────
         case 'web_search': {
-          const searchResult = result as { results?: WebSearchResult[]; error?: string };
-          if (searchResult.results?.length) {
+          const searchResult = result as { results?: WebSearchResult[]; error?: string } | undefined;
+          if (searchResult?.results?.length) {
             searchResults.push(...searchResult.results);
           }
           toolCallMeta.push({
             toolName,
             input: args,
-            summary: `Web search returned ${searchResult.results?.length ?? 0} results${searchResult.error ? ` (error: ${searchResult.error})` : ''}`,
+            summary: `Web search returned ${searchResult?.results?.length ?? 0} results${searchResult?.error ? ` (error: ${searchResult.error})` : ''}`,
           });
           break;
         }
 
         // ── 웹 스크래퍼 ──────────────────────────────────────────
         case 'web_scraper': {
-          const scraperResult = result as { content?: string; error?: string };
+          const scraperResult = result as { content?: string; error?: string } | undefined;
           toolCallMeta.push({
             toolName,
             input: args,
-            summary: `Scraped ${scraperResult.content?.length ?? 0} chars${scraperResult.error ? ` (error: ${scraperResult.error})` : ''}`,
+            summary: `Scraped ${scraperResult?.content?.length ?? 0} chars${scraperResult?.error ? ` (error: ${scraperResult.error})` : ''}`,
           });
           break;
         }
