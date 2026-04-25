@@ -49,7 +49,16 @@ export type {
   ConversationUpdateDto,
   ConversationBulkCreateDto,
 } from './types/conversation.js';
-export type { MessageDto, MessageCreateDto, MessageUpdateDto, Attachment } from './types/message.js';
+export type {
+  MessageDto,
+  MessageCreateDto,
+  MessageUpdateDto,
+  Attachment,
+  MessageMetadata,
+  GraphNodeToolCall,
+  LegacyAssistantToolCall,
+  SearchResult,
+} from './types/message.js';
 export type {
   NoteDto,
   NoteCreateDto,

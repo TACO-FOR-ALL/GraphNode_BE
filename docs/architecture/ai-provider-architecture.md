@@ -109,3 +109,97 @@ graph TD
 
 *   **File Processing Error**: 특정 파일 처리에 실패하더라도 전체 요청을 중단하지 않습니다. 에러 로그를 남기고 해당 파일만 제외한 채 채팅을 진행합니다 (Fail-Safe).
 *   **API Error**: Provider 호출 실패 시 `UpstreamError`로 래핑하여 클라이언트에 명확한 원인을 전달합니다. (Rate Limit, Auth Error 등 정규화)
+
+---
+
+## 7. Context Window Management — Batched Sliding Window Strategy
+
+> **구현 파일**: `src/core/services/AiInteractionService.ts`
+> **관련 메서드**: `buildContextMessages`, `generateSummary`, `countUserTurns`, `indexAfterNUserTurns`
+
+### 7.1 설계 배경
+
+단순 히스토리 전부 전송은 토큰 비용이 선형으로 증가합니다. 반대로 초과분을 **매 호출마다** AI로 요약하면 요약 API 비용과 레이턴시가 별도로 발생합니다.
+
+GraphNode는 두 문제를 동시에 해결하기 위해 **Batched Sliding Window + Pending Buffer** 전략을 채택합니다.
+
+### 7.2 핵심 상수
+
+| 상수 | 기본값 | 의미 |
+|---|---|---|
+| `MAX_DIRECT_WINDOW` | **20** | 항상 그대로(verbatim) 전송되는 최신 메시지 수 |
+| `SUMMARY_BATCH_TURNS` | **5** | 요약 갱신을 트리거하는 최소 expelled 대화 턴 수 (user+assistant 쌍 5개 ≈ 10개 메시지) |
+
+### 7.3 컨텍스트 구성
+
+```
+AI에게 전송되는 최종 메시지 배열:
+
+┌──────────────────────────────────┐
+│  [CONVERSATION MEMORY]           │  ← 고밀도 누적 요약 (system msg)
+│  (DB summary 필드 내용)           │    없으면 생략
+├──────────────────────────────────┤
+│  Pending Expelled                │  ← 아직 요약되지 않은 expelled 메시지
+│  (배치 경계 사이의 미요약 메시지)  │    0개 ~ BATCH_SIZE-1개
+├──────────────────────────────────┤
+│  Direct Window                   │  ← 최신 MAX_DIRECT_WINDOW(20)개
+│  (가장 최근 20개 메시지)          │    항상 원문 그대로 포함
+├──────────────────────────────────┤
+│  Current Message                 │  ← 현재 사용자 요청
+└──────────────────────────────────┘
+```
+
+### 7.4 요약 갱신 흐름
+
+```mermaid
+flowchart TD
+    A[buildContextMessages 호출] --> B{historyMessages.length\n≤ MAX_DIRECT_WINDOW?}
+    B -- "예 (≤20)" --> C[요약 없이\n전체 히스토리 반환]
+    B -- "아니오 (>20)" --> D[allExpelled = 앞쪽 메시지들\nwindowMessages = 최신 20개]
+    D --> E[expelledTurns =\nallExpelled의 user 메시지 수]
+    E --> F{expelledTurns > 0\nAND\nexpelledTurns % 5 == 0?}
+    F -- "아니오" --> G[요약 갱신 SKIP\n기존 summary 유지]
+    F -- "예 (배치 경계 도달)" --> H[prevBatch 끝 인덱스 계산\nnewBatch = 최신 5턴 분량]
+    H --> I[generateSummary 호출\nnewBatch + existingSummary → 새 메모리]
+    I --> J[DB summary 업데이트]
+    J --> K[summarizedTurns 재계산\npendingExpelled 슬라이싱]
+    G --> K
+    K --> L[결과 반환:\nMEMORY + pendingExpelled\n+ window + current]
+```
+
+### 7.5 턴 기반 카운팅
+
+메시지 개수가 아닌 **user 메시지 수 = 대화 턴 수**를 기준으로 합니다.
+
+- `countUserTurns(messages)` — user 역할 메시지 수 반환
+- `indexAfterNUserTurns(messages, n)` — 첫 N개 user 턴이 끝나는 exclusive 인덱스 반환 (뒤따르는 assistant 응답 포함)
+
+**이점**: user 한 번에 assistant가 여러 번 응답하는 Tool-Calling 흐름에서도 "턴" 경계가 올바르게 유지됩니다.
+
+### 7.6 비용 절감 효과 (이론값)
+
+| 시나리오 | 이전 방식 | 새 방식 |
+|---|---|---|
+| 메시지 21개 이후 매 호출 | **매 호출**마다 요약 API 실행 | expelled 5턴(≈10개)마다 **1회** |
+| 100개 메시지 대화 | 요약 API 약 **80회** | 요약 API 약 **8회** |
+| DB summary 업데이트 | 매 호출 | 5턴마다 1회 |
+
+### 7.7 고밀도 요약 프롬프트 전략
+
+`generateSummary`는 영문 시스템 프롬프트를 사용하며, 결과 언어는 원본 대화 언어(주로 한국어)와 일치합니다.
+
+**정보 보존 우선순위**:
+1. **결정 사항·선호도** — 사용자가 명시적으로 결정한 내용 (verbatim 보존)
+2. **고유 식별자** — 제품명·버전·기술 키워드·고유명사 (절대 삭제 금지)
+3. **액션 아이템·결론** — 합의된 다음 단계, 최종 답변
+4. **배경·설명** — 공격적으로 압축, 위 항목에서 유추 가능하면 생략
+
+**길이 정책**: 고정 제한 없음. 정보 밀도에 비례한 가변 길이. 패딩 금지.
+
+### 7.8 RAG / Retry 호환성
+
+| 핸들러 | Window 전략 |
+|---|---|
+| `handleAIChat` | `buildContextMessages` 적용 — Batched Sliding Window |
+| `handleRetryAIChat` | `buildContextMessages` 적용 — 동일 전략 |
+| `handleRagAIChat` | FE가 `recentMessages` 직접 제공 → 서버 측 Window 미적용 |

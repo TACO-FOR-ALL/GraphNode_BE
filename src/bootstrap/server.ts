@@ -34,6 +34,7 @@ import { makeMicroscopeRouter } from './modules/microscope.module';
 import { makeSearchRouter } from './modules/search.module';
 import { makeFeedbackRouter } from './modules/feedback.module';
 import { makeFileProxyRouter } from './modules/fileProxy.module';
+import { STORAGE_BUCKETS } from '../config/storageConfig';
 import { CleanupCron } from '../infra/cron/CleanupCron';
 // import { createTestAgentRouter } from '../app/routes/agent.test';
 
@@ -105,11 +106,13 @@ export function createApp() {
   // AiInteractionService가 생성하는 URL(/api/v1/ai/files/...)과 일치하도록 설정
   app.use('/api/v1/ai/files', makeFileRouter());
 
-  // File Proxy Routes — S3 key prefix와 동일한 경로에 마운트하여
-  // FE가 {domain}/{s3-key} 형태의 URL로 파일을 바로 렌더링할 수 있게 한다.
-  app.use('/feedback-files', makeFileProxyRouter());
-  app.use('/chat-files',     makeFileProxyRouter());
-  app.use('/sdk-files',      makeFileProxyRouter());
+  // File Proxy Routes — STORAGE_BUCKETS 레지스트리에서 proxyRoute가 정의된 항목을 자동 마운트.
+  // 새 파일 카테고리 추가 시 storageConfig.ts 항목 1개만 추가하면 된다.
+  for (const cfg of Object.values(STORAGE_BUCKETS)) {
+    if (cfg.proxyRoute) {
+      app.use(cfg.proxyRoute, makeFileProxyRouter());
+    }
+  }
 
   // Auth routes
   app.use('/auth/google', authGoogleRouter);

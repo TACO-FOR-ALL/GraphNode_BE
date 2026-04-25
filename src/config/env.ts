@@ -50,6 +50,9 @@ const EnvSchema = z.object({
   CLAUDE_API_KEY: z.string().min(1, 'CLAUDE_API_KEY required'),
   HF_API_TOKEN: z.string().min(1, 'HF_API_TOKEN required'),
 
+  // 웹 검색 Tool (Tavily) — 미설정 시 web_search tool이 빈 결과를 반환합니다.
+  TAVILY_API_KEY: z.string().optional(),
+
   // 일일 채팅 가능 횟수 (Beta Test 용도, Default 값은 20번)
   DAILY_CHAT_LIMIT: z.coerce.number().int().positive().default(20),
 

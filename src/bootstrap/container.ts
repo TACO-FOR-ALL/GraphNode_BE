@@ -458,8 +458,7 @@ export class Container {
       const raw = new AiInteractionService(
         this.getChatManagementService(),
         this.getUserService(),
-        this.getAwsS3Adapter(),
-        this.getDailyUsageService()
+        this.getAwsS3Adapter()
       );
       this.aiInteractionService = createAuditProxy(raw, 'AiInteractionService');
     }

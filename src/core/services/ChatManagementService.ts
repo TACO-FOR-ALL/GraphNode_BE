@@ -555,6 +555,10 @@ export class ChatManagementService {
       { retries: 3, label: 'ChatManagementService.deleteConversation.graphCleanup' }
     );
 
+    // 클러스터 처리로직 ...
+
+    // 서브클러스터 처리로직..
+
     return true;
   }
 
@@ -640,6 +644,8 @@ export class ChatManagementService {
                 createdAt: now.getTime(),
                 updatedAt: now.getTime(),
                 deletedAt: null,
+                attachments: message.attachments,
+                metadata: message.metadata,
               };
 
               const createdDoc = await this.messageService.createDoc(msgDoc, session);

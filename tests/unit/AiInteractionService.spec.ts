@@ -10,7 +10,6 @@ import { Readable } from 'stream';
 import { AiInteractionService } from '../../src/core/services/AiInteractionService';
 import { ChatManagementService } from '../../src/core/services/ChatManagementService';
 import { UserService } from '../../src/core/services/UserService';
-import { DailyUsageService } from '../../src/core/services/DailyUsageService';
 import { StoragePort } from '../../src/core/ports/StoragePort';
 import {
   ValidationError,
@@ -42,11 +41,6 @@ const mockStorageAdapter = {
   downloadStream: jest.fn(),
 } as unknown as jest.Mocked<StoragePort>;
 
-const mockDailyUsageSvc = {
-  checkLimit: jest.fn(),
-  incrementUsage: jest.fn(),
-} as unknown as jest.Mocked<DailyUsageService>;
-
 // Mock AI Provider Implementation
 const mockProvider: jest.Mocked<IAiProvider> = {
   checkAPIKeyValid: jest.fn(),
@@ -69,13 +63,10 @@ describe('AiInteractionService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (getAiProvider as jest.Mock).mockReturnValue(mockProvider);
-    mockDailyUsageSvc.checkLimit.mockResolvedValue(undefined);
-    mockDailyUsageSvc.incrementUsage.mockResolvedValue(undefined);
     service = new AiInteractionService(
       mockChatSvc,
       mockUserSvc,
-      mockStorageAdapter,
-      mockDailyUsageSvc
+      mockStorageAdapter
     );
   });
 
@@ -149,7 +140,6 @@ describe('AiInteractionService', () => {
 
       // 2. Provider Factory & Key Check
       expect(getAiProvider).toHaveBeenCalledWith('openai');
-      expect(mockDailyUsageSvc.checkLimit).toHaveBeenCalledWith(ownerUserId);
 
       // 3. History Retrieval
       expect(mockChatSvc.getMessages).toHaveBeenCalledWith(conversationId);
@@ -177,7 +167,6 @@ describe('AiInteractionService', () => {
               content: 'AI Response'
           })
       );
-      expect(mockDailyUsageSvc.incrementUsage).toHaveBeenCalledWith(ownerUserId);
     });
 
     it('should create new conversation if not found', async () => {

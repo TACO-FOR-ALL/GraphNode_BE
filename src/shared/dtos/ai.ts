@@ -29,13 +29,28 @@ export interface ChatMessage {
   deletedAt?: string | null; // ISO 8601
   attachments?: Attachment[];
   metadata?: {
-    toolCalls?: {
-      type: 'code_interpreter' | 'file_search';
-      input?: string;
-      logs?: string;
-      citations?: any[];
-      [key: string]: any;
-    }[];
+    toolCalls?: (
+      | {
+          /** GraphNode AI tool 호출 결과 */
+          toolName: string;
+          input: Record<string, unknown>;
+          summary?: string;
+        }
+      | {
+          /** Legacy: OpenAI Assistants API 코드 인터프리터 / 파일 검색 결과 */
+          type: 'code_interpreter' | 'file_search';
+          input?: string;
+          logs?: string;
+          citations?: any[];
+          [key: string]: any;
+        }
+    )[];
+    /** web_search tool이 수집한 검색 결과 링크 */
+    searchResults?: Array<{
+      title: string;
+      url: string;
+      snippet: string;
+    }>;
     [key: string]: any;
   };
   /** 검색 관련성 점수 (검색 결과에서만 포함됨) */
@@ -68,6 +83,8 @@ export interface ChatThread {
   messages: ChatMessage[];
   externalThreadId?: string; // OpenAI Assistants API Thread ID
   lastResponseId?: string;   // OpenAI Responses API Context ID
+  /** Sliding Window 누적 요약 — 윈도우 밖 메시지들을 압축한 누적 요약본 */
+  summary?: string;
   /** 검색 관련성 점수 (검색 결과에서만 포함됨) */
   score?: number;
 }
