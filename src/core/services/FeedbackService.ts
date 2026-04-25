@@ -31,6 +31,7 @@ import {
 } from '../../shared/dtos/feedback';
 import { NotFoundError, UpstreamError, ValidationError } from '../../shared/errors/domain';
 import { logger } from '../../shared/utils/logger';
+import { STORAGE_BUCKETS, buildStorageKey } from '../../config/storageConfig';
 
 /**
  * 피드백 도메인 서비스.
@@ -59,7 +60,7 @@ export class FeedbackService {
    *   - `title` (string): 제목. 1~1000자.
    *   - `content` (string): 본문. 1~10000자.
    * @param files - (선택) 첨부할 파일 배열. Express Multer의 메모리 버퍼 파일.
-   *   파일당 S3 `feedback-files/{uuid}-{originalname}` 경로에 저장된다.
+   *   파일당 S3 `{STORAGE_BUCKETS.FEEDBACK_FILES.prefix}/{uuid}-{YYYYMMDD}{ext}` 경로에 저장된다.
    * @returns 생성된 피드백의 응답 DTO. 불변 객체.
    * @throws {ValidationError} VALIDATION_FAILED — 필드 길이/형식 위반 시
    * @throws {UpstreamError} UPSTREAM_ERROR — S3 업로드 또는 DB 저장 실패 시
@@ -206,7 +207,7 @@ export class FeedbackService {
    * 멀티파트 파일 배열을 S3에 업로드하고 첨부 메타데이터 배열을 반환한다.
    * 파일이 없으면 null을 반환한다. storageAdapter가 주입되지 않은 경우 UpstreamError를 throw한다.
    *
-   * @description S3 키 형식: `feedback-files/{uuid}-{YYYYMMDD}{ext}`
+   * @description S3 키 형식: `{STORAGE_BUCKETS.FEEDBACK_FILES.prefix}/{uuid}-{YYYYMMDD}{ext}`
    * @param files - Express Multer 메모리 버퍼 파일 배열. undefined 또는 빈 배열이면 null 반환.
    * @returns 업로드된 파일의 메타데이터 배열, 파일이 없으면 null.
    * @throws {UpstreamError} UPSTREAM_ERROR — storageAdapter 미주입 또는 S3 업로드 실패 시
@@ -224,7 +225,7 @@ export class FeedbackService {
     for (const file of files) {
       const ext = file.originalname.includes('.') ? '.' + file.originalname.split('.').pop() : '';
       const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-      const key = `feedback-files/${uuidv4()}-${date}${ext}`;
+      const key = buildStorageKey(STORAGE_BUCKETS.FEEDBACK_FILES, `${uuidv4()}-${date}${ext}`);
       try {
         await this.storageAdapter.upload(key, file.buffer, file.mimetype, { bucketType: 'file' });
       } catch (err) {

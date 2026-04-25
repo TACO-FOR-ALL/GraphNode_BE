@@ -44,6 +44,8 @@ export interface ConversationDoc {
   tags?: string[];
   externalThreadId?: string; // OpenAI Assistants API Thread ID
   lastResponseId?: string;   // OpenAI Responses API Context ID
+  /** Sliding Window 누적 요약 — 윈도우 밖으로 밀려난 메시지들의 압축 요약본 */
+  summary?: string;
 }
 
 /**
@@ -72,13 +74,28 @@ export interface MessageDoc {
    * 확장된 메타데이터 저장소 (OpenAI Code Interpreter 로그, 검색 인용 정보 등)
    */
   metadata?: {
-    toolCalls?: {
-      type: 'code_interpreter' | 'file_search';
-      input?: string;
-      logs?: string;
-      citations?: any[];
-      [key: string]: any;
-    }[];
+    toolCalls?: (
+      | {
+          /** GraphNode AI tool 호출 결과 */
+          toolName: string;
+          input: Record<string, unknown>;
+          summary?: string;
+        }
+      | {
+          /** Legacy: OpenAI Assistants API 코드 인터프리터 / 파일 검색 결과 */
+          type: 'code_interpreter' | 'file_search';
+          input?: string;
+          logs?: string;
+          citations?: any[];
+          [key: string]: any;
+        }
+    )[];
+    /** web_search tool이 수집한 검색 결과 링크 */
+    searchResults?: Array<{
+      title: string;
+      url: string;
+      snippet: string;
+    }>;
     [key: string]: any;
   };
 }

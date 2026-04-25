@@ -159,10 +159,9 @@ export class NoteService {
    */
   async countNotes(userId: string): Promise<number> {
     try {
-      const noteCnt = await withRetry(
-        async () => await this.noteRepo.countByOwner(userId),
-        { label: 'NoteService.countNotes' }
-      );
+      const noteCnt = await withRetry(async () => await this.noteRepo.countByOwner(userId), {
+        label: 'NoteService.countNotes',
+      });
       if (noteCnt == null) {
         throw new UpstreamError('NoteRepository.countByOwner returned null');
       }
@@ -266,6 +265,10 @@ export class NoteService {
 
     // 연관된 지식 그래프 연쇄 삭제 (Linked Deletion)
     await this.graphManagementService.deleteNodesByOrigIds(userId, [noteId], permanent);
+
+    // 클러스터 처리로직...
+
+    //서브클러스터 처리로직..
   }
 
   /**

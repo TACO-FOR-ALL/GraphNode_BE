@@ -45,13 +45,12 @@ export function toConversationDoc(
  */
 export function toChatThreadDto(convDoc: ConversationDoc, messageDocs: MessageDoc[]): ChatThread {
   return {
-    id: convDoc._id, // DB의 _id를 DTO의 id로 매핑
+    id: convDoc._id,
     title: convDoc.title,
-    // 타임스탬프를 ISO 8601 문자열로 변환
     createdAt: new Date(convDoc.createdAt).toISOString(),
     updatedAt: new Date(convDoc.updatedAt).toISOString(),
     deletedAt: convDoc.deletedAt ? new Date(convDoc.deletedAt).toISOString() : null,
-    // 메시지 목록도 각각 DTO로 변환
+    summary: convDoc.summary,
     messages: messageDocs.map(toChatMessageDto),
   };
 }

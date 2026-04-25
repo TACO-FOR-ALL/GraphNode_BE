@@ -15,6 +15,9 @@ import * as Sentry from '@sentry/node';
 
 import { notifyHttp500, notifyWorkerFailed } from '../../shared/utils/discord';
 import { UpstreamError, ValidationError, NotFoundError } from '../../shared/errors/domain';
+import { v4 as uuidv4 } from 'uuid';
+import { container } from '../../bootstrap/container';
+import { ApiKeyModel } from '../../shared/dtos/me';
 
 const router = Router();
 
@@ -65,24 +68,24 @@ router.get('/ping', (_req: Request, res: Response) => {
 router.post('/discord/http500', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const {
-      errorCode    = 'UPSTREAM_ERROR',
+      errorCode = 'UPSTREAM_ERROR',
       errorMessage = '[DEV TEST] 로컬에서 발송한 테스트 Discord 알림입니다.',
-      httpStatus   = 500,
-      retryable    = false,
+      httpStatus = 500,
+      retryable = false,
       sentryEventId,
     } = req.body ?? {};
 
     const correlationId: string = (req as any).id ?? 'dev-test-correlation';
 
     await notifyHttp500({
-      path:         req.originalUrl,
-      method:       req.method,
-      httpStatus:   Number(httpStatus),
-      errorCode:    String(errorCode),
+      path: req.originalUrl,
+      method: req.method,
+      httpStatus: Number(httpStatus),
+      errorCode: String(errorCode),
       errorMessage: String(errorMessage),
       routePattern: '/dev/test/discord/http500',
-      retryable:    Boolean(retryable),
-      userId:       (req as any).userId ?? 'dev-test-user',
+      retryable: Boolean(retryable),
+      userId: (req as any).userId ?? 'dev-test-user',
       correlationId,
       sentryEventId: sentryEventId ? String(sentryEventId) : undefined,
     });
@@ -90,7 +93,9 @@ router.post('/discord/http500', async (req: Request, res: Response, next: NextFu
     res.json({
       ok: true,
       message: 'notifyHttp500 호출 완료. Discord 채널을 확인하세요.',
-      sentTo: process.env.DISCORD_WEBHOOK_URL_ERRORS ? 'Discord' : '(no-op: DISCORD_WEBHOOK_URL_ERRORS 미설정)',
+      sentTo: process.env.DISCORD_WEBHOOK_URL_ERRORS
+        ? 'Discord'
+        : '(no-op: DISCORD_WEBHOOK_URL_ERRORS 미설정)',
     });
   } catch (err) {
     next(err);
@@ -114,17 +119,17 @@ router.post('/discord/http500', async (req: Request, res: Response, next: NextFu
 router.post('/discord/worker-failed', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const {
-      taskType     = 'GRAPH_GENERATION_RESULT',
-      taskId       = 'task_devtest_01',
-      userId       = 'dev-user-01',
+      taskType = 'GRAPH_GENERATION_RESULT',
+      taskId = 'task_devtest_01',
+      userId = 'dev-user-01',
       errorMessage = '[DEV TEST] 로컬 워커 실패 테스트 알림입니다.',
       sentryEventId,
     } = req.body ?? {};
 
     await notifyWorkerFailed({
-      taskType:     String(taskType),
-      taskId:       String(taskId),
-      userId:       String(userId),
+      taskType: String(taskType),
+      taskId: String(taskId),
+      userId: String(userId),
       errorMessage: String(errorMessage),
       sentryEventId: sentryEventId ? String(sentryEventId) : undefined,
     });
@@ -132,7 +137,9 @@ router.post('/discord/worker-failed', async (req: Request, res: Response, next: 
     res.json({
       ok: true,
       message: 'notifyWorkerFailed 호출 완료. Discord 채널을 확인하세요.',
-      sentTo: process.env.DISCORD_WEBHOOK_URL_GRAPH ? 'Discord' : '(no-op: DISCORD_WEBHOOK_URL_GRAPH 미설정)',
+      sentTo: process.env.DISCORD_WEBHOOK_URL_GRAPH
+        ? 'Discord'
+        : '(no-op: DISCORD_WEBHOOK_URL_GRAPH 미설정)',
     });
   } catch (err) {
     next(err);
@@ -154,16 +161,16 @@ router.post('/discord/worker-failed', async (req: Request, res: Response, next: 
 router.post('/force-500', (req: Request, _res: Response, next: NextFunction) => {
   const {
     errorType = 'upstream',
-    message   = '[DEV TEST] errorHandler → Sentry → Discord 전체 파이프라인 검증',
+    message = '[DEV TEST] errorHandler → Sentry → Discord 전체 파이프라인 검증',
   } = req.body ?? {};
 
   // Breadcrumb 직접 추가: 테스트 컨텍스트 표기
   Sentry.addBreadcrumb({
-    type:     'debug',
+    type: 'debug',
     category: 'dev.test',
-    message:  'force-500 endpoint triggered',
-    data:     { errorType, correlationId: (req as any).id },
-    level:    'info',
+    message: 'force-500 endpoint triggered',
+    data: { errorType, correlationId: (req as any).id },
+    level: 'info',
   });
 
   switch (String(errorType)) {
@@ -176,6 +183,54 @@ router.post('/force-500', (req: Request, _res: Response, next: NextFunction) => 
     default:
       // upstream → 500 → errorHandler → Sentry.captureException → notifyHttp500
       next(new UpstreamError(String(message), { cause: 'dev-test forced error' }));
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /dev/test/ai/tool-call
+// AI 도구 호출(Tool Calling) 로직 수동 테스트
+//
+// Body:
+// {
+//   "chatContent": "오늘 서울 날씨 어때? 검색해줘.",
+//   "model": "openai",
+//   "modelName": "gpt-4o",
+//   "userId": "dev-test-user-01",
+//   "conversationId": "test-conv-01"
+// }
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/ai/tool-call', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const {
+      chatContent = '오늘 서울 날씨 어때? 실제 인터넷에서 검색해줘.',
+      model = 'openai',
+      modelName = 'gpt-4o',
+      userId = 'dev-test-user-01',
+      conversationId = `test-conv-${Date.now()}`,
+    } = req.body ?? {};
+
+    const aiInteractionService = container.getAiInteractionService();
+
+    // AI 서비스 호출 (비스트리밍 모드로 테스트 결과 확인 용이)
+    const response = await aiInteractionService.handleAIChat(
+      userId,
+      {
+        id: uuidv4(),
+        model: model as ApiKeyModel,
+        chatContent,
+        modelName,
+      },
+      conversationId
+    );
+
+    res.json({
+      ok: true,
+      message: 'AI 도구 호출 테스트 완료',
+      data: response,
+    });
+  } catch (err) {
+    // 에러 발생 시 errorHandler로 넘겨서 Discord/Sentry 연동도 같이 확인 가능
+    next(err);
   }
 });
 

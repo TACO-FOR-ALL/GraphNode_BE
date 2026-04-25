@@ -1,6 +1,6 @@
 # 💾 Database Architecture (Detailed)
 
-GraphNode Backend는 데이터의 특성에 따라 MySQL, MongoDB, Redis, Vector DB를 혼용하는 **Polyglot Persistence** 전략을 사용합니다. 본 문서는 각 데이터베이스의 스키마와 필드 정의를 상세히 기술합니다. 클라우드 기반 DB의 안정성을 위해 지수 백오프 기반의 [재시도 정책](retry-policy.md)이 전 계층에 적용되어 있습니다.
+GraphNode Backend는 데이터의 특성에 따라 PostgreSQL, MongoDB, Redis, Vector DB를 혼용하는 **Polyglot Persistence** 전략을 사용합니다. 본 문서는 각 데이터베이스의 스키마와 필드 정의를 상세히 기술합니다. 클라우드 기반 DB의 안정성을 위해 지수 백오프 기반의 [재시도 정책](retry-policy.md)이 전 계층에 적용되어 있습니다.
 
 
 
@@ -42,6 +42,27 @@ erDiagram
         string apiKeyGemini 
         string openaiAssistantId 
         string preferredLanguage "선호 언어(ISO 639-1)"
+        string userInfoId FK "UserInfo.id (nullable, @unique)"
+    }
+
+    UserInfo {
+        string id PK "UUID"
+        string onboardingOccupation "직업 분류 enum (nullable)"
+        array onboardingInterests "관심사 태그 목록 (기본값 [])"
+        string onboardingAgentMode "에이전트 어조 enum (기본값 formal)"
+    }
+
+    Feedback {
+        string id PK "UUID"
+        string category "피드백 분류 (예: BUG, FEATURE, OTHER)"
+        string userName "작성자 이름 (nullable)"
+        string userEmail "작성자 이메일 (nullable)"
+        string title "피드백 제목"
+        string content "피드백 본문"
+        string status "처리 상태 (UNREAD | READ | IN_PROGRESS | DONE)"
+        Json attachments "첨부 파일 목록 (nullable)"
+        Date createdAt "생성 시각"
+        Date updatedAt "수정 시각"
     }
 
     FolderDoc {
@@ -116,6 +137,7 @@ erDiagram
     User ||--o{ ConversationDoc : "owns"
     User ||--o{ MessageDoc : "owns"
     User ||--|| DailyUsage : "dailyUsage (1:1, onDelete Cascade)"
+    User |o--|| UserInfo : "userInfoId (1:0..1, 온보딩 정보)"
 
     FolderDoc ||--o{ FolderDoc : "parentId (트리 구조)"
     FolderDoc ||--o{ NoteDoc : "folderId (소속 노트)"
@@ -372,6 +394,7 @@ erDiagram
 | **apiKeyGemini** | `String` | No | (Encrypted) Gemini API Key |
 | **openaiAssistantId**| `String` | No | OpenAI Assistants API ID |
 | **preferredLanguage**| `String` | Yes | 선호 언어 (Default: 'en') |
+| **userInfoId** | `String` (UUID) | No | 온보딩 정보 FK → `user_info.id` (`@unique`, `@map("user_info_id")`) |
 
 ### **DailyUsage Table**
 - **Table Name**: `daily_usages` (managed by Prisma)
@@ -389,6 +412,37 @@ erDiagram
 > **날짜 판별 로직**: `lastResetDate`와 오늘(UTC 자정)을 비교하여 날짜가 다르면 `chatCount`를 0으로 간주한다(논리적 reset). 실제 DB reset은 다음 `incrementUsage` 호출 시점에 upsert로 수행된다.
 >
 > **일일 한도**: 환경변수 `DAILY_CHAT_LIMIT` (기본값 20회). 한도 초과 시 `RateLimitError (HTTP 429)` 반환.
+
+### **UserInfo Table**
+- **Table Name**: `user_info` (managed by Prisma)
+- **Source**: `prisma/schema.prisma`
+- **설계 전략**: 온보딩 과정에서 수집되는 사용자 설정 정보를 별도 테이블로 분리하여 `User`와 1:0..1 관계를 형성한다. 온보딩 완료 전에는 `User.userInfoId`가 null이다.
+
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `String` (UUID) | Yes | 레코드 고유 식별자 (PK) |
+| **onboardingOccupation** | `OnboardingOccupation` (Enum) | No | 직업 분류 (nullable). 허용값: `developer`, `student`, `entrepreneur`, `researcher`, `creator`, `other` |
+| **onboardingInterests** | `String[]` | Yes | 관심사 태그 목록 (Default: `[]`) |
+| **onboardingAgentMode** | `OnboardingAgentMode` (Enum) | Yes | 에이전트 응답 어조 (Default: `formal`). 허용값: `formal`, `friendly`, `casual` |
+
+### **Feedback Table**
+- **Table Name**: `feedbacks` (managed by Prisma)
+- **Source**: `src/core/types/persistence/feedback.persistence.ts`
+- **설계 전략**: 사용자 인증 없이도 제출 가능한 독립 피드백 엔티티. `User`와 FK 관계 없음 (익명 제출 지원). 첨부 파일은 JSONB 컬럼으로 저장.
+- **인덱스**: `createdAt` (`idx_feedback_created_at`)
+
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `String` (UUID) | Yes | 피드백 고유 식별자 (PK) |
+| **category** | `String` | Yes | 피드백 분류. 예: `BUG`, `FEATURE`, `OTHER`. 최대 191자 |
+| **userName** | `String` | No | 작성자 이름 (익명 제출 시 null). 최대 191자 |
+| **userEmail** | `String` | No | 작성자 이메일 (익명 제출 시 null). 최대 191자 |
+| **title** | `String` (Text) | Yes | 피드백 제목. 최소 1자, 최대 1000자 |
+| **content** | `String` (Text) | Yes | 피드백 본문. 최소 1자, 최대 10000자 |
+| **status** | `String` | Yes | 처리 상태. 허용값: `UNREAD`, `READ`, `IN_PROGRESS`, `DONE`. 최대 32자 |
+| **attachments** | `Json` | No | 첨부 파일 목록 (`FeedbackAttachmentItem[]`). 파일 없으면 null. S3 키·파일명·MIME·크기 포함 |
+| **createdAt** | `DateTime` | Yes | 생성 시각 (DB 자동 설정) |
+| **updatedAt** | `DateTime` | Yes | 최종 수정 시각 (DB 자동 갱신, `@updatedAt`) |
 
 ---
 
@@ -416,6 +470,7 @@ erDiagram
 | **tags** | `Array<String>` | 태그 목록 |
 | **externalThreadId** | `String` | OpenAI Assistants API Thread ID (Optional) |
 | **lastResponseId** | `String` | OpenAI Responses API Context ID (Optional) |
+| **summary** | `String` | Sliding Window 누적 요약. 컨텍스트 윈도우 밖으로 밀려난 메시지들의 압축 요약본 (Optional) |
 
 #### **messages** Collection
 대화 내 개별 메시지입니다.
@@ -431,9 +486,24 @@ erDiagram
 | **updatedAt** | `Number` | 수정 시각 |
 | **deletedAt** | `Number` | 삭제 시각 (Soft Delete, Optional) |
 | **attachments** | `Array<Attachment>` | 첨부 파일 정보 (id, type, url, name, mimeType, size) |
-| **metadata** | `Object` | 확장 데이터 (Code Interpreter, File Search 등) |
+| **metadata** | `Object` | 확장 메타데이터. `toolCalls[]` (GraphNode AI 툴 호출 결과 또는 Legacy OpenAI tool 결과), `searchResults[]` (web_search 결과 링크 목록) 포함 (Optional) |
 
-### B. Graph Domain (Knowledge Graph)
+### B. Notification Domain
+`src/core/types/persistence/notification.persistence.ts`
+
+#### **notifications** Collection
+사용자에게 발송된 알림을 저장하는 컬렉션입니다. SSE 재연결 시 커서 기반 replay에 사용됩니다.
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| **_id** | `String` (ULID) | 커서(cursor). 문자열 정렬 = 시간 정렬이 되도록 ULID 사용 권장. SSE `Last-Event-ID` 로 replay 기준점 |
+| **userId** | `String` | 알림 수신 사용자 ID |
+| **type** | `String` | 알림 타입 (`NotificationTypeString`) |
+| **payload** | `unknown` | 알림 페이로드 (타입별 구조 상이) |
+| **createdAt** | `Number` (Epoch ms) | 생성 시각 |
+| **expiresAt** | `Date` | (Optional) TTL 인덱스 타겟. 만료 일시 이후 MongoDB가 자동 삭제 |
+
+### C. Graph Domain (Knowledge Graph)
 `src/core/types/persistence/graph.persistence.ts`
 
 #### **graph_nodes** Collection
@@ -501,7 +571,7 @@ AI가 추출한 지식 그래프의 노드입니다.
 | **detail_level** | `String` | 요약 상세 레벨 (`brief`, `standard`, `detailed`) |
 | **deletedAt** | `Number` | 삭제 시각 (Soft Delete, Optional) |
 
-### C. Note Domain
+### D. Note Domain
 `src/core/types/persistence/note.persistence.ts`
 
 #### **notes** Collection
@@ -527,7 +597,7 @@ AI가 추출한 지식 그래프의 노드입니다.
 | **updatedAt** | `Date` | 수정 일시 |
 | **deletedAt** | `Date` | 삭제 일시 (Soft Delete, Optional) |
 
-### D. Microscope Domain
+### E. Microscope Domain
 `src/core/types/persistence/microscope_workspace.persistence.ts`
 
 다중 문서를 기반으로 분석하는 Microscope 파이프라인의 진행 상태 및 메타데이터를 저장합니다. 추출된 지식 그래프 데이터는 분석 완료 후 S3에 JSON 형태로 영속화되며, 웹 클라이언트에서 필요한 시점에 다운로드하여 시각화합니다. (Neo4j 의존성 제거됨)
