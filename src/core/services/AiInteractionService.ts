@@ -310,7 +310,7 @@ export class AiInteractionService {
       // 1. 파일 업로드 (S3 저장 및 첨부파일 메타데이터 생성)
       const userAttachments: Attachment[] = await this.handleFiles(files);
 
-      // 2. 서비스 자체 API 키 조회 & Provider 획득
+      // 3. 서비스 자체 API 키 조회 & Provider 획득
       const apiKey = this.getSystemApiKey(chatbody.model);
       let provider: IAiProvider;
       try {
@@ -319,7 +319,7 @@ export class AiInteractionService {
         throw new ValidationError(`Unsupported AI model: ${chatbody.model}`);
       }
 
-      // 3. 대화방 조회 또는 생성
+      // 4. 대화방 조회 또는 생성
       let conversation: ChatThread;
       let isNewConversation = false;
       let newTitle: string | null = null;
@@ -492,7 +492,7 @@ export class AiInteractionService {
     try {
       const userAttachments = await this.handleFiles(files);
 
-      // 1. 서비스 자체 API 키 조회 & Provider 획득
+      // 2. 서비스 자체 API 키 조회 & Provider 획득
       const apiKey = this.getSystemApiKey(chatbody.model);
       let provider: IAiProvider;
       try {

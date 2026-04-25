@@ -7,7 +7,6 @@ jest.mock('../../src/shared/ai-providers/index', () => ({
 import { AiInteractionService } from '../../src/core/services/AiInteractionService';
 import { ChatManagementService } from '../../src/core/services/ChatManagementService';
 import { UserService } from '../../src/core/services/UserService';
-import { DailyUsageService } from '../../src/core/services/DailyUsageService';
 import { StoragePort } from '../../src/core/ports/StoragePort';
 import { UpstreamError } from '../../src/shared/errors/domain';
 import { IAiProvider } from '../../src/shared/ai-providers/IAiProvider';
@@ -31,11 +30,6 @@ const mockStorageAdapter = {
   downloadStream: jest.fn(),
 } as unknown as jest.Mocked<StoragePort>;
 
-const mockDailyUsageSvc = {
-  checkLimit: jest.fn(),
-  incrementUsage: jest.fn(),
-} as unknown as jest.Mocked<DailyUsageService>;
-
 const mockProvider: jest.Mocked<IAiProvider> = {
   checkAPIKeyValid: jest.fn(),
   generateChat: jest.fn(),
@@ -48,13 +42,10 @@ describe('AiInteractionService (RAG)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (getAiProvider as jest.Mock).mockReturnValue(mockProvider);
-    mockDailyUsageSvc.checkLimit.mockResolvedValue(undefined);
-    mockDailyUsageSvc.incrementUsage.mockResolvedValue(undefined);
     service = new AiInteractionService(
       mockChatSvc,
       mockUserSvc,
-      mockStorageAdapter,
-      mockDailyUsageSvc
+      mockStorageAdapter
     );
   });
 
@@ -107,8 +98,6 @@ describe('AiInteractionService (RAG)', () => {
       expect(mockChatSvc.createMessage).toHaveBeenCalledTimes(2);
       expect(result.messages).toHaveLength(2);
       expect(result.messages[1].content).toBe('RAG answer');
-      expect(mockDailyUsageSvc.checkLimit).toHaveBeenCalledWith(ownerUserId);
-      expect(mockDailyUsageSvc.incrementUsage).toHaveBeenCalledWith(ownerUserId);
     });
 
     it('should generate title and create conversation if not exists in RAG mode', async () => {
