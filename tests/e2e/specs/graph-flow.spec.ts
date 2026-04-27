@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll } from '@jest/globals';
 import { apiClient, getTestUserId } from '../utils/api-client';
 import { seedTestData } from '../utils/db-seed';
+import { createNeo4jE2eDriver } from '../utils/neo4j-test-driver';
 import { Db, MongoClient } from 'mongodb';
 import { GraphNodeDoc, GraphStatsDoc } from '../../../src/core/types/persistence/graph.persistence';
-import neo4j from 'neo4j-driver';
 /**
  * Graph AI 엔드투엔드(E2E) 테스트 스펙
  *
@@ -450,11 +450,8 @@ describe('End-to-End Graph Flow', () => {
     await mongoClient.connect();
     const db = mongoClient.db();
 
-    // Neo4j 연결
-    const NEO4J_URI = process.env.NEO4J_URI || 'neo4j://localhost:7687';
-    const NEO4J_USER = process.env.NEO4J_USER || 'neo4j';
-    const NEO4J_PASSWORD = process.env.NEO4J_PASSWORD || 'password';
-    const driver = neo4j.driver(NEO4J_URI, neo4j.auth.basic(NEO4J_USER, NEO4J_PASSWORD));
+    // Neo4j 연결은 E2E docker-compose 기본 인증값과 맞춘 공통 헬퍼를 사용합니다.
+    const driver = createNeo4jE2eDriver();
     const session = driver.session();
 
     try {
@@ -502,10 +499,7 @@ describe('End-to-End Graph Flow', () => {
     await mongoClient.connect();
     const db = mongoClient.db();
 
-    const NEO4J_URI = process.env.NEO4J_URI || 'neo4j://localhost:7687';
-    const NEO4J_USER = process.env.NEO4J_USER || 'neo4j';
-    const NEO4J_PASSWORD = process.env.NEO4J_PASSWORD || 'neo4j-password';
-    const driver = neo4j.driver(NEO4J_URI, neo4j.auth.basic(NEO4J_USER, NEO4J_PASSWORD));
+    const driver = createNeo4jE2eDriver();
     const session = driver.session();
 
     try {
