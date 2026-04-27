@@ -96,10 +96,24 @@ function makePrimary(overrides?: Partial<GraphDocumentStore>): jest.Mocked<Graph
 
 function makeSecondary(overrides?: Partial<MacroGraphStore>): jest.Mocked<MacroGraphStore> {
   return {
-    upsertGraph: jest.fn().mockResolvedValue({ nodes: 1, edges: 0, clusters: 0, subclusters: 0, summary: false }),
+    upsertGraph: jest
+      .fn()
+      .mockResolvedValue({ nodes: 1, edges: 0, clusters: 0, subclusters: 0, summary: false }),
+    upsertNode: jest.fn().mockResolvedValue(undefined),
+    upsertNodes: jest.fn().mockResolvedValue(undefined),
+    updateNode: jest.fn().mockResolvedValue(undefined),
+    upsertEdge: jest.fn().mockResolvedValue('edge1'),
+    upsertEdges: jest.fn().mockResolvedValue(undefined),
+    upsertCluster: jest.fn().mockResolvedValue(undefined),
+    upsertClusters: jest.fn().mockResolvedValue(undefined),
+    upsertSubcluster: jest.fn().mockResolvedValue(undefined),
+    upsertSubclusters: jest.fn().mockResolvedValue(undefined),
+    saveStats: jest.fn().mockResolvedValue(undefined),
+    upsertGraphSummary: jest.fn().mockResolvedValue(undefined),
     findNode: jest.fn().mockResolvedValue(null),
     findNodesByOrigIds: jest.fn().mockResolvedValue([]),
     listNodes: jest.fn().mockResolvedValue([NODE]),
+    listNodesAll: jest.fn().mockResolvedValue([NODE]),
     listNodesByCluster: jest.fn().mockResolvedValue([]),
     listEdges: jest.fn().mockResolvedValue([]),
     findCluster: jest.fn().mockResolvedValue(null),
@@ -107,8 +121,25 @@ function makeSecondary(overrides?: Partial<MacroGraphStore>): jest.Mocked<MacroG
     listSubclusters: jest.fn().mockResolvedValue([]),
     getStats: jest.fn().mockResolvedValue(STATS),
     getGraphSummary: jest.fn().mockResolvedValue(null),
+    deleteAllGraphData: jest.fn().mockResolvedValue(undefined),
+    restoreAllGraphData: jest.fn().mockResolvedValue(undefined),
+    deleteNode: jest.fn().mockResolvedValue(undefined),
+    deleteNodes: jest.fn().mockResolvedValue(undefined),
+    deleteNodesByOrigIds: jest.fn().mockResolvedValue(undefined),
+    restoreNode: jest.fn().mockResolvedValue(undefined),
+    restoreNodesByOrigIds: jest.fn().mockResolvedValue(undefined),
+    deleteEdge: jest.fn().mockResolvedValue(undefined),
+    deleteEdgeBetween: jest.fn().mockResolvedValue(undefined),
+    deleteEdgesByNodeIds: jest.fn().mockResolvedValue(undefined),
+    restoreEdge: jest.fn().mockResolvedValue(undefined),
+    deleteCluster: jest.fn().mockResolvedValue(undefined),
+    restoreCluster: jest.fn().mockResolvedValue(undefined),
+    deleteSubcluster: jest.fn().mockResolvedValue(undefined),
+    restoreSubcluster: jest.fn().mockResolvedValue(undefined),
+    deleteStats: jest.fn().mockResolvedValue(undefined),
     deleteGraph: jest.fn().mockResolvedValue(undefined),
     deleteGraphSummary: jest.fn().mockResolvedValue(undefined),
+    restoreGraphSummary: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   } as unknown as jest.Mocked<MacroGraphStore>;
 }
@@ -129,9 +160,10 @@ describe('DualWriteGraphStoreProxy', () => {
       await proxy.upsertNode(NODE);
 
       expect(primary.upsertNode).toHaveBeenCalledWith(NODE, undefined);
-      // shadowWritesEnabled=false이므로 syncFullGraphFromMongo가 실행되지 않아야 함
+      // shadowWritesEnabled=false이므로 Neo4j 증분 write가 실행되지 않아야 함
       // 단, fire-and-forget이므로 곧바로 단언하면 타이밍 이슈 가능 → setImmediate 이후 확인
       await new Promise((r) => setImmediate(r));
+      expect(secondary.upsertNode).not.toHaveBeenCalled();
       expect(secondary.upsertGraph).not.toHaveBeenCalled();
     });
   });
@@ -139,7 +171,7 @@ describe('DualWriteGraphStoreProxy', () => {
   // ── write 흐름 ─────────────────────────────────────────────────────────────
 
   describe('secondaryWritesEnabled = true', () => {
-    it('upsertNode: primary 먼저 호출, 이후 secondary.upsertGraph가 호출된다', async () => {
+    it('upsertNode: primary 먼저 호출, 이후 secondary.upsertNode가 호출된다', async () => {
       const primary = makePrimary();
       const secondary = makeSecondary();
       const proxy = new DualWriteGraphStoreProxy(primary, secondary, {
@@ -151,9 +183,11 @@ describe('DualWriteGraphStoreProxy', () => {
 
       // primary가 먼저 호출됨을 순서로 검증
       const primaryCallOrder = (primary.upsertNode as jest.Mock).mock.invocationCallOrder[0];
-      const secondaryCallOrder = (secondary.upsertGraph as jest.Mock).mock.invocationCallOrder[0];
+      const secondaryCallOrder = (secondary.upsertNode as jest.Mock).mock.invocationCallOrder[0];
       expect(primaryCallOrder).toBeLessThan(secondaryCallOrder);
-      expect(secondary.upsertGraph).toHaveBeenCalledTimes(1);
+      expect(secondary.upsertNode).toHaveBeenCalledTimes(1);
+      expect(secondary.upsertNode).toHaveBeenCalledWith(NODE);
+      expect(secondary.upsertGraph).not.toHaveBeenCalled();
     });
 
     it('primary write 실패 시 secondary sync가 호출되지 않고 예외가 전파된다', async () => {
@@ -166,12 +200,13 @@ describe('DualWriteGraphStoreProxy', () => {
 
       await expect(proxy.upsertNode(NODE)).rejects.toThrow('Mongo write failed');
       await new Promise((r) => setImmediate(r));
+      expect(secondary.upsertNode).not.toHaveBeenCalled();
       expect(secondary.upsertGraph).not.toHaveBeenCalled();
     });
 
     it('Neo4j write 실패 시 Mongo 결과는 유지되고 예외가 외부로 전파되지 않는다', async () => {
       const secondary = makeSecondary({
-        upsertGraph: jest.fn().mockRejectedValue(new Error('Neo4j down')),
+        upsertNode: jest.fn().mockRejectedValue(new Error('Neo4j down')),
       });
       const primary = makePrimary();
       const proxy = new DualWriteGraphStoreProxy(primary, secondary, {
@@ -186,7 +221,7 @@ describe('DualWriteGraphStoreProxy', () => {
       expect((logger.warn as jest.Mock).mock.calls.length + (Sentry.captureException as jest.Mock).mock.calls.length).toBeGreaterThan(0);
     });
 
-    it('stats가 null이면 Neo4j sync를 건너뛴다', async () => {
+    it('upsertNode는 Mongo stats 조회 없이 Neo4j 증분 write를 직접 호출한다', async () => {
       const primary = makePrimary({ getStats: jest.fn().mockResolvedValue(null) });
       const secondary = makeSecondary();
       const proxy = new DualWriteGraphStoreProxy(primary, secondary, {
@@ -196,10 +231,12 @@ describe('DualWriteGraphStoreProxy', () => {
       await proxy.upsertNode(NODE);
       await new Promise((r) => setImmediate(r));
 
+      expect(primary.getStats).not.toHaveBeenCalled();
+      expect(secondary.upsertNode).toHaveBeenCalledWith(NODE);
       expect(secondary.upsertGraph).not.toHaveBeenCalled();
     });
 
-    it('deleteAllGraphData: Mongo 성공 후 secondary.deleteGraph를 호출한다', async () => {
+    it('deleteAllGraphData: Mongo 성공 후 secondary.deleteAllGraphData를 호출한다', async () => {
       const primary = makePrimary();
       const secondary = makeSecondary();
       const proxy = new DualWriteGraphStoreProxy(primary, secondary, {
@@ -209,7 +246,8 @@ describe('DualWriteGraphStoreProxy', () => {
       await proxy.deleteAllGraphData('user1');
 
       expect(primary.deleteAllGraphData).toHaveBeenCalledWith('user1', undefined, undefined);
-      expect(secondary.deleteGraph).toHaveBeenCalledWith('user1');
+      expect(secondary.deleteAllGraphData).toHaveBeenCalledWith('user1', undefined);
+      expect(secondary.deleteGraph).not.toHaveBeenCalled();
     });
 
     it('deleteGraphSummary: Mongo 성공 후 secondary.deleteGraphSummary를 호출한다', async () => {

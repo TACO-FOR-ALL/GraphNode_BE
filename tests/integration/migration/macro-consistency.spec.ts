@@ -513,3 +513,564 @@ describe('Macro Graph Migration: MongoDB ↔ Neo4j Read Consistency', () => {
     });
   });
 });
+
+/**
+ * @description Neo4j Roundtrip 검증 전용 사용자 ID입니다.
+ *
+ * 기존 마이그레이션 parity fixture와 섞이지 않도록 고정된 별도 userId를 사용합니다.
+ * 이 블록은 MongoDB와 Neo4j에 동일한 쓰기/삭제/복구 명령을 각각 실행한 뒤,
+ * 동일 read API 결과를 `collectDiffs` 기준으로 비교하여 Neo4j 증분 Cypher 경로가
+ * MongoDB를 대체할 수 있는지 검증합니다.
+ */
+const ROUNDTRIP_USER_ID = 'roundtrip-test-user-migration-spec';
+
+/**
+ * @description Roundtrip 테스트에서 사용할 고정 시각 문자열입니다.
+ *
+ * DB별 repository가 `createdAt`/`updatedAt`을 재작성할 수 있으므로 비교 대상에서는
+ * 시간 필드를 제외하지만, 입력 DTO가 서비스 유효성 검사를 안정적으로 통과하도록
+ * 모든 fixture에 동일한 ISO timestamp를 부여합니다.
+ */
+const ROUNDTRIP_NOW = '2026-04-27T00:00:00.000Z';
+
+/**
+ * @description Roundtrip 전용 Cluster fixture입니다.
+ *
+ * Node의 `clusterId`는 Neo4j에서 속성이 아니라 `BELONGS_TO` 관계로 표현되어야 하므로,
+ * Node upsert보다 먼저 Cluster를 생성해 관계 생성 Cypher가 실제로 동작하는지 확인합니다.
+ */
+const ROUNDTRIP_CLUSTER = {
+  id: 'roundtrip-cluster-main',
+  userId: ROUNDTRIP_USER_ID,
+  name: 'Roundtrip Cluster',
+  description: 'Neo4j migration roundtrip verification cluster',
+  size: 2,
+  themes: ['migration', 'neo4j', 'parity'],
+  createdAt: ROUNDTRIP_NOW,
+  updatedAt: ROUNDTRIP_NOW,
+};
+
+/**
+ * @description Roundtrip 전용 Node fixture 3종입니다.
+ *
+ * A/B 노드는 Edge, Subcluster, Global delete/restore 검증에 남겨두고,
+ * C 노드는 Node 단독 soft delete/restore/hard delete 생명주기를 검증하는 데 사용합니다.
+ */
+const ROUNDTRIP_NODE_A = {
+  id: 910001,
+  userId: ROUNDTRIP_USER_ID,
+  origId: 'roundtrip-orig-a',
+  clusterId: ROUNDTRIP_CLUSTER.id,
+  clusterName: ROUNDTRIP_CLUSTER.name,
+  timestamp: '2026-04-27T00:01:00.000Z',
+  numMessages: 11,
+  sourceType: 'chat' as const,
+  createdAt: ROUNDTRIP_NOW,
+  updatedAt: ROUNDTRIP_NOW,
+};
+
+const ROUNDTRIP_NODE_B = {
+  id: 910002,
+  userId: ROUNDTRIP_USER_ID,
+  origId: 'roundtrip-orig-b',
+  clusterId: ROUNDTRIP_CLUSTER.id,
+  clusterName: ROUNDTRIP_CLUSTER.name,
+  timestamp: '2026-04-27T00:02:00.000Z',
+  numMessages: 22,
+  sourceType: 'markdown' as const,
+  createdAt: ROUNDTRIP_NOW,
+  updatedAt: ROUNDTRIP_NOW,
+};
+
+const ROUNDTRIP_NODE_C = {
+  id: 910003,
+  userId: ROUNDTRIP_USER_ID,
+  origId: 'roundtrip-orig-c',
+  clusterId: ROUNDTRIP_CLUSTER.id,
+  clusterName: ROUNDTRIP_CLUSTER.name,
+  timestamp: '2026-04-27T00:03:00.000Z',
+  numMessages: 33,
+  sourceType: 'notion' as const,
+  createdAt: ROUNDTRIP_NOW,
+  updatedAt: ROUNDTRIP_NOW,
+};
+
+/**
+ * @description Roundtrip 전용 Edge fixture입니다.
+ *
+ * 두 Node 사이의 관계 생성, soft delete, restore, source/target 기반 hard delete까지
+ * 모두 같은 edge id와 source/target 조합으로 검증합니다.
+ */
+const ROUNDTRIP_EDGE = {
+  id: 'roundtrip-edge-a-b',
+  userId: ROUNDTRIP_USER_ID,
+  source: ROUNDTRIP_NODE_A.id,
+  target: ROUNDTRIP_NODE_B.id,
+  weight: 0.875,
+  type: 'insight' as const,
+  intraCluster: true,
+  createdAt: ROUNDTRIP_NOW,
+  updatedAt: ROUNDTRIP_NOW,
+};
+
+/**
+ * @description Roundtrip 전용 Subcluster fixture입니다.
+ *
+ * Neo4j에서는 `HAS_SUBCLUSTER`, `CONTAINS`, `REPRESENTS` 관계를 통해 복원되는 값들이므로
+ * listSubclusters 결과에서 nodeIds, representativeNodeId, density, topKeywords를 함께 비교합니다.
+ */
+const ROUNDTRIP_SUBCLUSTER = {
+  id: 'roundtrip-subcluster-main',
+  userId: ROUNDTRIP_USER_ID,
+  clusterId: ROUNDTRIP_CLUSTER.id,
+  nodeIds: [ROUNDTRIP_NODE_A.id, ROUNDTRIP_NODE_B.id],
+  representativeNodeId: ROUNDTRIP_NODE_A.id,
+  size: 2,
+  density: 0.42,
+  topKeywords: ['roundtrip', 'cypher', 'restore'],
+  createdAt: ROUNDTRIP_NOW,
+  updatedAt: ROUNDTRIP_NOW,
+};
+
+/**
+ * @description Roundtrip 비교에서 timestamp churn을 제거하고 Node의 의미 필드만 추출합니다.
+ *
+ * @param node MongoDB 또는 Neo4j에서 반환된 GraphNode DTO입니다.
+ * @returns 두 저장소가 동일하게 보존해야 하는 Node 비교용 projection입니다.
+ */
+function roundtripNodeView(node: unknown): Record<string, unknown> {
+  const value = node as Record<string, unknown>;
+  return {
+    id: value.id,
+    userId: value.userId,
+    origId: value.origId,
+    clusterId: value.clusterId,
+    clusterName: value.clusterName,
+    timestamp: value.timestamp,
+    numMessages: value.numMessages,
+    sourceType: value.sourceType,
+  };
+}
+
+/**
+ * @description Roundtrip 비교에서 Edge의 의미 필드만 추출합니다.
+ *
+ * @param edge MongoDB 또는 Neo4j에서 반환된 GraphEdge DTO입니다.
+ * @returns source/target/type/weight/intraCluster를 포함한 Edge 비교용 projection입니다.
+ */
+function roundtripEdgeView(edge: unknown): Record<string, unknown> {
+  const value = edge as Record<string, unknown>;
+  return {
+    id: value.id,
+    userId: value.userId,
+    source: value.source,
+    target: value.target,
+    weight: value.weight,
+    type: value.type,
+    intraCluster: value.intraCluster,
+  };
+}
+
+/**
+ * @description Roundtrip 비교에서 Cluster의 의미 필드만 추출합니다.
+ *
+ * @param cluster MongoDB 또는 Neo4j에서 반환된 GraphCluster DTO입니다.
+ * @returns 정렬된 themes를 포함한 Cluster 비교용 projection입니다.
+ */
+function roundtripClusterView(cluster: unknown): Record<string, unknown> {
+  const value = cluster as Record<string, unknown>;
+  return {
+    id: value.id,
+    userId: value.userId,
+    name: value.name,
+    description: value.description,
+    size: value.size,
+    themes: [...((value.themes as string[] | undefined) ?? [])].sort(),
+  };
+}
+
+/**
+ * @description Roundtrip 비교에서 Subcluster의 관계 복원 결과를 추출합니다.
+ *
+ * @param subcluster MongoDB 또는 Neo4j에서 반환된 GraphSubcluster DTO입니다.
+ * @returns 정렬된 nodeIds/topKeywords를 포함한 Subcluster 비교용 projection입니다.
+ */
+function roundtripSubclusterView(subcluster: unknown): Record<string, unknown> {
+  const value = subcluster as Record<string, unknown>;
+  return {
+    id: value.id,
+    userId: value.userId,
+    clusterId: value.clusterId,
+    nodeIds: [...((value.nodeIds as number[] | undefined) ?? [])].sort((a, b) => a - b),
+    representativeNodeId: value.representativeNodeId,
+    size: value.size,
+    density: value.density,
+    topKeywords: [...((value.topKeywords as string[] | undefined) ?? [])].sort(),
+  };
+}
+
+/**
+ * @description id 기반 배열 결과를 안정적으로 정렬합니다.
+ *
+ * @param items MongoDB 또는 Neo4j에서 반환된 DTO 배열입니다.
+ * @returns id 문자열 순서로 정렬된 새 배열입니다.
+ */
+function sortRoundtripById<T extends { id?: string | number }>(items: T[]): T[] {
+  return [...items].sort((left, right) => String(left.id).localeCompare(String(right.id)));
+}
+
+/**
+ * @description MongoDB와 Neo4j 결과를 기존 migration suite의 `collectDiffs` 기준으로 비교합니다.
+ *
+ * @param label 실패 메시지에 표시할 roundtrip 단계명입니다.
+ * @param mongoValue MongoDB 서비스에서 조회한 projection입니다.
+ * @param neo4jValue Neo4j 서비스에서 조회한 projection입니다.
+ * @returns diff가 없으면 void를 반환합니다.
+ * @throws 두 projection이 다르면 `assertNoDiffs`를 통해 상세 필드 차이를 포함한 Error를 던집니다.
+ */
+function assertRoundtripNoDiffs(label: string, mongoValue: unknown, neo4jValue: unknown): void {
+  const diffs: DiffEntry[] = [];
+  collectDiffs(mongoValue, neo4jValue, label, diffs);
+  assertNoDiffs(diffs, label);
+}
+
+/**
+ * @description Neo4j Roundtrip 통합 테스트입니다.
+ *
+ * 이 테스트는 MongoDB와 Neo4j에 동일한 mutation을 순서대로 실행하고 동일 read API로 결과를
+ * 비교합니다. 전체 스냅샷 재동기화가 아니라 Neo4j adapter의 개별 증분 Cypher가 실제로
+ * write/read/soft delete/restore/hard delete를 감당하는지 검증하는 목적입니다.
+ */
+describe('Macro Graph Migration: Neo4j Roundtrip Write/Read/Delete/Restore', () => {
+  let mongoService: GraphManagementService;
+  let neo4jService: GraphManagementService;
+
+  /**
+   * @description roundtrip 전용 DB 연결 및 서비스 준비 단계입니다.
+   *
+   * 기존 migration fixture와 격리하기 위해 시작 시점에 roundtrip userId의 잔여 데이터를
+   * 양쪽 저장소에서 permanent delete로 제거합니다. Neo4j adapter는 `findNodesByOrigIdsAll`
+   * GraphDocumentStore 메서드가 없으므로, 같은 의미의 includeDeleted 조회를 테스트 서비스에
+   * 주입해 soft delete 포함 조회 경로까지 검증합니다.
+   */
+  beforeAll(async () => {
+    await initMongo(MONGO_URI);
+    await initNeo4j();
+
+    const mongoRepo = new GraphRepositoryMongo();
+    const neo4jRepo = new Neo4jMacroGraphAdapter();
+    const neo4jRepoWithAll = neo4jRepo as unknown as {
+      findNodesByOrigIds: (
+        userId: string,
+        origIds: string[],
+        options?: { includeDeleted?: boolean },
+      ) => Promise<unknown[]>;
+      findNodesByOrigIdsAll?: (userId: string, origIds: string[]) => Promise<unknown[]>;
+    };
+
+    // Neo4j에는 별도 findNodesByOrigIdsAll 포트가 없으므로 includeDeleted 옵션으로 동일 의미를 구성합니다.
+    neo4jRepoWithAll.findNodesByOrigIdsAll = (targetUserId, origIds) =>
+      neo4jRepoWithAll.findNodesByOrigIds(targetUserId, origIds, { includeDeleted: true });
+
+    mongoService = new GraphManagementService(mongoRepo);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    neo4jService = new GraphManagementService(neo4jRepoWithAll as any);
+
+    // 이전 실패 실행에서 남은 fixture가 있으면 이번 roundtrip 결과를 오염시키므로 먼저 물리 삭제합니다.
+    await mongoService.deleteGraph(ROUNDTRIP_USER_ID, true);
+    await neo4jService.deleteGraph(ROUNDTRIP_USER_ID, true);
+  }, 60_000);
+
+  /**
+   * @description roundtrip fixture 영구 삭제 및 연결 종료 단계입니다.
+   *
+   * 테스트 도중 실패하더라도 다음 실행에 영향을 주지 않도록 MongoDB와 Neo4j 모두에
+   * permanent delete를 수행한 뒤 각 DB 연결을 종료합니다.
+   */
+  afterAll(async () => {
+    if (mongoService && neo4jService) {
+      await mongoService.deleteGraph(ROUNDTRIP_USER_ID, true);
+      await neo4jService.deleteGraph(ROUNDTRIP_USER_ID, true);
+    }
+
+    await disconnectMongo();
+    await closeNeo4j();
+  }, 60_000);
+
+  /**
+   * @description Node, Edge, Cluster, Subcluster, Global delete/restore 전체 생명주기 검증입니다.
+   *
+   * @returns 모든 roundtrip 단계가 MongoDB와 Neo4j에서 동일하면 resolve됩니다.
+   * @throws 각 단계의 read projection이 다르면 `collectDiffs` 기반 상세 diff를 포함해 실패합니다.
+   */
+  it('write-read-soft delete-restore-hard delete 전체 roundtrip 결과가 MongoDB와 Neo4j에서 동일하다', async () => {
+    /**
+     * @description 동일 mutation을 MongoDB 서비스와 Neo4j 서비스에 순서대로 적용합니다.
+     *
+     * @param action 각 저장소 서비스에 실행할 mutation 함수입니다.
+     * @returns 양쪽 저장소 mutation이 끝나면 resolve됩니다.
+     */
+    const writeBoth = async (
+      action: (service: GraphManagementService) => Promise<unknown>,
+    ): Promise<void> => {
+      await action(mongoService);
+      await action(neo4jService);
+    };
+
+    /**
+     * @description 동일 read를 양쪽 서비스에서 수행한 뒤 projection 결과를 비교합니다.
+     *
+     * @param label diff 출력에 사용할 단계명입니다.
+     * @param read 각 저장소 서비스에 실행할 read 함수입니다.
+     * @param view DB별 timestamp churn을 제거하고 의미 필드만 남기는 projection 함수입니다.
+     * @returns 양쪽 projection이 같으면 resolve됩니다.
+     */
+    const compareOne = async <T>(
+      label: string,
+      read: (service: GraphManagementService) => Promise<T>,
+      view: (value: T) => unknown,
+    ): Promise<void> => {
+      const mongoValue = await read(mongoService);
+      const neo4jValue = await read(neo4jService);
+      assertRoundtripNoDiffs(label, view(mongoValue), view(neo4jValue));
+    };
+
+    /**
+     * @description 동일 list read를 양쪽 서비스에서 수행한 뒤 id 정렬 projection으로 비교합니다.
+     *
+     * @param label diff 출력에 사용할 단계명입니다.
+     * @param read 각 저장소 서비스에 실행할 list read 함수입니다.
+     * @param view 배열 원소별 projection 함수입니다.
+     * @returns 양쪽 list projection이 같으면 resolve됩니다.
+     */
+    const compareList = async <T extends { id?: string | number }>(
+      label: string,
+      read: (service: GraphManagementService) => Promise<T[]>,
+      view: (value: T) => unknown,
+    ): Promise<void> => {
+      const mongoValues = sortRoundtripById(await read(mongoService)).map(view);
+      const neo4jValues = sortRoundtripById(await read(neo4jService)).map(view);
+      assertRoundtripNoDiffs(label, mongoValues, neo4jValues);
+    };
+
+    // 1. Cluster를 먼저 생성해 이후 Node BELONGS_TO 관계 생성의 부모를 준비합니다.
+    await writeBoth((service) => service.upsertCluster(ROUNDTRIP_CLUSTER));
+
+    // 2. A/B/C Node를 동일하게 생성하고, C는 Node 단독 생명주기 검증 대상으로 사용합니다.
+    await writeBoth((service) =>
+      service.upsertNodes([ROUNDTRIP_NODE_A, ROUNDTRIP_NODE_B, ROUNDTRIP_NODE_C]),
+    );
+
+    // 3. Edge와 Subcluster를 생성해 관계형 Cypher 경로까지 roundtrip 대상으로 포함합니다.
+    await writeBoth((service) => service.upsertEdge(ROUNDTRIP_EDGE));
+    await writeBoth((service) => service.upsertSubcluster(ROUNDTRIP_SUBCLUSTER));
+
+    // 4. Node read와 update를 검증합니다.
+    await compareOne(
+      'roundtrip.node.findNode.afterUpsert',
+      (service) => service.findNode(ROUNDTRIP_USER_ID, ROUNDTRIP_NODE_C.id),
+      (value) => (value ? roundtripNodeView(value) : null),
+    );
+
+    await writeBoth((service) =>
+      service.updateNode(ROUNDTRIP_USER_ID, ROUNDTRIP_NODE_C.id, {
+        timestamp: '2026-04-27T00:33:00.000Z',
+        numMessages: 44,
+      }),
+    );
+
+    await compareOne(
+      'roundtrip.node.findNode.afterUpdate',
+      (service) => service.findNode(ROUNDTRIP_USER_ID, ROUNDTRIP_NODE_C.id),
+      (value) => (value ? roundtripNodeView(value) : null),
+    );
+
+    // 5. Node soft delete 후 active list에서는 사라지고 All 조회 및 findNodesByOrigIdsAll에는 남아야 합니다.
+    await writeBoth((service) => service.deleteNode(ROUNDTRIP_USER_ID, ROUNDTRIP_NODE_C.id));
+
+    await compareList(
+      'roundtrip.node.listNodes.afterSoftDelete',
+      (service) => service.listNodes(ROUNDTRIP_USER_ID),
+      roundtripNodeView,
+    );
+    expect((await mongoService.listNodes(ROUNDTRIP_USER_ID)).some((n) => n.id === ROUNDTRIP_NODE_C.id)).toBe(false);
+    expect((await neo4jService.listNodes(ROUNDTRIP_USER_ID)).some((n) => n.id === ROUNDTRIP_NODE_C.id)).toBe(false);
+
+    await compareList(
+      'roundtrip.node.listNodesAll.afterSoftDelete',
+      (service) => service.listNodesAll(ROUNDTRIP_USER_ID),
+      roundtripNodeView,
+    );
+
+    await compareList(
+      'roundtrip.node.findNodesByOrigIdsAll.afterSoftDelete',
+      (service) => service.findNodesByOrigIdsAll(ROUNDTRIP_USER_ID, [ROUNDTRIP_NODE_C.origId]),
+      roundtripNodeView,
+    );
+
+    // 6. Node restore 후 다시 active read에 보여야 하며, 이후 hard delete로 완전히 제거합니다.
+    await writeBoth((service) => service.restoreNode(ROUNDTRIP_USER_ID, ROUNDTRIP_NODE_C.id));
+    await compareOne(
+      'roundtrip.node.findNode.afterRestore',
+      (service) => service.findNode(ROUNDTRIP_USER_ID, ROUNDTRIP_NODE_C.id),
+      (value) => (value ? roundtripNodeView(value) : null),
+    );
+
+    await writeBoth((service) =>
+      service.deleteNode(ROUNDTRIP_USER_ID, ROUNDTRIP_NODE_C.id, true),
+    );
+    await compareList(
+      'roundtrip.node.findNodesByOrigIdsAll.afterHardDelete',
+      (service) => service.findNodesByOrigIdsAll(ROUNDTRIP_USER_ID, [ROUNDTRIP_NODE_C.origId]),
+      roundtripNodeView,
+    );
+
+    // 7. Global soft delete/restore는 남아 있는 A/B Node, Edge, Cluster, Subcluster 전체를 대상으로 검증합니다.
+    await writeBoth((service) => service.deleteGraph(ROUNDTRIP_USER_ID));
+    await compareList(
+      'roundtrip.global.listNodes.afterDeleteAllGraphData',
+      (service) => service.listNodes(ROUNDTRIP_USER_ID),
+      roundtripNodeView,
+    );
+    expect(await mongoService.listNodes(ROUNDTRIP_USER_ID)).toHaveLength(0);
+    expect(await neo4jService.listNodes(ROUNDTRIP_USER_ID)).toHaveLength(0);
+
+    await writeBoth((service) => service.restoreGraph(ROUNDTRIP_USER_ID));
+    await compareList(
+      'roundtrip.global.listNodes.afterRestoreAllGraphData',
+      (service) => service.listNodes(ROUNDTRIP_USER_ID),
+      roundtripNodeView,
+    );
+    await compareList(
+      'roundtrip.global.listEdges.afterRestoreAllGraphData',
+      (service) => service.listEdges(ROUNDTRIP_USER_ID),
+      roundtripEdgeView,
+    );
+    await compareList(
+      'roundtrip.global.listClusters.afterRestoreAllGraphData',
+      (service) => service.listClusters(ROUNDTRIP_USER_ID),
+      roundtripClusterView,
+    );
+    await compareList(
+      'roundtrip.global.listSubclusters.afterRestoreAllGraphData',
+      (service) => service.listSubclusters(ROUNDTRIP_USER_ID),
+      roundtripSubclusterView,
+    );
+
+    // 8. Edge read, soft delete, restore, source/target 기반 hard delete를 검증합니다.
+    await compareList(
+      'roundtrip.edge.listEdges.afterUpsert',
+      (service) => service.listEdges(ROUNDTRIP_USER_ID),
+      roundtripEdgeView,
+    );
+
+    await writeBoth((service) => service.deleteEdge(ROUNDTRIP_USER_ID, ROUNDTRIP_EDGE.id));
+    await compareList(
+      'roundtrip.edge.listEdges.afterSoftDelete',
+      (service) => service.listEdges(ROUNDTRIP_USER_ID),
+      roundtripEdgeView,
+    );
+    expect((await mongoService.listEdges(ROUNDTRIP_USER_ID)).some((e) => e.id === ROUNDTRIP_EDGE.id)).toBe(false);
+    expect((await neo4jService.listEdges(ROUNDTRIP_USER_ID)).some((e) => e.id === ROUNDTRIP_EDGE.id)).toBe(false);
+
+    await writeBoth((service) => service.restoreEdge(ROUNDTRIP_USER_ID, ROUNDTRIP_EDGE.id));
+    await compareList(
+      'roundtrip.edge.listEdges.afterRestore',
+      (service) => service.listEdges(ROUNDTRIP_USER_ID),
+      roundtripEdgeView,
+    );
+
+    await writeBoth((service) =>
+      service.deleteEdgeBetween(
+        ROUNDTRIP_USER_ID,
+        ROUNDTRIP_EDGE.source,
+        ROUNDTRIP_EDGE.target,
+        true,
+      ),
+    );
+    await compareList(
+      'roundtrip.edge.listEdges.afterHardDeleteBetween',
+      (service) => service.listEdges(ROUNDTRIP_USER_ID),
+      roundtripEdgeView,
+    );
+
+    // 9. Cluster find/list와 Subcluster list를 비교해 관계 기반 read projection을 검증합니다.
+    await compareOne(
+      'roundtrip.cluster.findCluster.afterUpsert',
+      (service) => service.findCluster(ROUNDTRIP_USER_ID, ROUNDTRIP_CLUSTER.id),
+      (value) => (value ? roundtripClusterView(value) : null),
+    );
+    await compareList(
+      'roundtrip.cluster.listClusters.afterUpsert',
+      (service) => service.listClusters(ROUNDTRIP_USER_ID),
+      roundtripClusterView,
+    );
+    await compareList(
+      'roundtrip.subcluster.listSubclusters.afterUpsert',
+      (service) => service.listSubclusters(ROUNDTRIP_USER_ID),
+      roundtripSubclusterView,
+    );
+
+    // 10. Subcluster soft delete, restore, hard delete 생명주기를 검증합니다.
+    await writeBoth((service) =>
+      service.deleteSubcluster(ROUNDTRIP_USER_ID, ROUNDTRIP_SUBCLUSTER.id),
+    );
+    await compareList(
+      'roundtrip.subcluster.listSubclusters.afterSoftDelete',
+      (service) => service.listSubclusters(ROUNDTRIP_USER_ID),
+      roundtripSubclusterView,
+    );
+
+    await writeBoth((service) =>
+      service.restoreSubcluster(ROUNDTRIP_USER_ID, ROUNDTRIP_SUBCLUSTER.id),
+    );
+    await compareList(
+      'roundtrip.subcluster.listSubclusters.afterRestore',
+      (service) => service.listSubclusters(ROUNDTRIP_USER_ID),
+      roundtripSubclusterView,
+    );
+
+    await writeBoth((service) =>
+      service.deleteSubcluster(ROUNDTRIP_USER_ID, ROUNDTRIP_SUBCLUSTER.id, true),
+    );
+    await compareList(
+      'roundtrip.subcluster.listSubclusters.afterHardDelete',
+      (service) => service.listSubclusters(ROUNDTRIP_USER_ID),
+      roundtripSubclusterView,
+    );
+
+    // 11. Cluster soft delete, restore, hard delete 생명주기를 findCluster와 listClusters로 검증합니다.
+    await writeBoth((service) => service.deleteCluster(ROUNDTRIP_USER_ID, ROUNDTRIP_CLUSTER.id));
+    await compareOne(
+      'roundtrip.cluster.findCluster.afterSoftDelete',
+      (service) => service.findCluster(ROUNDTRIP_USER_ID, ROUNDTRIP_CLUSTER.id),
+      (value) => (value ? roundtripClusterView(value) : null),
+    );
+    await compareList(
+      'roundtrip.cluster.listClusters.afterSoftDelete',
+      (service) => service.listClusters(ROUNDTRIP_USER_ID),
+      roundtripClusterView,
+    );
+
+    await writeBoth((service) => service.restoreCluster(ROUNDTRIP_USER_ID, ROUNDTRIP_CLUSTER.id));
+    await compareOne(
+      'roundtrip.cluster.findCluster.afterRestore',
+      (service) => service.findCluster(ROUNDTRIP_USER_ID, ROUNDTRIP_CLUSTER.id),
+      (value) => (value ? roundtripClusterView(value) : null),
+    );
+
+    await writeBoth((service) =>
+      service.deleteCluster(ROUNDTRIP_USER_ID, ROUNDTRIP_CLUSTER.id, true),
+    );
+    await compareOne(
+      'roundtrip.cluster.findCluster.afterHardDelete',
+      (service) => service.findCluster(ROUNDTRIP_USER_ID, ROUNDTRIP_CLUSTER.id),
+      (value) => (value ? roundtripClusterView(value) : null),
+    );
+    await compareList(
+      'roundtrip.cluster.listClusters.afterHardDelete',
+      (service) => service.listClusters(ROUNDTRIP_USER_ID),
+      roundtripClusterView,
+    );
+  }, 120_000);
+});
