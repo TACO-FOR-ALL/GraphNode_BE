@@ -72,7 +72,7 @@ export interface Neo4jMicroscopeWorkspaceNode {
  * @property fileName 사용자에게 표시할 파일명입니다.
  * @property status AI 처리 상태입니다.
  * @property nodeId note/conversation 기반 ingest일 때 원본 노드 ID입니다.
- * @property nodeType 원본 노드 유형입니다.
+   * @property nodeType 원본 노드 유형입니다. Microscope Neo4j 런타임 마이그레이션은 보류하지만 미래 호환을 위해 notion/file을 허용합니다.
  * @property sourceId AI 워커가 반환한 source 식별자입니다.
  * @property error 실패 시 에러 메시지입니다.
  * @property createdAt document 등록 시각입니다.
@@ -86,7 +86,8 @@ export interface Neo4jMicroscopeDocumentNode {
   fileName: string;
   status: MicroscopeDocumentStatus;
   nodeId?: string;
-  nodeType?: 'note' | 'conversation';
+  /** 원본 노드 유형입니다. Microscope Neo4j 런타임 마이그레이션은 보류하지만 미래 호환을 위해 notion/file을 허용합니다. */
+  nodeType?: 'note' | 'conversation' | 'notion' | 'file';
   sourceId?: string;
   error?: string;
   createdAt: string;
