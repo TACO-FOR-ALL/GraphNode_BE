@@ -34,25 +34,20 @@ export interface DualWriteOptions {
  * @returns 정규화된 값
  */
 function normalizeForCompare(val: unknown): unknown {
-  // 1. 값이 배열인 경우, 내부 요소를 재귀적으로 정규화한 후 JSON 문자열 기준으로 정렬합니다.
   if (Array.isArray(val)) {
     return [...val.map(normalizeForCompare)].sort((a, b) =>
       JSON.stringify(a).localeCompare(JSON.stringify(b))
     );
   }
-  // 2. 값이 객체인 경우 (null 제외)
   if (val !== null && val !== undefined && typeof val === 'object') {
     const obj = val as Record<string, unknown>;
     const result: Record<string, unknown> = {};
-    // 객체의 키를 알파벳 순으로 정렬하여 순서 불일치로 인한 오차를 방지합니다.
     for (const k of Object.keys(obj).sort()) {
-      // 타임스탬프(createdAt, updatedAt)는 비교 대상에서 제외합니다.
       if (k === 'createdAt' || k === 'updatedAt') continue;
       result[k] = normalizeForCompare(obj[k]);
     }
     return result;
   }
-  // 3. 원시 타입(primitive)인 경우 그대로 반환합니다.
   return val;
 }
 
@@ -67,8 +62,7 @@ type DiffEntry = {
 };
 
 /**
- * @description 객체에서 식별자(id, origId, userId 등)를 추출하여 반환하는 함수입니다.
- * 비교 결과(diff)를 남길 때 어떤 문서에서 차이가 발생했는지 식별하기 위해 사용됩니다.
+ * @description 객체에서 식별자를 추출하는 함수입니다.
  *
  * @param val 식별자를 추출할 객체
  * @returns 식별자 문자열 또는 숫자, 없으면 undefined
@@ -76,42 +70,31 @@ type DiffEntry = {
 function getComparableId(val: unknown): string | number | undefined {
   if (!val || typeof val !== 'object') return undefined;
   const obj = val as Record<string, unknown>;
-  // id, origId, userId 순으로 우선순위를 두어 식별자를 찾습니다.
   const id = obj.id ?? obj.origId ?? obj.userId;
   return typeof id === 'string' || typeof id === 'number' ? id : undefined;
 }
 
 /**
- * @description 비교 결과에 남길 값을 간소화(압축)하는 함수입니다.
- * 거대한 배열이나 깊은 객체가 그대로 로그에 남는 것을 방지합니다.
+ * @description 비교 결과에 남길 값을 간소화하는 함수입니다.
  *
  * @param val 간소화할 원래 값
  * @returns 로깅용으로 간소화된 값
  */
 function compactDiffValue(val: unknown): unknown {
-  // 배열인 경우 크기 정보만 남깁니다.
   if (Array.isArray(val)) return `[array:${val.length}]`;
-  // 원시 타입인 경우 그대로 반환합니다.
   if (!val || typeof val !== 'object') return val;
-  // 객체인 경우 식별 및 상태 정보(id, 삭제 여부 등)만 추출합니다.
   const obj = val as Record<string, unknown>;
-  return {
-    id: obj.id,
-    origId: obj.origId,
-    userId: obj.userId,
-    deletedAt: obj.deletedAt,
-  };
+  return { id: obj.id, origId: obj.origId, userId: obj.userId, deletedAt: obj.deletedAt };
 }
 
 /**
  * @description Primary(Mongo)와 Secondary(Neo4j) 데이터 객체 간의 차이점을 수집합니다.
- * 재귀적으로 속성을 탐색하며 불일치하는 항목들을 diffs 배열에 담아 반환합니다.
  *
  * @param primary Mongo에서 조회한 원본 데이터
  * @param secondary Neo4j에서 조회한 대조 데이터
  * @param path 현재 비교 중인 JSON 경로 (기본값: '$')
  * @param diffs 차이점을 누적할 배열
- * @param limit 수집할 최대 차이점 개수 (기본값: 25, 너무 많은 로그 방지)
+ * @param limit 수집할 최대 차이점 개수 (기본값: 25)
  * @returns 수집된 차이점 배열
  */
 function collectDiffs(
@@ -121,41 +104,32 @@ function collectDiffs(
   diffs: DiffEntry[] = [],
   limit = 25
 ): DiffEntry[] {
-  // 최대 한계치에 도달했거나 두 값이 완전히 동일하다면 바로 반환합니다.
   if (diffs.length >= limit || Object.is(primary, secondary)) return diffs;
 
-  // 1. 둘 중 하나라도 배열인 경우
   if (Array.isArray(primary) || Array.isArray(secondary)) {
     const pArr = Array.isArray(primary) ? primary : [];
     const sArr = Array.isArray(secondary) ? secondary : [];
-    // 배열 길이가 다르면 차이점으로 기록합니다.
     if (pArr.length !== sArr.length) {
       diffs.push({ path: `${path}.length`, primary: pArr.length, secondary: sArr.length });
     }
-    // 최대 50개의 원소까지만 하위 비교를 수행합니다.
     for (let i = 0; i < Math.min(Math.max(pArr.length, sArr.length), 50); i += 1) {
       collectDiffs(pArr[i], sArr[i], `${path}[${i}]`, diffs, limit);
-      if (diffs.length >= limit) break; // 한도 초과 시 조기 종료
+      if (diffs.length >= limit) break;
     }
     return diffs;
   }
 
-  // 2. 둘 다 객체인 경우
   if (primary && secondary && typeof primary === 'object' && typeof secondary === 'object') {
     const pObj = primary as Record<string, unknown>;
     const sObj = secondary as Record<string, unknown>;
-    // 두 객체의 모든 키를 모아 중복을 제거하고 정렬합니다.
     const keys = Array.from(new Set([...Object.keys(pObj), ...Object.keys(sObj)])).sort();
     for (const key of keys) {
-      // 속성별로 재귀 호출하여 비교합니다.
       collectDiffs(pObj[key], sObj[key], `${path}.${key}`, diffs, limit);
-      if (diffs.length >= limit) break; // 한도 초과 시 조기 종료
+      if (diffs.length >= limit) break;
     }
     return diffs;
   }
 
-  // 3. 원시 타입의 값이 서로 다르거나, 타입이 불일치하는 경우
-  // 현재 path와 식별자(id) 정보와 함께, 간소화된 값으로 diff에 추가합니다.
   diffs.push({
     path,
     id: getComparableId(primary) ?? getComparableId(secondary),
@@ -166,17 +140,16 @@ function collectDiffs(
 }
 
 /**
- * @description MongoDB primary 결과를 기준으로 반환하고 Neo4j secondary shadow write를 수행하는 Proxy입니다.
+ * @description MongoDB primary와 Neo4j secondary에 동일한 비즈니스 요청을 독립적으로 병렬 처리하는 Proxy입니다.
  *
- * - 모든 반환값은 MongoDB primary 결과를 사용합니다.
+ * **독립적 병렬 처리(Independent Parallel Processing) 원칙**:
+ * - 모든 쓰기 작업은 Primary(MongoDB)와 Secondary(Neo4j)에 동일한 입력으로 각각 독립 실행됩니다.
+ * - Secondary(Neo4j)는 MongoDB로부터 데이터를 읽어 동기화하지 않습니다.
  * - MongoDB write가 실패하면 기존과 동일하게 예외를 throw합니다.
  * - Neo4j shadow write가 실패해도 FE 요청은 실패시키지 않습니다.
- * - Neo4j와 MongoDB는 cross-DB transaction이 불가능하므로 rollback을 시도하지 않습니다.
- * - write 작업마다 개별 Neo4j 단건 쓰기가 아닌 syncFullGraphFromMongo(userId)로 현재 Mongo 상태 전체를 반영합니다.
+ * - 읽기는 항상 MongoDB primary 결과를 반환하며, shadowReadCompare 옵션으로 Neo4j와 비교합니다.
  */
 export class DualWriteGraphStoreProxy implements GraphDocumentStore {
-  private readonly syncQueues = new Map<string, Promise<void>>();
-
   constructor(
     private readonly primary: GraphDocumentStore,
     private readonly secondary: MacroGraphStore,
@@ -192,133 +165,25 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   }
 
   /**
-   * @description Mongo primary에서 전체 graph 상태를 읽어 Neo4j secondary에 upsert 합니다.
-   * Dual Write 중 개별 쓰기가 아닌, 현재 Mongo의 스냅샷을 통째로 덮어쓰는 동기화 작업입니다.
-   * stats가 없으면 sync를 건너뜁니다. 실패해도 예외를 외부로 전파하지 않습니다.
+   * @description 외부에서 Shadow Sync를 명시적으로 요청할 때 호출하는 메서드입니다.
    *
-   * @param userId 동기화 대상 사용자 ID
-   * @param operation 동기화를 트리거한 오퍼레이션 이름 (로깅용)
+   * 독립적 병렬 처리 구조에서는 각 쓰기 작업이 이미 Neo4j에 직접 반영되므로,
+   * 이 메서드는 하위 호환성을 위해 유지되나 no-op으로 동작합니다.
    */
-  async syncFullGraphFromMongo(userId: string, operation = 'syncFullGraphFromMongo'): Promise<void> {
-    // 섀도우 쓰기가 비활성화된 경우 아무 작업도 하지 않습니다.
-    if (!this.shadowWritesEnabled) return;
-    try {
-      // 1. Mongo(Primary)로부터 사용자의 전체 그래프 데이터를 병렬로 가져옵니다.
-      const [nodes, edges, clusters, subclusters, stats, summary] = await Promise.all([
-        this.primary.listNodes(userId),
-        this.primary.listEdges(userId),
-        this.primary.listClusters(userId),
-        this.primary.listSubclusters(userId),
-        this.primary.getStats(userId),
-        this.primary.getGraphSummary(userId),
-      ]);
-
-      // 2. 만약 stats(통계) 문서조차 없다면, 유효한 그래프 데이터가 없다고 간주하고 종료합니다.
-      if (stats === null) {
-        logger.info({ userId }, 'Skipping Neo4j sync: no stats found in primary');
-        return;
-      }
-
-      // 3. 수집된 전체 데이터를 Neo4j(Secondary)에 일괄 저장(upsert)합니다.
-      await this.secondary.upsertGraph({
-        userId,
-        nodes,
-        edges,
-        clusters,
-        subclusters,
-        stats,
-        summary: summary ?? undefined,
-      });
-    } catch (err) {
-      // 동기화 중 에러가 발생해도 메인 비즈니스 로직(Mongo)을 방해하지 않도록, 로그만 남깁니다.
-      logger.warn({ userId, operation, err }, 'Macro graph Neo4j shadow sync failed (migration divergence)');
-      Sentry.captureException(err, { extra: { userId, operation } });
-    }
+  async flushShadowSync(_userId: string, _operation = 'afterCommit'): Promise<void> {
+    // 독립적 병렬 처리 구조에서는 각 개별 쓰기가 이미 Neo4j에 직접 반영됩니다.
   }
 
   /**
-   * @description write 이후 fire-and-forget 방식으로 Neo4j full sync를 큐에 넣어 수행합니다.
-   * 동일 유저에 대한 동시 동기화 요청이 발생할 경우 순차적으로 처리되도록 Promise 체인(syncQueues)을 사용합니다.
+   * @description Mongo Write 직후 Neo4j에 동일한 단건 작업을 미러링합니다.
    *
-   * @param userId 동기화 대상 사용자 ID
-   * @param operation 동기화를 트리거한 오퍼레이션 이름
-   */
-  private async enqueueFullSync(userId: string, operation: string): Promise<void> {
-    if (!this.shadowWritesEnabled) return;
-    
-    // 이전에 대기 중인 동기화 작업이 있는지 확인합니다.
-    const previous = this.syncQueues.get(userId) ?? Promise.resolve();
-    
-    // 이전 작업이 끝난 후(성공하든 실패하든 catch) 현재의 전체 동기화 작업을 체이닝합니다.
-    const next = previous
-      .catch(() => undefined)
-      .then(() => this.syncFullGraphFromMongo(userId, operation));
-      
-    // 큐 맵에 갱신된 Promise 체인을 저장합니다.
-    this.syncQueues.set(
-      userId,
-      next.finally(() => {
-        // 작업 완료 후, 현재 큐에 대기 중인 다른 작업이 없다면 큐에서 제거(정리)합니다.
-        if (this.syncQueues.get(userId) === next) {
-          this.syncQueues.delete(userId);
-        }
-      })
-    );
-    await next;
-  }
-
-  /**
-   * @description 외부(서비스 계층 등)에서 명시적으로 Shadow Sync를 발생시키고 싶을 때 호출하는 메서드입니다.
-   */
-  async flushShadowSync(userId: string, operation = 'afterCommit'): Promise<void> {
-    await this.enqueueFullSync(userId, operation);
-  }
-
-  /**
-   * @description Mongo Write 작업 직후에 Neo4j 동기화를 트리거하는 유틸리티입니다.
-   * 트랜잭션 옵션(`afterCommit`)이 있다면 트랜잭션이 성공한 후에 실행되도록 예약하고,
-   * 트랜잭션 없이 단독 실행되었다면 즉시 실행합니다.
-   * 
-   * @param userId 사용자 ID
-   * @param operation 트리거된 쓰기 오퍼레이션
-   * @param options 트랜잭션 정보(afterCommit 포함)
-   */
-  private async syncAfterWrite(
-    userId: string,
-    operation: string,
-    options?: RepoOptions
-  ): Promise<void> {
-    if (!this.shadowWritesEnabled) return;
-    
-    // 실행할 동기화 함수 (전체 동기화)
-    const run = () => this.enqueueFullSync(userId, operation);
-    
-    // 1. 트랜잭션 afterCommit 배열이 존재하면 콜백으로 등록합니다.
-    if (options?.afterCommit) {
-      options.afterCommit.push(run);
-      return;
-    }
-    // 2. afterCommit이 없는데 session만 있다면 트랜잭션 도중(Commit 전)에 
-    // 외부 DB 동기화를 하려는 위험한 상태이므로 경고를 띄우고 무시합니다.
-    if (options?.session) {
-      logger.warn(
-        { userId, operation },
-        'Neo4j shadow sync skipped inside Mongo transaction without afterCommit hook'
-      );
-      return;
-    }
-    // 3. 트랜잭션이 아닌 단일 작업일 경우 즉시 동기화를 실행합니다.
-    await run();
-  }
-
-  /**
-   * @description 전체 상태 동기화(syncFullGraphFromMongo) 대신,
-   * 단건 작업(예: 삭제)에 대해 Neo4j에서도 동일한 단건 작업을 거울처럼 수행(Mirroring)하게 합니다.
-   * 
+   * `mirrorAfterWrite`는 MongoDB 데이터를 읽지 않으며, 호출 측이 전달한 입력을
+   * 그대로 Neo4j에 독립적으로 전달합니다.
+   *
    * @param userId 사용자 ID
    * @param operation 트리거된 쓰기 오퍼레이션
    * @param options 트랜잭션 정보
-   * @param action 실행할 단건 Neo4j 호출 함수
+   * @param action 실행할 Neo4j 호출 함수
    */
   private async mirrorAfterWrite(
     userId: string,
@@ -327,8 +192,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
     action: () => Promise<void>
   ): Promise<void> {
     if (!this.shadowWritesEnabled) return;
-    
-    // 래퍼: Neo4j 액션을 실행하되 실패해도 메인 로직에 영향이 없도록 에러를 캐치합니다.
+
     const run = async () => {
       try {
         await action();
@@ -337,13 +201,11 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
         Sentry.captureException(err, { extra: { userId, operation } });
       }
     };
-    
-    // 트랜잭션 Commit 성공 후 실행하도록 콜백에 담습니다.
+
     if (options?.afterCommit) {
       options.afterCommit.push(run);
       return;
     }
-    // 부적절한 트랜잭션 내부 호출 방어 로직
     if (options?.session) {
       logger.warn(
         { userId, operation },
@@ -356,13 +218,12 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
 
   /**
    * @description Mongo에서 읽어온 Primary 결과를 반환하되, `shadowReadCompare` 옵션이 켜져 있으면
-   * 백그라운드에서 Neo4j(Secondary)의 동일 결과를 가져와 둘 사이의 불일치를 비교합니다.
-   * 비교 불일치 시 throw(에러 발생)하지 않고 logger.warn으로 상세 Diff를 기록합니다.
+   * 백그라운드에서 Neo4j(Secondary)의 동일 결과를 가져와 불일치를 비교합니다.
    *
-   * @param method 호출된 메서드명 (예: 'listNodes')
+   * @param method 호출된 메서드명
    * @param userId 사용자 ID
    * @param primaryResult Mongo에서 조회한 원본 결과
-   * @param secondaryFetch Neo4j에서 동일한 결과를 가져오는 함수(콜백)
+   * @param secondaryFetch Neo4j에서 동일한 결과를 가져오는 함수
    * @returns primaryResult (어떤 경우에도 Mongo 결과가 항상 반환됩니다)
    */
   private async compareAndReturn<T>(
@@ -371,25 +232,17 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
     primaryResult: T,
     secondaryFetch: () => Promise<T>
   ): Promise<T> {
-    // 섀도우 리드 비교나 섀도우 쓰기가 꺼져있으면 대조하지 않고 즉시 원본을 반환합니다.
     if (!this.shadowReadCompareEnabled || !this.shadowWritesEnabled) return primaryResult;
     try {
-      // 1. Neo4j에서 대조용 결과를 가져옵니다.
       const secondaryResult = await secondaryFetch();
-      
-      // 2. 두 결과를 정규화(날짜, 배열 순서 등 무시)한 뒤 직렬화하여 단순 비교합니다.
       const primaryNorm = JSON.stringify(normalizeForCompare(primaryResult));
       const secondaryNorm = JSON.stringify(normalizeForCompare(secondaryResult));
-      
-      // 3. 직렬화된 문자열이 다르다면 데이터 불일치가 발생한 것입니다.
+
       if (primaryNorm !== secondaryNorm) {
-        // 상세한 Diff(차이점)를 수집합니다.
         const diffs = collectDiffs(
           normalizeForCompare(primaryResult),
           normalizeForCompare(secondaryResult)
         );
-        
-        // 차이점을 로깅하여 추후 아키텍처 점검 시 사용할 수 있도록 합니다.
         logger.warn(
           {
             userId,
@@ -402,11 +255,8 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
         );
       }
     } catch (err) {
-      // 비교 과정(Neo4j 쿼리 등)에서 실패해도 원본 결과 반환에 영향을 주지 않아야 합니다.
       logger.warn({ userId, method, err }, 'Neo4j secondary read failed during comparison');
     }
-    
-    // 성공/실패 여부와 무관하게 항상 무사히 Primary 결과를 반환합니다.
     return primaryResult;
   }
 
@@ -415,13 +265,19 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   /** @inheritdoc */
   async upsertNode(node: GraphNodeDoc, options?: RepoOptions): Promise<void> {
     await this.primary.upsertNode(node, options);
-    await this.syncAfterWrite(node.userId, 'upsertNode', options);
+    await this.mirrorAfterWrite(node.userId, 'upsertNode', options, () =>
+      this.secondary.upsertNode(node)
+    );
   }
 
   /** @inheritdoc */
   async upsertNodes(nodes: GraphNodeDoc[], options?: RepoOptions): Promise<void> {
     await this.primary.upsertNodes(nodes, options);
-    if (nodes.length > 0) await this.syncAfterWrite(nodes[0].userId, 'upsertNodes', options);
+    if (nodes.length > 0) {
+      await this.mirrorAfterWrite(nodes[0].userId, 'upsertNodes', options, () =>
+        this.secondary.upsertNodes(nodes)
+      );
+    }
   }
 
   /** @inheritdoc */
@@ -432,7 +288,9 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
     options?: RepoOptions
   ): Promise<void> {
     await this.primary.updateNode(userId, id, patch, options);
-    await this.syncAfterWrite(userId, 'updateNode', options);
+    await this.mirrorAfterWrite(userId, 'updateNode', options, () =>
+      this.secondary.updateNode(userId, id, patch)
+    );
   }
 
   /** @inheritdoc */
@@ -512,7 +370,8 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
 
   /** @inheritdoc */
   async findNodesByOrigIdsAll(userId: string, origIds: string[]): Promise<GraphNodeDoc[]> {
-    // secondary는 soft-delete 포함 조회를 지원하지 않으므로 비교 없이 primary만 반환합니다.
+    // secondary는 includeDeleted 조회를 별도 options로 지원합니다.
+    // 비교 없이 primary만 반환합니다.
     return this.primary.findNodesByOrigIdsAll(userId, origIds);
   }
 
@@ -545,14 +404,16 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.deleteAllGraphData(userId, permanent, options);
     await this.mirrorAfterWrite(userId, 'deleteAllGraphData', options, () =>
-      this.secondary.deleteGraph(userId)
+      this.secondary.deleteAllGraphData(userId, permanent)
     );
   }
 
   /** @inheritdoc */
   async restoreAllGraphData(userId: string, options?: RepoOptions): Promise<void> {
     await this.primary.restoreAllGraphData(userId, options);
-    await this.syncAfterWrite(userId, 'restoreAllGraphData', options);
+    await this.mirrorAfterWrite(userId, 'restoreAllGraphData', options, () =>
+      this.secondary.restoreAllGraphData(userId)
+    );
   }
 
   // ── Edge ─────────────────────────────────────────────────────────────────
@@ -560,14 +421,20 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   /** @inheritdoc */
   async upsertEdge(edge: GraphEdgeDoc, options?: RepoOptions): Promise<string> {
     const result = await this.primary.upsertEdge(edge, options);
-    await this.syncAfterWrite(edge.userId, 'upsertEdge', options);
+    await this.mirrorAfterWrite(edge.userId, 'upsertEdge', options, () =>
+      this.secondary.upsertEdge(edge).then(() => undefined)
+    );
     return result;
   }
 
   /** @inheritdoc */
   async upsertEdges(edges: GraphEdgeDoc[], options?: RepoOptions): Promise<void> {
     await this.primary.upsertEdges(edges, options);
-    if (edges.length > 0) await this.syncAfterWrite(edges[0].userId, 'upsertEdges', options);
+    if (edges.length > 0) {
+      await this.mirrorAfterWrite(edges[0].userId, 'upsertEdges', options, () =>
+        this.secondary.upsertEdges(edges)
+      );
+    }
   }
 
   /** @inheritdoc */
@@ -631,13 +498,19 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   /** @inheritdoc */
   async upsertCluster(cluster: GraphClusterDoc, options?: RepoOptions): Promise<void> {
     await this.primary.upsertCluster(cluster, options);
-    await this.syncAfterWrite(cluster.userId, 'upsertCluster', options);
+    await this.mirrorAfterWrite(cluster.userId, 'upsertCluster', options, () =>
+      this.secondary.upsertCluster(cluster)
+    );
   }
 
   /** @inheritdoc */
   async upsertClusters(clusters: GraphClusterDoc[], options?: RepoOptions): Promise<void> {
     await this.primary.upsertClusters(clusters, options);
-    if (clusters.length > 0) await this.syncAfterWrite(clusters[0].userId, 'upsertClusters', options);
+    if (clusters.length > 0) {
+      await this.mirrorAfterWrite(clusters[0].userId, 'upsertClusters', options, () =>
+        this.secondary.upsertClusters(clusters)
+      );
+    }
   }
 
   /** @inheritdoc */
@@ -682,14 +555,18 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   /** @inheritdoc */
   async upsertSubcluster(subcluster: GraphSubclusterDoc, options?: RepoOptions): Promise<void> {
     await this.primary.upsertSubcluster(subcluster, options);
-    await this.syncAfterWrite(subcluster.userId, 'upsertSubcluster', options);
+    await this.mirrorAfterWrite(subcluster.userId, 'upsertSubcluster', options, () =>
+      this.secondary.upsertSubcluster(subcluster)
+    );
   }
 
   /** @inheritdoc */
   async upsertSubclusters(subclusters: GraphSubclusterDoc[], options?: RepoOptions): Promise<void> {
     await this.primary.upsertSubclusters(subclusters, options);
     if (subclusters.length > 0) {
-      await this.syncAfterWrite(subclusters[0].userId, 'upsertSubclusters', options);
+      await this.mirrorAfterWrite(subclusters[0].userId, 'upsertSubclusters', options, () =>
+        this.secondary.upsertSubclusters(subclusters)
+      );
     }
   }
 
@@ -731,7 +608,9 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   /** @inheritdoc */
   async saveStats(stats: GraphStatsDoc, options?: RepoOptions): Promise<void> {
     await this.primary.saveStats(stats, options);
-    await this.syncAfterWrite(stats.userId, 'saveStats', options);
+    await this.mirrorAfterWrite(stats.userId, 'saveStats', options, () =>
+      this.secondary.saveStats(stats)
+    );
   }
 
   /** @inheritdoc */
@@ -759,7 +638,9 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
     options?: RepoOptions
   ): Promise<void> {
     await this.primary.upsertGraphSummary(userId, summary, options);
-    await this.syncAfterWrite(userId, 'upsertGraphSummary', options);
+    await this.mirrorAfterWrite(userId, 'upsertGraphSummary', options, () =>
+      this.secondary.upsertGraphSummary(userId, summary)
+    );
   }
 
   /** @inheritdoc */
@@ -785,6 +666,8 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   /** @inheritdoc */
   async restoreGraphSummary(userId: string, options?: RepoOptions): Promise<void> {
     await this.primary.restoreGraphSummary(userId, options);
-    await this.syncAfterWrite(userId, 'restoreGraphSummary', options);
+    await this.mirrorAfterWrite(userId, 'restoreGraphSummary', options, () =>
+      this.secondary.restoreGraphSummary(userId)
+    );
   }
 }

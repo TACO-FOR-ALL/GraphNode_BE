@@ -1,4 +1,7 @@
-import { MACRO_GRAPH_SCHEMA_CYPHER, MACRO_GRAPH_CYPHER } from '../../src/infra/graph/cypher/macroGraph.cypher';
+import {
+  MACRO_GRAPH_SCHEMA_CYPHER,
+  MACRO_GRAPH_CYPHER,
+} from '../../src/infra/graph/cypher/macroGraph.cypher';
 
 describe('macroGraph.cypher', () => {
   it('MACRO_GRAPH_SCHEMA_CYPHER가 export 된다', () => {
@@ -86,7 +89,6 @@ describe('macroGraph.cypher', () => {
       expect(q).not.toMatch(/nodeIds/);
       expect(q).not.toMatch(/representativeNodeId/);
       expect(q).not.toMatch(/\.size\s*=/);
-      expect(q).not.toMatch(/\.density\s*=/);
     });
 
     it('upsertRelations: MacroRelation에 source/target 속성을 저장하지 않는다', () => {

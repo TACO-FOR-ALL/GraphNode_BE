@@ -92,7 +92,8 @@ export const MACRO_GRAPH_CYPHER = {
         n.embedding    = row.embedding,
         n.createdAt    = row.createdAt,
         n.updatedAt    = row.updatedAt,
-        n.deletedAt    = row.deletedAt
+        n.deletedAt    = row.deletedAt,
+        n.clusterId    = row.clusterId
   `,
 
   /**
@@ -978,6 +979,18 @@ export const MACRO_GRAPH_CYPHER = {
   `,
 
   /**
+   * @description Cluster를 Soft Delete 처리합니다.
+   *
+   * @param userId 사용자 ID
+   * @param clusterId Soft Delete할 Cluster id
+   * @param deletedAt 삭제 타임스탬프 (number)
+   */
+  softDeleteClusterById: `
+    MATCH (c:MacroCluster {userId: $userId, id: $clusterId})
+    SET c.deletedAt = $deletedAt
+  `,
+
+  /**
    * @description 삭제된 Cluster를 복원합니다.
    *
    * @param userId 사용자 ID
@@ -1009,6 +1022,18 @@ export const MACRO_GRAPH_CYPHER = {
   deleteSubclusterById: `
     MATCH (sc:MacroSubcluster {userId: $userId, id: $subclusterId})
     DETACH DELETE sc
+  `,
+
+  /**
+   * @description Subcluster를 Soft Delete 처리합니다.
+   *
+   * @param userId 사용자 ID
+   * @param subclusterId Soft Delete할 Subcluster id
+   * @param deletedAt 삭제 타임스탬프 (number)
+   */
+  softDeleteSubclusterById: `
+    MATCH (sc:MacroSubcluster {userId: $userId, id: $subclusterId})
+    SET sc.deletedAt = $deletedAt
   `,
 
   /**
@@ -1100,5 +1125,96 @@ export const MACRO_GRAPH_CYPHER = {
     OPTIONAL MATCH (g)-[:HAS_STATS]->(st:MacroStats)
     OPTIONAL MATCH (g)-[:HAS_SUMMARY]->(sm:MacroSummary)
     DETACH DELETE n, cl, sc, rel, st, sm
+  `,
+
+  /**
+   * @description MacroNode의 특정 속성을 부분 업데이트합니다. (Incremental Update)
+   *
+   * `$props` 맵에 포함된 속성만 업데이트하며, 포함되지 않은 속성은 유지됩니다.
+   * null 값을 전달하면 해당 속성이 제거됩니다 (deletedAt 복원 시 활용).
+   *
+   * @param userId 사용자 ID
+   * @param id 업데이트할 node id
+   * @param props 업데이트할 속성 맵 (undefined 키 제외, null 키 포함)
+   */
+  updateNode: `
+    MATCH (n:MacroNode {userId: $userId, id: $id})
+    SET n += $props
+  `,
+
+  /**
+   * @description 기존 MacroNode들을 대상으로 소속 cluster와의 BELONGS_TO 관계를 복원합니다.
+   *
+   * 개별 cluster upsert 이후 이미 저장된 node들의 관계를 repair 합니다.
+   * node에 저장된 `n.clusterId` 속성을 활용하여 대상 cluster를 조회합니다.
+   *
+   * @param userId 사용자 ID
+   * @param clusterIds 복원 대상 cluster id 배열
+   */
+  linkExistingNodesToClusters: `
+    UNWIND $clusterIds AS clusterId
+    MATCH (c:MacroCluster {userId: $userId, id: clusterId})
+    MATCH (n:MacroNode {userId: $userId})
+    WHERE n.clusterId = clusterId
+    MERGE (n)-[:BELONGS_TO]->(c)
+  `,
+
+  /**
+   * @description 모든 soft delete된 MacroNode와 연관된 MacroRelation/MACRO_RELATED를 복원합니다.
+   *
+   * @param userId 사용자 ID
+   */
+  restoreAllNodes: `
+    MATCH (n:MacroNode {userId: $userId})
+    WHERE n.deletedAt IS NOT NULL
+    SET n.deletedAt = null
+  `,
+
+  /**
+   * @description 모든 soft delete된 MacroRelation 및 materialized MACRO_RELATED를 복원합니다.
+   *
+   * @param userId 사용자 ID
+   */
+  restoreAllEdges: `
+    MATCH (r:MacroRelation {userId: $userId})
+    WHERE r.deletedAt IS NOT NULL
+    SET r.deletedAt = null
+    WITH collect(r.id) AS edgeIds
+    MATCH (:MacroNode {userId: $userId})-[mr:MACRO_RELATED {userId: $userId}]->(:MacroNode {userId: $userId})
+    WHERE mr.id IN edgeIds
+    SET mr.deletedAt = null
+  `,
+
+  /**
+   * @description 모든 soft delete된 MacroCluster를 복원합니다.
+   *
+   * @param userId 사용자 ID
+   */
+  restoreAllClusters: `
+    MATCH (c:MacroCluster {userId: $userId})
+    WHERE c.deletedAt IS NOT NULL
+    SET c.deletedAt = null
+  `,
+
+  /**
+   * @description 모든 soft delete된 MacroSubcluster를 복원합니다.
+   *
+   * @param userId 사용자 ID
+   */
+  restoreAllSubclusters: `
+    MATCH (sc:MacroSubcluster {userId: $userId})
+    WHERE sc.deletedAt IS NOT NULL
+    SET sc.deletedAt = null
+  `,
+
+  /**
+   * @description soft delete된 MacroSummary를 복원합니다.
+   *
+   * @param userId 사용자 ID
+   */
+  restoreGraphSummaryNode: `
+    MATCH (sm:MacroSummary {userId: $userId})
+    WHERE sm.deletedAt IS NOT NULL
+    SET sm.deletedAt = null
   `,
 } as const;

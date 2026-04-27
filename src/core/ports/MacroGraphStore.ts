@@ -109,6 +109,142 @@ export interface MacroGraphStore {
   ): Promise<MacroGraphUpsertResult>;
 
   /**
+   * @description 단일 graph node를 독립적으로 upsert 합니다. (Incremental Write)
+   *
+   * @param node 저장할 graph node 문서입니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  upsertNode(node: GraphNodeDoc, options?: MacroGraphStoreOptions): Promise<void>;
+
+  /**
+   * @description 다수의 graph node를 독립적으로 일괄 upsert 합니다. (Incremental Write)
+   *
+   * @param nodes 저장할 graph node 문서 목록입니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  upsertNodes(nodes: GraphNodeDoc[], options?: MacroGraphStoreOptions): Promise<void>;
+
+  /**
+   * @description 단일 graph node를 부분 업데이트합니다. (Incremental Write)
+   *
+   * @param userId 사용자 ID입니다.
+   * @param id 업데이트할 node id입니다.
+   * @param patch 업데이트할 필드 부분 객체입니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  updateNode(
+    userId: string,
+    id: number,
+    patch: Partial<GraphNodeDoc>,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description 단일 graph edge를 독립적으로 upsert 합니다. (Incremental Write)
+   *
+   * @param edge 저장할 graph edge 문서입니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   * @returns 저장된 edge id입니다.
+   */
+  upsertEdge(edge: GraphEdgeDoc, options?: MacroGraphStoreOptions): Promise<string>;
+
+  /**
+   * @description 다수의 graph edge를 독립적으로 일괄 upsert 합니다. (Incremental Write)
+   *
+   * @param edges 저장할 graph edge 문서 목록입니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  upsertEdges(edges: GraphEdgeDoc[], options?: MacroGraphStoreOptions): Promise<void>;
+
+  /**
+   * @description 단일 cluster를 독립적으로 upsert 합니다. (Incremental Write)
+   *
+   * @param cluster 저장할 cluster 문서입니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  upsertCluster(cluster: GraphClusterDoc, options?: MacroGraphStoreOptions): Promise<void>;
+
+  /**
+   * @description 다수의 cluster를 독립적으로 일괄 upsert 합니다. (Incremental Write)
+   *
+   * @param clusters 저장할 cluster 문서 목록입니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  upsertClusters(clusters: GraphClusterDoc[], options?: MacroGraphStoreOptions): Promise<void>;
+
+  /**
+   * @description 단일 subcluster를 독립적으로 upsert 합니다. (Incremental Write)
+   *
+   * @param subcluster 저장할 subcluster 문서입니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  upsertSubcluster(
+    subcluster: GraphSubclusterDoc,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description 다수의 subcluster를 독립적으로 일괄 upsert 합니다. (Incremental Write)
+   *
+   * @param subclusters 저장할 subcluster 문서 목록입니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  upsertSubclusters(
+    subclusters: GraphSubclusterDoc[],
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description 사용자 graph stats를 독립적으로 저장합니다. (Incremental Write)
+   *
+   * @param stats 저장할 stats 문서입니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  saveStats(stats: GraphStatsDoc, options?: MacroGraphStoreOptions): Promise<void>;
+
+  /**
+   * @description 사용자 graph summary를 독립적으로 upsert 합니다. (Incremental Write)
+   *
+   * @param userId 사용자 ID입니다.
+   * @param summary 저장할 summary 문서입니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  upsertGraphSummary(
+    userId: string,
+    summary: GraphSummaryDoc,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description 논리적 삭제(Soft Delete)된 graph summary를 복원합니다.
+   *
+   * @param userId 복원 대상 사용자 ID입니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  restoreGraphSummary(userId: string, options?: MacroGraphStoreOptions): Promise<void>;
+
+  /**
+   * @description 사용자의 Macro Graph 전체 데이터를 삭제합니다. deleteGraph의 alias입니다.
+   *
+   * @param userId 삭제 대상 사용자 ID입니다.
+   * @param permanent true일 경우 물리적 삭제(Hard Delete), false일 경우 논리적 삭제(Soft Delete)입니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  deleteAllGraphData(
+    userId: string,
+    permanent?: boolean,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description 논리적 삭제(Soft Delete)된 사용자 전체 그래프 데이터를 복원합니다.
+   *
+   * @param userId 복원 대상 사용자 ID입니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  restoreAllGraphData(userId: string, options?: MacroGraphStoreOptions): Promise<void>;
+
+  /**
    * @description graph node id로 단일 node를 조회합니다.
    *
    * @param userId 조회 대상 사용자 ID입니다.
@@ -137,13 +273,24 @@ export interface MacroGraphStore {
   ): Promise<GraphNodeDoc[]>;
 
   /**
-   * @description 사용자 graph node 목록을 조회합니다.
+   * @description 사용자 graph node 목록을 조회합니다. (active only)
    *
    * @param userId 조회 대상 사용자 ID입니다.
    * @param options transaction 등 adapter 전용 옵션입니다.
    * @returns node 문서 목록입니다.
    */
   listNodes(userId: string, options?: MacroGraphStoreOptions): Promise<GraphNodeDoc[]>;
+
+  /**
+   * @description soft-deleted 포함 전체 사용자 graph node 목록을 조회합니다.
+   *
+   * GraphDocumentStore.listNodesAll과 동일한 계약입니다.
+   *
+   * @param userId 조회 대상 사용자 ID입니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   * @returns soft-deleted 포함 전체 node 문서 목록입니다.
+   */
+  listNodesAll(userId: string, options?: MacroGraphStoreOptions): Promise<GraphNodeDoc[]>;
 
   /**
    * @description 특정 cluster에 속한 node 목록을 조회합니다.
