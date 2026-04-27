@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/node';
 
 import type { GraphDocumentStore, RepoOptions } from '../../core/ports/GraphDocumentStore';
-import type { MacroGraphStore, MacroGraphUpsertInput } from '../../core/ports/MacroGraphStore';
+import type { MacroGraphStore } from '../../core/ports/MacroGraphStore';
 import type {
   GraphClusterDoc,
   GraphEdgeDoc,
@@ -178,55 +178,6 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   }
 
   /**
-   * @description MongoDB primary에 커밋된 Macro Graph 전체 상태를 다시 읽어 Neo4j secondary에 단일
-   * `upsertGraph` 호출로 반영합니다.
-   *
-   * 이 메서드는 마이그레이션 기간의 dual-write 안전장치입니다. 개별 mutation을 Neo4j에 증분 반영하면
-   * Mongo 트랜잭션 순서, cluster 선후 관계, soft-delete cascade 같은 경계에서 누락이 생길 수 있으므로,
-   * primary write가 성공한 뒤 Mongo를 source of truth로 삼아 현재 사용자 graph snapshot 전체를 재구성합니다.
-   * Neo4j write 실패는 `mirrorAfterWrite`에서 catch되어 API 응답으로 전파되지 않습니다.
-   *
-   * @param userId 동기화 대상 사용자 ID입니다.
-   * @param operation 호출한 Mongo write 작업명입니다. 로그와 Sentry extra에 남겨 원인 추적에 사용합니다.
-   * @returns Neo4j에 전체 Macro Graph snapshot을 upsert한 뒤 resolve되는 Promise입니다.
-   * @throws Neo4j adapter 또는 Mongo primary read 중 발생한 예외를 그대로 던집니다. 호출자는 반드시
-   * `mirrorAfterWrite`처럼 사용자 응답과 격리된 경계에서 catch해야 합니다.
-   */
-  private async syncFullGraphFromMongo(userId: string, operation: string): Promise<void> {
-    // Mongo write 직후의 authoritative snapshot을 구성하기 위해 모든 Macro collection을 primary에서 다시 읽습니다.
-    const [nodes, edges, clusters, subclusters, stats, summary] = await Promise.all([
-      this.primary.listNodesAll(userId),
-      this.primary.listEdges(userId),
-      this.primary.listClusters(userId),
-      this.primary.listSubclusters(userId),
-      this.primary.getStats(userId),
-      this.primary.getGraphSummary(userId),
-    ]);
-
-    // stats는 Neo4j upsertGraph의 root payload 역할을 하므로 없으면 불완전한 graph를 쓰지 않고 보류합니다.
-    if (!stats) {
-      logger.warn(
-        { userId, operation },
-        'Macro graph Neo4j shadow sync skipped because Mongo stats are missing'
-      );
-      return;
-    }
-
-    const payload: MacroGraphUpsertInput = {
-      userId,
-      nodes,
-      edges,
-      clusters,
-      subclusters,
-      stats,
-      ...(summary ? { summary } : {}),
-    };
-
-    // Secondary는 Mongo snapshot 전체를 idempotent하게 재작성합니다. 응답 격리는 mirrorAfterWrite가 담당합니다.
-    await this.secondary.upsertGraph(payload);
-  }
-
-  /**
    * @description 외부에서 Shadow Sync를 명시적으로 요청할 때 호출하는 메서드입니다.
    *
    * 독립적 병렬 처리 구조에서는 각 쓰기 작업이 이미 Neo4j에 직접 반영되므로,
@@ -245,13 +196,14 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
    * @param userId 사용자 ID
    * @param operation 트리거된 쓰기 오퍼레이션
    * @param options 트랜잭션 정보
-   * @param action 실행할 Neo4j 호출 함수
+   * @param action 실행할 Neo4j 호출 함수입니다. 반환값이 있는 adapter 메서드도 shadow write에서는
+   * 예외 여부만 관찰하므로 `unknown`으로 허용합니다.
    */
   private async mirrorAfterWrite(
     userId: string,
     operation: string,
     options: RepoOptions | undefined,
-    action: () => Promise<void>
+    action: () => Promise<unknown>
   ): Promise<void> {
     // dual-write가 꺼진 환경에서는 Mongo primary만 사용하여 기존 단위 테스트/로컬 개발 경로를 유지합니다.
     if (!this.shadowWritesEnabled) return;
@@ -439,7 +391,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   async upsertNode(node: GraphNodeDoc, options?: RepoOptions): Promise<void> {
     await this.primary.upsertNode(node, options);
     await this.mirrorAfterWrite(node.userId, 'upsertNode', options, () =>
-      this.syncFullGraphFromMongo(node.userId, 'upsertNode')
+      this.secondary.upsertNode(node)
     );
   }
 
@@ -448,7 +400,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
     await this.primary.upsertNodes(nodes, options);
     if (nodes.length > 0) {
       await this.mirrorAfterWrite(nodes[0].userId, 'upsertNodes', options, () =>
-        this.syncFullGraphFromMongo(nodes[0].userId, 'upsertNodes')
+        this.secondary.upsertNodes(nodes)
       );
     }
   }
@@ -462,7 +414,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.updateNode(userId, id, patch, options);
     await this.mirrorAfterWrite(userId, 'updateNode', options, () =>
-      this.syncFullGraphFromMongo(userId, 'updateNode')
+      this.secondary.updateNode(userId, id, patch)
     );
   }
 
@@ -475,7 +427,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.deleteNode(userId, id, permanent, options);
     await this.mirrorAfterWrite(userId, 'deleteNode', options, () =>
-      this.syncFullGraphFromMongo(userId, 'deleteNode')
+      this.secondary.deleteNode(userId, id, permanent)
     );
   }
 
@@ -488,7 +440,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.deleteNodes(userId, ids, permanent, options);
     await this.mirrorAfterWrite(userId, 'deleteNodes', options, () =>
-      this.syncFullGraphFromMongo(userId, 'deleteNodes')
+      this.secondary.deleteNodes(userId, ids, permanent)
     );
   }
 
@@ -501,7 +453,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.deleteNodesByOrigIds(userId, origIds, permanent, options);
     await this.mirrorAfterWrite(userId, 'deleteNodesByOrigIds', options, () =>
-      this.syncFullGraphFromMongo(userId, 'deleteNodesByOrigIds')
+      this.secondary.deleteNodesByOrigIds(userId, origIds, permanent)
     );
   }
 
@@ -509,7 +461,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   async restoreNode(userId: string, id: number, options?: RepoOptions): Promise<void> {
     await this.primary.restoreNode(userId, id, options);
     await this.mirrorAfterWrite(userId, 'restoreNode', options, () =>
-      this.syncFullGraphFromMongo(userId, 'restoreNode')
+      this.secondary.restoreNode(userId, id)
     );
   }
 
@@ -521,7 +473,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.restoreNodesByOrigIds(userId, origIds, options);
     await this.mirrorAfterWrite(userId, 'restoreNodesByOrigIds', options, () =>
-      this.syncFullGraphFromMongo(userId, 'restoreNodesByOrigIds')
+      this.secondary.restoreNodesByOrigIds(userId, origIds)
     );
   }
 
@@ -582,7 +534,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.deleteAllGraphData(userId, permanent, options);
     await this.mirrorAfterWrite(userId, 'deleteAllGraphData', options, () =>
-      this.secondary.deleteGraph(userId)
+      this.secondary.deleteAllGraphData(userId, permanent)
     );
   }
 
@@ -590,7 +542,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   async restoreAllGraphData(userId: string, options?: RepoOptions): Promise<void> {
     await this.primary.restoreAllGraphData(userId, options);
     await this.mirrorAfterWrite(userId, 'restoreAllGraphData', options, () =>
-      this.syncFullGraphFromMongo(userId, 'restoreAllGraphData')
+      this.secondary.restoreAllGraphData(userId)
     );
   }
 
@@ -600,7 +552,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   async upsertEdge(edge: GraphEdgeDoc, options?: RepoOptions): Promise<string> {
     const result = await this.primary.upsertEdge(edge, options);
     await this.mirrorAfterWrite(edge.userId, 'upsertEdge', options, () =>
-      this.syncFullGraphFromMongo(edge.userId, 'upsertEdge')
+      this.secondary.upsertEdge(edge)
     );
     return result;
   }
@@ -610,7 +562,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
     await this.primary.upsertEdges(edges, options);
     if (edges.length > 0) {
       await this.mirrorAfterWrite(edges[0].userId, 'upsertEdges', options, () =>
-        this.syncFullGraphFromMongo(edges[0].userId, 'upsertEdges')
+        this.secondary.upsertEdges(edges)
       );
     }
   }
@@ -624,7 +576,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.deleteEdge(userId, edgeId, permanent, options);
     await this.mirrorAfterWrite(userId, 'deleteEdge', options, () =>
-      this.syncFullGraphFromMongo(userId, 'deleteEdge')
+      this.secondary.deleteEdge(userId, edgeId, permanent)
     );
   }
 
@@ -638,7 +590,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.deleteEdgeBetween(userId, source, target, permanent, options);
     await this.mirrorAfterWrite(userId, 'deleteEdgeBetween', options, () =>
-      this.syncFullGraphFromMongo(userId, 'deleteEdgeBetween')
+      this.secondary.deleteEdgeBetween(userId, source, target, permanent)
     );
   }
 
@@ -651,7 +603,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.deleteEdgesByNodeIds(userId, ids, permanent, options);
     await this.mirrorAfterWrite(userId, 'deleteEdgesByNodeIds', options, () =>
-      this.syncFullGraphFromMongo(userId, 'deleteEdgesByNodeIds')
+      this.secondary.deleteEdgesByNodeIds(userId, ids, permanent)
     );
   }
 
@@ -659,7 +611,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   async restoreEdge(userId: string, edgeId: string, options?: RepoOptions): Promise<void> {
     await this.primary.restoreEdge(userId, edgeId, options);
     await this.mirrorAfterWrite(userId, 'restoreEdge', options, () =>
-      this.syncFullGraphFromMongo(userId, 'restoreEdge')
+      this.secondary.restoreEdge(userId, edgeId)
     );
   }
 
@@ -677,7 +629,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   async upsertCluster(cluster: GraphClusterDoc, options?: RepoOptions): Promise<void> {
     await this.primary.upsertCluster(cluster, options);
     await this.mirrorAfterWrite(cluster.userId, 'upsertCluster', options, () =>
-      this.syncFullGraphFromMongo(cluster.userId, 'upsertCluster')
+      this.secondary.upsertCluster(cluster)
     );
   }
 
@@ -686,7 +638,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
     await this.primary.upsertClusters(clusters, options);
     if (clusters.length > 0) {
       await this.mirrorAfterWrite(clusters[0].userId, 'upsertClusters', options, () =>
-        this.syncFullGraphFromMongo(clusters[0].userId, 'upsertClusters')
+        this.secondary.upsertClusters(clusters)
       );
     }
   }
@@ -700,7 +652,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.deleteCluster(userId, clusterId, permanent, options);
     await this.mirrorAfterWrite(userId, 'deleteCluster', options, () =>
-      this.syncFullGraphFromMongo(userId, 'deleteCluster')
+      this.secondary.deleteCluster(userId, clusterId, permanent)
     );
   }
 
@@ -708,7 +660,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   async restoreCluster(userId: string, clusterId: string, options?: RepoOptions): Promise<void> {
     await this.primary.restoreCluster(userId, clusterId, options);
     await this.mirrorAfterWrite(userId, 'restoreCluster', options, () =>
-      this.syncFullGraphFromMongo(userId, 'restoreCluster')
+      this.secondary.restoreCluster(userId, clusterId)
     );
   }
 
@@ -734,7 +686,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   async upsertSubcluster(subcluster: GraphSubclusterDoc, options?: RepoOptions): Promise<void> {
     await this.primary.upsertSubcluster(subcluster, options);
     await this.mirrorAfterWrite(subcluster.userId, 'upsertSubcluster', options, () =>
-      this.syncFullGraphFromMongo(subcluster.userId, 'upsertSubcluster')
+      this.secondary.upsertSubcluster(subcluster)
     );
   }
 
@@ -743,7 +695,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
     await this.primary.upsertSubclusters(subclusters, options);
     if (subclusters.length > 0) {
       await this.mirrorAfterWrite(subclusters[0].userId, 'upsertSubclusters', options, () =>
-        this.syncFullGraphFromMongo(subclusters[0].userId, 'upsertSubclusters')
+        this.secondary.upsertSubclusters(subclusters)
       );
     }
   }
@@ -757,7 +709,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.deleteSubcluster(userId, subclusterId, permanent, options);
     await this.mirrorAfterWrite(userId, 'deleteSubcluster', options, () =>
-      this.syncFullGraphFromMongo(userId, 'deleteSubcluster')
+      this.secondary.deleteSubcluster(userId, subclusterId, permanent)
     );
   }
 
@@ -769,7 +721,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.restoreSubcluster(userId, subclusterId, options);
     await this.mirrorAfterWrite(userId, 'restoreSubcluster', options, () =>
-      this.syncFullGraphFromMongo(userId, 'restoreSubcluster')
+      this.secondary.restoreSubcluster(userId, subclusterId)
     );
   }
 
@@ -787,7 +739,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   async saveStats(stats: GraphStatsDoc, options?: RepoOptions): Promise<void> {
     await this.primary.saveStats(stats, options);
     await this.mirrorAfterWrite(stats.userId, 'saveStats', options, () =>
-      this.syncFullGraphFromMongo(stats.userId, 'saveStats')
+      this.secondary.saveStats(stats)
     );
   }
 
@@ -817,7 +769,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.upsertGraphSummary(userId, summary, options);
     await this.mirrorAfterWrite(userId, 'upsertGraphSummary', options, () =>
-      this.syncFullGraphFromMongo(userId, 'upsertGraphSummary')
+      this.secondary.upsertGraphSummary(userId, summary)
     );
   }
 
@@ -845,7 +797,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   async restoreGraphSummary(userId: string, options?: RepoOptions): Promise<void> {
     await this.primary.restoreGraphSummary(userId, options);
     await this.mirrorAfterWrite(userId, 'restoreGraphSummary', options, () =>
-      this.syncFullGraphFromMongo(userId, 'restoreGraphSummary')
+      this.secondary.restoreGraphSummary(userId)
     );
   }
 }
