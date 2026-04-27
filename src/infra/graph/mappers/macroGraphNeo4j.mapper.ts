@@ -284,6 +284,7 @@ export function toNeo4jMacroSubcluster(doc: GraphSubclusterDoc): Neo4jMacroSubcl
     id: doc.id,
     userId: doc.userId,
     topKeywords: doc.topKeywords,
+    density: doc.density,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
     deletedAt: doc.deletedAt,

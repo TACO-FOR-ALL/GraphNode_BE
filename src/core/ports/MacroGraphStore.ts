@@ -18,6 +18,8 @@ import type {
 export interface MacroGraphStoreOptions {
   /** 구현체가 해석할 수 있는 opaque transaction 객체입니다. */
   transaction?: unknown;
+  /** soft delete 된 항목을 조회 결과에 포함할지 여부입니다. 기본값은 Mongo와 동일하게 false입니다. */
+  includeDeleted?: boolean;
 }
 
 /**
@@ -218,6 +220,194 @@ export interface MacroGraphStore {
     userId: string,
     options?: MacroGraphStoreOptions
   ): Promise<GraphSummaryDoc | null>;
+
+  /**
+   * @description 단일 graph node를 삭제합니다.
+   *
+   * @param userId 삭제 대상 사용자 ID입니다.
+   * @param id 삭제할 node id입니다.
+   * @param permanent true일 경우 물리적 삭제(Hard Delete), false일 경우 논리적 삭제(Soft Delete)를 수행합니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  deleteNode(
+    userId: string,
+    id: number,
+    permanent?: boolean,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description 다수의 graph node를 삭제합니다.
+   *
+   * @param userId 삭제 대상 사용자 ID입니다.
+   * @param ids 삭제할 node id 배열입니다.
+   * @param permanent true일 경우 물리적 삭제(Hard Delete), false일 경우 논리적 삭제(Soft Delete)를 수행합니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  deleteNodes(
+    userId: string,
+    ids: number[],
+    permanent?: boolean,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description 원천 데이터 ID(origId) 목록을 기반으로 graph node를 삭제합니다.
+   *
+   * @param userId 삭제 대상 사용자 ID입니다.
+   * @param origIds 삭제할 원천 데이터 ID(origId) 배열입니다.
+   * @param permanent true일 경우 물리적 삭제(Hard Delete), false일 경우 논리적 삭제(Soft Delete)를 수행합니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  deleteNodesByOrigIds(
+    userId: string,
+    origIds: string[],
+    permanent?: boolean,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description 논리적 삭제(Soft Delete)된 단일 graph node를 복원합니다.
+   *
+   * @param userId 복원 대상 사용자 ID입니다.
+   * @param id 복원할 node id입니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  restoreNode(userId: string, id: number, options?: MacroGraphStoreOptions): Promise<void>;
+
+  /**
+   * @description 논리적 삭제(Soft Delete)된 다수의 graph node를 원천 데이터 ID를 기반으로 복원합니다.
+   *
+   * @param userId 복원 대상 사용자 ID입니다.
+   * @param origIds 복원할 원천 데이터 ID(origId) 배열입니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  restoreNodesByOrigIds(
+    userId: string,
+    origIds: string[],
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description 단일 graph edge를 삭제합니다.
+   *
+   * @param userId 삭제 대상 사용자 ID입니다.
+   * @param edgeId 삭제할 edge id입니다.
+   * @param permanent true일 경우 물리적 삭제(Hard Delete), false일 경우 논리적 삭제(Soft Delete)를 수행합니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  deleteEdge(
+    userId: string,
+    edgeId: string,
+    permanent?: boolean,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description 특정 Source와 Target 노드 사이의 graph edge를 삭제합니다.
+   *
+   * @param userId 삭제 대상 사용자 ID입니다.
+   * @param source source node id입니다.
+   * @param target target node id입니다.
+   * @param permanent true일 경우 물리적 삭제(Hard Delete), false일 경우 논리적 삭제(Soft Delete)를 수행합니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  deleteEdgeBetween(
+    userId: string,
+    source: number,
+    target: number,
+    permanent?: boolean,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description 특정 노드(들)에 연결된 모든 graph edge를 삭제합니다.
+   *
+   * @param userId 삭제 대상 사용자 ID입니다.
+   * @param ids 대상 node id 배열입니다.
+   * @param permanent true일 경우 물리적 삭제(Hard Delete), false일 경우 논리적 삭제(Soft Delete)를 수행합니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  deleteEdgesByNodeIds(
+    userId: string,
+    ids: number[],
+    permanent?: boolean,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description 논리적 삭제(Soft Delete)된 graph edge를 복원합니다.
+   *
+   * @param userId 복원 대상 사용자 ID입니다.
+   * @param edgeId 복원할 edge id입니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  restoreEdge(userId: string, edgeId: string, options?: MacroGraphStoreOptions): Promise<void>;
+
+  /**
+   * @description 단일 cluster를 삭제합니다.
+   *
+   * @param userId 삭제 대상 사용자 ID입니다.
+   * @param clusterId 삭제할 cluster id입니다.
+   * @param permanent true일 경우 물리적 삭제(Hard Delete), false일 경우 논리적 삭제(Soft Delete)를 수행합니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  deleteCluster(
+    userId: string,
+    clusterId: string,
+    permanent?: boolean,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description 논리적 삭제(Soft Delete)된 cluster를 복원합니다.
+   *
+   * @param userId 복원 대상 사용자 ID입니다.
+   * @param clusterId 복원할 cluster id입니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  restoreCluster(
+    userId: string,
+    clusterId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description 단일 subcluster를 삭제합니다.
+   *
+   * @param userId 삭제 대상 사용자 ID입니다.
+   * @param subclusterId 삭제할 subcluster id입니다.
+   * @param permanent true일 경우 물리적 삭제(Hard Delete), false일 경우 논리적 삭제(Soft Delete)를 수행합니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  deleteSubcluster(
+    userId: string,
+    subclusterId: string,
+    permanent?: boolean,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description 논리적 삭제(Soft Delete)된 subcluster를 복원합니다.
+   *
+   * @param userId 복원 대상 사용자 ID입니다.
+   * @param subclusterId 복원할 subcluster id입니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  restoreSubcluster(
+    userId: string,
+    subclusterId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description 사용자 graph stats를 삭제합니다.
+   *
+   * @param userId 삭제 대상 사용자 ID입니다.
+   * @param permanent true일 경우 물리적 삭제(Hard Delete), false일 경우 논리적 삭제(Soft Delete)를 수행합니다.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   */
+  deleteStats(userId: string, permanent?: boolean, options?: MacroGraphStoreOptions): Promise<void>;
 
   /**
    * @description 사용자 Macro Graph를 삭제합니다.

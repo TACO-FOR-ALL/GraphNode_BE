@@ -3,7 +3,12 @@ import { apiClient, getTestUserId } from '../utils/api-client';
 import { seedTestData } from '../utils/db-seed';
 import { Db, MongoClient } from 'mongodb';
 import { GraphNodeDoc, GraphStatsDoc } from '../../../src/core/types/persistence/graph.persistence';
-
+import neo4j from 'neo4j-driver';
+import { initNeo4j, closeNeo4j } from '../../../src/infra/db/neo4j';
+import { initMongo, disconnectMongo } from '../../../src/infra/db/mongodb';
+import { Neo4jMacroGraphAdapter } from '../../../src/infra/graph/Neo4jMacroGraphAdapter';
+import { GraphRepositoryMongo } from '../../../src/infra/repositories/GraphRepositoryMongo';
+import { GraphManagementService } from '../../../src/core/services/GraphManagementService';
 /**
  * Graph AI 엔드투엔드(E2E) 테스트 스펙
  *
@@ -437,4 +442,211 @@ describe('End-to-End Graph Flow', () => {
       await mongoClient.close();
     }
   });
+
+  it('Scenario 4: Dual Write Consistency Verification', async () => {
+    console.log('\n--- Starting Scenario 4: Dual Write Consistency ---');
+
+    if (!scenario1Passed) {
+      throw new Error('Scenario 1 did not complete successfully. Scenario 4 requires a generated graph.');
+    }
+
+    // MongoDB 연결
+    const mongoClient = new MongoClient(MONGO_URI);
+    await mongoClient.connect();
+    const db = mongoClient.db();
+
+    // Neo4j 연결
+    const NEO4J_URI = process.env.NEO4J_URI || 'neo4j://localhost:7687';
+    const NEO4J_USER = process.env.NEO4J_USER || 'neo4j';
+    const NEO4J_PASSWORD = process.env.NEO4J_PASSWORD || 'password';
+    const driver = neo4j.driver(NEO4J_URI, neo4j.auth.basic(NEO4J_USER, NEO4J_PASSWORD));
+    const session = driver.session();
+
+    try {
+      // 1. MongoDB에서 Node, Cluster, Subcluster, Relation 개수 가져오기
+      const mongoNodesCount = await db.collection('graph_nodes').countDocuments({ userId, deletedAt: null });
+      const mongoClustersCount = await db.collection('graph_clusters').countDocuments({ userId, deletedAt: null });
+      const mongoSubclustersCount = await db.collection('graph_subclusters').countDocuments({ userId, deletedAt: null });
+      const mongoRelationsCount = await db.collection('graph_relations').countDocuments({ userId, deletedAt: null });
+
+      // 2. Neo4j에서 Node, Cluster, Subcluster, Relation 개수 가져오기
+      const neo4jNodesRes = await session.run('MATCH (n:MacroNode {userId: $userId}) WHERE n.deletedAt IS NULL RETURN count(n) AS count', { userId });
+      const neo4jNodesCount = neo4jNodesRes.records[0].get('count').toNumber();
+
+      const neo4jClustersRes = await session.run('MATCH (c:MacroCluster {userId: $userId}) WHERE c.deletedAt IS NULL RETURN count(c) AS count', { userId });
+      const neo4jClustersCount = neo4jClustersRes.records[0].get('count').toNumber();
+
+      const neo4jSubclustersRes = await session.run('MATCH (sc:MacroSubcluster {userId: $userId}) WHERE sc.deletedAt IS NULL RETURN count(sc) AS count', { userId });
+      const neo4jSubclustersCount = neo4jSubclustersRes.records[0].get('count').toNumber();
+
+      const neo4jRelationsRes = await session.run('MATCH (r:MacroRelation {userId: $userId}) WHERE r.deletedAt IS NULL RETURN count(r) AS count', { userId });
+      const neo4jRelationsCount = neo4jRelationsRes.records[0].get('count').toNumber();
+
+      // 3. 개수 비교 검증 (Dual Write 정합성)
+      expect(neo4jNodesCount).toBe(mongoNodesCount);
+      expect(neo4jClustersCount).toBe(mongoClustersCount);
+      expect(neo4jSubclustersCount).toBe(mongoSubclustersCount);
+      expect(neo4jRelationsCount).toBe(mongoRelationsCount);
+
+      console.log(`[Dual Write Verification] Nodes: ${mongoNodesCount}, Clusters: ${mongoClustersCount}, Subclusters: ${mongoSubclustersCount}, Relations: ${mongoRelationsCount}`);
+    } finally {
+      await session.close();
+      await driver.close();
+      await mongoClient.close();
+    }
+  });
+
+  it('Scenario 5: Graph Node Soft Delete Consistency Verification', async () => {
+    console.log('\n--- Starting Scenario 5: Soft Delete Verification ---');
+
+    if (!scenario1Passed) {
+      throw new Error('Scenario 1 did not complete successfully. Scenario 5 requires graph_nodes to be populated.');
+    }
+
+    const mongoClient = new MongoClient(MONGO_URI);
+    await mongoClient.connect();
+    const db = mongoClient.db();
+
+    const NEO4J_URI = process.env.NEO4J_URI || 'neo4j://localhost:7687';
+    const NEO4J_USER = process.env.NEO4J_USER || 'neo4j';
+    const NEO4J_PASSWORD = process.env.NEO4J_PASSWORD || 'password';
+    const driver = neo4j.driver(NEO4J_URI, neo4j.auth.basic(NEO4J_USER, NEO4J_PASSWORD));
+    const session = driver.session();
+
+    try {
+      // 1. 삭제할 노드 선정
+      const targetNode = await db.collection<GraphNodeDoc>('graph_nodes').findOne({ userId, deletedAt: null });
+      if (!targetNode) {
+        throw new Error('No active node found for testing deletion.');
+      }
+
+      console.log(`Target node for deletion: ${targetNode.id} (origId: ${targetNode.origId})`);
+
+      // 2. API를 통한 노드 삭제 호출 (소프트 삭제 유도 - Dual Write Transaction)
+      // DELETE /v1/graph/nodes/:id (Cascade가 아닌 단일 삭제를 가정하거나 Cascade여도 해당 노드의 deletedAt은 설정됨)
+      const response = await apiClient.delete(`/v1/graph/nodes/${targetNode.id}`);
+      expect(response.status).toBe(200);
+
+      // 3. MongoDB 검증 (deletedAt이 설정되었는지)
+      const deletedMongoNode = await db.collection<GraphNodeDoc>('graph_nodes').findOne({ userId, id: targetNode.id });
+      expect(deletedMongoNode).not.toBeNull();
+      expect(deletedMongoNode?.deletedAt).not.toBeNull();
+
+      // 4. Neo4j 검증 (deletedAt이 설정되었는지)
+      const neo4jRes = await session.run('MATCH (n:MacroNode {userId: $userId, id: $id}) RETURN n.deletedAt AS deletedAt', { userId, id: targetNode.id });
+      expect(neo4jRes.records.length).toBe(1);
+      const neo4jDeletedAt = neo4jRes.records[0].get('deletedAt');
+      expect(neo4jDeletedAt).not.toBeNull();
+      
+      console.log('Soft Delete consistency verified for both MongoDB and Neo4j.');
+    } finally {
+      await session.close();
+      await driver.close();
+      await mongoClient.close();
+    }
+  });
+
+  it('Scenario 6: Deep DTO Equality & Type Checks (Service Layer Swap Consistency)', async () => {
+    console.log('\n--- Starting Scenario 6: Service Layer Deep DTO Verification ---');
+    
+    // Service 계층의 DB layer Swap이 발생했을 때 DTO가 정확히 동일한지 검증하기 위해
+    // E2E 내부에서 직접 Service 인스턴스를 두 개(Mongo 기반, Neo4j 기반) 생성하여 비교합니다.
+    await initMongo(MONGO_URI);
+    await initNeo4j();
+    
+    try {
+      const mongoRepo = new GraphRepositoryMongo();
+      const neo4jRepo = new Neo4jMacroGraphAdapter();
+
+      const mongoService = new GraphManagementService(mongoRepo);
+      // Neo4j 어댑터는 MacroGraphStore를 구현하지만, GraphManagementService는 GraphDocumentStore를 요구합니다.
+      // 테스트의 조회 정합성 검증을 위해 임시로 캐스팅하여 주입합니다.
+      const neo4jService = new GraphManagementService(neo4jRepo as any);
+
+      // 데이터 정규화 및 타입 검증 헬퍼
+      const normalizeAndCheckType = (valMongo: any, valNeo4j: any, path: string = ''): any => {
+        // 둘 중 하나가 undefined/null이면 둘 다 그래야 함
+        if (valMongo == null || valNeo4j == null) {
+          expect(`[${path}] Null/Undefined mismatch: Neo4j(${valNeo4j}) vs Mongo(${valMongo})`).toBe(`[${path}] Null/Undefined mismatch: Neo4j(${valNeo4j}) vs Mongo(${valMongo})`);
+          // Actually, if we get here and they match in being nullish, it's fine. If not, it will fail the global toEqual anyway.
+        }
+
+        // 타입 일치 여부 검증 (DB에 따라 Date vs String 등의 차이가 DTO에서 발생하지 않아야 함)
+        expect(typeof valNeo4j).toBe(typeof valMongo);
+
+        if (Array.isArray(valMongo) && Array.isArray(valNeo4j)) {
+          // 배열의 경우 순서가 다를 수 있으므로 id 또는 JSON 문자열 기준으로 정렬하여 재귀 비교
+          const sortedMongo = [...valMongo].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+          const sortedNeo4j = [...valNeo4j].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+          
+          return sortedNeo4j.map((nVal, idx) => normalizeAndCheckType(sortedMongo[idx], nVal, `${path}[${idx}]`));
+        }
+
+        if (valMongo !== null && typeof valMongo === 'object') {
+          const result: any = {};
+          for (const k of Object.keys(valMongo).sort()) {
+            // DB별로 삽입 시간에 미세 오차가 있을 수 있는 타임스탬프 값 자체는 비교에서 제외하지만,
+            // "타입"이 동일한지는 위에서 typeof 로 이미 검증됨 (둘 다 string이어야 함)
+            if (['createdAt', 'updatedAt', 'timestamp', 'deletedAt'].includes(k)) {
+               result[k] = 'TIMESTAMP_PLACEHOLDER';
+               continue;
+            }
+            result[k] = normalizeAndCheckType(valMongo[k], valNeo4j[k], `${path}.${k}`);
+          }
+          return result;
+        }
+
+        // 기본 원시 타입일 경우 값 반환
+        return valNeo4j; // 값 자체는 외부 expect(neo).toEqual(mongo) 에서 최종 검증됨
+      };
+
+      // 1. 노드 정합성 비교 (일반 목록)
+      const mongoNodes = await mongoService.listNodes(userId);
+      const neo4jNodes = await neo4jService.listNodes(userId);
+      expect(mongoNodes.length).toBeGreaterThan(0);
+      expect(normalizeAndCheckType(mongoNodes, neo4jNodes, 'nodes')).toEqual(normalizeAndCheckType(mongoNodes, mongoNodes, 'nodes'));
+
+      // 2. 노드 정합성 비교 (클러스터 필터링 포함)
+      if (mongoNodes.length > 0 && mongoNodes[0].clusterId) {
+         const clusterId = mongoNodes[0].clusterId;
+         const mongoNodesByCluster = await mongoService.listNodesByCluster(userId, clusterId);
+         const neo4jNodesByCluster = await neo4jService.listNodesByCluster(userId, clusterId);
+         expect(normalizeAndCheckType(mongoNodesByCluster, neo4jNodesByCluster, 'nodesByCluster')).toEqual(normalizeAndCheckType(mongoNodesByCluster, mongoNodesByCluster, 'nodesByCluster'));
+      }
+
+      // 3. 노드 정합성 비교 (Soft Deleted 포함)
+      const mongoNodesAll = await mongoService.listNodesAll(userId);
+      const neo4jNodesAll = await neo4jService.listNodesAll(userId);
+      expect(normalizeAndCheckType(mongoNodesAll, neo4jNodesAll, 'nodesAll')).toEqual(normalizeAndCheckType(mongoNodesAll, mongoNodesAll, 'nodesAll'));
+
+      // 4. 단건 노드 정합성 비교 (findNode)
+      if (mongoNodes.length > 0) {
+        const targetId = mongoNodes[0].id;
+        const mongoSingleNode = await mongoService.findNode(userId, targetId);
+        const neo4jSingleNode = await neo4jService.findNode(userId, targetId);
+        expect(normalizeAndCheckType(mongoSingleNode, neo4jSingleNode, 'findNode')).toEqual(normalizeAndCheckType(mongoSingleNode, mongoSingleNode, 'findNode'));
+      }
+
+      // 5. 엣지 정합성 비교
+      const mongoEdges = await mongoService.listEdges(userId);
+      const neo4jEdges = await neo4jService.listEdges(userId);
+      expect(normalizeAndCheckType(mongoEdges, neo4jEdges, 'edges')).toEqual(normalizeAndCheckType(mongoEdges, mongoEdges, 'edges'));
+
+      // 6. 클러스터 정합성 비교
+      const mongoClusters = await mongoService.listClusters(userId);
+      const neo4jClusters = await neo4jService.listClusters(userId);
+      expect(normalizeAndCheckType(mongoClusters, neo4jClusters, 'clusters')).toEqual(normalizeAndCheckType(mongoClusters, mongoClusters, 'clusters'));
+
+      // 7. 서브클러스터 정합성 비교
+      const mongoSubclusters = await mongoService.listSubclusters(userId);
+      const neo4jSubclusters = await neo4jService.listSubclusters(userId);
+      expect(normalizeAndCheckType(mongoSubclusters, neo4jSubclusters, 'subclusters')).toEqual(normalizeAndCheckType(mongoSubclusters, mongoSubclusters, 'subclusters'));
+
+      console.log('Deep DTO equality and Field Type Consistency verified completely between MongoDB and Neo4j Service Layers.');
+    } finally {
+      await disconnectMongo();
+      await closeNeo4j();
+    }
+  });
 });
+

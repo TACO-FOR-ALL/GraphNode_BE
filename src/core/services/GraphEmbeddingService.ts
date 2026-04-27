@@ -12,6 +12,7 @@ import { GraphManagementService } from './GraphManagementService';
 import { ConversationService } from './ConversationService';
 import { NoteService } from './NoteService';
 import { GraphSummaryDoc } from '../types/persistence/graph.persistence';
+import type { RepoOptions } from '../ports/GraphDocumentStore';
 import { withRetry } from '../../shared/utils/retry';
 import { UpstreamError } from '../../shared/errors/domain';
 
@@ -34,6 +35,52 @@ export class GraphEmbeddingService {
     private readonly conversationService?: ConversationService,
     private readonly noteService?: NoteService
   ) {}
+
+  /**
+   * @description MongoDB 트랜잭션과 Neo4j After-Commit 콜백을 함께 관리하는 공통 트랜잭션 래퍼입니다.
+   *
+   * 이 메서드는 MongoDB 트랜잭션을 시작하고, 주어진 `work` 콜백을 실행하여 MongoDB에 데이터를 먼저 저장합니다.
+   * `work` 수행 도중 Neo4j 등 외부 저장소 동기화가 필요할 경우 `afterCommit` 배열에 콜백을 등록합니다.
+   * MongoDB 트랜잭션 커밋이 성공적으로 완료된 이후에만 `afterCommit` 콜백들을 실행하여 분산 트랜잭션(Dual Write)의 최소 정합성을 보장합니다.
+   *
+   * @param label 트랜잭션 실패/재시도 로그 구분을 위한 라벨
+   * @param work 트랜잭션 세션(`session`)과 커밋 후 실행될 콜백 배열(`afterCommit`)을 주입받아 수행할 실제 비즈니스 로직
+   * @example
+   * await this.runGraphWriteTransaction('UpsertNodes', async ({ session, afterCommit }) => {
+   *   await mongoCollection.insertOne(doc, { session });
+   *   afterCommit.push(async () => {
+   *     await neo4jSync(doc);
+   *   });
+   * });
+   */
+  private async runGraphWriteTransaction(
+    label: string,
+    work: (options: RepoOptions) => Promise<void>
+  ): Promise<void> {
+    const mongoClient = getMongo();
+    if (!mongoClient) {
+      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
+    }
+
+    const session = mongoClient.startSession();
+    const afterCommit: Array<() => Promise<void>> = [];
+    try {
+      await withRetry(
+        async () => {
+          await session.withTransaction(async () => {
+            await work({ session, afterCommit });
+          });
+        },
+        { label }
+      );
+
+      for (const callback of afterCommit) {
+        await callback();
+      }
+    } finally {
+      await session.endSession();
+    }
+  }
 
   /**
    * 벡터 관련 기능이 비활성화되었음을 알리는 예외를 발생시킵니다.
@@ -123,46 +170,19 @@ export class GraphEmbeddingService {
    * @see removeNodeCascade - 노드와 연결된 모든 엣지를 함께 삭제하려면 이 메서드를 사용하세요.
    */
   async deleteNode(userId: string, id: number, permanent?: boolean) {
-    const mongoClient = getMongo();
-    if (!mongoClient) {
-      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
-    }
-    const session = mongoClient.startSession();
-    try {
-      await withRetry(
-        async () => {
-          await session.withTransaction(async () => {
-            await this.graphManagementService.deleteNode(userId, id, permanent, { session });
-          });
-        },
-        { label: 'GraphEmbeddingService.deleteNode.transaction' }
-      );
-    } finally {
-      await session.endSession();
-    }
+    await this.runGraphWriteTransaction('GraphEmbeddingService.deleteNode.transaction', (options) =>
+      this.graphManagementService.deleteNode(userId, id, permanent, options)
+    );
   }
 
   /**
    * 노드 복구합니다.
    */
   async restoreNode(userId: string, id: number) {
-    const mongoClient = getMongo();
-    if (!mongoClient) {
-      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
-    }
-    const session = mongoClient.startSession();
-    try {
-      await withRetry(
-        async () => {
-          await session.withTransaction(async () => {
-            await this.graphManagementService.restoreNode(userId, id, { session });
-          });
-        },
-        { label: 'GraphEmbeddingService.restoreNode.transaction' }
-      );
-    } finally {
-      await session.endSession();
-    }
+    await this.runGraphWriteTransaction(
+      'GraphEmbeddingService.restoreNode.transaction',
+      (options) => this.graphManagementService.restoreNode(userId, id, options)
+    );
   }
 
   /**
@@ -257,23 +277,10 @@ export class GraphEmbeddingService {
    * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
    */
   async upsertCluster(cluster: GraphClusterDto): Promise<void> {
-    const mongoClient = getMongo();
-    if (!mongoClient) {
-      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
-    }
-    const session = mongoClient.startSession();
-    try {
-      await withRetry(
-        async () => {
-          await session.withTransaction(async () => {
-            await this.graphManagementService.upsertCluster(cluster, { session });
-          });
-        },
-        { label: 'GraphEmbeddingService.upsertCluster.transaction' }
-      );
-    } finally {
-      await session.endSession();
-    }
+    await this.runGraphWriteTransaction(
+      'GraphEmbeddingService.upsertCluster.transaction',
+      (options) => this.graphManagementService.upsertCluster(cluster, options)
+    );
   }
 
   /**
@@ -285,46 +292,20 @@ export class GraphEmbeddingService {
    * @see removeClusterCascade - 클러스터와 속한 모든 노드/엣지를 삭제하려면 이 메서드를 사용하세요.
    */
   async deleteCluster(userId: string, id: string, permanent?: boolean): Promise<void> {
-    const mongoClient = getMongo();
-    if (!mongoClient) {
-      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
-    }
-    const session = mongoClient.startSession();
-    try {
-      await withRetry(
-        async () => {
-          await session.withTransaction(async () => {
-            await this.graphManagementService.deleteCluster(userId, id, permanent, { session });
-          });
-        },
-        { label: 'GraphEmbeddingService.deleteCluster.transaction' }
-      );
-    } finally {
-      await session.endSession();
-    }
+    await this.runGraphWriteTransaction(
+      'GraphEmbeddingService.deleteCluster.transaction',
+      (options) => this.graphManagementService.deleteCluster(userId, id, permanent, options)
+    );
   }
 
   /**
    * 클러스터 복구
    */
   async restoreCluster(userId: string, id: string): Promise<void> {
-    const mongoClient = getMongo();
-    if (!mongoClient) {
-      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
-    }
-    const session = mongoClient.startSession();
-    try {
-      await withRetry(
-        async () => {
-          await session.withTransaction(async () => {
-            await this.graphManagementService.restoreCluster(userId, id, { session });
-          });
-        },
-        { label: 'GraphEmbeddingService.restoreCluster.transaction' }
-      );
-    } finally {
-      await session.endSession();
-    }
+    await this.runGraphWriteTransaction(
+      'GraphEmbeddingService.restoreCluster.transaction',
+      (options) => this.graphManagementService.restoreCluster(userId, id, options)
+    );
   }
 
   /**
@@ -409,33 +390,20 @@ export class GraphEmbeddingService {
    * @throws {UpstreamError} - DB 작업 중 오류 발생 시
    */
   async removeClusterCascade(userId: string, id: string, permanent?: boolean): Promise<void> {
-    const mongoClient = getMongo();
-    if (!mongoClient) {
-      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
-    }
-    const session = mongoClient.startSession();
-    try {
-      await withRetry(
-        async () => {
-          await session.withTransaction(async () => {
-            const nodesInCluster = await this.graphManagementService.listNodesByCluster(userId, id);
-            if (nodesInCluster.length > 0) {
-              const ids = nodesInCluster.map((n) => n.id);
-              // 1. 클러스터에 속한 모든 노드와 관련 엣지 삭제
-              await this.graphManagementService.deleteEdgesByNodeIds(userId, ids, permanent, {
-                session,
-              });
-              await this.graphManagementService.deleteNodes(userId, ids, permanent, { session });
-            }
-            // 2. 클러스터 자체 삭제
-            await this.graphManagementService.deleteCluster(userId, id, permanent, { session });
-          });
-        },
-        { label: 'GraphEmbeddingService.removeClusterCascade.transaction' }
-      );
-    } finally {
-      await session.endSession();
-    }
+    await this.runGraphWriteTransaction(
+      'GraphEmbeddingService.removeClusterCascade.transaction',
+      async (options) => {
+        const nodesInCluster = await this.graphManagementService.listNodesByCluster(userId, id);
+        if (nodesInCluster.length > 0) {
+          const ids = nodesInCluster.map((n) => n.id);
+          // 1. 클러스터에 속한 모든 노드와 관련 엣지 삭제
+          await this.graphManagementService.deleteEdgesByNodeIds(userId, ids, permanent, options);
+          await this.graphManagementService.deleteNodes(userId, ids, permanent, options);
+        }
+        // 2. 클러스터 자체 삭제
+        await this.graphManagementService.deleteCluster(userId, id, permanent, options);
+      }
+    );
   }
 
   /**
@@ -552,18 +520,14 @@ export class GraphEmbeddingService {
    * @throws {UpstreamError} - DB 저장 중 오류 발생 시
    */
   async persistSnapshot(payload: PersistGraphPayloadDto): Promise<void> {
-    const mongoClient = getMongo();
-    if (!mongoClient) {
-      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
-    }
-    const session = mongoClient.startSession();
-    try {
-      await withRetry(
-        async () => {
-          await session.withTransaction(async () => {
-            await this.graphManagementService.persistSnapshotBulk(payload, { session });
-            return;
-            /*
+    await this.runGraphWriteTransaction(
+      'GraphEmbeddingService.persistSnapshot.transaction',
+      async (options) => {
+        await this.graphManagementService.persistSnapshotBulk(payload, options);
+        return;
+      }
+    );
+    /*
             const { userId, snapshot } = payload;
 
             // subclusters가 undefined일 경우 빈 배열로 처리
@@ -603,14 +567,14 @@ export class GraphEmbeddingService {
               })
             );
             await this.graphManagementService.saveStats({ ...snapshot.stats, userId }, { session });
-            */
+
           });
         },
         { label: 'GraphEmbeddingService.persistSnapshot.transaction' }
       );
     } finally {
       await session.endSession();
-    }
+      */
   }
 
   /**
@@ -619,23 +583,10 @@ export class GraphEmbeddingService {
    * @param userId
    */
   async deleteGraph(userId: string, permanent?: boolean) {
-    const mongoClient = getMongo();
-    if (!mongoClient) {
-      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
-    }
-    const session = mongoClient.startSession();
-    try {
-      await withRetry(
-        async () => {
-          await session.withTransaction(async () => {
-            await this.graphManagementService.deleteGraph(userId, permanent, { session });
-          });
-        },
-        { label: 'GraphEmbeddingService.deleteGraph.transaction' }
-      );
-    } finally {
-      await session.endSession();
-    }
+    await this.runGraphWriteTransaction(
+      'GraphEmbeddingService.deleteGraph.transaction',
+      (options) => this.graphManagementService.deleteGraph(userId, permanent, options)
+    );
   }
 
   async restoreGraph(_userId: string) {

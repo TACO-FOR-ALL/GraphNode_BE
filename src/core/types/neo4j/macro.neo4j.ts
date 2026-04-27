@@ -271,6 +271,8 @@ export interface Neo4jMacroSubclusterNode {
   userId: string;
   /** subcluster keyword 목록입니다. */
   topKeywords: string[];
+  /** Handler가 계산해 저장한 subcluster density 원본 값입니다. 관계 집계값이 아니므로 속성으로 보존합니다. */
+  density: number;
   /** subcluster 생성 ISO 시각입니다. */
   createdAt?: string;
   /** subcluster 수정 ISO 시각입니다. */

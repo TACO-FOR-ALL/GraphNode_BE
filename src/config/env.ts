@@ -124,6 +124,18 @@ const EnvSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === 'true'),
+
+  // Macro Graph Dual Write (Phase 1 마이그레이션)
+  // Neo4j 연결이 없는 환경에서 기본값 false로 proxy를 비활성화합니다.
+  MACRO_GRAPH_DUAL_WRITE_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
+  // shadow read compare는 dual write가 활성화된 경우에만 동작합니다.
+  MACRO_GRAPH_SHADOW_COMPARE_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
 });
 
 /**
