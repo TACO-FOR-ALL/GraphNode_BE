@@ -21,7 +21,9 @@
     "test:users": "tsx tests/scripts/test-users-crud.ts",
     "k6:users:create": "tsx tests/scripts/create-k6-users.ts",
     "k6:users:delete": "tsx tests/scripts/delete-k6-users.ts",
-    "k6:smoke:managed": "tsx tests/scripts/run-k6-smoke-managed.ts"
+    "k6:smoke:managed": "tsx tests/scripts/run-k6-smoke-managed.ts",
+    "migrate:neo4j": "tsx scripts/sync-macro-graph.ts",
+    "migrate:neo4j:dry": "tsx scripts/sync-macro-graph.ts --dry-run"
   },
   "repository": {
     "type": "git",

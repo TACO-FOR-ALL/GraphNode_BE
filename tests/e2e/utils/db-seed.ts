@@ -49,7 +49,9 @@ export async function seedTestData() {
     await db.collection('graph_nodes').deleteMany({ userId: TEST_USER_ID });
     await db.collection('graph_edges').deleteMany({ userId: TEST_USER_ID });
     await db.collection('graph_clusters').deleteMany({ userId: TEST_USER_ID });
+    await db.collection('graph_subclusters').deleteMany({ userId: TEST_USER_ID });
     await db.collection('graph_stats').deleteMany({ userId: TEST_USER_ID });
+    await db.collection('graph_summaries').deleteMany({ userId: TEST_USER_ID });
 
     // Seed Conversation: 그래프 생성의 원본 데이터가 될 대화방
     const convId = 'conv-e2e-123';
