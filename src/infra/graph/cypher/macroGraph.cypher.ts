@@ -92,8 +92,7 @@ export const MACRO_GRAPH_CYPHER = {
         n.embedding    = row.embedding,
         n.createdAt    = row.createdAt,
         n.updatedAt    = row.updatedAt,
-        n.deletedAt    = row.deletedAt,
-        n.clusterId    = row.clusterId
+        n.deletedAt    = row.deletedAt
   `,
 
   /**
@@ -1146,17 +1145,15 @@ export const MACRO_GRAPH_CYPHER = {
    * @description 기존 MacroNode들을 대상으로 소속 cluster와의 BELONGS_TO 관계를 복원합니다.
    *
    * 개별 cluster upsert 이후 이미 저장된 node들의 관계를 repair 합니다.
-   * node에 저장된 `n.clusterId` 속성을 활용하여 대상 cluster를 조회합니다.
+   * MacroNode에는 clusterId를 저장하지 않으므로 이 query는 관계를 생성하지 않는 호환용 no-op입니다.
    *
    * @param userId 사용자 ID
    * @param clusterIds 복원 대상 cluster id 배열
    */
   linkExistingNodesToClusters: `
-    UNWIND $clusterIds AS clusterId
-    MATCH (c:MacroCluster {userId: $userId, id: clusterId})
-    MATCH (n:MacroNode {userId: $userId})
-    WHERE n.clusterId = clusterId
-    MERGE (n)-[:BELONGS_TO]->(c)
+    UNWIND $clusterIds AS cid
+    MATCH (c:MacroCluster {userId: $userId, id: cid})
+    RETURN count(c) AS inspectedClusters
   `,
 
   /**

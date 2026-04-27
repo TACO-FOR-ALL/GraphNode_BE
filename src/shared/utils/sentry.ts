@@ -34,7 +34,8 @@ export function initSentry() {
       nodeProfilingIntegration(),
     ],
     // 성능 모니터링 샘플링 비율 (1.0 = 100% 전송. 프로덕션에서는 줄여야 함 예: 0.1)
-    tracesSampleRate: (process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test') ? 0.1 : 1.0,
+    tracesSampleRate:
+      process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test' ? 0.1 : 1.0,
     // 프로파일링 샘플링 비율
     profilesSampleRate: 1.0,
 
@@ -74,6 +75,46 @@ export function initSentry() {
 }
 
 /**
+ * @description Macro Graph migration shadow read 불일치를 Sentry warning issue로 기록합니다.
+ *
+ * 일반 HTTP 5xx와 달리 shadow read mismatch는 사용자 요청 실패가 아니므로 exception이 아니라 message로
+ * capture합니다. method 단위 fingerprint를 지정하여 같은 read API의 parity 문제를 하나의 이슈로 묶고,
+ * 상세 diff는 context에 넣어 후속 분석에서 필드 단위 원인을 확인할 수 있게 합니다.
+ *
+ * @param params.userId 불일치가 발생한 사용자 ID입니다.
+ * @param params.method 불일치가 발생한 read method 이름입니다.
+ * @param params.diffCount 수집된 diff 개수입니다.
+ * @param params.diffs MongoDB primary와 Neo4j secondary의 상세 diff 목록입니다.
+ * @param params.suppressedCount Discord/Sentry dedupe cooldown 동안 억제된 동일 mismatch 개수입니다.
+ * @returns Sentry SDK가 반환한 event id입니다. Discord 알림에서 Sentry 링크 생성에 사용합니다.
+ * @throws Sentry SDK 내부 오류가 발생하면 호출자에게 전파됩니다. 프록시는 이를 shadow compare 경계에서 catch합니다.
+ */
+export function captureMacroGraphConsistencyMismatch(params: {
+  userId: string;
+  method: string;
+  diffCount: number;
+  diffs: unknown;
+  suppressedCount?: number;
+}): string {
+  return Sentry.withScope((scope) => {
+    scope.setLevel('warning');
+    scope.setTag('area', 'macro_graph_migration');
+    scope.setTag('kind', 'shadow_read_mismatch');
+    scope.setTag('method', params.method);
+    scope.setUser({ id: params.userId });
+    scope.setContext('macro_graph_consistency', {
+      userId: params.userId,
+      method: params.method,
+      diffCount: params.diffCount,
+      diffs: params.diffs,
+      suppressedCount: params.suppressedCount ?? 0,
+    });
+    scope.setFingerprint(['macro-graph-consistency', params.method]);
+    return Sentry.captureMessage('Macro graph shadow read mismatch');
+  });
+}
+
+/**
  * Sentry 에러 핸들러 설정
  * - v8부터는 app.use(handler) 대신 setupExpressErrorHandler(app) 사용
  * - 모든 라우트/미들웨어 등록 후, Global Error Handler 직전에 호출해야 함
@@ -91,4 +132,3 @@ export function setupSentryErrorHandler(app: Express) {
     shouldHandleError: () => false,
   });
 }
-

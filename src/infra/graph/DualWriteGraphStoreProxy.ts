@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/node';
 
 import type { GraphDocumentStore, RepoOptions } from '../../core/ports/GraphDocumentStore';
-import type { MacroGraphStore } from '../../core/ports/MacroGraphStore';
+import type { MacroGraphStore, MacroGraphUpsertInput } from '../../core/ports/MacroGraphStore';
 import type {
   GraphClusterDoc,
   GraphEdgeDoc,
@@ -11,6 +11,13 @@ import type {
   GraphSummaryDoc,
 } from '../../core/types/persistence/graph.persistence';
 import { logger } from '../../shared/utils/logger';
+import { notifyMacroGraphConsistencyMismatch } from '../../shared/utils/discord';
+import { captureMacroGraphConsistencyMismatch } from '../../shared/utils/sentry';
+import {
+  buildMacroGraphDiffSignature,
+  compareMacroGraphResults,
+  type MacroGraphDiffEntry,
+} from './macroGraphConsistency';
 
 /**
  * @description DualWriteGraphStoreProxy 동작 옵션입니다.
@@ -150,6 +157,12 @@ function collectDiffs(
  * - 읽기는 항상 MongoDB primary 결과를 반환하며, shadowReadCompare 옵션으로 Neo4j와 비교합니다.
  */
 export class DualWriteGraphStoreProxy implements GraphDocumentStore {
+  private readonly mismatchAlertCooldownMs = 10 * 60 * 1000;
+  private readonly mismatchAlertDedupe = new Map<
+    string,
+    { lastSentAt: number; suppressed: number }
+  >();
+
   constructor(
     private readonly primary: GraphDocumentStore,
     private readonly secondary: MacroGraphStore,
@@ -162,6 +175,55 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
 
   private get shadowReadCompareEnabled(): boolean {
     return this.options.shadowReadCompare ?? false;
+  }
+
+  /**
+   * @description MongoDB primary에 커밋된 Macro Graph 전체 상태를 다시 읽어 Neo4j secondary에 단일
+   * `upsertGraph` 호출로 반영합니다.
+   *
+   * 이 메서드는 마이그레이션 기간의 dual-write 안전장치입니다. 개별 mutation을 Neo4j에 증분 반영하면
+   * Mongo 트랜잭션 순서, cluster 선후 관계, soft-delete cascade 같은 경계에서 누락이 생길 수 있으므로,
+   * primary write가 성공한 뒤 Mongo를 source of truth로 삼아 현재 사용자 graph snapshot 전체를 재구성합니다.
+   * Neo4j write 실패는 `mirrorAfterWrite`에서 catch되어 API 응답으로 전파되지 않습니다.
+   *
+   * @param userId 동기화 대상 사용자 ID입니다.
+   * @param operation 호출한 Mongo write 작업명입니다. 로그와 Sentry extra에 남겨 원인 추적에 사용합니다.
+   * @returns Neo4j에 전체 Macro Graph snapshot을 upsert한 뒤 resolve되는 Promise입니다.
+   * @throws Neo4j adapter 또는 Mongo primary read 중 발생한 예외를 그대로 던집니다. 호출자는 반드시
+   * `mirrorAfterWrite`처럼 사용자 응답과 격리된 경계에서 catch해야 합니다.
+   */
+  private async syncFullGraphFromMongo(userId: string, operation: string): Promise<void> {
+    // Mongo write 직후의 authoritative snapshot을 구성하기 위해 모든 Macro collection을 primary에서 다시 읽습니다.
+    const [nodes, edges, clusters, subclusters, stats, summary] = await Promise.all([
+      this.primary.listNodesAll(userId),
+      this.primary.listEdges(userId),
+      this.primary.listClusters(userId),
+      this.primary.listSubclusters(userId),
+      this.primary.getStats(userId),
+      this.primary.getGraphSummary(userId),
+    ]);
+
+    // stats는 Neo4j upsertGraph의 root payload 역할을 하므로 없으면 불완전한 graph를 쓰지 않고 보류합니다.
+    if (!stats) {
+      logger.warn(
+        { userId, operation },
+        'Macro graph Neo4j shadow sync skipped because Mongo stats are missing'
+      );
+      return;
+    }
+
+    const payload: MacroGraphUpsertInput = {
+      userId,
+      nodes,
+      edges,
+      clusters,
+      subclusters,
+      stats,
+      ...(summary ? { summary } : {}),
+    };
+
+    // Secondary는 Mongo snapshot 전체를 idempotent하게 재작성합니다. 응답 격리는 mirrorAfterWrite가 담당합니다.
+    await this.secondary.upsertGraph(payload);
   }
 
   /**
@@ -191,10 +253,12 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
     options: RepoOptions | undefined,
     action: () => Promise<void>
   ): Promise<void> {
+    // dual-write가 꺼진 환경에서는 Mongo primary만 사용하여 기존 단위 테스트/로컬 개발 경로를 유지합니다.
     if (!this.shadowWritesEnabled) return;
 
     const run = async () => {
       try {
+        // Neo4j write는 best-effort입니다. 실패해도 Mongo 작업의 성공 응답은 되돌리지 않습니다.
         await action();
       } catch (err) {
         logger.warn({ userId, operation, err }, 'Neo4j shadow mutation failed');
@@ -203,10 +267,12 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
     };
 
     if (options?.afterCommit) {
+      // Mongo transaction이 제공한 afterCommit hook이 있으면 커밋 성공 이후에만 Neo4j를 갱신합니다.
       options.afterCommit.push(run);
       return;
     }
     if (options?.session) {
+      // Mongo session만 있고 commit hook이 없으면 rollback 가능성을 알 수 없어 secondary write를 의도적으로 보류합니다.
       logger.warn(
         { userId, operation },
         'Neo4j shadow mutation skipped inside Mongo transaction without afterCommit hook'
@@ -226,38 +292,145 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
    * @param secondaryFetch Neo4j에서 동일한 결과를 가져오는 함수
    * @returns primaryResult (어떤 경우에도 Mongo 결과가 항상 반환됩니다)
    */
-  private async compareAndReturn<T>(
+  /**
+   * @description MongoDB primary read 결과를 즉시 반환하면서, 옵션이 켜진 경우 Neo4j shadow read 비교를
+   * 백그라운드에서 시작합니다.
+   *
+   * 읽기 API의 응답 source는 migration 기간 동안 항상 MongoDB입니다. Neo4j 조회, 비교, 알림 전송은
+   * 사용자 응답을 지연시키거나 실패시키면 안 되므로 `void` fire-and-forget으로 분리합니다.
+   *
+   * @param method 호출된 read method 이름입니다. 비교 규칙 선택과 알림 fingerprint에 사용합니다.
+   * @param userId 조회 대상 사용자 ID입니다.
+   * @param primaryResult MongoDB에서 이미 조회한 응답 값입니다.
+   * @param secondaryFetch 동일 조건으로 Neo4j를 조회하는 함수입니다.
+   * @returns 항상 `primaryResult`를 그대로 반환합니다.
+   * @throws 이 메서드는 shadow compare 예외를 전파하지 않습니다.
+   */
+  private compareAndReturn<T>(
     method: string,
     userId: string,
     primaryResult: T,
     secondaryFetch: () => Promise<T>
-  ): Promise<T> {
-    if (!this.shadowReadCompareEnabled || !this.shadowWritesEnabled) return primaryResult;
+  ): T {
+    // shadow compare가 꺼진 환경에서는 추가 조회 없이 Mongo 결과만 반환합니다.
+    if (!this.shadowReadCompareEnabled) return primaryResult;
+
+    // Neo4j 조회와 알림은 API latency/error boundary에서 분리합니다.
+    void this.runShadowReadCompare(method, userId, primaryResult, secondaryFetch);
+    return primaryResult;
+  }
+
+  /**
+   * @description Neo4j secondary read를 실행하고 MongoDB primary 결과와 비교합니다.
+   *
+   * 비교 실패는 migration 관측 이벤트일 뿐 API 실패가 아니므로 warn 로그와 알림으로만 처리합니다.
+   * Neo4j 조회 실패도 동일하게 격리하여 Mongo read 응답에는 영향을 주지 않습니다.
+   *
+   * @param method 호출된 read method 이름입니다.
+   * @param userId 조회 대상 사용자 ID입니다.
+   * @param primaryResult MongoDB primary에서 반환된 기준 결과입니다.
+   * @param secondaryFetch Neo4j secondary 조회 함수입니다.
+   * @returns 비교와 필요 시 알림 전송을 마치면 resolve되는 Promise입니다.
+   * @throws 내부에서 모든 예외를 catch하여 로그로 남기므로 호출자에게 전파하지 않습니다.
+   */
+  private async runShadowReadCompare<T>(
+    method: string,
+    userId: string,
+    primaryResult: T,
+    secondaryFetch: () => Promise<T>
+  ): Promise<void> {
     try {
       const secondaryResult = await secondaryFetch();
-      const primaryNorm = JSON.stringify(normalizeForCompare(primaryResult));
-      const secondaryNorm = JSON.stringify(normalizeForCompare(secondaryResult));
+      const comparison = compareMacroGraphResults(method, primaryResult, secondaryResult);
 
-      if (primaryNorm !== secondaryNorm) {
-        const diffs = collectDiffs(
-          normalizeForCompare(primaryResult),
-          normalizeForCompare(secondaryResult)
-        );
+      // 불일치가 확인된 경우에만 상세 diff를 로그/알림으로 보냅니다.
+      if (!comparison.matched) {
         logger.warn(
           {
             userId,
             method,
-            diffs,
-            primaryLength: primaryNorm.length,
-            secondaryLength: secondaryNorm.length,
+            diffs: comparison.diffs,
           },
           'Macro graph dual read mismatch'
         );
+        await this.reportMismatch(userId, method, comparison.diffs);
       }
     } catch (err) {
+      // secondary read 자체가 실패해도 Mongo primary 응답은 이미 반환되었거나 반환될 예정입니다.
       logger.warn({ userId, method, err }, 'Neo4j secondary read failed during comparison');
     }
-    return primaryResult;
+  }
+
+  /**
+   * @description Macro Graph shadow read 불일치를 Sentry와 Discord로 보고합니다.
+   *
+   * 동일한 mismatch가 짧은 시간 안에 반복될 수 있으므로 diff signature 기반 cooldown을 적용합니다.
+   * Sentry event id는 Discord payload에 연결되어 CloudWatch 로그, Discord, Sentry를 함께 추적할 수 있습니다.
+   *
+   * @param userId 불일치가 발생한 사용자 ID입니다.
+   * @param method 불일치가 발생한 read method 이름입니다.
+   * @param diffs 비교 모듈이 생성한 상세 diff 목록입니다.
+   * @returns 알림 전송 시도가 끝나면 resolve되는 Promise입니다.
+   * @throws Discord 전송 실패는 내부 catch로 warn 처리하며 외부로 전파하지 않습니다.
+   */
+  private async reportMismatch(
+    userId: string,
+    method: string,
+    diffs: readonly MacroGraphDiffEntry[]
+  ): Promise<void> {
+    const dedupeKey = `${userId}:${buildMacroGraphDiffSignature(method, diffs)}`;
+    const now = Date.now();
+    const previous = this.mismatchAlertDedupe.get(dedupeKey);
+
+    // 같은 mismatch가 cooldown 안에 반복되면 알림 대신 suppressed count만 누적합니다.
+    if (previous && now - previous.lastSentAt < this.mismatchAlertCooldownMs) {
+      previous.suppressed += 1;
+      return;
+    }
+
+    // cooldown이 지난 첫 이벤트에는 직전 구간의 suppressed count를 함께 보내 운영자가 반복성을 볼 수 있게 합니다.
+    const suppressedCount = previous?.suppressed ?? 0;
+    this.mismatchAlertDedupe.set(dedupeKey, { lastSentAt: now, suppressed: 0 });
+    this.pruneMismatchDedupe();
+
+    // Sentry issue를 먼저 생성하고 event id를 Discord embed에 연결합니다.
+    const sentryEventId = captureMacroGraphConsistencyMismatch({
+      userId,
+      method,
+      diffCount: diffs.length,
+      diffs,
+      suppressedCount,
+    });
+
+    // Discord 전송 실패는 관측 실패일 뿐 API/worker 실패로 격상하지 않습니다.
+    await notifyMacroGraphConsistencyMismatch({
+      userId,
+      method,
+      diffCount: diffs.length,
+      diffs: diffs.slice(0, 10),
+      suppressedCount,
+      sentryEventId,
+    }).catch((err) => {
+      logger.warn({ userId, method, err }, 'Discord macro graph mismatch notification failed');
+    });
+  }
+
+  /**
+   * @description mismatch dedupe map이 과도하게 커지는 것을 막기 위해 오래된 key를 정리합니다.
+   *
+   * 운영 중 많은 사용자/필드에서 일시적으로 불일치가 발생할 수 있으므로, map 크기가 임계치를 넘었을 때만
+   * cooldown보다 오래된 항목을 제거합니다.
+   *
+   * @returns 정리 작업을 마치고 void를 반환합니다.
+   * @throws 메모리 map 순회만 수행하므로 예외를 의도적으로 던지지 않습니다.
+   */
+  private pruneMismatchDedupe(): void {
+    if (this.mismatchAlertDedupe.size <= 500) return;
+    const cutoff = Date.now() - this.mismatchAlertCooldownMs;
+    for (const [key, value] of this.mismatchAlertDedupe.entries()) {
+      if (value.lastSentAt < cutoff) this.mismatchAlertDedupe.delete(key);
+      if (this.mismatchAlertDedupe.size <= 500) break;
+    }
   }
 
   // ── Node ─────────────────────────────────────────────────────────────────
@@ -266,7 +439,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   async upsertNode(node: GraphNodeDoc, options?: RepoOptions): Promise<void> {
     await this.primary.upsertNode(node, options);
     await this.mirrorAfterWrite(node.userId, 'upsertNode', options, () =>
-      this.secondary.upsertNode(node)
+      this.syncFullGraphFromMongo(node.userId, 'upsertNode')
     );
   }
 
@@ -275,7 +448,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
     await this.primary.upsertNodes(nodes, options);
     if (nodes.length > 0) {
       await this.mirrorAfterWrite(nodes[0].userId, 'upsertNodes', options, () =>
-        this.secondary.upsertNodes(nodes)
+        this.syncFullGraphFromMongo(nodes[0].userId, 'upsertNodes')
       );
     }
   }
@@ -289,7 +462,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.updateNode(userId, id, patch, options);
     await this.mirrorAfterWrite(userId, 'updateNode', options, () =>
-      this.secondary.updateNode(userId, id, patch)
+      this.syncFullGraphFromMongo(userId, 'updateNode')
     );
   }
 
@@ -302,7 +475,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.deleteNode(userId, id, permanent, options);
     await this.mirrorAfterWrite(userId, 'deleteNode', options, () =>
-      this.secondary.deleteNode(userId, id, permanent)
+      this.syncFullGraphFromMongo(userId, 'deleteNode')
     );
   }
 
@@ -315,7 +488,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.deleteNodes(userId, ids, permanent, options);
     await this.mirrorAfterWrite(userId, 'deleteNodes', options, () =>
-      this.secondary.deleteNodes(userId, ids, permanent)
+      this.syncFullGraphFromMongo(userId, 'deleteNodes')
     );
   }
 
@@ -328,7 +501,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.deleteNodesByOrigIds(userId, origIds, permanent, options);
     await this.mirrorAfterWrite(userId, 'deleteNodesByOrigIds', options, () =>
-      this.secondary.deleteNodesByOrigIds(userId, origIds, permanent)
+      this.syncFullGraphFromMongo(userId, 'deleteNodesByOrigIds')
     );
   }
 
@@ -336,7 +509,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   async restoreNode(userId: string, id: number, options?: RepoOptions): Promise<void> {
     await this.primary.restoreNode(userId, id, options);
     await this.mirrorAfterWrite(userId, 'restoreNode', options, () =>
-      this.secondary.restoreNode(userId, id)
+      this.syncFullGraphFromMongo(userId, 'restoreNode')
     );
   }
 
@@ -348,7 +521,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.restoreNodesByOrigIds(userId, origIds, options);
     await this.mirrorAfterWrite(userId, 'restoreNodesByOrigIds', options, () =>
-      this.secondary.restoreNodesByOrigIds(userId, origIds)
+      this.syncFullGraphFromMongo(userId, 'restoreNodesByOrigIds')
     );
   }
 
@@ -371,8 +544,10 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   /** @inheritdoc */
   async findNodesByOrigIdsAll(userId: string, origIds: string[]): Promise<GraphNodeDoc[]> {
     // secondary는 includeDeleted 조회를 별도 options로 지원합니다.
-    // 비교 없이 primary만 반환합니다.
-    return this.primary.findNodesByOrigIdsAll(userId, origIds);
+    const primary = await this.primary.findNodesByOrigIdsAll(userId, origIds);
+    return this.compareAndReturn('findNodesByOrigIdsAll', userId, primary, () =>
+      this.secondary.findNodesByOrigIds(userId, origIds, { includeDeleted: true })
+    );
   }
 
   /** @inheritdoc */
@@ -385,7 +560,10 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
 
   /** @inheritdoc */
   async listNodesAll(userId: string): Promise<GraphNodeDoc[]> {
-    return this.primary.listNodesAll(userId);
+    const primary = await this.primary.listNodesAll(userId);
+    return this.compareAndReturn('listNodesAll', userId, primary, () =>
+      this.secondary.listNodesAll(userId, { includeDeleted: true })
+    );
   }
 
   /** @inheritdoc */
@@ -404,7 +582,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.deleteAllGraphData(userId, permanent, options);
     await this.mirrorAfterWrite(userId, 'deleteAllGraphData', options, () =>
-      this.secondary.deleteAllGraphData(userId, permanent)
+      this.secondary.deleteGraph(userId)
     );
   }
 
@@ -412,7 +590,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   async restoreAllGraphData(userId: string, options?: RepoOptions): Promise<void> {
     await this.primary.restoreAllGraphData(userId, options);
     await this.mirrorAfterWrite(userId, 'restoreAllGraphData', options, () =>
-      this.secondary.restoreAllGraphData(userId)
+      this.syncFullGraphFromMongo(userId, 'restoreAllGraphData')
     );
   }
 
@@ -422,7 +600,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   async upsertEdge(edge: GraphEdgeDoc, options?: RepoOptions): Promise<string> {
     const result = await this.primary.upsertEdge(edge, options);
     await this.mirrorAfterWrite(edge.userId, 'upsertEdge', options, () =>
-      this.secondary.upsertEdge(edge).then(() => undefined)
+      this.syncFullGraphFromMongo(edge.userId, 'upsertEdge')
     );
     return result;
   }
@@ -432,7 +610,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
     await this.primary.upsertEdges(edges, options);
     if (edges.length > 0) {
       await this.mirrorAfterWrite(edges[0].userId, 'upsertEdges', options, () =>
-        this.secondary.upsertEdges(edges)
+        this.syncFullGraphFromMongo(edges[0].userId, 'upsertEdges')
       );
     }
   }
@@ -446,7 +624,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.deleteEdge(userId, edgeId, permanent, options);
     await this.mirrorAfterWrite(userId, 'deleteEdge', options, () =>
-      this.secondary.deleteEdge(userId, edgeId, permanent)
+      this.syncFullGraphFromMongo(userId, 'deleteEdge')
     );
   }
 
@@ -460,7 +638,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.deleteEdgeBetween(userId, source, target, permanent, options);
     await this.mirrorAfterWrite(userId, 'deleteEdgeBetween', options, () =>
-      this.secondary.deleteEdgeBetween(userId, source, target, permanent)
+      this.syncFullGraphFromMongo(userId, 'deleteEdgeBetween')
     );
   }
 
@@ -473,7 +651,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.deleteEdgesByNodeIds(userId, ids, permanent, options);
     await this.mirrorAfterWrite(userId, 'deleteEdgesByNodeIds', options, () =>
-      this.secondary.deleteEdgesByNodeIds(userId, ids, permanent)
+      this.syncFullGraphFromMongo(userId, 'deleteEdgesByNodeIds')
     );
   }
 
@@ -481,7 +659,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   async restoreEdge(userId: string, edgeId: string, options?: RepoOptions): Promise<void> {
     await this.primary.restoreEdge(userId, edgeId, options);
     await this.mirrorAfterWrite(userId, 'restoreEdge', options, () =>
-      this.secondary.restoreEdge(userId, edgeId)
+      this.syncFullGraphFromMongo(userId, 'restoreEdge')
     );
   }
 
@@ -499,7 +677,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   async upsertCluster(cluster: GraphClusterDoc, options?: RepoOptions): Promise<void> {
     await this.primary.upsertCluster(cluster, options);
     await this.mirrorAfterWrite(cluster.userId, 'upsertCluster', options, () =>
-      this.secondary.upsertCluster(cluster)
+      this.syncFullGraphFromMongo(cluster.userId, 'upsertCluster')
     );
   }
 
@@ -508,7 +686,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
     await this.primary.upsertClusters(clusters, options);
     if (clusters.length > 0) {
       await this.mirrorAfterWrite(clusters[0].userId, 'upsertClusters', options, () =>
-        this.secondary.upsertClusters(clusters)
+        this.syncFullGraphFromMongo(clusters[0].userId, 'upsertClusters')
       );
     }
   }
@@ -522,7 +700,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.deleteCluster(userId, clusterId, permanent, options);
     await this.mirrorAfterWrite(userId, 'deleteCluster', options, () =>
-      this.secondary.deleteCluster(userId, clusterId, permanent)
+      this.syncFullGraphFromMongo(userId, 'deleteCluster')
     );
   }
 
@@ -530,7 +708,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   async restoreCluster(userId: string, clusterId: string, options?: RepoOptions): Promise<void> {
     await this.primary.restoreCluster(userId, clusterId, options);
     await this.mirrorAfterWrite(userId, 'restoreCluster', options, () =>
-      this.secondary.restoreCluster(userId, clusterId)
+      this.syncFullGraphFromMongo(userId, 'restoreCluster')
     );
   }
 
@@ -556,7 +734,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   async upsertSubcluster(subcluster: GraphSubclusterDoc, options?: RepoOptions): Promise<void> {
     await this.primary.upsertSubcluster(subcluster, options);
     await this.mirrorAfterWrite(subcluster.userId, 'upsertSubcluster', options, () =>
-      this.secondary.upsertSubcluster(subcluster)
+      this.syncFullGraphFromMongo(subcluster.userId, 'upsertSubcluster')
     );
   }
 
@@ -565,7 +743,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
     await this.primary.upsertSubclusters(subclusters, options);
     if (subclusters.length > 0) {
       await this.mirrorAfterWrite(subclusters[0].userId, 'upsertSubclusters', options, () =>
-        this.secondary.upsertSubclusters(subclusters)
+        this.syncFullGraphFromMongo(subclusters[0].userId, 'upsertSubclusters')
       );
     }
   }
@@ -579,7 +757,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.deleteSubcluster(userId, subclusterId, permanent, options);
     await this.mirrorAfterWrite(userId, 'deleteSubcluster', options, () =>
-      this.secondary.deleteSubcluster(userId, subclusterId, permanent)
+      this.syncFullGraphFromMongo(userId, 'deleteSubcluster')
     );
   }
 
@@ -591,7 +769,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.restoreSubcluster(userId, subclusterId, options);
     await this.mirrorAfterWrite(userId, 'restoreSubcluster', options, () =>
-      this.secondary.restoreSubcluster(userId, subclusterId)
+      this.syncFullGraphFromMongo(userId, 'restoreSubcluster')
     );
   }
 
@@ -609,7 +787,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   async saveStats(stats: GraphStatsDoc, options?: RepoOptions): Promise<void> {
     await this.primary.saveStats(stats, options);
     await this.mirrorAfterWrite(stats.userId, 'saveStats', options, () =>
-      this.secondary.saveStats(stats)
+      this.syncFullGraphFromMongo(stats.userId, 'saveStats')
     );
   }
 
@@ -639,7 +817,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   ): Promise<void> {
     await this.primary.upsertGraphSummary(userId, summary, options);
     await this.mirrorAfterWrite(userId, 'upsertGraphSummary', options, () =>
-      this.secondary.upsertGraphSummary(userId, summary)
+      this.syncFullGraphFromMongo(userId, 'upsertGraphSummary')
     );
   }
 
@@ -667,7 +845,7 @@ export class DualWriteGraphStoreProxy implements GraphDocumentStore {
   async restoreGraphSummary(userId: string, options?: RepoOptions): Promise<void> {
     await this.primary.restoreGraphSummary(userId, options);
     await this.mirrorAfterWrite(userId, 'restoreGraphSummary', options, () =>
-      this.secondary.restoreGraphSummary(userId)
+      this.syncFullGraphFromMongo(userId, 'restoreGraphSummary')
     );
   }
 }

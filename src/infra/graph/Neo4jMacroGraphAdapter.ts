@@ -76,9 +76,7 @@ function buildNodeRow(record: { get(key: string): unknown }) {
       mimeType: props['mimeType'] as string | undefined,
       timestamp: props['timestamp'] as string | null,
       numMessages: toJsNumber(props['numMessages']),
-      embedding: Array.isArray(props['embedding'])
-        ? (props['embedding'] as number[])
-        : undefined,
+      embedding: Array.isArray(props['embedding']) ? (props['embedding'] as number[]) : undefined,
       createdAt: props['createdAt'] as string | undefined,
       updatedAt: props['updatedAt'] as string | undefined,
       deletedAt: props['deletedAt'] as number | null | undefined,
@@ -103,7 +101,9 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
    * @description options.transaction이 있으면 해당 transaction을 사용하고, 없으면 session을 열어 닫습니다.
    */
   private async runRead<T>(
-    fn: (runner: { run(query: string, params?: Record<string, unknown>): Promise<{ records: unknown[] }> }) => Promise<T>,
+    fn: (runner: {
+      run(query: string, params?: Record<string, unknown>): Promise<{ records: unknown[] }>;
+    }) => Promise<T>,
     options?: MacroGraphStoreOptions
   ): Promise<T> {
     const tx = options?.transaction as ManagedTransaction | undefined;
@@ -248,7 +248,10 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
         .filter((n) => n.clusterId)
         .map((n) => ({ nodeId: n.id, clusterId: n.clusterId }));
       if (belongsToRows.length > 0) {
-        await runner.run(MACRO_GRAPH_CYPHER.linkNodeBelongsToCluster, { userId, rows: belongsToRows });
+        await runner.run(MACRO_GRAPH_CYPHER.linkNodeBelongsToCluster, {
+          userId,
+          rows: belongsToRows,
+        });
       }
 
       // cluster → subcluster (HAS_SUBCLUSTER)
@@ -351,7 +354,9 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
    */
   private async ensureGraphRoot(
     userId: string,
-    runner: { run(query: string, params?: Record<string, unknown>): Promise<{ records: unknown[] }> }
+    runner: {
+      run(query: string, params?: Record<string, unknown>): Promise<{ records: unknown[] }>;
+    }
   ): Promise<void> {
     const now = new Date().toISOString();
     await runner.run(MACRO_GRAPH_CYPHER.upsertGraphRoot, { userId, now });
@@ -380,8 +385,9 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     await this.runWrite(async (runner) => {
       await this.ensureGraphRoot(userId, runner);
 
-      // clusterId를 함께 저장하여 upsertClusters 시 BELONGS_TO 복원에 활용
-      const rows = nodes.map((doc) => ({ ...toNeo4jMacroNode(doc), clusterId: doc.clusterId ?? null }));
+      // MacroNode에는 clusterId를 속성으로 저장하지 않고, 스칼라 속성만 upsert합니다.
+      // 소속 정보는 아래 BELONGS_TO 관계 생성 쿼리로만 표현합니다.
+      const rows = nodes.map((doc) => toNeo4jMacroNode(doc));
       await runner.run(MACRO_GRAPH_CYPHER.upsertNodes, { rows });
 
       await runner.run(MACRO_GRAPH_CYPHER.linkNodesToGraph, {
@@ -394,7 +400,10 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
         .filter((n) => n.clusterId)
         .map((n) => ({ nodeId: n.id, clusterId: n.clusterId }));
       if (belongsToRows.length > 0) {
-        await runner.run(MACRO_GRAPH_CYPHER.linkNodeBelongsToCluster, { userId, rows: belongsToRows });
+        await runner.run(MACRO_GRAPH_CYPHER.linkNodeBelongsToCluster, {
+          userId,
+          rows: belongsToRows,
+        });
       }
     }, options);
   }
@@ -415,8 +424,13 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   ): Promise<void> {
     // undefined 필드 제거, null은 유지 (deletedAt = null 은 속성 제거 의도)
     const scalarFields: (keyof GraphNodeDoc)[] = [
-      'origId', 'nodeType' as keyof GraphNodeDoc, 'timestamp', 'numMessages',
-      'embedding', 'updatedAt', 'deletedAt',
+      'origId',
+      'nodeType' as keyof GraphNodeDoc,
+      'timestamp',
+      'numMessages',
+      'embedding',
+      'updatedAt',
+      'deletedAt',
     ];
     const props: Record<string, unknown> = {};
     for (const field of scalarFields) {
@@ -483,7 +497,10 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
         intraCluster: e.intraCluster,
         deletedAt: e.deletedAt ?? null,
       }));
-      await runner.run(MACRO_GRAPH_CYPHER.linkMaterializedMacroRelated, { userId, rows: macroRelatedRows });
+      await runner.run(MACRO_GRAPH_CYPHER.linkMaterializedMacroRelated, {
+        userId,
+        rows: macroRelatedRows,
+      });
     }, options);
   }
 
@@ -505,7 +522,10 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
    * @param clusters 저장할 cluster 문서 목록입니다.
    * @param options transaction 등 adapter 전용 옵션입니다.
    */
-  async upsertClusters(clusters: GraphClusterDoc[], options?: MacroGraphStoreOptions): Promise<void> {
+  async upsertClusters(
+    clusters: GraphClusterDoc[],
+    options?: MacroGraphStoreOptions
+  ): Promise<void> {
     if (clusters.length === 0) return;
     const userId = clusters[0].userId;
 
@@ -522,8 +542,8 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
 
       // 이미 저장된 node들의 BELONGS_TO 관계 복원
       // (upsertNodes 호출 시 cluster가 없어 생성 못한 관계를 여기서 생성)
-      const clusterIds = clusters.map((c) => c.id);
-      await runner.run(MACRO_GRAPH_CYPHER.linkExistingNodesToClusters, { userId, clusterIds });
+      // MacroNode에 외래키 속성을 남기지 않기 때문에 cluster 단독 upsert에서는 관계를 추론하지 않습니다.
+      // migration/dual-write 경로의 전체 snapshot upsert가 node 입력의 clusterId로 BELONGS_TO를 명시 생성합니다.
     }, options);
   }
 
@@ -571,7 +591,10 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
         .filter((sc) => sc.clusterId)
         .map((sc) => ({ clusterId: sc.clusterId, subclusterId: sc.id }));
       if (clusterLinks.length > 0) {
-        await runner.run(MACRO_GRAPH_CYPHER.linkSubclusterToCluster, { userId, rows: clusterLinks });
+        await runner.run(MACRO_GRAPH_CYPHER.linkSubclusterToCluster, {
+          userId,
+          rows: clusterLinks,
+        });
       }
 
       // subcluster ↔ contained nodes (CONTAINS)
@@ -582,7 +605,10 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
         }
       }
       if (containsRows.length > 0) {
-        await runner.run(MACRO_GRAPH_CYPHER.linkSubclusterContainsNodes, { userId, rows: containsRows });
+        await runner.run(MACRO_GRAPH_CYPHER.linkSubclusterContainsNodes, {
+          userId,
+          rows: containsRows,
+        });
       }
 
       // subcluster ↔ representative node (REPRESENTS)
@@ -590,7 +616,10 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
         .filter((sc) => sc.representativeNodeId != null)
         .map((sc) => ({ subclusterId: sc.id, nodeId: sc.representativeNodeId }));
       if (representsRows.length > 0) {
-        await runner.run(MACRO_GRAPH_CYPHER.linkSubclusterRepresentsNode, { userId, rows: representsRows });
+        await runner.run(MACRO_GRAPH_CYPHER.linkSubclusterRepresentsNode, {
+          userId,
+          rows: representsRows,
+        });
       }
     }, options);
   }
@@ -747,7 +776,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   ): Promise<GraphNodeDoc[]> {
     // 조회할 ID가 없다면 불필요한 DB 접근을 막고 바로 빈 배열을 반환합니다.
     if (origIds.length === 0) return [];
-    
+
     // Read 전용 세션/트랜잭션 환경을 열어 작업을 수행합니다.
     return this.runRead(async (runner) => {
       // MACRO_GRAPH_CYPHER.findNodesByOrigIds 쿼리를 실행합니다.
@@ -789,7 +818,10 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     return this.runRead(async (runner) => {
       // MACRO_GRAPH_CYPHER.listNodes 사이퍼 쿼리를 실행합니다.
       // 이 쿼리는 userId가 일치하고 Graph 루트와 연결된 모든 노드를 순회하여 조회합니다.
-      const result = await runner.run(MACRO_GRAPH_CYPHER.listNodes, this.readParams(userId, options));
+      const result = await runner.run(
+        MACRO_GRAPH_CYPHER.listNodes,
+        this.readParams(userId, options)
+      );
       // 반환된 레코드 스트림을 매핑 함수를 통해 클라이언트 친화적인 DTO 배열로 일괄 변환하여 리턴합니다.
       return (result.records as unknown[]).map((rec) =>
         fromNeo4jMacroNode(buildNodeRow(rec as { get(key: string): unknown }))
@@ -839,8 +871,11 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     return this.runRead(async (runner) => {
       // MACRO_GRAPH_CYPHER.listEdges 쿼리를 실행하여 유저 그래프 내의 유효한 엣지를 모두 가져옵니다.
       // (n1)-[rel:MACRO_RELATED]->(n2) 패턴을 매칭하여 간선 객체와 양 끝단의 id를 추출합니다.
-      const result = await runner.run(MACRO_GRAPH_CYPHER.listEdges, this.readParams(userId, options));
-      
+      const result = await runner.run(
+        MACRO_GRAPH_CYPHER.listEdges,
+        this.readParams(userId, options)
+      );
+
       // 반환된 레코드들을 순회하며 간선 모델과 source/target ID를 포함하는 row 구조체로 매핑합니다.
       return (result.records as unknown[]).map((rec) => {
         const record = rec as { get(key: string): unknown };
@@ -891,7 +926,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
 
       const record = records[0] as { get(key: string): unknown };
       const clusterProps = (record.get('c') as { properties: Record<string, unknown> }).properties;
-      
+
       // 클러스터 메타 속성과 조인/집계된 size를 포함하여 Row 객체를 생성합니다.
       const row = {
         cluster: {
@@ -921,18 +956,24 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   async listClusters(userId: string, options?: MacroGraphStoreOptions): Promise<GraphClusterDoc[]> {
     return this.runRead(async (runner) => {
       // MACRO_GRAPH_CYPHER.listClusters 쿼리를 실행하여 유저의 모든 클러스터 및 각 size 집계를 가져옵니다.
-      const result = await runner.run(MACRO_GRAPH_CYPHER.listClusters, this.readParams(userId, options));
-      
+      const result = await runner.run(
+        MACRO_GRAPH_CYPHER.listClusters,
+        this.readParams(userId, options)
+      );
+
       return (result.records as unknown[]).map((rec) => {
         const record = rec as { get(key: string): unknown };
-        const clusterProps = (record.get('c') as { properties: Record<string, unknown> }).properties;
+        const clusterProps = (record.get('c') as { properties: Record<string, unknown> })
+          .properties;
         const row = {
           cluster: {
             id: String(clusterProps['id'] ?? ''),
             userId: String(clusterProps['userId'] ?? ''),
             name: String(clusterProps['name'] ?? ''),
             description: String(clusterProps['description'] ?? ''),
-            themes: Array.isArray(clusterProps['themes']) ? (clusterProps['themes'] as string[]) : [],
+            themes: Array.isArray(clusterProps['themes'])
+              ? (clusterProps['themes'] as string[])
+              : [],
             createdAt: clusterProps['createdAt'] as string | undefined,
             updatedAt: clusterProps['updatedAt'] as string | undefined,
             deletedAt: clusterProps['deletedAt'] as number | null | undefined,
@@ -946,7 +987,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   }
 
   /**
-   * @description 사용자의 활성 MacroSubcluster 목록을 조회합니다. 
+   * @description 사용자의 활성 MacroSubcluster 목록을 조회합니다.
    * 이 과정에서 해당 서브클러스터가 포함하고 있는 노드들의 ID 리스트와 대표 노드 ID, 부모 클러스터 ID까지 집계하여 함께 반환합니다.
    *
    * @param userId 조회 대상 사용자 ID
@@ -958,10 +999,13 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     options?: MacroGraphStoreOptions
   ): Promise<GraphSubclusterDoc[]> {
     return this.runRead(async (runner) => {
-      // MACRO_GRAPH_CYPHER.listSubclusters 쿼리를 실행하여 Subcluster와 연관된 
+      // MACRO_GRAPH_CYPHER.listSubclusters 쿼리를 실행하여 Subcluster와 연관된
       // CONTAINS 관계의 노드 ID들, REPRESENTS 관계의 대표 노드 ID, HAS_SUBCLUSTER 관계의 부모 클러스터 ID를 추출합니다.
-      const result = await runner.run(MACRO_GRAPH_CYPHER.listSubclusters, this.readParams(userId, options));
-      
+      const result = await runner.run(
+        MACRO_GRAPH_CYPHER.listSubclusters,
+        this.readParams(userId, options)
+      );
+
       return (result.records as unknown[]).map((rec) => {
         const record = rec as { get(key: string): unknown };
         const scProps = (record.get('sc') as { properties: Record<string, unknown> }).properties;
@@ -1005,14 +1049,17 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     return this.runRead(async (runner) => {
       // MACRO_GRAPH_CYPHER.getStats 쿼리를 실행합니다.
       // 이 쿼리는 Stats 노드 메타데이터를 가져오는 동시에, 해당 유저의 nodes, edges, clusters의 실제 개수를 COUNT()로 집계합니다.
-      const result = await runner.run(MACRO_GRAPH_CYPHER.getStats, this.readParams(userId, options));
+      const result = await runner.run(
+        MACRO_GRAPH_CYPHER.getStats,
+        this.readParams(userId, options)
+      );
       const records = result.records as unknown[];
       if (records.length === 0) return null; // 통계 노드가 생성되지 않은 경우
 
       const record = records[0] as { get(key: string): unknown };
       // 통계 노드의 속성을 추출합니다.
       const stProps = (record.get('st') as { properties: Record<string, unknown> }).properties;
-      
+
       // 통계 메타데이터와 동적으로 집계된 nodes, edges, clusters 수를 하나의 Row 구조체로 묶습니다.
       const row = {
         stats: {
@@ -1027,7 +1074,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
         edges: toJsNumber(record.get('edges')),
         clusters: toJsNumber(record.get('clusters')),
       };
-      
+
       // GraphStatsDoc DTO로 변환하여 반환합니다.
       return fromNeo4jMacroStats(row);
     }, options);
@@ -1047,15 +1094,17 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   ): Promise<GraphSummaryDoc | null> {
     return this.runRead(async (runner) => {
       // 1. summary 노드 자체의 속성(JSON 포맷으로 저장된 overview 등)을 조회합니다.
-      const summaryResult = await runner.run(MACRO_GRAPH_CYPHER.getGraphSummary, this.readParams(userId, options));
+      const summaryResult = await runner.run(
+        MACRO_GRAPH_CYPHER.getGraphSummary,
+        this.readParams(userId, options)
+      );
       const summaryRecords = summaryResult.records as unknown[];
       if (summaryRecords.length === 0) return null; // 요약 데이터가 없으면 종료
 
       const summaryRecord = summaryRecords[0] as { get(key: string): unknown };
-      const smProps = (
-        summaryRecord.get('sm') as { properties: Record<string, unknown> }
-      ).properties;
-      
+      const smProps = (summaryRecord.get('sm') as { properties: Record<string, unknown> })
+        .properties;
+
       // JSON 문자열 형태로 저장된 속성들을 Neo4jMacroSummaryNode 타입 구조체로 매핑합니다.
       const summaryNode: Neo4jMacroSummaryNode = {
         id: String(smProps['id'] ?? userId),
@@ -1071,7 +1120,10 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
       };
 
       // 2. overview 필드 구성을 위해 현재 활성 그래프의 노드 타입(conversation, note 등)별 개수를 별도의 집계 쿼리로 가져옵니다.
-      const countsResult = await runner.run(MACRO_GRAPH_CYPHER.getSummaryNodeCounts, this.readParams(userId, options));
+      const countsResult = await runner.run(
+        MACRO_GRAPH_CYPHER.getSummaryNodeCounts,
+        this.readParams(userId, options)
+      );
       const countsRecords = countsResult.records as unknown[];
       let totalSourceNodes = 0;
       let totalConversations = 0;
@@ -1144,22 +1196,19 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   ): Promise<void> {
     if (ids.length === 0) return; // 삭제할 ID가 없으면 바로 종료합니다.
     const deletedAt = Date.now(); // Soft delete 시 사용할 현재 타임스탬프
-    
+
     // Write 트랜잭션/세션을 통해 안전하게 삭제 작업을 수행합니다.
-    await this.runWrite(
-      async (runner) => {
-        // permanent 옵션에 따라 Hard Delete 또는 Soft Delete Cypher 쿼리를 동적으로 선택하여 실행합니다.
-        // Hard Delete: 노드와 연결된 모든 간선(엣지)를 DETACH DELETE 합니다.
-        // Soft Delete: 노드의 deletedAt 속성 및 연결된 엣지들의 deletedAt 속성을 업데이트합니다.
-        await runner.run(
-          permanent
-            ? MACRO_GRAPH_CYPHER.hardDeleteNodesByIds
-            : MACRO_GRAPH_CYPHER.softDeleteNodesByIds,
-          { userId, ids, deletedAt }
-        );
-      },
-      options
-    );
+    await this.runWrite(async (runner) => {
+      // permanent 옵션에 따라 Hard Delete 또는 Soft Delete Cypher 쿼리를 동적으로 선택하여 실행합니다.
+      // Hard Delete: 노드와 연결된 모든 간선(엣지)를 DETACH DELETE 합니다.
+      // Soft Delete: 노드의 deletedAt 속성 및 연결된 엣지들의 deletedAt 속성을 업데이트합니다.
+      await runner.run(
+        permanent
+          ? MACRO_GRAPH_CYPHER.hardDeleteNodesByIds
+          : MACRO_GRAPH_CYPHER.softDeleteNodesByIds,
+        { userId, ids, deletedAt }
+      );
+    }, options);
   }
 
   /**
@@ -1178,30 +1227,27 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     options?: MacroGraphStoreOptions
   ): Promise<void> {
     if (origIds.length === 0) return;
-    
+
     // Write 트랜잭션을 엽니다. origId 기반 ID 조회와 실제 삭제를 하나의 트랜잭션으로 묶습니다.
-    await this.runWrite(
-      async (runner) => {
-        // 먼저 origId 리스트에 해당하는 Neo4j 상의 실제 Node ID(숫자)들을 조회합니다.
-        const result = await runner.run(MACRO_GRAPH_CYPHER.findNodeIdsByOrigIds, {
-          userId,
-          origIds,
-        });
-        const record = (result.records as unknown[])[0] as { get(key: string): unknown } | undefined;
-        // 반환된 레코드에서 ids 리스트를 JS number 배열로 파싱합니다.
-        const ids = record ? toJsNumberArray((record.get('ids') as unknown[]) ?? []) : [];
-        if (ids.length === 0) return; // 변환된 ID가 하나도 없다면 삭제 작업을 중단합니다.
-        
-        // 변환된 내부 ID 배열을 이용해 실제 삭제 쿼리(Hard/Soft)를 실행합니다.
-        await runner.run(
-          permanent
-            ? MACRO_GRAPH_CYPHER.hardDeleteNodesByIds
-            : MACRO_GRAPH_CYPHER.softDeleteNodesByIds,
-          { userId, ids, deletedAt: Date.now() }
-        );
-      },
-      options
-    );
+    await this.runWrite(async (runner) => {
+      // 먼저 origId 리스트에 해당하는 Neo4j 상의 실제 Node ID(숫자)들을 조회합니다.
+      const result = await runner.run(MACRO_GRAPH_CYPHER.findNodeIdsByOrigIds, {
+        userId,
+        origIds,
+      });
+      const record = (result.records as unknown[])[0] as { get(key: string): unknown } | undefined;
+      // 반환된 레코드에서 ids 리스트를 JS number 배열로 파싱합니다.
+      const ids = record ? toJsNumberArray((record.get('ids') as unknown[]) ?? []) : [];
+      if (ids.length === 0) return; // 변환된 ID가 하나도 없다면 삭제 작업을 중단합니다.
+
+      // 변환된 내부 ID 배열을 이용해 실제 삭제 쿼리(Hard/Soft)를 실행합니다.
+      await runner.run(
+        permanent
+          ? MACRO_GRAPH_CYPHER.hardDeleteNodesByIds
+          : MACRO_GRAPH_CYPHER.softDeleteNodesByIds,
+        { userId, ids, deletedAt: Date.now() }
+      );
+    }, options);
   }
 
   /**
@@ -1212,20 +1258,13 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
    * @param id 복구할 노드의 고유 ID
    * @param options transaction 등 adapter 전용 옵션
    */
-  async restoreNode(
-    userId: string,
-    id: number,
-    options?: MacroGraphStoreOptions
-  ): Promise<void> {
+  async restoreNode(userId: string, id: number, options?: MacroGraphStoreOptions): Promise<void> {
     // Write 트랜잭션/세션으로 감쌉니다.
-    await this.runWrite(
-      async (runner) => {
-        // MACRO_GRAPH_CYPHER.restoreNodesByIds 쿼리를 실행하여 단일 노드의 deletedAt 속성을 지웁니다.
-        // 연결된 간선들도 함께 복구 로직이 반영될 수 있습니다. (Cypher 쿼리에 정의됨)
-        await runner.run(MACRO_GRAPH_CYPHER.restoreNodesByIds, { userId, ids: [id] });
-      },
-      options
-    );
+    await this.runWrite(async (runner) => {
+      // MACRO_GRAPH_CYPHER.restoreNodesByIds 쿼리를 실행하여 단일 노드의 deletedAt 속성을 지웁니다.
+      // 연결된 간선들도 함께 복구 로직이 반영될 수 있습니다. (Cypher 쿼리에 정의됨)
+      await runner.run(MACRO_GRAPH_CYPHER.restoreNodesByIds, { userId, ids: [id] });
+    }, options);
   }
 
   /**
@@ -1241,25 +1280,22 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     options?: MacroGraphStoreOptions
   ): Promise<void> {
     if (origIds.length === 0) return;
-    
+
     // Write 트랜잭션으로 ID 조회 및 복구를 원자적으로 처리합니다.
-    await this.runWrite(
-      async (runner) => {
-        // origId 리스트에 대응되는 Neo4j 내부 Node ID 들을 찾습니다.
-        const result = await runner.run(MACRO_GRAPH_CYPHER.findNodeIdsByOrigIds, {
-          userId,
-          origIds,
-        });
-        const record = (result.records as unknown[])[0] as { get(key: string): unknown } | undefined;
-        // 내부 ID 배열로 파싱합니다.
-        const ids = record ? toJsNumberArray((record.get('ids') as unknown[]) ?? []) : [];
-        if (ids.length > 0) {
-          // 조회된 내부 ID들을 이용해 복구(deletedAt 제거) 쿼리를 실행합니다.
-          await runner.run(MACRO_GRAPH_CYPHER.restoreNodesByIds, { userId, ids });
-        }
-      },
-      options
-    );
+    await this.runWrite(async (runner) => {
+      // origId 리스트에 대응되는 Neo4j 내부 Node ID 들을 찾습니다.
+      const result = await runner.run(MACRO_GRAPH_CYPHER.findNodeIdsByOrigIds, {
+        userId,
+        origIds,
+      });
+      const record = (result.records as unknown[])[0] as { get(key: string): unknown } | undefined;
+      // 내부 ID 배열로 파싱합니다.
+      const ids = record ? toJsNumberArray((record.get('ids') as unknown[]) ?? []) : [];
+      if (ids.length > 0) {
+        // 조회된 내부 ID들을 이용해 복구(deletedAt 제거) 쿼리를 실행합니다.
+        await runner.run(MACRO_GRAPH_CYPHER.restoreNodesByIds, { userId, ids });
+      }
+    }, options);
   }
 
   /**
@@ -1277,20 +1313,17 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     permanent = false,
     options?: MacroGraphStoreOptions
   ): Promise<void> {
-    await this.runWrite(
-      async (runner) => {
-        if (permanent) {
-          await runner.run(MACRO_GRAPH_CYPHER.deleteEdgeById, { userId, edgeId });
-        } else {
-          await runner.run(MACRO_GRAPH_CYPHER.softDeleteEdgesByIds, {
-            userId,
-            edgeIds: [edgeId],
-            deletedAt: Date.now(),
-          });
-        }
-      },
-      options
-    );
+    await this.runWrite(async (runner) => {
+      if (permanent) {
+        await runner.run(MACRO_GRAPH_CYPHER.deleteEdgeById, { userId, edgeId });
+      } else {
+        await runner.run(MACRO_GRAPH_CYPHER.softDeleteEdgesByIds, {
+          userId,
+          edgeIds: [edgeId],
+          deletedAt: Date.now(),
+        });
+      }
+    }, options);
   }
 
   /**
@@ -1309,28 +1342,25 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     permanent = false,
     options?: MacroGraphStoreOptions
   ): Promise<void> {
-    await this.runWrite(
-      async (runner) => {
-        // 1. source와 target 사이에 존재하는 엣지들의 ID 목록을 조회합니다.
-        const result = await runner.run(MACRO_GRAPH_CYPHER.findEdgeIdsBetween, {
-          userId,
-          source,
-          target,
-        });
-        const record = (result.records as unknown[])[0] as { get(key: string): unknown } | undefined;
-        const edgeIds = record ? ((record.get('edgeIds') as string[]) ?? []) : [];
-        if (edgeIds.length === 0) return; // 연결된 엣지가 없으면 작업 종료
-        
-        // 2. 조회된 엣지 ID들을 기반으로 영구 또는 논리적 삭제를 수행합니다.
-        await runner.run(
-          permanent
-            ? MACRO_GRAPH_CYPHER.hardDeleteEdgesByIds
-            : MACRO_GRAPH_CYPHER.softDeleteEdgesByIds,
-          { userId, edgeIds, deletedAt: Date.now() }
-        );
-      },
-      options
-    );
+    await this.runWrite(async (runner) => {
+      // 1. source와 target 사이에 존재하는 엣지들의 ID 목록을 조회합니다.
+      const result = await runner.run(MACRO_GRAPH_CYPHER.findEdgeIdsBetween, {
+        userId,
+        source,
+        target,
+      });
+      const record = (result.records as unknown[])[0] as { get(key: string): unknown } | undefined;
+      const edgeIds = record ? ((record.get('edgeIds') as string[]) ?? []) : [];
+      if (edgeIds.length === 0) return; // 연결된 엣지가 없으면 작업 종료
+
+      // 2. 조회된 엣지 ID들을 기반으로 영구 또는 논리적 삭제를 수행합니다.
+      await runner.run(
+        permanent
+          ? MACRO_GRAPH_CYPHER.hardDeleteEdgesByIds
+          : MACRO_GRAPH_CYPHER.softDeleteEdgesByIds,
+        { userId, edgeIds, deletedAt: Date.now() }
+      );
+    }, options);
   }
 
   /**
@@ -1349,27 +1379,24 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     options?: MacroGraphStoreOptions
   ): Promise<void> {
     if (ids.length === 0) return;
-    await this.runWrite(
-      async (runner) => {
-        // 1. 주어진 노드 배열(ids)에 연결된(Source 또는 Target) 모든 엣지의 ID를 조회합니다.
-        const result = await runner.run(MACRO_GRAPH_CYPHER.findEdgeIdsByNodeIds, {
-          userId,
-          ids,
-        });
-        const record = (result.records as unknown[])[0] as { get(key: string): unknown } | undefined;
-        const edgeIds = record ? ((record.get('edgeIds') as string[]) ?? []) : [];
-        if (edgeIds.length === 0) return; // 대상 엣지가 없으면 작업 중단
-        
-        // 2. 찾아낸 간선 ID들을 대상으로 일괄 삭제 쿼리를 실행합니다.
-        await runner.run(
-          permanent
-            ? MACRO_GRAPH_CYPHER.hardDeleteEdgesByIds
-            : MACRO_GRAPH_CYPHER.softDeleteEdgesByIds,
-          { userId, edgeIds, deletedAt: Date.now() }
-        );
-      },
-      options
-    );
+    await this.runWrite(async (runner) => {
+      // 1. 주어진 노드 배열(ids)에 연결된(Source 또는 Target) 모든 엣지의 ID를 조회합니다.
+      const result = await runner.run(MACRO_GRAPH_CYPHER.findEdgeIdsByNodeIds, {
+        userId,
+        ids,
+      });
+      const record = (result.records as unknown[])[0] as { get(key: string): unknown } | undefined;
+      const edgeIds = record ? ((record.get('edgeIds') as string[]) ?? []) : [];
+      if (edgeIds.length === 0) return; // 대상 엣지가 없으면 작업 중단
+
+      // 2. 찾아낸 간선 ID들을 대상으로 일괄 삭제 쿼리를 실행합니다.
+      await runner.run(
+        permanent
+          ? MACRO_GRAPH_CYPHER.hardDeleteEdgesByIds
+          : MACRO_GRAPH_CYPHER.softDeleteEdgesByIds,
+        { userId, edgeIds, deletedAt: Date.now() }
+      );
+    }, options);
   }
 
   /**
@@ -1384,13 +1411,10 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     edgeId: string,
     options?: MacroGraphStoreOptions
   ): Promise<void> {
-    await this.runWrite(
-      async (runner) => {
-        // edgeId에 해당하는 릴레이션의 deletedAt 속성을 지워 복구합니다.
-        await runner.run(MACRO_GRAPH_CYPHER.restoreEdgeById, { userId, edgeId });
-      },
-      options
-    );
+    await this.runWrite(async (runner) => {
+      // edgeId에 해당하는 릴레이션의 deletedAt 속성을 지워 복구합니다.
+      await runner.run(MACRO_GRAPH_CYPHER.restoreEdgeById, { userId, edgeId });
+    }, options);
   }
 
   /**
@@ -1407,20 +1431,17 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     permanent = false,
     options?: MacroGraphStoreOptions
   ): Promise<void> {
-    await this.runWrite(
-      async (runner) => {
-        if (permanent) {
-          await runner.run(MACRO_GRAPH_CYPHER.deleteClusterById, { userId, clusterId });
-        } else {
-          await runner.run(MACRO_GRAPH_CYPHER.softDeleteClusterById, {
-            userId,
-            clusterId,
-            deletedAt: Date.now(),
-          });
-        }
-      },
-      options
-    );
+    await this.runWrite(async (runner) => {
+      if (permanent) {
+        await runner.run(MACRO_GRAPH_CYPHER.deleteClusterById, { userId, clusterId });
+      } else {
+        await runner.run(MACRO_GRAPH_CYPHER.softDeleteClusterById, {
+          userId,
+          clusterId,
+          deletedAt: Date.now(),
+        });
+      }
+    }, options);
   }
 
   /**
@@ -1435,13 +1456,10 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     clusterId: string,
     options?: MacroGraphStoreOptions
   ): Promise<void> {
-    await this.runWrite(
-      async (runner) => {
-        // 클러스터 노드의 deletedAt 속성을 제거합니다.
-        await runner.run(MACRO_GRAPH_CYPHER.restoreClusterById, { userId, clusterId });
-      },
-      options
-    );
+    await this.runWrite(async (runner) => {
+      // 클러스터 노드의 deletedAt 속성을 제거합니다.
+      await runner.run(MACRO_GRAPH_CYPHER.restoreClusterById, { userId, clusterId });
+    }, options);
   }
 
   /**
@@ -1458,20 +1476,17 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     permanent = false,
     options?: MacroGraphStoreOptions
   ): Promise<void> {
-    await this.runWrite(
-      async (runner) => {
-        if (permanent) {
-          await runner.run(MACRO_GRAPH_CYPHER.deleteSubclusterById, { userId, subclusterId });
-        } else {
-          await runner.run(MACRO_GRAPH_CYPHER.softDeleteSubclusterById, {
-            userId,
-            subclusterId,
-            deletedAt: Date.now(),
-          });
-        }
-      },
-      options
-    );
+    await this.runWrite(async (runner) => {
+      if (permanent) {
+        await runner.run(MACRO_GRAPH_CYPHER.deleteSubclusterById, { userId, subclusterId });
+      } else {
+        await runner.run(MACRO_GRAPH_CYPHER.softDeleteSubclusterById, {
+          userId,
+          subclusterId,
+          deletedAt: Date.now(),
+        });
+      }
+    }, options);
   }
 
   /**
@@ -1486,13 +1501,10 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     subclusterId: string,
     options?: MacroGraphStoreOptions
   ): Promise<void> {
-    await this.runWrite(
-      async (runner) => {
-        // 서브클러스터 노드의 deletedAt을 제거하여 복구합니다.
-        await runner.run(MACRO_GRAPH_CYPHER.restoreSubclusterById, { userId, subclusterId });
-      },
-      options
-    );
+    await this.runWrite(async (runner) => {
+      // 서브클러스터 노드의 deletedAt을 제거하여 복구합니다.
+      await runner.run(MACRO_GRAPH_CYPHER.restoreSubclusterById, { userId, subclusterId });
+    }, options);
   }
 
   /**
@@ -1507,13 +1519,10 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     _permanent = true,
     options?: MacroGraphStoreOptions
   ): Promise<void> {
-    await this.runWrite(
-      async (runner) => {
-        // 통계 데이터를 저장하는 노드(MacroStats)를 삭제합니다.
-        await runner.run(MACRO_GRAPH_CYPHER.deleteStats, { userId });
-      },
-      options
-    );
+    await this.runWrite(async (runner) => {
+      // 통계 데이터를 저장하는 노드(MacroStats)를 삭제합니다.
+      await runner.run(MACRO_GRAPH_CYPHER.deleteStats, { userId });
+    }, options);
   }
 
   /**
