@@ -20,7 +20,8 @@ export const initNeo4j = async (): Promise<Driver> => {
     driver = neo4j.driver(uri, neo4j.auth.basic(user, password));
 
     // 애플리케이션 시작 시 연결 가능 여부를 먼저 검증합니다.
-    await driver.verifyConnectivity();
+    const serverInfo = await driver.getServerInfo();
+    logger.info(serverInfo, 'Neo4j server info');
     await ensureNeo4jSchema(driver);
     logger.info('Neo4j connected');
 
