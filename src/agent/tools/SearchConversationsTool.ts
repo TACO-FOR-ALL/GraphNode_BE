@@ -74,7 +74,9 @@ export class SearchConversationsTool implements IAgentTool {
         message: `${result.nodes.length}개의 관련 노드를 찾았습니다. (Seed ${result.seedCount}개 → 그래프 확장 포함)`,
         nodes: result.nodes.map((node: GraphRagNodeResult) => ({
           id: node.origId,
+          title: node.title,
           nodeType: node.nodeType,
+          clusterName: node.clusterName,
           hopDistance: node.hopDistance,
           relevanceScore: Number(node.combinedScore.toFixed(4)),
           connectionCount: node.connectionCount,

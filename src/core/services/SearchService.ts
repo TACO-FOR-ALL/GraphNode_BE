@@ -306,7 +306,9 @@ export class SearchService {
       const seedEntry = seedResults.find((r) => r.node.origId === origId);
       finalNodes.push({
         origId,
-        nodeType: seedEntry?.node.metadata?.sourceType ?? 'unknown',
+        title: seedEntry?.node.nodeTitle ?? seedEntry?.node.label ?? null,
+        nodeType: normalizeGraphRagNodeType(seedEntry?.node.sourceType),
+        clusterName: seedEntry?.node.clusterName || null,
         hopDistance: 0,
         combinedScore: vectorScore,
         vectorScore,
@@ -333,7 +335,9 @@ export class SearchService {
 
       finalNodes.push({
         origId: neighbor.origId,
+        title: null,
         nodeType: neighbor.nodeType,
+        clusterName: neighbor.clusterName,
         hopDistance: neighbor.hopDistance,
         combinedScore,
         connectionCount: neighbor.connectionCount,
@@ -342,7 +346,7 @@ export class SearchService {
 
     // combinedScore 내림차순 정렬 후 상위 limit개 반환
     finalNodes.sort((a, b) => b.combinedScore - a.combinedScore);
-    const topNodes = finalNodes.slice(0, limit);
+    const topNodes = await this.enrichGraphRagNodeDetails(userId, finalNodes.slice(0, limit));
 
     logger.info(
       { userId, keyword, seedCount: seedOrigIds.length, resultCount: topNodes.length },
@@ -350,6 +354,57 @@ export class SearchService {
     );
 
     return { keyword, seedCount: seedOrigIds.length, nodes: topNodes };
+  }
+
+  /**
+   * Graph RAG 노드 결과에 사용자에게 노출할 식별 정보를 보강합니다.
+   *
+   * @remarks
+   * seed 노드는 벡터 검색 결과에서 일부 정보를 이미 갖고 있을 수 있습니다. 그래프 확장으로
+   * 들어온 neighbor 노드는 원본 문서 저장소를 조회해 `title`을 보강하고, 비어 있는
+   * `clusterName`은 null로 정규화합니다.
+   *
+   * @param userId 검색 요청 사용자 ID입니다.
+   * @param nodes 점수 계산과 정렬이 끝난 Graph RAG 노드 목록입니다.
+   * @returns title과 clusterName이 보강된 노드 목록입니다.
+   */
+  private async enrichGraphRagNodeDetails(
+    userId: string,
+    nodes: GraphRagNodeResult[]
+  ): Promise<GraphRagNodeResult[]> {
+    if (nodes.length === 0) return nodes;
+
+    const titleByOrigId = new Map<string, string>();
+    const conversationIds = uniqueOrigIds(
+      nodes.filter((node) => isConversationGraphRagType(node.nodeType))
+    );
+    const noteIds = uniqueOrigIds(nodes.filter((node) => isNoteGraphRagType(node.nodeType)));
+
+    if (conversationIds.length > 0) {
+      const conversations = await this.convRepo.findByIds(conversationIds, userId);
+      for (const conversation of conversations) {
+        if (conversation.title?.trim()) {
+          titleByOrigId.set(conversation._id, conversation.title);
+        }
+      }
+    }
+
+    if (noteIds.length > 0) {
+      const notes = await Promise.all(
+        noteIds.map((origId) => this.noteRepo.getNote(origId, userId, false))
+      );
+      for (const note of notes) {
+        if (note?._id && note.title?.trim()) {
+          titleByOrigId.set(note._id, note.title);
+        }
+      }
+    }
+
+    return nodes.map((node) => ({
+      ...node,
+      title: node.title ?? titleByOrigId.get(node.origId) ?? null,
+      clusterName: node.clusterName?.trim() ? node.clusterName : null,
+    }));
   }
 }
 
@@ -384,6 +439,50 @@ function extractSnippet(text: string, keyword: string, maxLength = 150): string 
   const start = Math.max(0, idx - 50);
   const end = Math.min(text.length, idx + keyword.length + 100);
   return (start > 0 ? '...' : '') + text.substring(start, end) + (end < text.length ? '...' : '');
+}
+
+/**
+ * 그래프 노드의 legacy sourceType을 Graph RAG 응답용 nodeType으로 변환합니다.
+ *
+ * @param sourceType 기존 GraphNodeDto의 sourceType 값입니다.
+ * @returns Graph RAG 응답에 사용할 nodeType 문자열입니다.
+ */
+function normalizeGraphRagNodeType(sourceType?: string): string {
+  if (sourceType === 'chat') return 'conversation';
+  if (sourceType === 'markdown') return 'note';
+  return sourceType ?? 'unknown';
+}
+
+/**
+ * Graph RAG nodeType이 대화 원본을 가리키는지 확인합니다.
+ *
+ * @param nodeType Graph RAG 결과의 nodeType 값입니다.
+ * @returns conversation/chat 타입이면 true를 반환합니다.
+ */
+function isConversationGraphRagType(nodeType: string): boolean {
+  return nodeType === 'conversation' || nodeType === 'chat';
+}
+
+/**
+ * Graph RAG nodeType이 노트 원본을 가리키는지 확인합니다.
+ *
+ * @param nodeType Graph RAG 결과의 nodeType 값입니다.
+ * @returns note/markdown 타입이면 true를 반환합니다.
+ */
+function isNoteGraphRagType(nodeType: string): boolean {
+  return nodeType === 'note' || nodeType === 'markdown';
+}
+
+/**
+ * 노드 목록에서 공백이 아닌 origId를 중복 없이 추출합니다.
+ *
+ * @param nodes Graph RAG 노드 목록입니다.
+ * @returns 중복이 제거된 origId 목록입니다.
+ */
+function uniqueOrigIds(nodes: GraphRagNodeResult[]): string[] {
+  return [
+    ...new Set(nodes.map((node) => node.origId).filter((origId) => origId.trim().length > 0)),
+  ];
 }
 
 /**

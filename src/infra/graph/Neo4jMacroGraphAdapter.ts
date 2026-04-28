@@ -53,6 +53,17 @@ function toJsNumber(val: unknown): number {
 }
 
 /**
+ * Neo4j에서 반환된 문자열 값을 API 응답에 맞게 정규화합니다.
+ *
+ * @param val Neo4j record에서 읽은 원본 값입니다.
+ * @returns 공백이 아닌 문자열이면 해당 문자열을, 비어 있으면 null을 반환합니다.
+ */
+function normalizeNullableString(val: unknown): string | null {
+  const str = String(val ?? '').trim();
+  return str.length > 0 ? str : null;
+}
+
+/**
  * @description Neo4j Integer 배열 → JS number 배열 변환 헬퍼입니다.
  *
  * @param arr Neo4j에서 반환된 배열 (Integer 또는 number 혼용 가능)
@@ -1611,6 +1622,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
           origId,
           nodeId: toJsNumber(record.get('nodeId')),
           nodeType: String(record.get('nodeType') ?? ''),
+          clusterName: normalizeNullableString(record.get('clusterName')),
           hopDistance: 1,
           connectedSeeds: (record.get('connectedSeeds') as string[]) ?? [],
           avgEdgeWeight: Number(record.get('avgEdgeWeight') ?? 0.5),
@@ -1627,6 +1639,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
           origId,
           nodeId: toJsNumber(record.get('nodeId')),
           nodeType: String(record.get('nodeType') ?? ''),
+          clusterName: normalizeNullableString(record.get('clusterName')),
           hopDistance: 2,
           connectedSeeds: (record.get('connectedSeeds') as string[]) ?? [],
           avgEdgeWeight: Number(record.get('avgEdgeWeight') ?? 0.5),

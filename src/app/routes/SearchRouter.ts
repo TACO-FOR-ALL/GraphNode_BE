@@ -18,6 +18,7 @@ export function createSearchRouter(controller: SearchController): Router {
    * @route GET /v1/search
    * @description 글로벌 키워드 검색 (노트 및 대화)
    */
+  router.get('/graph-rag', asyncHandler(controller.graphRagSearch.bind(controller)));
   router.get('/', asyncHandler(controller.integratedSearchByKeyword.bind(controller)));
 
   return router;

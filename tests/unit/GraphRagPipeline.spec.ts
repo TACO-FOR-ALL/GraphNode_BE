@@ -23,6 +23,8 @@ describe('SearchService.graphRagSearch()', () => {
   let searchService: SearchService;
   let mockGraphVectorService: jest.Mocked<GraphVectorService>;
   let mockMacroGraphStore: jest.Mocked<MacroGraphStore>;
+  let mockConversationRepository: jest.Mocked<ConversationRepository>;
+  let mockNoteRepository: jest.Mocked<NoteRepository>;
 
   const userId = 'user-test-001';
   const keyword = '딥러닝';
@@ -45,6 +47,7 @@ describe('SearchService.graphRagSearch()', () => {
       origId: 'conv-c',
       nodeId: 3,
       nodeType: 'conversation',
+      clusterName: 'AI',
       hopDistance: 1,
       connectedSeeds: ['conv-a', 'conv-b'], // 2개 seed와 연결 → connectionCount=2
       avgEdgeWeight: 0.8,
@@ -54,6 +57,7 @@ describe('SearchService.graphRagSearch()', () => {
       origId: 'conv-d',
       nodeId: 4,
       nodeType: 'conversation',
+      clusterName: 'AI',
       hopDistance: 1,
       connectedSeeds: ['conv-a'],
       avgEdgeWeight: 0.6,
@@ -67,6 +71,7 @@ describe('SearchService.graphRagSearch()', () => {
       origId: 'conv-e',
       nodeId: 5,
       nodeType: 'note',
+      clusterName: 'Research',
       hopDistance: 2,
       connectedSeeds: ['conv-a'],
       avgEdgeWeight: 0.5,
@@ -84,9 +89,17 @@ describe('SearchService.graphRagSearch()', () => {
       searchGraphRagNeighbors: jest.fn(),
     } as unknown as jest.Mocked<MacroGraphStore>;
 
+    mockConversationRepository = {
+      findByIds: jest.fn(),
+    } as unknown as jest.Mocked<ConversationRepository>;
+
+    mockNoteRepository = {
+      getNote: jest.fn(),
+    } as unknown as jest.Mocked<NoteRepository>;
+
     searchService = new SearchService(
-      {} as ConversationRepository,
-      {} as NoteRepository,
+      mockConversationRepository,
+      mockNoteRepository,
       {} as MessageRepository,
       mockGraphVectorService,
       mockMacroGraphStore
@@ -100,6 +113,14 @@ describe('SearchService.graphRagSearch()', () => {
     ]);
 
     // 임베딩 mock 초기화
+    (mockConversationRepository.findByIds as any).mockResolvedValue([
+      { _id: 'conv-a', title: 'Seed A' },
+      { _id: 'conv-b', title: 'Seed B' },
+      { _id: 'conv-c', title: 'Neighbor C' },
+      { _id: 'conv-d', title: 'Neighbor D' },
+    ]);
+    (mockNoteRepository.getNote as any).mockResolvedValue({ _id: 'conv-e', title: 'Note E' });
+
     const huggingfaceMock = jest.requireMock('../../src/shared/utils/huggingface') as any;
     huggingfaceMock.generateMiniLMEmbedding.mockResolvedValue(Array(384).fill(0.1));
   });
@@ -143,6 +164,20 @@ describe('SearchService.graphRagSearch()', () => {
 
       expect(result.keyword).toBe(keyword);
       expect(result.seedCount).toBe(2); // conv-a, conv-b
+    });
+
+    it('Graph RAG node results include title and clusterName metadata', async () => {
+      const result = await searchService.graphRagSearch(userId, keyword, 10);
+
+      expect(result.nodes.find((node) => node.origId === 'conv-a')).toEqual(
+        expect.objectContaining({ title: 'Seed A', clusterName: 'AI' })
+      );
+      expect(result.nodes.find((node) => node.origId === 'conv-c')).toEqual(
+        expect.objectContaining({ title: 'Neighbor C', clusterName: 'AI' })
+      );
+      expect(result.nodes.find((node) => node.origId === 'conv-e')).toEqual(
+        expect.objectContaining({ title: 'Note E', clusterName: 'Research' })
+      );
     });
   });
 
@@ -241,8 +276,8 @@ describe('SearchConversationsTool Graph RAG 통합', () => {
       keyword: '딥러닝',
       seedCount: 2,
       nodes: [
-        { origId: 'conv-a', nodeType: 'conversation', hopDistance: 0, combinedScore: 0.9, vectorScore: 0.9, connectionCount: 0 },
-        { origId: 'conv-c', nodeType: 'conversation', hopDistance: 1, combinedScore: 0.66, connectionCount: 2 },
+        { origId: 'conv-a', title: 'Seed A', nodeType: 'conversation', clusterName: 'AI', hopDistance: 0, combinedScore: 0.9, vectorScore: 0.9, connectionCount: 0 },
+        { origId: 'conv-c', title: 'Neighbor C', nodeType: 'conversation', clusterName: 'AI', hopDistance: 1, combinedScore: 0.66, connectionCount: 2 },
       ],
     });
 
@@ -258,6 +293,8 @@ describe('SearchConversationsTool Graph RAG 통합', () => {
     expect(mockSearchService.graphRagSearch).toHaveBeenCalledWith('user-001', '딥러닝', 10);
     expect(parsed.nodes).toHaveLength(2);
     expect(parsed.nodes[0].matchSource).toBe('vector_seed');
+    expect(parsed.nodes[0].title).toBe('Seed A');
+    expect(parsed.nodes[0].clusterName).toBe('AI');
     expect(parsed.nodes[1].matchSource).toBe('graph_1hop');
   });
 

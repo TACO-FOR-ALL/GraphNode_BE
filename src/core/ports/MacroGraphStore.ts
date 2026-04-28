@@ -27,6 +27,8 @@ export interface GraphRagNeighborResult {
   nodeId: number;
   /** 노드 유형 */
   nodeType: string;
+  /** 노드가 속한 클러스터 이름입니다. 찾을 수 없으면 null입니다. */
+  clusterName: string | null;
   /** Seed 노드로부터의 홉 거리 */
   hopDistance: number;
   /** 이 노드에 연결된 Seed origId 목록 */

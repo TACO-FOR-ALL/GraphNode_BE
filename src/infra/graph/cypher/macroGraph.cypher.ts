@@ -1300,15 +1300,17 @@ export const MACRO_GRAPH_CYPHER = {
     WHERE neighbor.deletedAt IS NULL
       AND r.deletedAt IS NULL
       AND NOT neighbor.origId IN $seedOrigIds
-    WITH neighbor, seed, r
+    OPTIONAL MATCH (neighbor)-[:BELONGS_TO]->(cluster:MacroCluster {userId: $userId})
+    WITH neighbor, seed, r, cluster
     WITH neighbor.origId   AS origId,
          neighbor.id       AS nodeId,
          neighbor.nodeType AS nodeType,
+         coalesce(cluster.name, '') AS clusterName,
          1                 AS hopDistance,
          collect(DISTINCT seed.origId)      AS connectedSeeds,
          avg(coalesce(r.weight, 0.5))       AS avgEdgeWeight,
          count(DISTINCT seed)               AS connectionCount
-    RETURN origId, nodeId, nodeType, hopDistance, connectedSeeds, avgEdgeWeight, connectionCount
+    RETURN origId, nodeId, nodeType, clusterName, hopDistance, connectedSeeds, avgEdgeWeight, connectionCount
     ORDER BY connectionCount DESC, avgEdgeWeight DESC
     LIMIT $limit
   `,
@@ -1337,15 +1339,17 @@ export const MACRO_GRAPH_CYPHER = {
       AND NOT neighbor.origId IN $seedOrigIds
       AND NOT mid.origId IN $seedOrigIds
       AND neighbor.id <> mid.id
-    WITH neighbor, seed, r1, r2
+    OPTIONAL MATCH (neighbor)-[:BELONGS_TO]->(cluster:MacroCluster {userId: $userId})
+    WITH neighbor, seed, r1, r2, cluster
     WITH neighbor.origId   AS origId,
          neighbor.id       AS nodeId,
          neighbor.nodeType AS nodeType,
+         coalesce(cluster.name, '') AS clusterName,
          2                 AS hopDistance,
          collect(DISTINCT seed.origId)                                            AS connectedSeeds,
          avg((coalesce(r1.weight, 0.5) + coalesce(r2.weight, 0.5)) / 2.0)       AS avgEdgeWeight,
          count(DISTINCT seed)                                                     AS connectionCount
-    RETURN origId, nodeId, nodeType, hopDistance, connectedSeeds, avgEdgeWeight, connectionCount
+    RETURN origId, nodeId, nodeType, clusterName, hopDistance, connectedSeeds, avgEdgeWeight, connectionCount
     ORDER BY connectionCount DESC, avgEdgeWeight DESC
     LIMIT $limit
   `,

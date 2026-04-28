@@ -76,8 +76,12 @@ export interface SearchResult {
 export interface GraphRagNodeResult {
   /** 원본 데이터 ID */
   origId: string;
+  /** 원본 문서에서 해석한 노드 제목입니다. 찾을 수 없으면 null입니다. */
+  title: string | null;
   /** 노드 유형 */
   nodeType: string;
+  /** 노드가 속한 클러스터 이름입니다. 찾을 수 없으면 null입니다. */
+  clusterName: string | null;
   /** Seed 노드로부터의 홉 거리 */
   hopDistance: number;
   /** 최종 랭킹 점수 */
