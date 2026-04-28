@@ -60,3 +60,48 @@ export interface SearchResult {
   notes: NoteSearchResult[];
   chatThreads: ConversationSearchResult[];
 }
+
+/**
+ * Graph RAG 검색 결과 단일 노드 항목.
+ *
+ * ChromaDB 벡터 검색(Seed 추출) + Neo4j 그래프 확장(이웃 탐색)을 결합한 결과입니다.
+ *
+ * @property origId 원본 데이터 ID (conversation, note, notion, file 실제 ID)
+ * @property nodeType 노드 유형 ('conversation' | 'note' | 'notion' | 'file')
+ * @property hopDistance Seed 노드로부터의 그래프 거리 (0=seed, 1=1홉, 2=2홉)
+ * @property combinedScore 벡터 유사도 + 그래프 구조 + 엣지 가중치를 결합한 최종 랭킹 점수
+ * @property vectorScore Seed 노드인 경우 ChromaDB 코사인 유사도 점수 (0~1)
+ * @property connectionCount 이 노드에 연결된 Seed 노드의 수 (복수 Seed와 연결될수록 관련성 높음)
+ */
+export interface GraphRagNodeResult {
+  /** 원본 데이터 ID */
+  origId: string;
+  /** 노드 유형 */
+  nodeType: string;
+  /** Seed 노드로부터의 홉 거리 */
+  hopDistance: number;
+  /** 최종 랭킹 점수 */
+  combinedScore: number;
+  /** Seed 노드의 ChromaDB 벡터 유사도 점수 */
+  vectorScore?: number;
+  /** 연결된 Seed 노드 수 */
+  connectionCount: number;
+}
+
+/**
+ * Graph RAG 검색 파이프라인 전체 결과 DTO.
+ *
+ * keyword → ChromaDB 벡터 검색 → Neo4j 그래프 확장의 3단계 파이프라인 결과입니다.
+ *
+ * @property keyword 입력된 검색 키워드
+ * @property seedCount ChromaDB 벡터 검색에서 추출된 Seed 노드 수
+ * @property nodes combinedScore 내림차순으로 정렬된 결과 노드 목록
+ */
+export interface GraphRagSearchResult {
+  /** 검색 키워드 */
+  keyword: string;
+  /** 벡터 검색으로 추출된 Seed 노드 수 */
+  seedCount: number;
+  /** combinedScore 내림차순 정렬 결과 */
+  nodes: GraphRagNodeResult[];
+}

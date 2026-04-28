@@ -12,6 +12,7 @@ import { ConversationService } from './ConversationService';
 import { MessageService } from './MessageService';
 import { GraphEmbeddingService } from './GraphEmbeddingService';
 import { GraphVectorService } from './GraphVectorService';
+import { SearchService } from './SearchService';
 import { AgentMode, ChatStreamRequestBody } from '../../agent/types';
 import { UserService } from './UserService';
 import { InvalidApiKeyError } from '../../shared/errors/domain';
@@ -30,6 +31,8 @@ export interface AgentServiceDeps {
   messageService: MessageService;
   graphEmbeddingService: GraphEmbeddingService;
   graphVectorService: GraphVectorService;
+  /** Graph RAG 검색 파이프라인 (SearchConversationsTool에서 사용) */
+  searchService: SearchService;
 }
 
 export class AgentService {

@@ -1,10 +1,19 @@
 import { logger } from '../../shared/utils/logger';
-import type { NoteSearchResult, ConversationSearchResult, SearchResult } from '../../shared/dtos/search';
+import type {
+  NoteSearchResult,
+  ConversationSearchResult,
+  SearchResult,
+  GraphRagNodeResult,
+  GraphRagSearchResult,
+} from '../../shared/dtos/search';
 import { ConversationRepository } from '../ports/ConversationRepository';
 import { NoteRepository } from '../ports/NoteRepository';
 import { MessageRepository } from '../ports/MessageRepository';
 import type { ConversationDoc, MessageDoc } from '../types/persistence/ai.persistence';
 import type { NoteDoc } from '../types/persistence/note.persistence';
+import type { MacroGraphStore } from '../ports/MacroGraphStore';
+import { GraphVectorService } from './GraphVectorService';
+import { generateMiniLMEmbedding } from '../../shared/utils/huggingface';
 
 /**
  * 모듈: SearchService (통합 검색 서비스)
@@ -23,11 +32,15 @@ export class SearchService {
    * @param convRepo 대화 저장소 인터페이스 (Port)
    * @param noteRepo 노트 저장소 인터페이스 (Port)
    * @param msgRepo 메시지 저장소 인터페이스 (Port)
+   * @param graphVectorService ChromaDB 벡터 검색 서비스 (Graph RAG 파이프라인 전용)
+   * @param macroGraphStore Neo4j 그래프 저장소 포트 (Graph RAG 파이프라인 전용)
    */
   constructor(
     private readonly convRepo: ConversationRepository,
     private readonly noteRepo: NoteRepository,
-    private readonly msgRepo: MessageRepository
+    private readonly msgRepo: MessageRepository,
+    private readonly graphVectorService?: GraphVectorService,
+    private readonly macroGraphStore?: MacroGraphStore
   ) {}
 
   /**
@@ -207,6 +220,136 @@ export class SearchService {
     );
 
     return { notes, chatThreads };
+  }
+
+  /**
+   * Graph RAG 검색 파이프라인을 실행합니다.
+   *
+   * @description
+   * ## 처리 흐름
+   *
+   * ### Phase 1 — 임베딩 변환
+   * 입력 keyword를 MiniLM 모델로 384차원 벡터로 변환합니다.
+   *
+   * ### Phase 2 — ChromaDB 벡터 유사도 검색 (Seed 노드 추출)
+   * GraphVectorService를 통해 코사인 유사도 상위 K개의 Seed 노드를 추출합니다.
+   * 각 Seed는 origId와 vector score(0~1)를 갖습니다.
+   *
+   * ### Phase 3 — Neo4j 그래프 확장 (이웃 탐색)
+   * Seed origIds 기반으로 MACRO_RELATED 관계를 1홉/2홉 탐색합니다.
+   * 여러 Seed와 연결된 이웃은 connectionCount가 높아져 스코어 보너스를 받습니다.
+   *
+   * ### Phase 4 — 스코어 결합 및 랭킹
+   * ```
+   * Seed(0홉):  combinedScore = vectorScore
+   * 1홉 이웃:   combinedScore = maxSeedScore × 0.8 × avgEdgeWeight × (1 + 0.15 × (connectionCount-1))
+   * 2홉 이웃:   combinedScore = maxSeedScore × 0.5 × avgEdgeWeight × (1 + 0.15 × (connectionCount-1))
+   * ```
+   * maxSeedScore: 해당 이웃과 연결된 Seed 중 최고 vector score.
+   *
+   * @param userId 검색 대상 사용자 ID
+   * @param keyword 검색 키워드
+   * @param limit 최종 반환할 노드 수 (기본값 10)
+   * @returns combinedScore 내림차순 정렬된 Graph RAG 결과
+   * @throws {Error} graphVectorService 또는 macroGraphStore가 주입되지 않은 경우
+   */
+  async graphRagSearch(
+    userId: string,
+    keyword: string,
+    limit: number = 10
+  ): Promise<GraphRagSearchResult> {
+    if (!this.graphVectorService || !this.macroGraphStore) {
+      throw new Error(
+        '[SearchService.graphRagSearch] graphVectorService 또는 macroGraphStore가 주입되지 않았습니다.'
+      );
+    }
+
+    logger.info({ userId, keyword, limit }, '[SearchService] Graph RAG 검색 파이프라인 시작');
+
+    // ── Phase 1: 키워드 → 임베딩 벡터 변환 ─────────────────────────────────
+    const queryVector = await generateMiniLMEmbedding(keyword);
+
+    // ── Phase 2: ChromaDB 벡터 유사도 검색 (Seed 추출) ─────────────────────
+    // Seed를 limit보다 많이 뽑아 그래프 확장 후 최종 limit으로 줄입니다.
+    const seedFetchLimit = Math.max(limit * 2, 10);
+    const seedResults = await this.graphVectorService.searchNodes(userId, queryVector, seedFetchLimit);
+
+    if (seedResults.length === 0) {
+      logger.info({ userId, keyword }, '[SearchService] Graph RAG: Seed 노드 없음, 빈 결과 반환');
+      return { keyword, seedCount: 0, nodes: [] };
+    }
+
+    // Seed origId → vector score 맵 구축
+    const seedScoreMap = new Map<string, number>();
+    for (const { node, score } of seedResults) {
+      if (node.origId) {
+        seedScoreMap.set(node.origId, score);
+      }
+    }
+    const seedOrigIds = [...seedScoreMap.keys()];
+
+    // ── Phase 3: Neo4j 그래프 확장 (1홉/2홉 이웃 탐색) ────────────────────
+    // 각 홉에서 limit * 2개까지 이웃을 탐색합니다.
+    const neighborLimit = limit * 2;
+    const neighbors = await this.macroGraphStore.searchGraphRagNeighbors(
+      userId,
+      seedOrigIds,
+      neighborLimit
+    );
+
+    // ── Phase 4: 스코어 결합 및 랭킹 ────────────────────────────────────────
+    const finalNodes: GraphRagNodeResult[] = [];
+
+    // Seed 노드 (hopDistance=0): combinedScore = vectorScore
+    for (const [origId, vectorScore] of seedScoreMap) {
+      // Seed 노드의 nodeType을 seedResults에서 찾습니다.
+      const seedEntry = seedResults.find((r) => r.node.origId === origId);
+      finalNodes.push({
+        origId,
+        nodeType: seedEntry?.node.metadata?.sourceType ?? 'unknown',
+        hopDistance: 0,
+        combinedScore: vectorScore,
+        vectorScore,
+        connectionCount: 0,
+      });
+    }
+
+    // 이웃 노드 (1홉/2홉): 그래프 구조 + 벡터 점수 결합
+    const HOP_DECAY: Record<number, number> = { 1: 0.8, 2: 0.5 };
+    const CONNECTION_BONUS_RATE = 0.15;
+
+    for (const neighbor of neighbors) {
+      const hopDecay = HOP_DECAY[neighbor.hopDistance] ?? 0.3;
+      const connectionBonus = CONNECTION_BONUS_RATE * Math.max(0, neighbor.connectionCount - 1);
+
+      // 이 이웃에 연결된 Seed 중 최고 vector score를 기준으로 삼습니다.
+      const maxSeedScore = neighbor.connectedSeeds.reduce((best, seedOrigId) => {
+        const score = seedScoreMap.get(seedOrigId) ?? 0;
+        return score > best ? score : best;
+      }, 0);
+
+      const combinedScore =
+        maxSeedScore * hopDecay * neighbor.avgEdgeWeight * (1 + connectionBonus);
+
+      finalNodes.push({
+        origId: neighbor.origId,
+        nodeType: neighbor.nodeType,
+        hopDistance: neighbor.hopDistance,
+        combinedScore,
+        connectionCount: neighbor.connectionCount,
+      });
+    }
+
+    // combinedScore 내림차순 정렬 후 상위 limit개 반환
+    finalNodes.sort((a, b) => b.combinedScore - a.combinedScore);
+    const topNodes = finalNodes.slice(0, limit);
+
+    logger.info(
+      { userId, keyword, seedCount: seedOrigIds.length, resultCount: topNodes.length },
+      '[SearchService] Graph RAG 검색 파이프라인 완료'
+    );
+
+    return { keyword, seedCount: seedOrigIds.length, nodes: topNodes };
   }
 }
 

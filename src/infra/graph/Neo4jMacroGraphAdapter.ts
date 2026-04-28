@@ -33,6 +33,7 @@ import {
   type Neo4jMacroSummaryAggregateContext,
 } from './mappers/macroGraphNeo4j.mapper';
 import type { MacroFileType, Neo4jMacroSummaryNode } from '../../core/types/neo4j/macro.neo4j';
+import type { GraphRagNeighborResult } from '../../core/ports/MacroGraphStore';
 import { logger } from '../../shared/utils/logger';
 
 /**
@@ -1562,6 +1563,84 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
       );
     } finally {
       // 사용이 완료된 세션은 리소스 누수 방지를 위해 반드시 종료합니다.
+      await session.close();
+    }
+  }
+
+  /**
+   * @description Seed 노드 origId 목록을 기반으로 Graph RAG용 이웃 노드를 탐색합니다.
+   *
+   * 1홉 쿼리와 2홉 쿼리를 순차 실행하여 이웃 목록을 구성합니다.
+   * 1홉에서 이미 나온 origId는 2홉 결과에서 제외됩니다(1홉 우선).
+   * Seed origIds가 비어있으면 즉시 빈 배열을 반환합니다.
+   *
+   * @param userId 조회 대상 사용자 ID
+   * @param seedOrigIds ChromaDB 벡터 검색으로 추출한 Seed origId 목록
+   * @param limit 1홉/2홉 각각에서 반환할 최대 이웃 수 (기본 20)
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 1홉/2홉 이웃 노드 목록 (중복 origId 제거, 1홉 우선)
+   */
+  async searchGraphRagNeighbors(
+    userId: string,
+    seedOrigIds: string[],
+    limit: number = 20,
+    options?: MacroGraphStoreOptions
+  ): Promise<GraphRagNeighborResult[]> {
+    if (seedOrigIds.length === 0) return [];
+
+    const session = this.getDriver().session({ defaultAccessMode: neo4j.session.READ });
+    try {
+      const neo4jLimit = neo4j.int(limit);
+      const params = { userId, seedOrigIds, limit: neo4jLimit };
+
+      // 1홉과 2홉을 병렬 실행하여 IO 대기 시간을 줄입니다.
+      const [hop1Result, hop2Result] = await Promise.all([
+        session.run(MACRO_GRAPH_CYPHER.graphRagNeighbors1Hop, params),
+        session.run(MACRO_GRAPH_CYPHER.graphRagNeighbors2Hop, params),
+      ]);
+
+      const seen = new Set<string>();
+      const results: GraphRagNeighborResult[] = [];
+
+      // 1홉 결과를 먼저 처리합니다 (더 가까운 이웃이므로 우선순위 높음).
+      for (const record of hop1Result.records) {
+        const origId = String(record.get('origId'));
+        if (seen.has(origId)) continue;
+        seen.add(origId);
+        results.push({
+          origId,
+          nodeId: toJsNumber(record.get('nodeId')),
+          nodeType: String(record.get('nodeType') ?? ''),
+          hopDistance: 1,
+          connectedSeeds: (record.get('connectedSeeds') as string[]) ?? [],
+          avgEdgeWeight: Number(record.get('avgEdgeWeight') ?? 0.5),
+          connectionCount: toJsNumber(record.get('connectionCount')),
+        });
+      }
+
+      // 2홉 결과에서 1홉과 중복되지 않는 이웃만 추가합니다.
+      for (const record of hop2Result.records) {
+        const origId = String(record.get('origId'));
+        if (seen.has(origId)) continue;
+        seen.add(origId);
+        results.push({
+          origId,
+          nodeId: toJsNumber(record.get('nodeId')),
+          nodeType: String(record.get('nodeType') ?? ''),
+          hopDistance: 2,
+          connectedSeeds: (record.get('connectedSeeds') as string[]) ?? [],
+          avgEdgeWeight: Number(record.get('avgEdgeWeight') ?? 0.5),
+          connectionCount: toJsNumber(record.get('connectionCount')),
+        });
+      }
+
+      logger.info(
+        { userId, seedCount: seedOrigIds.length, neighborCount: results.length },
+        '[Neo4jMacroGraphAdapter] Graph RAG 이웃 탐색 완료'
+      );
+
+      return results;
+    } finally {
       await session.close();
     }
   }
