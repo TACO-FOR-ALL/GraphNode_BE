@@ -81,10 +81,12 @@ export interface NoteBulkCreateDto {
 /**
  * Folder Create DTO
  * @public
+ * @property id 폴더 ID (UUID) - 클라이언트 생성
  * @property name 폴더 이름
  * @property parentId 상위 폴더 ID (선택)
  */
 export interface FolderCreateDto {
+  id?: string;
   name: string;
   parentId?: string | null;
 }
