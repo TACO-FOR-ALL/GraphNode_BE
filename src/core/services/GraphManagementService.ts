@@ -201,10 +201,6 @@ export class GraphManagementService {
       this.assertUser(userId);
       await this.repo.deleteNodesByOrigIds(userId, origIds, permanent, options);
 
-      //클러스터 
-
-      //서브 클러스터 관련코드
-
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.deleteNodesByOrigIds failed', { cause: String(err) });
