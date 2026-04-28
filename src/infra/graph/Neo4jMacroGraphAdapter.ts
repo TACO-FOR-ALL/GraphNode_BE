@@ -693,18 +693,33 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   }
 
   /**
-   * @description 사용자 Macro Graph 전체 데이터를 삭제합니다. deleteGraph의 alias입니다.
+   * @description 사용자 Macro Graph 전체 데이터를 삭제합니다.
+   *
+   * permanent=true이면 MacroGraph 루트 포함 모든 노드를 물리 삭제합니다 (DETACH DELETE).
+   * permanent=false(기본)이면 nodes/edges/clusters/subclusters/summary에 deletedAt 타임스탬프를 설정합니다.
+   * soft delete 후 restoreAllGraphData로 복원할 수 있습니다.
    *
    * @param userId 삭제 대상 사용자 ID입니다.
-   * @param _permanent 현재 Neo4j 구현은 hard delete만 지원합니다.
+   * @param permanent true: hard delete, false/undefined: soft delete
    * @param options transaction 등 adapter 전용 옵션입니다.
    */
   async deleteAllGraphData(
     userId: string,
-    _permanent?: boolean,
+    permanent?: boolean,
     options?: MacroGraphStoreOptions
   ): Promise<void> {
-    await this.deleteGraph(userId, options);
+    if (permanent) {
+      await this.deleteGraph(userId, options);
+      return;
+    }
+    const deletedAt = Date.now();
+    await this.runWrite(async (runner) => {
+      await runner.run(MACRO_GRAPH_CYPHER.softDeleteAllNodes, { userId, deletedAt });
+      await runner.run(MACRO_GRAPH_CYPHER.softDeleteAllEdges, { userId, deletedAt });
+      await runner.run(MACRO_GRAPH_CYPHER.softDeleteAllClusters, { userId, deletedAt });
+      await runner.run(MACRO_GRAPH_CYPHER.softDeleteAllSubclusters, { userId, deletedAt });
+      await runner.run(MACRO_GRAPH_CYPHER.softDeleteSummaryNode, { userId, deletedAt });
+    }, options);
   }
 
   /**

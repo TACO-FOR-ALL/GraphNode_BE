@@ -1157,6 +1157,70 @@ export const MACRO_GRAPH_CYPHER = {
   `,
 
   /**
+   * @description 모든 active MacroNode를 Soft Delete 처리합니다. (deleteAllGraphData soft 경로)
+   *
+   * @param userId 사용자 ID
+   * @param deletedAt 삭제 타임스탬프 (number)
+   */
+  softDeleteAllNodes: `
+    MATCH (n:MacroNode {userId: $userId})
+    WHERE n.deletedAt IS NULL
+    SET n.deletedAt = $deletedAt
+  `,
+
+  /**
+   * @description 모든 active MacroRelation 및 materialized MACRO_RELATED를 Soft Delete 처리합니다.
+   *
+   * @param userId 사용자 ID
+   * @param deletedAt 삭제 타임스탬프 (number)
+   */
+  softDeleteAllEdges: `
+    MATCH (r:MacroRelation {userId: $userId})
+    WHERE r.deletedAt IS NULL
+    SET r.deletedAt = $deletedAt
+    WITH collect(r.id) AS edgeIds
+    MATCH (:MacroNode {userId: $userId})-[mr:MACRO_RELATED {userId: $userId}]->(:MacroNode {userId: $userId})
+    WHERE mr.id IN edgeIds AND mr.deletedAt IS NULL
+    SET mr.deletedAt = $deletedAt
+  `,
+
+  /**
+   * @description 모든 active MacroCluster를 Soft Delete 처리합니다.
+   *
+   * @param userId 사용자 ID
+   * @param deletedAt 삭제 타임스탬프 (number)
+   */
+  softDeleteAllClusters: `
+    MATCH (c:MacroCluster {userId: $userId})
+    WHERE c.deletedAt IS NULL
+    SET c.deletedAt = $deletedAt
+  `,
+
+  /**
+   * @description 모든 active MacroSubcluster를 Soft Delete 처리합니다.
+   *
+   * @param userId 사용자 ID
+   * @param deletedAt 삭제 타임스탬프 (number)
+   */
+  softDeleteAllSubclusters: `
+    MATCH (sc:MacroSubcluster {userId: $userId})
+    WHERE sc.deletedAt IS NULL
+    SET sc.deletedAt = $deletedAt
+  `,
+
+  /**
+   * @description active MacroSummary를 Soft Delete 처리합니다.
+   *
+   * @param userId 사용자 ID
+   * @param deletedAt 삭제 타임스탬프 (number)
+   */
+  softDeleteSummaryNode: `
+    MATCH (sm:MacroSummary {userId: $userId})
+    WHERE sm.deletedAt IS NULL
+    SET sm.deletedAt = $deletedAt
+  `,
+
+  /**
    * @description 모든 soft delete된 MacroNode와 연관된 MacroRelation/MACRO_RELATED를 복원합니다.
    *
    * @param userId 사용자 ID

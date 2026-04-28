@@ -113,6 +113,20 @@ export function collectDiffs(
     for (const key of Object.keys(mo)) {
       collectDiffs(mo[key], no[key], `${path}.${key}`, diffs, maxDiffs);
     }
+    // neo4j 결과에만 존재하는 extra key도 divergence로 기록합니다.
+    if (diffs.length < maxDiffs) {
+      for (const key of Object.keys(no)) {
+        if (!(key in mo)) {
+          diffs.push({
+            path: `${path}.${key}`,
+            mongo: undefined,
+            neo4j: no[key],
+            reason: 'extra key in neo4j result',
+          });
+          if (diffs.length >= maxDiffs) break;
+        }
+      }
+    }
     return;
   }
 
@@ -925,37 +939,26 @@ describe('Macro Graph Migration: Neo4j Roundtrip Write/Read/Delete/Restore', () 
       roundtripNodeView,
     );
 
-    // 7. Global soft delete/restore는 남아 있는 A/B Node, Edge, Cluster, Subcluster 전체를 대상으로 검증합니다.
-    await writeBoth((service) => service.deleteGraph(ROUNDTRIP_USER_ID));
+    // 7. Global hard delete (permanent=true): MongoDB는 deleteAllGraphData에서 global soft-delete를
+    // 지원하지 않으므로 permanent=true로 양쪽 영구 삭제합니다.
+    // Neo4j global soft-delete/restore 는 아래 별도 describe 블록에서 Neo4j adapter 단위로 검증합니다.
+    await writeBoth((service) => service.deleteGraph(ROUNDTRIP_USER_ID, true));
     await compareList(
-      'roundtrip.global.listNodes.afterDeleteAllGraphData',
+      'roundtrip.global.listNodes.afterHardDeleteAll',
       (service) => service.listNodes(ROUNDTRIP_USER_ID),
       roundtripNodeView,
     );
     expect(await mongoService.listNodes(ROUNDTRIP_USER_ID)).toHaveLength(0);
     expect(await neo4jService.listNodes(ROUNDTRIP_USER_ID)).toHaveLength(0);
+    // hard delete 후 listNodesAll도 비어야 합니다 (soft delete 흔적 없음).
+    expect(await mongoService.listNodesAll(ROUNDTRIP_USER_ID)).toHaveLength(0);
+    expect(await neo4jService.listNodesAll(ROUNDTRIP_USER_ID)).toHaveLength(0);
 
-    await writeBoth((service) => service.restoreGraph(ROUNDTRIP_USER_ID));
-    await compareList(
-      'roundtrip.global.listNodes.afterRestoreAllGraphData',
-      (service) => service.listNodes(ROUNDTRIP_USER_ID),
-      roundtripNodeView,
-    );
-    await compareList(
-      'roundtrip.global.listEdges.afterRestoreAllGraphData',
-      (service) => service.listEdges(ROUNDTRIP_USER_ID),
-      roundtripEdgeView,
-    );
-    await compareList(
-      'roundtrip.global.listClusters.afterRestoreAllGraphData',
-      (service) => service.listClusters(ROUNDTRIP_USER_ID),
-      roundtripClusterView,
-    );
-    await compareList(
-      'roundtrip.global.listSubclusters.afterRestoreAllGraphData',
-      (service) => service.listSubclusters(ROUNDTRIP_USER_ID),
-      roundtripSubclusterView,
-    );
+    // 8–11단계(Edge/Cluster/Subcluster 개별 생명주기)를 위해 A/B fixture를 재생성합니다.
+    await writeBoth((service) => service.upsertCluster(ROUNDTRIP_CLUSTER));
+    await writeBoth((service) => service.upsertNodes([ROUNDTRIP_NODE_A, ROUNDTRIP_NODE_B]));
+    await writeBoth((service) => service.upsertEdge(ROUNDTRIP_EDGE));
+    await writeBoth((service) => service.upsertSubcluster(ROUNDTRIP_SUBCLUSTER));
 
     // 8. Edge read, soft delete, restore, source/target 기반 hard delete를 검증합니다.
     await compareList(
@@ -1073,4 +1076,334 @@ describe('Macro Graph Migration: Neo4j Roundtrip Write/Read/Delete/Restore', () 
       roundtripClusterView,
     );
   }, 120_000);
+});
+
+// ─── Additional Roundtrip Cases ───────────────────────────────────────────────
+//
+// 아래 describe 블록은 메인 roundtrip에서 다루지 않은 추가 케이스를 검증합니다:
+//   - deleteNodesByOrigIds / restoreNodesByOrigIds (origId 기반 soft/hard delete 경로)
+//   - deleteEdgesByNodeIds (nodeId 배열 기반 엣지 일괄 soft/hard delete)
+//   - Neo4j global soft-delete + restoreAllGraphData (MongoDB가 미지원하는 경로의 Neo4j 단독 검증)
+//   - soft delete 멱등성 (동일 노드에 두 번 soft delete → 여전히 비활성, deletedAt 단조 증가)
+//   - hard delete 후 listNodesAll = 0 (soft delete 흔적 없이 완전 제거 확인)
+
+/**
+ * @description 추가 roundtrip 테스트에서 사용할 고정 사용자 ID입니다.
+ * 메인 roundtrip fixture와 격리하기 위해 별도 ID를 사용합니다.
+ */
+const EXT_USER_ID = 'roundtrip-ext-test-user-migration-spec';
+
+const EXT_CLUSTER = {
+  id: 'ext-cluster-main',
+  userId: EXT_USER_ID,
+  name: 'Ext Test Cluster',
+  description: 'Extension test cluster for additional roundtrip cases',
+  size: 2,
+  themes: ['ext', 'migration', 'parity'],
+  createdAt: '2026-04-27T00:00:00.000Z',
+  updatedAt: '2026-04-27T00:00:00.000Z',
+};
+
+const EXT_NODE_X = {
+  id: 930001,
+  userId: EXT_USER_ID,
+  origId: 'ext-orig-x',
+  clusterId: EXT_CLUSTER.id,
+  clusterName: EXT_CLUSTER.name,
+  timestamp: '2026-04-27T00:01:00.000Z',
+  numMessages: 5,
+  sourceType: 'chat' as const,
+  createdAt: '2026-04-27T00:00:00.000Z',
+  updatedAt: '2026-04-27T00:00:00.000Z',
+};
+
+const EXT_NODE_Y = {
+  id: 930002,
+  userId: EXT_USER_ID,
+  origId: 'ext-orig-y',
+  clusterId: EXT_CLUSTER.id,
+  clusterName: EXT_CLUSTER.name,
+  timestamp: '2026-04-27T00:02:00.000Z',
+  numMessages: 7,
+  sourceType: 'markdown' as const,
+  createdAt: '2026-04-27T00:00:00.000Z',
+  updatedAt: '2026-04-27T00:00:00.000Z',
+};
+
+const EXT_EDGE_XY = {
+  id: 'ext-edge-x-y',
+  userId: EXT_USER_ID,
+  source: EXT_NODE_X.id,
+  target: EXT_NODE_Y.id,
+  weight: 0.6,
+  type: 'hard' as const,
+  intraCluster: true,
+  createdAt: '2026-04-27T00:00:00.000Z',
+  updatedAt: '2026-04-27T00:00:00.000Z',
+};
+
+describe('Macro Graph Migration: Additional Roundtrip Cases', () => {
+  let mongoService: GraphManagementService;
+  let neo4jService: GraphManagementService;
+
+  beforeAll(async () => {
+    await initMongo(MONGO_URI);
+    await initNeo4j();
+
+    const mongoRepo = new GraphRepositoryMongo();
+    const neo4jRepo = new Neo4jMacroGraphAdapter();
+
+    // Neo4j adapter에 findNodesByOrigIdsAll을 monkey-patch합니다.
+    // MacroGraphStore 포트에는 별도 메서드가 없으므로 includeDeleted 옵션을 통해 동등 동작을 구성합니다.
+    const neo4jRepoWithAll = neo4jRepo as unknown as {
+      findNodesByOrigIds: (
+        userId: string,
+        origIds: string[],
+        options?: { includeDeleted?: boolean },
+      ) => Promise<unknown[]>;
+      findNodesByOrigIdsAll?: (userId: string, origIds: string[]) => Promise<unknown[]>;
+    };
+    neo4jRepoWithAll.findNodesByOrigIdsAll = (u, origIds) =>
+      neo4jRepoWithAll.findNodesByOrigIds(u, origIds, { includeDeleted: true });
+
+    mongoService = new GraphManagementService(mongoRepo);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    neo4jService = new GraphManagementService(neo4jRepoWithAll as any);
+
+    // 이전 실행 잔여 데이터 제거
+    await mongoService.deleteGraph(EXT_USER_ID, true);
+    await neo4jService.deleteGraph(EXT_USER_ID, true);
+  }, 60_000);
+
+  afterAll(async () => {
+    if (mongoService && neo4jService) {
+      await mongoService.deleteGraph(EXT_USER_ID, true);
+      await neo4jService.deleteGraph(EXT_USER_ID, true);
+    }
+    await disconnectMongo();
+    await closeNeo4j();
+  }, 60_000);
+
+  /**
+   * @description 동일 mutation을 두 저장소에 순서대로 적용하는 헬퍼입니다.
+   */
+  const writeBothExt = async (
+    action: (service: GraphManagementService) => Promise<unknown>,
+  ): Promise<void> => {
+    await action(mongoService);
+    await action(neo4jService);
+  };
+
+  /**
+   * @description EXT fixture를 두 저장소에 동일하게 준비합니다.
+   */
+  const setupExtFixture = async (includeEdge = true): Promise<void> => {
+    await writeBothExt((s) => s.upsertCluster(EXT_CLUSTER));
+    await writeBothExt((s) => s.upsertNodes([EXT_NODE_X, EXT_NODE_Y]));
+    if (includeEdge) {
+      await writeBothExt((s) => s.upsertEdge(EXT_EDGE_XY));
+    }
+  };
+
+  /**
+   * @description EXT fixture를 두 저장소에서 모두 영구 제거합니다.
+   */
+  const teardownExtFixture = async (): Promise<void> => {
+    await writeBothExt((s) => s.deleteGraph(EXT_USER_ID, true));
+  };
+
+  // ── deleteNodesByOrigIds + restoreNodesByOrigIds ──────────────────────────
+
+  it('deleteNodesByOrigIds — soft delete: X 비활성화·Y 유지, findNodesByOrigIdsAll로 X 확인', async () => {
+    await setupExtFixture(false);
+
+    // X만 origId 기반 soft delete
+    await writeBothExt((s) => s.deleteNodesByOrigIds(EXT_USER_ID, [EXT_NODE_X.origId]));
+
+    const mongoActive = await mongoService.listNodes(EXT_USER_ID);
+    const neo4jActive = await neo4jService.listNodes(EXT_USER_ID);
+    // X는 active list에서 사라져야 합니다
+    expect(mongoActive.some((n) => n.origId === EXT_NODE_X.origId)).toBe(false);
+    expect(neo4jActive.some((n) => n.origId === EXT_NODE_X.origId)).toBe(false);
+    // Y는 여전히 active list에 있어야 합니다
+    expect(mongoActive.some((n) => n.origId === EXT_NODE_Y.origId)).toBe(true);
+    expect(neo4jActive.some((n) => n.origId === EXT_NODE_Y.origId)).toBe(true);
+    // 양쪽 active count가 동일해야 합니다
+    expect(neo4jActive.length).toBe(mongoActive.length);
+
+    // X는 findNodesByOrigIdsAll에서 조회되어야 하며 deletedAt이 non-null이어야 합니다
+    const mongoAllX = await mongoService.findNodesByOrigIdsAll(EXT_USER_ID, [EXT_NODE_X.origId]);
+    const neo4jAllX = await neo4jService.findNodesByOrigIdsAll(EXT_USER_ID, [EXT_NODE_X.origId]);
+    expect(mongoAllX).toHaveLength(1);
+    expect(neo4jAllX).toHaveLength(1);
+    // deletedAt != null (MongoDB = number, Neo4j = number)
+    expect(mongoAllX[0].deletedAt != null).toBe(true);
+    expect(neo4jAllX[0].deletedAt != null).toBe(true);
+    expect(typeof neo4jAllX[0].deletedAt).toBe('number');
+
+    await teardownExtFixture();
+  }, 60_000);
+
+  it('restoreNodesByOrigIds — soft delete 후 restore: X가 active list에 복귀하고 deletedAt이 null/undefined', async () => {
+    await setupExtFixture(false);
+
+    // X soft delete → restore
+    await writeBothExt((s) => s.deleteNodesByOrigIds(EXT_USER_ID, [EXT_NODE_X.origId]));
+    await writeBothExt((s) => s.restoreNodesByOrigIds(EXT_USER_ID, [EXT_NODE_X.origId]));
+
+    const mongoActive = await mongoService.listNodes(EXT_USER_ID);
+    const neo4jActive = await neo4jService.listNodes(EXT_USER_ID);
+    expect(neo4jActive.length).toBe(mongoActive.length);
+    expect(neo4jActive.some((n) => n.origId === EXT_NODE_X.origId)).toBe(true);
+    expect(mongoActive.some((n) => n.origId === EXT_NODE_X.origId)).toBe(true);
+
+    // restore 후 deletedAt은 null 또는 undefined (양쪽 모두 == null)
+    const mongoXRestored = await mongoService.findNodesByOrigIdsAll(EXT_USER_ID, [EXT_NODE_X.origId]);
+    const neo4jXRestored = await neo4jService.findNodesByOrigIdsAll(EXT_USER_ID, [EXT_NODE_X.origId]);
+    expect(mongoXRestored[0].deletedAt == null).toBe(true);
+    expect(neo4jXRestored[0].deletedAt == null).toBe(true);
+
+    await teardownExtFixture();
+  }, 60_000);
+
+  it('deleteNodesByOrigIds — hard delete: listNodesAll에서도 완전히 사라짐', async () => {
+    await setupExtFixture(false);
+
+    // X hard delete by origId
+    await writeBothExt((s) =>
+      s.deleteNodesByOrigIds(EXT_USER_ID, [EXT_NODE_X.origId], true),
+    );
+
+    // active list에서 사라져야 합니다
+    const mongoActive = await mongoService.listNodes(EXT_USER_ID);
+    const neo4jActive = await neo4jService.listNodes(EXT_USER_ID);
+    expect(mongoActive.some((n) => n.origId === EXT_NODE_X.origId)).toBe(false);
+    expect(neo4jActive.some((n) => n.origId === EXT_NODE_X.origId)).toBe(false);
+    expect(neo4jActive.length).toBe(mongoActive.length);
+
+    // findNodesByOrigIdsAll에서도 완전히 사라져야 합니다 (hard delete)
+    const mongoAllAfterHard = await mongoService.findNodesByOrigIdsAll(EXT_USER_ID, [EXT_NODE_X.origId]);
+    const neo4jAllAfterHard = await neo4jService.findNodesByOrigIdsAll(EXT_USER_ID, [EXT_NODE_X.origId]);
+    expect(mongoAllAfterHard).toHaveLength(0);
+    expect(neo4jAllAfterHard).toHaveLength(0);
+
+    await teardownExtFixture();
+  }, 60_000);
+
+  // ── deleteEdgesByNodeIds ──────────────────────────────────────────────────
+
+  it('deleteEdgesByNodeIds — soft delete: 연결 엣지가 active list에서 사라짐', async () => {
+    await setupExtFixture(true);
+
+    // X에 연결된 엣지 soft delete
+    await writeBothExt((s) => s.deleteEdgesByNodeIds(EXT_USER_ID, [EXT_NODE_X.id]));
+
+    const mongoEdges = await mongoService.listEdges(EXT_USER_ID);
+    const neo4jEdges = await neo4jService.listEdges(EXT_USER_ID);
+    expect(mongoEdges.some((e) => e.id === EXT_EDGE_XY.id)).toBe(false);
+    expect(neo4jEdges.some((e) => e.id === EXT_EDGE_XY.id)).toBe(false);
+    expect(neo4jEdges.length).toBe(mongoEdges.length);
+
+    await teardownExtFixture();
+  }, 60_000);
+
+  it('deleteEdgesByNodeIds — restore 후 hard delete: active list에서 완전히 제거', async () => {
+    await setupExtFixture(true);
+
+    // soft delete → restore → hard delete 순서 검증
+    await writeBothExt((s) => s.deleteEdgesByNodeIds(EXT_USER_ID, [EXT_NODE_X.id]));
+    await writeBothExt((s) => s.restoreEdge(EXT_USER_ID, EXT_EDGE_XY.id));
+
+    const mongoAfterRestore = await mongoService.listEdges(EXT_USER_ID);
+    const neo4jAfterRestore = await neo4jService.listEdges(EXT_USER_ID);
+    expect(mongoAfterRestore.some((e) => e.id === EXT_EDGE_XY.id)).toBe(true);
+    expect(neo4jAfterRestore.some((e) => e.id === EXT_EDGE_XY.id)).toBe(true);
+    expect(neo4jAfterRestore.length).toBe(mongoAfterRestore.length);
+
+    // Y 기준으로 hard delete
+    await writeBothExt((s) => s.deleteEdgesByNodeIds(EXT_USER_ID, [EXT_NODE_Y.id], true));
+
+    const mongoAfterHard = await mongoService.listEdges(EXT_USER_ID);
+    const neo4jAfterHard = await neo4jService.listEdges(EXT_USER_ID);
+    expect(mongoAfterHard.some((e) => e.id === EXT_EDGE_XY.id)).toBe(false);
+    expect(neo4jAfterHard.some((e) => e.id === EXT_EDGE_XY.id)).toBe(false);
+    expect(neo4jAfterHard.length).toBe(mongoAfterHard.length);
+
+    await teardownExtFixture();
+  }, 60_000);
+
+  // ── Soft delete 멱등성 ──────────────────────────────────────────────────
+
+  it('soft delete 멱등성 — 두 번 soft delete해도 노드가 비활성 상태를 유지하고 deletedAt이 number', async () => {
+    await setupExtFixture(false);
+
+    // 첫 번째 soft delete
+    await writeBothExt((s) => s.deleteNode(EXT_USER_ID, EXT_NODE_X.id));
+
+    const mongoAllFirst = await mongoService.findNodesByOrigIdsAll(EXT_USER_ID, [EXT_NODE_X.origId]);
+    const deletedAtFirst = mongoAllFirst[0].deletedAt as number;
+    expect(deletedAtFirst != null).toBe(true);
+
+    // 두 번째 soft delete (이미 삭제된 노드에 재시도)
+    await writeBothExt((s) => s.deleteNode(EXT_USER_ID, EXT_NODE_X.id));
+
+    // active list에 여전히 없어야 합니다
+    const mongoActive = await mongoService.listNodes(EXT_USER_ID);
+    const neo4jActive = await neo4jService.listNodes(EXT_USER_ID);
+    expect(mongoActive.some((n) => n.id === EXT_NODE_X.id)).toBe(false);
+    expect(neo4jActive.some((n) => n.id === EXT_NODE_X.id)).toBe(false);
+    expect(neo4jActive.length).toBe(mongoActive.length);
+
+    // deletedAt이 여전히 non-null이고 number여야 합니다
+    const mongoAllSecond = await mongoService.findNodesByOrigIdsAll(EXT_USER_ID, [EXT_NODE_X.origId]);
+    const neo4jAllSecond = await neo4jService.findNodesByOrigIdsAll(EXT_USER_ID, [EXT_NODE_X.origId]);
+    expect(mongoAllSecond[0].deletedAt != null).toBe(true);
+    expect(neo4jAllSecond[0].deletedAt != null).toBe(true);
+    expect(typeof neo4jAllSecond[0].deletedAt).toBe('number');
+    // 두 번째 deletedAt ≥ 첫 번째 deletedAt (단조 증가 또는 동일)
+    expect((neo4jAllSecond[0].deletedAt as number)).toBeGreaterThanOrEqual(deletedAtFirst);
+
+    await teardownExtFixture();
+  }, 60_000);
+
+  // ── Neo4j global soft-delete / restoreAllGraphData ────────────────────────
+  //
+  // MongoDB의 deleteAllGraphData는 항상 hard delete이며 restoreAllGraphData를 지원하지 않습니다.
+  // 아래 테스트는 Neo4j adapter가 global soft-delete/restore를 올바르게 수행하는지
+  // Neo4j 단독으로 검증합니다.
+
+  it('Neo4j global soft-delete: deleteGraph(soft) 후 listNodes=0, restoreGraph 후 원복', async () => {
+    await setupExtFixture(true);
+
+    // Neo4j 전용: soft delete (permanent=undefined)
+    await neo4jService.deleteGraph(EXT_USER_ID);
+
+    // soft delete 후 active list는 비어야 합니다
+    expect(await neo4jService.listNodes(EXT_USER_ID)).toHaveLength(0);
+    expect(await neo4jService.listEdges(EXT_USER_ID)).toHaveLength(0);
+    expect(await neo4jService.listClusters(EXT_USER_ID)).toHaveLength(0);
+
+    // soft delete이므로 listNodesAll에서는 여전히 조회되어야 합니다
+    const allAfterSoftDelete = await neo4jService.listNodesAll(EXT_USER_ID);
+    expect(allAfterSoftDelete.length).toBeGreaterThan(0);
+    expect(allAfterSoftDelete.every((n) => n.deletedAt != null)).toBe(true);
+
+    // restoreGraph로 전체 복원
+    await neo4jService.restoreGraph(EXT_USER_ID);
+
+    // restore 후 active list가 복원되어야 합니다
+    const nodesAfterRestore = await neo4jService.listNodes(EXT_USER_ID);
+    expect(nodesAfterRestore.length).toBe(2); // X + Y
+    const edgesAfterRestore = await neo4jService.listEdges(EXT_USER_ID);
+    expect(edgesAfterRestore.length).toBe(1); // EXT_EDGE_XY
+    const clustersAfterRestore = await neo4jService.listClusters(EXT_USER_ID);
+    expect(clustersAfterRestore.length).toBe(1); // EXT_CLUSTER
+
+    // restore 후 deletedAt이 null/undefined여야 합니다 (== null check)
+    expect(nodesAfterRestore.every((n) => n.deletedAt == null)).toBe(true);
+
+    // MongoDB에 대한 hard delete cleanup만 수행합니다 (Mongo는 soft delete 미지원이므로 setup만 했음)
+    await mongoService.deleteGraph(EXT_USER_ID, true);
+    await neo4jService.deleteGraph(EXT_USER_ID, true);
+  }, 60_000);
 });
