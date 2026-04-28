@@ -25,6 +25,7 @@ import {
   bulkCreateConversationsSchema as _bulkCreateConversationsSchema,
 } from '../../shared/dtos/ai.schemas';
 import { AiInteractionService } from '../../core/services/AiInteractionService';
+import { ChatExportService } from '../../core/services/ChatExportService';
 import { ChatThread, ChatMessage, AIChatResponseDto } from '../../shared/dtos/ai';
 import { AIchatType } from '../../shared/ai-providers/AIchatType';
 import { ValidationError } from '../../shared/errors/domain';
@@ -43,8 +44,40 @@ import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 export class AiController {
   constructor(
     private readonly chatManagementService: ChatManagementService, // 채팅 통합 서비스
-    private readonly aiInteractionService: AiInteractionService // AI 채팅 로직 서비스
+    private readonly aiInteractionService: AiInteractionService, // AI 채팅 로직 서비스
+    private readonly chatExportService: ChatExportService
   ) {}
+
+  async startConversationExport(req: Request, res: Response) {
+    const ownerUserId: string = getUserIdFromRequest(req)!;
+    const conversationId: string = req.params.conversationId;
+    if (!conversationId) throw new ValidationError('conversationId is required');
+
+    const result = await this.chatExportService.startExport(ownerUserId, conversationId);
+    res.status(202).json(result);
+  }
+
+  async getConversationExportStatus(req: Request, res: Response) {
+    const ownerUserId: string = getUserIdFromRequest(req)!;
+    const jobId: string = req.params.jobId;
+    if (!jobId) throw new ValidationError('jobId is required');
+
+    const result = await this.chatExportService.getExportStatus(ownerUserId, jobId);
+    res.status(200).json(result);
+  }
+
+  async downloadConversationExport(req: Request, res: Response) {
+    const ownerUserId: string = getUserIdFromRequest(req)!;
+    const jobId: string = req.params.jobId;
+    if (!jobId) throw new ValidationError('jobId is required');
+
+    const file = await this.chatExportService.downloadExportFile(ownerUserId, jobId);
+
+    res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    res.setHeader('Content-Type', file.contentType ?? 'application/json; charset=utf-8');
+    if (file.contentLength) res.setHeader('Content-Length', file.contentLength);
+    res.status(200).end(file.buffer);
+  }
 
   /**
    * AI 실제 대화를 처리하는 Controller 메서드

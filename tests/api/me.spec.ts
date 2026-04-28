@@ -27,10 +27,10 @@ jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => ({
   UserRepositoryMySQL: class {
     async findOrCreateFromProvider() { return userState; }
     async findById(id: any) { 
-      return (String(id) === userState.id) ? userState : null; 
+      return (userState && String(id) === userState.id) ? userState : null; 
     }
     async findApiKeyById(id: any, model: any) {
-      if (String(id) !== userState.id) return null;
+      if (!userState || String(id) !== userState.id) return null;
       switch (model) {
         case 'openai': return userState.apiKeyOpenai;
         case 'deepseek': return userState.apiKeyDeepseek;
@@ -40,7 +40,7 @@ jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => ({
       }
     }
     async updateApiKeyById(id: any, model: any, apiKey: any) {
-      if (String(id) === userState.id) {
+      if (userState && String(id) === userState.id) {
         if (model === 'openai') userState.apiKeyOpenai = apiKey;
         if (model === 'deepseek') userState.apiKeyDeepseek = apiKey;
         if (model === 'claude') userState.apiKeyClaude = apiKey;
@@ -48,7 +48,7 @@ jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => ({
       }
     }
     async deleteApiKeyById(id: any, model: any) {
-      if (String(id) === userState.id) {
+      if (userState && String(id) === userState.id) {
         if (model === 'openai') userState.apiKeyOpenai = null;
         if (model === 'deepseek') userState.apiKeyDeepseek = null;
         if (model === 'claude') userState.apiKeyClaude = null;
@@ -106,6 +106,28 @@ describe('Me API Integration Tests', () => {
     it('should return 401 if not authenticated', async () => {
       const res = await request(app).get('/v1/me');
       expect(res.status).toBe(401);
+    });
+
+    it('should fall back to gn-profile cookie when profile lookup fails', async () => {
+      userState = null as any;
+      const helperProfile = Buffer.from(
+        JSON.stringify({
+          id: mockUser.id,
+          email: mockUser.email,
+          displayName: mockUser.displayName,
+          avatarUrl: mockUser.avatarUrl,
+        })
+      ).toString('base64url');
+
+      const res = await request(app)
+        .get('/v1/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('Cookie', [`gn-profile=${helperProfile}`]);
+
+      expect(res.status).toBe(200);
+      expect(res.body.userId).toBe(mockUser.id);
+      expect(res.body.profile.displayName).toBe(mockUser.displayName);
+      expect(res.body.profile.provider).toBe('unknown');
     });
   });
 

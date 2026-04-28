@@ -3,13 +3,13 @@ import { z } from 'zod';
 
 import { getUserIdFromRequest } from '../utils/request';
 import { UserService } from '../../core/services/UserService';
-import { MeResponseDto, ApiKeyModel } from '../../shared/dtos/me';
+import { MeResponseDto, ApiKeyModel, UserProfileDto } from '../../shared/dtos/me';
 import { verifyToken } from '../utils/jwt';
 import {
   listSessions,
   removeSessionBySessionId,
 } from '../../infra/redis/SessionStoreRedis';
-import { ValidationError } from '../../shared/errors/domain';
+import { NotFoundError, UpstreamError, ValidationError } from '../../shared/errors/domain';
 
 /**
  * /v1/me 엔드포인트의 컨트롤러 클래스.
@@ -26,7 +26,24 @@ export class MeController {
   async getMe(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = getUserIdFromRequest(req)!;
-      const userProfile = await this.userService.getUserProfile(userId);
+      let userProfile: UserProfileDto;
+      try {
+        userProfile = await this.userService.getUserProfile(userId);
+      } catch (e) {
+        const fallbackProfile = this.getProfileSnapshotFromCookie(req, userId);
+        if (
+          fallbackProfile &&
+          (e instanceof NotFoundError || e instanceof UpstreamError)
+        ) {
+          const body: MeResponseDto = {
+            userId,
+            profile: fallbackProfile,
+          };
+          res.status(200).json(body);
+          return;
+        }
+        throw e;
+      }
 
       const body: MeResponseDto = {
         userId: userProfile.id,
@@ -252,6 +269,41 @@ export class MeController {
       if (!token) return null;
       const payload = verifyToken(token);
       return payload.sessionId ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private getProfileSnapshotFromCookie(req: Request, userId: string): UserProfileDto | null {
+    try {
+      const raw = req.cookies?.['gn-profile'];
+      if (!raw) return null;
+
+      const decoded = JSON.parse(Buffer.from(raw, 'base64url').toString('utf-8')) as {
+        id?: string | number;
+        displayName?: string | null;
+        avatarUrl?: string | null;
+        email?: string | null;
+      };
+
+      return {
+        id: typeof decoded.id === 'string' ? decoded.id : userId,
+        email: decoded.email ?? null,
+        displayName: decoded.displayName ?? null,
+        avatarUrl: decoded.avatarUrl ?? null,
+        provider: 'unknown',
+        providerUserId: userId,
+        apiKeyOpenai: null,
+        apiKeyDeepseek: null,
+        apiKeyClaude: null,
+        apiKeyGemini: null,
+        createdAt: new Date(0).toISOString(),
+        lastLoginAt: null,
+        preferredLanguage: 'en',
+        onboardingOccupation: null,
+        onboardingInterests: [],
+        onboardingAgentMode: 'formal',
+      };
     } catch {
       return null;
     }

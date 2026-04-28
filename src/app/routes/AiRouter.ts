@@ -9,6 +9,7 @@ import multer from 'multer';
 const upload = multer({ storage: multer.memoryStorage() });
 
 import type { ChatManagementService } from '../../core/services/ChatManagementService';
+import type { ChatExportService } from '../../core/services/ChatExportService';
 import { AiController } from '../controllers/AiController';
 import { asyncHandler } from '../utils/asyncHandler';
 import { bindSessionUser } from '../middlewares/session';
@@ -18,9 +19,14 @@ import { AiInteractionService } from '../../core/services/AiInteractionService';
 export function createAiRouter(deps: {
   chatManagementService: ChatManagementService;
   aiInteractionService: AiInteractionService;
+  chatExportService: ChatExportService;
 }) {
   const router = Router();
-  const aiController = new AiController(deps.chatManagementService, deps.aiInteractionService);
+  const aiController = new AiController(
+    deps.chatManagementService,
+    deps.aiInteractionService,
+    deps.chatExportService
+  );
 
   // 보호 구역(세션 바인딩 + 인증)
   router.use(bindSessionUser, requireLogin);
@@ -59,6 +65,18 @@ export function createAiRouter(deps: {
   router.post(
     '/conversations/:conversationId/restore',
     asyncHandler(aiController.restoreConversation.bind(aiController))
+  );
+  router.post(
+    '/conversations/:conversationId/export',
+    asyncHandler(aiController.startConversationExport.bind(aiController))
+  );
+  router.get(
+    '/chat-exports/:jobId',
+    asyncHandler(aiController.getConversationExportStatus.bind(aiController))
+  );
+  router.get(
+    '/chat-exports/:jobId/download',
+    asyncHandler(aiController.downloadConversationExport.bind(aiController))
   );
 
   // Messages

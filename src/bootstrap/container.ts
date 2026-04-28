@@ -20,6 +20,7 @@ import { AiInteractionService } from '../core/services/AiInteractionService';
 import { AgentService } from '../core/services/AgentService';
 import { SearchService } from '../core/services/SearchService';
 import { FeedbackService } from '../core/services/FeedbackService';
+import { ChatExportService } from '../core/services/ChatExportService';
 import { GoogleOAuthService } from '../core/services/GoogleOAuthService';
 import { AppleOAuthService } from '../core/services/AppleOAuthService';
 import { MicroscopeManagementService } from '../core/services/MicroscopeManagementService';
@@ -47,11 +48,13 @@ import { StoragePort } from '../core/ports/StoragePort';
 import { EventBusPort } from '../core/ports/EventBusPort';
 import { NotificationRepository } from '../core/ports/NotificationRepository';
 import { FeedbackRepository } from '../core/ports/FeedbackRepository';
+import { ChatExportRepository } from '../core/ports/ChatExportRepository';
 // Infra Adapters
 import { AwsSqsAdapter } from '../infra/aws/AwsSqsAdapter';
 import { AwsS3Adapter } from '../infra/aws/AwsS3Adapter';
 import { RedisEventBusAdapter } from '../infra/redis/RedisEventBusAdapter';
 import { FeedbackRepositoryPrisma } from '../infra/repositories/FeedbackRepositoryPrisma';
+import { ChatExportRepositoryMongo } from '../infra/repositories/ChatExportRepositoryMongo';
 
 /**
  * 애플리케이션의 의존성 주입(Dependency Injection)을 관리하는 싱글톤 컨테이너입니다.
@@ -78,6 +81,7 @@ export class Container {
   private microscopeWorkspaceRepo: MicroscopeWorkspaceStore | null = null;
   private notificationRepo: NotificationRepository | null = null;
   private feedbackRepo: FeedbackRepository | null = null;
+  private chatExportRepo: ChatExportRepository | null = null;
 
   // Infra Adapters
   private queueAdapter: QueuePort | null = null;
@@ -103,6 +107,7 @@ export class Container {
   private microscopeManagementService: MicroscopeManagementService | null = null;
   private searchService: SearchService | null = null;
   private feedbackService: FeedbackService | null = null;
+  private chatExportService: ChatExportService | null = null;
 
   private constructor() {}
 
@@ -279,6 +284,13 @@ export class Container {
       this.feedbackRepo = new FeedbackRepositoryPrisma();
     }
     return this.feedbackRepo;
+  }
+
+  getChatExportRepository(): ChatExportRepository {
+    if (!this.chatExportRepo) {
+      this.chatExportRepo = new ChatExportRepositoryMongo();
+    }
+    return this.chatExportRepo;
   }
 
   // --- Services ---
@@ -463,6 +475,18 @@ export class Container {
       this.aiInteractionService = createAuditProxy(raw, 'AiInteractionService');
     }
     return this.aiInteractionService;
+  }
+
+  getChatExportService(): ChatExportService {
+    if (!this.chatExportService) {
+      const raw = new ChatExportService(
+        this.getChatManagementService(),
+        this.getChatExportRepository(),
+        this.getAwsS3Adapter()
+      );
+      this.chatExportService = createAuditProxy(raw, 'ChatExportService');
+    }
+    return this.chatExportService;
   }
 
   /**
