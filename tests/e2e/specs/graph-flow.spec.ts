@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll } from '@jest/globals';
 import { apiClient, getTestUserId } from '../utils/api-client';
 import { seedTestData } from '../utils/db-seed';
+import { createNeo4jE2eDriver } from '../utils/neo4j-test-driver';
 import { Db, MongoClient } from 'mongodb';
 import { GraphNodeDoc, GraphStatsDoc } from '../../../src/core/types/persistence/graph.persistence';
-
 /**
  * Graph AI 엔드투엔드(E2E) 테스트 스펙
  *
@@ -74,6 +74,20 @@ describe('End-to-End Graph Flow', () => {
   beforeAll(async () => {
     // 테스트 시작 전 기초 데이터(유저, 원본 메시지 등) 주입
     await seedTestData();
+
+    // 이전 테스트 실행에서 Neo4j에 남아있는 해당 userId의 잔재 데이터를 제거합니다.
+    // db-seed.ts는 MongoDB만 클리닝하므로 Neo4j는 여기서 별도로 처리합니다.
+    const neo4jDriver = createNeo4jE2eDriver();
+    const neo4jSession = neo4jDriver.session();
+    try {
+      await neo4jSession.run(
+        'MATCH (n {userId: $userId}) DETACH DELETE n',
+        { userId }
+      );
+    } finally {
+      await neo4jSession.close();
+      await neo4jDriver.close();
+    }
   });
 
   it('Scenario 1: Full Graph Generation Flow', async () => {
@@ -94,11 +108,22 @@ describe('End-to-End Graph Flow', () => {
     const db = mongoClient.db();
 
     // 1. DB접속해서, conversation과 note의 개수 각각 얻어서 보관 필요
-    const conversations = await db.collection('conversations').find({ ownerUserId: userId }).toArray();
-    const notes = await db.collection('notes').find({ ownerUserId: userId, deletedAt: null }).toArray();
-    const expectedOrigIds = [...conversations.map((c) => c._id.toString()), ...notes.map((n) => n._id.toString())];
+    const conversations = await db
+      .collection('conversations')
+      .find({ ownerUserId: userId })
+      .toArray();
+    const notes = await db
+      .collection('notes')
+      .find({ ownerUserId: userId, deletedAt: null })
+      .toArray();
+    const expectedOrigIds = [
+      ...conversations.map((c) => c._id.toString()),
+      ...notes.map((n) => n._id.toString()),
+    ];
     const expectedCount = expectedOrigIds.length;
-    console.log(`Expected nodes: ${expectedCount} (Conversations: ${conversations.length}, Notes: ${notes.length})`);
+    console.log(
+      `Expected nodes: ${expectedCount} (Conversations: ${conversations.length}, Notes: ${notes.length})`
+    );
     console.log(`Expected origIds: ${JSON.stringify([...expectedOrigIds].sort())}`);
 
     try {
@@ -108,7 +133,9 @@ describe('End-to-End Graph Flow', () => {
 
         // 영구 실패 상태 감지: 더 이상 기다려도 CREATED로 바뀌지 않으므로 즉시 종료
         if (stats && stats.status === 'NOT_CREATED') {
-          console.error(`[Scenario 1] Graph generation permanently failed (status=NOT_CREATED). Aborting poll.`);
+          console.error(
+            `[Scenario 1] Graph generation permanently failed (status=NOT_CREATED). Aborting poll.`
+          );
           break;
         }
 
@@ -135,17 +162,23 @@ describe('End-to-End Graph Flow', () => {
           );
 
           if (actualCount !== expectedCount) {
-            console.error(`[Test Failed] Node count mismatch! Expected: ${expectedCount}, Actual: ${actualCount}`);
+            console.error(
+              `[Test Failed] Node count mismatch! Expected: ${expectedCount}, Actual: ${actualCount}`
+            );
             console.error(`Expected IDs: ${JSON.stringify(expectedOrigIds)}`);
             console.error(`Actual IDs: ${JSON.stringify(actualOrigIds)}`);
-            throw new Error(`Graph generation finished but node count mismatch: ${actualCount} vs ${expectedCount}`);
+            throw new Error(
+              `Graph generation finished but node count mismatch: ${actualCount} vs ${expectedCount}`
+            );
           }
 
           // 3. 생성된 노드의 origId가 seedTestData에서 주입한 데이터와 일치하는지 확인
           for (const expectedId of expectedOrigIds) {
             if (!actualOrigIds.includes(expectedId)) {
               console.error(`[Test Failed] Missing node for origId: ${expectedId}`);
-              throw new Error(`Graph generation finished but missing node for origId: ${expectedId}`);
+              throw new Error(
+                `Graph generation finished but missing node for origId: ${expectedId}`
+              );
             }
           }
 
@@ -188,7 +221,9 @@ describe('End-to-End Graph Flow', () => {
     console.log('\n--- Starting Scenario 2: Graph Summary ---');
 
     if (!scenario1Passed) {
-      throw new Error('Scenario 1 did not complete successfully. Scenario 2 requires a generated graph and cannot proceed.');
+      throw new Error(
+        'Scenario 1 did not complete successfully. Scenario 2 requires a generated graph and cannot proceed.'
+      );
     }
 
     // 1. 그래프 요약 API 호출
@@ -232,11 +267,17 @@ describe('End-to-End Graph Flow', () => {
       expect(summary).toBeTruthy();
       expect(summary?.overview).toBeTruthy();
 
-      const actualConversations = await finalDb.collection('conversations').countDocuments({ ownerUserId: userId });
-      const actualNotes = await finalDb.collection('notes').countDocuments({ ownerUserId: userId, deletedAt: null });
+      const actualConversations = await finalDb
+        .collection('conversations')
+        .countDocuments({ ownerUserId: userId });
+      const actualNotes = await finalDb
+        .collection('notes')
+        .countDocuments({ ownerUserId: userId, deletedAt: null });
 
       console.log(`\n[Summary Verification]`);
-      console.log(`- Total Conversations: actual=${actualConversations}, summary=${summary?.overview.total_conversations}`);
+      console.log(
+        `- Total Conversations: actual=${actualConversations}, summary=${summary?.overview.total_conversations}`
+      );
       console.log(`- Total Notes: actual=${actualNotes}, summary=${summary?.overview.total_notes}`);
       console.log(`- Total Notions: summary=${summary?.overview.total_notions}`);
 
@@ -252,7 +293,9 @@ describe('End-to-End Graph Flow', () => {
     console.log('\n--- Starting Scenario 3: Add Node (Conversation + Note) ---');
 
     if (!scenario1Passed) {
-      throw new Error('Scenario 1 did not complete successfully. Scenario 3 requires graph_nodes to be populated and cannot proceed.');
+      throw new Error(
+        'Scenario 1 did not complete successfully. Scenario 3 requires graph_nodes to be populated and cannot proceed.'
+      );
     }
 
     const mongoClient = new MongoClient(MONGO_URI);
@@ -434,6 +477,138 @@ describe('End-to-End Graph Flow', () => {
         `All rigorous verifications passed: Existing node id=${updatedNode.id} updated correctly, new conversation node id=${newConvNode?.id}, new note node id=${newNoteNode?.id}.`
       );
     } finally {
+      await mongoClient.close();
+    }
+  });
+
+  it('Scenario 4: Dual Write Consistency Verification', async () => {
+    console.log('\n--- Starting Scenario 4: Dual Write Consistency ---');
+
+    if (!scenario1Passed) {
+      throw new Error(
+        'Scenario 1 did not complete successfully. Scenario 4 requires a generated graph.'
+      );
+    }
+
+    // MongoDB 연결
+    const mongoClient = new MongoClient(MONGO_URI);
+    await mongoClient.connect();
+    const db = mongoClient.db();
+
+    // Neo4j 연결은 E2E docker-compose 기본 인증값과 맞춘 공통 헬퍼를 사용합니다.
+    const driver = createNeo4jE2eDriver();
+    const session = driver.session();
+
+    try {
+      // 1. MongoDB에서 Node, Cluster, Subcluster, Edge(Relation) 개수 가져오기
+      // deletedAt이 없거나(missing) null인 문서만 활성 데이터로 집계합니다.
+      const activeFilter = { userId, deletedAt: { $in: [null, undefined] } };
+      const mongoNodesCount = await db
+        .collection('graph_nodes')
+        .countDocuments(activeFilter);
+      const mongoClustersCount = await db
+        .collection('graph_clusters')
+        .countDocuments(activeFilter);
+      const mongoSubclustersCount = await db
+        .collection('graph_subclusters')
+        .countDocuments(activeFilter);
+      const mongoRelationsCount = await db
+        .collection('graph_edges')
+        .countDocuments(activeFilter);
+
+      // 2. Neo4j에서 Node, Cluster, Subcluster, Relation 개수 가져오기
+      const neo4jNodesRes = await session.run(
+        'MATCH (n:MacroNode {userId: $userId}) WHERE n.deletedAt IS NULL RETURN count(n) AS count',
+        { userId }
+      );
+      const neo4jNodesCount = neo4jNodesRes.records[0].get('count').toNumber();
+
+      const neo4jClustersRes = await session.run(
+        'MATCH (c:MacroCluster {userId: $userId}) WHERE c.deletedAt IS NULL RETURN count(c) AS count',
+        { userId }
+      );
+      const neo4jClustersCount = neo4jClustersRes.records[0].get('count').toNumber();
+
+      const neo4jSubclustersRes = await session.run(
+        'MATCH (sc:MacroSubcluster {userId: $userId}) WHERE sc.deletedAt IS NULL RETURN count(sc) AS count',
+        { userId }
+      );
+      const neo4jSubclustersCount = neo4jSubclustersRes.records[0].get('count').toNumber();
+
+      const neo4jRelationsRes = await session.run(
+        'MATCH (r:MacroRelation {userId: $userId}) WHERE r.deletedAt IS NULL RETURN count(r) AS count',
+        { userId }
+      );
+      const neo4jRelationsCount = neo4jRelationsRes.records[0].get('count').toNumber();
+
+      // 3. 개수 비교 검증 (Dual Write 정합성)
+      expect(neo4jNodesCount).toBe(mongoNodesCount);
+      expect(neo4jClustersCount).toBe(mongoClustersCount);
+      expect(neo4jSubclustersCount).toBe(mongoSubclustersCount);
+      expect(neo4jRelationsCount).toBe(mongoRelationsCount);
+
+      console.log(
+        `[Dual Write Verification] Nodes: ${mongoNodesCount}, Clusters: ${mongoClustersCount}, Subclusters: ${mongoSubclustersCount}, Relations: ${mongoRelationsCount}`
+      );
+    } finally {
+      await session.close();
+      await driver.close();
+      await mongoClient.close();
+    }
+  });
+
+  it('Scenario 5: Graph Node Soft Delete Consistency Verification', async () => {
+    console.log('\n--- Starting Scenario 5: Soft Delete Verification ---');
+
+    if (!scenario1Passed) {
+      throw new Error(
+        'Scenario 1 did not complete successfully. Scenario 5 requires graph_nodes to be populated.'
+      );
+    }
+
+    const mongoClient = new MongoClient(MONGO_URI);
+    await mongoClient.connect();
+    const db = mongoClient.db();
+
+    const driver = createNeo4jE2eDriver();
+    const session = driver.session();
+
+    try {
+      // 1. 삭제할 노드 선정
+      const targetNode = await db
+        .collection<GraphNodeDoc>('graph_nodes')
+        .findOne({ userId, deletedAt: null });
+      if (!targetNode) {
+        throw new Error('No active node found for testing deletion.');
+      }
+
+      console.log(`Target node for deletion: ${targetNode.id} (origId: ${targetNode.origId})`);
+
+      // 2. API를 통한 노드 삭제 호출 (소프트 삭제 유도 - Dual Write Transaction)
+      // DELETE /v1/graph/nodes/:id (Cascade가 아닌 단일 삭제를 가정하거나 Cascade여도 해당 노드의 deletedAt은 설정됨)
+      const response = await apiClient.delete(`/v1/graph/nodes/${targetNode.id}`);
+      expect(response.status).toBe(204);
+
+      // 3. MongoDB 검증 (deletedAt이 설정되었는지)
+      const deletedMongoNode = await db
+        .collection<GraphNodeDoc>('graph_nodes')
+        .findOne({ userId, id: targetNode.id });
+      expect(deletedMongoNode).not.toBeNull();
+      expect(deletedMongoNode?.deletedAt).not.toBeNull();
+
+      // 4. Neo4j 검증 (deletedAt이 설정되었는지)
+      const neo4jRes = await session.run(
+        'MATCH (n:MacroNode {userId: $userId, id: $id}) RETURN n.deletedAt AS deletedAt',
+        { userId, id: targetNode.id }
+      );
+      expect(neo4jRes.records.length).toBe(1);
+      const neo4jDeletedAt = neo4jRes.records[0].get('deletedAt');
+      expect(neo4jDeletedAt).not.toBeNull();
+
+      console.log('Soft Delete consistency verified for both MongoDB and Neo4j.');
+    } finally {
+      await session.close();
+      await driver.close();
       await mongoClient.close();
     }
   });

@@ -9,6 +9,7 @@ import {
 
 export interface RepoOptions {
   session?: unknown; // MongoDB ClientSession
+  afterCommit?: Array<() => Promise<void>>;
 }
 
 /**

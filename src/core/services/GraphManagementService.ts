@@ -765,9 +765,11 @@ export class GraphManagementService {
       });
 
       // bulkWrite로 일괄 저장
+      await this.upsertClusters(clusters, options);
+      // Neo4j dual-write는 clusterId를 node 속성으로 저장하지 않고 BELONGS_TO 관계로만 표현합니다.
+      // 따라서 cluster를 먼저 upsert해야 이후 node upsert가 같은 graph에 관계를 만들 수 있습니다.
       await this.upsertNodes(nodes, options);
       await this.upsertEdges(edges, options);
-      await this.upsertClusters(clusters, options);
       await this.upsertSubclusters(subclusters, options);
       await this.saveStats({ ...snapshot.stats, userId }, options);
     } catch (err: unknown) {

@@ -67,6 +67,7 @@ export function toGraphNodeDto(doc: GraphNodeDoc): GraphNodeDto {
     embedding: doc.embedding,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
+    deletedAt: doc.deletedAt != null ? new Date(doc.deletedAt).toISOString() : undefined,
   };
 }
 

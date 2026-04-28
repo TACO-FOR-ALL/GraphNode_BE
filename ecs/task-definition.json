@@ -38,6 +38,14 @@
         {
           "name": "DISCORD_WEBHOOK_URL_GRAPH",
           "value": "https://discord.com/api/webhooks/1493877326180515986/Pa10k3GI1-jEytwWpGN8MaRPgXBnxPuvo1Tkzt7dxdEHy2LuEfH-O92YZ2-cA7aknKf7"
+        },
+        {
+          "name": "MACRO_GRAPH_DUAL_WRITE_ENABLED",
+          "value": "true"
+        },
+        {
+          "name": "MACRO_GRAPH_SHADOW_COMPARE_ENABLED",
+          "value": "true"
         }
       ],
       "secrets": [

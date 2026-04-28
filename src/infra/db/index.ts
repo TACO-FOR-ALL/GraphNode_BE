@@ -4,6 +4,8 @@ import prisma from './prisma';
 import { initRedis } from '../redis/client';
 import { initChroma } from './chroma';
 
+import { initNeo4j } from './neo4j';
+
 /**
  * RDB(Prisma)/MongoDB/Redis를 순차 초기화한다. ENV 유효성 검증 포함.
  * @returns Promise<void>
@@ -25,8 +27,8 @@ export async function initDatabases() {
   // FIXME TODO : ChromaDB 연결 추가 필요
   await initChroma();
 
-  // 5. Neo4j connection FIXME(Connection 시 인증 오류 발생, PW 확인 필요)
-  // await initNeo4j();
+  // 5. Neo4j connection
+  await initNeo4j();
 }
 
 /**

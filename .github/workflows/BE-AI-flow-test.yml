@@ -2,7 +2,7 @@ name: BE-AI Integrated Flow Test
 
 on:
   pull_request:
-    branches: [ "main", "develop" ]
+    branches: ['main', 'develop']
 
 # 권한 설정 (OIDC 인증을 위해 필수)
 permissions:
@@ -137,7 +137,7 @@ jobs:
             echo "⏳ Still waiting for services... (Attempt $i/45)"
             sleep 10
           done
-          
+
           echo "❌ Timed out waiting for services to be healthy."
           docker compose -f be/docker-compose.test.yml ps
           docker compose -f be/docker-compose.test.yml logs
@@ -168,8 +168,10 @@ jobs:
           cd be && ./scripts/e2e-test.sh
         env:
           MONGODB_URI: mongodb://127.0.0.1:27017/graphnode?directConnection=true
+          MONGODB_URL: mongodb://127.0.0.1:27017/graphnode?directConnection=true
           DATABASE_URL: postgresql://app:app@localhost:5432/graphnode
           INTERNAL_SERVICE_TOKEN: ci-test-key
+          MIGRATION_TEST_USER_ID: user-12345
 
       # 10. 추가 로그 수집 (실패/캔슬 포함 모든 비정상 종료 대응)
       - name: Collect Logs on Failure
@@ -189,4 +191,3 @@ jobs:
           name: e2e-logs
           path: be/e2e-logs/
           if-no-files-found: warn
-

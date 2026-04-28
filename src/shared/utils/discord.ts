@@ -14,7 +14,7 @@
 
 /** Discord Embed 색상 상수 (integer RGB) */
 const COLOR = {
-  RED: 0xff4444,    // HTTP 500 에러
+  RED: 0xff4444, // HTTP 500 에러
   ORANGE: 0xff8800, // Worker FAILED (AI 서버 응답)
   YELLOW: 0xffcc00, // Worker 내부 예외 (경고)
 } as const;
@@ -104,7 +104,18 @@ export async function notifyHttp500(params: {
   const webhookUrl = process.env.DISCORD_WEBHOOK_URL_ERRORS;
   if (!webhookUrl) return;
 
-  const { path, method, httpStatus, errorCode, errorMessage, routePattern, retryable, userId, correlationId, sentryEventId } = params;
+  const {
+    path,
+    method,
+    httpStatus,
+    errorCode,
+    errorMessage,
+    routePattern,
+    retryable,
+    userId,
+    correlationId,
+    sentryEventId,
+  } = params;
   const sentryLink = buildSentryLink(sentryEventId);
 
   const fields: Array<{ name: string; value: string; inline: boolean }> = [
@@ -121,17 +132,23 @@ export async function notifyHttp500(params: {
     fields.push({ name: '사용자 ID', value: `\`${userId}\``, inline: true });
   }
   if (sentryLink) {
-    fields.push({ name: '📋 Sentry', value: `[Breadcrumb Trail 포함 이벤트 보기](${sentryLink})`, inline: false });
+    fields.push({
+      name: '📋 Sentry',
+      value: `[Breadcrumb Trail 포함 이벤트 보기](${sentryLink})`,
+      inline: false,
+    });
   }
 
   const payload = {
-    embeds: [{
-      title: `🚨 [BE] ${httpStatus} ${errorCode}`,
-      color: COLOR.RED,
-      fields,
-      timestamp: new Date().toISOString(),
-      footer: { text: 'GraphNode BE API' },
-    }],
+    embeds: [
+      {
+        title: `🚨 [BE] ${httpStatus} ${errorCode}`,
+        color: COLOR.RED,
+        fields,
+        timestamp: new Date().toISOString(),
+        footer: { text: 'GraphNode BE API' },
+      },
+    ],
   };
 
   await postWebhook(webhookUrl, payload);
@@ -183,17 +200,88 @@ export async function notifyWorkerFailed(params: {
   ];
 
   if (sentryLink) {
-    fields.push({ name: '📋 Sentry', value: `[Breadcrumb Trail 포함 이벤트 보기](${sentryLink})`, inline: false });
+    fields.push({
+      name: '📋 Sentry',
+      value: `[Breadcrumb Trail 포함 이벤트 보기](${sentryLink})`,
+      inline: false,
+    });
   }
 
   const payload = {
-    embeds: [{
-      title: `⚠️ [Worker] ${taskType} → AI FAILED`,
-      color: COLOR.ORANGE,
-      fields,
-      timestamp: new Date().toISOString(),
-      footer: { text: 'GraphNode Worker (AI 서버 응답 실패)' },
-    }],
+    embeds: [
+      {
+        title: `⚠️ [Worker] ${taskType} → AI FAILED`,
+        color: COLOR.ORANGE,
+        fields,
+        timestamp: new Date().toISOString(),
+        footer: { text: 'GraphNode Worker (AI 서버 응답 실패)' },
+      },
+    ],
+  };
+
+  await postWebhook(webhookUrl, payload);
+}
+
+/**
+ * @description Macro Graph migration shadow read 불일치를 Discord Graph 채널로 전송합니다.
+ *
+ * 이 알림은 운영 중 MongoDB primary와 Neo4j secondary가 같은 read DTO를 반환하지 않을 때 발송됩니다.
+ * Sentry event id가 있으면 embed에 링크를 포함하여 Discord에서 바로 추적 이슈로 이동할 수 있게 합니다.
+ * Webhook 환경 변수가 없으면 기존 알림 유틸과 동일하게 no-op으로 종료합니다.
+ *
+ * @param params.userId 불일치가 발생한 사용자 ID입니다.
+ * @param params.method 불일치가 발생한 read method 이름입니다.
+ * @param params.diffCount 수집된 diff 개수입니다.
+ * @param params.diffs Discord에 표시할 diff 일부입니다. payload 과대화를 막기 위해 호출부에서 잘라 전달합니다.
+ * @param params.suppressedCount dedupe cooldown 동안 억제된 동일 알림 개수입니다.
+ * @param params.sentryEventId Sentry captureMessage 반환값입니다. 설정된 경우 Sentry 링크 생성에 사용합니다.
+ * @returns Discord webhook 전송이 끝나면 resolve됩니다. webhook 미설정 시 즉시 resolve됩니다.
+ * @throws Discord API가 2xx가 아닌 응답을 반환하면 `postWebhook`의 Error를 그대로 던집니다.
+ */
+export async function notifyMacroGraphConsistencyMismatch(params: {
+  userId: string;
+  method: string;
+  diffCount: number;
+  diffs: unknown;
+  suppressedCount?: number;
+  sentryEventId?: string;
+}): Promise<void> {
+  const webhookUrl = process.env.DISCORD_WEBHOOK_URL_GRAPH;
+  if (!webhookUrl) return;
+
+  // Sentry event id가 있을 때만 양방향 추적 링크를 Discord embed에 포함합니다.
+  const sentryLink = buildSentryLink(params.sentryEventId);
+  const diffSummary = JSON.stringify(params.diffs).slice(0, 900);
+  const fields: Array<{ name: string; value: string; inline: boolean }> = [
+    { name: 'User ID', value: `\`${params.userId}\``, inline: true },
+    { name: 'Read Method', value: `\`${params.method}\``, inline: true },
+    { name: 'Diff Count', value: `\`${params.diffCount}\``, inline: true },
+    { name: 'Diffs', value: `\`\`\`json\n${diffSummary}\n\`\`\``, inline: false },
+  ];
+
+  // cooldown 동안 동일 mismatch가 반복되었으면 억제 개수를 별도 필드로 노출합니다.
+  if (params.suppressedCount && params.suppressedCount > 0) {
+    fields.push({
+      name: 'Suppressed Duplicates',
+      value: `\`${params.suppressedCount}\``,
+      inline: true,
+    });
+  }
+
+  if (sentryLink) {
+    fields.push({ name: 'Sentry', value: `[Open issue](${sentryLink})`, inline: false });
+  }
+
+  const payload = {
+    embeds: [
+      {
+        title: '[Migration] Macro graph shadow read mismatch',
+        color: COLOR.YELLOW,
+        fields,
+        timestamp: new Date().toISOString(),
+        footer: { text: 'GraphNode Macro Graph Migration' },
+      },
+    ],
   };
 
   await postWebhook(webhookUrl, payload);
