@@ -164,7 +164,7 @@ export class AddNodeResultHandler implements JobHandler {
       let unresolvedEdgeCount = 0;
 
       const clusterPromises: Promise<void>[] = [];
-      const nodePromises: Promise<void>[] = [];
+      const pendingNodes: GraphNodeDto[] = [];
 
       /**
        * 260411 작업 설명:
@@ -251,24 +251,25 @@ export class AddNodeResultHandler implements JobHandler {
           // 같은 배치의 edge가 raw AI string id를 참조할 수 있으므로 기록한다.
           createdNodeIds.set(normalizedItem.rawTempId, dbNodeId);
 
-          nodePromises.push(
-            graphService.upsertNode({
-              id: dbNodeId,
-              userId,
-              origId: normalizedItem.normalizedOrigId,
-              clusterId: normalizedItem.clusterId,
-              clusterName: normalizedItem.clusterName || '',
-              numMessages: this.resolveNumMessages(normalizedItem, resolvedSourceType),
-              sourceType: resolvedSourceType,
-              embedding: [],
-              timestamp: normalizedItem.timestamp ?? null,
-            })
-          );
+          pendingNodes.push({
+            id: dbNodeId,
+            userId,
+            origId: normalizedItem.normalizedOrigId,
+            clusterId: normalizedItem.clusterId,
+            clusterName: normalizedItem.clusterName || '',
+            numMessages: this.resolveNumMessages(normalizedItem, resolvedSourceType),
+            sourceType: resolvedSourceType,
+            embedding: [],
+            timestamp: normalizedItem.timestamp ?? null,
+          });
           totalNodesAdded += 1;
         }
       }
 
-      await Promise.all([...clusterPromises, ...nodePromises]);
+      // Neo4j는 MacroNode.clusterId 속성을 저장하지 않고 BELONGS_TO 관계를 소속 정보의 source of truth로 사용합니다.
+      // 따라서 신규 cluster가 포함된 AddNode 결과에서는 cluster upsert가 먼저 끝나야 node upsert 시 관계 생성 Cypher가 성공합니다.
+      await Promise.all(clusterPromises);
+      await Promise.all(pendingNodes.map((node) => graphService.upsertNode(node)));
 
       // 260411: sourceType resolve 결과 로깅 추가
       logger.info(
@@ -318,6 +319,23 @@ export class AddNodeResultHandler implements JobHandler {
             logger.warn(
               { taskId, userId, source: edge.source, target: edge.target },
               'AddNode edge skipped: could not resolve node ID to DB numeric id'
+            );
+            continue;
+          }
+
+          // AI가 신규 node와 기존 node를 같은 원천 문서로 중복 지칭하면 정규화 후 동일 DB node id로 접힐 수 있습니다.
+          // MongoDB/Neo4j 모두 self-loop edge를 저장하지 않는 계약이므로, 전체 AddNode 작업을 실패시키지 않고 해당 edge만 건너뜁니다.
+          if (sourceId === targetId) {
+            unresolvedEdgeCount += 1;
+            logger.warn(
+              {
+                taskId,
+                userId,
+                source: edge.source,
+                target: edge.target,
+                resolvedNodeId: sourceId,
+              },
+              'AddNode edge skipped: source and target resolved to the same DB node id'
             );
             continue;
           }

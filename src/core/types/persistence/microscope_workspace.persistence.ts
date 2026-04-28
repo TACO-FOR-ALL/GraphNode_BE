@@ -13,6 +13,8 @@ export type MicroscopeDocumentStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 
  * @property s3Key 원본 파일의 S3 경로
  * @property fileName 사용자에게 보여질 원본 파일명
  * @property status AI 워커 처리 상태
+ * @property nodeId note/conversation/notion/file 기반 ingest일 때 원본 노드 ID
+ * @property nodeType 원본 노드 유형. Microscope 런타임 마이그레이션은 보류하지만 미래 호환을 위해 notion/file을 허용
  * @property sourceId AI 워커 처리가 성공하면 부여되는 고유 문서 식별자 (Neo4j에 매핑됨)
  * @property graphPayloadId AI 워커 처리가 성공하면 부여되는 고유 그래프 페이로드 식별자 (MongoDB에 매핑됨)
  * @property error 실패 시의 에러 원인
@@ -20,16 +22,27 @@ export type MicroscopeDocumentStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 
  * @property updatedAt 최종 상태 변경 일시
  */
 export interface MicroscopeDocumentMetaDoc {
+  /** 내부 고유 식별자입니다. */
   id: string;
+  /** 원본 파일의 S3 경로입니다. */
   s3Key: string;
+  /** 사용자에게 보여질 원본 파일명입니다. */
   fileName: string;
+  /** AI 워커 처리 상태입니다. */
   status: MicroscopeDocumentStatus;
+  /** note/conversation/notion/file 기반 ingest일 때 원본 노드 ID입니다. */
   nodeId?: string;
-  nodeType?: 'note' | 'conversation';
+  /** 원본 노드 유형입니다. Microscope 런타임 마이그레이션은 보류하지만 미래 호환을 위해 notion/file을 허용합니다. */
+  nodeType?: 'note' | 'conversation' | 'notion' | 'file';
+  /** AI 워커 처리가 성공하면 부여되는 고유 문서 식별자입니다. */
   sourceId?: string;
+  /** AI 워커 처리가 성공하면 부여되는 고유 그래프 페이로드 식별자입니다. */
   graphPayloadId?: string;
+  /** 실패 시의 에러 원인입니다. */
   error?: string;
+  /** 등록 일시입니다. */
   createdAt: string;
+  /** 최종 상태 변경 일시입니다. */
   updatedAt: string;
 }
 

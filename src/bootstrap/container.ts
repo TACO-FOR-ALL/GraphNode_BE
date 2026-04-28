@@ -35,12 +35,15 @@ import { MicroscopeWorkspaceRepositoryMongo } from '../infra/repositories/Micros
 import { NotificationRepositoryMongo } from '../infra/repositories/NotificationRepositoryMongo';
 // DB / Infrastructure Adapters
 import { Neo4jGraphAdapter } from '../infra/graph/Neo4jGraphAdapter';
+import { Neo4jMacroGraphAdapter } from '../infra/graph/Neo4jMacroGraphAdapter';
+import { DualWriteGraphStoreProxy } from '../infra/graph/DualWriteGraphStoreProxy';
 import { ChromaVectorAdapter } from '../infra/vector/ChromaVectorAdapter';
 // import { QdrantClientAdapter } from '../infra/repositories/QdrantClientAdapter'; // Removed
 import { NoteRepository } from '../core/ports/NoteRepository';
 // Ports
 import { GraphDocumentStore } from '../core/ports/GraphDocumentStore';
 import { GraphNeo4jStore } from '../core/ports/GraphNeo4jStore';
+import { MacroGraphStore } from '../core/ports/MacroGraphStore';
 import { VectorStore } from '../core/ports/VectorStore';
 import { QueuePort } from '../core/ports/QueuePort';
 import { StoragePort } from '../core/ports/StoragePort';
@@ -71,7 +74,8 @@ export class Container {
   private userRepo: UserRepository | null = null;
   private dailyUsageRepo: DailyUsageRepository | null = null;
   private noteRepo: NoteRepository | null = null;
-  private graphRepo: GraphDocumentStore | null = null; // Renamed to Mongo Store
+  private graphRepo: GraphDocumentStore | null = null; // DualWriteGraphStoreProxy or GraphRepositoryMongo
+  private macroGraphStore: MacroGraphStore | null = null;
   private neo4jStore: GraphNeo4jStore | null = null;
   private vectorStore: VectorStore | null = null;
   private graphVectorService: GraphVectorService | null = null;
@@ -133,9 +137,29 @@ export class Container {
 
   // --- Infrastructure / DB ---
 
+  /**
+   * MacroGraphStore(Neo4jMacroGraphAdapter) 인스턴스를 반환합니다.
+   * @returns MacroGraphStore 인스턴스
+   */
+  getMacroGraphStore(): MacroGraphStore {
+    if (!this.macroGraphStore) {
+      this.macroGraphStore = new Neo4jMacroGraphAdapter();
+    }
+    return this.macroGraphStore;
+  }
+
   getGraphDocumentStore(): GraphDocumentStore {
     if (!this.graphRepo) {
-      this.graphRepo = new GraphRepositoryMongo();
+      const primaryStore = new GraphRepositoryMongo();
+      const env = loadEnv();
+      if (env.MACRO_GRAPH_DUAL_WRITE_ENABLED) {
+        this.graphRepo = new DualWriteGraphStoreProxy(primaryStore, this.getMacroGraphStore(), {
+          secondaryWritesEnabled: true,
+          shadowReadCompare: env.MACRO_GRAPH_SHADOW_COMPARE_ENABLED ?? false,
+        });
+      } else {
+        this.graphRepo = primaryStore;
+      }
     }
     return this.graphRepo;
   }

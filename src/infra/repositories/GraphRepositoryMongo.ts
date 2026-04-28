@@ -12,6 +12,15 @@ import {
 import { getMongo } from '../db/mongodb';
 import { UpstreamError, ValidationError, NotFoundError } from '../../shared/errors/domain';
 
+/**
+ * MongoDB 기반 Macro Graph 문서 저장소 구현체입니다.
+ *
+ * @deprecated 작성일: 2026-04-27.
+ * 원인: Macro Graph의 장기 저장소가 MongoDB document store에서 Neo4j Native Graph 구조로
+ * 이관될 예정입니다. 신규 Macro Graph 런타임 코드는 이 class를
+ * 직접 사용하지 말고 관계 기반 Neo4j 저장소 계층을 사용해야 합니다. 이 구현체는
+ * 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해 당분간 보존합니다.
+ */
 export class GraphRepositoryMongo implements GraphDocumentStore {
   private db() {
     const mongo = getMongo();
@@ -45,6 +54,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * 타임스탬프 책임: createdAt은 최초 삽입 시에만 설정($setOnInsert), updatedAt은 매 호출마다 갱신($set).
    * @param node 저장할 노드 문서.
    */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
+   */
   async upsertNode(node: GraphNodeDoc, options?: RepoOptions): Promise<void> {
     try {
       const now = new Date().toISOString();
@@ -72,6 +87,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * - 각 노드는 `(id, userId)`를 기준으로 upsert 됩니다.
    * - `createdAt`은 신규 삽입 시에만 설정되고, `updatedAt`은 현재 시각으로 일괄 갱신됩니다.
    * - 입력 배열이 비어 있으면 저장을 건너뜁니다.
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async upsertNodes(nodes: GraphNodeDoc[], options?: RepoOptions): Promise<void> {
     try {
@@ -107,6 +128,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param id 갱신할 노드의 ID (number)
    * @param patch 갱신할 속성 객체
    */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
+   */
   async updateNode(
     userId: string,
     id: number,
@@ -138,6 +165,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param id 삭제할 노드 ID
    * @param permanent 영구 삭제 여부 (true: Hard Delete, false: Soft Delete)
    * @param options (선택) 트랜잭션 옵션
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async deleteNode(
     userId: string,
@@ -175,6 +208,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param id 노드 ID
    * @param options (선택) 트랜잭션 옵션
    */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
+   */
   async restoreNode(userId: string, id: number, options?: RepoOptions): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
@@ -200,6 +239,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param ids 노드 ID 목록
    * @param permanent 완전 삭제 여부
    * @param options (선택) 트랜잭션 옵션
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async deleteNodes(
     userId: string,
@@ -240,6 +285,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param origIds 원본 ID 목록
    * @param permanent 완전 삭제 여부
    * @param options (선택) 트랜잭션 옵션
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async deleteNodesByOrigIds(
     userId: string,
@@ -291,6 +342,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param origIds 원본 ID 목록
    * @param options (선택) 트랜잭션 옵션
    */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
+   */
   async restoreNodesByOrigIds(
     userId: string,
     origIds: string[],
@@ -332,6 +389,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param _permanent 영구 삭제 여부 (현재 사용되지 않음)
    * @param options (선택) 트랜잭션 옵션
    */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
+   */
   async deleteAllGraphData(
     userId: string,
     _permanent?: boolean,
@@ -358,6 +421,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param _options (선택) 트랜잭션 옵션
    * @throws {UpstreamError} 복구가 지원되지 않음을 알림
    */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
+   */
   async restoreAllGraphData(_userId: string, _options?: RepoOptions): Promise<void> {
     // [Hard Delete Policy] Restore is not supported in hard-delete only mode
     throw new UpstreamError('Restore is not supported in hard-delete only mode');
@@ -368,6 +437,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    *
    * @param userId 사용자 ID
    * @param id 노드 ID
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async findNode(userId: string, id: number): Promise<GraphNodeDoc | null> {
     try {
@@ -396,6 +471,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param userId 사용자 ID
    * @param origIds 원본 ID 목록
    * @returns 조회된 노드 문서 배열
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async findNodesByOrigIds(userId: string, origIds: string[]): Promise<GraphNodeDoc[]> {
     try {
@@ -432,6 +513,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @returns 조회된 노드 문서 배열
    * @throws {UpstreamError} - DB 오류 발생 시
    */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
+   */
   async findNodesByOrigIdsAll(userId: string, origIds: string[]): Promise<GraphNodeDoc[]> {
     try {
       // deletedAt고 관계 없이 조회
@@ -463,6 +550,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * 특정 사용자의 모든 노드 목록을 조회합니다.
    * @param userId 사용자 ID
    * @returns 조회된 노드 문서 배열
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async listNodes(userId: string): Promise<GraphNodeDoc[]> {
     try {
@@ -498,6 +591,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @returns 조회된 노드 문서 배열
    * @throws {UpstreamError} - DB 오류 발생 시
    */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
+   */
   async listNodesAll(userId: string): Promise<GraphNodeDoc[]> {
     try {
       // deletedAt고 관계 없이 조회
@@ -528,6 +627,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param userId 사용자 ID
    * @param clusterId 클러스터 ID
    * @returns 조회된 노드 문서 배열
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async listNodesByCluster(userId: string, clusterId: string): Promise<GraphNodeDoc[]> {
     try {
@@ -560,6 +665,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * 타임스탬프 책임: createdAt은 최초 삽입 시에만 설정($setOnInsert), updatedAt은 매 호출마다 갱신($set).
    * @param edge 저장할 엣지 문서.
    * @returns 생성되거나 갱신된 엣지의 ID
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async upsertEdge(edge: GraphEdgeDoc, options?: RepoOptions): Promise<string> {
     try {
@@ -594,6 +705,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * - 각 엣지는 `(id, userId)`를 기준으로 upsert 됩니다.
    * - `createdAt`은 신규 삽입 시에만 설정되고, `updatedAt`은 현재 시각으로 일괄 갱신됩니다.
    * - 입력 배열이 비어 있으면 저장을 건너뜁니다.
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async upsertEdges(edges: GraphEdgeDoc[], options?: RepoOptions): Promise<void> {
     try {
@@ -637,6 +754,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param permanent 완전 삭제 여부
    * @param options 트랜잭션 옵션
    */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
+   */
   async deleteEdge(
     userId: string,
     edgeId: string,
@@ -660,6 +783,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param target 노드 ID
    * @param permanent 완전 삭제 여부
    * @param options (선택) 트랜잭션 옵션
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async deleteEdgeBetween(
     userId: string,
@@ -695,6 +824,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param permanent 완전 삭제 여부
    * @param options (선택) 트랜잭션 옵션
    */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
+   */
   async deleteEdgesByNodeIds(
     userId: string,
     ids: number[],
@@ -724,6 +859,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param edgeId 엣지 ID
    * @param options (선택) 트랜잭션 옵션
    */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
+   */
   async restoreEdge(userId: string, edgeId: string, options?: RepoOptions): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
@@ -740,6 +881,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
   /**
    * 특정 사용자의 모든 엣지 목록을 조회합니다.
    */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
+   */
   async listEdges(userId: string): Promise<GraphEdgeDoc[]> {
     try {
       return await this.graphEdges_col()
@@ -754,6 +901,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * 그래프 클러스터를 생성하거나 갱신합니다(upsert).
    * 타임스탬프 책임: createdAt은 최초 삽입 시에만 설정($setOnInsert), updatedAt은 매 호출마다 갱신($set).
    * @param cluster 저장할 클러스터 문서.
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async upsertCluster(cluster: GraphClusterDoc, options?: RepoOptions): Promise<void> {
     try {
@@ -782,6 +935,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * - 각 클러스터는 `(id, userId)`를 기준으로 upsert 됩니다.
    * - `createdAt`은 신규 삽입 시에만 설정되고, `updatedAt`은 현재 시각으로 일괄 갱신됩니다.
    * - 입력 배열이 비어 있으면 저장을 건너뜁니다.
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async upsertClusters(clusters: GraphClusterDoc[], options?: RepoOptions): Promise<void> {
     try {
@@ -819,6 +978,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param _permanent 삭제 여부 (현재는 무시됨)
    * @param options (선택) 트랜잭션 옵션
    */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
+   */
   async deleteCluster(
     userId: string,
     clusterId: string,
@@ -841,6 +1006,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param clusterId 클러스터 ID
    * @param options (선택) 트랜잭션 옵션
    */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
+   */
   async restoreCluster(userId: string, clusterId: string, options?: RepoOptions): Promise<void> {
     try {
       const opts = { ...options, session: options?.session as any };
@@ -860,6 +1031,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param userId 사용자 ID
    * @param clusterId 클러스터 ID
    */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
+   */
   async findCluster(userId: string, clusterId: string): Promise<GraphClusterDoc | null> {
     try {
       return await this.graphClusters_col().findOne({
@@ -874,6 +1051,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
 
   /**
    * 특정 사용자의 모든 클러스터 목록을 조회합니다.
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async listClusters(userId: string): Promise<GraphClusterDoc[]> {
     try {
@@ -890,6 +1073,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * 타임스탬프 책임: createdAt은 최초 삽입 시에만 설정($setOnInsert), updatedAt은 매 호출마다 갱신($set).
    * @param subcluster 저장할 서브클러스터 문서
    * @param options (선택) 트랜잭션 옵션
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async upsertSubcluster(subcluster: GraphSubclusterDoc, options?: RepoOptions): Promise<void> {
     try {
@@ -918,6 +1107,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * - 각 서브클러스터는 `(id, userId)`를 기준으로 upsert 됩니다.
    * - `createdAt`은 신규 삽입 시에만 설정되고, `updatedAt`은 현재 시각으로 일괄 갱신됩니다.
    * - 입력 배열이 비어 있으면 저장을 건너뜁니다.
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async upsertSubclusters(
     subclusters: GraphSubclusterDoc[],
@@ -960,6 +1155,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param permanent 영구 삭제 여부
    * @param options (선택) 트랜잭션 옵션
    */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
+   */
   async deleteSubcluster(
     userId: string,
     subclusterId: string,
@@ -981,6 +1182,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param userId 사용자 ID
    * @param subclusterId 서브클러스터 ID
    * @param options (선택) 트랜잭션 옵션
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async restoreSubcluster(
     userId: string,
@@ -1005,6 +1212,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param userId 사용자 ID
    * @returns 서브클러스터 문서 배열
    */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
+   */
   async listSubclusters(userId: string): Promise<GraphSubclusterDoc[]> {
     try {
       return await this.graphSubclusters_col()
@@ -1019,6 +1232,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * 그래프 통계를 저장합니다. 사용자 ID를 키로 사용합니다.
    * 타임스탬프 책임: updatedAt은 매 호출마다 repository가 갱신합니다.
    * @param stats 저장할 통계 문서.
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async saveStats(stats: GraphStatsDoc, options?: RepoOptions): Promise<void> {
     try {
@@ -1041,6 +1260,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @returns 조회된 통계 문서
    * @throws {UpstreamError} - DB 오류 발생 시
    */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
+   */
   async getStats(userId: string): Promise<GraphStatsDoc | null> {
     try {
       return await this.graphStats_col().findOne({
@@ -1059,6 +1284,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param _permanent - 삭제 여부 (현재는 무시됨)
    * @param options - 트랜잭션 옵션
    * @throws {UpstreamError} - DB 오류 발생 시
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async deleteStats(userId: string, _permanent?: boolean, options?: RepoOptions): Promise<void> {
     try {
@@ -1083,6 +1314,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param summary - 저장할 요약 정보
    * @param options - 트랜잭션 옵션
    * @throws {UpstreamError} - DB 오류 발생 시
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async upsertGraphSummary(
     userId: string,
@@ -1109,6 +1346,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @returns 조회된 요약 정보
    * @throws {UpstreamError} - DB 오류 발생 시
    */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
+   */
   async getGraphSummary(userId: string): Promise<GraphSummaryDoc | null> {
     try {
       const doc = await this.graphSummary_col().findOne({
@@ -1128,6 +1371,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param _permanent - 삭제 여부 (현재는 무시됨)
    * @param options - 트랜잭션 옵션
    * @throws {UpstreamError} - DB 오류 발생 시
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async deleteGraphSummary(
     userId: string,
@@ -1149,6 +1398,12 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
    * @param _userId - 작업을 요청한 사용자 ID (현재 미사용)
    * @param _options - 트랜잭션 옵션 (현재 미사용)
    * @throws {UpstreamError} 복구가 지원되지 않음을 알림
+   */
+  /**
+   * @deprecated 작성일: 2026-04-27.
+   * 원인: Macro Graph의 장기 저장소가 MongoDB에서 Neo4j Native Graph 구조로 이관될 예정입니다.
+   * 신규 Macro Graph 런타임 코드에서는 이 Mongo 구현체 메서드를 호출하지 말고 관계 기반 Neo4j 저장소 계층을 사용하십시오.
+   * 이 메서드는 마이그레이션 검증, 롤백, 과거 테스트 호환을 위해서만 보존합니다.
    */
   async restoreGraphSummary(_userId: string, _options?: RepoOptions): Promise<void> {
     // [Hard Delete Policy] Restore is no longer supported
@@ -1172,3 +1427,5 @@ export class GraphRepositoryMongo implements GraphDocumentStore {
     throw new UpstreamError(`${methodName} failed`, { cause: String(err) });
   }
 }
+
+
