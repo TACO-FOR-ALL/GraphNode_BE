@@ -4,7 +4,7 @@ import { GraphManagementService } from '../../src/core/services/GraphManagementS
 import { GraphDocumentStore } from '../../src/core/ports/GraphDocumentStore';
 import { GraphNodeDto, GraphEdgeDto, GraphStatsDto } from '../../src/shared/dtos/graph';
 import { ValidationError, UpstreamError } from '../../src/shared/errors/domain';
-import { GraphNodeDoc } from '../../src/core/types/persistence/graph.persistence';
+import { GraphNodeDoc, GraphSubclusterDoc } from '../../src/core/types/persistence/graph.persistence';
 
 describe('GraphManagementService', () => {
   let service: GraphManagementService;
@@ -165,6 +165,71 @@ describe('GraphManagementService', () => {
           await service.listNodesByCluster('user-1', 'c1');
           expect(mockRepo.listNodesByCluster).toHaveBeenCalledWith('user-1', 'c1');
       });
+  });
+
+  describe('listSubclusters', () => {
+    it('should recalculate subcluster nodeIds and size from active nodes', async () => {
+      mockRepo.listNodes.mockResolvedValue([
+        {
+          id: 2,
+          userId: 'user-1',
+          origId: 'orig-2',
+          clusterId: 'cluster-1',
+          clusterName: 'Cluster 1',
+          timestamp: null,
+          numMessages: 1,
+          createdAt: '',
+          updatedAt: '',
+        },
+      ]);
+      mockRepo.listSubclusters.mockResolvedValue([
+        {
+          id: 'subcluster-1',
+          userId: 'user-1',
+          clusterId: 'cluster-1',
+          nodeIds: [1, 2],
+          representativeNodeId: 1,
+          size: 2,
+          density: 0.5,
+          topKeywords: ['test'],
+          createdAt: '',
+          updatedAt: '',
+        } as GraphSubclusterDoc,
+      ]);
+
+      const result = await service.listSubclusters('user-1');
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          id: 'subcluster-1',
+          nodeIds: [2],
+          size: 1,
+          representativeNodeId: 2,
+        }),
+      ]);
+    });
+
+    it('should drop subclusters with no remaining active nodes', async () => {
+      mockRepo.listNodes.mockResolvedValue([]);
+      mockRepo.listSubclusters.mockResolvedValue([
+        {
+          id: 'subcluster-empty',
+          userId: 'user-1',
+          clusterId: 'cluster-1',
+          nodeIds: [99],
+          representativeNodeId: 99,
+          size: 1,
+          density: 0.1,
+          topKeywords: [],
+          createdAt: '',
+          updatedAt: '',
+        } as GraphSubclusterDoc,
+      ]);
+
+      const result = await service.listSubclusters('user-1');
+
+      expect(result).toEqual([]);
+    });
   });
 
   // --- Edge Tests ---

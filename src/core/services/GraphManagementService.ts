@@ -200,6 +200,11 @@ export class GraphManagementService {
     try {
       this.assertUser(userId);
       await this.repo.deleteNodesByOrigIds(userId, origIds, permanent, options);
+
+      //클러스터 
+
+      //서브 클러스터 관련코드
+
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.deleteNodesByOrigIds failed', { cause: String(err) });
@@ -705,7 +710,25 @@ export class GraphManagementService {
   async listSubclusters(userId: string): Promise<GraphSubclusterDoc[]> {
     try {
       this.assertUser(userId);
-      return await this.repo.listSubclusters(userId);
+      const [subclusters, activeNodes] = await Promise.all([
+        this.repo.listSubclusters(userId),
+        this.repo.listNodes(userId),
+      ]);
+      const activeNodeIds = new Set(activeNodes.map((node) => node.id));
+
+      return subclusters
+        .map((subcluster) => {
+          const nodeIds = subcluster.nodeIds.filter((nodeId) => activeNodeIds.has(nodeId));
+          return {
+            ...subcluster,
+            nodeIds,
+            size: nodeIds.length,
+            representativeNodeId: nodeIds.includes(subcluster.representativeNodeId)
+              ? subcluster.representativeNodeId
+              : nodeIds[0] ?? subcluster.representativeNodeId,
+          };
+        })
+        .filter((subcluster) => subcluster.size > 0);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.listSubclusters failed', { cause: String(err) });
