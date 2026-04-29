@@ -110,43 +110,75 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   }
 
   /**
-   * @description options.transaction이 있으면 해당 transaction을 사용하고, 없으면 session을 열어 닫습니다.
+   * @description 읽기 작업을 Neo4j managed read transaction 안에서 실행합니다. 작성일자: 2026-04-29.
+   *
+   * 호출자가 transaction을 전달하면 같은 transaction을 재사용하고, 전달하지 않으면 READ session을 열어
+   * executeRead로 쿼리를 실행합니다. 이 흐름은 session에 열린 transaction이 남은 상태에서 session.run을
+   * 직접 호출하는 위험을 제거합니다.
+   *
+   * @param fn ManagedTransaction을 받아 읽기 쿼리를 실행하는 콜백입니다.
+   * @param options 외부 transaction과 조회 옵션을 담은 adapter 옵션입니다.
+   * @returns 콜백 실행 결과를 그대로 반환합니다.
    */
   private async runRead<T>(
-    fn: (runner: {
-      run(query: string, params?: Record<string, unknown>): Promise<{ records: unknown[] }>;
-    }) => Promise<T>,
+    fn: (runner: ManagedTransaction) => Promise<T>,
     options?: MacroGraphStoreOptions
   ): Promise<T> {
     const tx = options?.transaction as ManagedTransaction | undefined;
     if (tx && typeof tx.run === 'function') {
-      return fn(tx as unknown as Parameters<typeof fn>[0]);
+      // 외부 transaction이 있으면 새 session을 만들지 않고 호출자 transaction 범위 안에서 실행합니다.
+      return fn(tx);
     }
+
     const session = this.getDriver().session({ defaultAccessMode: neo4j.session.READ });
     try {
-      return await fn(session as unknown as Parameters<typeof fn>[0]);
+      // executeRead가 transaction 생성, commit, rollback을 관리하도록 위임합니다.
+      return await session.executeRead((innerTx) => fn(innerTx));
     } finally {
+      // 읽기 성공 여부와 관계없이 session을 닫아 connection 누수를 막습니다.
       await session.close();
     }
   }
 
+  /**
+   * @description 쓰기 작업을 Neo4j managed write transaction 안에서 실행합니다. 작성일자: 2026-04-29.
+   *
+   * 호출자가 transaction을 전달하면 같은 transaction을 재사용하고, 전달하지 않으면 WRITE session을 열어
+   * executeWrite로 commit/rollback 범위를 명확히 관리합니다.
+   *
+   * @param fn ManagedTransaction을 받아 쓰기 쿼리를 실행하는 콜백입니다.
+   * @param options 외부 transaction과 adapter 옵션을 담은 값입니다.
+   * @returns 콜백 실행 결과를 그대로 반환합니다.
+   */
   private async runWrite<T>(
     fn: (runner: ManagedTransaction) => Promise<T>,
     options?: MacroGraphStoreOptions
   ): Promise<T> {
     const tx = options?.transaction as ManagedTransaction | undefined;
     if (tx && typeof tx.run === 'function') {
+      // 외부 transaction이 있으면 삭제, 갱신 쿼리도 호출자 transaction에 참여시킵니다.
       return fn(tx);
     }
+
     const session = this.getDriver().session({ defaultAccessMode: neo4j.session.WRITE });
     try {
+      // executeWrite가 재시도 가능한 write transaction 수명주기를 관리하게 합니다.
       return await session.executeWrite((innerTx) => fn(innerTx));
     } finally {
+      // 쓰기 성공 여부와 관계없이 session을 닫습니다.
       await session.close();
     }
   }
 
+  /**
+   * @description 읽기 Cypher에 공통으로 넘길 사용자와 soft-delete 조회 옵션을 만듭니다. 작성일자: 2026-04-29.
+   *
+   * @param userId 조회 대상 사용자 ID입니다.
+   * @param options includeDeleted 플래그를 포함할 수 있는 adapter 옵션입니다.
+   * @returns Neo4j read query에 전달할 공통 파라미터입니다.
+   */
   private readParams(userId: string, options?: MacroGraphStoreOptions): Record<string, unknown> {
+    // includeDeleted가 명시되지 않으면 active 데이터만 조회합니다.
     return { userId, includeDeleted: options?.includeDeleted ?? false };
   }
 
@@ -1553,43 +1585,32 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   }
 
   /**
-   * @description 사용자의 Macro Graph 전체를 삭제합니다.
+   * @description 사용자의 Macro Graph 전체를 삭제합니다. 작성일자: 2026-04-29.
    *
-   * @param userId 삭제 대상 사용자 ID
-   * @param options transaction 등 adapter 전용 옵션
+   * 삭제 작업은 runWrite 래퍼를 통해 실행되어 외부 transaction이 있으면 재사용하고, 없으면
+   * executeWrite 기반 managed transaction을 사용합니다.
+   *
+   * @param userId 삭제 대상 사용자 ID입니다.
+   * @param options 외부 transaction을 포함할 수 있는 adapter 옵션입니다.
    */
   async deleteGraph(userId: string, options?: MacroGraphStoreOptions): Promise<void> {
-    const tx = options?.transaction as ManagedTransaction | undefined;
-    if (tx) {
-      // 외부에서 주입된 트랜잭션이 있으면 해당 트랜잭션 컨텍스트 내에서 삭제 쿼리를 실행합니다.
-      await tx.run(MACRO_GRAPH_CYPHER.deleteGraph, { userId });
-      return;
-    }
-    // 주입된 트랜잭션이 없다면, 새 WRITE 세션을 엽니다.
-    const session = this.getDriver().session({ defaultAccessMode: neo4j.session.WRITE });
-    try {
-      // executeWrite를 통해 자동 재시도 및 트랜잭션 관리가 포함된 쓰기 작업을 수행합니다.
-      await session.executeWrite((innerTx) =>
-        innerTx.run(MACRO_GRAPH_CYPHER.deleteGraph, { userId })
-      );
-    } finally {
-      // 사용이 완료된 세션은 리소스 누수 방지를 위해 반드시 종료합니다.
-      await session.close();
-    }
+    await this.runWrite(async (runner) => {
+      // 모든 그래프 데이터 삭제 쿼리를 단일 write transaction 안에서 실행합니다.
+      await runner.run(MACRO_GRAPH_CYPHER.deleteGraph, { userId });
+    }, options);
   }
-
   /**
-   * @description Seed 노드 origId 목록을 기반으로 Graph RAG용 이웃 노드를 탐색합니다.
+   * @description Seed origId 목록을 기반으로 Graph RAG 이웃 노드를 탐색합니다. 작성일자: 2026-04-29.
    *
-   * 1홉 쿼리와 2홉 쿼리를 순차 실행하여 이웃 목록을 구성합니다.
-   * 1홉에서 이미 나온 origId는 2홉 결과에서 제외됩니다(1홉 우선).
-   * Seed origIds가 비어있으면 즉시 빈 배열을 반환합니다.
+   * 외부 transaction이 전달된 경우에는 같은 transaction 안에서 1홉, 2홉 쿼리를 순차 실행합니다.
+   * transaction이 없을 때만 1홉과 2홉 조회를 서로 다른 READ session의 executeRead로 병렬 실행합니다.
+   * 이 방식은 단일 session에 열린 transaction이 있는 상태에서 다른 쿼리를 직접 실행하는 위험을 피합니다.
    *
-   * @param userId 조회 대상 사용자 ID
-   * @param seedOrigIds ChromaDB 벡터 검색으로 추출한 Seed origId 목록
-   * @param limit 1홉/2홉 각각에서 반환할 최대 이웃 수 (기본 20)
-   * @param options transaction 등 adapter 전용 옵션
-   * @returns 1홉/2홉 이웃 노드 목록 (중복 origId 제거, 1홉 우선)
+   * @param userId 조회 대상 사용자 ID입니다.
+   * @param seedOrigIds ChromaDB 벡터 검색으로 추출한 seed origId 목록입니다.
+   * @param limit 1홉과 2홉 각각에서 반환할 최대 이웃 수입니다.
+   * @param options 외부 transaction을 포함할 수 있는 adapter 옵션입니다.
+   * @returns 중복 origId를 제거하고 1홉 결과를 우선한 Graph RAG 이웃 목록입니다.
    */
   async searchGraphRagNeighbors(
     userId: string,
@@ -1599,22 +1620,16 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   ): Promise<GraphRagNeighborResult[]> {
     if (seedOrigIds.length === 0) return [];
 
-    const session = this.getDriver().session({ defaultAccessMode: neo4j.session.READ });
-    try {
-      const neo4jLimit = neo4j.int(limit);
-      const params = { userId, seedOrigIds, limit: neo4jLimit };
-
-      // 1홉과 2홉을 병렬 실행하여 IO 대기 시간을 줄입니다.
-      const [hop1Result, hop2Result] = await Promise.all([
-        session.run(MACRO_GRAPH_CYPHER.graphRagNeighbors1Hop, params),
-        session.run(MACRO_GRAPH_CYPHER.graphRagNeighbors2Hop, params),
-      ]);
-
+    const params = { userId, seedOrigIds, limit: neo4j.int(limit) };
+    const buildResults = (
+      hop1Records: Array<{ get(key: string): unknown }>,
+      hop2Records: Array<{ get(key: string): unknown }>
+    ): GraphRagNeighborResult[] => {
       const seen = new Set<string>();
       const results: GraphRagNeighborResult[] = [];
 
-      // 1홉 결과를 먼저 처리합니다 (더 가까운 이웃이므로 우선순위 높음).
-      for (const record of hop1Result.records) {
+      // 1홉 결과는 더 가까운 관계이므로 먼저 추가하고 이후 중복 origId를 차단합니다.
+      for (const record of hop1Records) {
         const origId = String(record.get('origId'));
         if (seen.has(origId)) continue;
         seen.add(origId);
@@ -1630,8 +1645,8 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
         });
       }
 
-      // 2홉 결과에서 1홉과 중복되지 않는 이웃만 추가합니다.
-      for (const record of hop2Result.records) {
+      // 2홉 결과는 1홉에 이미 포함된 노드를 제외하고 보강 후보로 추가합니다.
+      for (const record of hop2Records) {
         const origId = String(record.get('origId'));
         if (seen.has(origId)) continue;
         seen.add(origId);
@@ -1647,6 +1662,38 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
         });
       }
 
+      return results;
+    };
+
+    const tx = options?.transaction as ManagedTransaction | undefined;
+    if (tx && typeof tx.run === 'function') {
+      // 외부 transaction 안에서는 같은 transaction runner를 순차 사용하여 병렬 transaction 충돌을 피합니다.
+      const hop1Result = await tx.run(MACRO_GRAPH_CYPHER.graphRagNeighbors1Hop, params);
+      const hop2Result = await tx.run(MACRO_GRAPH_CYPHER.graphRagNeighbors2Hop, params);
+      return buildResults(
+        hop1Result.records as Array<{ get(key: string): unknown }>,
+        hop2Result.records as Array<{ get(key: string): unknown }>
+      );
+    }
+
+    const session1 = this.getDriver().session({ defaultAccessMode: neo4j.session.READ });
+    const session2 = this.getDriver().session({ defaultAccessMode: neo4j.session.READ });
+    try {
+      // transaction이 없는 일반 조회에서는 각 hop 쿼리에 별도 session을 배정해 안전하게 병렬화합니다.
+      const [hop1Result, hop2Result] = await Promise.all([
+        session1.executeRead((innerTx) =>
+          innerTx.run(MACRO_GRAPH_CYPHER.graphRagNeighbors1Hop, params)
+        ),
+        session2.executeRead((innerTx) =>
+          innerTx.run(MACRO_GRAPH_CYPHER.graphRagNeighbors2Hop, params)
+        ),
+      ]);
+
+      const results = buildResults(
+        hop1Result.records as Array<{ get(key: string): unknown }>,
+        hop2Result.records as Array<{ get(key: string): unknown }>
+      );
+
       logger.info(
         { userId, seedCount: seedOrigIds.length, neighborCount: results.length },
         '[Neo4jMacroGraphAdapter] Graph RAG 이웃 탐색 완료'
@@ -1654,33 +1701,22 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
 
       return results;
     } finally {
-      await session.close();
+      // 병렬 조회 중 하나가 실패해도 두 session을 모두 닫습니다.
+      await Promise.all([session1.close(), session2.close()]);
     }
   }
-
   /**
-   * @description 사용자의 MacroSummary를 삭제합니다.
+   * @description 사용자의 MacroSummary 노드를 삭제합니다. 작성일자: 2026-04-29.
    *
-   * @param userId 삭제 대상 사용자 ID
-   * @param options transaction 등 adapter 전용 옵션
+   * 직접 session을 열지 않고 runWrite 래퍼를 사용해 transaction 처리 방식을 한 곳으로 통일합니다.
+   *
+   * @param userId 삭제 대상 사용자 ID입니다.
+   * @param options 외부 transaction을 포함할 수 있는 adapter 옵션입니다.
    */
   async deleteGraphSummary(userId: string, options?: MacroGraphStoreOptions): Promise<void> {
-    const tx = options?.transaction as ManagedTransaction | undefined;
-    if (tx) {
-      // 주입된 트랜잭션이 존재하면 해당 트랜잭션을 사용하여 Summary 노드를 삭제합니다.
-      await tx.run(MACRO_GRAPH_CYPHER.deleteGraphSummary, { userId });
-      return;
-    }
-    // 주입된 트랜잭션이 없으므로 직접 WRITE 세션을 생성합니다.
-    const session = this.getDriver().session({ defaultAccessMode: neo4j.session.WRITE });
-    try {
-      // executeWrite 내부에서 트랜잭션을 열어 삭제 쿼리를 실행합니다.
-      await session.executeWrite((innerTx) =>
-        innerTx.run(MACRO_GRAPH_CYPHER.deleteGraphSummary, { userId })
-      );
-    } finally {
-      // 작업이 끝난 뒤 세션을 닫아줍니다.
-      await session.close();
-    }
+    await this.runWrite(async (runner) => {
+      // Summary 삭제도 동일한 write transaction 정책을 따르게 합니다.
+      await runner.run(MACRO_GRAPH_CYPHER.deleteGraphSummary, { userId });
+    }, options);
   }
 }
