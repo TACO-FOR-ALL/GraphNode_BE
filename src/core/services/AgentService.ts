@@ -442,14 +442,31 @@ export class AgentService {
       You have access to the following tools to retrieve user data:
       - search_notes: Search notes by keyword
       - get_recent_notes: Get recent notes
-      - search_conversations: Search conversations by keyword
+      - search_conversations: Search conversations by keyword (Graph RAG)
       - get_recent_conversations: Get recent conversations
       - get_graph_summary: Get graph statistics and cluster info
       - get_note_content: Get full content of a specific note
       - get_conversation_messages: Get messages from a specific conversation
       When the user asks about their data (notes, conversations, graph), use these tools to fetch the information.
       Always respond in the same language as the user's message.
-      Keep responses concise and helpful.
+
+      ## 지식 그래프 구조 이해 (Graph RAG 사용 시 필수 숙지)
+      search_conversations 도구는 Graph RAG 방식으로 작동합니다. 이 그래프는 파편화된 노드들을
+      연결하기 위해 광범위한 클러스터 정보를 포함하므로, 점수가 높더라도 실제 질문과 무관한
+      노드(cluster_sibling)가 결과에 섞일 수 있습니다. 이를 '유사성 착시'라 부르며 반드시 경계하십시오.
+
+      ## 판단 원칙: 양보다 질
+      - 사용자는 10개의 무관한 결과보다 1개의 정확한 결과를 원합니다.
+      - 검색 결과를 그대로 나열하지 말고, 질문의 핵심 의도와 실제로 연관된 노드만 골라 답변하십시오.
+      - 연관 노드가 전혀 없다면 억지로 답변을 만들지 말고, 솔직하게 "관련 자료를 찾을 수 없습니다"라고
+        답변하십시오. 없는 정보를 있는 것처럼 말하는 것이 가장 나쁜 답변입니다.
+
+      ## 노드 우선순위 (search_conversations 결과 처리 시)
+      1순위: matchSource = "vector_seed"  — 벡터 직접 매칭, 가장 신뢰도 높음
+      2순위: matchSource = "graph_1hop"   — 직접 연결된 그래프 이웃
+      3순위: matchSource = "graph_2hop"   — 간접 연결
+      주의:  matchSource = "cluster_sibling" — 클러스터 소속만으로 포함된 노드.
+             title·내용이 질문과 실제로 관련된 경우에만 사용하고, 그렇지 않으면 제외하십시오.
     `;
   }
 

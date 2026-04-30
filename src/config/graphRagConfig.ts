@@ -56,7 +56,7 @@ export const GRAPH_RAG_HOP_DECAY_FALLBACK = 0.3;
  * 올리면: 허브 노드(다수 Seed와 연결된 중심 노드)가 순위 상단에 몰립니다.
  * 낮추면: Seed 연결 수 영향이 약해져 엣지 가중치(avgEdgeWeight)가 더 지배적이 됩니다.
  */
-export const GRAPH_RAG_CONNECTION_BONUS_RATE = 0.15;
+export const GRAPH_RAG_CONNECTION_BONUS_RATE = 0.0;
 
 // ── 클러스터 가상 연결 확장 (고립 노드 보완) ─────────────────────────────────
 
