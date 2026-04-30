@@ -1,5 +1,7 @@
 # src/workers — SQS Consumer Workers
 
+> 마지막 갱신: 2026-04-29
+
 SQS Result Queue를 폴링하고 AI 워커 처리 결과를 수신·처리하는 백그라운드 워커.
 **API 요청 스레드에서 직접 호출 금지.** 무거운 작업은 반드시 이 경로를 통해 처리.
 
@@ -12,6 +14,15 @@ SQS Result Queue
   → handlers/*.ts (각 작업 결과 처리)
   → FCM/WebSocket으로 클라이언트 알림
 ```
+
+## Neo4j 쓰기 작업
+
+AI 워커 결과 처리 시 Neo4j에도 Macro Graph 구조를 저장해야 합니다.
+
+- `GRAPH_GENERATION_RESULT` 처리 → `MacroGraphStore.upsertGraph()` 호출 (전체 교체 single transaction)
+- 증분 업데이트: `upsertNode` / `upsertEdge` / `upsertCluster`
+- **Singleton Driver 사용**: `getNeo4jDriver()` 전역 1개만 사용. 핸들러에서 직접 `new Driver()` 금지
+- **세션 닫기**: 모든 Neo4j 세션은 `try...finally`에서 `session.close()` 필수
 
 ## 수신 메시지 타입 (SQS Task Types)
 

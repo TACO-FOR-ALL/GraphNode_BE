@@ -1,5 +1,7 @@
 # src/bootstrap — DI 컨테이너 & 서버 조립
 
+> 마지막 갱신: 2026-04-29
+
 **신규 Service/Repository 추가 시 반드시 이 디렉토리를 수정해야 합니다.**
 
 ## 파일 구성
@@ -7,6 +9,7 @@
 ```
 container.ts       전체 싱글톤 생성·DI 연결의 유일한 진입점
 server.ts          Express 앱 조립 (미들웨어 체인, 라우터 마운트)
+                   — 앱 시작 시 Promise.all([initChroma(), initNeo4j()]) 병렬 초기화
 modules/           도메인별 DI 모듈 분리 (container.ts가 각 모듈을 호출)
   *.module.ts      각 도메인의 Repository→Service→Controller 생성 순서 정의
 ```

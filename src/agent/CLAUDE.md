@@ -1,5 +1,7 @@
 # src/agent — AI Agent Tools (Function Calling)
 
+> 마지막 갱신: 2026-04-29
+
 Claude Function Calling 도구 정의 및 ToolRegistry 관리.
 AI가 대화 중 호출할 수 있는 백엔드 데이터 접근 도구들.
 
@@ -10,8 +12,14 @@ ToolRegistry.ts   등록된 모든 Tool의 스키마·핸들러 맵
 types.ts          Tool 공통 타입 정의
 tools/
   Get*.ts         조회 도구 (읽기 전용)
-  Search*.ts      검색 도구
+  Search*.ts      검색 도구 (GraphRagSearch 포함)
 ```
+
+## Graph RAG 도구
+
+`SearchGraphRagTool` — ChromaDB 벡터 검색(Seed) + Neo4j 1홉/2홉 이웃 탐색을 결합.  
+Agent가 사용자 맥락 관련 노드를 찾아 응답에 활용할 때 호출.  
+내부적으로 `SearchService.graphRagSearch(userId, query, limit)` 위임.
 
 ## Tool 구현 패턴
 

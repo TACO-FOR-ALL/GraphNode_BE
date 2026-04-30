@@ -50,6 +50,7 @@ const TARGET_USER_IDS: string[] = [
   'fccc7e5e-de95-43b2-8d39-3f753f15cd24',
   'd2a7591a-d486-48ef-9949-d5efed91eafe',
   'bddd9c83-4256-48e1-a660-ae3844cbc610',
+  '46d3d6c5-2a13-4e52-b069-ca5938095b5a',
 ];
 
 const MONGODB_URL = process.env.MONGODB_URL ?? 'mongodb://localhost:27017';

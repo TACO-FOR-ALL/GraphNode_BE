@@ -68,6 +68,15 @@ export type {
   FolderUpdateDto,
 } from './types/note.js';
 export type { SyncPushRequest, SyncPullResponse } from './types/sync.js';
+export type {
+  ConversationSearchResult,
+  GraphRagNodeResult,
+  GraphRagSearchParams,
+  GraphRagSearchResponse,
+  NoteSearchResult,
+  SearchNotesAndAIChatsParams,
+  SearchNotesAndAIChatsResponse,
+} from './types/search.js';
 export type { FileAttachment, FileUploadResponse } from './types/file.js';
 export type { MicroscopeDocument, MicroscopeWorkspace, MicroscopeGraphNode, MicroscopeGraphEdge, MicroscopeGraphData } from './types/microscope.js';
 export type {

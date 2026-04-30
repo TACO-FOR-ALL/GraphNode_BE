@@ -162,8 +162,11 @@ describe('Neo4jMacroGraphAdapter', () => {
         }),
       };
 
-      const session = {
+      const tx = {
         run: jest.fn().mockResolvedValue({ records: [statsRecord] }),
+      };
+      const session = {
+        executeRead: jest.fn().mockImplementation(async (fn: (t: typeof tx) => Promise<void>) => fn(tx)),
         close: jest.fn().mockResolvedValue(undefined),
       };
       const driver = { session: jest.fn().mockReturnValue(session) };
@@ -180,8 +183,11 @@ describe('Neo4jMacroGraphAdapter', () => {
     });
 
     it('MacroGraph가 없으면 null을 반환한다', async () => {
-      const session = {
+      const tx = {
         run: jest.fn().mockResolvedValue({ records: [] }),
+      };
+      const session = {
+        executeRead: jest.fn().mockImplementation(async (fn: (t: typeof tx) => Promise<void>) => fn(tx)),
         close: jest.fn().mockResolvedValue(undefined),
       };
       const driver = { session: jest.fn().mockReturnValue(session) };
@@ -226,6 +232,143 @@ describe('Neo4jMacroGraphAdapter', () => {
 
       const calledQuery = (tx.run as jest.Mock).mock.calls[0][0] as string;
       expect(calledQuery).toContain('DETACH DELETE sm');
+    });
+  });
+
+  describe('searchGraphRagNeighbors', () => {
+    function makeRecord(data: Record<string, unknown>) {
+      return { get: jest.fn().mockImplementation((key: string) => data[key] ?? null) };
+    }
+
+    function makeReadSession(records: ReturnType<typeof makeRecord>[]) {
+      const tx = { run: jest.fn().mockResolvedValue({ records }) };
+      return {
+        executeRead: jest.fn().mockImplementation(
+          async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx)
+        ),
+        close: jest.fn().mockResolvedValue(undefined),
+        _tx: tx,
+      };
+    }
+
+    it('seedOrigIds가 빈 배열이면 DB를 호출하지 않고 즉시 빈 배열을 반환한다', async () => {
+      const driver = { session: jest.fn() };
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      const result = await adapter.searchGraphRagNeighbors('user1', []);
+
+      expect(driver.session).not.toHaveBeenCalled();
+      expect(result).toEqual([]);
+    });
+
+    it('1홉/2홉 쿼리를 각각 별도 세션의 executeRead로 실행한다', async () => {
+      const hop1Record = makeRecord({
+        origId: 'neighbor-a',
+        nodeId: 10,
+        nodeType: 'conversation',
+        clusterName: 'AI',
+        connectedSeeds: ['seed-1'],
+        avgEdgeWeight: 0.8,
+        connectionCount: 1,
+      });
+      const hop2Record = makeRecord({
+        origId: 'neighbor-b',
+        nodeId: 20,
+        nodeType: 'note',
+        clusterName: 'Research',
+        connectedSeeds: ['seed-1'],
+        avgEdgeWeight: 0.5,
+        connectionCount: 1,
+      });
+
+      const session1 = makeReadSession([hop1Record]);
+      const session2 = makeReadSession([hop2Record]);
+      const driver = {
+        session: jest.fn()
+          .mockReturnValueOnce(session1)
+          .mockReturnValueOnce(session2),
+      };
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      const results = await adapter.searchGraphRagNeighbors('user1', ['seed-1'], 20);
+
+      // 세션 2개가 각각 생성되어야 합니다.
+      expect(driver.session).toHaveBeenCalledTimes(2);
+      expect(session1.executeRead).toHaveBeenCalledTimes(1);
+      expect(session2.executeRead).toHaveBeenCalledTimes(1);
+
+      // 1홉 결과가 먼저 포함됩니다.
+      expect(results[0]).toMatchObject({ origId: 'neighbor-a', hopDistance: 1 });
+      expect(results[1]).toMatchObject({ origId: 'neighbor-b', hopDistance: 2 });
+
+      // 각 세션이 닫혀야 합니다.
+      expect(session1.close).toHaveBeenCalledTimes(1);
+      expect(session2.close).toHaveBeenCalledTimes(1);
+    });
+
+    it('1홉과 2홉에서 중복 origId가 있으면 1홉 항목을 우선하고 2홉은 제거된다', async () => {
+      const sharedOrigId = 'shared-node';
+      const hop1Record = makeRecord({
+        origId: sharedOrigId,
+        nodeId: 10,
+        nodeType: 'conversation',
+        clusterName: 'AI',
+        connectedSeeds: ['seed-1'],
+        avgEdgeWeight: 0.8,
+        connectionCount: 1,
+      });
+      const hop2Record = makeRecord({
+        origId: sharedOrigId, // 동일한 origId — 제거되어야 합니다.
+        nodeId: 10,
+        nodeType: 'conversation',
+        clusterName: 'AI',
+        connectedSeeds: ['seed-1'],
+        avgEdgeWeight: 0.5,
+        connectionCount: 1,
+      });
+
+      const session1 = makeReadSession([hop1Record]);
+      const session2 = makeReadSession([hop2Record]);
+      const driver = {
+        session: jest.fn()
+          .mockReturnValueOnce(session1)
+          .mockReturnValueOnce(session2),
+      };
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      const results = await adapter.searchGraphRagNeighbors('user1', ['seed-1'], 20);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].origId).toBe(sharedOrigId);
+      expect(results[0].hopDistance).toBe(1); // 1홉이 유지됩니다.
+    });
+
+    it('쿼리 실패 시 양쪽 세션 모두 닫힌다', async () => {
+      const session1 = {
+        executeRead: jest.fn().mockRejectedValue(new Error('Neo4j connection failed')),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      const session2 = {
+        executeRead: jest.fn().mockResolvedValue({ records: [] }),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      const driver = {
+        session: jest.fn()
+          .mockReturnValueOnce(session1)
+          .mockReturnValueOnce(session2),
+      };
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      await expect(
+        adapter.searchGraphRagNeighbors('user1', ['seed-1'], 20)
+      ).rejects.toThrow('Neo4j connection failed');
+
+      expect(session1.close).toHaveBeenCalledTimes(1);
+      expect(session2.close).toHaveBeenCalledTimes(1);
     });
   });
 });

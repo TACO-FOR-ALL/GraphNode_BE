@@ -8,6 +8,38 @@ import type {
 } from '../types/persistence/graph.persistence';
 
 /**
+ * @description Graph RAG 이웃 탐색 결과 단일 항목입니다.
+ *
+ * Neo4j MACRO_RELATED 관계를 따라 Seed 노드로부터 1~2홉 범위의 이웃 노드 정보를 담습니다.
+ *
+ * @property origId 원본 데이터 ID (conversation, note, notion, file 실제 ID)
+ * @property nodeId Neo4j MacroNode 내부 정수 ID
+ * @property nodeType 노드 유형 문자열
+ * @property hopDistance Seed 노드로부터의 홉 거리 (1 또는 2)
+ * @property connectedSeeds 이 노드에 도달할 수 있는 Seed origId 목록
+ * @property avgEdgeWeight Seed→이웃 경로상 엣지들의 평균 가중치 (0~1)
+ * @property connectionCount 연결된 Seed 노드 수 (복수일수록 중심성 높음)
+ */
+export interface GraphRagNeighborResult {
+  /** 원본 데이터 ID */
+  origId: string;
+  /** Neo4j MacroNode 내부 정수 ID */
+  nodeId: number;
+  /** 노드 유형 */
+  nodeType: string;
+  /** 노드가 속한 클러스터 이름입니다. 찾을 수 없으면 null입니다. */
+  clusterName: string | null;
+  /** Seed 노드로부터의 홉 거리 */
+  hopDistance: number;
+  /** 이 노드에 연결된 Seed origId 목록 */
+  connectedSeeds: string[];
+  /** 경로상 엣지들의 평균 가중치 */
+  avgEdgeWeight: number;
+  /** 연결된 Seed 노드 수 */
+  connectionCount: number;
+}
+
+/**
  * @description Macro Graph Store 호출 시 사용할 infrastructure transaction 옵션입니다.
  *
  * Core 계층은 Neo4j driver 타입을 직접 import하지 않습니다. adapter는 이 값을 Neo4j transaction 또는
@@ -573,4 +605,68 @@ export interface MacroGraphStore {
    * @returns 삭제가 끝나면 resolve됩니다.
    */
   deleteGraphSummary(userId: string, options?: MacroGraphStoreOptions): Promise<void>;
+
+  /**
+   * @description Seed 노드 origId 목록을 기반으로 Graph RAG용 이웃 노드를 탐색합니다.
+   *
+   * Neo4j의 MACRO_RELATED materialized 관계를 따라 1홉(직접 연결)과 2홉(중간 노드 경유) 이웃을 탐색합니다.
+   * Seed 자신은 결과에서 제외됩니다. soft-deleted 노드 및 엣지는 필터링됩니다.
+   * 여러 Seed와 연결된 이웃은 connectionCount가 높아지며, 스코어링 시 보너스를 받습니다.
+   *
+   * @param userId 조회 대상 사용자 ID입니다.
+   * @param seedOrigIds ChromaDB 벡터 검색으로 추출한 Seed 노드의 origId 목록입니다.
+   * @param limit 1홉/2홉 각각에서 반환할 최대 이웃 수입니다. 기본값 20.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   * @returns 1홉/2홉 이웃 노드 목록 (중복 origId 제거, 1홉 우선). Seed가 없으면 빈 배열.
+   */
+  searchGraphRagNeighbors(
+    userId: string,
+    seedOrigIds: string[],
+    limit?: number,
+    options?: MacroGraphStoreOptions
+  ): Promise<GraphRagNeighborResult[]>;
+
+  /**
+   * @description Seed 노드와 동일 클러스터에 속하는 시블링 노드를 탐색합니다. 작성일자: 2026-04-30.
+   *
+   * MACRO_RELATED 엣지가 없는 고립 노드를 보완하기 위해 클러스터 메타데이터를 가상 연결로 활용합니다.
+   * Seed 자신과 이미 발견된 이웃(excludeOrigIds)은 결과에서 제외됩니다.
+   * soft-deleted 노드 및 클러스터는 필터링됩니다.
+   *
+   * @param userId 조회 대상 사용자 ID입니다.
+   * @param seedOrigIds ChromaDB 벡터 검색으로 추출한 Seed 노드의 origId 목록입니다.
+   * @param excludeOrigIds 이미 결과에 포함된 origId 목록입니다. (seeds + hop neighbors)
+   * @param limit 반환할 최대 시블링 수입니다. 기본값 10.
+   * @param options transaction 등 adapter 전용 옵션입니다.
+   * @returns 클러스터 시블링 목록. Seed 또는 이웃 클러스터가 없으면 빈 배열.
+   */
+  searchGraphRagClusterSiblings(
+    userId: string,
+    seedOrigIds: string[],
+    excludeOrigIds: string[],
+    limit?: number,
+    options?: MacroGraphStoreOptions
+  ): Promise<GraphRagClusterSiblingResult[]>;
+}
+
+/**
+ * @description Graph RAG 클러스터 시블링 탐색 결과 단일 항목입니다.
+ *
+ * Seed 노드와 동일 클러스터에 속하지만 직접적인 MACRO_RELATED 엣지가 없는 노드입니다.
+ * 고립 노드(isolated node) 문제를 완화하기 위해 클러스터를 가상 연결로 활용합니다.
+ *
+ * @property origId 원본 데이터 ID
+ * @property nodeId Neo4j MacroNode 내부 정수 ID
+ * @property nodeType 노드 유형 문자열
+ * @property clusterName 소속 클러스터 이름
+ * @property connectedSeeds 같은 클러스터를 공유하는 Seed origId 목록
+ * @property connectionCount 같은 클러스터를 공유하는 Seed 수
+ */
+export interface GraphRagClusterSiblingResult {
+  origId: string;
+  nodeId: number;
+  nodeType: string;
+  clusterName: string | null;
+  connectedSeeds: string[];
+  connectionCount: number;
 }

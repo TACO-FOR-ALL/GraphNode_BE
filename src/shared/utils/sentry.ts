@@ -102,11 +102,21 @@ export function captureMacroGraphConsistencyMismatch(params: {
     scope.setTag('kind', 'shadow_read_mismatch');
     scope.setTag('method', params.method);
     scope.setUser({ id: params.userId });
+    // NOTE: Sentry SDK의 setContext()는 flat plain object를 기대합니다.
+    // diffs가 unknown[] 배열이면 SDK 내부에서 직렬화가 드롭되므로,
+    // JSON.stringify로 문자열화하여 전달합니다. (8KB 크기 제한 적용)
+    const diffsJson = (() => {
+      try {
+        return JSON.stringify(params.diffs).slice(0, 8192);
+      } catch {
+        return '[serialization failed]';
+      }
+    })();
     scope.setContext('macro_graph_consistency', {
       userId: params.userId,
       method: params.method,
       diffCount: params.diffCount,
-      diffs: params.diffs,
+      diffsJson,
       suppressedCount: params.suppressedCount ?? 0,
     });
     scope.setFingerprint(['macro-graph-consistency', params.method]);
