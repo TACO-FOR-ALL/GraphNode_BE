@@ -1353,4 +1353,39 @@ export const MACRO_GRAPH_CYPHER = {
     ORDER BY connectionCount DESC, avgEdgeWeight DESC
     LIMIT $limit
   `,
+
+  /**
+   * @description Graph RAG용 클러스터 시블링 탐색 쿼리입니다. 작성일자: 2026-04-30.
+   *
+   * Seed 노드와 동일 클러스터(BELONGS_TO)에 속하지만 MACRO_RELATED 엣지가 없는 고립 노드를 탐색합니다.
+   * - Seed 자신과 이미 발견된 이웃($excludeOrigIds)은 결과에서 제외합니다.
+   * - soft-deleted 노드 및 클러스터는 필터링합니다.
+   * - 여러 Seed와 클러스터를 공유하는 노드는 connectionCount가 높아집니다.
+   *
+   * @param userId 사용자 ID
+   * @param seedOrigIds Seed 노드 origId 배열
+   * @param excludeOrigIds 이미 결과에 포함된 origId 배열 (seeds + hop neighbors)
+   * @param limit 반환할 최대 시블링 수
+   */
+  graphRagClusterSiblings: `
+    UNWIND $seedOrigIds AS seedOrigId
+    MATCH (seed:MacroNode {userId: $userId, origId: seedOrigId})
+    WHERE seed.deletedAt IS NULL
+    MATCH (seed)-[:BELONGS_TO]->(cluster:MacroCluster {userId: $userId})
+    WHERE cluster.deletedAt IS NULL
+    MATCH (sibling:MacroNode {userId: $userId})-[:BELONGS_TO]->(cluster)
+    WHERE sibling.deletedAt IS NULL
+      AND NOT sibling.origId IN $seedOrigIds
+      AND NOT sibling.origId IN $excludeOrigIds
+    WITH sibling, cluster, seed
+    WITH sibling.origId   AS origId,
+         sibling.id       AS nodeId,
+         sibling.nodeType AS nodeType,
+         cluster.name     AS clusterName,
+         collect(DISTINCT seed.origId) AS connectedSeeds,
+         count(DISTINCT seed)          AS connectionCount
+    RETURN origId, nodeId, nodeType, clusterName, connectedSeeds, connectionCount
+    ORDER BY connectionCount DESC
+    LIMIT $limit
+  `,
 } as const;

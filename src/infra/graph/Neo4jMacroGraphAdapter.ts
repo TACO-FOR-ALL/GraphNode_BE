@@ -7,6 +7,7 @@ import type {
   MacroGraphStoreOptions,
   MacroGraphUpsertInput,
   MacroGraphUpsertResult,
+  GraphRagClusterSiblingResult,
 } from '../../core/ports/MacroGraphStore';
 import type {
   GraphClusterDoc,
@@ -1717,6 +1718,51 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     await this.runWrite(async (runner) => {
       // Summary 삭제도 동일한 write transaction 정책을 따르게 합니다.
       await runner.run(MACRO_GRAPH_CYPHER.deleteGraphSummary, { userId });
+    }, options);
+  }
+
+  /**
+   * @description Seed 노드와 동일 클러스터에 속하는 시블링 노드를 탐색합니다. 작성일자: 2026-04-30.
+   *
+   * 고립 노드(MACRO_RELATED 엣지가 없는 노드) 문제를 보완하기 위해
+   * 클러스터 메타데이터(BELONGS_TO 관계)를 가상 연결로 활용합니다.
+   *
+   * @param userId 조회 대상 사용자 ID입니다.
+   * @param seedOrigIds Seed 노드 origId 목록입니다.
+   * @param excludeOrigIds 이미 결과에 포함된 origId 목록 (seeds + hop neighbors)입니다.
+   * @param limit 반환할 최대 시블링 수입니다.
+   * @param options 외부 transaction을 포함할 수 있는 adapter 옵션입니다.
+   * @returns 클러스터 시블링 목록입니다.
+   */
+  async searchGraphRagClusterSiblings(
+    userId: string,
+    seedOrigIds: string[],
+    excludeOrigIds: string[],
+    limit: number = 10,
+    options?: MacroGraphStoreOptions
+  ): Promise<GraphRagClusterSiblingResult[]> {
+    if (seedOrigIds.length === 0) return [];
+
+    const params = { userId, seedOrigIds, excludeOrigIds, limit: neo4j.int(limit) };
+
+    return this.runRead(async (runner) => {
+      const result = await runner.run(MACRO_GRAPH_CYPHER.graphRagClusterSiblings, params);
+
+      const siblings: GraphRagClusterSiblingResult[] = result.records.map((record) => ({
+        origId: String(record.get('origId')),
+        nodeId: toJsNumber(record.get('nodeId')),
+        nodeType: String(record.get('nodeType') ?? ''),
+        clusterName: normalizeNullableString(record.get('clusterName')),
+        connectedSeeds: (record.get('connectedSeeds') as string[]) ?? [],
+        connectionCount: toJsNumber(record.get('connectionCount')),
+      }));
+
+      logger.info(
+        { userId, seedCount: seedOrigIds.length, siblingCount: siblings.length },
+        '[Neo4jMacroGraphAdapter] Graph RAG 클러스터 시블링 탐색 완료'
+      );
+
+      return siblings;
     }, options);
   }
 }

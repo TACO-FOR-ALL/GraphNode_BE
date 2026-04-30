@@ -14,6 +14,18 @@ import type { NoteDoc } from '../types/persistence/note.persistence';
 import type { MacroGraphStore } from '../ports/MacroGraphStore';
 import { GraphVectorService } from './GraphVectorService';
 import { generateMiniLMEmbedding } from '../../shared/utils/huggingface';
+import {
+  GRAPH_RAG_VECTOR_MIN_SCORE,
+  GRAPH_RAG_SEED_FETCH_MULTIPLIER,
+  GRAPH_RAG_SEED_FETCH_MIN,
+  GRAPH_RAG_NEIGHBOR_FETCH_MULTIPLIER,
+  GRAPH_RAG_HOP_DECAY,
+  GRAPH_RAG_HOP_DECAY_FALLBACK,
+  GRAPH_RAG_CONNECTION_BONUS_RATE,
+  GRAPH_RAG_CLUSTER_SIBLING_DECAY,
+  GRAPH_RAG_CLUSTER_SIBLING_BUDGET_RATIO,
+  GRAPH_RAG_MULTI_KEYWORD_PER_QUERY_LIMIT,
+} from '../../config/graphRagConfig';
 
 /**
  * 모듈: SearchService (통합 검색 서비스)
@@ -231,9 +243,10 @@ export class SearchService {
    * ### Phase 1 — 임베딩 변환
    * 입력 keyword를 MiniLM 모델로 384차원 벡터로 변환합니다.
    *
-   * ### Phase 2 — ChromaDB 벡터 유사도 검색 (Seed 노드 추출)
-   * GraphVectorService를 통해 코사인 유사도 상위 K개의 Seed 노드를 추출합니다.
-   * 각 Seed는 origId와 vector score(0~1)를 갖습니다.
+   * ### Phase 2 — ChromaDB 벡터 유사도 검색 + Seed Pruning
+   * GraphVectorService를 통해 코사인 유사도 상위 K개의 Seed 후보를 추출합니다.
+   * 이후 GRAPH_RAG_VECTOR_MIN_SCORE 미만의 저품질 Seed를 사전 제거(Pruning)합니다.
+   * 저품질 Seed가 Neo4j 탐색 bias로 주입되면 무관한 이웃이 결과에 혼입될 수 있습니다.
    *
    * ### Phase 3 — Neo4j 그래프 확장 (이웃 탐색)
    * Seed origIds 기반으로 MACRO_RELATED 관계를 1홉/2홉 탐색합니다.
@@ -271,13 +284,26 @@ export class SearchService {
 
     // ── Phase 2: ChromaDB 벡터 유사도 검색 (Seed 추출) ─────────────────────
     // Seed를 limit보다 많이 뽑아 그래프 확장 후 최종 limit으로 줄입니다.
-    const seedFetchLimit = Math.max(limit * 2, 10);
-    const seedResults = await this.graphVectorService.searchNodes(userId, queryVector, seedFetchLimit);
+    const seedFetchLimit = Math.max(limit * GRAPH_RAG_SEED_FETCH_MULTIPLIER, GRAPH_RAG_SEED_FETCH_MIN);
+    const rawSeedResults = await this.graphVectorService.searchNodes(userId, queryVector, seedFetchLimit);
+
+    // ── Phase 2-b: Seed Pruning — 저품질 Seed 사전 제거 ────────────────────
+    // GRAPH_RAG_VECTOR_MIN_SCORE 미만 Seed는 그래프 탐색 진입 전에 폐기한다.
+    // 저품질 Seed가 Neo4j 탐색의 sourceNodes bias로 주입되면 무관한 이웃이 상위권에 등장할 수 있다.
+    const seedResults = rawSeedResults.filter(({ score }) => score >= GRAPH_RAG_VECTOR_MIN_SCORE);
 
     if (seedResults.length === 0) {
-      logger.info({ userId, keyword }, '[SearchService] Graph RAG: Seed 노드 없음, 빈 결과 반환');
+      logger.info(
+        { userId, keyword, rawCount: rawSeedResults.length, minScore: GRAPH_RAG_VECTOR_MIN_SCORE },
+        '[SearchService] Graph RAG: 유효 Seed 없음 (임계치 미달), 빈 결과 반환'
+      );
       return { keyword, seedCount: 0, nodes: [] };
     }
+
+    logger.info(
+      { userId, keyword, rawCount: rawSeedResults.length, prunedCount: seedResults.length, minScore: GRAPH_RAG_VECTOR_MIN_SCORE },
+      '[SearchService] Graph RAG: Seed Pruning 완료'
+    );
 
     // Seed origId → vector score 맵 구축
     const seedScoreMap = new Map<string, number>();
@@ -289,12 +315,29 @@ export class SearchService {
     const seedOrigIds = [...seedScoreMap.keys()];
 
     // ── Phase 3: Neo4j 그래프 확장 (1홉/2홉 이웃 탐색) ────────────────────
-    // 각 홉에서 limit * 2개까지 이웃을 탐색합니다.
-    const neighborLimit = limit * 2;
+    // 각 홉에서 limit × GRAPH_RAG_NEIGHBOR_FETCH_MULTIPLIER 개까지 이웃을 탐색합니다.
+    const neighborLimit = limit * GRAPH_RAG_NEIGHBOR_FETCH_MULTIPLIER;
     const neighbors = await this.macroGraphStore.searchGraphRagNeighbors(
       userId,
       seedOrigIds,
       neighborLimit
+    );
+
+    // ── Phase 3-b: 클러스터 가상 연결 확장 (고립 노드 보완) ────────────────
+    // MACRO_RELATED 엣지가 없는 고립 노드를 보완하기 위해
+    // Seed와 동일 클러스터에 속하는 시블링 노드를 추가 탐색합니다.
+    const siblingBudget = Math.max(1, Math.floor(limit * GRAPH_RAG_CLUSTER_SIBLING_BUDGET_RATIO));
+    const excludeOrigIds = [...seedOrigIds, ...neighbors.map((n) => n.origId)];
+    const clusterSiblings = await this.macroGraphStore.searchGraphRagClusterSiblings(
+      userId,
+      seedOrigIds,
+      excludeOrigIds,
+      siblingBudget
+    );
+
+    logger.info(
+      { userId, keyword, siblingCount: clusterSiblings.length, budget: siblingBudget },
+      '[SearchService] Graph RAG: 클러스터 시블링 탐색 완료'
     );
 
     // ── Phase 4: 스코어 결합 및 랭킹 ────────────────────────────────────────
@@ -317,12 +360,9 @@ export class SearchService {
     }
 
     // 이웃 노드 (1홉/2홉): 그래프 구조 + 벡터 점수 결합
-    const HOP_DECAY: Record<number, number> = { 1: 0.8, 2: 0.5 };
-    const CONNECTION_BONUS_RATE = 0.15;
-
     for (const neighbor of neighbors) {
-      const hopDecay = HOP_DECAY[neighbor.hopDistance] ?? 0.3;
-      const connectionBonus = CONNECTION_BONUS_RATE * Math.max(0, neighbor.connectionCount - 1);
+      const hopDecay = GRAPH_RAG_HOP_DECAY[neighbor.hopDistance] ?? GRAPH_RAG_HOP_DECAY_FALLBACK;
+      const connectionBonus = GRAPH_RAG_CONNECTION_BONUS_RATE * Math.max(0, neighbor.connectionCount - 1);
 
       // 이 이웃에 연결된 Seed 중 최고 vector score를 기준으로 삼습니다.
       const maxSeedScore = neighbor.connectedSeeds.reduce((best, seedOrigId) => {
@@ -344,6 +384,29 @@ export class SearchService {
       });
     }
 
+    // 클러스터 시블링 노드: 엣지 없이 클러스터 소속만으로 연결된 노드
+    // hopDistance=9를 sentinel로 사용해 matchSource='cluster_sibling'으로 구분
+    for (const sibling of clusterSiblings) {
+      const connectionBonus = GRAPH_RAG_CONNECTION_BONUS_RATE * Math.max(0, sibling.connectionCount - 1);
+      const maxSeedScore = sibling.connectedSeeds.reduce((best, seedOrigId) => {
+        const score = seedScoreMap.get(seedOrigId) ?? 0;
+        return score > best ? score : best;
+      }, 0);
+
+      // 엣지 가중치 없이 클러스터 소속으로만 연결 → CLUSTER_SIBLING_DECAY 적용
+      const combinedScore = maxSeedScore * GRAPH_RAG_CLUSTER_SIBLING_DECAY * (1 + connectionBonus);
+
+      finalNodes.push({
+        origId: sibling.origId,
+        title: null,
+        nodeType: sibling.nodeType,
+        clusterName: sibling.clusterName,
+        hopDistance: 9, // sentinel: cluster_sibling (no direct edge)
+        combinedScore,
+        connectionCount: sibling.connectionCount,
+      });
+    }
+
     // combinedScore 내림차순 정렬 후 상위 limit개 반환
     finalNodes.sort((a, b) => b.combinedScore - a.combinedScore);
     const topNodes = await this.enrichGraphRagNodeDetails(userId, finalNodes.slice(0, limit));
@@ -354,6 +417,79 @@ export class SearchService {
     );
 
     return { keyword, seedCount: seedOrigIds.length, nodes: topNodes };
+  }
+
+  /**
+   * 여러 키워드를 병렬로 Graph RAG 검색하고 결과를 병합합니다. (에이전트 전용)
+   *
+   * @description
+   * 복합 질문("A가 B 역할일 때의 C 아이디어")을 여러 독립 키워드로 분리해 검색하면,
+   * 그래프 상 서로 다른 '섬(island)'에 위치한 노드들을 동시에 탐색할 수 있습니다.
+   *
+   * 병합 규칙:
+   * - 동일 origId가 여러 키워드 검색 결과에 등장하면 최고 combinedScore를 채택합니다.
+   * - 전체 결과를 combinedScore 내림차순으로 정렬 후 상위 limit개를 반환합니다.
+   * - 각 키워드는 독립적으로 GRAPH_RAG_MULTI_KEYWORD_PER_QUERY_LIMIT 개를 가져옵니다.
+   *
+   * @param userId 검색 대상 사용자 ID
+   * @param keywords 검색할 키워드 목록 (1개면 단일 검색과 동일)
+   * @param limit 최종 반환할 노드 수 (기본값 10)
+   * @returns combinedScore 내림차순 병합 결과
+   */
+  async graphRagSearchMulti(
+    userId: string,
+    keywords: string[],
+    limit: number = 10
+  ): Promise<GraphRagSearchResult> {
+    const validKeywords = keywords.map((k) => k.trim()).filter(Boolean);
+    if (validKeywords.length === 0) {
+      return { keyword: '', seedCount: 0, nodes: [] };
+    }
+
+    // 키워드가 1개면 단일 검색으로 위임해 불필요한 오버헤드를 피합니다.
+    if (validKeywords.length === 1) {
+      return this.graphRagSearch(userId, validKeywords[0], limit);
+    }
+
+    logger.info(
+      { userId, keywords: validKeywords, limit },
+      '[SearchService] Graph RAG 멀티 키워드 검색 시작'
+    );
+
+    // 각 키워드를 독립 검색 (병렬)
+    const perQueryLimit = GRAPH_RAG_MULTI_KEYWORD_PER_QUERY_LIMIT;
+    const searchResults = await Promise.all(
+      validKeywords.map((kw) => this.graphRagSearch(userId, kw, perQueryLimit))
+    );
+
+    // 중복 origId 병합: 동일 노드는 최고 combinedScore 채택
+    const mergedMap = new Map<string, GraphRagNodeResult>();
+    let totalSeedCount = 0;
+
+    for (const result of searchResults) {
+      totalSeedCount += result.seedCount;
+      for (const node of result.nodes) {
+        const existing = mergedMap.get(node.origId);
+        if (!existing || node.combinedScore > existing.combinedScore) {
+          mergedMap.set(node.origId, node);
+        }
+      }
+    }
+
+    const mergedNodes = [...mergedMap.values()]
+      .sort((a, b) => b.combinedScore - a.combinedScore)
+      .slice(0, limit);
+
+    logger.info(
+      { userId, keywords: validKeywords, mergedCount: mergedNodes.length, totalSeedCount },
+      '[SearchService] Graph RAG 멀티 키워드 검색 완료'
+    );
+
+    return {
+      keyword: validKeywords.join(', '),
+      seedCount: totalSeedCount,
+      nodes: mergedNodes,
+    };
   }
 
   /**
