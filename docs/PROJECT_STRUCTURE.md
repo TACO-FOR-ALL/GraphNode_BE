@@ -1,5 +1,7 @@
 # 🏗️ Project Structure
 
+> 마지막 갱신: 2026-04-29
+
 GraphNode Backend는 **Hexagonal Architecture (Ports and Adapters)** 와 **Layered Architecture**의 원칙을 따르며, 관심사의 분리(Separation of Concerns)를 통해 유지보수성과 테스트 용이성을 확보합니다.
 
 ## Directory Tree
@@ -25,13 +27,15 @@ src/
 │   └── usecases/         #   - (Optional) 특정 비즈니스 흐름을 캡슐화한 클래스
 │
 ├── infra/                # [Infrastructure Layer] 외부 시스템 구현체 (Adapter)
-│   ├── repositories/     #   - Core Ports를 구현한 DB 저장소 (Prisma/Mongo/MySQL)
+│   ├── repositories/     #   - Core Ports를 구현한 DB 저장소 (Prisma/Mongoose)
 │   ├── aws/              #   - AWS SDK (S3, SQS 등) 연동 구현체
-│   ├── db/               #   - Database 연결 설정 및 초기화 (Prisma Client, Mongoose)
+│   ├── db/               #   - Database 연결 설정 및 초기화 (Prisma, Mongoose, Neo4j, ChromaDB)
 │   ├── redis/            #   - Redis 클라이언트, 캐시, 이벤트 버스 어댑터
 │   ├── vector/           #   - Vector DB (ChromaDB) 연동 어댑터
 │   ├── http/             #   - 외부 HTTP API 호출을 위한 클라이언트 (Axios 등)
-│   └── graph/            #   - Graph DB (Neo4j 등) 연동 어댑터
+│   └── graph/            #   - Graph DB (Neo4j) 어댑터
+│       ├── cypher/       #     - Cypher 쿼리 상수 (macroGraph.cypher.ts)
+│       └── mappers/      #     - Neo4j 레코드 ↔ GraphDoc 변환 매퍼
 │
 ├── shared/               # [Shared Layer] 전역 공유 유틸리티 및 정의
 │   ├── dtos/             #   - Data Transfer Objects (계층 간 데이터 전송 객체)
@@ -78,7 +82,7 @@ src/
   - **Services**: 트랜잭션 단위 설정, 도메인 로직 실행, 여러 Repository 조율.
   - **Ports**: Repository나 외부 서비스(S3, SQS, AI 등)가 구현해야 할 인터페이스(Contract) 정의.
   - **Types**: DB나 프레임워크에 종속되지 않는 순수 도메인 모델 정의.
-  - **외부 기술(Express, AWS, MySql 등)에 의존하지 않음** (Dependency Inversion).
+  - **외부 기술(Express, AWS, PostgreSQL 등)에 의존하지 않음** (Dependency Inversion).
 
 ### 4. Infra Layer (`src/infra`)
 - **역할**: Core Layer의 Port를 실제로 구현(Implements)하고 외부 시스템과 통신합니다. (Outbound Adapter)
@@ -105,5 +109,5 @@ src/
 ## Key Concepts
 
 - **Dependency Injection (DI)**: `src/bootstrap/container.ts`를 통해 의존성을 주입받아 모듈 간 결합도를 낮추고 테스트 용이성을 높입니다.
-- **Repository Pattern**: 데이터 접근 로직을 Repository로 추상화하여 비즈니스 로직과 구체적인 DB 기술(MySql/Mongo)을 분리합니다.
+- **Repository Pattern**: 데이터 접근 로직을 Repository로 추상화하여 비즈니스 로직과 구체적인 DB 기술(PostgreSQL/MongoDB/Neo4j 등)을 분리합니다.
 - **Manual Wiring**: 별도의 DI 프레임워크(NestJS 등) 없이 명시적으로 의존성을 주입하여 제어 흐름을 명확하게 파악할 수 있습니다.

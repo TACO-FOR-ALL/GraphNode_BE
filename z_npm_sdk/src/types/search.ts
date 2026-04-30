@@ -72,3 +72,56 @@ export interface SearchNotesAndAIChatsParams {
   /** 검색할 키워드 */
   q: string;
 }
+
+/**
+ * Graph RAG 의미 기반 검색에서 반환되는 단일 그래프 노드 결과입니다.
+ *
+ * @remarks
+ * 백엔드는 벡터 유사도 검색과 Neo4j 이웃 노드 확장을 결합합니다.
+ * Seed 노드는 `hopDistance`가 0이고, 그래프 이웃 노드는 1 또는 2입니다.
+ * @public
+ */
+export interface GraphRagNodeResult {
+  /** 대화 ID, 노트 ID 같은 원본 문서 ID입니다. */
+  origId: string;
+  /** 원본 문서에서 해석한 제목입니다. 찾을 수 없으면 null입니다. */
+  title: string | null;
+  /** `conversation`, `note`, `notion` 같은 원본 노드 유형입니다. */
+  nodeType: string;
+  /** 그래프 메타데이터에서 해석한 클러스터 이름입니다. 찾을 수 없으면 null입니다. */
+  clusterName: string | null;
+  /** 벡터 seed 노드로부터의 거리입니다. seed는 0, 그래프 이웃은 1 또는 2입니다. */
+  hopDistance: number;
+  /** 벡터 점수, hop 감쇠, edge weight, 연결 보너스를 결합한 최종 랭킹 점수입니다. */
+  combinedScore: number;
+  /** 원본 벡터 유사도 점수입니다. seed 노드에만 포함됩니다. */
+  vectorScore?: number;
+  /** 이 결과 노드와 연결된 벡터 seed 노드 개수입니다. */
+  connectionCount: number;
+}
+
+/**
+ * Graph RAG 의미 기반 검색 응답입니다.
+ *
+ * @public
+ */
+export interface GraphRagSearchResponse {
+  /** 원본 검색어입니다. */
+  keyword: string;
+  /** 그래프 확장에 사용된 벡터 seed 노드 개수입니다. */
+  seedCount: number;
+  /** `combinedScore` 내림차순으로 정렬된 결과 노드 목록입니다. */
+  nodes: GraphRagNodeResult[];
+}
+
+/**
+ * Graph RAG 검색 쿼리 파라미터입니다.
+ *
+ * @public
+ */
+export interface GraphRagSearchParams {
+  /** 검색어입니다. */
+  q: string;
+  /** 최대 결과 개수입니다. 백엔드는 1부터 50까지 허용합니다. */
+  limit?: number;
+}

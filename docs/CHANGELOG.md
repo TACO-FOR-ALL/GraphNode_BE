@@ -6,7 +6,17 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
-### Added
+### Added (2026-04-29)
+
+- **Graph RAG 검색 API** (`GET /v1/search/graph-rag`): ChromaDB 벡터 유사도 Seed 추출 + Neo4j 1홉/2홉 MACRO_RELATED 이웃 탐색 결합 검색
+- **Neo4j Macro Graph 어댑터** (`Neo4jMacroGraphAdapter`): upsertGraph(전체 교체), upsertNode/upsertEdge(증분 쓰기), searchGraphRagNeighbors
+- **Agent Graph RAG 도구**: AgentService에 Graph RAG 컨텍스트 활용 채팅 스트림 추가
+- **DevTest 엔드포인트**: `POST /dev/test/search/graph-rag`, `POST /dev/test/agent/graph-rag-chat` (SSE) — 로컬 인증 없이 Postman 테스트 가능
+- **문서 분리·최신화**: `DATABASE.md` → 5개 문서로 분리 (`DATABASE_ERD.md`, `DATABASE_NEO4J.md`, `DATABASE_SCHEMA_PG.md`, `DATABASE_SCHEMA_MONGO.md`), `ARCHITECTURE.md` PostgreSQL/ChromaDB 반영 수정
+
+---
+
+### Added (이전 기록)
 
 - Google OAuth2 로그인 플로우: `/auth/google/start`, `/auth/google/callback`
 - 세션 기반 인증(쿠키 정책: `__Host-session; HttpOnly; Secure; SameSite`)

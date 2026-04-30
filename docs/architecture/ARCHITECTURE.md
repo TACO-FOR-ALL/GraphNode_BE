@@ -1,5 +1,7 @@
 # System Architecture
 
+> 마지막 갱신: 2026-04-29
+
 GraphNode Backend는 확장성과 유지보수성을 극대화하기 위해 **계층형 아키텍처(Layered Architecture)**와 **이벤트 기반 비동기 처리(Event-Driven Asynchronous Processing)** 패턴을 채택하고 있습니다.
 
 ## 1. 개요 (Overview)
@@ -18,36 +20,39 @@ graph TD
         SQS_Req[SQS: Request Queue]
         SQS_Res[SQS: Result Queue]
     end
-    
+
     subgraph "AI Infrastructure"
         AI_Server[AI Server: Python/FastAPI]
     end
-    
+
     subgraph "Persistence Layer"
-        MySQL[(MySQL: User/Metadata)]
-        Mongo[(MongoDB: Chat History/Workspace)]
+        PG[(PostgreSQL: User/Auth/Usage)]
+        Mongo[(MongoDB: Chat/Note/Graph)]
         Redis[(Redis: Cache/Session)]
-        Neo4j[(Neo4j: Knowledge Graph)]
+        Neo4j[(Neo4j: Macro Graph + Graph RAG)]
+        Chroma[(ChromaDB: Vector Embeddings)]
     end
 
     User <--> Client
     Client <--> ALB
     ALB <--> API
-    
-    API <--> MySQL
+
+    API <--> PG
     API <--> Mongo
     API <--> Redis
     API <--> Neo4j
-    
+    API <--> Chroma
+
     API -- "작업 요청 전송" --> SQS_Req
     SQS_Req -- "Polling" --> AI_Server
-    
+
     AI_Server -- "결과 전송" --> SQS_Res
     SQS_Res -- "Polling" --> Worker
-    
-    Worker -- "결과 저장" --> MySQL
+
+    Worker -- "결과 저장" --> PG
     Worker -- "상태 갱신" --> Mongo
     Worker -- "그래프 갱신" --> Neo4j
+    Worker -- "임베딩 저장" --> Chroma
     Worker -- "알림 발송" --> Redis
 ```
 
@@ -68,12 +73,29 @@ graph TD
 
 ## 3. 데이터 아키텍처 (Data Layer)
 
+> 상세 스키마 및 ERD: [`docs/architecture/DATABASE.md`](DATABASE.md)
+
 | 저장소 | 역할 | 이유 |
 | :--- | :--- | :--- |
-| **MySQL (Prisma)** | 사용자 정보, 메타데이터 연동 제어 | 관계형 데이터의 무결성 보호 |
-| **MongoDB** | 대화/노트 데이터, Microscope 워크스페이스 구조화 상태 추적 | 비정형 문서 데이터의 유연한 확장성 확보 |
-| **Neo4j** | 대화형/문서형 지식 그래프의 노드 간 관계 맵 및 클러스터링 보관 | 지식 구조의 명시적 관계 추적 및 시각적 탐색 효율성 |
-| **Redis** | 세션 정보, 실시간 알림 큐, 캐시 | 빠른 읽기/쓰기 성능 및 TTL 기반 알림 제어 |
+| **PostgreSQL (Prisma)** | 사용자 계정 · 일일 사용량 · 온보딩 · 피드백 | 관계형 정합성 및 트랜잭션 보장 |
+| **MongoDB** | 대화 · 메시지 · 노트 · Microscope 워크스페이스 · Macro Graph | 비정형 문서 데이터의 유연한 확장성 확보 |
+| **Neo4j** | Macro Graph Native 구조 저장 + **Graph RAG** 이웃 탐색 | 노드-관계 명시적 표현, MACRO_RELATED 홉 탐색 성능 |
+| **ChromaDB** | 384차원 MiniLM 임베딩 벡터 저장 · 유사도 검색 | Graph RAG Phase 1 Seed 추출 (의미 기반) |
+| **Redis** | 세션 정보 · 실시간 알림 큐 · 캐시 · Rate Limit | 빠른 읽기/쓰기 성능 및 TTL 기반 알림 제어 |
+
+### Graph RAG 데이터 흐름
+
+```
+사용자 키워드
+    │
+    ▼ ChromaDB 벡터 검색 (Seed 추출 — MiniLM 유사도)
+    │
+    ▼ Neo4j MACRO_RELATED 1홉/2홉 이웃 탐색
+    │
+    ▼ 스코어 결합 (vectorScore × hopDecay × edgeWeight × connectionBonus)
+    │
+    ▼ GET /v1/search/graph-rag 응답
+```
 
 ## 4. 확장 전략 (Scalability)
 

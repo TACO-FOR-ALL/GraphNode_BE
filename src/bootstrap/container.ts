@@ -467,6 +467,7 @@ export class Container {
           messageService: this.getMessageService(),
           graphEmbeddingService: this.getGraphEmbeddingService(),
           graphVectorService: this.getGraphVectorService(),
+          searchService: this.getSearchService(),
         }
       );
       this.agentService = createAuditProxy(raw, 'AgentService');
@@ -552,6 +553,8 @@ export class Container {
         this.getConversationRepository(),
         this.getNoteRepository(),
         this.getMessageRepository(),
+        this.getGraphVectorService(),
+        this.getMacroGraphStore(),
       );
       this.searchService = createAuditProxy(raw, 'SearchService');
     }

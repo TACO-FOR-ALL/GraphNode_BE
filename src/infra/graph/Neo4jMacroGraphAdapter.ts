@@ -7,6 +7,7 @@ import type {
   MacroGraphStoreOptions,
   MacroGraphUpsertInput,
   MacroGraphUpsertResult,
+  GraphRagClusterSiblingResult,
 } from '../../core/ports/MacroGraphStore';
 import type {
   GraphClusterDoc,
@@ -33,6 +34,7 @@ import {
   type Neo4jMacroSummaryAggregateContext,
 } from './mappers/macroGraphNeo4j.mapper';
 import type { MacroFileType, Neo4jMacroSummaryNode } from '../../core/types/neo4j/macro.neo4j';
+import type { GraphRagNeighborResult } from '../../core/ports/MacroGraphStore';
 import { logger } from '../../shared/utils/logger';
 
 /**
@@ -49,6 +51,17 @@ function toJsNumber(val: unknown): number {
     return (val as { toNumber(): number }).toNumber();
   }
   return Number(val) || 0;
+}
+
+/**
+ * Neo4j에서 반환된 문자열 값을 API 응답에 맞게 정규화합니다.
+ *
+ * @param val Neo4j record에서 읽은 원본 값입니다.
+ * @returns 공백이 아닌 문자열이면 해당 문자열을, 비어 있으면 null을 반환합니다.
+ */
+function normalizeNullableString(val: unknown): string | null {
+  const str = String(val ?? '').trim();
+  return str.length > 0 ? str : null;
 }
 
 /**
@@ -98,43 +111,75 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   }
 
   /**
-   * @description options.transaction이 있으면 해당 transaction을 사용하고, 없으면 session을 열어 닫습니다.
+   * @description 읽기 작업을 Neo4j managed read transaction 안에서 실행합니다. 작성일자: 2026-04-29.
+   *
+   * 호출자가 transaction을 전달하면 같은 transaction을 재사용하고, 전달하지 않으면 READ session을 열어
+   * executeRead로 쿼리를 실행합니다. 이 흐름은 session에 열린 transaction이 남은 상태에서 session.run을
+   * 직접 호출하는 위험을 제거합니다.
+   *
+   * @param fn ManagedTransaction을 받아 읽기 쿼리를 실행하는 콜백입니다.
+   * @param options 외부 transaction과 조회 옵션을 담은 adapter 옵션입니다.
+   * @returns 콜백 실행 결과를 그대로 반환합니다.
    */
   private async runRead<T>(
-    fn: (runner: {
-      run(query: string, params?: Record<string, unknown>): Promise<{ records: unknown[] }>;
-    }) => Promise<T>,
+    fn: (runner: ManagedTransaction) => Promise<T>,
     options?: MacroGraphStoreOptions
   ): Promise<T> {
     const tx = options?.transaction as ManagedTransaction | undefined;
     if (tx && typeof tx.run === 'function') {
-      return fn(tx as unknown as Parameters<typeof fn>[0]);
+      // 외부 transaction이 있으면 새 session을 만들지 않고 호출자 transaction 범위 안에서 실행합니다.
+      return fn(tx);
     }
+
     const session = this.getDriver().session({ defaultAccessMode: neo4j.session.READ });
     try {
-      return await fn(session as unknown as Parameters<typeof fn>[0]);
+      // executeRead가 transaction 생성, commit, rollback을 관리하도록 위임합니다.
+      return await session.executeRead((innerTx) => fn(innerTx));
     } finally {
+      // 읽기 성공 여부와 관계없이 session을 닫아 connection 누수를 막습니다.
       await session.close();
     }
   }
 
+  /**
+   * @description 쓰기 작업을 Neo4j managed write transaction 안에서 실행합니다. 작성일자: 2026-04-29.
+   *
+   * 호출자가 transaction을 전달하면 같은 transaction을 재사용하고, 전달하지 않으면 WRITE session을 열어
+   * executeWrite로 commit/rollback 범위를 명확히 관리합니다.
+   *
+   * @param fn ManagedTransaction을 받아 쓰기 쿼리를 실행하는 콜백입니다.
+   * @param options 외부 transaction과 adapter 옵션을 담은 값입니다.
+   * @returns 콜백 실행 결과를 그대로 반환합니다.
+   */
   private async runWrite<T>(
     fn: (runner: ManagedTransaction) => Promise<T>,
     options?: MacroGraphStoreOptions
   ): Promise<T> {
     const tx = options?.transaction as ManagedTransaction | undefined;
     if (tx && typeof tx.run === 'function') {
+      // 외부 transaction이 있으면 삭제, 갱신 쿼리도 호출자 transaction에 참여시킵니다.
       return fn(tx);
     }
+
     const session = this.getDriver().session({ defaultAccessMode: neo4j.session.WRITE });
     try {
+      // executeWrite가 재시도 가능한 write transaction 수명주기를 관리하게 합니다.
       return await session.executeWrite((innerTx) => fn(innerTx));
     } finally {
+      // 쓰기 성공 여부와 관계없이 session을 닫습니다.
       await session.close();
     }
   }
 
+  /**
+   * @description 읽기 Cypher에 공통으로 넘길 사용자와 soft-delete 조회 옵션을 만듭니다. 작성일자: 2026-04-29.
+   *
+   * @param userId 조회 대상 사용자 ID입니다.
+   * @param options includeDeleted 플래그를 포함할 수 있는 adapter 옵션입니다.
+   * @returns Neo4j read query에 전달할 공통 파라미터입니다.
+   */
   private readParams(userId: string, options?: MacroGraphStoreOptions): Record<string, unknown> {
+    // includeDeleted가 명시되지 않으면 active 데이터만 조회합니다.
     return { userId, includeDeleted: options?.includeDeleted ?? false };
   }
 
@@ -1541,54 +1586,183 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   }
 
   /**
-   * @description 사용자의 Macro Graph 전체를 삭제합니다.
+   * @description 사용자의 Macro Graph 전체를 삭제합니다. 작성일자: 2026-04-29.
    *
-   * @param userId 삭제 대상 사용자 ID
-   * @param options transaction 등 adapter 전용 옵션
+   * 삭제 작업은 runWrite 래퍼를 통해 실행되어 외부 transaction이 있으면 재사용하고, 없으면
+   * executeWrite 기반 managed transaction을 사용합니다.
+   *
+   * @param userId 삭제 대상 사용자 ID입니다.
+   * @param options 외부 transaction을 포함할 수 있는 adapter 옵션입니다.
    */
   async deleteGraph(userId: string, options?: MacroGraphStoreOptions): Promise<void> {
+    await this.runWrite(async (runner) => {
+      // 모든 그래프 데이터 삭제 쿼리를 단일 write transaction 안에서 실행합니다.
+      await runner.run(MACRO_GRAPH_CYPHER.deleteGraph, { userId });
+    }, options);
+  }
+  /**
+   * @description Seed origId 목록을 기반으로 Graph RAG 이웃 노드를 탐색합니다. 작성일자: 2026-04-29.
+   *
+   * 외부 transaction이 전달된 경우에는 같은 transaction 안에서 1홉, 2홉 쿼리를 순차 실행합니다.
+   * transaction이 없을 때만 1홉과 2홉 조회를 서로 다른 READ session의 executeRead로 병렬 실행합니다.
+   * 이 방식은 단일 session에 열린 transaction이 있는 상태에서 다른 쿼리를 직접 실행하는 위험을 피합니다.
+   *
+   * @param userId 조회 대상 사용자 ID입니다.
+   * @param seedOrigIds ChromaDB 벡터 검색으로 추출한 seed origId 목록입니다.
+   * @param limit 1홉과 2홉 각각에서 반환할 최대 이웃 수입니다.
+   * @param options 외부 transaction을 포함할 수 있는 adapter 옵션입니다.
+   * @returns 중복 origId를 제거하고 1홉 결과를 우선한 Graph RAG 이웃 목록입니다.
+   */
+  async searchGraphRagNeighbors(
+    userId: string,
+    seedOrigIds: string[],
+    limit: number = 20,
+    options?: MacroGraphStoreOptions
+  ): Promise<GraphRagNeighborResult[]> {
+    if (seedOrigIds.length === 0) return [];
+
+    const params = { userId, seedOrigIds, limit: neo4j.int(limit) };
+    const buildResults = (
+      hop1Records: Array<{ get(key: string): unknown }>,
+      hop2Records: Array<{ get(key: string): unknown }>
+    ): GraphRagNeighborResult[] => {
+      const seen = new Set<string>();
+      const results: GraphRagNeighborResult[] = [];
+
+      // 1홉 결과는 더 가까운 관계이므로 먼저 추가하고 이후 중복 origId를 차단합니다.
+      for (const record of hop1Records) {
+        const origId = String(record.get('origId'));
+        if (seen.has(origId)) continue;
+        seen.add(origId);
+        results.push({
+          origId,
+          nodeId: toJsNumber(record.get('nodeId')),
+          nodeType: String(record.get('nodeType') ?? ''),
+          clusterName: normalizeNullableString(record.get('clusterName')),
+          hopDistance: 1,
+          connectedSeeds: (record.get('connectedSeeds') as string[]) ?? [],
+          avgEdgeWeight: Number(record.get('avgEdgeWeight') ?? 0.5),
+          connectionCount: toJsNumber(record.get('connectionCount')),
+        });
+      }
+
+      // 2홉 결과는 1홉에 이미 포함된 노드를 제외하고 보강 후보로 추가합니다.
+      for (const record of hop2Records) {
+        const origId = String(record.get('origId'));
+        if (seen.has(origId)) continue;
+        seen.add(origId);
+        results.push({
+          origId,
+          nodeId: toJsNumber(record.get('nodeId')),
+          nodeType: String(record.get('nodeType') ?? ''),
+          clusterName: normalizeNullableString(record.get('clusterName')),
+          hopDistance: 2,
+          connectedSeeds: (record.get('connectedSeeds') as string[]) ?? [],
+          avgEdgeWeight: Number(record.get('avgEdgeWeight') ?? 0.5),
+          connectionCount: toJsNumber(record.get('connectionCount')),
+        });
+      }
+
+      return results;
+    };
+
     const tx = options?.transaction as ManagedTransaction | undefined;
-    if (tx) {
-      // 외부에서 주입된 트랜잭션이 있으면 해당 트랜잭션 컨텍스트 내에서 삭제 쿼리를 실행합니다.
-      await tx.run(MACRO_GRAPH_CYPHER.deleteGraph, { userId });
-      return;
-    }
-    // 주입된 트랜잭션이 없다면, 새 WRITE 세션을 엽니다.
-    const session = this.getDriver().session({ defaultAccessMode: neo4j.session.WRITE });
-    try {
-      // executeWrite를 통해 자동 재시도 및 트랜잭션 관리가 포함된 쓰기 작업을 수행합니다.
-      await session.executeWrite((innerTx) =>
-        innerTx.run(MACRO_GRAPH_CYPHER.deleteGraph, { userId })
+    if (tx && typeof tx.run === 'function') {
+      // 외부 transaction 안에서는 같은 transaction runner를 순차 사용하여 병렬 transaction 충돌을 피합니다.
+      const hop1Result = await tx.run(MACRO_GRAPH_CYPHER.graphRagNeighbors1Hop, params);
+      const hop2Result = await tx.run(MACRO_GRAPH_CYPHER.graphRagNeighbors2Hop, params);
+      return buildResults(
+        hop1Result.records as Array<{ get(key: string): unknown }>,
+        hop2Result.records as Array<{ get(key: string): unknown }>
       );
-    } finally {
-      // 사용이 완료된 세션은 리소스 누수 방지를 위해 반드시 종료합니다.
-      await session.close();
     }
+
+    const session1 = this.getDriver().session({ defaultAccessMode: neo4j.session.READ });
+    const session2 = this.getDriver().session({ defaultAccessMode: neo4j.session.READ });
+    try {
+      // transaction이 없는 일반 조회에서는 각 hop 쿼리에 별도 session을 배정해 안전하게 병렬화합니다.
+      const [hop1Result, hop2Result] = await Promise.all([
+        session1.executeRead((innerTx) =>
+          innerTx.run(MACRO_GRAPH_CYPHER.graphRagNeighbors1Hop, params)
+        ),
+        session2.executeRead((innerTx) =>
+          innerTx.run(MACRO_GRAPH_CYPHER.graphRagNeighbors2Hop, params)
+        ),
+      ]);
+
+      const results = buildResults(
+        hop1Result.records as Array<{ get(key: string): unknown }>,
+        hop2Result.records as Array<{ get(key: string): unknown }>
+      );
+
+      logger.info(
+        { userId, seedCount: seedOrigIds.length, neighborCount: results.length },
+        '[Neo4jMacroGraphAdapter] Graph RAG 이웃 탐색 완료'
+      );
+
+      return results;
+    } finally {
+      // 병렬 조회 중 하나가 실패해도 두 session을 모두 닫습니다.
+      await Promise.all([session1.close(), session2.close()]);
+    }
+  }
+  /**
+   * @description 사용자의 MacroSummary 노드를 삭제합니다. 작성일자: 2026-04-29.
+   *
+   * 직접 session을 열지 않고 runWrite 래퍼를 사용해 transaction 처리 방식을 한 곳으로 통일합니다.
+   *
+   * @param userId 삭제 대상 사용자 ID입니다.
+   * @param options 외부 transaction을 포함할 수 있는 adapter 옵션입니다.
+   */
+  async deleteGraphSummary(userId: string, options?: MacroGraphStoreOptions): Promise<void> {
+    await this.runWrite(async (runner) => {
+      // Summary 삭제도 동일한 write transaction 정책을 따르게 합니다.
+      await runner.run(MACRO_GRAPH_CYPHER.deleteGraphSummary, { userId });
+    }, options);
   }
 
   /**
-   * @description 사용자의 MacroSummary를 삭제합니다.
+   * @description Seed 노드와 동일 클러스터에 속하는 시블링 노드를 탐색합니다. 작성일자: 2026-04-30.
    *
-   * @param userId 삭제 대상 사용자 ID
-   * @param options transaction 등 adapter 전용 옵션
+   * 고립 노드(MACRO_RELATED 엣지가 없는 노드) 문제를 보완하기 위해
+   * 클러스터 메타데이터(BELONGS_TO 관계)를 가상 연결로 활용합니다.
+   *
+   * @param userId 조회 대상 사용자 ID입니다.
+   * @param seedOrigIds Seed 노드 origId 목록입니다.
+   * @param excludeOrigIds 이미 결과에 포함된 origId 목록 (seeds + hop neighbors)입니다.
+   * @param limit 반환할 최대 시블링 수입니다.
+   * @param options 외부 transaction을 포함할 수 있는 adapter 옵션입니다.
+   * @returns 클러스터 시블링 목록입니다.
    */
-  async deleteGraphSummary(userId: string, options?: MacroGraphStoreOptions): Promise<void> {
-    const tx = options?.transaction as ManagedTransaction | undefined;
-    if (tx) {
-      // 주입된 트랜잭션이 존재하면 해당 트랜잭션을 사용하여 Summary 노드를 삭제합니다.
-      await tx.run(MACRO_GRAPH_CYPHER.deleteGraphSummary, { userId });
-      return;
-    }
-    // 주입된 트랜잭션이 없으므로 직접 WRITE 세션을 생성합니다.
-    const session = this.getDriver().session({ defaultAccessMode: neo4j.session.WRITE });
-    try {
-      // executeWrite 내부에서 트랜잭션을 열어 삭제 쿼리를 실행합니다.
-      await session.executeWrite((innerTx) =>
-        innerTx.run(MACRO_GRAPH_CYPHER.deleteGraphSummary, { userId })
+  async searchGraphRagClusterSiblings(
+    userId: string,
+    seedOrigIds: string[],
+    excludeOrigIds: string[],
+    limit: number = 10,
+    options?: MacroGraphStoreOptions
+  ): Promise<GraphRagClusterSiblingResult[]> {
+    if (seedOrigIds.length === 0) return [];
+
+    const params = { userId, seedOrigIds, excludeOrigIds, limit: neo4j.int(limit) };
+
+    return this.runRead(async (runner) => {
+      const result = await runner.run(MACRO_GRAPH_CYPHER.graphRagClusterSiblings, params);
+
+      const siblings: GraphRagClusterSiblingResult[] = result.records.map((record) => ({
+        origId: String(record.get('origId')),
+        nodeId: toJsNumber(record.get('nodeId')),
+        nodeType: String(record.get('nodeType') ?? ''),
+        clusterName: normalizeNullableString(record.get('clusterName')),
+        connectedSeeds: (record.get('connectedSeeds') as string[]) ?? [],
+        connectionCount: toJsNumber(record.get('connectionCount')),
+      }));
+
+      logger.info(
+        { userId, seedCount: seedOrigIds.length, siblingCount: siblings.length },
+        '[Neo4jMacroGraphAdapter] Graph RAG 클러스터 시블링 탐색 완료'
       );
-    } finally {
-      // 작업이 끝난 뒤 세션을 닫아줍니다.
-      await session.close();
-    }
+
+      return siblings;
+    }, options);
   }
 }

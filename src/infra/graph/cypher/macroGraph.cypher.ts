@@ -1278,4 +1278,114 @@ export const MACRO_GRAPH_CYPHER = {
     WHERE sm.deletedAt IS NOT NULL
     SET sm.deletedAt = null
   `,
+
+  /**
+   * @description Graph RAG용 1홉 이웃 탐색 쿼리입니다.
+   *
+   * Seed origId 목록으로 MacroNode를 찾고, MACRO_RELATED 관계로 직접 연결된(1홉) 이웃을 탐색합니다.
+   * - Seed 자신은 결과에서 제외합니다 (NOT neighbor.origId IN $seedOrigIds).
+   * - soft-deleted 노드 및 엣지는 필터링합니다.
+   * - 여러 Seed와 공유 연결된 이웃은 connectionCount가 높아집니다.
+   * - avgEdgeWeight: 해당 이웃으로 향하는 엣지들의 평균 weight입니다.
+   *
+   * @param userId 사용자 ID
+   * @param seedOrigIds Seed 노드 origId 배열
+   * @param limit 반환할 최대 이웃 수
+   */
+  graphRagNeighbors1Hop: `
+    UNWIND $seedOrigIds AS seedOrigId
+    MATCH (seed:MacroNode {userId: $userId, origId: seedOrigId})
+    WHERE seed.deletedAt IS NULL
+    MATCH (seed)-[r:MACRO_RELATED {userId: $userId}]-(neighbor:MacroNode {userId: $userId})
+    WHERE neighbor.deletedAt IS NULL
+      AND r.deletedAt IS NULL
+      AND NOT neighbor.origId IN $seedOrigIds
+    OPTIONAL MATCH (neighbor)-[:BELONGS_TO]->(cluster:MacroCluster {userId: $userId})
+    WITH neighbor, seed, r, cluster
+    WITH neighbor.origId   AS origId,
+         neighbor.id       AS nodeId,
+         neighbor.nodeType AS nodeType,
+         coalesce(cluster.name, '') AS clusterName,
+         1                 AS hopDistance,
+         collect(DISTINCT seed.origId)      AS connectedSeeds,
+         avg(coalesce(r.weight, 0.5))       AS avgEdgeWeight,
+         count(DISTINCT seed)               AS connectionCount
+    RETURN origId, nodeId, nodeType, clusterName, hopDistance, connectedSeeds, avgEdgeWeight, connectionCount
+    ORDER BY connectionCount DESC, avgEdgeWeight DESC
+    LIMIT $limit
+  `,
+
+  /**
+   * @description Graph RAG용 2홉 이웃 탐색 쿼리입니다.
+   *
+   * Seed → 중간노드 → 이웃 경로(2홉)를 탐색합니다.
+   * - Seed 자신 및 중간 노드(mid)는 결과에서 제외합니다.
+   * - soft-deleted 노드 및 엣지는 모두 필터링합니다.
+   * - avgEdgeWeight: 두 엣지(r1, r2)의 weight 평균입니다.
+   *
+   * @param userId 사용자 ID
+   * @param seedOrigIds Seed 노드 origId 배열
+   * @param limit 반환할 최대 이웃 수
+   */
+  graphRagNeighbors2Hop: `
+    UNWIND $seedOrigIds AS seedOrigId
+    MATCH (seed:MacroNode {userId: $userId, origId: seedOrigId})
+    WHERE seed.deletedAt IS NULL
+    MATCH (seed)-[r1:MACRO_RELATED {userId: $userId}]-(mid:MacroNode {userId: $userId})-[r2:MACRO_RELATED {userId: $userId}]-(neighbor:MacroNode {userId: $userId})
+    WHERE mid.deletedAt IS NULL
+      AND r1.deletedAt IS NULL
+      AND r2.deletedAt IS NULL
+      AND neighbor.deletedAt IS NULL
+      AND NOT neighbor.origId IN $seedOrigIds
+      AND NOT mid.origId IN $seedOrigIds
+      AND neighbor.id <> mid.id
+    OPTIONAL MATCH (neighbor)-[:BELONGS_TO]->(cluster:MacroCluster {userId: $userId})
+    WITH neighbor, seed, r1, r2, cluster
+    WITH neighbor.origId   AS origId,
+         neighbor.id       AS nodeId,
+         neighbor.nodeType AS nodeType,
+         coalesce(cluster.name, '') AS clusterName,
+         2                 AS hopDistance,
+         collect(DISTINCT seed.origId)                                            AS connectedSeeds,
+         avg((coalesce(r1.weight, 0.5) + coalesce(r2.weight, 0.5)) / 2.0)       AS avgEdgeWeight,
+         count(DISTINCT seed)                                                     AS connectionCount
+    RETURN origId, nodeId, nodeType, clusterName, hopDistance, connectedSeeds, avgEdgeWeight, connectionCount
+    ORDER BY connectionCount DESC, avgEdgeWeight DESC
+    LIMIT $limit
+  `,
+
+  /**
+   * @description Graph RAG용 클러스터 시블링 탐색 쿼리입니다. 작성일자: 2026-04-30.
+   *
+   * Seed 노드와 동일 클러스터(BELONGS_TO)에 속하지만 MACRO_RELATED 엣지가 없는 고립 노드를 탐색합니다.
+   * - Seed 자신과 이미 발견된 이웃($excludeOrigIds)은 결과에서 제외합니다.
+   * - soft-deleted 노드 및 클러스터는 필터링합니다.
+   * - 여러 Seed와 클러스터를 공유하는 노드는 connectionCount가 높아집니다.
+   *
+   * @param userId 사용자 ID
+   * @param seedOrigIds Seed 노드 origId 배열
+   * @param excludeOrigIds 이미 결과에 포함된 origId 배열 (seeds + hop neighbors)
+   * @param limit 반환할 최대 시블링 수
+   */
+  graphRagClusterSiblings: `
+    UNWIND $seedOrigIds AS seedOrigId
+    MATCH (seed:MacroNode {userId: $userId, origId: seedOrigId})
+    WHERE seed.deletedAt IS NULL
+    MATCH (seed)-[:BELONGS_TO]->(cluster:MacroCluster {userId: $userId})
+    WHERE cluster.deletedAt IS NULL
+    MATCH (sibling:MacroNode {userId: $userId})-[:BELONGS_TO]->(cluster)
+    WHERE sibling.deletedAt IS NULL
+      AND NOT sibling.origId IN $seedOrigIds
+      AND NOT sibling.origId IN $excludeOrigIds
+    WITH sibling, cluster, seed
+    WITH sibling.origId   AS origId,
+         sibling.id       AS nodeId,
+         sibling.nodeType AS nodeType,
+         cluster.name     AS clusterName,
+         collect(DISTINCT seed.origId) AS connectedSeeds,
+         count(DISTINCT seed)          AS connectionCount
+    RETURN origId, nodeId, nodeType, clusterName, connectedSeeds, connectionCount
+    ORDER BY connectionCount DESC
+    LIMIT $limit
+  `,
 } as const;

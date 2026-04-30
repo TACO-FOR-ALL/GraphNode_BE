@@ -18,6 +18,7 @@ import { UpstreamError, ValidationError, NotFoundError } from '../../shared/erro
 import { v4 as uuidv4 } from 'uuid';
 import { container } from '../../bootstrap/container';
 import { ApiKeyModel } from '../../shared/dtos/me';
+import type { ChatStreamRequestBody } from '../../agent/types';
 
 const router = Router();
 
@@ -232,6 +233,118 @@ router.post('/ai/tool-call', async (req: Request, res: Response, next: NextFunct
     // 에러 발생 시 errorHandler로 넘겨서 Discord/Sentry 연동도 같이 확인 가능
     next(err);
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /dev/test/search/graph-rag
+// SearchService.graphRagSearch 직접 호출 — 의미 기반(임베딩+Neo4j) 검색 파이프라인 검증
+//
+// Body (모두 optional, 기본값 있음):
+// {
+//   "userId":  "dev-test-user",   — 검색 대상 사용자 ID
+//   "q":       "그래프 노트",      — 검색 키워드
+//   "limit":   10                 — 반환 노드 수 (1-50, 기본 10)
+// }
+//
+// 응답 예시:
+// { ok: true, data: { keyword, seedCount, nodes: [...] } }
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/search/graph-rag', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { userId = 'dev-test-user', q = '그래프', limit } = req.body ?? {};
+
+    if (!q || String(q).trim() === '') {
+      throw new ValidationError('Body field "q" (검색 키워드)는 필수입니다.');
+    }
+
+    const parsedLimit = limit !== undefined ? Number(limit) : undefined;
+    if (parsedLimit !== undefined && (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 50)) {
+      throw new ValidationError('Body field "limit"은 1-50 사이의 정수여야 합니다.');
+    }
+
+    const searchService = container.getSearchService();
+    const result = await searchService.graphRagSearch(String(userId), String(q), parsedLimit);
+
+    res.json({
+      ok: true,
+      message: 'SearchService.graphRagSearch 호출 완료.',
+      data: result,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /dev/test/agent/graph-rag-chat
+// AgentService.handleChatStream SSE 스트림 — Agent + Graph RAG 통합 파이프라인 검증
+//
+// Postman 사용법:
+//   1. Method: POST, URL: http://localhost:{PORT}/dev/test/agent/graph-rag-chat
+//   2. Body > raw > JSON 으로 아래 payload 입력
+//   3. Send 후 Postman 하단 "Response" 패널에서 SSE 이벤트 실시간 확인
+//      (Postman 자동으로 text/event-stream 인식)
+//
+// Body (모두 optional, 기본값 있음):
+// {
+//   "userId":      "dev-test-user",    — 테스트 사용자 ID
+//   "userMessage": "내 최근 노트 보여줘", — Agent에 보낼 메시지
+//   "contextText": "",                 — 선택: 추가 컨텍스트 텍스트
+//   "modeHint":    null                — 선택: "chat" | "summary" | "note"
+// }
+//
+// 응답 이벤트 흐름 (SSE):
+//   event: status  data: { phase: "analyzing", message: "요청 분석 중..." }
+//   event: status  data: { phase: "searching", message: "데이터 검색 중..." }   ← graph RAG tool call 시
+//   event: chunk   data: { text: "..." }
+//   event: status  data: { phase: "done", message: "응답 생성 완료" }
+//   event: result  data: { mode, answer, noteContent }
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/agent/graph-rag-chat', (req: Request, res: Response) => {
+  const {
+    userId = 'dev-test-user',
+    userMessage = '내 최근 노트 보여줘',
+    contextText,
+    modeHint,
+  } = (req.body ?? {}) as Partial<ChatStreamRequestBody & { userId: string }>;
+
+  // SSE 스트림 설정
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  const sendEvent = (event: string, data: unknown) => {
+    if (res.writableEnded) return;
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const trimmedMessage = (String(userMessage) || '').trim();
+  if (!trimmedMessage) {
+    sendEvent('error', { message: 'Body field "userMessage"는 필수입니다.' });
+    res.end();
+    return;
+  }
+
+  const agentService = container.getAgentService();
+
+  agentService
+    .handleChatStream(
+      String(userId),
+      { userMessage: trimmedMessage, contextText: contextText?.trim(), modeHint },
+      sendEvent
+    )
+    .then(() => {
+      if (!res.writableEnded) res.end();
+    })
+    .catch((err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      sendEvent('error', { message });
+      if (!res.writableEnded) res.end();
+    });
 });
 
 export default router;

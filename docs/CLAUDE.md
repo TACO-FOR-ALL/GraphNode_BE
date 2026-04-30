@@ -13,7 +13,11 @@
 |---|---|
 | [`ARCHITECTURE.md`](architecture/ARCHITECTURE.md) | 전체 시스템 레이어·모듈 구조 파악 |
 | [`ai-provider-architecture.md`](architecture/ai-provider-architecture.md) | AI Provider(OpenAI/Gemini/Claude) 인터페이스, 파일 처리, **컨텍스트 윈도우·배치 요약 전략** |
-| [`DATABASE.md`](architecture/DATABASE.md) | PostgreSQL ERD, 스키마 결정 이력 (prisma 변경 시 동기화 필수) |
+| [`DATABASE.md`](architecture/DATABASE.md) | Polyglot Persistence 전략 인덱스 (PostgreSQL/MongoDB/Neo4j/ChromaDB/S3 요약) |
+| [`DATABASE_ERD.md`](architecture/DATABASE_ERD.md) | ERD 다이어그램 전체 (Core, Microscope, Macro Graph, Vector DB) |
+| [`DATABASE_SCHEMA_PG.md`](architecture/DATABASE_SCHEMA_PG.md) | PostgreSQL 상세 스키마 (Prisma 변경 시 동기화 필수) |
+| [`DATABASE_SCHEMA_MONGO.md`](architecture/DATABASE_SCHEMA_MONGO.md) | MongoDB 컬렉션 상세 스키마 |
+| [`DATABASE_NEO4J.md`](architecture/DATABASE_NEO4J.md) | Neo4j 그래프 모델 · Graph RAG 파이프라인 · Cypher 전략 |
 | [`SQS_FLOW.md`](architecture/SQS_FLOW.md) | BE→SQS→AI Worker 비동기 파이프라인 전체 흐름 |
 | [`LOGIC_SQS.md`](architecture/LOGIC_SQS.md) | SQS 메시지 포맷·라우팅·에러 처리 상세 |
 | [`LOGIC_FCM.md`](architecture/LOGIC_FCM.md) | FCM 푸시 알림 발송 로직 |
@@ -72,6 +76,8 @@ guides/Daily/YYYYMMDD-<주제>.md
 ```
 
 최신 로그 (2026년 4월):
+- [`20260429-graph-rag-devtest-endpoints.md`](guides/Daily/20260429-graph-rag-devtest-endpoints.md) ← 최신
+- [`20260428-neo4j-batch-migration-script.md`](guides/Daily/20260428-neo4j-batch-migration-script.md)
 - [`20260423-ai-tool-implementation.md`](guides/Daily/20260423-ai-tool-implementation.md)
 - [`20260412-graph-summary-statistics.md`](guides/Daily/20260412-graph-summary-statistics.md)
 - [`20260408-conversation-list-perf-optimization.md`](guides/Daily/20260408-conversation-list-perf-optimization.md)
@@ -100,7 +106,9 @@ guides/Daily/YYYYMMDD-<주제>.md
 |---|---|
 | AI 채팅·컨텍스트 로직 수정 | [`ai-provider-architecture.md`](architecture/ai-provider-architecture.md) §7 |
 | SQS 워커 메시지 포맷 변경 | [`SQS_FLOW.md`](architecture/SQS_FLOW.md), [`LOGIC_SQS.md`](architecture/LOGIC_SQS.md) |
-| DB 스키마(Prisma) 변경 | [`DATABASE.md`](architecture/DATABASE.md) — ERD 동기화 필수 |
+| DB 스키마(Prisma) 변경 | [`DATABASE_SCHEMA_PG.md`](architecture/DATABASE_SCHEMA_PG.md) — ERD 동기화 필수 |
+| MongoDB 컬렉션 변경 | [`DATABASE_SCHEMA_MONGO.md`](architecture/DATABASE_SCHEMA_MONGO.md) — ERD 동기화 필수 |
+| Neo4j 그래프 모델·Graph RAG 변경 | [`DATABASE_NEO4J.md`](architecture/DATABASE_NEO4J.md) |
 | REST API 엔드포인트 추가·변경 | [`api/openapi.yaml`](api/openapi.yaml) — Contract-First |
 | 에러 클래스 추가 | [`ERRORS.md`](architecture/ERRORS.md) |
 | 알림 로직 수정 | [`notification-system.md`](architecture/notification-system.md), [`LOGIC_FCM.md`](architecture/LOGIC_FCM.md) |

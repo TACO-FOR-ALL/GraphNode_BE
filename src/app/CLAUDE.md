@@ -1,5 +1,7 @@
 # src/app — Presentation Layer
 
+> 마지막 갱신: 2026-04-29
+
 HTTP 진입점. Zod 검증 · 라우팅 · `next(e)` 에러 위임만 담당. 비즈니스 로직 금지. **≤150 LOC/파일**.
 
 ## 파일 구성

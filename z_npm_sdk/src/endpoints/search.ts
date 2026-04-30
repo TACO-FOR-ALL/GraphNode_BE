@@ -1,5 +1,6 @@
 import { RequestBuilder, type HttpResponse } from '../http-builder.js';
 import type { 
+  GraphRagSearchResponse,
   SearchNotesAndAIChatsResponse
 } from '../types/search.js';
 
@@ -48,5 +49,34 @@ export class SearchApi {
       .path('/v1/search')
       .query({ q })
       .get<SearchNotesAndAIChatsResponse>();
+  }
+
+  /**
+   * Graph RAG 의미 기반 검색을 실행하고 벡터 seed 노드와 1-2 hop 그래프 이웃을 반환합니다.
+   *
+   * @param q 검색어입니다.
+   * @param limit 반환할 최대 랭킹 노드 개수입니다. 백엔드는 1부터 50까지 허용합니다.
+   * @returns {Promise<HttpResponse<GraphRagSearchResponse>>} 제목과 클러스터 메타데이터가 포함된 랭킹 그래프 노드입니다.
+   *
+   * @example
+   * const response = await client.search.graphRagSearch('프로젝트 계획', 10);
+   *
+   * if (response.isSuccess) {
+   *   response.data.nodes.forEach(node => {
+   *     console.log(node.title, node.clusterName, node.combinedScore);
+   *   });
+   * }
+   *
+   * @throws 400 - 검색어가 없거나 limit이 유효하지 않을 때 발생합니다.
+   * @throws 401 - 인증이 필요할 때 발생합니다.
+   */
+  async graphRagSearch(
+    q: string,
+    limit?: number
+  ): Promise<HttpResponse<GraphRagSearchResponse>> {
+    return this.rb
+      .path('/v1/search/graph-rag')
+      .query({ q, limit })
+      .get<GraphRagSearchResponse>();
   }
 }
