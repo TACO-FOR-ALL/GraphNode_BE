@@ -217,18 +217,16 @@ describe('End-to-End Graph Flow', () => {
     const neo4jDriver = createNeo4jE2eDriver();
     const neo4jSession = neo4jDriver.session();
     let isFinished = false;
-    let overviewJson: string | null = null;
 
     try {
       for (let i = 0; i < 60; i++) {
         const summaryRes = await neo4jSession.run(
           `MATCH (g:MacroGraph {userId: $userId})-[:HAS_SUMMARY]->(sm:MacroSummary)
            WHERE sm.deletedAt IS NULL
-           RETURN sm.overviewJson AS overviewJson`,
+           RETURN sm.id AS id`,
           { userId }
         );
         if (summaryRes.records.length > 0) {
-          overviewJson = summaryRes.records[0].get('overviewJson') as string | null;
           isFinished = true;
           break;
         }
@@ -244,8 +242,11 @@ describe('End-to-End Graph Flow', () => {
     expect(isFinished).toBe(true);
     console.log('\nGraph summary confirmed in Neo4j.');
 
-    expect(overviewJson).toBeTruthy();
-    const overview = JSON.parse(overviewJson!);
+    // overviewJson은 Neo4j 저장 시 count 필드를 제거하고 조회 시 동적으로 집계합니다.
+    // 따라서 count 검증은 API 응답(hydrated summary)을 통해 수행합니다.
+    const summaryApiRes = await apiClient.get('/v1/graph-ai/summary');
+    expect(summaryApiRes.status).toBe(200);
+    const overview = summaryApiRes.data?.overview;
     expect(overview).toBeTruthy();
 
     // MongoDB에서 conversations/notes 실제 개수 조회하여 summary 통계값과 비교
