@@ -12,13 +12,13 @@ import { createApp } from '../../src/bootstrap/server';
 import { generateAccessToken } from '../../src/app/utils/jwt';
 import { NoteDoc, FolderDoc } from '../../src/core/types/persistence/note.persistence';
 import { closeDatabases } from '../../src/infra/db';
-import { GraphRepositoryMongo } from '../../src/infra/repositories/GraphRepositoryMongo';
+import { Neo4jMacroGraphAdapter } from '../../src/infra/graph/Neo4jMacroGraphAdapter';
 import { AwsSqsAdapter } from '../../src/infra/aws/AwsSqsAdapter';
 import { AwsS3Adapter } from '../../src/infra/aws/AwsS3Adapter';
 import { RedisEventBusAdapter } from '../../src/infra/redis/RedisEventBusAdapter';
 
 // --- Infra Mocks to prevent hangs from other modules ---
-jest.mock('../../src/infra/repositories/GraphRepositoryMongo');
+jest.mock('../../src/infra/graph/Neo4jMacroGraphAdapter');
 jest.mock('../../src/infra/aws/AwsSqsAdapter');
 jest.mock('../../src/infra/aws/AwsS3Adapter');
 jest.mock('../../src/infra/redis/RedisEventBusAdapter');
@@ -37,7 +37,7 @@ jest.mock('../../src/infra/db', () => ({
 }));
 
 // Mock implementations
-(GraphRepositoryMongo as unknown as jest.Mock).mockImplementation(
+(Neo4jMacroGraphAdapter as unknown as jest.Mock).mockImplementation(
   () =>
     ({
       upsertNode: jest.fn<any>().mockResolvedValue(undefined),

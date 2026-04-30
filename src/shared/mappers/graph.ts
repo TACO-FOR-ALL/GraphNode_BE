@@ -11,12 +11,19 @@
  * 2. Doc -> DTO (조회 시): DB 데이터를 클라이언트 응답 포맷으로 변환
  */
 
-import type { GraphClusterDto, GraphEdgeDto, GraphNodeDto, GraphStatsDto } from '../dtos/graph';
+import type {
+  GraphClusterDto,
+  GraphEdgeDto,
+  GraphNodeDto,
+  GraphStatsDto,
+  GraphSubclusterDto,
+} from '../dtos/graph';
 import type {
   GraphClusterDoc,
   GraphEdgeDoc,
   GraphNodeDoc,
   GraphStatsDoc,
+  GraphSubclusterDoc,
 } from '../../core/types/persistence/graph.persistence';
 
 // --- Node Mappers (노드 변환) ---
@@ -160,6 +167,52 @@ export function toGraphClusterDto(doc: GraphClusterDoc): GraphClusterDto {
     themes: doc.themes,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
+  };
+}
+
+// --- Subcluster Mappers ---
+
+/**
+ * GraphSubclusterDto를 GraphSubclusterDoc(DB 문서)으로 변환합니다.
+ *
+ * @param dto 서브클러스터 DTO
+ * @returns 저장 가능한 서브클러스터 문서
+ */
+export function toGraphSubclusterDoc(dto: GraphSubclusterDto): GraphSubclusterDoc {
+  return {
+    id: dto.id,
+    userId: dto.userId ?? '',
+    clusterId: dto.clusterId,
+    nodeIds: dto.nodeIds,
+    representativeNodeId: dto.representativeNodeId,
+    size: dto.size,
+    density: dto.density,
+    topKeywords: dto.topKeywords,
+    createdAt: dto.createdAt ?? '',
+    updatedAt: dto.updatedAt ?? '',
+    deletedAt: dto.deletedAt != null ? new Date(dto.deletedAt).getTime() : undefined,
+  };
+}
+
+/**
+ * GraphSubclusterDoc(DB 문서)을 GraphSubclusterDto로 변환합니다.
+ *
+ * @param doc 서브클러스터 문서
+ * @returns 클라이언트용 서브클러스터 DTO
+ */
+export function toGraphSubclusterDto(doc: GraphSubclusterDoc): GraphSubclusterDto {
+  return {
+    id: doc.id,
+    userId: doc.userId,
+    clusterId: doc.clusterId,
+    nodeIds: doc.nodeIds,
+    representativeNodeId: doc.representativeNodeId,
+    size: doc.size,
+    density: doc.density,
+    topKeywords: doc.topKeywords,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+    deletedAt: doc.deletedAt != null ? new Date(doc.deletedAt).toISOString() : undefined,
   };
 }
 

@@ -172,6 +172,8 @@ export interface GraphStatsDto {
 export interface GraphSubclusterDto {
   /** 서브클러스터 ID */
   id: string;
+  /** 사용자 ID */
+  userId?: string;
   /** 소속 클러스터 ID */
   clusterId: string;
   /** 포함된 노드 ID 목록 */
@@ -184,6 +186,10 @@ export interface GraphSubclusterDto {
   density: number;
   /** 주요 키워드 */
   topKeywords: string[];
+  /** 생성 시각(ISO 8601 UTC) */
+  createdAt?: string;
+  /** 수정 시각(ISO 8601 UTC) */
+  updatedAt?: string;
   /** 삭제 시각(ISO 8601 UTC) */
   deletedAt?: string;
 }

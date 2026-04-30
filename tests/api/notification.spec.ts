@@ -23,7 +23,7 @@ import { generateAccessToken } from '../../src/app/utils/jwt';
 import { NotificationService } from '../../src/core/services/NotificationService';
 
 // --- Mocks ---
-jest.mock('../../src/infra/repositories/GraphRepositoryMongo');
+jest.mock('../../src/infra/graph/Neo4jMacroGraphAdapter');
 jest.mock('../../src/infra/aws/AwsSqsAdapter');
 jest.mock('../../src/infra/aws/AwsS3Adapter');
 jest.mock('../../src/infra/repositories/ConversationRepositoryMongo');

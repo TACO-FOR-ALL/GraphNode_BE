@@ -22,13 +22,11 @@ export interface Neo4jOptions {
  * GraphDocumentStore(MongoDB)와는 달리 그래프 순회 및 관계 중심의 쿼리에 최적화된 인터페이스를 지향합니다.
  */
 export interface GraphNeo4jStore {
-  // --- 노드(Node) ---
   upsertNode(node: GraphNodeDoc, options?: Neo4jOptions): Promise<void>;
   deleteNode(userId: string, id: number, options?: Neo4jOptions): Promise<void>;
   deleteNodes(userId: string, ids: number[], options?: Neo4jOptions): Promise<void>;
   findNode(userId: string, id: number): Promise<GraphNodeDoc | null>;
 
-  // --- 엣지(Relationship) ---
   upsertEdge(edge: GraphEdgeDoc, options?: Neo4jOptions): Promise<string>;
   deleteEdgeBetween(
     userId: string,
@@ -42,7 +40,6 @@ export interface GraphNeo4jStore {
     options?: Neo4jOptions
   ): Promise<void>;
 
-  // --- 클러스터(Cluster) & 통계 ---
   upsertCluster(cluster: GraphClusterDoc, options?: Neo4jOptions): Promise<void>;
   deleteCluster(userId: string, clusterId: string, options?: Neo4jOptions): Promise<void>;
   saveStats(stats: GraphStatsDoc, options?: Neo4jOptions): Promise<void>;
@@ -61,14 +58,15 @@ export interface GraphNeo4jStore {
 
   upsertMicroscopeExtractedFromEdge(entityUuid: string, chunkUuid: string, options?: Neo4jOptions): Promise<void>;
   deleteMicroscopeExtractedFromEdge(entityUuid: string, chunkUuid: string, options?: Neo4jOptions): Promise<void>;
-
   /**
    * 해당 워크스페이스(group_id)에 속한 모든 Microscope 데이터(노드 및 엣지)를 파기합니다.
    */
   deleteMicroscopeWorkspaceGraphs(groupId: string, options?: Neo4jOptions): Promise<void>;
-
   /**
    * 해당 워크스페이스(group_id)에 속한 모든 Microscope 데이터(노드 및 엣지)를 조회하여 FE 포맷으로 반환합니다.
    */
   getMicroscopeWorkspaceGraph(groupId: string, options?: Neo4jOptions): Promise<MicroscopeGraphDataDto>;
 }
+
+
+
