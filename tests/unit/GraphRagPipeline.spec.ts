@@ -1,24 +1,30 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { SearchService } from '../../src/core/services/SearchService';
-import type { MacroGraphStore, GraphRagNeighborResult } from '../../src/core/ports/MacroGraphStore';
+import type {
+  GraphRagClusterSiblingResult,
+  GraphRagNeighborResult,
+  MacroGraphStore,
+} from '../../src/core/ports/MacroGraphStore';
 import { GraphVectorService } from '../../src/core/services/GraphVectorService';
 import type { ConversationRepository } from '../../src/core/ports/ConversationRepository';
 import type { NoteRepository } from '../../src/core/ports/NoteRepository';
 import type { MessageRepository } from '../../src/core/ports/MessageRepository';
+import {
+  GRAPH_RAG_CLUSTER_SIBLING_BUDGET_RATIO,
+  GRAPH_RAG_CLUSTER_SIBLING_DECAY,
+  GRAPH_RAG_CONNECTION_BONUS_RATE,
+  GRAPH_RAG_HOP_DECAY,
+  GRAPH_RAG_NEIGHBOR_FETCH_MULTIPLIER,
+  GRAPH_RAG_SEED_FETCH_MIN,
+  GRAPH_RAG_SEED_FETCH_MULTIPLIER,
+} from '../../src/config/graphRagConfig';
 
-// huggingface.ts 임베딩 함수를 모킹합니다 (외부 HTTP 호출 방지).
 jest.mock('../../src/shared/utils/huggingface', () => ({
   generateMiniLMEmbedding: jest.fn(),
 }));
 
-/**
- * GraphRagPipeline 단위 테스트
- *
- * 검증 대상:
- *  1. SearchService.graphRagSearch() - 전체 파이프라인 흐름
- *  2. 스코어링 알고리즘 (seed, 1홉, 2홉)
- *  3. SearchConversationsTool의 graphRagSearch 호출
- */
+const graphRagKeyword = 'graph rag';
+
 describe('SearchService.graphRagSearch()', () => {
   let searchService: SearchService;
   let mockGraphVectorService: jest.Mocked<GraphVectorService>;
@@ -27,29 +33,48 @@ describe('SearchService.graphRagSearch()', () => {
   let mockNoteRepository: jest.Mocked<NoteRepository>;
 
   const userId = 'user-test-001';
-  const keyword = '딥러닝';
+  const keyword = graphRagKeyword;
+  const embedding = Array(384).fill(0.1);
 
-  // ChromaDB seed 검색 결과 픽스처
-  const mockSeedResults = [
+  const seedResults = [
     {
-      node: { id: 1, userId, origId: 'conv-a', clusterId: 'c1', clusterName: 'AI', numMessages: 10, timestamp: null },
+      node: {
+        id: 1,
+        userId,
+        origId: 'conv-a',
+        nodeTitle: 'Seed A from vector',
+        clusterId: 'cluster-ai',
+        clusterName: 'AI',
+        numMessages: 10,
+        timestamp: null,
+        sourceType: 'chat' as const,
+      },
       score: 0.9,
     },
     {
-      node: { id: 2, userId, origId: 'conv-b', clusterId: 'c1', clusterName: 'AI', numMessages: 5, timestamp: null },
+      node: {
+        id: 2,
+        userId,
+        origId: 'conv-b',
+        nodeTitle: 'Seed B from vector',
+        clusterId: 'cluster-ai',
+        clusterName: 'AI',
+        numMessages: 5,
+        timestamp: null,
+        sourceType: 'chat' as const,
+      },
       score: 0.7,
     },
   ];
 
-  // Neo4j 1홉 이웃 픽스처
-  const mockNeighbors1Hop: GraphRagNeighborResult[] = [
+  const neighbors: GraphRagNeighborResult[] = [
     {
       origId: 'conv-c',
       nodeId: 3,
       nodeType: 'conversation',
       clusterName: 'AI',
       hopDistance: 1,
-      connectedSeeds: ['conv-a', 'conv-b'], // 2개 seed와 연결 → connectionCount=2
+      connectedSeeds: ['conv-a', 'conv-b'],
       avgEdgeWeight: 0.8,
       connectionCount: 2,
     },
@@ -63,12 +88,8 @@ describe('SearchService.graphRagSearch()', () => {
       avgEdgeWeight: 0.6,
       connectionCount: 1,
     },
-  ];
-
-  // Neo4j 2홉 이웃 픽스처 (1홉과 겹치지 않는 origId)
-  const mockNeighbors2Hop: GraphRagNeighborResult[] = [
     {
-      origId: 'conv-e',
+      origId: 'note-e',
       nodeId: 5,
       nodeType: 'note',
       clusterName: 'Research',
@@ -76,6 +97,17 @@ describe('SearchService.graphRagSearch()', () => {
       connectedSeeds: ['conv-a'],
       avgEdgeWeight: 0.5,
       connectionCount: 1,
+    },
+  ];
+
+  const clusterSiblings: GraphRagClusterSiblingResult[] = [
+    {
+      origId: 'conv-f',
+      nodeId: 6,
+      nodeType: 'conversation',
+      clusterName: 'AI',
+      connectedSeeds: ['conv-a', 'conv-b'],
+      connectionCount: 2,
     },
   ];
 
@@ -87,6 +119,7 @@ describe('SearchService.graphRagSearch()', () => {
 
     mockMacroGraphStore = {
       searchGraphRagNeighbors: jest.fn(),
+      searchGraphRagClusterSiblings: jest.fn(),
     } as unknown as jest.Mocked<MacroGraphStore>;
 
     mockConversationRepository = {
@@ -105,223 +138,309 @@ describe('SearchService.graphRagSearch()', () => {
       mockMacroGraphStore
     );
 
-    // 기본 mock 동작 설정
-    (mockGraphVectorService.searchNodes as any).mockResolvedValue(mockSeedResults);
-    (mockMacroGraphStore.searchGraphRagNeighbors as any).mockResolvedValue([
-      ...mockNeighbors1Hop,
-      ...mockNeighbors2Hop,
-    ]);
+    const huggingfaceMock = jest.requireMock('../../src/shared/utils/huggingface') as {
+      generateMiniLMEmbedding: jest.Mock;
+    };
+    huggingfaceMock.generateMiniLMEmbedding.mockReset();
+    huggingfaceMock.generateMiniLMEmbedding.mockResolvedValue(embedding as never);
 
-    // 임베딩 mock 초기화
-    (mockConversationRepository.findByIds as any).mockResolvedValue([
+    mockGraphVectorService.searchNodes.mockResolvedValue(seedResults);
+    mockMacroGraphStore.searchGraphRagNeighbors.mockResolvedValue(neighbors);
+    mockMacroGraphStore.searchGraphRagClusterSiblings.mockResolvedValue(clusterSiblings);
+
+    mockConversationRepository.findByIds.mockResolvedValue([
       { _id: 'conv-a', title: 'Seed A' },
       { _id: 'conv-b', title: 'Seed B' },
       { _id: 'conv-c', title: 'Neighbor C' },
       { _id: 'conv-d', title: 'Neighbor D' },
-    ]);
-    (mockNoteRepository.getNote as any).mockResolvedValue({ _id: 'conv-e', title: 'Note E' });
-
-    const huggingfaceMock = jest.requireMock('../../src/shared/utils/huggingface') as any;
-    huggingfaceMock.generateMiniLMEmbedding.mockResolvedValue(Array(384).fill(0.1));
+      { _id: 'conv-f', title: 'Cluster Sibling F' },
+    ] as any);
+    mockNoteRepository.getNote.mockResolvedValue({ _id: 'note-e', title: 'Note E' } as any);
   });
 
-  describe('파이프라인 흐름 검증', () => {
-    it('keyword → embedding → ChromaDB → Neo4j 순서로 호출되어야 합니다', async () => {
-      const huggingfaceMock = jest.requireMock('../../src/shared/utils/huggingface') as any;
+  describe('pipeline flow', () => {
+    it('generates an embedding, fetches vector seeds, then queries graph neighbors and cluster siblings', async () => {
+      const huggingfaceMock = jest.requireMock('../../src/shared/utils/huggingface') as {
+        generateMiniLMEmbedding: jest.Mock;
+      };
+      const limit = 10;
 
-      await searchService.graphRagSearch(userId, keyword, 10);
+      await searchService.graphRagSearch(userId, keyword, limit);
 
-      // Phase 1: 임베딩 호출 확인
       expect(huggingfaceMock.generateMiniLMEmbedding).toHaveBeenCalledWith(keyword);
-
-      // Phase 2: ChromaDB 벡터 검색 호출 확인
       expect(mockGraphVectorService.searchNodes).toHaveBeenCalledWith(
         userId,
-        expect.any(Array),
-        expect.any(Number)
+        embedding,
+        Math.max(limit * GRAPH_RAG_SEED_FETCH_MULTIPLIER, GRAPH_RAG_SEED_FETCH_MIN)
       );
-
-      // Phase 3: Neo4j 이웃 탐색 호출 확인 (seed origIds 전달)
       expect(mockMacroGraphStore.searchGraphRagNeighbors).toHaveBeenCalledWith(
         userId,
-        expect.arrayContaining(['conv-a', 'conv-b']),
-        expect.any(Number)
+        ['conv-a', 'conv-b'],
+        limit * GRAPH_RAG_NEIGHBOR_FETCH_MULTIPLIER
       );
+      expect(mockMacroGraphStore.searchGraphRagClusterSiblings).toHaveBeenCalledWith(
+        userId,
+        ['conv-a', 'conv-b'],
+        ['conv-a', 'conv-b', 'conv-c', 'conv-d', 'note-e'],
+        Math.max(1, Math.floor(limit * GRAPH_RAG_CLUSTER_SIBLING_BUDGET_RATIO))
+      );
+
+      const embeddingOrder = huggingfaceMock.generateMiniLMEmbedding.mock.invocationCallOrder[0];
+      const vectorOrder = mockGraphVectorService.searchNodes.mock.invocationCallOrder[0];
+      const neighborOrder = mockMacroGraphStore.searchGraphRagNeighbors.mock.invocationCallOrder[0];
+      const siblingOrder =
+        mockMacroGraphStore.searchGraphRagClusterSiblings.mock.invocationCallOrder[0];
+      expect(embeddingOrder).toBeLessThan(vectorOrder);
+      expect(vectorOrder).toBeLessThan(neighborOrder);
+      expect(neighborOrder).toBeLessThan(siblingOrder);
     });
 
-    it('seed 노드가 없으면 Neo4j 탐색을 호출하지 않고 빈 결과를 반환해야 합니다', async () => {
-      (mockGraphVectorService.searchNodes as any).mockResolvedValue([]);
+    it('returns an empty result and skips Neo4j when no vector seeds survive', async () => {
+      mockGraphVectorService.searchNodes.mockResolvedValue([]);
 
       const result = await searchService.graphRagSearch(userId, keyword, 10);
 
       expect(mockMacroGraphStore.searchGraphRagNeighbors).not.toHaveBeenCalled();
-      expect(result.seedCount).toBe(0);
-      expect(result.nodes).toHaveLength(0);
+      expect(mockMacroGraphStore.searchGraphRagClusterSiblings).not.toHaveBeenCalled();
+      expect(result).toEqual({ keyword, seedCount: 0, nodes: [] });
     });
 
-    it('결과에 keyword와 seedCount가 올바르게 포함되어야 합니다', async () => {
+    it('includes keyword, seedCount, title, and cluster metadata in the response', async () => {
       const result = await searchService.graphRagSearch(userId, keyword, 10);
 
       expect(result.keyword).toBe(keyword);
-      expect(result.seedCount).toBe(2); // conv-a, conv-b
-    });
-
-    it('Graph RAG node results include title and clusterName metadata', async () => {
-      const result = await searchService.graphRagSearch(userId, keyword, 10);
-
+      expect(result.seedCount).toBe(2);
       expect(result.nodes.find((node) => node.origId === 'conv-a')).toEqual(
-        expect.objectContaining({ title: 'Seed A', clusterName: 'AI' })
+        expect.objectContaining({ title: 'Seed A from vector', clusterName: 'AI' })
       );
       expect(result.nodes.find((node) => node.origId === 'conv-c')).toEqual(
         expect.objectContaining({ title: 'Neighbor C', clusterName: 'AI' })
       );
-      expect(result.nodes.find((node) => node.origId === 'conv-e')).toEqual(
+      expect(result.nodes.find((node) => node.origId === 'note-e')).toEqual(
         expect.objectContaining({ title: 'Note E', clusterName: 'Research' })
+      );
+      expect(result.nodes.find((node) => node.origId === 'conv-f')).toEqual(
+        expect.objectContaining({
+          title: 'Cluster Sibling F',
+          clusterName: 'AI',
+          hopDistance: 9,
+        })
       );
     });
   });
 
-  describe('스코어링 알고리즘 검증', () => {
-    it('Seed 노드(0홉)의 combinedScore는 vectorScore와 같아야 합니다', async () => {
+  describe('scoring and result shaping', () => {
+    it('uses the vector score as the combined score for seed nodes', async () => {
       const result = await searchService.graphRagSearch(userId, keyword, 10);
 
-      const seedNodeA = result.nodes.find((n) => n.origId === 'conv-a');
-      const seedNodeB = result.nodes.find((n) => n.origId === 'conv-b');
+      const seedNodeA = result.nodes.find((node) => node.origId === 'conv-a');
+      const seedNodeB = result.nodes.find((node) => node.origId === 'conv-b');
 
-      expect(seedNodeA?.hopDistance).toBe(0);
-      expect(seedNodeA?.combinedScore).toBeCloseTo(0.9);
-      expect(seedNodeA?.vectorScore).toBeCloseTo(0.9);
-
-      expect(seedNodeB?.hopDistance).toBe(0);
-      expect(seedNodeB?.combinedScore).toBeCloseTo(0.7);
+      expect(seedNodeA).toEqual(
+        expect.objectContaining({ hopDistance: 0, combinedScore: 0.9, vectorScore: 0.9 })
+      );
+      expect(seedNodeB).toEqual(
+        expect.objectContaining({ hopDistance: 0, combinedScore: 0.7, vectorScore: 0.7 })
+      );
     });
 
-    it('1홉 이웃의 combinedScore는 hopDecay(0.8) × avgEdgeWeight × connectionBonus를 반영해야 합니다', async () => {
+    it('scores 1-hop neighbors with hop decay, edge weight, and the configured connection bonus', async () => {
       const result = await searchService.graphRagSearch(userId, keyword, 10);
 
-      const hop1NodeC = result.nodes.find((n) => n.origId === 'conv-c');
+      const hop1Node = result.nodes.find((node) => node.origId === 'conv-c');
+      const connectionBonus = GRAPH_RAG_CONNECTION_BONUS_RATE * (2 - 1);
 
-      // conv-c: maxSeedScore=0.9, hopDecay=0.8, avgEdgeWeight=0.8, connectionCount=2
-      // connectionBonus = 0.15 × (2-1) = 0.15
-      // combinedScore = 0.9 × 0.8 × 0.8 × (1 + 0.15) ≈ 0.6624
-      expect(hop1NodeC?.hopDistance).toBe(1);
-      expect(hop1NodeC?.combinedScore).toBeCloseTo(0.9 * 0.8 * 0.8 * 1.15, 4);
+      expect(hop1Node?.hopDistance).toBe(1);
+      expect(hop1Node?.combinedScore).toBeCloseTo(
+        0.9 * GRAPH_RAG_HOP_DECAY[1] * 0.8 * (1 + connectionBonus),
+        4
+      );
     });
 
-    it('2홉 이웃의 combinedScore는 hopDecay(0.5)를 반영해야 합니다', async () => {
+    it('scores 2-hop neighbors with the configured 2-hop decay', async () => {
       const result = await searchService.graphRagSearch(userId, keyword, 10);
 
-      const hop2NodeE = result.nodes.find((n) => n.origId === 'conv-e');
+      const hop2Node = result.nodes.find((node) => node.origId === 'note-e');
 
-      // conv-e: maxSeedScore=0.9, hopDecay=0.5, avgEdgeWeight=0.5, connectionCount=1
-      // connectionBonus = 0 (connectionCount=1 → 보너스 없음)
-      // combinedScore = 0.9 × 0.5 × 0.5 × 1.0 = 0.225
-      expect(hop2NodeE?.hopDistance).toBe(2);
-      expect(hop2NodeE?.combinedScore).toBeCloseTo(0.9 * 0.5 * 0.5 * 1.0, 4);
+      expect(hop2Node?.hopDistance).toBe(2);
+      expect(hop2Node?.combinedScore).toBeCloseTo(
+        0.9 * GRAPH_RAG_HOP_DECAY[2] * 0.5,
+        4
+      );
     });
 
-    it('결과가 combinedScore 내림차순으로 정렬되어야 합니다', async () => {
+    it('scores cluster siblings with the sibling decay and marks them with hopDistance 9', async () => {
       const result = await searchService.graphRagSearch(userId, keyword, 10);
 
+      const siblingNode = result.nodes.find((node) => node.origId === 'conv-f');
+      const connectionBonus = GRAPH_RAG_CONNECTION_BONUS_RATE * (2 - 1);
+
+      expect(siblingNode?.hopDistance).toBe(9);
+      expect(siblingNode?.combinedScore).toBeCloseTo(
+        0.9 * GRAPH_RAG_CLUSTER_SIBLING_DECAY * (1 + connectionBonus),
+        4
+      );
+    });
+
+    it('sorts by combinedScore descending and slices to the requested limit', async () => {
+      const result = await searchService.graphRagSearch(userId, keyword, 3);
+
+      expect(result.nodes).toHaveLength(3);
       for (let i = 1; i < result.nodes.length; i++) {
         expect(result.nodes[i - 1].combinedScore).toBeGreaterThanOrEqual(
           result.nodes[i].combinedScore
         );
       }
-    });
-
-    it('limit를 초과하는 노드는 잘려야 합니다', async () => {
-      // seed 2개 + 이웃 3개 = 총 5개인데 limit=3으로 제한
-      const result = await searchService.graphRagSearch(userId, keyword, 3);
-
-      expect(result.nodes.length).toBeLessThanOrEqual(3);
+      expect(result.nodes.map((node) => node.origId)).toEqual(['conv-a', 'conv-b', 'conv-c']);
     });
   });
 
-  describe('오류 처리', () => {
-    it('graphVectorService/macroGraphStore가 없으면 에러를 던져야 합니다', async () => {
+  describe('error handling', () => {
+    it('throws when graph dependencies are not configured', async () => {
       const serviceWithoutDeps = new SearchService(
         {} as ConversationRepository,
         {} as NoteRepository,
         {} as MessageRepository
-        // graphVectorService, macroGraphStore 미주입
       );
 
       await expect(serviceWithoutDeps.graphRagSearch(userId, keyword)).rejects.toThrow();
     });
 
-    it('임베딩 생성 실패 시 에러가 전파되어야 합니다', async () => {
-      const huggingfaceMock = jest.requireMock('../../src/shared/utils/huggingface') as any;
+    it('propagates embedding generation failures', async () => {
+      const huggingfaceMock = jest.requireMock('../../src/shared/utils/huggingface') as {
+        generateMiniLMEmbedding: jest.Mock;
+      };
       huggingfaceMock.generateMiniLMEmbedding.mockRejectedValueOnce(
-        new Error('HuggingFace 서버 오류')
+        new Error('embedding service failed') as never
       );
 
       await expect(searchService.graphRagSearch(userId, keyword)).rejects.toThrow(
-        'HuggingFace 서버 오류'
+        'embedding service failed'
       );
     });
   });
 });
 
-describe('SearchConversationsTool Graph RAG 통합', () => {
-  it('AgentServiceDeps에서 searchService.graphRagSearch를 호출해야 합니다', async () => {
+describe('SearchConversationsTool Graph RAG integration', () => {
+  it('maps graphRagSearch results to tool nodes, clusters, and match sources', async () => {
     const { SearchConversationsTool } = await import(
       '../../src/agent/tools/SearchConversationsTool'
     );
 
     const mockSearchService = {
-      graphRagSearch: jest.fn() as any,
+      graphRagSearch: jest.fn(),
     };
-    (mockSearchService.graphRagSearch as any).mockResolvedValue({
-      keyword: '딥러닝',
+    mockSearchService.graphRagSearch.mockResolvedValue({
+      keyword: graphRagKeyword,
       seedCount: 2,
       nodes: [
-        { origId: 'conv-a', title: 'Seed A', nodeType: 'conversation', clusterName: 'AI', hopDistance: 0, combinedScore: 0.9, vectorScore: 0.9, connectionCount: 0 },
-        { origId: 'conv-c', title: 'Neighbor C', nodeType: 'conversation', clusterName: 'AI', hopDistance: 1, combinedScore: 0.66, connectionCount: 2 },
+        {
+          origId: 'conv-a',
+          title: 'Seed A',
+          nodeType: 'conversation',
+          clusterName: 'AI',
+          hopDistance: 0,
+          combinedScore: 0.9,
+          vectorScore: 0.9,
+          connectionCount: 0,
+        },
+        {
+          origId: 'conv-f',
+          title: 'Cluster Sibling F',
+          nodeType: 'conversation',
+          clusterName: 'AI',
+          hopDistance: 9,
+          combinedScore: 0.405,
+          connectionCount: 2,
+        },
       ],
-    });
+    } as never);
 
     const tool = new SearchConversationsTool();
     const result = await tool.execute(
       'user-001',
-      { keyword: '딥러닝', limit: 10 },
+      { keyword: graphRagKeyword, limit: 10 },
       { searchService: mockSearchService } as any,
       {} as any
     );
 
     const parsed = JSON.parse(result);
-    expect(mockSearchService.graphRagSearch).toHaveBeenCalledWith('user-001', '딥러닝', 10);
-    expect(parsed.nodes).toHaveLength(2);
-    expect(parsed.nodes[0].matchSource).toBe('vector_seed');
-    expect(parsed.nodes[0].title).toBe('Seed A');
-    expect(parsed.nodes[0].clusterName).toBe('AI');
-    expect(parsed.nodes[1].matchSource).toBe('graph_1hop');
+    expect(mockSearchService.graphRagSearch).toHaveBeenCalledWith('user-001', graphRagKeyword, 10);
+    expect(parsed.nodes).toEqual([
+      expect.objectContaining({ id: 'conv-a', matchSource: 'vector_seed' }),
+      expect.objectContaining({ id: 'conv-f', matchSource: 'cluster_sibling' }),
+    ]);
+    expect(parsed.clusters).toEqual([
+      expect.objectContaining({
+        clusterName: 'AI',
+        nodeCount: 2,
+        maxRelevanceScore: 0.9,
+      }),
+    ]);
+    expect(parsed.search_summary.matchSourceBreakdown).toEqual({
+      vector_seed: 1,
+      cluster_sibling: 1,
+    });
   });
 
-  it('결과가 없으면 안내 메시지를 반환해야 합니다', async () => {
+  it('uses graphRagSearchMulti for comma-separated keywords', async () => {
     const { SearchConversationsTool } = await import(
       '../../src/agent/tools/SearchConversationsTool'
     );
 
     const mockSearchService = {
-      graphRagSearch: jest.fn() as any,
+      graphRagSearch: jest.fn(),
+      graphRagSearchMulti: jest.fn(),
     };
-    (mockSearchService.graphRagSearch as any).mockResolvedValue({
-      keyword: '없는키워드',
+    mockSearchService.graphRagSearchMulti.mockResolvedValue({
+      keyword: 'alpha, beta',
       seedCount: 0,
       nodes: [],
-    });
+    } as never);
 
     const tool = new SearchConversationsTool();
     const result = await tool.execute(
       'user-001',
-      { keyword: '없는키워드' },
+      { keyword: 'alpha, beta', limit: 5 },
       { searchService: mockSearchService } as any,
       {} as any
     );
 
     const parsed = JSON.parse(result);
-    expect(parsed.nodes).toHaveLength(0);
-    expect(parsed.message).toContain('없습니다');
+    expect(mockSearchService.graphRagSearch).not.toHaveBeenCalled();
+    expect(mockSearchService.graphRagSearchMulti).toHaveBeenCalledWith(
+      'user-001',
+      ['alpha', 'beta'],
+      5
+    );
+    expect(parsed.nodes).toEqual([]);
+  });
+
+  it('returns an empty message when no graph results are found', async () => {
+    const { SearchConversationsTool } = await import(
+      '../../src/agent/tools/SearchConversationsTool'
+    );
+
+    const mockSearchService = {
+      graphRagSearch: jest.fn(),
+    };
+    mockSearchService.graphRagSearch.mockResolvedValue({
+      keyword: 'missing',
+      seedCount: 0,
+      nodes: [],
+    } as never);
+
+    const tool = new SearchConversationsTool();
+    const result = await tool.execute(
+      'user-001',
+      { keyword: 'missing' },
+      { searchService: mockSearchService } as any,
+      {} as any
+    );
+
+    const parsed = JSON.parse(result);
+    expect(parsed.nodes).toEqual([]);
+    expect(parsed.clusters).toEqual([]);
+    expect(parsed.message).toEqual(expect.any(String));
   });
 });
