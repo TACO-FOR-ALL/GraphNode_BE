@@ -50,9 +50,15 @@ import {
   toNeo4jMacroStats,
   toNeo4jMacroSubcluster,
   toNeo4jMacroSummary,
+  toMacroNodeType,
   type Neo4jMacroSummaryAggregateContext,
 } from './mappers/macroGraphNeo4j.mapper';
-import type { MacroFileType, Neo4jMacroSummaryNode } from '../../core/types/neo4j/macro.neo4j';
+import type {
+  MacroFileType,
+  MacroNodeType,
+  Neo4jMacroSummaryNode,
+} from '../../core/types/neo4j/macro.neo4j';
+import type { GraphEdgeType } from '../../shared/dtos/graph';
 import type { GraphRagNeighborResult } from '../../core/ports/MacroGraphStore';
 import { logger } from '../../shared/utils/logger';
 
@@ -110,8 +116,11 @@ function buildNodeRow(record: { get(key: string): unknown }) {
     node: {
       id: toJsNumber(props['id']),
       userId: String(props['userId'] ?? ''),
+      label: props['label'] as string | undefined,
+      summary: props['summary'] as string | undefined,
+      metadataJson: props['metadataJson'] as string | undefined,
       origId: String(props['origId'] ?? ''),
-      nodeType: props['nodeType'] as 'conversation' | 'note' | 'notion' | 'file',
+      nodeType: props['nodeType'] as MacroNodeType,
       fileType: props['fileType'] as MacroFileType | undefined,
       mimeType: props['mimeType'] as string | undefined,
       timestamp: props['timestamp'] as string | null,
@@ -377,6 +386,9 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
         target: e.target,
         weight: e.weight,
         type: e.type,
+        relationType: e.relationType,
+        relation: e.relation,
+        propertiesJson: JSON.stringify(e.properties ?? {}),
         intraCluster: e.intraCluster,
         deletedAt: e.deletedAt ?? null,
       }));
@@ -486,8 +498,9 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     options?: MacroGraphStoreOptions
   ): Promise<void> {
     const scalarFields: (keyof GraphNodeDoc)[] = [
+      'label',
+      'summary',
       'origId',
-      'nodeType' as keyof GraphNodeDoc,
       'timestamp',
       'numMessages',
       'embedding',
@@ -498,6 +511,8 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     for (const field of scalarFields) {
       if (field in patch) props[field] = (patch as Record<string, unknown>)[field] ?? null;
     }
+    if ('metadata' in patch) props.metadataJson = JSON.stringify(patch.metadata ?? {});
+    if ('sourceType' in patch) props.nodeType = toMacroNodeType(patch.sourceType);
     if (Object.keys(props).length === 0) return;
 
     await this.runWrite(async (runner) => {
@@ -555,6 +570,9 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
         target: e.target,
         weight: e.weight,
         type: e.type,
+        relationType: e.relationType,
+        relation: e.relation,
+        propertiesJson: JSON.stringify(e.properties ?? {}),
         intraCluster: e.intraCluster,
         deletedAt: e.deletedAt ?? null,
       }));
@@ -894,7 +912,10 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
             id: String(relProps['id'] ?? ''),
             userId: String(relProps['userId'] ?? ''),
             weight: toJsNumber(relProps['weight']),
-            type: relProps['type'] as 'hard' | 'insight',
+            type: relProps['type'] as GraphEdgeType,
+            relationType: relProps['relationType'] as string | undefined,
+            relation: relProps['relation'] as string | undefined,
+            propertiesJson: relProps['propertiesJson'] as string | undefined,
             intraCluster: Boolean(relProps['intraCluster']),
             createdAt: relProps['createdAt'] as string | undefined,
             updatedAt: relProps['updatedAt'] as string | undefined,
@@ -1622,6 +1643,316 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
       );
 
       return siblings;
+    }, options);
+  }
+
+  // =====================
+  // Graph Editor 편집 메서드 구현 (작성일: 2026-05-01)
+  // =====================
+
+  /**
+   * @description 사용자의 다음 사용 가능한 node ID를 반환합니다. 작성일: 2026-05-01
+   *
+   * 현재 저장된 MacroNode 중 최대 id + 1을 반환합니다. 노드가 없으면 1을 반환합니다.
+   *
+   * @param userId 조회 대상 사용자 ID
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 다음 사용 가능한 정수 node ID
+   */
+  async getNextNodeId(userId: string, options?: MacroGraphStoreOptions): Promise<number> {
+    return this.runRead(async (runner) => {
+      const result = await runner.run(MACRO_GRAPH_CYPHER.getMaxNodeId, { userId });
+      const records = result.records as unknown[];
+      if (records.length === 0) return 1;
+      const record = records[0] as { get(key: string): unknown };
+      return toJsNumber(record.get('maxId')) + 1;
+    }, options);
+  }
+
+  /**
+   * @description edge id로 단일 GraphEdgeDto를 조회합니다. 작성일: 2026-05-01
+   *
+   * @param userId 조회 대상 사용자 ID
+   * @param edgeId 조회할 edge id
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 조회된 GraphEdgeDto. 없으면 null.
+   */
+  async findEdge(
+    userId: string,
+    edgeId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<GraphEdgeDto | null> {
+    return this.runRead(async (runner) => {
+      const result = await runner.run(MACRO_GRAPH_CYPHER.findEdgeById, {
+        ...this.readParams(userId, options),
+        edgeId,
+      });
+      const records = result.records as unknown[];
+      if (records.length === 0) return null;
+
+      const record = records[0] as { get(key: string): unknown };
+      const relProps = (record.get('rel') as { properties: Record<string, unknown> }).properties;
+      const row = {
+        relation: {
+          id: String(relProps['id'] ?? ''),
+          userId: String(relProps['userId'] ?? ''),
+          weight: typeof relProps['weight'] === 'number' ? relProps['weight'] : toJsNumber(relProps['weight']),
+          type: String(relProps['type'] ?? 'insight') as GraphEdgeType,
+          relationType: relProps['relationType'] as string | undefined,
+          intraCluster: Boolean(relProps['intraCluster']),
+          relation: relProps['relation'] as string | undefined,
+          propertiesJson: relProps['propertiesJson'] as string | undefined,
+          createdAt: relProps['createdAt'] as string | undefined,
+          updatedAt: relProps['updatedAt'] as string | undefined,
+          deletedAt: relProps['deletedAt'] as number | null | undefined,
+        },
+        sourceNodeId: toJsNumber(record.get('sourceNodeId')),
+        targetNodeId: toJsNumber(record.get('targetNodeId')),
+      };
+      return toGraphEdgeDto(fromNeo4jMacroRelation(row));
+    }, options);
+  }
+
+  /**
+   * @description subcluster id로 단일 GraphSubclusterDto를 조회합니다. 작성일: 2026-05-01
+   *
+   * @param userId 조회 대상 사용자 ID
+   * @param subclusterId 조회할 subcluster id
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 조회된 GraphSubclusterDto. 없으면 null.
+   */
+  async findSubcluster(
+    userId: string,
+    subclusterId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<GraphSubclusterDto | null> {
+    return this.runRead(async (runner) => {
+      const result = await runner.run(MACRO_GRAPH_CYPHER.findSubclusterById, {
+        ...this.readParams(userId, options),
+        subclusterId,
+      });
+      const records = result.records as unknown[];
+      if (records.length === 0) return null;
+
+      const record = records[0] as { get(key: string): unknown };
+      const scProps = (record.get('sc') as { properties: Record<string, unknown> }).properties;
+      const row = {
+        subcluster: {
+          id: String(scProps['id'] ?? ''),
+          userId: String(scProps['userId'] ?? ''),
+          topKeywords: Array.isArray(scProps['topKeywords'])
+            ? (scProps['topKeywords'] as string[])
+            : [],
+          density: typeof scProps['density'] === 'number' ? scProps['density'] : 0,
+          createdAt: scProps['createdAt'] as string | undefined,
+          updatedAt: scProps['updatedAt'] as string | undefined,
+          deletedAt: scProps['deletedAt'] as number | null | undefined,
+        },
+        clusterId: String(record.get('clusterId') ?? ''),
+        nodeIds: toJsNumberArray((record.get('nodeIds') as unknown[]) ?? []),
+        representativeNodeId: toJsNumber(record.get('representativeNodeId')),
+        size: toJsNumber(record.get('size')),
+        density: toJsNumber(record.get('density')),
+      };
+      return toGraphSubclusterDto(fromNeo4jMacroSubcluster(row));
+    }, options);
+  }
+
+  /**
+   * @description 단일 MacroRelation 속성을 부분 업데이트합니다. 작성일: 2026-05-01
+   *
+   * MACRO_RELATED materialized 관계의 weight/type/intraCluster도 동기화합니다.
+   *
+   * @param userId 사용자 ID
+   * @param edgeId 업데이트할 edge id
+   * @param patch 업데이트할 필드 부분 객체
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  async updateEdge(
+    userId: string,
+    edgeId: string,
+    patch: Partial<GraphEdgeDto>,
+    options?: MacroGraphStoreOptions
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    // 예약 필드 제거 후 props 구성
+    const {
+      id: _id,
+      userId: _userId,
+      createdAt: _ca,
+      source: _src,
+      target: _tgt,
+      properties,
+      ...rest
+    } = patch as Record<string, unknown>;
+    const props = {
+      ...rest,
+      ...(properties !== undefined ? { propertiesJson: JSON.stringify(properties ?? {}) } : {}),
+      updatedAt: now,
+    };
+
+    await this.runWrite(async (runner) => {
+      await runner.run(MACRO_GRAPH_CYPHER.updateEdge, { userId, edgeId, props });
+    }, options);
+  }
+
+  /**
+   * @description 단일 MacroCluster 속성을 부분 업데이트합니다. 작성일: 2026-05-01
+   *
+   * @param userId 사용자 ID
+   * @param clusterId 업데이트할 cluster id
+   * @param patch 업데이트할 필드 부분 객체
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  async updateCluster(
+    userId: string,
+    clusterId: string,
+    patch: Partial<GraphClusterDto>,
+    options?: MacroGraphStoreOptions
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    const { id: _id, userId: _userId, createdAt: _ca, size: _size, ...rest } = patch as Record<string, unknown>;
+    const props = { ...rest, updatedAt: now };
+
+    await this.runWrite(async (runner) => {
+      await runner.run(MACRO_GRAPH_CYPHER.updateCluster, { userId, clusterId, props });
+    }, options);
+  }
+
+  /**
+   * @description 단일 MacroSubcluster 속성을 부분 업데이트합니다. 작성일: 2026-05-01
+   *
+   * @param userId 사용자 ID
+   * @param subclusterId 업데이트할 subcluster id
+   * @param patch 업데이트할 필드 부분 객체
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  async updateSubcluster(
+    userId: string,
+    subclusterId: string,
+    patch: Partial<GraphSubclusterDto>,
+    options?: MacroGraphStoreOptions
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    const { id: _id, userId: _userId, createdAt: _ca, clusterId: _cid, nodeIds: _nids, representativeNodeId: _rep, size: _size, ...rest } = patch as Record<string, unknown>;
+    const props = { ...rest, updatedAt: now };
+
+    await this.runWrite(async (runner) => {
+      await runner.run(MACRO_GRAPH_CYPHER.updateSubcluster, { userId, subclusterId, props });
+    }, options);
+  }
+
+  /**
+   * @description node를 다른 cluster로 이동합니다 (BELONGS_TO 관계 교체). 작성일: 2026-05-01
+   *
+   * @param userId 사용자 ID
+   * @param nodeId 이동할 node id
+   * @param newClusterId 이동 대상 cluster id
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  async moveNodeToCluster(
+    userId: string,
+    nodeId: number,
+    newClusterId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<void> {
+    await this.runWrite(async (runner) => {
+      await runner.run(MACRO_GRAPH_CYPHER.moveNodeToCluster, { userId, nodeId, newClusterId });
+    }, options);
+  }
+
+  /**
+   * @description subcluster를 다른 cluster로 이동합니다 (HAS_SUBCLUSTER 관계 교체). 작성일: 2026-05-01
+   *
+   * subcluster 내 모든 node의 BELONGS_TO도 newClusterId로 재설정합니다.
+   *
+   * @param userId 사용자 ID
+   * @param subclusterId 이동할 subcluster id
+   * @param newClusterId 이동 대상 cluster id
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  async moveSubclusterToCluster(
+    userId: string,
+    subclusterId: string,
+    newClusterId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<void> {
+    await this.runWrite(async (runner) => {
+      await runner.run(MACRO_GRAPH_CYPHER.moveSubclusterToCluster, {
+        userId,
+        subclusterId,
+        newClusterId,
+      });
+    }, options);
+  }
+
+  /**
+   * @description subcluster에 node를 편입합니다 (CONTAINS 관계 생성). 작성일: 2026-05-01
+   *
+   * node와 subcluster가 동일 cluster에 속해 있는지는 호출 전 service layer에서 검증합니다.
+   *
+   * @param userId 사용자 ID
+   * @param subclusterId 대상 subcluster id
+   * @param nodeId 편입할 node id
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  async addNodeToSubcluster(
+    userId: string,
+    subclusterId: string,
+    nodeId: number,
+    options?: MacroGraphStoreOptions
+  ): Promise<void> {
+    await this.runWrite(async (runner) => {
+      await runner.run(MACRO_GRAPH_CYPHER.addNodeToSubcluster, { userId, subclusterId, nodeId });
+    }, options);
+  }
+
+  /**
+   * @description subcluster에서 node를 제거합니다 (CONTAINS 관계 삭제). 작성일: 2026-05-01
+   *
+   * node 자체는 cluster에 잔류합니다. CONTAINS 관계만 제거됩니다.
+   *
+   * @param userId 사용자 ID
+   * @param subclusterId 대상 subcluster id
+   * @param nodeId 제거할 node id
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  async removeNodeFromSubcluster(
+    userId: string,
+    subclusterId: string,
+    nodeId: number,
+    options?: MacroGraphStoreOptions
+  ): Promise<void> {
+    await this.runWrite(async (runner) => {
+      await runner.run(MACRO_GRAPH_CYPHER.removeNodeFromSubcluster, {
+        userId,
+        subclusterId,
+        nodeId,
+      });
+    }, options);
+  }
+
+  /**
+   * @description cluster에 활성 node가 하나 이상 있는지 확인합니다. 작성일: 2026-05-01
+   *
+   * cluster 삭제 전 guard check 용도입니다.
+   *
+   * @param userId 사용자 ID
+   * @param clusterId 확인할 cluster id
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 활성 node가 1개 이상 있으면 true
+   */
+  async clusterHasNodes(
+    userId: string,
+    clusterId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<boolean> {
+    return this.runRead(async (runner) => {
+      const result = await runner.run(MACRO_GRAPH_CYPHER.clusterHasNodes, { userId, clusterId });
+      const records = result.records as unknown[];
+      if (records.length === 0) return false;
+      const record = records[0] as { get(key: string): unknown };
+      return Boolean(record.get('hasNodes'));
     }, options);
   }
 }

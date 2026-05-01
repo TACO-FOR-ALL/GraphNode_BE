@@ -19,6 +19,20 @@ import type {
   Neo4jMacroSummaryNode,
   Neo4jMacroSummaryOverview,
 } from '../../../core/types/neo4j/macro.neo4j';
+import type { GraphSourceType } from '../../../shared/dtos/graph';
+
+const LEGACY_TO_MACRO_NODE_TYPE: Record<GraphSourceType, MacroNodeType> = {
+  chat: 'conversation',
+  markdown: 'note',
+  notion: 'notion',
+};
+
+const MACRO_TO_LEGACY_SOURCE_TYPE: Record<MacroNodeType, GraphSourceType> = {
+  conversation: 'chat',
+  note: 'markdown',
+  notion: 'notion',
+  file: 'markdown',
+};
 
 /**
  * @description Neo4j에서 MacroNode와 cluster 관계 context를 함께 조회한 row입니다.
@@ -149,6 +163,9 @@ export function toNeo4jMacroNode(
   return {
     id: doc.id,
     userId: doc.userId,
+    label: doc.label,
+    summary: doc.summary,
+    metadataJson: JSON.stringify(doc.metadata ?? {}),
     origId: doc.origId,
     nodeType,
     fileType,
@@ -173,6 +190,9 @@ export function fromNeo4jMacroNode(row: Neo4jMacroNodeHydratedRow): GraphNodeDoc
   return {
     id: node.id,
     userId: node.userId,
+    label: node.label,
+    summary: node.summary,
+    metadata: parseJsonRecord(node.metadataJson ?? ''),
     origId: node.origId,
     clusterId: row.clusterId,
     clusterName: row.clusterName,
@@ -200,6 +220,9 @@ export function toNeo4jMacroRelation(doc: GraphEdgeDoc): Neo4jMacroRelationNode 
     userId: doc.userId,
     weight: doc.weight,
     type: doc.type,
+    relationType: doc.relationType,
+    relation: doc.relation,
+    propertiesJson: JSON.stringify(doc.properties ?? {}),
     intraCluster: doc.intraCluster,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
@@ -222,6 +245,9 @@ export function fromNeo4jMacroRelation(row: Neo4jMacroRelationHydratedRow): Grap
     target: row.targetNodeId,
     weight: relation.weight,
     type: relation.type,
+    relationType: relation.relationType,
+    relation: relation.relation,
+    properties: parseJsonRecord(relation.propertiesJson ?? ''),
     intraCluster: relation.intraCluster,
     createdAt: relation.createdAt ?? '',
     updatedAt: relation.updatedAt ?? '',
@@ -417,9 +443,7 @@ export function fromNeo4jMacroSummary(
  * @returns Neo4j source node type입니다.
  */
 export function toMacroNodeType(sourceType?: GraphNodeDoc['sourceType']): MacroNodeType {
-  if (sourceType === 'chat') return 'conversation';
-  if (sourceType === 'notion') return 'notion';
-  return 'note';
+  return sourceType ? LEGACY_TO_MACRO_NODE_TYPE[sourceType] : 'note';
 }
 
 /**
@@ -429,9 +453,7 @@ export function toMacroNodeType(sourceType?: GraphNodeDoc['sourceType']): MacroN
  * @returns 기존 `GraphNodeDoc.sourceType` 값입니다.
  */
 export function toLegacySourceType(nodeType: MacroNodeType): GraphNodeDoc['sourceType'] {
-  if (nodeType === 'conversation') return 'chat';
-  if (nodeType === 'notion') return 'notion';
-  return 'markdown';
+  return MACRO_TO_LEGACY_SOURCE_TYPE[nodeType];
 }
 
 /**

@@ -29,6 +29,8 @@ export const MACRO_GRAPH_SCHEMA_CYPHER = [
   'CREATE INDEX macro_cluster_name IF NOT EXISTS FOR (c:MacroCluster) ON (c.userId, c.name)',
   /** [인덱스] relation 타입별 조회와 집계를 보조합니다. */
   'CREATE INDEX macro_relation_type IF NOT EXISTS FOR (r:MacroRelation) ON (r.userId, r.type)',
+  /** [인덱스] 사용자 정의 relationType 조회를 보조합니다. */
+  'CREATE INDEX macro_relation_custom_type IF NOT EXISTS FOR (r:MacroRelation) ON (r.userId, r.relationType)',
   /** [전문검색] 원천 ID, source type, MIME 타입 기반 MacroNode 검색을 지원합니다. */
   'CREATE FULLTEXT INDEX macro_node_text IF NOT EXISTS FOR (n:MacroNode) ON EACH [n.origId, n.nodeType, n.mimeType]',
   /** [전문검색] cluster 이름과 설명 기반 검색을 지원합니다. */
@@ -83,7 +85,10 @@ export const MACRO_GRAPH_CYPHER = {
   upsertNodes: `
     UNWIND $rows AS row
     MERGE (n:MacroNode {userId: row.userId, id: row.id})
-    SET n.origId       = row.origId,
+    SET n.label        = row.label,
+        n.summary      = row.summary,
+        n.metadataJson = row.metadataJson,
+        n.origId       = row.origId,
         n.nodeType     = row.nodeType,
         n.fileType     = row.fileType,
         n.mimeType     = row.mimeType,
@@ -185,6 +190,9 @@ export const MACRO_GRAPH_CYPHER = {
     MERGE (r:MacroRelation {userId: row.userId, id: row.id})
     SET r.weight       = row.weight,
         r.type         = row.type,
+        r.relationType = row.relationType,
+        r.relation     = row.relation,
+        r.propertiesJson = row.propertiesJson,
         r.intraCluster = row.intraCluster,
         r.createdAt    = row.createdAt,
         r.updatedAt    = row.updatedAt,
@@ -489,6 +497,9 @@ export const MACRO_GRAPH_CYPHER = {
     MERGE (src)-[r:MACRO_RELATED {id: row.edgeId, userId: $userId}]->(tgt)
     SET r.weight       = row.weight,
         r.type         = row.type,
+        r.relationType = row.relationType,
+        r.relation     = row.relation,
+        r.propertiesJson = row.propertiesJson,
         r.intraCluster = row.intraCluster,
         r.deletedAt    = row.deletedAt
   `,
@@ -1387,5 +1398,193 @@ export const MACRO_GRAPH_CYPHER = {
     RETURN origId, nodeId, nodeType, clusterName, connectedSeeds, connectionCount
     ORDER BY connectionCount DESC
     LIMIT $limit
+  `,
+
+  // =====================
+  // Graph Editor 편집용 Cypher (작성일: 2026-05-01)
+  // =====================
+
+  /**
+   * @description 사용자의 MacroNode 중 최대 id를 조회합니다. 작성일: 2026-05-01
+   *
+   * 노드가 없으면 0을 반환합니다.
+   *
+   * @param userId 사용자 ID
+   */
+  getMaxNodeId: `
+    MATCH (n:MacroNode {userId: $userId})
+    RETURN coalesce(max(n.id), 0) AS maxId
+  `,
+
+  /**
+   * @description edge id로 단일 MacroRelation을 source/target endpoint와 함께 조회합니다. 작성일: 2026-05-01
+   *
+   * @param userId 사용자 ID
+   * @param edgeId 조회할 edge id
+   * @param includeDeleted soft delete된 edge 포함 여부
+   */
+  findEdgeById: `
+    MATCH (g:MacroGraph {userId: $userId})-[:HAS_RELATION]->(rel:MacroRelation {userId: $userId, id: $edgeId})
+    WHERE $includeDeleted OR rel.deletedAt IS NULL
+    MATCH (rel)-[:RELATES_SOURCE]->(src:MacroNode)
+    MATCH (rel)-[:RELATES_TARGET]->(tgt:MacroNode)
+    RETURN rel, src.id AS sourceNodeId, tgt.id AS targetNodeId
+  `,
+
+  /**
+   * @description subcluster id로 단일 MacroSubcluster를 관계 집계와 함께 조회합니다. 작성일: 2026-05-01
+   *
+   * @param userId 사용자 ID
+   * @param subclusterId 조회할 subcluster id
+   * @param includeDeleted soft delete된 subcluster 포함 여부
+   */
+  findSubclusterById: `
+    MATCH (g:MacroGraph {userId: $userId})-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId, id: $subclusterId})
+    WHERE $includeDeleted OR sc.deletedAt IS NULL
+    OPTIONAL MATCH (cl:MacroCluster {userId: $userId})-[:HAS_SUBCLUSTER]->(sc)
+    OPTIONAL MATCH (sc)-[:CONTAINS]->(n:MacroNode {userId: $userId})
+    WHERE $includeDeleted OR n.deletedAt IS NULL
+    OPTIONAL MATCH (sc)-[:REPRESENTS]->(rep:MacroNode {userId: $userId})
+    RETURN sc,
+           coalesce(cl.id, '')    AS clusterId,
+           collect(DISTINCT n.id) AS nodeIds,
+           rep.id                  AS representativeNodeId,
+           count(DISTINCT n)       AS size,
+           coalesce(sc.density, 0.0) AS density
+  `,
+
+  /**
+   * @description MacroRelation 속성을 부분 업데이트하고 MACRO_RELATED materialized 관계에도 반영합니다.
+   * 작성일: 2026-05-01
+   *
+   * @param userId 사용자 ID
+   * @param edgeId 업데이트할 edge id
+   * @param props 업데이트할 속성 맵
+   */
+  updateEdge: `
+    MATCH (rel:MacroRelation {userId: $userId, id: $edgeId})
+    SET rel += $props
+    WITH rel
+    OPTIONAL MATCH (:MacroNode {userId: $userId})-[mr:MACRO_RELATED {userId: $userId, id: $edgeId}]->(:MacroNode {userId: $userId})
+    SET mr.weight       = rel.weight,
+        mr.type         = rel.type,
+        mr.relationType = rel.relationType,
+        mr.relation     = rel.relation,
+        mr.propertiesJson = rel.propertiesJson,
+        mr.intraCluster = rel.intraCluster,
+        mr.deletedAt    = rel.deletedAt
+  `,
+
+  /**
+   * @description MacroCluster 속성을 부분 업데이트합니다. 작성일: 2026-05-01
+   *
+   * @param userId 사용자 ID
+   * @param clusterId 업데이트할 cluster id
+   * @param props 업데이트할 속성 맵
+   */
+  updateCluster: `
+    MATCH (c:MacroCluster {userId: $userId, id: $clusterId})
+    SET c += $props
+  `,
+
+  /**
+   * @description MacroSubcluster 속성을 부분 업데이트합니다. 작성일: 2026-05-01
+   *
+   * @param userId 사용자 ID
+   * @param subclusterId 업데이트할 subcluster id
+   * @param props 업데이트할 속성 맵
+   */
+  updateSubcluster: `
+    MATCH (sc:MacroSubcluster {userId: $userId, id: $subclusterId})
+    SET sc += $props
+  `,
+
+  /**
+   * @description node의 BELONGS_TO 관계를 삭제하고 새 cluster에 연결합니다. 작성일: 2026-05-01
+   *
+   * 기존 BELONGS_TO 관계를 모두 삭제 후 newClusterId cluster에 새 BELONGS_TO를 생성합니다.
+   *
+   * @param userId 사용자 ID
+   * @param nodeId 이동할 node id
+   * @param newClusterId 이동 대상 cluster id
+   */
+  moveNodeToCluster: `
+    MATCH (n:MacroNode {userId: $userId, id: $nodeId})
+    OPTIONAL MATCH (n)-[oldRel:BELONGS_TO]->(:MacroCluster {userId: $userId})
+    DELETE oldRel
+    WITH n
+    MATCH (newCluster:MacroCluster {userId: $userId, id: $newClusterId})
+    WHERE newCluster.deletedAt IS NULL
+    MERGE (n)-[:BELONGS_TO]->(newCluster)
+  `,
+
+  /**
+   * @description subcluster의 HAS_SUBCLUSTER 관계를 삭제하고 새 cluster에 연결합니다. 작성일: 2026-05-01
+   *
+   * 또한 subcluster에 CONTAINS된 모든 node의 BELONGS_TO도 newClusterId로 재설정합니다.
+   *
+   * @param userId 사용자 ID
+   * @param subclusterId 이동할 subcluster id
+   * @param newClusterId 이동 대상 cluster id
+   */
+  moveSubclusterToCluster: `
+    MATCH (sc:MacroSubcluster {userId: $userId, id: $subclusterId})
+    OPTIONAL MATCH (oldCluster:MacroCluster {userId: $userId})-[oldRel:HAS_SUBCLUSTER]->(sc)
+    DELETE oldRel
+    WITH sc
+    MATCH (newCluster:MacroCluster {userId: $userId, id: $newClusterId})
+    WHERE newCluster.deletedAt IS NULL
+    MERGE (newCluster)-[:HAS_SUBCLUSTER]->(sc)
+    WITH sc, newCluster
+    OPTIONAL MATCH (sc)-[:CONTAINS]->(n:MacroNode {userId: $userId})
+    WHERE n.deletedAt IS NULL
+    OPTIONAL MATCH (n)-[oldNodeRel:BELONGS_TO]->(:MacroCluster {userId: $userId})
+    DELETE oldNodeRel
+    WITH n, newCluster
+    WHERE n IS NOT NULL
+    MERGE (n)-[:BELONGS_TO]->(newCluster)
+  `,
+
+  /**
+   * @description subcluster에 node의 CONTAINS 관계를 생성합니다. 작성일: 2026-05-01
+   *
+   * node와 subcluster가 동일 cluster에 속해 있는지는 service layer에서 검증합니다.
+   *
+   * @param userId 사용자 ID
+   * @param subclusterId 대상 subcluster id
+   * @param nodeId 편입할 node id
+   */
+  addNodeToSubcluster: `
+    MATCH (sc:MacroSubcluster {userId: $userId, id: $subclusterId})
+    WHERE sc.deletedAt IS NULL
+    MATCH (n:MacroNode {userId: $userId, id: $nodeId})
+    WHERE n.deletedAt IS NULL
+    MERGE (sc)-[:CONTAINS]->(n)
+  `,
+
+  /**
+   * @description subcluster에서 node의 CONTAINS 관계를 삭제합니다. 작성일: 2026-05-01
+   *
+   * node 자체는 삭제되지 않습니다. CONTAINS 관계만 제거됩니다.
+   *
+   * @param userId 사용자 ID
+   * @param subclusterId 대상 subcluster id
+   * @param nodeId 제거할 node id
+   */
+  removeNodeFromSubcluster: `
+    MATCH (sc:MacroSubcluster {userId: $userId, id: $subclusterId})-[rel:CONTAINS]->(n:MacroNode {userId: $userId, id: $nodeId})
+    DELETE rel
+  `,
+
+  /**
+   * @description cluster에 활성 node가 있는지 확인합니다. 작성일: 2026-05-01
+   *
+   * @param userId 사용자 ID
+   * @param clusterId 확인할 cluster id
+   */
+  clusterHasNodes: `
+    MATCH (n:MacroNode {userId: $userId})-[:BELONGS_TO]->(c:MacroCluster {userId: $userId, id: $clusterId})
+    WHERE n.deletedAt IS NULL
+    RETURN count(n) > 0 AS hasNodes
   `,
 } as const;

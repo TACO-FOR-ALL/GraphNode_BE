@@ -33,6 +33,7 @@ import { makeFileRouter } from './modules/file.module';
 import { makeMicroscopeRouter } from './modules/microscope.module';
 import { makeSearchRouter } from './modules/search.module';
 import { makeFeedbackRouter } from './modules/feedback.module';
+import { makeGraphEditorRouter } from './modules/graphEditor.module';
 import { makeFileProxyRouter } from './modules/fileProxy.module';
 import { STORAGE_BUCKETS } from '../config/storageConfig';
 import { CleanupCron } from '../infra/cron/CleanupCron';
@@ -79,6 +80,9 @@ export function createApp() {
 
   // Graph Router(조립된 Router 장착)
   app.use('/v1/graph', makeGraphRouter());
+
+  // Graph Editor Router — 매크로 그래프 직접 편집 API
+  app.use('/v1/graph/editor', makeGraphEditorRouter());
 
   // Graph AI Router (전용 AI 처리 라우터)
   app.use('/v1/graph-ai', makeGraphAiRouter());

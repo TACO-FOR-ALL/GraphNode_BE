@@ -1,3 +1,5 @@
+import type { GraphSourceType, GraphEdgeType } from '../../../shared/dtos/graph';
+
 /**
  * Graph Node Document (MongoDB)
  * Collection: graph_nodes
@@ -14,12 +16,15 @@
 export interface GraphNodeDoc {
   id: number;
   userId: string;
+  label?: string;
+  summary?: string;
+  metadata?: Record<string, unknown>;
   origId: string;
   clusterId: string;
   clusterName: string;
   timestamp: string | null;
   numMessages: number;
-  sourceType?: 'chat' | 'markdown' | 'notion';
+  sourceType?: GraphSourceType;
   embedding?: number[]; // 384-dimensional vector from AI pipeline
   createdAt: string;
   updatedAt: string;
@@ -45,7 +50,10 @@ export interface GraphEdgeDoc {
   source: number;
   target: number;
   weight: number;
-  type: 'hard' | 'insight';
+  type: GraphEdgeType;
+  relationType?: string;
+  relation?: string;
+  properties?: Record<string, unknown>;
   intraCluster: boolean;
   createdAt: string;
   updatedAt: string;

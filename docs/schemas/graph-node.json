@@ -19,6 +19,27 @@
       "type": "string",
       "minLength": 1
     },
+    "label": {
+      "description": "The editor-visible node label.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "summary": {
+      "description": "Optional node summary.",
+      "type": "string",
+      "maxLength": 2000
+    },
+    "metadata": {
+      "description": "Custom node metadata.",
+      "type": "object",
+      "additionalProperties": true
+    },
+    "nodeTitle": {
+      "description": "Legacy generated node title.",
+      "type": "string",
+      "minLength": 1
+    },
     "clusterId": {
       "description": "The ID of the cluster this node belongs to.",
       "type": "string",
@@ -33,7 +54,7 @@
       "description": "The timestamp of the conversation (ISO 8601) or null.",
       "oneOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }]
     },
-    "numSections": {
+    "numMessages": {
       "description": "The number of messages or sections included in this node.",
       "type": "integer",
       "minimum": 0
@@ -50,6 +71,11 @@
     },
     "updatedAt": {
       "description": "Update timestamp (ISO 8601 UTC).",
+      "type": "string",
+      "format": "date-time"
+    },
+    "deletedAt": {
+      "description": "Soft-delete timestamp (ISO 8601 UTC).",
       "type": "string",
       "format": "date-time"
     }

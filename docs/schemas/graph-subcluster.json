@@ -12,15 +12,16 @@
         "items": { "type": "integer" }
       },
       "representativeNodeId": { "type": "integer" },
-      "size": { "type": "integer" },
-      "density": { "type": "number" },
+      "size": { "type": "integer", "minimum": 0 },
+      "density": { "type": "number", "minimum": 0, "maximum": 1 },
       "topKeywords": {
         "type": "array",
         "items": { "type": "string" }
       },
       "createdAt": { "type": "string", "format": "date-time" },
-      "updatedAt": { "type": "string", "format": "date-time" }
+      "updatedAt": { "type": "string", "format": "date-time" },
+      "deletedAt": { "type": "string", "format": "date-time" }
     },
-    "required": ["id", "userId", "clusterId", "nodeIds", "representativeNodeId", "size"],
+    "required": ["id", "userId", "clusterId", "nodeIds", "representativeNodeId", "size", "density", "topKeywords"],
     "additionalProperties": false
   }

@@ -607,6 +607,181 @@ export interface MacroGraphStore {
     limit?: number,
     options?: MacroGraphStoreOptions
   ): Promise<GraphRagClusterSiblingResult[]>;
+
+  // =====================
+  // Graph Editor 편집 메서드 (작성일: 2026-05-01)
+  // =====================
+
+  /**
+   * @description 사용자의 다음 사용 가능한 node ID를 반환합니다. 작성일: 2026-05-01
+   *
+   * 현재 저장된 MacroNode 중 최대 id + 1을 반환합니다.
+   * 노드가 없으면 1을 반환합니다.
+   *
+   * @param userId 사용자 ID
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 다음 사용 가능한 정수 node ID
+   */
+  getNextNodeId(userId: string, options?: MacroGraphStoreOptions): Promise<number>;
+
+  /**
+   * @description edge id로 단일 edge를 조회합니다. 작성일: 2026-05-01
+   *
+   * @param userId 조회 대상 사용자 ID
+   * @param edgeId 조회할 edge id
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 조회된 GraphEdgeDto. 없으면 null.
+   */
+  findEdge(
+    userId: string,
+    edgeId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<GraphEdgeDto | null>;
+
+  /**
+   * @description subcluster id로 단일 subcluster를 조회합니다. 작성일: 2026-05-01
+   *
+   * @param userId 조회 대상 사용자 ID
+   * @param subclusterId 조회할 subcluster id
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 조회된 GraphSubclusterDto. 없으면 null.
+   */
+  findSubcluster(
+    userId: string,
+    subclusterId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<GraphSubclusterDto | null>;
+
+  /**
+   * @description 단일 graph edge를 부분 업데이트합니다. 작성일: 2026-05-01
+   *
+   * @param userId 사용자 ID
+   * @param edgeId 업데이트할 edge id
+   * @param patch 업데이트할 필드 부분 객체
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  updateEdge(
+    userId: string,
+    edgeId: string,
+    patch: Partial<GraphEdgeDto>,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description 단일 cluster를 부분 업데이트합니다. 작성일: 2026-05-01
+   *
+   * @param userId 사용자 ID
+   * @param clusterId 업데이트할 cluster id
+   * @param patch 업데이트할 필드 부분 객체
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  updateCluster(
+    userId: string,
+    clusterId: string,
+    patch: Partial<GraphClusterDto>,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description 단일 subcluster를 부분 업데이트합니다. 작성일: 2026-05-01
+   *
+   * @param userId 사용자 ID
+   * @param subclusterId 업데이트할 subcluster id
+   * @param patch 업데이트할 필드 부분 객체
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  updateSubcluster(
+    userId: string,
+    subclusterId: string,
+    patch: Partial<GraphSubclusterDto>,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description node를 다른 cluster로 이동합니다 (BELONGS_TO 관계 교체). 작성일: 2026-05-01
+   *
+   * 기존 BELONGS_TO 관계를 삭제하고 newClusterId cluster와 새 BELONGS_TO를 생성합니다.
+   *
+   * @param userId 사용자 ID
+   * @param nodeId 이동할 node id
+   * @param newClusterId 이동 대상 cluster id
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  moveNodeToCluster(
+    userId: string,
+    nodeId: number,
+    newClusterId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description subcluster를 다른 cluster로 이동합니다 (HAS_SUBCLUSTER 관계 교체). 작성일: 2026-05-01
+   *
+   * 기존 HAS_SUBCLUSTER 관계를 삭제하고 newClusterId cluster와 새 HAS_SUBCLUSTER를 생성합니다.
+   * subcluster에 속한 node들도 함께 newClusterId로 BELONGS_TO를 재설정합니다.
+   *
+   * @param userId 사용자 ID
+   * @param subclusterId 이동할 subcluster id
+   * @param newClusterId 이동 대상 cluster id
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  moveSubclusterToCluster(
+    userId: string,
+    subclusterId: string,
+    newClusterId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description node를 subcluster에 편입합니다 (CONTAINS 관계 생성). 작성일: 2026-05-01
+   *
+   * node의 clusterId와 subcluster의 clusterId가 일치해야 합니다.
+   * 불일치 시 adapter는 에러를 던집니다.
+   *
+   * @param userId 사용자 ID
+   * @param subclusterId 대상 subcluster id
+   * @param nodeId 편입할 node id
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  addNodeToSubcluster(
+    userId: string,
+    subclusterId: string,
+    nodeId: number,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description subcluster에서 node를 제거합니다 (CONTAINS 관계 삭제). 작성일: 2026-05-01
+   *
+   * node 자체는 cluster에 잔류합니다. CONTAINS 관계만 삭제됩니다.
+   *
+   * @param userId 사용자 ID
+   * @param subclusterId 대상 subcluster id
+   * @param nodeId 제거할 node id
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  removeNodeFromSubcluster(
+    userId: string,
+    subclusterId: string,
+    nodeId: number,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description cluster에 활성 node가 하나 이상 있는지 확인합니다. 작성일: 2026-05-01
+   *
+   * cluster 삭제 전 guard check 용도로 사용됩니다.
+   *
+   * @param userId 사용자 ID
+   * @param clusterId 확인할 cluster id
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 활성 node가 1개 이상 있으면 true
+   */
+  clusterHasNodes(
+    userId: string,
+    clusterId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<boolean>;
 }
 /**
  * @description Graph RAG 클러스터 시블링 탐색 결과 단일 항목입니다.

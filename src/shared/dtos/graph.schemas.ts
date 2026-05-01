@@ -5,6 +5,7 @@
 
 import { z } from 'zod';
 
+import { GRAPH_SOURCE_TYPES } from './graph.source-types';
 import type {
   GraphClusterDto,
   GraphEdgeDto,
@@ -26,7 +27,7 @@ export const graphNodeSchema = z.object({
   clusterName: z.string().min(1),
   timestamp: z.iso.datetime({ offset: true }).or(z.null()),
   numMessages: z.number().int().nonnegative(),
-  sourceType: z.enum(['chat', 'markdown', 'notion']).optional(),
+  sourceType: z.enum(GRAPH_SOURCE_TYPES).optional(),
   createdAt: z.iso.datetime({ offset: true }).optional(),
   updatedAt: z.iso.datetime({ offset: true }).optional(),
   deletedAt: z.iso.datetime({ offset: true }).optional(),
@@ -42,6 +43,9 @@ export const graphEdgeSchema = z.object({
   target: z.number().int(),
   weight: z.number().min(0).max(1),
   type: z.enum(['hard', 'insight']),
+  relationType: z.string().min(1).max(100).optional(),
+  relation: z.string().max(200).optional(),
+  properties: z.record(z.string(), z.unknown()).optional(),
   intraCluster: z.boolean(),
   createdAt: z.iso.datetime({ offset: true }).optional(),
   updatedAt: z.iso.datetime({ offset: true }).optional(),
