@@ -4,6 +4,8 @@ import { ChatExportService } from '../../src/core/services/ChatExportService';
 import { ChatManagementService } from '../../src/core/services/ChatManagementService';
 import { ChatExportRepository } from '../../src/core/ports/ChatExportRepository';
 import { StoragePort } from '../../src/core/ports/StoragePort';
+import { EmailPort } from '../../src/core/ports/EmailPort';
+import { UserService } from '../../src/core/services/UserService';
 import { ChatExportJobDoc } from '../../src/core/types/persistence/chat_export.persistence';
 import { ConflictError } from '../../src/shared/errors/domain';
 
@@ -16,8 +18,10 @@ describe('ChatExportService', () => {
   let uploadedFiles: Map<string, Buffer>;
   let chatManagementService: jest.Mocked<ChatManagementService>;
   let getConversationMock: any;
+  let userService: jest.Mocked<UserService>;
   let chatExportRepository: jest.Mocked<ChatExportRepository>;
   let storage: jest.Mocked<StoragePort>;
+  let email: jest.Mocked<EmailPort>;
   let service: ChatExportService;
 
   beforeEach(() => {
@@ -47,6 +51,17 @@ describe('ChatExportService', () => {
       validateConversationOwner,
       getConversation: getConversationMock,
     } as unknown as jest.Mocked<ChatManagementService>;
+
+    userService = {
+      getUserProfile: jest.fn<any>().mockResolvedValue({
+        id: 'user-1',
+        email: 'user-1@example.com',
+        provider: 'google',
+        providerUserId: 'p-1',
+        preferredLanguage: 'en',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      }),
+    } as unknown as jest.Mocked<UserService>;
 
     chatExportRepository = {
       create: jest.fn(async (job) => {
@@ -83,7 +98,17 @@ describe('ChatExportService', () => {
       delete: jest.fn(),
     } as unknown as jest.Mocked<StoragePort>;
 
-    service = new ChatExportService(chatManagementService, chatExportRepository, storage);
+    email = {
+      sendEmailWithAttachment: jest.fn(async () => {}),
+    } as unknown as jest.Mocked<EmailPort>;
+
+    service = new ChatExportService(
+      chatManagementService,
+      userService,
+      chatExportRepository,
+      storage,
+      email
+    );
   });
 
   it('creates export job, uploads file, and returns downloadable status', async () => {
@@ -97,6 +122,7 @@ describe('ChatExportService', () => {
     expect(chatManagementService.validateConversationOwner).toHaveBeenCalledWith('conv-1', 'user-1');
     expect(chatManagementService.getConversation).toHaveBeenCalledWith('conv-1', 'user-1');
     expect(storage.upload).toHaveBeenCalledTimes(1);
+    expect(email.sendEmailWithAttachment).toHaveBeenCalledTimes(1);
     expect(status.status).toBe('DONE');
     expect(status.downloadUrl).toBe(`/v1/ai/chat-exports/${started.jobId}/download`);
 

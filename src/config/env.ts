@@ -88,6 +88,10 @@ const EnvSchema = z.object({
   S3_PAYLOAD_BUCKET: z.string().min(1, 'S3_PAYLOAD_BUCKET required'),
   S3_FILE_BUCKET: z.string().min(1, 'S3_FILE_BUCKET required'),
 
+  // Chat Export Email (AWS SES)
+  // 미설정 시 채팅 내보내기 이메일 발송은 자동으로 스킵됩니다.
+  CHAT_EXPORT_EMAIL_FROM: z.string().email().optional(),
+
   // JWT 설정
   JWT_SECRET: z.string().min(1, 'JWT_SECRET required'),
   JWT_ACCESS_EXPIRY: z.string().default('1h'),

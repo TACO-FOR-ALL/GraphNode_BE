@@ -46,12 +46,14 @@ import { VectorStore } from '../core/ports/VectorStore';
 import { QueuePort } from '../core/ports/QueuePort';
 import { StoragePort } from '../core/ports/StoragePort';
 import { EventBusPort } from '../core/ports/EventBusPort';
+import { EmailPort } from '../core/ports/EmailPort';
 import { NotificationRepository } from '../core/ports/NotificationRepository';
 import { FeedbackRepository } from '../core/ports/FeedbackRepository';
 import { ChatExportRepository } from '../core/ports/ChatExportRepository';
 // Infra Adapters
 import { AwsSqsAdapter } from '../infra/aws/AwsSqsAdapter';
 import { AwsS3Adapter } from '../infra/aws/AwsS3Adapter';
+import { AwsSesEmailAdapter } from '../infra/aws/AwsSesEmailAdapter';
 import { RedisEventBusAdapter } from '../infra/redis/RedisEventBusAdapter';
 import { FeedbackRepositoryPrisma } from '../infra/repositories/FeedbackRepositoryPrisma';
 import { ChatExportRepositoryMongo } from '../infra/repositories/ChatExportRepositoryMongo';
@@ -86,6 +88,7 @@ export class Container {
   // Infra Adapters
   private queueAdapter: QueuePort | null = null;
   private storageAdapter: StoragePort | null = null;
+  private emailAdapter: EmailPort | null = null;
   private eventBusAdapter: EventBusPort | null = null;
 
   // Services
@@ -179,6 +182,18 @@ export class Container {
       this.storageAdapter = createAuditProxy(raw, 'AwsS3Adapter');
     }
     return this.storageAdapter;
+  }
+
+  /**
+   * AwsSesEmailAdapter 인스턴스를 반환합니다.
+   * @remarks env.CHAT_EXPORT_EMAIL_FROM 미설정 시에도 어댑터는 생성되며, 발송은 내부에서 스킵됩니다.
+   */
+  getEmailAdapter(): EmailPort {
+    if (!this.emailAdapter) {
+      const raw = new AwsSesEmailAdapter();
+      this.emailAdapter = createAuditProxy(raw, 'AwsSesEmailAdapter');
+    }
+    return this.emailAdapter;
   }
 
   /**
@@ -481,8 +496,10 @@ export class Container {
     if (!this.chatExportService) {
       const raw = new ChatExportService(
         this.getChatManagementService(),
+        this.getUserService(),
         this.getChatExportRepository(),
-        this.getAwsS3Adapter()
+        this.getAwsS3Adapter(),
+        this.getEmailAdapter()
       );
       this.chatExportService = createAuditProxy(raw, 'ChatExportService');
     }

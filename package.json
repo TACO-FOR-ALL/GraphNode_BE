@@ -85,6 +85,7 @@
     "@ai-sdk/openai": "^3.0.53",
     "@anthropic-ai/sdk": "^0.71.2",
     "@aws-sdk/client-s3": "^3.971.0",
+    "@aws-sdk/client-ses": "^3.972.0",
     "@aws-sdk/client-sqs": "^3.972.0",
     "@aws-sdk/lib-storage": "^3.995.0",
     "@google/genai": "^1.44.0",

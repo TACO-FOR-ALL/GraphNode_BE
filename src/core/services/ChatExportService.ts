@@ -2,12 +2,14 @@ import { ulid } from 'ulid';
 
 import type { ChatExportRepository } from '../ports/ChatExportRepository';
 import type { StoragePort } from '../ports/StoragePort';
+import type { EmailPort } from '../ports/EmailPort';
 import type { ChatExportJobDoc } from '../types/persistence/chat_export.persistence';
 import type {
   ChatExportStatusResponseDto,
   StartChatExportResponseDto,
 } from '../../shared/dtos/chat-export';
 import { ChatManagementService } from './ChatManagementService';
+import { UserService } from './UserService';
 import { buildStorageKey, STORAGE_BUCKETS } from '../../config/storageConfig';
 import {
   NotFoundError,
@@ -15,6 +17,7 @@ import {
   ValidationError,
   ConflictError,
 } from '../../shared/errors/domain';
+import { logger } from '../../shared/utils/logger';
 
 interface ExportPayload {
   exportedAt: string;
@@ -38,8 +41,10 @@ interface ExportPayload {
 export class ChatExportService {
   constructor(
     private readonly chatManagementService: ChatManagementService,
+    private readonly userService: UserService,
     private readonly chatExportRepository: ChatExportRepository,
-    private readonly storage: StoragePort
+    private readonly storage: StoragePort,
+    private readonly email: EmailPort
   ) {}
 
   async startExport(userId: string, conversationId: string): Promise<StartChatExportResponseDto> {
@@ -144,9 +149,10 @@ export class ChatExportService {
         `${job.userId}/${job.jobId}-${job.conversationId}.json`
       );
 
+      const exportBuffer = Buffer.from(JSON.stringify(payload, null, 2), 'utf-8');
       await this.storage.upload(
         fileKey,
-        Buffer.from(JSON.stringify(payload, null, 2), 'utf-8'),
+        exportBuffer,
         'application/json; charset=utf-8',
         { bucketType: 'file' }
       );
@@ -157,6 +163,39 @@ export class ChatExportService {
         errorMessage: undefined,
         updatedAt: Date.now(),
       });
+
+      // 이메일 발송은 best-effort 입니다. 실패해도 export job은 DONE 유지.
+      try {
+        const profile = await this.userService.getUserProfile(job.userId);
+        if (!profile.email) {
+          logger.warn(
+            { userId: job.userId, jobId: job.jobId },
+            'User email is empty — skip export email'
+          );
+          return;
+        }
+
+        await this.email.sendEmailWithAttachment({
+          to: profile.email,
+          subject: `GraphNode chat export: ${payload.conversation.title || payload.conversation.id}`,
+          text: [
+            'Your chat export is ready.',
+            '',
+            `Conversation: ${payload.conversation.title || payload.conversation.id}`,
+            `Exported at: ${payload.exportedAt}`,
+            '',
+            'Attached is a JSON file containing the conversation and messages.',
+          ].join('\n'),
+          attachmentFilename: `${job.conversationId}.json`,
+          attachmentContentType: 'application/json; charset=utf-8',
+          attachmentBuffer: exportBuffer,
+        });
+      } catch (err: unknown) {
+        logger.warn(
+          { err, userId: job.userId, jobId: job.jobId },
+          'Failed to send chat export email (best-effort)'
+        );
+      }
     } catch (err: unknown) {
       if (err instanceof NotFoundError || err instanceof ValidationError || err instanceof ConflictError) {
         throw err;
