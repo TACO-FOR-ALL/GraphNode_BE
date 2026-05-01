@@ -91,6 +91,55 @@ function makeMockDriver(txFn: (tx: ReturnType<typeof makeMockTx>) => void = () =
 describe('Neo4jMacroGraphAdapter', () => {
   beforeEach(() => jest.clearAllMocks());
 
+  describe('listSubclusters', () => {
+    it('record aggregate(size/nodeIds/repId)를 GraphSubclusterDto로 매핑한다', async () => {
+      const scProps = {
+        id: 'sc-1',
+        userId: 'user1',
+        topKeywords: ['k1'],
+        density: 0.3,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        deletedAt: null,
+      };
+
+      const record = {
+        get: jest.fn().mockImplementation((key: string) => {
+          if (key === 'sc') return { properties: scProps };
+          if (key === 'clusterId') return 'c1';
+          if (key === 'nodeIds') return [1, 2];
+          if (key === 'representativeNodeId') return 2;
+          if (key === 'size') return 2;
+          if (key === 'density') return 0.3;
+          return null;
+        }),
+      };
+
+      const tx = { run: jest.fn().mockResolvedValue({ records: [record] }) };
+      const session = {
+        executeRead: jest.fn().mockImplementation(
+          async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx)
+        ),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      const driver = { session: jest.fn().mockReturnValue(session) };
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      const res = await adapter.listSubclusters('user1');
+
+      expect(res).toHaveLength(1);
+      expect(res[0]).toMatchObject({
+        id: 'sc-1',
+        userId: 'user1',
+        clusterId: 'c1',
+        nodeIds: [1, 2],
+        representativeNodeId: 2,
+        size: 2,
+      });
+    });
+  });
+
   describe('upsertGraph', () => {
     it('MACRO_GRAPH_CYPHER와 mapper를 사용해 write transaction 안에서 batch query를 호출한다', async () => {
       const { driver, session, tx } = makeMockDriver();

@@ -91,6 +91,17 @@ describe('macroGraph.cypher', () => {
       expect(q).not.toMatch(/\.size\s*=/);
     });
 
+    it('listSubclusters: size를 count 집계로 복원하고 삭제 노드는 제외한다', () => {
+      const q = MACRO_GRAPH_CYPHER.listSubclusters;
+
+      // size는 저장된 property가 아니라, 포함 노드 집계로 계산되어야 합니다.
+      expect(q).toMatch(/count\(DISTINCT n\)\s+AS\s+size/);
+
+      // includeDeleted=false(기본)일 때는 deletedAt이 없는 노드만 집계/수집되어야 합니다.
+      expect(q).toMatch(/WHERE\s+\$includeDeleted\s+OR\s+n\.deletedAt\s+IS\s+NULL/);
+      expect(q).toMatch(/collect\(DISTINCT n\.id\)\s+AS\s+nodeIds/);
+    });
+
     it('upsertRelations: MacroRelation에 source/target 속성을 저장하지 않는다', () => {
       const q = MACRO_GRAPH_CYPHER.upsertRelations;
       expect(q).not.toMatch(/\.source\s*=/);
