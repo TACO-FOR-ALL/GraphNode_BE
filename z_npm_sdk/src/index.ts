@@ -46,6 +46,13 @@ export type {
   SessionsResponseDto,
 } from './types/me.js';
 export type {
+  CreditBalanceDto,
+  CreditUsageDto,
+  CreditUsageItemDto,
+  CreditPlanType,
+  CreditFeatureType,
+} from './types/credit.js';
+export type {
   ConversationDto,
   ConversationCreateDto,
   ConversationUpdateDto,

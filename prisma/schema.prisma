@@ -23,8 +23,9 @@ model User {
   openaiAssistantId String?     @map("openai_assistant_id") @db.VarChar(191)
   preferredLanguage String      @default("en") @map("preferred_language") @db.VarChar(10)
   userInfoId        String?     @unique @map("user_info_id")
-  dailyUsage        DailyUsage? @relation("UserToDailyUsage")
-  userInfo          UserInfo?   @relation("UserToUserInfo", fields: [userInfoId], references: [id])
+  dailyUsage        DailyUsage?    @relation("UserToDailyUsage")
+  userInfo          UserInfo?      @relation("UserToUserInfo", fields: [userInfoId], references: [id])
+  creditBalance     CreditBalance? @relation("UserToCreditBalance")
 
   @@unique([provider, providerUserId], map: "uniq_provider_user")
   @@map("users")
@@ -79,4 +80,86 @@ enum OnboardingAgentMode {
   formal
   friendly
   casual
+}
+
+// ── Credit System ──────────────────────────────────────────────────────────────
+
+enum PlanType {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum CreditFeature {
+  AI_CHAT
+  GRAPH_GENERATION
+  ADD_NODE
+  MICROSCOPE_INGEST
+}
+
+enum CreditTransactionType {
+  REFILL
+  DEDUCT
+  HOLD
+  COMMIT
+  ROLLBACK
+  REFUND
+}
+
+// 사용자별 크레딧 잔액 원장 (1:1 with User)
+// balance     = 실제 남은 크레딧
+// holdAmount  = 비동기 작업에 에스크로된 크레딧 (balance 에서 차감 전)
+// available   = balance - holdAmount (서비스가 계산)
+model CreditBalance {
+  id          String    @id @default(uuid())
+  userId      String    @unique @map("user_id") @db.VarChar(191)
+  balance     Int       @default(0)
+  holdAmount  Int       @default(0) @map("hold_amount")
+  planType    PlanType  @default(FREE) @map("plan_type")
+  cycleStart  DateTime  @map("cycle_start") @db.Timestamp(0)
+  cycleEnd    DateTime  @map("cycle_end") @db.Timestamp(0)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  user         User                @relation("UserToCreditBalance", fields: [userId], references: [id], onDelete: Cascade)
+  transactions CreditTransaction[]
+
+  @@map("credit_balances")
+}
+
+// 불변 크레딧 이동 원장 (append-only)
+// taskId 가 있는 HOLD 행이 비동기 잡과의 상관관계 키
+model CreditTransaction {
+  id          String                @id @default(uuid())
+  userId      String                @map("user_id") @db.VarChar(191)
+  type        CreditTransactionType @map("type")
+  feature     CreditFeature?        @map("feature")
+  amount      Int                   @map("amount")
+  taskId      String?               @map("task_id") @db.VarChar(191)
+  description String?               @map("description") @db.VarChar(512)
+  expiresAt   DateTime?             @map("expires_at") @db.Timestamp(0)
+  createdAt   DateTime              @default(now()) @map("created_at") @db.Timestamp(0)
+
+  balance CreditBalance @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)], map: "idx_credit_tx_user")
+  @@index([taskId],                        map: "idx_credit_tx_task_id")
+  @@index([type, expiresAt],               map: "idx_credit_tx_hold_expiry")
+  @@map("credit_transactions")
+}
+
+// AI 기능 사용 내역 (분석용 append-only)
+model UsageLog {
+  id         String        @id @default(uuid())
+  userId     String        @map("user_id") @db.VarChar(191)
+  feature    CreditFeature @map("feature")
+  taskId     String?       @map("task_id") @db.VarChar(191)
+  creditUsed Int           @map("credit_used")
+  status     String        @default("SUCCESS") @map("status") @db.VarChar(32)
+  metadata   Json?         @map("metadata")
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamp(0)
+
+  @@index([userId, createdAt(sort: Desc)], map: "idx_usage_log_user")
+  @@index([taskId],                        map: "idx_usage_log_task_id")
+  @@map("usage_logs")
 }
