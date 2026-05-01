@@ -19,6 +19,7 @@ import { AiInteractionService } from '../core/services/AiInteractionService';
 import { AgentService } from '../core/services/AgentService';
 import { SearchService } from '../core/services/SearchService';
 import { FeedbackService } from '../core/services/FeedbackService';
+import { GraphEditorService } from '../core/services/GraphEditorService';
 import { GoogleOAuthService } from '../core/services/GoogleOAuthService';
 import { AppleOAuthService } from '../core/services/AppleOAuthService';
 import { MicroscopeManagementService } from '../core/services/MicroscopeManagementService';
@@ -102,6 +103,7 @@ export class Container {
   private microscopeManagementService: MicroscopeManagementService | null = null;
   private searchService: SearchService | null = null;
   private feedbackService: FeedbackService | null = null;
+  private graphEditorService: GraphEditorService | null = null;
 
   private constructor() {}
   /**
@@ -519,6 +521,18 @@ export class Container {
       this.feedbackService = createAuditProxy(raw, 'FeedbackService');
     }
     return this.feedbackService;
+  }
+
+  /**
+   * GraphEditorService 인스턴스를 반환합니다.
+   * 작성일: 2026-05-01
+   */
+  getGraphEditorService(): GraphEditorService {
+    if (!this.graphEditorService) {
+      const raw = new GraphEditorService(this.getMacroGraphStore());
+      this.graphEditorService = createAuditProxy(raw, 'GraphEditorService');
+    }
+    return this.graphEditorService;
   }
 }
 

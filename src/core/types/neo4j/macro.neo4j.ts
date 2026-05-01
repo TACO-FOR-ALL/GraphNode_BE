@@ -5,7 +5,7 @@ import type {
   Pattern,
   Recommendation,
 } from '../../../shared/dtos/ai_graph_output';
-import type { GraphStatus } from '../../../shared/dtos/graph';
+import type { GraphEdgeType, GraphStatus } from '../../../shared/dtos/graph';
 
 /**
  * @description Macro Graph를 Neo4j에 저장할 때 사용하는 노드 라벨 목록입니다.
@@ -105,6 +105,12 @@ export interface Neo4jMacroGraphNode {
  * @property deletedAt soft delete 시각입니다.
  */
 export interface Neo4jMacroNode {
+  /** 사용자가 편집할 수 있는 노드 표시 이름입니다. */
+  label?: string;
+  /** 사용자가 편집할 수 있는 노드 요약입니다. */
+  summary?: string;
+  /** 사용자 정의 노드 속성을 JSON 문자열로 직렬화한 값입니다. */
+  metadataJson?: string;
   /** 기존 FE/Mongo 계약에서 사용하는 graph node id입니다. */
   id: number;
   /** 노드 소유 사용자 ID입니다. */
@@ -173,7 +179,13 @@ export interface Neo4jMacroRelationNode {
   /** edge 가중치입니다. */
   weight: number;
   /** edge 타입입니다. */
-  type: 'hard' | 'insight';
+  type: GraphEdgeType;
+  /** 사용자가 지정한 Neo4j 스타일 관계 타입입니다. */
+  relationType?: string;
+  /** 사용자가 지정한 관계 표시 이름입니다. */
+  relation?: string;
+  /** 사용자 정의 관계 속성을 JSON 문자열로 직렬화한 값입니다. */
+  propertiesJson?: string;
   /** 같은 cluster 내부 관계인지 여부입니다. */
   intraCluster: boolean;
   /** 관계 노드 생성 ISO 시각입니다. */
@@ -206,7 +218,13 @@ export interface Neo4jMacroRelatedRelationship {
   /** edge 가중치입니다. */
   weight: number;
   /** edge 타입입니다. */
-  type: 'hard' | 'insight';
+  type: GraphEdgeType;
+  /** 사용자가 지정한 Neo4j 스타일 관계 타입입니다. */
+  relationType?: string;
+  /** 사용자가 지정한 관계 표시 이름입니다. */
+  relation?: string;
+  /** 사용자 정의 관계 속성을 JSON 문자열로 직렬화한 값입니다. */
+  propertiesJson?: string;
   /** 같은 cluster 내부 관계인지 여부입니다. */
   intraCluster: boolean;
   /** 관계 생성 ISO 시각입니다. */

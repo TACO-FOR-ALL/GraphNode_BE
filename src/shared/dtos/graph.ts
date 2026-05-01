@@ -1,3 +1,6 @@
+import type { GraphSourceType } from './graph.source-types';
+export { GRAPH_SOURCE_TYPES, type GraphSourceType } from './graph.source-types';
+
 /**
  * 모듈: Graph 요청 관련 DTO들 (Internal/API Contract)
  * 책임:
@@ -50,7 +53,7 @@ export interface GraphNodeDto {
   /** 노드에 포함된 메시지 턴 수 또는 빈도 수 */
   numMessages: number;
   /** 노드 출처 유형 */
-  sourceType?: 'chat' | 'markdown' | 'notion';
+  sourceType?: GraphSourceType;
   /** 임베딩 (선택) */
   embedding?: number[];
 
@@ -72,6 +75,14 @@ export interface GraphNodeDto {
 export type GraphEdgeType = 'hard' | 'insight';
 
 /**
+ * 사용자가 지정할 수 있는 macro graph 관계 타입입니다.
+ *
+ * 기존 `type` 필드는 `hard`/`insight` 분류를 유지하고, Neo4j editor API에서 자유롭게 지정하는
+ * 관계 타입은 이 필드(`relationType`)에 저장합니다.
+ */
+export type GraphRelationType = string;
+
+/**
  * 그래프 백엔드 처리 상태.
  * @public
  */
@@ -91,7 +102,9 @@ export interface GraphEdgeDto {
   target: number;
 
   // New fields
+  relationType?: GraphRelationType;
   relation?: string;
+  properties?: Record<string, unknown>;
 
   /** 엣지 가중치(0~1) */
   weight: number;
