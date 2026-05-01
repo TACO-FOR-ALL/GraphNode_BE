@@ -11,7 +11,7 @@ import nock from 'nock';
 
 import { createApp } from '../../src/bootstrap/server';
 import { generateAccessToken } from '../../src/app/utils/jwt';
-import { GraphRepositoryMongo } from '../../src/infra/repositories/GraphRepositoryMongo';
+import { Neo4jMacroGraphAdapter } from '../../src/infra/graph/Neo4jMacroGraphAdapter';
 import { AwsSqsAdapter } from '../../src/infra/aws/AwsSqsAdapter';
 import { AwsS3Adapter } from '../../src/infra/aws/AwsS3Adapter';
 import { ConversationRepositoryMongo } from '../../src/infra/repositories/ConversationRepositoryMongo';
@@ -20,7 +20,7 @@ import { NoteRepositoryMongo } from '../../src/infra/repositories/NoteRepository
 import { UserRepositoryMySQL } from '../../src/infra/repositories/UserRepositoryMySQL';
 
 // --- Mocks ---
-jest.mock('../../src/infra/repositories/GraphRepositoryMongo');
+jest.mock('../../src/infra/graph/Neo4jMacroGraphAdapter');
 jest.mock('../../src/infra/aws/AwsSqsAdapter');
 jest.mock('../../src/infra/aws/AwsS3Adapter');
 jest.mock('../../src/infra/repositories/ConversationRepositoryMongo');
@@ -166,7 +166,7 @@ describe('GraphAi API Integration Tests', () => {
     };
 
     beforeAll(async () => {
-        (GraphRepositoryMongo as jest.Mock).mockImplementation(() => mockGraphRepo);
+        (Neo4jMacroGraphAdapter as jest.Mock).mockImplementation(() => mockGraphRepo);
         (ConversationRepositoryMongo as jest.Mock).mockImplementation(() => mockConvRepo);
         (MessageRepositoryMongo as jest.Mock).mockImplementation(() => mockMsgRepo);
         (NoteRepositoryMongo as jest.Mock).mockImplementation(() => mockNoteRepo);
