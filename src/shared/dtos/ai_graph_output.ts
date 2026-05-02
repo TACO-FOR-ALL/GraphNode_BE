@@ -68,6 +68,8 @@ export interface GraphSummary {
   detail_level: 'brief' | 'standard' | 'detailed';
 }
 
+import type { GraphSourceType } from './graph.source-types';
+
 /**
  * Legacy/Generation DTOs (Restored for graph_ai_input.mapper.ts)
  */
@@ -81,7 +83,7 @@ export interface AiGraphNodeOutput {
   top_keywords: string[];
   timestamp: string | null;
   num_sections: number;
-  source_type: 'chat' | 'markdown' | 'notion';
+  source_type: GraphSourceType;
 }
 
 export interface AiGraphEdgeOutput {

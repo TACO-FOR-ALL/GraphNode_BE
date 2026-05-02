@@ -65,8 +65,8 @@ jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => ({
 }));
 
 // --- GraphRepository Mock ---
-jest.mock('../../src/infra/repositories/GraphRepositoryMongo', () => ({
-  GraphRepositoryMongo: class {
+jest.mock('../../src/infra/graph/Neo4jMacroGraphAdapter', () => ({
+  Neo4jMacroGraphAdapter: class {
     // --- Node Operations ---
     async upsertNode(doc: GraphNodeDoc) {
       nodesStore.set(doc.id, { ...doc });

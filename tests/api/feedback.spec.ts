@@ -16,7 +16,7 @@ import request from 'supertest';
 
 import { createApp } from '../../src/bootstrap/server';
 import { closeDatabases } from '../../src/infra/db';
-import { GraphRepositoryMongo } from '../../src/infra/repositories/GraphRepositoryMongo';
+import { Neo4jMacroGraphAdapter } from '../../src/infra/graph/Neo4jMacroGraphAdapter';
 import { AwsSqsAdapter } from '../../src/infra/aws/AwsSqsAdapter';
 import { AwsS3Adapter } from '../../src/infra/aws/AwsS3Adapter';
 import { RedisEventBusAdapter } from '../../src/infra/redis/RedisEventBusAdapter';
@@ -28,7 +28,7 @@ import { NotFoundError } from '../../src/shared/errors/domain';
 
 // ─── 인프라 목(Mock) — 타 모듈 hang 방지 ────────────────────────────────────
 
-jest.mock('../../src/infra/repositories/GraphRepositoryMongo');
+jest.mock('../../src/infra/graph/Neo4jMacroGraphAdapter');
 jest.mock('../../src/infra/aws/AwsSqsAdapter');
 jest.mock('../../src/infra/aws/AwsS3Adapter');
 jest.mock('../../src/infra/redis/RedisEventBusAdapter');
@@ -46,7 +46,7 @@ jest.mock('../../src/infra/db', () => ({
   closeDatabases: jest.fn(),
 }));
 
-(GraphRepositoryMongo as unknown as jest.Mock).mockImplementation(() => ({
+(Neo4jMacroGraphAdapter as unknown as jest.Mock).mockImplementation(() => ({
   upsertNode: jest.fn<any>().mockResolvedValue(undefined),
   findNode: jest.fn<any>().mockResolvedValue(null),
   listNodes: jest.fn<any>().mockResolvedValue([]),

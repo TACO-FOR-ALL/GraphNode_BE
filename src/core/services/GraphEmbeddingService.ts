@@ -7,14 +7,14 @@ import {
   PersistGraphPayloadDto,
 } from '../../shared/dtos/graph';
 import type { VectorStore } from '../ports/VectorStore';
-import { getMongo } from '../../infra/db/mongodb';
 import { GraphManagementService } from './GraphManagementService';
 import { ConversationService } from './ConversationService';
 import { NoteService } from './NoteService';
 import { GraphSummaryDoc } from '../types/persistence/graph.persistence';
-import type { RepoOptions } from '../ports/GraphDocumentStore';
-import { withRetry } from '../../shared/utils/retry';
+import type { MacroGraphStoreOptions } from '../ports/MacroGraphStore';
 import { UpstreamError } from '../../shared/errors/domain';
+
+type RepoOptions = MacroGraphStoreOptions;
 
 /**
  * 모듈: GraphEmbeddingService (그래프-벡터 통합 서비스)
@@ -57,31 +57,12 @@ export class GraphEmbeddingService {
     label: string,
     work: (options: RepoOptions) => Promise<void>
   ): Promise<void> {
-    const mongoClient = getMongo();
-    if (!mongoClient) {
-      throw new Error('MongoDB client is not initialized. Cannot start a transaction.');
-    }
-
-    const session = mongoClient.startSession();
-    const afterCommit: Array<() => Promise<void>> = [];
     try {
-      await withRetry(
-        async () => {
-          await session.withTransaction(async () => {
-            await work({ session, afterCommit });
-          });
-        },
-        { label }
-      );
-
-      for (const callback of afterCommit) {
-        await callback();
-      }
-    } finally {
-      await session.endSession();
+      await work({});
+    } catch (err: unknown) {
+      throw new UpstreamError(label, { cause: String(err) });
     }
   }
-
   /**
    * 벡터 관련 기능이 비활성화되었음을 알리는 예외를 발생시킵니다.
    * @deprecated 벡터 동기화 기능은 현재 요구사항에서 제외되었습니다.
@@ -89,7 +70,6 @@ export class GraphEmbeddingService {
   private throwVectorDisabledError() {
     throw new Error('Vector operations are temporarily disabled');
   }
-
   /**
    * 노드와 벡터 데이터를 준비합니다. (현재 비활성화)
    * @deprecated 벡터 동기화 기능은 현재 요구사항에서 제외되었습니다.
@@ -101,7 +81,6 @@ export class GraphEmbeddingService {
   ) {
     this.throwVectorDisabledError();
   }
-
   /**
    * 여러 노드를 일괄적으로 적용합니다. (현재 비활성화)
    * @deprecated 벡터 동기화 기능은 현재 요구사항에서 제외되었습니다.
@@ -109,7 +88,6 @@ export class GraphEmbeddingService {
   async applyBatchNodes(_items: Array<{ nodePayload: GraphNodeDto; vectorPayload: unknown }>) {
     this.throwVectorDisabledError();
   }
-
   /**
    * 벡터 검색을 통해 노드를 찾습니다. (현재 비활성화)
    * @deprecated 벡터 검색 기능은 비활성화되었습니다.
@@ -122,7 +100,6 @@ export class GraphEmbeddingService {
   ) {
     this.throwVectorDisabledError();
   }
-
   /**
    * 벡터가 누락된 노드를 찾습니다. (현재 비활성화)
    * @deprecated 벡터 정합성 검증은 비활성화되었습니다.
@@ -174,7 +151,6 @@ export class GraphEmbeddingService {
       this.graphManagementService.deleteNode(userId, id, permanent, options)
     );
   }
-
   /**
    * 노드 복구합니다.
    */
@@ -184,7 +160,6 @@ export class GraphEmbeddingService {
       (options) => this.graphManagementService.restoreNode(userId, id, options)
     );
   }
-
   /**
    * 특정 노드를 조회합니다.
    * @param userId - 작업을 요청한 사용자 ID
@@ -195,7 +170,6 @@ export class GraphEmbeddingService {
   findNode(userId: string, id: number) {
     return this.graphManagementService.findNode(userId, id);
   }
-
   /**
    * 특정 사용자의 모든 노드 목록을 조회합니다.
    * @param userId - 작업을 요청한 사용자 ID
@@ -205,7 +179,6 @@ export class GraphEmbeddingService {
   listNodes(userId: string) {
     return this.graphManagementService.listNodes(userId);
   }
-
   /**
    * 특정 사용자의 모든 노드 목록(soft delete 되어서 휴지통에 잇는 것 까지)을 조회합니다.
    * @param userId - 작업을 요청한 사용자 ID
@@ -219,7 +192,6 @@ export class GraphEmbeddingService {
   listNodesByCluster(userId: string, clusterId: string) {
     return this.graphManagementService.listNodesByCluster(userId, clusterId);
   }
-
   /**
    * 그래프 엣지를 생성하거나 갱신합니다.
    * @param edge - 저장할 엣지 데이터. `userId`, `source`, `target`은 필수입니다.
@@ -256,7 +228,6 @@ export class GraphEmbeddingService {
   deleteEdgeBetween(userId: string, source: number, target: number, permanent?: boolean) {
     return this.graphManagementService.deleteEdgeBetween(userId, source, target, permanent);
   }
-
   /**
    * 특정 사용자의 모든 엣지 목록을 조회합니다.
    * @param userId - 작업을 요청한 사용자 ID
@@ -297,7 +268,6 @@ export class GraphEmbeddingService {
       (options) => this.graphManagementService.deleteCluster(userId, id, permanent, options)
     );
   }
-
   /**
    * 클러스터 복구
    */
@@ -307,7 +277,6 @@ export class GraphEmbeddingService {
       (options) => this.graphManagementService.restoreCluster(userId, id, options)
     );
   }
-
   /**
    * 특정 클러스터를 조회합니다.
    * @param userId - 작업을 요청한 사용자 ID
@@ -318,7 +287,6 @@ export class GraphEmbeddingService {
   findCluster(userId: string, id: string) {
     return this.graphManagementService.findCluster(userId, id);
   }
-
   /**
    * 특정 사용자의 모든 클러스터 목록을 조회합니다.
    * @param userId - 작업을 요청한 사용자 ID
@@ -338,7 +306,6 @@ export class GraphEmbeddingService {
   saveStats(stats: GraphStatsDto) {
     return this.graphManagementService.saveStats(stats);
   }
-
   /**
    * 특정 사용자의 그래프 통계를 조회합니다.
    * @param userId - 작업을 요청한 사용자 ID
@@ -374,7 +341,7 @@ export class GraphEmbeddingService {
    * await service.removeNodeCascade('u-123', 5);
    */
   async removeNodeCascade(userId: string, id: number, permanent?: boolean): Promise<void> {
-    // GraphRepositoryMongo.deleteNode 에 이미 관련 엣지 삭제 로직이 포함되어 있음
+    // 그래프 저장소 deleteNode에 관련 엣지 삭제 로직이 포함되어 있음
     await this.graphManagementService.deleteNode(userId, id, permanent);
   }
 
@@ -396,16 +363,13 @@ export class GraphEmbeddingService {
         const nodesInCluster = await this.graphManagementService.listNodesByCluster(userId, id);
         if (nodesInCluster.length > 0) {
           const ids = nodesInCluster.map((n) => n.id);
-          // 1. 클러스터에 속한 모든 노드와 관련 엣지 삭제
           await this.graphManagementService.deleteEdgesByNodeIds(userId, ids, permanent, options);
           await this.graphManagementService.deleteNodes(userId, ids, permanent, options);
         }
-        // 2. 클러스터 자체 삭제
         await this.graphManagementService.deleteCluster(userId, id, permanent, options);
       }
     );
   }
-
   /**
    * 특정 사용자의 전체 그래프 데이터를 스냅샷 형태로 조회합니다.
    *
@@ -439,7 +403,6 @@ export class GraphEmbeddingService {
         : { nodes: 0, edges: 0, clusters: 0, status: 'NOT_CREATED' },
     };
   }
-
   /**
    * 그래프 노드에 제목을 추가합니다.
    * @param userId - 작업을 요청한 사용자 ID
@@ -449,7 +412,6 @@ export class GraphEmbeddingService {
   private async attachNodeTitles(userId: string, nodes: GraphNodeDto[]): Promise<GraphNodeDto[]> {
     const titleByOrigId = new Map<string, string>();
 
-    // 채팅 노드의 원본 ID 추출
     const chatOrigIds = [
       ...new Set(
         nodes
@@ -459,7 +421,6 @@ export class GraphEmbeddingService {
       ),
     ];
 
-    // 마크다운 노드의 원본 ID 추출
     const markdownOrigIds = [
       ...new Set(
         nodes
@@ -469,11 +430,8 @@ export class GraphEmbeddingService {
       ),
     ];
 
-    // 채팅 노드의 제목 추가
     if (chatOrigIds.length > 0 && this.conversationService) {
-      // 채팅 노드의 원본 ID를 사용하여 대화 문서 조회
       const conversationDocs = await this.conversationService.findDocsByIds(chatOrigIds, userId);
-      // 대화 문서의 제목을 제목 맵에 추가
       for (const conversationDoc of conversationDocs) {
         if (conversationDoc.title?.trim()) {
           titleByOrigId.set(conversationDoc._id, conversationDoc.title);
@@ -481,15 +439,12 @@ export class GraphEmbeddingService {
       }
     }
 
-    // 마크다운 노드의 제목 추가
     if (markdownOrigIds.length > 0 && this.noteService) {
       const noteService = this.noteService;
 
-      // 마크다운 노드의 원본 ID를 사용하여 노트 문서 조회
       const noteDocs = await Promise.all(
         markdownOrigIds.map((origId) => noteService.getNoteDoc(origId, userId))
       );
-      // 노트 문서의 제목을 제목 맵에 추가
       for (const noteDoc of noteDocs) {
         if (noteDoc?._id && noteDoc.title?.trim()) {
           titleByOrigId.set(noteDoc._id, noteDoc.title);
@@ -497,14 +452,12 @@ export class GraphEmbeddingService {
       }
     }
 
-    // 노드에 제목 추가
     return nodes.map((node) => {
       if (node.sourceType === 'chat' || node.sourceType === 'markdown') {
         const nodeTitle = titleByOrigId.get(node.origId);
         return nodeTitle ? { ...node, nodeTitle } : node;
       }
 
-      // FIXME TODO: 추후에 Notion 추가 시에 변경 요망.
       return node;
     });
   }
@@ -527,54 +480,6 @@ export class GraphEmbeddingService {
         return;
       }
     );
-    /*
-            const { userId, snapshot } = payload;
-
-            // subclusters가 undefined일 경우 빈 배열로 처리
-            const subclusters = snapshot.subclusters || [];
-
-            // WriteConflict 방지: 같은 컬렉션에 대한 동시 write는 트랜잭션 내에서
-            // WriteConflict(61)를 발생시킬 수 있으므로, 컬렉션별로 순차 실행한다.
-            // (nodes, edges, clusters, subclusters는 서로 다른 컬렉션이므로
-            //  각 컬렉션 내에서는 Promise.all로 병렬 처리해도 안전함)
-            await Promise.all(
-              snapshot.nodes.map((node) =>
-                this.graphManagementService.upsertNode({ ...node, userId }, { session })
-              )
-            );
-            await Promise.all(
-              snapshot.edges.map((edge) =>
-                this.graphManagementService.upsertEdge({ ...edge, userId }, { session })
-              )
-            );
-            await Promise.all(
-              snapshot.clusters.map((cluster) =>
-                this.graphManagementService.upsertCluster({ ...cluster, userId }, { session })
-              )
-            );
-            await Promise.all(
-              subclusters.map((subcluster) => {
-                const { deletedAt, ...rest } = subcluster;
-                // createdAt/updatedAt 생략 — repository layer가 설정합니다.
-                return this.graphManagementService.upsertSubcluster(
-                  {
-                    ...rest,
-                    userId,
-                    ...(deletedAt != null ? { deletedAt: new Date(deletedAt).getTime() } : {}),
-                  } as any,
-                  { session }
-                );
-              })
-            );
-            await this.graphManagementService.saveStats({ ...snapshot.stats, userId }, { session });
-
-          });
-        },
-        { label: 'GraphEmbeddingService.persistSnapshot.transaction' }
-      );
-    } finally {
-      await session.endSession();
-      */
   }
 
   /**
@@ -605,7 +510,6 @@ export class GraphEmbeddingService {
   async upsertGraphSummary(userId: string, summary: GraphSummaryDoc) {
     return this.graphManagementService.upsertGraphSummary(userId, summary);
   }
-
   /**
    * 그래프 요약/인사이트 조회 (Delegation)
    *
@@ -628,7 +532,6 @@ export class GraphEmbeddingService {
       },
     };
   }
-
   /**
    * 그래프 요약/인사이트 삭제 (Delegation)
    *
@@ -638,7 +541,6 @@ export class GraphEmbeddingService {
   async deleteGraphSummary(userId: string, permanent?: boolean) {
     return this.graphManagementService.deleteGraphSummary(userId, permanent);
   }
-
   /**
    * 그래프 요약/인사이트 복원 (Delegation)
    *
@@ -649,3 +551,5 @@ export class GraphEmbeddingService {
     throw new UpstreamError('Restore is not supported in hard-delete only mode');
   }
 }
+
+

@@ -7,10 +7,7 @@
 import { Neo4jMacroGraphAdapter } from '../../src/infra/graph/Neo4jMacroGraphAdapter';
 import { MACRO_GRAPH_CYPHER } from '../../src/infra/graph/cypher/macroGraph.cypher';
 import type { MacroGraphUpsertInput } from '../../src/core/ports/MacroGraphStore';
-import type {
-  GraphNodeDoc,
-  GraphStatsDoc,
-} from '../../src/core/types/persistence/graph.persistence';
+import type { GraphNodeDto, GraphStatsDto } from '../../src/shared/dtos/graph';
 
 // neo4j driver mock
 jest.mock('../../src/infra/db/neo4j', () => ({
@@ -25,7 +22,7 @@ jest.mock('../../src/shared/utils/logger', () => ({
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
-const NODE: GraphNodeDoc = {
+const NODE: GraphNodeDto = {
   id: 1,
   userId: 'user1',
   origId: 'orig1',
@@ -38,8 +35,7 @@ const NODE: GraphNodeDoc = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
-const STATS: GraphStatsDoc = {
-  id: 'user1',
+const STATS: GraphStatsDto = {
   userId: 'user1',
   nodes: 1,
   edges: 0,

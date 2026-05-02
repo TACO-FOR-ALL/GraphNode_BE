@@ -23,6 +23,8 @@ export { NotificationApi } from './endpoints/notification.js';
 export { FileApi } from './endpoints/file.js';
 export { MicroscopeApi } from './endpoints/microscope.js';
 export { FeedbackApi } from './endpoints/feedback.js';
+export { GraphEditorApi } from './endpoints/graphEditor.js';
+export type { BatchOperation } from './endpoints/graphEditor.js';
 
 // Types
 export type { ProblemDetails } from './types/problem.js';
@@ -80,6 +82,7 @@ export type {
 export type { FileAttachment, FileUploadResponse } from './types/file.js';
 export type { MicroscopeDocument, MicroscopeWorkspace, MicroscopeGraphNode, MicroscopeGraphEdge, MicroscopeGraphData } from './types/microscope.js';
 export type {
+  GraphSourceType,
   GraphNodeDto,
   GraphEdgeDto,
   GraphClusterDto,
@@ -89,8 +92,10 @@ export type {
   GraphSummaryDto,
   CreateEdgeResponse,
   UpdateNodePayload,
+  GraphEdgeType,
   GraphStatus,
 } from './types/graph.js';
+export { GRAPH_SOURCE_TYPES } from './types/graph.js';
 export type {
   AgentChatMode,
   AgentChatModeHint,
@@ -157,6 +162,25 @@ export type {
   CreateFeedbackResponseDto,
   FeedbackDto,
 } from './types/feedback.js';
+export type {
+  CreateNodeEditorDto,
+  UpdateNodeEditorDto,
+  CreateNodeEditorResponseDto,
+  CreateEdgeEditorDto,
+  UpdateEdgeEditorDto,
+  CreateEdgeEditorResponseDto,
+  CreateClusterEditorDto,
+  UpdateClusterEditorDto,
+  CreateClusterEditorResponseDto,
+  CreateSubclusterEditorDto,
+  UpdateSubclusterEditorDto,
+  CreateSubclusterEditorResponseDto,
+  MoveNodeToClusterDto,
+  MoveSubclusterToClusterDto,
+  AddNodeToSubclusterDto,
+  BatchOperationResult,
+  BatchEditorResponseDto,
+} from './types/graphEditor.js';
 export type {
   AiInputData,
   AiInputMappingNode,
