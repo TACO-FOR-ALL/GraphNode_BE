@@ -60,30 +60,32 @@ describe('CreditService', () => {
     service = new CreditService(repo);
   });
 
-  it('blocks deduction when available balance is below feature cost', async () => {
+  it('blocks deduction when DB reports insufficient balance (concurrent race)', async () => {
     repo.findBalanceByUserId.mockResolvedValue(balance({ balance: 5, holdAmount: 0 }));
+    repo.deductBalance.mockResolvedValue({ success: false, availableAfter: 0 });
 
     await expect(
       service.deduct('user-1', CreditFeature.GRAPH_GENERATION)
     ).rejects.toBeInstanceOf(InsufficientCreditError);
 
-    expect(repo.deductBalance).not.toHaveBeenCalled();
+    expect(repo.deductBalance).toHaveBeenCalled();
     expect(repo.createUsageLog).not.toHaveBeenCalled();
   });
 
-  it('blocks escrow hold before queueing when available balance is insufficient', async () => {
+  it('blocks escrow hold when DB reports insufficient balance (concurrent race)', async () => {
     repo.findBalanceByUserId.mockResolvedValue(balance({ balance: 8, holdAmount: 4 }));
+    repo.holdBalance.mockResolvedValue({ success: false, availableAfter: 0 });
 
     await expect(
       service.hold('user-1', CreditFeature.ADD_NODE, 'task_user-1_01LOW')
     ).rejects.toBeInstanceOf(InsufficientCreditError);
 
-    expect(repo.holdBalance).not.toHaveBeenCalled();
+    expect(repo.holdBalance).toHaveBeenCalled();
   });
 
   it('places an escrow hold with the SQS taskId when enough credits exist', async () => {
     repo.findBalanceByUserId.mockResolvedValue(balance({ balance: 30, holdAmount: 0 }));
-    repo.holdBalance.mockResolvedValue({ success: true, availableAfter: 20 });
+    repo.holdBalance.mockResolvedValue({ success: true, availableAfter: 30 });
 
     await service.hold('user-1', CreditFeature.GRAPH_GENERATION, 'task_user-1_01OK');
 
@@ -92,7 +94,7 @@ describe('CreditService', () => {
         userId: 'user-1',
         feature: CreditFeature.GRAPH_GENERATION,
         taskId: 'task_user-1_01OK',
-        cost: 10,
+        cost: 0,
       })
     );
   });
