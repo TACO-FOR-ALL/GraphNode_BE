@@ -95,6 +95,7 @@ enum CreditFeature {
   GRAPH_GENERATION
   ADD_NODE
   MICROSCOPE_INGEST
+  AGENT_CHAT
 }
 
 enum CreditTransactionType {

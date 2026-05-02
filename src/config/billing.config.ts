@@ -35,6 +35,10 @@ export interface CreditContext {
   modelName?: string;
   /** 그래프 작업: 처리 대상 노드 수 */
   nodeCount?: number;
+  /** 에이전트: 에이전트 모드 (chat/summary/note) */
+  agentMode?: string;
+  /** 에이전트: 도구 호출 횟수 (향후 Tool 과금 확장 시 사용) */
+  toolCallCount?: number;
 }
 
 /**
@@ -79,10 +83,11 @@ export class TokenBasedCostCalculator implements CreditCostCalculator {
 /**
  * 각 기능 별 토큰 비용 임시 하드코딩
  */
-const AI_CHAT_COST = 1;
-const GRAPH_GENERATION_COST = 10;
-const ADD_NODE_COST = 5;
-const MICROSCOPE_INGEST_COST = 3;
+const AI_CHAT_COST = 0;
+const GRAPH_GENERATION_COST = 0;
+const ADD_NODE_COST = 0;
+const MICROSCOPE_INGEST_COST = 0;
+const AGENT_CHAT_COST = 0;
 
 /**
  * 기능별 크레딧 비용 맵 (중앙 조정 포인트)
@@ -96,6 +101,7 @@ export const FEATURE_COSTS: Record<CreditFeature, CreditCostCalculator> = {
   [CreditFeature.GRAPH_GENERATION]: new FixedCostCalculator(GRAPH_GENERATION_COST),
   [CreditFeature.ADD_NODE]: new FixedCostCalculator(ADD_NODE_COST),
   [CreditFeature.MICROSCOPE_INGEST]: new FixedCostCalculator(MICROSCOPE_INGEST_COST),
+  [CreditFeature.AGENT_CHAT]: new FixedCostCalculator(AGENT_CHAT_COST),
 } satisfies Record<CreditFeature, CreditCostCalculator>;
 
 /**

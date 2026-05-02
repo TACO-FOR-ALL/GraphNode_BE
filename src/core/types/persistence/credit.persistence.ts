@@ -31,12 +31,14 @@ export type PlanType = (typeof PlanType)[keyof typeof PlanType];
  * @param GRAPH_GENERATION : 그래프 생성 기능
  * @param ADD_NODE : 노드 추가 기능
  * @param MICROSCOPE_INGEST : 현미경 기능
+ * @param AGENT_CHAT : AI 에이전트 채팅 기능
  */
 export const CreditFeature = {
   AI_CHAT: 'AI_CHAT',
   GRAPH_GENERATION: 'GRAPH_GENERATION',
   ADD_NODE: 'ADD_NODE',
   MICROSCOPE_INGEST: 'MICROSCOPE_INGEST',
+  AGENT_CHAT: 'AGENT_CHAT',
 } as const;
 
 /**
@@ -45,6 +47,7 @@ export const CreditFeature = {
  * @param GRAPH_GENERATION : 그래프 생성 기능
  * @param ADD_NODE : 노드 추가 기능
  * @param MICROSCOPE_INGEST : 현미경 기능
+ * @param AGENT_CHAT : AI 에이전트 채팅 기능
  */
 export type CreditFeature = (typeof CreditFeature)[keyof typeof CreditFeature];
 

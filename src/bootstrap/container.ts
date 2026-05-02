@@ -440,6 +440,7 @@ export class Container {
           graphEmbeddingService: this.getGraphEmbeddingService(),
           graphVectorService: this.getGraphVectorService(),
           searchService: this.getSearchService(),
+          creditService: this.getCreditService(),
         }
       );
       this.agentService = createAuditProxy(raw, 'AgentService');
