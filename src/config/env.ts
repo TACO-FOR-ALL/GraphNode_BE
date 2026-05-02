@@ -88,6 +88,17 @@ const EnvSchema = z.object({
   S3_PAYLOAD_BUCKET: z.string().min(1, 'S3_PAYLOAD_BUCKET required'),
   S3_FILE_BUCKET: z.string().min(1, 'S3_FILE_BUCKET required'),
 
+  // 채팅 내보내기 이메일 (SMTP, 예: Gmail) — USER/PASS 미설정 시 발송은 건너뜁니다.
+  CHAT_EXPORT_EMAIL_FROM: z.email().optional(),
+  CHAT_EXPORT_SMTP_HOST: z.string().min(1).default('smtp.gmail.com'),
+  CHAT_EXPORT_SMTP_PORT: z.coerce.number().int().positive().default(587),
+  CHAT_EXPORT_SMTP_SECURE: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
+  CHAT_EXPORT_SMTP_USER: z.string().optional(),
+  CHAT_EXPORT_SMTP_PASS: z.string().optional(),
+
   // JWT 설정
   JWT_SECRET: z.string().min(1, 'JWT_SECRET required'),
   JWT_ACCESS_EXPIRY: z.string().default('1h'),

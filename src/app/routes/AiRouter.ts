@@ -10,17 +10,21 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 import type { ChatManagementService } from '../../core/services/ChatManagementService';
 import { AiController } from '../controllers/AiController';
+import { ChatExportController } from '../controllers/ChatExportController';
 import { asyncHandler } from '../utils/asyncHandler';
 import { bindSessionUser } from '../middlewares/session';
 import { requireLogin } from '../middlewares/auth';
 import { AiInteractionService } from '../../core/services/AiInteractionService';
+import type { ChatExportService } from '../../core/services/ChatExportService';
 
 export function createAiRouter(deps: {
   chatManagementService: ChatManagementService;
   aiInteractionService: AiInteractionService;
+  chatExportService: ChatExportService;
 }) {
   const router = Router();
   const aiController = new AiController(deps.chatManagementService, deps.aiInteractionService);
+  const chatExportController = new ChatExportController(deps.chatExportService);
 
   // 보호 구역(세션 바인딩 + 인증)
   router.use(bindSessionUser, requireLogin);
@@ -59,6 +63,11 @@ export function createAiRouter(deps: {
   router.post(
     '/conversations/:conversationId/restore',
     asyncHandler(aiController.restoreConversation.bind(aiController))
+  );
+
+  router.post(
+    '/conversations/:conversationId/exports',
+    asyncHandler(chatExportController.startExport.bind(chatExportController))
   );
 
   // Messages
@@ -104,6 +113,12 @@ export function createAiRouter(deps: {
     upload.array('files'),
     asyncHandler(aiController.handleAIRagChat.bind(aiController))
   );
+
+  router.get(
+    '/chat-exports/:jobId/download',
+    asyncHandler(chatExportController.download.bind(chatExportController))
+  );
+  router.get('/chat-exports/:jobId', asyncHandler(chatExportController.getStatus.bind(chatExportController)));
 
   router.get('/files/:key', asyncHandler(aiController.downloadFile.bind(aiController)));
 

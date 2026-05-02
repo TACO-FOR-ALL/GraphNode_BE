@@ -956,6 +956,45 @@ paths:
             application/problem+json:
               schema:
                 $ref: ../schemas/problem.json
+  /v1/ai/conversations/{conversationId}/exports:
+    post:
+      summary: Request asynchronous chat transcript export
+      description: >-
+        Creates a background job that serializes the conversation and messages to JSON, uploads to storage,
+        and best-effort emails the authenticated user's account email when SMTP is configured
+        (`CHAT_EXPORT_SMTP_USER`, `CHAT_EXPORT_SMTP_PASS`; optional `CHAT_EXPORT_EMAIL_FROM` for From header).
+        Poll `GET /v1/ai/chat-exports/{jobId}` then download via `GET /v1/ai/chat-exports/{jobId}/download` when status is DONE.
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string }
+      responses:
+        '202':
+          description: Accepted — export job queued
+          content:
+            application/json:
+              schema: { $ref: ../schemas/chat-export-start-response.json }
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '404':
+          description: Not Found — conversation does not exist or not owned by user
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '502':
+          description: Bad Gateway
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
   /v1/ai/conversations/{conversationId}/messages:
     post:
       summary: Create message
@@ -1318,6 +1357,62 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }
+  /v1/ai/chat-exports/{jobId}:
+    get:
+      summary: Get chat export job status
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Export job status
+          content:
+            application/json:
+              schema: { $ref: ../schemas/chat-export-status-response.json }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '404':
+          description: Job not found
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+  /v1/ai/chat-exports/{jobId}/download:
+    get:
+      summary: Download completed chat export JSON
+      description: Available only when job status is DONE. Returns JSON as a downloadable attachment.
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: JSON export file
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '404':
+          description: Job not found
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '409':
+          description: Conflict — export not ready yet
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
   /v1/ai/files:
     post:
       summary: Upload files

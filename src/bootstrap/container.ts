@@ -20,6 +20,7 @@ import { AiInteractionService } from '../core/services/AiInteractionService';
 import { AgentService } from '../core/services/AgentService';
 import { SearchService } from '../core/services/SearchService';
 import { FeedbackService } from '../core/services/FeedbackService';
+import { ChatExportService } from '../core/services/ChatExportService';
 import { GoogleOAuthService } from '../core/services/GoogleOAuthService';
 import { AppleOAuthService } from '../core/services/AppleOAuthService';
 import { MicroscopeManagementService } from '../core/services/MicroscopeManagementService';
@@ -48,13 +49,17 @@ import { VectorStore } from '../core/ports/VectorStore';
 import { QueuePort } from '../core/ports/QueuePort';
 import { StoragePort } from '../core/ports/StoragePort';
 import { EventBusPort } from '../core/ports/EventBusPort';
+import { EmailPort } from '../core/ports/EmailPort';
 import { NotificationRepository } from '../core/ports/NotificationRepository';
+import { ChatExportRepository } from '../core/ports/ChatExportRepository';
 import { FeedbackRepository } from '../core/ports/FeedbackRepository';
 // Infra Adapters
 import { AwsSqsAdapter } from '../infra/aws/AwsSqsAdapter';
 import { AwsS3Adapter } from '../infra/aws/AwsS3Adapter';
+import { SmtpEmailAdapter } from '../infra/email/SmtpEmailAdapter';
 import { RedisEventBusAdapter } from '../infra/redis/RedisEventBusAdapter';
 import { FeedbackRepositoryPrisma } from '../infra/repositories/FeedbackRepositoryPrisma';
+import { ChatExportRepositoryMongo } from '../infra/repositories/ChatExportRepositoryMongo';
 
 /**
  * 애플리케이션의 의존성 주입(Dependency Injection)을 관리하는 싱글톤 컨테이너입니다.
@@ -82,10 +87,12 @@ export class Container {
   private microscopeWorkspaceRepo: MicroscopeWorkspaceStore | null = null;
   private notificationRepo: NotificationRepository | null = null;
   private feedbackRepo: FeedbackRepository | null = null;
+  private chatExportRepo: ChatExportRepository | null = null;
 
   // Infra Adapters
   private queueAdapter: QueuePort | null = null;
   private storageAdapter: StoragePort | null = null;
+  private emailAdapter: EmailPort | null = null;
   private eventBusAdapter: EventBusPort | null = null;
 
   // Services
@@ -107,6 +114,7 @@ export class Container {
   private microscopeManagementService: MicroscopeManagementService | null = null;
   private searchService: SearchService | null = null;
   private feedbackService: FeedbackService | null = null;
+  private chatExportService: ChatExportService | null = null;
 
   private constructor() {}
 
@@ -198,6 +206,18 @@ export class Container {
       this.storageAdapter = createAuditProxy(raw, 'AwsS3Adapter');
     }
     return this.storageAdapter;
+  }
+
+  /**
+   * SmtpEmailAdapter 인스턴스를 반환합니다.
+   * @remarks `CHAT_EXPORT_SMTP_USER` / `CHAT_EXPORT_SMTP_PASS` 미설정 시 발송은 건너뜁니다.
+   */
+  getEmailAdapter(): EmailPort {
+    if (!this.emailAdapter) {
+      const raw = new SmtpEmailAdapter();
+      this.emailAdapter = createAuditProxy(raw, 'SmtpEmailAdapter');
+    }
+    return this.emailAdapter;
   }
 
   /**
@@ -303,6 +323,13 @@ export class Container {
       this.feedbackRepo = new FeedbackRepositoryPrisma();
     }
     return this.feedbackRepo;
+  }
+
+  getChatExportRepository(): ChatExportRepository {
+    if (!this.chatExportRepo) {
+      this.chatExportRepo = new ChatExportRepositoryMongo();
+    }
+    return this.chatExportRepo;
   }
 
   // --- Services ---
@@ -488,6 +515,20 @@ export class Container {
       this.aiInteractionService = createAuditProxy(raw, 'AiInteractionService');
     }
     return this.aiInteractionService;
+  }
+
+  getChatExportService(): ChatExportService {
+    if (!this.chatExportService) {
+      const raw = new ChatExportService(
+        this.getChatManagementService(),
+        this.getUserService(),
+        this.getChatExportRepository(),
+        this.getAwsS3Adapter(),
+        this.getEmailAdapter()
+      );
+      this.chatExportService = createAuditProxy(raw, 'ChatExportService');
+    }
+    return this.chatExportService;
   }
 
   /**
