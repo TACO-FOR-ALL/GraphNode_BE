@@ -81,7 +81,7 @@ export class TokenBasedCostCalculator implements CreditCostCalculator {
 }
 
 /**
- * 각 기능 별 토큰 비용 임시 하드코딩
+ * 각 기능 별 크레딧 비용
  */
 const AI_CHAT_COST = 0;
 const GRAPH_GENERATION_COST = 0;

@@ -55,6 +55,7 @@ describe('CreditService', () => {
       findExpiredHolds: jest.fn(),
       findHoldByTaskId: jest.fn(),
       createUsageLog: jest.fn(),
+      findUsageLogs: jest.fn(),
     };
     service = new CreditService(repo);
   });
