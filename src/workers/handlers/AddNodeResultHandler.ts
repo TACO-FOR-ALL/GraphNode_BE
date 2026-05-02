@@ -57,6 +57,7 @@ export class AddNodeResultHandler implements JobHandler {
     const notiService = container.getNotificationService();
     const conversationService = container.getConversationService();
     const noteService = container.getNoteService();
+    const creditService = container.getCreditService();
 
     // AI 서버에서 실패한 경우
     if (status === 'FAILED' || error) {
@@ -77,10 +78,7 @@ export class AddNodeResultHandler implements JobHandler {
         scope.setTag('failure_source', 'ai_server');
         scope.setTag('correlation_id', taskId);
         scope.setContext('worker_failure', { taskId, userId, errorMsg });
-        return Sentry.captureMessage(
-          `[Worker FAILED] ADD_NODE_RESULT: ${errorMsg}`,
-          'warning'
-        );
+        return Sentry.captureMessage(`[Worker FAILED] ADD_NODE_RESULT: ${errorMsg}`, 'warning');
       });
 
       void notifyWorkerFailed({
@@ -98,6 +96,16 @@ export class AddNodeResultHandler implements JobHandler {
       }
 
       await notiService.sendAddConversationFailed(userId, taskId, errorMsg);
+
+      // 4-1. 선제적 차감된 크레딧 롤백 (Rollback)
+      try {
+        await creditService.rollbackByTaskId(taskId);
+      } catch (creditErr) {
+        logger.error(
+          { err: creditErr, taskId, userId },
+          'Credit rollback failed after add-node failure'
+        );
+      }
       return;
     }
 
@@ -393,6 +401,16 @@ export class AddNodeResultHandler implements JobHandler {
           { taskId, status: 'COMPLETED' }
         ),
       ]);
+
+      // 4-2. 선제적 차감된 크레딧 커밋 (Commit)
+      try {
+        await creditService.commitByTaskId(taskId);
+      } catch (creditErr) {
+        logger.error(
+          { err: creditErr, taskId, userId },
+          'Credit commit failed after add-node success'
+        );
+      }
     } catch (err) {
       logger.error({ err, taskId, userId }, 'Failed to process add node result');
 

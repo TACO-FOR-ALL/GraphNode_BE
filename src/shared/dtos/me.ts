@@ -1,3 +1,5 @@
+import type { CreditBalanceResponseDto } from './credit.js';
+
 /**
  * 사용자 프로필 응답 모델(표시용 스냅샷).
  * - 목적: 클라이언트가 로그인 사용자 정보를 화면에 표시할 수 있도록 최소 필드만 제공한다.
@@ -115,6 +117,10 @@ export interface MeResponseDto {
    * 표시용 프로필(가능한 경우 동봉). 세션 스냅샷 또는 보조 쿠키에서 획득한다.
    */
   profile?: UserProfileDto;
+  /**
+   * 크레딧 잔액 정보 (선택). 포함 시 JIT 갱신 후 최신 값이 제공된다.
+   */
+  credit?: CreditBalanceResponseDto;
 }
 
 /**

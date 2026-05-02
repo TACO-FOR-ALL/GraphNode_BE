@@ -44,6 +44,33 @@ jest.mock('../../src/infra/redis/RedisEventBusAdapter', () => ({
   }
 }));
 
+jest.mock('../../src/infra/repositories/CreditRepositoryPrisma', () => ({
+  CreditRepositoryPrisma: jest.fn().mockImplementation(() => ({
+    findBalanceByUserId: jest.fn<any>().mockResolvedValue({
+      id: 'bal-1',
+      userId: 'user-12345',
+      balance: 100,
+      holdAmount: 0,
+      planType: 'FREE',
+      cycleStart: new Date(),
+      cycleEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      updatedAt: new Date(),
+    }),
+    createBalance: jest.fn<any>().mockResolvedValue({}),
+    holdBalance: jest.fn<any>().mockResolvedValue({ success: true, availableAfter: 90 }),
+    commitHold: jest.fn<any>().mockResolvedValue(true),
+    rollbackHold: jest.fn<any>().mockResolvedValue(true),
+    deductBalance: jest.fn<any>().mockResolvedValue({ success: true, availableAfter: 90 }),
+    refundBalance: jest.fn<any>().mockResolvedValue(undefined),
+    refillBalance: jest.fn<any>().mockResolvedValue(undefined),
+    findUsersWithExpiredCycle: jest.fn<any>().mockResolvedValue([]),
+    findExpiredHolds: jest.fn<any>().mockResolvedValue([]),
+    findHoldByTaskId: jest.fn<any>().mockResolvedValue(null),
+    createUsageLog: jest.fn<any>().mockResolvedValue(undefined),
+    findUsageLogs: jest.fn<any>().mockResolvedValue({ items: [], total: 0 }),
+  })),
+}));
+
 // GraphAi 테스트는 큐잉만 검증. 알림 전송 시 NotificationService가 Mongo insert를 시도하는데,
 // 이 스펙의 Mongo mock은 db().collection()을 지원하지 않아 502가 난다. 따라서 NotificationService를 mock.
 jest.mock('../../src/core/services/NotificationService', () => ({

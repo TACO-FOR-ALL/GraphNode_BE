@@ -1,4 +1,5 @@
-/** 온보딩 직업 */
+import type { CreditBalanceDto } from './credit.js';
+
 export type OnboardingOccupation =
   | 'developer'
   | 'student'
@@ -63,10 +64,12 @@ export type PreferredLanguage = 'ko' | 'en' | 'zh' | 'ja';
  * @public
  * @property userId 사용자 ID
  * @property profile 사용자 프로필 정보 (선택)
+ * @property credit  크레딧 잔액 정보 (선택) — JIT 갱신 후 최신 값
  */
 export interface MeResponseDto {
   userId: string;
   profile?: UserProfileDto;
+  credit?: CreditBalanceDto;
 }
 
 /**

@@ -5,15 +5,18 @@ import { requireLogin } from '../middlewares/auth';
 import { MeController } from '../controllers/MeController';
 import { UserService } from '../../core/services/UserService';
 import { asyncHandler } from '../utils/asyncHandler';
+import type { ICreditService } from '../../core/ports/ICreditService';
+
 
 /**
  * /v1/me 라우터를 생성하는 팩토리 함수.
  * @param deps 라우터가 의존하는 서비스들
  * @returns Express 라우터
  */
-export function createMeRouter(deps: { userService: UserService }): Router {
+export function createMeRouter(deps: { userService: UserService; creditService: ICreditService }): Router {
   const router = Router();
-  const meController = new MeController(deps.userService);
+  const meController = new MeController(deps.userService, deps.creditService);
+
 
   router.use(bindSessionUser);
   router.use(requireLogin);
@@ -48,6 +51,10 @@ export function createMeRouter(deps: { userService: UserService }): Router {
 
   router.get('/onboarding', asyncHandler(meController.getOnboarding.bind(meController)));
   router.patch('/onboarding', asyncHandler(meController.updateOnboarding.bind(meController)));
+
+  // Credits
+  router.get('/credits', asyncHandler(meController.getCredits.bind(meController)));
+  router.get('/credits/usage', asyncHandler(meController.getCreditUsage.bind(meController)));
 
   return router;
 }

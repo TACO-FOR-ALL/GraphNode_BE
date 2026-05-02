@@ -37,6 +37,7 @@ import { makeGraphEditorRouter } from './modules/graphEditor.module';
 import { makeFileProxyRouter } from './modules/fileProxy.module';
 import { STORAGE_BUCKETS } from '../config/storageConfig';
 import { CleanupCron } from '../infra/cron/CleanupCron';
+import { BillingCron } from '../infra/cron/BillingCron';
 // import { createTestAgentRouter } from '../app/routes/agent.test';
 
 import { setupSentryErrorHandler } from '../shared/utils/sentry';
@@ -154,6 +155,9 @@ export async function bootstrap() {
 
   // 오래된 삭제된 항목 자동 정리 크론 시작
   CleanupCron.start();
+
+  // 크레딧 HOLD 만료 정리 및 구독 갱신 크론 시작
+  BillingCron.start();
 
   return { app, database };
 }
