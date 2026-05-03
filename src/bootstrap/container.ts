@@ -19,6 +19,7 @@ import { AiInteractionService } from '../core/services/AiInteractionService';
 import { AgentService } from '../core/services/AgentService';
 import { SearchService } from '../core/services/SearchService';
 import { FeedbackService } from '../core/services/FeedbackService';
+import { ChatExportService } from '../core/services/ChatExportService';
 import { GraphEditorService } from '../core/services/GraphEditorService';
 import { GoogleOAuthService } from '../core/services/GoogleOAuthService';
 import { AppleOAuthService } from '../core/services/AppleOAuthService';
@@ -46,13 +47,18 @@ import { VectorStore } from '../core/ports/VectorStore';
 import { QueuePort } from '../core/ports/QueuePort';
 import { StoragePort } from '../core/ports/StoragePort';
 import { EventBusPort } from '../core/ports/EventBusPort';
+import { EmailPort } from '../core/ports/EmailPort';
 import { NotificationRepository } from '../core/ports/NotificationRepository';
+import { ChatExportRepository } from '../core/ports/ChatExportRepository';
 import { FeedbackRepository } from '../core/ports/FeedbackRepository';
 // Infra Adapters
-import { AwsSqsAdapter } from '../infra/aws/AwsSqsAdapter';
 import { AwsS3Adapter } from '../infra/aws/AwsS3Adapter';
+import { AwsSqsAdapter } from '../infra/aws/AwsSqsAdapter';
+import { SmtpEmailAdapter } from '../infra/email/SmtpEmailAdapter';
 import { RedisEventBusAdapter } from '../infra/redis/RedisEventBusAdapter';
 import { FeedbackRepositoryPrisma } from '../infra/repositories/FeedbackRepositoryPrisma';
+import { ChatExportRepositoryMongo } from '../infra/repositories/ChatExportRepositoryMongo';
+
 import { CreditRepositoryPrisma } from '../infra/repositories/CreditRepositoryPrisma';
 import { ICreditRepository } from '../core/ports/ICreditRepository';
 import { CreditService } from '../core/services/CreditService';
@@ -81,11 +87,13 @@ export class Container {
   private microscopeWorkspaceRepo: MicroscopeWorkspaceStore | null = null;
   private notificationRepo: NotificationRepository | null = null;
   private feedbackRepo: FeedbackRepository | null = null;
+  private chatExportRepo: ChatExportRepository | null = null;
   private creditRepo: ICreditRepository | null = null;
 
   // Infra Adapters
   private queueAdapter: QueuePort | null = null;
   private storageAdapter: StoragePort | null = null;
+  private emailAdapter: EmailPort | null = null;
   private eventBusAdapter: EventBusPort | null = null;
 
   // Services
@@ -107,6 +115,7 @@ export class Container {
   private microscopeManagementService: MicroscopeManagementService | null = null;
   private searchService: SearchService | null = null;
   private feedbackService: FeedbackService | null = null;
+  private chatExportService: ChatExportService | null = null;
   private graphEditorService: GraphEditorService | null = null;
   private creditService: CreditService | null = null;
 
@@ -182,6 +191,18 @@ export class Container {
     }
     return this.storageAdapter;
   }
+  /**
+   * SmtpEmailAdapter 인스턴스를 반환합니다.
+   * @remarks `CHAT_EXPORT_SMTP_USER` / `CHAT_EXPORT_SMTP_PASS` 미설정 시 발송은 건너뜁니다.
+   */
+  getEmailAdapter(): EmailPort {
+    if (!this.emailAdapter) {
+      const raw = new SmtpEmailAdapter();
+      this.emailAdapter = createAuditProxy(raw, 'SmtpEmailAdapter');
+    }
+    return this.emailAdapter;
+  }
+
   /**
    * RedisEventBusAdapter 인스턴스를 반환합니다.
    * @returns RedisEventBusAdapter 인스턴스
@@ -279,6 +300,14 @@ export class Container {
     return this.feedbackRepo;
   }
 
+  getChatExportRepository(): ChatExportRepository {
+    if (!this.chatExportRepo) {
+      this.chatExportRepo = new ChatExportRepositoryMongo();
+    }
+    return this.chatExportRepo;
+  }
+
+  // --- Services ---
   getCreditRepository(): ICreditRepository {
     if (!this.creditRepo) {
       this.creditRepo = new CreditRepositoryPrisma();
@@ -462,6 +491,21 @@ export class Container {
     }
     return this.aiInteractionService;
   }
+
+  getChatExportService(): ChatExportService {
+    if (!this.chatExportService) {
+      const raw = new ChatExportService(
+        this.getChatManagementService(),
+        this.getUserService(),
+        this.getChatExportRepository(),
+        this.getAwsS3Adapter(),
+        this.getEmailAdapter()
+      );
+      this.chatExportService = createAuditProxy(raw, 'ChatExportService');
+    }
+    return this.chatExportService;
+  }
+
   /**
    * GoogleOAuthService 인스턴스를 반환합니다.
    */

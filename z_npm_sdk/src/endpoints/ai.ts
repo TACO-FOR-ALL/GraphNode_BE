@@ -62,13 +62,34 @@ export interface AIChatRetryRequestDto {
 }
 
 /**
+ * 채팅 내보내기 작업 시작 응답
+ * @public
+ */
+export interface StartChatExportResponseDto {
+  jobId: string;
+  status: 'PENDING' | 'PROCESSING' | 'DONE' | 'FAILED';
+}
+
+/**
+ * 채팅 내보내기 작업 상태
+ * @public
+ */
+export interface ChatExportStatusResponseDto {
+  jobId: string;
+  status: 'PENDING' | 'PROCESSING' | 'DONE' | 'FAILED';
+  downloadUrl?: string;
+  errorMessage?: string;
+}
+
+/**
  * AI Chat API
  *
  * AI 모델과의 실시간 채팅 기능을 제공하는 API 클래스입니다.
  * `/v1/ai` 엔드포인트 하위의 API들을 호출합니다.
  *
- * 주요 기능:
- * - AI 채팅 메시지 전송 및 응답 수신 (`chat`)
+   * 주요 기능:
+   * - AI 채팅 메시지 전송 및 응답 수신 (`chat`)
+   * - 채팅 내역 비동기 내보내기·다운로드 (`startChatExport`, `getChatExportStatus`, `downloadChatExport`) — 완료 시 백엔드가 SMTP로 계정 메일에 JSON 첨부를 보낼 수 있음(서버 환경변수 설정 시, API 스키마 동일)
  *
  * @public
  */
@@ -456,6 +477,51 @@ export class AiApi {
       if (!signal.aborted) onEvent({ event: AiStreamEvent.ERROR, data: { message: String(e) } });
     });
     return () => controller.abort();
+  }
+
+  /**
+   * 대화 채팅 내역(JSON) 비동기 내보내기 작업을 시작합니다.
+   *
+   * @remarks
+   * 서버는 작업 완료 후 사용자 프로필 이메일로 내보내기 파일 첨부 메일 발송을 시도할 수 있습니다(SMTP 설정 시).
+   * 클라이언트는 `GET /v1/ai/chat-exports/:jobId`로 상태를 폴링한 뒤 완료 시 `downloadChatExport`로 Blob을 받습니다.
+   *
+   * @param conversationId - 내보낼 대화 ID
+   * @returns jobId·초기 status (`202` 성공 시 본문에 포함)
+   */
+  async startChatExport(
+    conversationId: string
+  ): Promise<HttpResponse<StartChatExportResponseDto>> {
+    return this.rb.path(`/v1/ai/conversations/${conversationId}/exports`).post();
+  }
+
+  /**
+   * 채팅 내보내기 작업 상태를 조회합니다.
+   *
+   * @param jobId - `startChatExport` 응답의 작업 ID
+   * @remarks `status === 'DONE'`일 때 `downloadUrl` 또는 다운로드 API 사용 가능
+   */
+  async getChatExportStatus(
+    jobId: string
+  ): Promise<HttpResponse<ChatExportStatusResponseDto>> {
+    return this.rb.path(`/v1/ai/chat-exports/${jobId}`).get();
+  }
+
+  /**
+   * 완료된 내보내기 JSON 파일을 Blob으로 받습니다.
+   *
+   * @param jobId - 내보내기 작업 ID
+   * @throws {Error} HTTP 비정상 응답 시 (`409` 등 미완료 상태)
+   */
+  async downloadChatExport(jobId: string): Promise<Blob> {
+    const rb = this.rb.path(`/v1/ai/chat-exports/${jobId}/download`);
+    const res = await rb.sendRaw('GET', undefined, {});
+
+    if (!res.ok) {
+      throw new Error(`Failed to download chat export: ${res.status} ${res.statusText}`);
+    }
+
+    return await res.blob();
   }
 
   /**

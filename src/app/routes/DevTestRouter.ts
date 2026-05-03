@@ -12,13 +12,20 @@
 
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import * as Sentry from '@sentry/node';
+import { v4 as uuidv4 } from 'uuid';
 
 import { notifyHttp500, notifyWorkerFailed } from '../../shared/utils/discord';
 import { UpstreamError, ValidationError, NotFoundError } from '../../shared/errors/domain';
-import { v4 as uuidv4 } from 'uuid';
 import { container } from '../../bootstrap/container';
+import { loadEnv } from '../../config/env';
 import { ApiKeyModel } from '../../shared/dtos/me';
 import type { ChatStreamRequestBody } from '../../agent/types';
+
+/**
+ * 환경은 **항상 `loadEnv()`(Zod `EnvSchema`)** 로만 접근합니다.
+ * Infisical·ECS 등이 미리 채워 둔 `process.env`를 그 이름으로 두 번 정의하지 않으며,
+ * 런타임 주입 순서 테스트(`resetEnvCacheForTests`)와 맞추려 모듈 상단 고정 스냅샷은 두지 않습니다.
+ */
 
 const router = Router();
 
@@ -40,16 +47,108 @@ router.use((_req: Request, res: Response, next: NextFunction) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.get('/ping', (_req: Request, res: Response) => {
+  const env = loadEnv();
   res.json({
     ok: true,
     env: {
-      NODE_ENV: process.env.NODE_ENV,
-      DISCORD_WEBHOOK_URL_ERRORS: process.env.DISCORD_WEBHOOK_URL_ERRORS ? '✅ set' : '❌ not set',
-      DISCORD_WEBHOOK_URL_GRAPH: process.env.DISCORD_WEBHOOK_URL_GRAPH ? '✅ set' : '❌ not set',
-      SENTRY_ORG_SLUG: process.env.SENTRY_ORG_SLUG ? '✅ set' : '❌ not set',
-      SENTRY_DSN: process.env.SENTRY_DSN ? '✅ set' : '❌ not set',
+      NODE_ENV: env.NODE_ENV,
+      DISCORD_WEBHOOK_URL_ERRORS: env.DISCORD_WEBHOOK_URL_ERRORS?.trim() ? '✅ set' : '❌ not set',
+      DISCORD_WEBHOOK_URL_GRAPH: env.DISCORD_WEBHOOK_URL_GRAPH?.trim() ? '✅ set' : '❌ not set',
+      SENTRY_ORG_SLUG: env.SENTRY_ORG_SLUG?.trim() ? '✅ set' : '❌ not set',
+      SENTRY_DSN: env.SENTRY_DSN?.trim() ? '✅ set' : '❌ not set',
+      CHAT_EXPORT_SMTP_USER: env.CHAT_EXPORT_SMTP_USER?.trim() ? '✅ set' : '❌ not set',
+      CHAT_EXPORT_SMTP_PASS: env.CHAT_EXPORT_SMTP_PASS?.trim() ? '✅ set' : '❌ not set',
     },
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /dev/test/chat-export-email-env
+// 채팅보내기 SMTP 관련 env가 주입됐는지 여부만 반환(비밀값 미포함).
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/chat-export-email-env', (_req: Request, res: Response) => {
+  const env = loadEnv();
+  res.json({
+    ok: true,
+    CHAT_EXPORT_SMTP_USER: env.CHAT_EXPORT_SMTP_USER?.trim() ? 'set' : 'missing',
+    CHAT_EXPORT_SMTP_PASS: env.CHAT_EXPORT_SMTP_PASS?.trim() ? 'set' : 'missing',
+    CHAT_EXPORT_EMAIL_FROM: env.CHAT_EXPORT_EMAIL_FROM?.trim() ? 'set' : 'optional_missing',
+    CHAT_EXPORT_SMTP_HOST: env.CHAT_EXPORT_SMTP_HOST,
+    CHAT_EXPORT_SMTP_PORT: env.CHAT_EXPORT_SMTP_PORT,
+    CHAT_EXPORT_SMTP_SECURE: env.CHAT_EXPORT_SMTP_SECURE ?? false,
+    nextSteps: [
+      'Full flow: log in → POST /v1/ai/conversations/{conversationId}/exports → GET /v1/ai/chat-exports/{jobId} until DONE; mail goes to profile email.',
+      'SMTP only: set TEST_LOGIN_SECRET, then POST /dev/test/email/chat-export-smtp-ping with header x-internal-token and body { "to": "your@email" }.',
+    ],
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /dev/test/email/chat-export-smtp-ping
+// nodemailer(SMTP)로 소형 첨부 테스트 메일 1통 발송 — 채팅보내기와 동일 어댑터.
+//
+// Headers: x-internal-token — `loadEnv().TEST_LOGIN_SECRET`과 동일(min 16 chars).
+// Body: { "to": "recipient@example.com" } (required).
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/email/chat-export-smtp-ping', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const env = loadEnv();
+    const expectedSecret = env.TEST_LOGIN_SECRET?.trim();
+    const providedSecret = req.header('x-internal-token')?.trim();
+    if (!expectedSecret || expectedSecret.length < 16) {
+      res.status(403).json({
+        ok: false,
+        message:
+          'Set TEST_LOGIN_SECRET (at least 16 characters) in .env or Infisical before using this endpoint.',
+      });
+      return;
+    }
+    if (!providedSecret || providedSecret !== expectedSecret) {
+      res.status(403).json({
+        ok: false,
+        message: 'Send header x-internal-token with the same value as TEST_LOGIN_SECRET.',
+      });
+      return;
+    }
+
+    if (!env.CHAT_EXPORT_SMTP_USER?.trim() || !env.CHAT_EXPORT_SMTP_PASS?.trim()) {
+      res.status(400).json({
+        ok: false,
+        reason: 'smtp_not_configured',
+        message: 'Set CHAT_EXPORT_SMTP_USER and CHAT_EXPORT_SMTP_PASS (e.g. Gmail app password).',
+      });
+      return;
+    }
+
+    const to = String(req.body?.to ?? '').trim();
+    if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      throw new ValidationError('Body field "to" must be a valid email address.');
+    }
+
+    const email = container.getEmailAdapter();
+    await email.sendEmailWithAttachment({
+      to,
+      subject: '[GraphNode DEV] SMTP ping (chat export path)',
+      text: [
+        'This is a development-only test message.',
+        'If you see this, CHAT_EXPORT_SMTP_* is configured and nodemailer can send mail.',
+        '',
+        'Next: POST /v1/ai/conversations/{conversationId}/exports while logged in (email uses your profile address).',
+      ].join('\n'),
+      attachmentFilename: 'smtp-ping.txt',
+      attachmentContentType: 'text/plain; charset=utf-8',
+      attachmentBuffer: Buffer.from('GraphNode SMTP ping OK\n', 'utf-8'),
+    });
+
+    res.json({
+      ok: true,
+      message: `Test email sent to ${to}. Check inbox and spam folder.`,
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -91,10 +190,11 @@ router.post('/discord/http500', async (req: Request, res: Response, next: NextFu
       sentryEventId: sentryEventId ? String(sentryEventId) : undefined,
     });
 
+    const env = loadEnv();
     res.json({
       ok: true,
       message: 'notifyHttp500 호출 완료. Discord 채널을 확인하세요.',
-      sentTo: process.env.DISCORD_WEBHOOK_URL_ERRORS
+      sentTo: env.DISCORD_WEBHOOK_URL_ERRORS?.trim()
         ? 'Discord'
         : '(no-op: DISCORD_WEBHOOK_URL_ERRORS 미설정)',
     });
@@ -135,10 +235,11 @@ router.post('/discord/worker-failed', async (req: Request, res: Response, next: 
       sentryEventId: sentryEventId ? String(sentryEventId) : undefined,
     });
 
+    const env = loadEnv();
     res.json({
       ok: true,
       message: 'notifyWorkerFailed 호출 완료. Discord 채널을 확인하세요.',
-      sentTo: process.env.DISCORD_WEBHOOK_URL_GRAPH
+      sentTo: env.DISCORD_WEBHOOK_URL_GRAPH?.trim()
         ? 'Discord'
         : '(no-op: DISCORD_WEBHOOK_URL_GRAPH 미설정)',
     });

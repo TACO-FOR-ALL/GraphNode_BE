@@ -8,6 +8,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Added
 
+- 개발 전용 SMTP 점검: `GET /dev/test/chat-export-email-env`(주입 여부만), `POST /dev/test/email/chat-export-smtp-ping`(헤더 `x-internal-token` = `TEST_LOGIN_SECRET`, body `{ "to" }`로 테스트 메일).
+- AI 채팅 내보내기: 비동기 JSON 내보내기(`POST /v1/ai/conversations/{conversationId}/exports`), 상태 조회 및 다운로드, SMTP(nodemailer)로 계정 이메일 발송(best-effort, `CHAT_EXPORT_SMTP_USER`/`CHAT_EXPORT_SMTP_PASS` 설정 시).
 - Google OAuth2 로그인 플로우: `/auth/google/start`, `/auth/google/callback`
 - 세션 기반 인증(쿠키 정책: `__Host-session; HttpOnly; Secure; SameSite`)
 - `/v1/me` — 사용자 프로필 응답(Problem Details 오류 규격 적용)

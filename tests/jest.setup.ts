@@ -36,6 +36,7 @@ process.env.FIREBASE_CREDENTIALS_JSON = JSON.stringify({
   client_email: 'dummy@example.com',
 });
 process.env.AWS_REGION = 'ap-northeast-2';
+process.env.TEST_LOGIN_SECRET = 'test-login-secret-for-dev-test-routers-min-32';
 
 // SessionStoreRedis ZSET 시뮬레이션용 인메모리 저장소 (테스트 격리용)
 const zsetStore: Record<string, Map<string, number>> = {};

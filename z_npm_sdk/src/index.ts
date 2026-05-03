@@ -112,7 +112,12 @@ export type {
   AgentChatStreamHandler,
 } from './endpoints/agent.js';
 export { openAgentChatStream } from './endpoints/agent.js';
-export type { AIChatRequestDto, AIChatResponseDto } from './endpoints/ai.js';
+export type {
+  AIChatRequestDto,
+  AIChatResponseDto,
+  StartChatExportResponseDto,
+  ChatExportStatusResponseDto,
+} from './endpoints/ai.js';
 export { AiStreamEvent } from './types/ai-event.js';
 export {
   TaskType,

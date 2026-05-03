@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ChatExportStatusResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jobId", "status"],
+  "properties": {
+    "jobId": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["PENDING", "PROCESSING", "DONE", "FAILED"]
+    },
+    "downloadUrl": {
+      "type": "string",
+      "description": "Relative path to download endpoint when status is DONE"
+    },
+    "errorMessage": { "type": "string" }
+  }
+}
