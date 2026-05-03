@@ -88,7 +88,7 @@ const EnvSchema = z.object({
   S3_PAYLOAD_BUCKET: z.string().min(1, 'S3_PAYLOAD_BUCKET required'),
   S3_FILE_BUCKET: z.string().min(1, 'S3_FILE_BUCKET required'),
 
-  // 채팅 내보내기 이메일 (SMTP, 예: Gmail) — USER/PASS 미설정 시 발송은 건너뜁니다.
+  // 채팅 내보내기 알림 — SMTP(nodemailer) 직접 발송. USER/PASS 미설정 시 메일만 건너뜁니다.
   CHAT_EXPORT_EMAIL_FROM: z.email().optional(),
   CHAT_EXPORT_SMTP_HOST: z.string().min(1).default('smtp.gmail.com'),
   CHAT_EXPORT_SMTP_PORT: z.coerce.number().int().positive().default(587),
@@ -169,6 +169,17 @@ export type Env = z.infer<typeof EnvSchema>;
  * @returns 검증된 환경 변수 객체 (Env)
  */
 let cachedEnv: Env | null = null;
+
+/**
+ * @internal Jest 등에서 `process.env`를 바꾼 뒤 `loadEnv()`가 다시 파싱하도록 캐시를 비웁니다.
+ * @throws {Error} NODE_ENV가 test가 아닐 때
+ */
+export function resetEnvCacheForTests(): void {
+  if (process.env.NODE_ENV !== 'test') {
+    throw new Error('resetEnvCacheForTests is only allowed when NODE_ENV=test');
+  }
+  cachedEnv = null;
+}
 
 export function loadEnv(): Env {
   if (cachedEnv) return cachedEnv;

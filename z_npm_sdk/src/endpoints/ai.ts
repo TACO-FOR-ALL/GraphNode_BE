@@ -89,7 +89,7 @@ export interface ChatExportStatusResponseDto {
  *
    * 주요 기능:
    * - AI 채팅 메시지 전송 및 응답 수신 (`chat`)
-   * - 채팅 내역 비동기 내보내기 및 다운로드 (`startChatExport`, `getChatExportStatus`, `downloadChatExport`)
+   * - 채팅 내역 비동기 내보내기·다운로드 (`startChatExport`, `getChatExportStatus`, `downloadChatExport`) — 완료 시 백엔드가 SMTP로 계정 메일에 JSON 첨부를 보낼 수 있음(서버 환경변수 설정 시, API 스키마 동일)
  *
  * @public
  */
@@ -481,7 +481,13 @@ export class AiApi {
 
   /**
    * 대화 채팅 내역(JSON) 비동기 내보내기 작업을 시작합니다.
-   * `GET /v1/ai/chat-exports/:jobId`로 상태를 폴링한 뒤 완료 시 다운로드하세요.
+   *
+   * @remarks
+   * 서버는 작업 완료 후 사용자 프로필 이메일로 내보내기 파일 첨부 메일 발송을 시도할 수 있습니다(SMTP 설정 시).
+   * 클라이언트는 `GET /v1/ai/chat-exports/:jobId`로 상태를 폴링한 뒤 완료 시 `downloadChatExport`로 Blob을 받습니다.
+   *
+   * @param conversationId - 내보낼 대화 ID
+   * @returns jobId·초기 status (`202` 성공 시 본문에 포함)
    */
   async startChatExport(
     conversationId: string
@@ -491,6 +497,9 @@ export class AiApi {
 
   /**
    * 채팅 내보내기 작업 상태를 조회합니다.
+   *
+   * @param jobId - `startChatExport` 응답의 작업 ID
+   * @remarks `status === 'DONE'`일 때 `downloadUrl` 또는 다운로드 API 사용 가능
    */
   async getChatExportStatus(
     jobId: string
@@ -500,6 +509,9 @@ export class AiApi {
 
   /**
    * 완료된 내보내기 JSON 파일을 Blob으로 받습니다.
+   *
+   * @param jobId - 내보내기 작업 ID
+   * @throws {Error} HTTP 비정상 응답 시 (`409` 등 미완료 상태)
    */
   async downloadChatExport(jobId: string): Promise<Blob> {
     const rb = this.rb.path(`/v1/ai/chat-exports/${jobId}/download`);

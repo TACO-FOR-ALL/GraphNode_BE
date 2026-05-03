@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
-import { loadEnv } from '../../src/config/env';
 import { ChatExportService } from '../../src/core/services/ChatExportService';
 import { ChatManagementService } from '../../src/core/services/ChatManagementService';
 import { ChatExportRepository } from '../../src/core/ports/ChatExportRepository';
@@ -8,10 +7,9 @@ import { StoragePort } from '../../src/core/ports/StoragePort';
 import { EmailPort } from '../../src/core/ports/EmailPort';
 import { UserService } from '../../src/core/services/UserService';
 import { ChatExportJobDoc } from '../../src/core/types/persistence/chat_export.persistence';
-import { SmtpEmailAdapter } from '../../src/infra/email/SmtpEmailAdapter';
 import { ConflictError } from '../../src/shared/errors/domain';
 
-/** 테스트용 수신 QQ 메일 (ChatExportService mock 프로필 + opt-in 실제 SMTP 테스트) */
+/** Mock 사용자 프로필 이메일(내보내기 메일 `to` 검증용) */
 const TEST_EXPORT_RECIPIENT_EMAIL = 'Test@example.com';
 
 function flushPromises() {
@@ -153,45 +151,4 @@ describe('ChatExportService', () => {
 
     await expect(service.downloadExportFile('user-1', started.jobId)).rejects.toThrow(ConflictError);
   });
-});
-
-/**
- * 실제 메일 발송(opt-in): `RUN_LIVE_SMTP_TEST=1 npm test -- tests/unit/ChatExportService.spec.ts`
- * 전제: `.env`의 `CHAT_EXPORT_SMTP_USER` / `CHAT_EXPORT_SMTP_PASS`(Gmail은 앱 비밀번호).
- * 보안: 로그·스크린샷에 .env 또는 실패 원문 전체를 올리지 말 것. PASS/FAIL만 공유하면 됨.
- */
-describe('SmtpEmailAdapter live SMTP (opt-in)', () => {
-  const liveIt = process.env.RUN_LIVE_SMTP_TEST === '1' ? it : it.skip;
-
-  liveIt(
-    'sends a smoke email with JSON attachment to yuc010100@qq.com',
-    async () => {
-      const env = loadEnv();
-      const user = env.CHAT_EXPORT_SMTP_USER?.trim();
-      const pass = env.CHAT_EXPORT_SMTP_PASS?.trim();
-      if (!user || !pass) {
-        throw new Error(
-          'Set CHAT_EXPORT_SMTP_USER and CHAT_EXPORT_SMTP_PASS (e.g. in .env) to run live SMTP.'
-        );
-      }
-
-      const adapter = new SmtpEmailAdapter();
-      await adapter.sendEmailWithAttachment({
-        to: TEST_EXPORT_RECIPIENT_EMAIL,
-        subject: '[GraphNode] Chat export SMTP smoke test',
-        text: 'Automated smoke from GraphNode_BE (RUN_LIVE_SMTP_TEST=1).',
-        attachmentFilename: 'smoke-chat-export.json',
-        attachmentContentType: 'application/json; charset=utf-8',
-        attachmentBuffer: Buffer.from(
-          JSON.stringify(
-            { test: true, sentAt: new Date().toISOString(), recipient: TEST_EXPORT_RECIPIENT_EMAIL },
-            null,
-            2
-          ),
-          'utf-8'
-        ),
-      });
-    },
-    30_000
-  );
 });

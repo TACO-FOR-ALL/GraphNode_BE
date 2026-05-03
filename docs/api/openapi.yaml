@@ -961,8 +961,8 @@ paths:
       summary: Request asynchronous chat transcript export
       description: >-
         Creates a background job that serializes the conversation and messages to JSON, uploads to storage,
-        and best-effort emails the authenticated user's account email when SMTP is configured
-        (`CHAT_EXPORT_SMTP_USER`, `CHAT_EXPORT_SMTP_PASS`; optional `CHAT_EXPORT_EMAIL_FROM` for From header).
+        and best-effort emails the export JSON to the authenticated user's profile email when SMTP is configured
+        (`CHAT_EXPORT_SMTP_USER`, `CHAT_EXPORT_SMTP_PASS`; optional `CHAT_EXPORT_EMAIL_FROM` for the From header).
         Poll `GET /v1/ai/chat-exports/{jobId}` then download via `GET /v1/ai/chat-exports/{jobId}/download` when status is DONE.
       parameters:
         - in: path

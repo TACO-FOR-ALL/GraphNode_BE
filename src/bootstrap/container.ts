@@ -54,8 +54,8 @@ import { NotificationRepository } from '../core/ports/NotificationRepository';
 import { ChatExportRepository } from '../core/ports/ChatExportRepository';
 import { FeedbackRepository } from '../core/ports/FeedbackRepository';
 // Infra Adapters
-import { AwsSqsAdapter } from '../infra/aws/AwsSqsAdapter';
 import { AwsS3Adapter } from '../infra/aws/AwsS3Adapter';
+import { AwsSqsAdapter } from '../infra/aws/AwsSqsAdapter';
 import { SmtpEmailAdapter } from '../infra/email/SmtpEmailAdapter';
 import { RedisEventBusAdapter } from '../infra/redis/RedisEventBusAdapter';
 import { FeedbackRepositoryPrisma } from '../infra/repositories/FeedbackRepositoryPrisma';

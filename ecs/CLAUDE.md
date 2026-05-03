@@ -61,7 +61,7 @@ HTTP 포트 없음 — 외부 트래픽을 받지 않고 큐 메시지만 소비
 | 수정 내용 | 해야 할 일 |
 |---|---|
 | 환경변수 추가 | Infisical/Secrets Manager에 먼저 등록 후 `valueFrom` 추가 |
-| 채팅 내보내기 SMTP | 시크릿 `taco5/graphnode/mvp` JSON에 `CHAT_EXPORT_SMTP_USER`, `CHAT_EXPORT_SMTP_PASS`, `CHAT_EXPORT_EMAIL_FROM`(발신 주소; From을 SMTP와 같게 쓰면 동일 값) 키 추가 후 태스크 재등록 |
+| 채팅 내보내기 SMTP | 시크릿 JSON에 `CHAT_EXPORT_SMTP_USER`, `CHAT_EXPORT_SMTP_PASS`, 선택 `CHAT_EXPORT_EMAIL_FROM`. 태스크 재등록 |
 | 이미지 태그 변경 | `image` 필드 업데이트 후 AWS CLI로 태스크 재등록 |
 | CPU/Memory 변경 | 최상위 `cpu`·`memory` AND `containerDefinitions[].cpu`·`memory` 둘 다 수정 |
 | 포트 추가 | `portMappings` 배열에 추가 + 보안 그룹 인바운드 규칙도 업데이트 |

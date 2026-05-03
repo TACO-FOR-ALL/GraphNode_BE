@@ -6,14 +6,20 @@ import { logger } from '../../shared/utils/logger';
 import { UpstreamError, ValidationError } from '../../shared/errors/domain';
 
 /**
- * SMTP(nodemailer) 기반 메일 발송 어댑터 — Gmail 등 직접 SMTP 계정으로 첨부 메일을 보냅니다.
- * AWS SES를 사용하지 않습니다.
+ * nodemailer(SMTP)로 첨부 메일을 직접 발송하는 어댑터.
+ * AWS SES API를 거치지 않고, `CHAT_EXPORT_SMTP_USER` / `CHAT_EXPORT_SMTP_PASS`로 SMTP에 연결합니다.
  */
 export class SmtpEmailAdapter implements EmailPort {
   /**
    * @description 첨부파일이 있는 메일을 SMTP로 발송합니다.
-   * @throws {ValidationError} 수신 주소가 비었을 때
-   * @throws {UpstreamError} SMTP 전송 실패 시
+   * @param input.to 수신자 이메일. 빈 문자열이면 {@link ValidationError}.
+   * @param input.subject 제목(개행 제거).
+   * @param input.text 본문 plain text.
+   * @param input.attachmentFilename 첨부 파일명.
+   * @param input.attachmentContentType 첨부 MIME 타입.
+   * @param input.attachmentBuffer 첨부 바이너리.
+   * @throws {ValidationError} 수신 주소가 비었을 때.
+   * @throws {UpstreamError} SMTP 전송 실패 시.
    */
   async sendEmailWithAttachment(input: {
     to: string;
@@ -64,7 +70,6 @@ export class SmtpEmailAdapter implements EmailPort {
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      // 비밀번호·auth 응답은 로그에 남기지 않음 — 수신 주소만 상위 문맥용
       logger.error({ to: input.to, smtpErrorMessage: message }, 'Failed to send SMTP email');
       throw new UpstreamError('Failed to send email', { cause: err as Error });
     }

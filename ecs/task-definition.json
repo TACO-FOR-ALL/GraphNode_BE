@@ -178,8 +178,16 @@
           "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:CHAT_EXPORT_SMTP_PASS::"
         },
         {
-          "name": "CHAT_EXPORT_EMAIL_FROM",
-          "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:CHAT_EXPORT_EMAIL_FROM::"
+          "name": "CHAT_EXPORT_SMTP_SECURE",
+          "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:CHAT_EXPORT_SMTP_SECURE::"
+        },
+        {
+          "name": "CHAT_EXPORT_SMTP_HOST",
+          "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:CHAT_EXPORT_SMTP_HOST::"
+        },
+        {
+          "name": "CHAT_EXPORT_SMTP_PORT",
+          "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:CHAT_EXPORT_SMTP_PORT::"
         }
       ],
       "essential": true,

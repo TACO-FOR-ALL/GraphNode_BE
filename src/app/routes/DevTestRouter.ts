@@ -12,11 +12,12 @@
 
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import * as Sentry from '@sentry/node';
+import { v4 as uuidv4 } from 'uuid';
 
 import { notifyHttp500, notifyWorkerFailed } from '../../shared/utils/discord';
 import { UpstreamError, ValidationError, NotFoundError } from '../../shared/errors/domain';
-import { v4 as uuidv4 } from 'uuid';
 import { container } from '../../bootstrap/container';
+import { loadEnv } from '../../config/env';
 import { ApiKeyModel } from '../../shared/dtos/me';
 import type { ChatStreamRequestBody } from '../../agent/types';
 
@@ -40,6 +41,7 @@ router.use((_req: Request, res: Response, next: NextFunction) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.get('/ping', (_req: Request, res: Response) => {
+  const env = loadEnv();
   res.json({
     ok: true,
     env: {
@@ -48,8 +50,99 @@ router.get('/ping', (_req: Request, res: Response) => {
       DISCORD_WEBHOOK_URL_GRAPH: process.env.DISCORD_WEBHOOK_URL_GRAPH ? '✅ set' : '❌ not set',
       SENTRY_ORG_SLUG: process.env.SENTRY_ORG_SLUG ? '✅ set' : '❌ not set',
       SENTRY_DSN: process.env.SENTRY_DSN ? '✅ set' : '❌ not set',
+      CHAT_EXPORT_SMTP_USER: env.CHAT_EXPORT_SMTP_USER?.trim() ? '✅ set' : '❌ not set',
+      CHAT_EXPORT_SMTP_PASS: env.CHAT_EXPORT_SMTP_PASS?.trim() ? '✅ set' : '❌ not set',
     },
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /dev/test/chat-export-email-env
+// 채팅보내기 SMTP 관련 env가 주입됐는지 여부만 반환(비밀값 미포함).
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/chat-export-email-env', (_req: Request, res: Response) => {
+  const env = loadEnv();
+  res.json({
+    ok: true,
+    CHAT_EXPORT_SMTP_USER: env.CHAT_EXPORT_SMTP_USER?.trim() ? 'set' : 'missing',
+    CHAT_EXPORT_SMTP_PASS: env.CHAT_EXPORT_SMTP_PASS?.trim() ? 'set' : 'missing',
+    CHAT_EXPORT_EMAIL_FROM: env.CHAT_EXPORT_EMAIL_FROM?.trim() ? 'set' : 'optional_missing',
+    CHAT_EXPORT_SMTP_HOST: env.CHAT_EXPORT_SMTP_HOST,
+    CHAT_EXPORT_SMTP_PORT: env.CHAT_EXPORT_SMTP_PORT,
+    CHAT_EXPORT_SMTP_SECURE: env.CHAT_EXPORT_SMTP_SECURE ?? false,
+    nextSteps: [
+      'Full flow: log in → POST /v1/ai/conversations/{conversationId}/exports → GET /v1/ai/chat-exports/{jobId} until DONE; mail goes to profile email.',
+      'SMTP only: set TEST_LOGIN_SECRET, then POST /dev/test/email/chat-export-smtp-ping with header x-internal-token and body { "to": "your@email" }.',
+    ],
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /dev/test/email/chat-export-smtp-ping
+// nodemailer(SMTP)로 소형 첨부 테스트 메일 1통 발송 — 채팅보내기와 동일 어댑터.
+//
+// Headers: x-internal-token — must equal process.env.TEST_LOGIN_SECRET (min 16 chars).
+// Body: { "to": "recipient@example.com" } (required).
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/email/chat-export-smtp-ping', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const expectedSecret = process.env.TEST_LOGIN_SECRET?.trim();
+    const providedSecret = req.header('x-internal-token')?.trim();
+    if (!expectedSecret || expectedSecret.length < 16) {
+      res.status(403).json({
+        ok: false,
+        message:
+          'Set TEST_LOGIN_SECRET (at least 16 characters) in .env or Infisical before using this endpoint.',
+      });
+      return;
+    }
+    if (!providedSecret || providedSecret !== expectedSecret) {
+      res.status(403).json({
+        ok: false,
+        message: 'Send header x-internal-token with the same value as TEST_LOGIN_SECRET.',
+      });
+      return;
+    }
+
+    const env = loadEnv();
+    if (!env.CHAT_EXPORT_SMTP_USER?.trim() || !env.CHAT_EXPORT_SMTP_PASS?.trim()) {
+      res.status(400).json({
+        ok: false,
+        reason: 'smtp_not_configured',
+        message: 'Set CHAT_EXPORT_SMTP_USER and CHAT_EXPORT_SMTP_PASS (e.g. Gmail app password).',
+      });
+      return;
+    }
+
+    const to = String(req.body?.to ?? '').trim();
+    if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      throw new ValidationError('Body field "to" must be a valid email address.');
+    }
+
+    const email = container.getEmailAdapter();
+    await email.sendEmailWithAttachment({
+      to,
+      subject: '[GraphNode DEV] SMTP ping (chat export path)',
+      text: [
+        'This is a development-only test message.',
+        'If you see this, CHAT_EXPORT_SMTP_* is configured and nodemailer can send mail.',
+        '',
+        'Next: POST /v1/ai/conversations/{conversationId}/exports while logged in (email uses your profile address).',
+      ].join('\n'),
+      attachmentFilename: 'smtp-ping.txt',
+      attachmentContentType: 'text/plain; charset=utf-8',
+      attachmentBuffer: Buffer.from('GraphNode SMTP ping OK\n', 'utf-8'),
+    });
+
+    res.json({
+      ok: true,
+      message: `Test email sent to ${to}. Check inbox and spam folder.`,
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

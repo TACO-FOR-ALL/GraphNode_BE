@@ -37,7 +37,7 @@ interface ExportPayload {
 /**
  * 채팅 내보내기 유스케이스.
  * - 대화·메시지를 JSON으로 직렬화하여 S3에 저장합니다.
- * - 완료 후 사용자 프로필 이메일로 첨부 발송을 시도합니다(선택·best-effort).
+ * - 완료 후 `EmailPort`(구현: SMTP)로 사용자 프로필 이메일에 JSON 첨부 발송을 시도합니다(환경 설정 시, best-effort).
  */
 export class ChatExportService {
   constructor(
