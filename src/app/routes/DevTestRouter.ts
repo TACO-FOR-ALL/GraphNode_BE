@@ -21,6 +21,12 @@ import { loadEnv } from '../../config/env';
 import { ApiKeyModel } from '../../shared/dtos/me';
 import type { ChatStreamRequestBody } from '../../agent/types';
 
+/**
+ * 환경은 **항상 `loadEnv()`(Zod `EnvSchema`)** 로만 접근합니다.
+ * Infisical·ECS 등이 미리 채워 둔 `process.env`를 그 이름으로 두 번 정의하지 않으며,
+ * 런타임 주입 순서 테스트(`resetEnvCacheForTests`)와 맞추려 모듈 상단 고정 스냅샷은 두지 않습니다.
+ */
+
 const router = Router();
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -45,11 +51,11 @@ router.get('/ping', (_req: Request, res: Response) => {
   res.json({
     ok: true,
     env: {
-      NODE_ENV: process.env.NODE_ENV,
-      DISCORD_WEBHOOK_URL_ERRORS: process.env.DISCORD_WEBHOOK_URL_ERRORS ? '✅ set' : '❌ not set',
-      DISCORD_WEBHOOK_URL_GRAPH: process.env.DISCORD_WEBHOOK_URL_GRAPH ? '✅ set' : '❌ not set',
-      SENTRY_ORG_SLUG: process.env.SENTRY_ORG_SLUG ? '✅ set' : '❌ not set',
-      SENTRY_DSN: process.env.SENTRY_DSN ? '✅ set' : '❌ not set',
+      NODE_ENV: env.NODE_ENV,
+      DISCORD_WEBHOOK_URL_ERRORS: env.DISCORD_WEBHOOK_URL_ERRORS?.trim() ? '✅ set' : '❌ not set',
+      DISCORD_WEBHOOK_URL_GRAPH: env.DISCORD_WEBHOOK_URL_GRAPH?.trim() ? '✅ set' : '❌ not set',
+      SENTRY_ORG_SLUG: env.SENTRY_ORG_SLUG?.trim() ? '✅ set' : '❌ not set',
+      SENTRY_DSN: env.SENTRY_DSN?.trim() ? '✅ set' : '❌ not set',
       CHAT_EXPORT_SMTP_USER: env.CHAT_EXPORT_SMTP_USER?.trim() ? '✅ set' : '❌ not set',
       CHAT_EXPORT_SMTP_PASS: env.CHAT_EXPORT_SMTP_PASS?.trim() ? '✅ set' : '❌ not set',
     },
@@ -82,13 +88,14 @@ router.get('/chat-export-email-env', (_req: Request, res: Response) => {
 // POST /dev/test/email/chat-export-smtp-ping
 // nodemailer(SMTP)로 소형 첨부 테스트 메일 1통 발송 — 채팅보내기와 동일 어댑터.
 //
-// Headers: x-internal-token — must equal process.env.TEST_LOGIN_SECRET (min 16 chars).
+// Headers: x-internal-token — `loadEnv().TEST_LOGIN_SECRET`과 동일(min 16 chars).
 // Body: { "to": "recipient@example.com" } (required).
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.post('/email/chat-export-smtp-ping', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const expectedSecret = process.env.TEST_LOGIN_SECRET?.trim();
+    const env = loadEnv();
+    const expectedSecret = env.TEST_LOGIN_SECRET?.trim();
     const providedSecret = req.header('x-internal-token')?.trim();
     if (!expectedSecret || expectedSecret.length < 16) {
       res.status(403).json({
@@ -106,7 +113,6 @@ router.post('/email/chat-export-smtp-ping', async (req: Request, res: Response, 
       return;
     }
 
-    const env = loadEnv();
     if (!env.CHAT_EXPORT_SMTP_USER?.trim() || !env.CHAT_EXPORT_SMTP_PASS?.trim()) {
       res.status(400).json({
         ok: false,
@@ -184,10 +190,11 @@ router.post('/discord/http500', async (req: Request, res: Response, next: NextFu
       sentryEventId: sentryEventId ? String(sentryEventId) : undefined,
     });
 
+    const env = loadEnv();
     res.json({
       ok: true,
       message: 'notifyHttp500 호출 완료. Discord 채널을 확인하세요.',
-      sentTo: process.env.DISCORD_WEBHOOK_URL_ERRORS
+      sentTo: env.DISCORD_WEBHOOK_URL_ERRORS?.trim()
         ? 'Discord'
         : '(no-op: DISCORD_WEBHOOK_URL_ERRORS 미설정)',
     });
@@ -228,10 +235,11 @@ router.post('/discord/worker-failed', async (req: Request, res: Response, next: 
       sentryEventId: sentryEventId ? String(sentryEventId) : undefined,
     });
 
+    const env = loadEnv();
     res.json({
       ok: true,
       message: 'notifyWorkerFailed 호출 완료. Discord 채널을 확인하세요.',
-      sentTo: process.env.DISCORD_WEBHOOK_URL_GRAPH
+      sentTo: env.DISCORD_WEBHOOK_URL_GRAPH?.trim()
         ? 'Discord'
         : '(no-op: DISCORD_WEBHOOK_URL_GRAPH 미설정)',
     });
