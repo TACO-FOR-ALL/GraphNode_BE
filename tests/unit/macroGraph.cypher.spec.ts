@@ -48,6 +48,17 @@ describe('macroGraph.cypher', () => {
       'getGraphSummary',
       'deleteGraph',
       'deleteGraphSummary',
+      'getMaxNodeId',
+      'findEdgeById',
+      'findSubclusterById',
+      'updateEdge',
+      'updateCluster',
+      'updateSubcluster',
+      'moveNodeToCluster',
+      'moveSubclusterToCluster',
+      'addNodeToSubcluster',
+      'removeNodeFromSubcluster',
+      'clusterHasNodes',
     ] as const;
 
     for (const key of requiredKeys) {
@@ -121,6 +132,40 @@ describe('macroGraph.cypher', () => {
 
     it('linkMaterializedMacroRelated: MACRO_RELATED 관계를 사용한다', () => {
       expect(MACRO_GRAPH_CYPHER.linkMaterializedMacroRelated).toMatch(/MACRO_RELATED/);
+    });
+
+    it('upsertRelations: 사용자 정의 relationType/relation/propertiesJson을 저장한다', () => {
+      const q = MACRO_GRAPH_CYPHER.upsertRelations;
+      expect(q).toMatch(/r\.relationType\s*=\s*row\.relationType/);
+      expect(q).toMatch(/r\.relation\s*=\s*row\.relation/);
+      expect(q).toMatch(/r\.propertiesJson\s*=\s*row\.propertiesJson/);
+    });
+
+    it('linkMaterializedMacroRelated: materialized edge에도 사용자 정의 관계 속성을 복제한다', () => {
+      const q = MACRO_GRAPH_CYPHER.linkMaterializedMacroRelated;
+      expect(q).toMatch(/r\.relationType\s*=\s*row\.relationType/);
+      expect(q).toMatch(/r\.relation\s*=\s*row\.relation/);
+      expect(q).toMatch(/r\.propertiesJson\s*=\s*row\.propertiesJson/);
+    });
+
+    it('updateEdge: MacroRelation과 MACRO_RELATED 관계를 같은 값으로 동기화한다', () => {
+      const q = MACRO_GRAPH_CYPHER.updateEdge;
+      expect(q).toMatch(/SET rel \+= \$props/);
+      expect(q).toMatch(/mr\.weight\s*=\s*rel\.weight/);
+      expect(q).toMatch(/mr\.relationType\s*=\s*rel\.relationType/);
+      expect(q).toMatch(/mr\.propertiesJson\s*=\s*rel\.propertiesJson/);
+    });
+
+    it('moveNodeToCluster: 기존 BELONGS_TO를 삭제한 뒤 새 cluster와 연결한다', () => {
+      const q = MACRO_GRAPH_CYPHER.moveNodeToCluster;
+      expect(q).toMatch(/DELETE oldRel/);
+      expect(q).toMatch(/MERGE \(n\)-\[:BELONGS_TO\]->\(newCluster\)/);
+    });
+
+    it('moveSubclusterToCluster: subcluster와 포함 node의 cluster 소속을 함께 이동한다', () => {
+      const q = MACRO_GRAPH_CYPHER.moveSubclusterToCluster;
+      expect(q).toMatch(/MERGE \(newCluster\)-\[:HAS_SUBCLUSTER\]->\(sc\)/);
+      expect(q).toMatch(/MERGE \(n\)-\[:BELONGS_TO\]->\(newCluster\)/);
     });
   });
 });

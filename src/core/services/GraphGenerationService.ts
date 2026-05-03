@@ -33,6 +33,8 @@ import { withRetry } from '../../shared/utils/retry';
 import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 import { redis } from '../../infra/redis/client';
 import { GraphClusterDto } from '../../shared/dtos/graph';
+import { ICreditService } from '../ports/ICreditService';
+import { CreditFeature } from '../types/persistence/credit.persistence';
 
 /**
  * 모듈: GraphGenerationService
@@ -56,7 +58,8 @@ export class GraphGenerationService {
     private readonly userService: UserService,
     private readonly queuePort: QueuePort,
     private readonly storagePort: StoragePort,
-    private readonly notificationService: NotificationService
+    private readonly notificationService: NotificationService,
+    private readonly creditService?: ICreditService
   ) {
     const env = loadEnv();
     // FIXME TODO : HTTP Client 사용하지 않고 SQS로만 통신하도록 변경 예정
@@ -82,6 +85,8 @@ export class GraphGenerationService {
     }
   ): Promise<string | null> {
     let taskId: string | undefined;
+    let creditHeldTaskId: string | undefined;
+    let messageSent = false;
     try {
       // 0. 데이터 존재 여부 확인
       const convs = await withRetry(
@@ -101,6 +106,10 @@ export class GraphGenerationService {
 
       taskId = `task_${userId}_${ulid()}`;
       const s3Key = `graph-generation/${taskId}/input.json`;
+
+      // 선제적 크레딧 차감 (Hold)
+      await this.holdCredit(userId, CreditFeature.GRAPH_GENERATION, taskId);
+      creditHeldTaskId = taskId;
 
       // 상태 변경: CREATING
       await withRetry(
@@ -156,6 +165,7 @@ export class GraphGenerationService {
       await withRetry(async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
         label: 'QueuePort.sendMessage.GraphGen',
       });
+      messageSent = true;
 
       // PostHog 분석용 시작 이벤트(A) 기록 및 시작 시각 캐싱
       await this.trackGraphGenerationRequested(userId, taskId, messageBody.timestamp);
@@ -165,7 +175,13 @@ export class GraphGenerationService {
 
       return taskId;
     } catch (err) {
+      // queue 전송 실패 시 차감된 크레딧 롤백
+      if (creditHeldTaskId && !messageSent) {
+        await this.rollbackCreditHold(creditHeldTaskId, 'graph generation enqueue failed');
+      }
+
       logger.error({ err, userId }, 'Failed to enqueue graph generation request');
+
       // 실패 알림 전송
       await this.notificationService.sendGraphGenerationRequestFailed(
         userId,
@@ -369,14 +385,44 @@ export class GraphGenerationService {
   }
 
   /**
+   * 크레딧 차감 (Hold)
+   * @param userId 사용자 ID
+   * @param feature 기능
+   * @param taskId 작업 ID
+   */
+  private async holdCredit(userId: string, feature: CreditFeature, taskId: string): Promise<void> {
+    if (!this.creditService) return;
+    await this.creditService.hold(userId, feature, taskId);
+  }
+
+  /**
+   * 크레딧 차감 (Rollback)
+   * @param taskId 작업 ID
+   * @param reason 사유
+   */
+  private async rollbackCreditHold(taskId: string, reason: string): Promise<void> {
+    if (!this.creditService) return;
+
+    try {
+      await this.creditService.rollbackByTaskId(taskId);
+    } catch (err) {
+      logger.error({ err, taskId, reason }, 'Failed to rollback credit hold after queue failure');
+    }
+  }
+
+  /**
    * SQS 기반 노드 추가 요청 (AddNode)
    *
    * @param userId 사용자 ID
    * @returns Task ID 또는 추가할 내용이 없는 경우 null
    */
   async requestAddNodeViaQueue(userId: string): Promise<string | null> {
+    let taskId = 'unknown';
+    let creditHeldTaskId: string | undefined;
+    let messageSent = false;
+
     try {
-      const taskId = `task_add_node_${userId}_${ulid()}`;
+      taskId = `task_add_node_${userId}_${ulid()}`;
       const s3Key = `add-node/${taskId}/batch.json`;
 
       const stats = await withRetry(async () => await this.graphEmbeddingService.getStats(userId), {
@@ -422,6 +468,10 @@ export class GraphGenerationService {
       if (updatedConversations.length === 0 && updatedNotes.length === 0) {
         return null;
       }
+
+      // 선제적 크레딧 차감 (Hold)
+      await this.holdCredit(userId, CreditFeature.ADD_NODE, taskId);
+      creditHeldTaskId = taskId;
 
       // AI 입력 포맷 변환
       const mappedConversations: AiInputConversation[] = updatedConversations.map((conv) => {
@@ -507,21 +557,23 @@ export class GraphGenerationService {
       await withRetry(async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
         label: 'QueuePort.sendMessage.AddNode',
       });
+      messageSent = true;
 
       // 성공 알림 전송
       await this.notificationService.sendAddConversationRequested(userId, taskId);
 
       return taskId;
     } catch (err) {
+      // queue 전송 실패 시 차감된 크레딧 롤백
+      if (creditHeldTaskId && !messageSent) {
+        await this.rollbackCreditHold(creditHeldTaskId, 'add-node enqueue failed');
+      }
+
       logger.error({ err, userId }, 'Failed to queue add node request');
 
       // 실패 알림 전송 (taskId가 try 블록 내부에 정의되어 있으므로 에러 객체에 taskId를 담아두거나 스코프를 조정해야 함)
       // 여기서는 스코프 문제로 'unknown' 처리하거나 상단으로 taskId 정의를 뺌
-      await this.notificationService.sendAddConversationRequestFailed(
-        userId,
-        'unknown',
-        String(err)
-      );
+      await this.notificationService.sendAddConversationRequestFailed(userId, taskId, String(err));
 
       if (err instanceof AppError) throw err;
       throw new UpstreamError('Failed to request add node via queue', { cause: String(err) });

@@ -1,3 +1,5 @@
+import type { GraphSourceType } from './graph.source-types';
+
 /**
  * AI 모듈에서
  */
@@ -161,7 +163,7 @@ export interface AiInputSourceNode {
   /** 구성 섹션 리스트 */
   sections: AiInputSection[];
   /** 소스 유형 */
-  source_type: 'chat' | 'markdown' | 'notion';
+  source_type: GraphSourceType;
   /** 생성 시간 (Unix Timestamp, seconds) */
   create_time?: number;
   /** 수정 시간 (Unix Timestamp, seconds) */

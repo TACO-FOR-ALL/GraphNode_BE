@@ -1,0 +1,97 @@
+{
+  "$id": "https://graphnode.dev/schemas/graph-editor-responses.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Graph Editor Response Schemas",
+  "description": "Response schemas for direct macro graph editor endpoints.",
+  "$defs": {
+    "CreateNodeEditorResponseDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodeId", "node"],
+      "properties": {
+        "nodeId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "node": {
+          "$ref": "graph-node.json"
+        }
+      }
+    },
+    "CreateEdgeEditorResponseDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["edgeId", "edge"],
+      "properties": {
+        "edgeId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "edge": {
+          "$ref": "graph-edge.json"
+        }
+      }
+    },
+    "CreateClusterEditorResponseDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cluster"],
+      "properties": {
+        "cluster": {
+          "$ref": "graph-cluster.json"
+        }
+      }
+    },
+    "CreateSubclusterEditorResponseDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subcluster"],
+      "properties": {
+        "subcluster": {
+          "$ref": "graph-subcluster.json"
+        }
+      }
+    },
+    "BatchOperationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operationIndex", "success"],
+      "properties": {
+        "operationIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "success": {
+          "type": "boolean"
+        },
+        "data": {
+          "description": "Operation result data. Create operations return their corresponding create response; update/delete/move operations usually return no data."
+        },
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "BatchEditorResponseDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["success", "results", "processedCount"],
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "description": "True only when all submitted operations completed successfully."
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BatchOperationResult"
+          }
+        },
+        "processedCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

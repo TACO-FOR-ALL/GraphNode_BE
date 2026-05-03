@@ -11,12 +11,19 @@
  * 2. Doc -> DTO (조회 시): DB 데이터를 클라이언트 응답 포맷으로 변환
  */
 
-import type { GraphClusterDto, GraphEdgeDto, GraphNodeDto, GraphStatsDto } from '../dtos/graph';
+import type {
+  GraphClusterDto,
+  GraphEdgeDto,
+  GraphNodeDto,
+  GraphStatsDto,
+  GraphSubclusterDto,
+} from '../dtos/graph';
 import type {
   GraphClusterDoc,
   GraphEdgeDoc,
   GraphNodeDoc,
   GraphStatsDoc,
+  GraphSubclusterDoc,
 } from '../../core/types/persistence/graph.persistence';
 
 // --- Node Mappers (노드 변환) ---
@@ -35,6 +42,9 @@ export function toGraphNodeDoc(dto: GraphNodeDto): GraphNodeDoc {
   return {
     id: id,
     userId: dto.userId,
+    label: dto.label,
+    summary: dto.summary,
+    metadata: dto.metadata,
     origId: dto.origId,
     clusterId: dto.clusterId,
     clusterName: dto.clusterName,
@@ -58,6 +68,9 @@ export function toGraphNodeDto(doc: GraphNodeDoc): GraphNodeDto {
   return {
     id: doc.id,
     userId: doc.userId,
+    label: doc.label,
+    summary: doc.summary,
+    metadata: doc.metadata,
     origId: doc.origId,
     clusterId: doc.clusterId,
     clusterName: doc.clusterName,
@@ -95,6 +108,9 @@ export function toGraphEdgeDoc(dto: GraphEdgeDto): GraphEdgeDoc {
     target: target,
     weight: dto.weight,
     type: dto.type,
+    relationType: dto.relationType,
+    relation: dto.relation,
+    properties: dto.properties,
     intraCluster: dto.intraCluster,
     // Timestamp placeholder — actual values are always overridden by the repository layer.
     createdAt: dto.createdAt ?? '',
@@ -116,6 +132,9 @@ export function toGraphEdgeDto(doc: GraphEdgeDoc): GraphEdgeDto {
     target: doc.target,
     weight: doc.weight,
     type: doc.type,
+    relationType: doc.relationType,
+    relation: doc.relation,
+    properties: doc.properties,
     intraCluster: doc.intraCluster,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
@@ -160,6 +179,52 @@ export function toGraphClusterDto(doc: GraphClusterDoc): GraphClusterDto {
     themes: doc.themes,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
+  };
+}
+
+// --- Subcluster Mappers ---
+
+/**
+ * GraphSubclusterDto를 GraphSubclusterDoc(DB 문서)으로 변환합니다.
+ *
+ * @param dto 서브클러스터 DTO
+ * @returns 저장 가능한 서브클러스터 문서
+ */
+export function toGraphSubclusterDoc(dto: GraphSubclusterDto): GraphSubclusterDoc {
+  return {
+    id: dto.id,
+    userId: dto.userId ?? '',
+    clusterId: dto.clusterId,
+    nodeIds: dto.nodeIds,
+    representativeNodeId: dto.representativeNodeId,
+    size: dto.size,
+    density: dto.density,
+    topKeywords: dto.topKeywords,
+    createdAt: dto.createdAt ?? '',
+    updatedAt: dto.updatedAt ?? '',
+    deletedAt: dto.deletedAt != null ? new Date(dto.deletedAt).getTime() : undefined,
+  };
+}
+
+/**
+ * GraphSubclusterDoc(DB 문서)을 GraphSubclusterDto로 변환합니다.
+ *
+ * @param doc 서브클러스터 문서
+ * @returns 클라이언트용 서브클러스터 DTO
+ */
+export function toGraphSubclusterDto(doc: GraphSubclusterDoc): GraphSubclusterDto {
+  return {
+    id: doc.id,
+    userId: doc.userId,
+    clusterId: doc.clusterId,
+    nodeIds: doc.nodeIds,
+    representativeNodeId: doc.representativeNodeId,
+    size: doc.size,
+    density: doc.density,
+    topKeywords: doc.topKeywords,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+    deletedAt: doc.deletedAt != null ? new Date(doc.deletedAt).toISOString() : undefined,
   };
 }
 

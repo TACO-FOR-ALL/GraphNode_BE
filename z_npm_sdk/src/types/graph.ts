@@ -1,3 +1,6 @@
+import type { GraphSourceType } from './sourceTypes.js';
+export { GRAPH_SOURCE_TYPES, type GraphSourceType } from './sourceTypes.js';
+
 /**
  * Graph API에 사용되는 타입 정의
  */
@@ -25,7 +28,7 @@ export interface GraphNodeDto {
   clusterName: string;
   timestamp: string | null;
   numMessages: number;
-  sourceType?: 'chat' | 'markdown' | 'notion';
+  sourceType?: GraphSourceType;
   createdAt?: string;
   updatedAt?: string;
   deletedAt?: string;
@@ -63,6 +66,9 @@ export interface GraphEdgeDto {
   target: number;
   weight: number;
   type: GraphEdgeType;
+  relationType?: string;
+  relation?: string;
+  properties?: Record<string, unknown>;
   intraCluster: boolean;
   createdAt?: string;
   updatedAt?: string;

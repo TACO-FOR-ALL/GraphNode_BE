@@ -34,6 +34,22 @@
       "type": "string",
       "enum": ["hard", "insight"]
     },
+    "relationType": {
+      "description": "User-facing relation type, normalized to UPPER_SNAKE_CASE by editor APIs.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "relation": {
+      "description": "Display label for the relation.",
+      "type": "string",
+      "maxLength": 200
+    },
+    "properties": {
+      "description": "Custom edge properties.",
+      "type": "object",
+      "additionalProperties": true
+    },
     "intraCluster": {
       "description": "Whether the edge connects nodes within the same cluster.",
       "type": "boolean"
@@ -45,6 +61,11 @@
     },
     "updatedAt": {
       "description": "Update timestamp (ISO 8601 UTC).",
+      "type": "string",
+      "format": "date-time"
+    },
+    "deletedAt": {
+      "description": "Soft-delete timestamp (ISO 8601 UTC).",
       "type": "string",
       "format": "date-time"
     }
