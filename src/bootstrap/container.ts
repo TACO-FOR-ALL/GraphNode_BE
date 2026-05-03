@@ -2,7 +2,6 @@ import { ConversationRepositoryMongo } from '../infra/repositories/ConversationR
 import { MessageRepositoryMongo } from '../infra/repositories/MessageRepositoryMongo';
 import { UserRepositoryMySQL } from '../infra/repositories/UserRepositoryMySQL';
 import { NoteRepositoryMongo } from '../infra/repositories/NoteRepositoryMongo';
-import { GraphRepositoryMongo } from '../infra/repositories/GraphRepositoryMongo';
 import { DailyUsageRepositoryPrisma } from '../infra/repositories/DailyUsageRepositoryPrisma';
 import { GraphVectorService } from '../core/services/GraphVectorService';
 import { ConversationService } from '../core/services/ConversationService';
@@ -21,6 +20,7 @@ import { AgentService } from '../core/services/AgentService';
 import { SearchService } from '../core/services/SearchService';
 import { FeedbackService } from '../core/services/FeedbackService';
 import { ChatExportService } from '../core/services/ChatExportService';
+import { GraphEditorService } from '../core/services/GraphEditorService';
 import { GoogleOAuthService } from '../core/services/GoogleOAuthService';
 import { AppleOAuthService } from '../core/services/AppleOAuthService';
 import { MicroscopeManagementService } from '../core/services/MicroscopeManagementService';
@@ -37,12 +37,10 @@ import { NotificationRepositoryMongo } from '../infra/repositories/NotificationR
 // DB / Infrastructure Adapters
 import { Neo4jGraphAdapter } from '../infra/graph/Neo4jGraphAdapter';
 import { Neo4jMacroGraphAdapter } from '../infra/graph/Neo4jMacroGraphAdapter';
-import { DualWriteGraphStoreProxy } from '../infra/graph/DualWriteGraphStoreProxy';
 import { ChromaVectorAdapter } from '../infra/vector/ChromaVectorAdapter';
 // import { QdrantClientAdapter } from '../infra/repositories/QdrantClientAdapter'; // Removed
 import { NoteRepository } from '../core/ports/NoteRepository';
 // Ports
-import { GraphDocumentStore } from '../core/ports/GraphDocumentStore';
 import { GraphNeo4jStore } from '../core/ports/GraphNeo4jStore';
 import { MacroGraphStore } from '../core/ports/MacroGraphStore';
 import { VectorStore } from '../core/ports/VectorStore';
@@ -61,6 +59,9 @@ import { RedisEventBusAdapter } from '../infra/redis/RedisEventBusAdapter';
 import { FeedbackRepositoryPrisma } from '../infra/repositories/FeedbackRepositoryPrisma';
 import { ChatExportRepositoryMongo } from '../infra/repositories/ChatExportRepositoryMongo';
 
+import { CreditRepositoryPrisma } from '../infra/repositories/CreditRepositoryPrisma';
+import { ICreditRepository } from '../core/ports/ICreditRepository';
+import { CreditService } from '../core/services/CreditService';
 /**
  * 애플리케이션의 의존성 주입(Dependency Injection)을 관리하는 싱글톤 컨테이너입니다.
  *
@@ -79,7 +80,6 @@ export class Container {
   private userRepo: UserRepository | null = null;
   private dailyUsageRepo: DailyUsageRepository | null = null;
   private noteRepo: NoteRepository | null = null;
-  private graphRepo: GraphDocumentStore | null = null; // DualWriteGraphStoreProxy or GraphRepositoryMongo
   private macroGraphStore: MacroGraphStore | null = null;
   private neo4jStore: GraphNeo4jStore | null = null;
   private vectorStore: VectorStore | null = null;
@@ -88,6 +88,7 @@ export class Container {
   private notificationRepo: NotificationRepository | null = null;
   private feedbackRepo: FeedbackRepository | null = null;
   private chatExportRepo: ChatExportRepository | null = null;
+  private creditRepo: ICreditRepository | null = null;
 
   // Infra Adapters
   private queueAdapter: QueuePort | null = null;
@@ -115,9 +116,10 @@ export class Container {
   private searchService: SearchService | null = null;
   private feedbackService: FeedbackService | null = null;
   private chatExportService: ChatExportService | null = null;
+  private graphEditorService: GraphEditorService | null = null;
+  private creditService: CreditService | null = null;
 
   private constructor() {}
-
   /**
    * Container의 싱글톤 인스턴스를 반환합니다.
    * 인스턴스가 없으면 새로 생성합니다.
@@ -144,7 +146,6 @@ export class Container {
   }
 
   // --- Infrastructure / DB ---
-
   /**
    * MacroGraphStore(Neo4jMacroGraphAdapter) 인스턴스를 반환합니다.
    * @returns MacroGraphStore 인스턴스
@@ -154,22 +155,6 @@ export class Container {
       this.macroGraphStore = new Neo4jMacroGraphAdapter();
     }
     return this.macroGraphStore;
-  }
-
-  getGraphDocumentStore(): GraphDocumentStore {
-    if (!this.graphRepo) {
-      const primaryStore = new GraphRepositoryMongo();
-      const env = loadEnv();
-      if (env.MACRO_GRAPH_DUAL_WRITE_ENABLED) {
-        this.graphRepo = new DualWriteGraphStoreProxy(primaryStore, this.getMacroGraphStore(), {
-          secondaryWritesEnabled: true,
-          shadowReadCompare: env.MACRO_GRAPH_SHADOW_COMPARE_ENABLED ?? false,
-        });
-      } else {
-        this.graphRepo = primaryStore;
-      }
-    }
-    return this.graphRepo;
   }
 
   getGraphNeo4jStore(): GraphNeo4jStore {
@@ -195,7 +180,6 @@ export class Container {
     }
     return this.graphVectorService;
   }
-
   /**
    * AwsS3Adapter 인스턴스를 반환합니다.
    * @returns AwsS3Adapter 인스턴스
@@ -207,7 +191,6 @@ export class Container {
     }
     return this.storageAdapter;
   }
-
   /**
    * SmtpEmailAdapter 인스턴스를 반환합니다.
    * @remarks `CHAT_EXPORT_SMTP_USER` / `CHAT_EXPORT_SMTP_PASS` 미설정 시 발송은 건너뜁니다.
@@ -233,7 +216,6 @@ export class Container {
   }
 
   // --- Repositories ---
-
   /**
    * ConversationRepository 인스턴스를 반환합니다.
    * @returns ConversationRepository 인스턴스
@@ -244,7 +226,6 @@ export class Container {
     }
     return this.conversationRepo;
   }
-
   /**
    * MessageRepository 인스턴스를 반환합니다.
    * @returns MessageRepository 인스턴스
@@ -255,7 +236,6 @@ export class Container {
     }
     return this.messageRepo;
   }
-
   /**
    * UserRepository 인스턴스를 반환합니다.
    * @returns UserRepository 인스턴스
@@ -266,7 +246,6 @@ export class Container {
     }
     return this.userRepo;
   }
-
   /**
    * DailyUsageRepository 인스턴스를 반환합니다.
    * @returns DailyUsageRepository 인스턴스
@@ -277,7 +256,6 @@ export class Container {
     }
     return this.dailyUsageRepo;
   }
-
   /**
    * NoteRepository 인스턴스를 반환합니다.
    * @returns NoteRepository 인스턴스
@@ -290,14 +268,12 @@ export class Container {
   }
 
   /**
-   * GraphDocumentStore(Repository) 인스턴스를 반환합니다.
-   * @returns GraphDocumentStore 인스턴스
+   * MacroGraphStore 인스턴스를 반환합니다.
+   * @returns MacroGraphStore 인스턴스
    */
-  getGraphRepository(): GraphDocumentStore {
-    return this.getGraphDocumentStore(); // Alias for backward compatibility if needed, or better rename it fully.
-    // Since we replaced usage in this file, we can just redirect.
+  getGraphRepository(): MacroGraphStore {
+    return this.getMacroGraphStore();
   }
-
   /**
    * MicroscopeWorkspaceRepositoryMongo 인스턴스를 반환합니다.
    */
@@ -307,7 +283,6 @@ export class Container {
     }
     return this.microscopeWorkspaceRepo;
   }
-
   /**
    * NotificationRepository(Mongo) 인스턴스를 반환합니다.
    */
@@ -333,7 +308,14 @@ export class Container {
   }
 
   // --- Services ---
+  getCreditRepository(): ICreditRepository {
+    if (!this.creditRepo) {
+      this.creditRepo = new CreditRepositoryPrisma();
+    }
+    return this.creditRepo;
+  }
 
+  // --- Services ---
   /**
    * ConversationService 인스턴스를 반환합니다.
    * @returns ConversationService 인스턴스
@@ -345,7 +327,6 @@ export class Container {
     }
     return this.conversationService;
   }
-
   /**
    * MessageService 인스턴스를 반환합니다.
    */
@@ -356,7 +337,6 @@ export class Container {
     }
     return this.messageService;
   }
-
   /**
    * ChatManagementService 인스턴스를 반환합니다.
    */
@@ -371,7 +351,6 @@ export class Container {
     }
     return this.chatManagementService;
   }
-
   /**
    * UserService 인스턴스를 반환합니다.
    */
@@ -382,7 +361,6 @@ export class Container {
     }
     return this.userService;
   }
-
   /**
    * DailyUsageService 인스턴스를 반환합니다.
    */
@@ -393,7 +371,6 @@ export class Container {
     }
     return this.dailyUsageService;
   }
-
   /**
    * NoteService 인스턴스를 반환합니다.
    */
@@ -404,18 +381,16 @@ export class Container {
     }
     return this.noteService;
   }
-
   /**
    * GraphManagementService 인스턴스를 반환합니다.
    */
   getGraphManagementService(): GraphManagementService {
     if (!this.graphManagementService) {
-      const raw = new GraphManagementService(this.getGraphDocumentStore());
+      const raw = new GraphManagementService(this.getMacroGraphStore());
       this.graphManagementService = createAuditProxy(raw, 'GraphManagementService');
     }
     return this.graphManagementService;
   }
-
   /**
    * GraphEmbeddingService 인스턴스를 반환합니다.
    */
@@ -432,7 +407,6 @@ export class Container {
     }
     return this.graphEmbeddingService;
   }
-
   /**
    * GraphGenerationService 인스턴스를 반환합니다.
    */
@@ -445,7 +419,8 @@ export class Container {
         this.getUserService(),
         this.getAwsSqsAdapter(),
         this.getAwsS3Adapter(),
-        this.getNotificationService()
+        this.getNotificationService(),
+        this.getCreditService()
       );
       this.graphGenerationService = createAuditProxy(raw, 'GraphGenerationService');
     }
@@ -479,7 +454,6 @@ export class Container {
     }
     return this.notificationService;
   }
-
   /**
    * AgentService 인스턴스를 반환합니다.
    */
@@ -495,13 +469,13 @@ export class Container {
           graphEmbeddingService: this.getGraphEmbeddingService(),
           graphVectorService: this.getGraphVectorService(),
           searchService: this.getSearchService(),
+          creditService: this.getCreditService(),
         }
       );
       this.agentService = createAuditProxy(raw, 'AgentService');
     }
     return this.agentService;
   }
-
   /**
    * AiInteractionService 인스턴스를 반환합니다.
    */
@@ -510,7 +484,8 @@ export class Container {
       const raw = new AiInteractionService(
         this.getChatManagementService(),
         this.getUserService(),
-        this.getAwsS3Adapter()
+        this.getAwsS3Adapter(),
+        this.getCreditService()
       );
       this.aiInteractionService = createAuditProxy(raw, 'AiInteractionService');
     }
@@ -546,7 +521,6 @@ export class Container {
     }
     return this.googleOAuthService;
   }
-
   /**
    * AppleOAuthService 인스턴스를 반환합니다.
    */
@@ -564,7 +538,6 @@ export class Container {
     }
     return this.appleOAuthService;
   }
-
   /**
    * MicroscopeManagementService 인스턴스를 반환합니다.
    */
@@ -578,13 +551,13 @@ export class Container {
         this.getConversationRepository(),
         this.getNoteRepository(),
         this.getNotificationService(),
-        this.getUserService()
+        this.getUserService(),
+        this.getCreditService()
       );
       this.microscopeManagementService = createAuditProxy(raw, 'MicroscopeManagementService');
     }
     return this.microscopeManagementService;
   }
-
   /**
    * SearchService 인스턴스를 반환합니다.
    */
@@ -608,6 +581,26 @@ export class Container {
       this.feedbackService = createAuditProxy(raw, 'FeedbackService');
     }
     return this.feedbackService;
+  }
+
+  getCreditService(): CreditService {
+    if (!this.creditService) {
+      const raw = new CreditService(this.getCreditRepository());
+      this.creditService = createAuditProxy(raw, 'CreditService');
+    }
+    return this.creditService;
+  }
+
+  /**
+   * GraphEditorService 인스턴스를 반환합니다.
+   * 작성일: 2026-05-01
+   */
+  getGraphEditorService(): GraphEditorService {
+    if (!this.graphEditorService) {
+      const raw = new GraphEditorService(this.getMacroGraphStore());
+      this.graphEditorService = createAuditProxy(raw, 'GraphEditorService');
+    }
+    return this.graphEditorService;
   }
 }
 

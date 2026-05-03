@@ -24,7 +24,7 @@ import { createApp } from '../../src/bootstrap/server';
 import { generateAccessToken } from '../../src/app/utils/jwt';
 
 // --- Mocks ---
-jest.mock('../../src/infra/repositories/GraphRepositoryMongo');
+jest.mock('../../src/infra/graph/Neo4jMacroGraphAdapter');
 jest.mock('../../src/infra/aws/AwsSqsAdapter');
 jest.mock('../../src/infra/aws/AwsS3Adapter');
 jest.mock('../../src/infra/repositories/ConversationRepositoryMongo');

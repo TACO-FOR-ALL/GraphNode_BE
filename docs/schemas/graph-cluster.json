@@ -23,7 +23,7 @@
     "description": {
       "description": "A description of the cluster.",
       "type": "string",
-      "minLength": 1
+      "maxLength": 2000
     },
     "size": {
       "description": "The number of nodes in the cluster.",
@@ -31,13 +31,14 @@
       "minimum": 0
     },
     "themes": {
-      "description": "Core themes of the cluster (up to 3).",
+      "description": "Core themes of the cluster.",
       "type": "array",
       "items": {
         "type": "string",
-        "minLength": 1
+        "minLength": 1,
+        "maxLength": 100
       },
-      "maxItems": 3
+      "maxItems": 10
     },
     "createdAt": {
       "description": "Creation timestamp (ISO 8601 UTC).",
@@ -46,6 +47,11 @@
     },
     "updatedAt": {
       "description": "Update timestamp (ISO 8601 UTC).",
+      "type": "string",
+      "format": "date-time"
+    },
+    "deletedAt": {
+      "description": "Soft-delete timestamp (ISO 8601 UTC).",
       "type": "string",
       "format": "date-time"
     }

@@ -5,8 +5,198 @@ info:
   description: >-
     Backend API for GraphNode. Errors follow RFC 9457 Problem Details.
 jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+tags:
+  - name: Graph Editor
+    description: Direct macro graph editing endpoints for nodes, edges, clusters, subclusters, and best-effort batch operations.
 paths:
+  /v1/me:
+    get:
+      summary: 현재 로그인 사용자 정보 조회
+      description: >-
+        현재 세션의 사용자 프로필 및 크레딧 잔액(JIT 갱신 후)을 반환합니다.
+        `credit` 필드는 항상 포함됩니다.
+      tags: [Me]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [userId]
+                properties:
+                  userId:
+                    type: string
+                    description: 사용자 ID
+                  profile:
+                    type: object
+                    description: 사용자 프로필 정보
+                  credit:
+                    type: object
+                    description: 크레딧 잔액 정보 (JIT 갱신 후)
+                    required: [balance, holdAmount, availableBalance, planType, cycleStart, cycleEnd]
+                    properties:
+                      balance:
+                        type: number
+                      holdAmount:
+                        type: number
+                      availableBalance:
+                        type: number
+                      planType:
+                        type: string
+                        enum: [FREE, PRO, ENTERPRISE]
+                      cycleStart:
+                        type: string
+                        format: date-time
+                      cycleEnd:
+                        type: string
+                        format: date-time
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '502':
+          description: Bad Gateway
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+
+  /v1/me/credits:
+    get:
+      summary: 크레딧 잔액 상세 조회
+      description: >-
+        현재 사용자의 크레딧 잔액을 조회합니다.
+        구독 주기가 만료된 경우 JIT(Just-In-Time) 갱신이 자동으로 실행됩니다.
+      tags: [Me]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [balance, holdAmount, availableBalance, planType, cycleStart, cycleEnd]
+                properties:
+                  balance:
+                    type: number
+                    description: 현재 보유 크레딧 (총량)
+                  holdAmount:
+                    type: number
+                    description: 에스크로 중인 크레딧 (비동기 작업 진행 중)
+                  availableBalance:
+                    type: number
+                    description: 실제 사용 가능한 크레딧 (balance - holdAmount)
+                  planType:
+                    type: string
+                    enum: [FREE, PRO, ENTERPRISE]
+                    description: 구독 플랜
+                  cycleStart:
+                    type: string
+                    format: date-time
+                    description: 현재 청구 주기 시작 일시
+                  cycleEnd:
+                    type: string
+                    format: date-time
+                    description: 현재 청구 주기 종료 일시
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '503':
+          description: Service Unavailable — 크레딧 서비스 미초기화
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+
+  /v1/me/credits/usage:
+    get:
+      summary: 크레딧 사용 내역 조회
+      description: >-
+        현재 사용자의 크레딧 사용 내역을 최신순으로 페이지네이션 조회합니다.
+      tags: [Me]
+      parameters:
+        - name: limit
+          in: query
+          description: 한 번에 가져올 항목 수 (기본 20, 최대 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          description: 건너뛸 항목 수 (기본 0)
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, feature, creditUsed, status, taskId, createdAt]
+                      properties:
+                        id:
+                          type: string
+                          description: UsageLog ID
+                        feature:
+                          type: string
+                          enum: [AI_CHAT, GRAPH_GENERATION, ADD_NODE, MICROSCOPE_INGEST]
+                          description: 사용된 기능
+                        creditUsed:
+                          type: number
+                          description: 사용한 크레딧 수
+                        status:
+                          type: string
+                          enum: [SUCCESS, FAILED]
+                          description: 결과 상태
+                        taskId:
+                          type: string
+                          nullable: true
+                          description: 비동기 작업 ID (동기 작업이면 null)
+                        createdAt:
+                          type: string
+                          format: date-time
+                          description: 사용 일시
+                  total:
+                    type: integer
+                    description: 전체 항목 수
+        '400':
+          description: Bad Request — limit/offset 파라미터 유효성 오류
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '503':
+          description: Service Unavailable — 크레딧 서비스 미초기화
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+
   /v1/search:
+
     get:
       summary: Integrated keyword search across notes and AI chats
       tags: [Search]
@@ -2164,6 +2354,806 @@ paths:
             application/problem+json:
               schema:
                 $ref: ../schemas/problem.json
+  /v1/graph/editor/nodes:
+    post:
+      summary: Create a graph editor node
+      operationId: createGraphEditorNode
+      tags: [Graph Editor]
+      description: >
+        Creates a user-owned macro graph node and links it to an existing cluster.
+        The server assigns the numeric node ID and stores editor-created nodes with
+        an `origId` using the `editor:{userId}:{nodeId}` pattern.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/graph-editor-requests.json#/$defs/CreateNodeEditorDto
+      responses:
+        '201':
+          description: Node created.
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/graph-editor-responses.json#/$defs/CreateNodeEditorResponseDto
+        '400':
+          description: Invalid request body.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '404':
+          description: Cluster not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '502':
+          description: Graph backend error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/editor/nodes/{nodeId}:
+    patch:
+      summary: Update a graph editor node
+      operationId: updateGraphEditorNode
+      tags: [Graph Editor]
+      description: Updates mutable node fields. Use the move-cluster endpoint to change cluster membership.
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/graph-editor-requests.json#/$defs/UpdateNodeEditorDto
+      responses:
+        '204':
+          description: Node updated.
+        '400':
+          description: Invalid request body or node ID.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '404':
+          description: Node not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '502':
+          description: Graph backend error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+    delete:
+      summary: Delete a graph editor node
+      operationId: deleteGraphEditorNode
+      tags: [Graph Editor]
+      description: Soft-deletes the node by default. Set `permanent=true` for hard delete.
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - name: permanent
+          in: query
+          required: false
+          description: If true, hard-deletes the node and related materialized graph links.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '204':
+          description: Node deleted.
+        '400':
+          description: Invalid node ID.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '404':
+          description: Node not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '502':
+          description: Graph backend error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/editor/nodes/{nodeId}/move-cluster:
+    post:
+      summary: Move a node to another cluster
+      operationId: moveGraphEditorNodeToCluster
+      tags: [Graph Editor]
+      description: >
+        Moves a node to the target cluster. If the node belonged to subclusters in
+        a different cluster, those subcluster memberships are removed.
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/graph-editor-requests.json#/$defs/MoveNodeToClusterDto
+      responses:
+        '204':
+          description: Node moved.
+        '400':
+          description: Invalid request body or node ID.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '404':
+          description: Node or target cluster not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '502':
+          description: Graph backend error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/editor/edges:
+    post:
+      summary: Create a graph editor edge
+      operationId: createGraphEditorEdge
+      tags: [Graph Editor]
+      description: >
+        Creates an insight edge between two existing nodes. `relationType` is
+        normalized to UPPER_SNAKE_CASE by the backend.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/graph-editor-requests.json#/$defs/CreateEdgeEditorDto
+      responses:
+        '201':
+          description: Edge created.
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/graph-editor-responses.json#/$defs/CreateEdgeEditorResponseDto
+        '400':
+          description: Invalid request body.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '404':
+          description: Source or target node not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '502':
+          description: Graph backend error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/editor/edges/{edgeId}:
+    patch:
+      summary: Update a graph editor edge
+      operationId: updateGraphEditorEdge
+      tags: [Graph Editor]
+      description: Updates edge weight, relation labels, or custom properties.
+      parameters:
+        - name: edgeId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/graph-editor-requests.json#/$defs/UpdateEdgeEditorDto
+      responses:
+        '204':
+          description: Edge updated.
+        '400':
+          description: Invalid request body or edge ID.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '404':
+          description: Edge not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '502':
+          description: Graph backend error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+    delete:
+      summary: Delete a graph editor edge
+      operationId: deleteGraphEditorEdge
+      tags: [Graph Editor]
+      description: Soft-deletes the edge by default. Set `permanent=true` for hard delete.
+      parameters:
+        - name: edgeId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - name: permanent
+          in: query
+          required: false
+          description: If true, hard-deletes the edge and materialized graph links.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '204':
+          description: Edge deleted.
+        '400':
+          description: Invalid edge ID.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '404':
+          description: Edge not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '502':
+          description: Graph backend error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/editor/clusters:
+    post:
+      summary: Create a graph editor cluster
+      operationId: createGraphEditorCluster
+      tags: [Graph Editor]
+      description: Creates an empty cluster. If `id` is omitted, the backend generates a UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/graph-editor-requests.json#/$defs/CreateClusterEditorDto
+      responses:
+        '201':
+          description: Cluster created.
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/graph-editor-responses.json#/$defs/CreateClusterEditorResponseDto
+        '400':
+          description: Invalid request body.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '409':
+          description: Cluster ID already exists.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '502':
+          description: Graph backend error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/editor/clusters/{clusterId}:
+    patch:
+      summary: Update a graph editor cluster
+      operationId: updateGraphEditorCluster
+      tags: [Graph Editor]
+      description: Updates cluster display fields. Cluster IDs are immutable.
+      parameters:
+        - name: clusterId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/graph-editor-requests.json#/$defs/UpdateClusterEditorDto
+      responses:
+        '204':
+          description: Cluster updated.
+        '400':
+          description: Invalid request body or cluster ID.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '404':
+          description: Cluster not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '502':
+          description: Graph backend error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+    delete:
+      summary: Delete a graph editor cluster
+      operationId: deleteGraphEditorCluster
+      tags: [Graph Editor]
+      description: >
+        Deletes a cluster. By default, deletion is rejected when the cluster has
+        active nodes. Set `cascade=true` to delete contained nodes and related
+        edges first. Set `permanent=true` for hard delete.
+      parameters:
+        - name: clusterId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - name: cascade
+          in: query
+          required: false
+          description: If true, deletes contained nodes and related edges before deleting the cluster.
+          schema:
+            type: boolean
+            default: false
+        - name: permanent
+          in: query
+          required: false
+          description: If true, performs hard delete for the cluster and any cascaded graph data.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '204':
+          description: Cluster deleted.
+        '400':
+          description: Invalid cluster ID.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '404':
+          description: Cluster not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '409':
+          description: Cluster has active nodes and `cascade=true` was not provided.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '502':
+          description: Graph backend error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/editor/subclusters:
+    post:
+      summary: Create a graph editor subcluster
+      operationId: createGraphEditorSubcluster
+      tags: [Graph Editor]
+      description: Creates an empty subcluster under an existing cluster.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/graph-editor-requests.json#/$defs/CreateSubclusterEditorDto
+      responses:
+        '201':
+          description: Subcluster created.
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/graph-editor-responses.json#/$defs/CreateSubclusterEditorResponseDto
+        '400':
+          description: Invalid request body.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '404':
+          description: Parent cluster not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '409':
+          description: Subcluster ID already exists.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '502':
+          description: Graph backend error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/editor/subclusters/{subclusterId}:
+    patch:
+      summary: Update a graph editor subcluster
+      operationId: updateGraphEditorSubcluster
+      tags: [Graph Editor]
+      description: Updates subcluster keywords or density.
+      parameters:
+        - name: subclusterId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/graph-editor-requests.json#/$defs/UpdateSubclusterEditorDto
+      responses:
+        '204':
+          description: Subcluster updated.
+        '400':
+          description: Invalid request body or subcluster ID.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '404':
+          description: Subcluster not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '502':
+          description: Graph backend error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+    delete:
+      summary: Delete a graph editor subcluster
+      operationId: deleteGraphEditorSubcluster
+      tags: [Graph Editor]
+      description: >
+        Deletes a subcluster. Nodes are not deleted; their cluster membership is preserved.
+        Set `permanent=true` for hard delete.
+      parameters:
+        - name: subclusterId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - name: permanent
+          in: query
+          required: false
+          description: If true, hard-deletes the subcluster.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '204':
+          description: Subcluster deleted.
+        '400':
+          description: Invalid subcluster ID.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '404':
+          description: Subcluster not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '502':
+          description: Graph backend error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/editor/subclusters/{subclusterId}/move-cluster:
+    post:
+      summary: Move a subcluster to another cluster
+      operationId: moveGraphEditorSubclusterToCluster
+      tags: [Graph Editor]
+      description: Moves a subcluster to the target cluster and moves contained nodes with it.
+      parameters:
+        - name: subclusterId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/graph-editor-requests.json#/$defs/MoveSubclusterToClusterDto
+      responses:
+        '204':
+          description: Subcluster moved.
+        '400':
+          description: Invalid request body or subcluster ID.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '404':
+          description: Subcluster or target cluster not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '502':
+          description: Graph backend error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/editor/subclusters/{subclusterId}/nodes:
+    post:
+      summary: Add a node to a subcluster
+      operationId: addGraphEditorNodeToSubcluster
+      tags: [Graph Editor]
+      description: Adds a node to a subcluster. The node and subcluster must belong to the same cluster.
+      parameters:
+        - name: subclusterId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/graph-editor-requests.json#/$defs/AddNodeToSubclusterDto
+      responses:
+        '204':
+          description: Node added to subcluster.
+        '400':
+          description: Invalid request body or cluster membership mismatch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '404':
+          description: Node or subcluster not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '502':
+          description: Graph backend error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/editor/subclusters/{subclusterId}/nodes/{nodeId}:
+    delete:
+      summary: Remove a node from a subcluster
+      operationId: removeGraphEditorNodeFromSubcluster
+      tags: [Graph Editor]
+      description: Removes the subcluster membership only. The node remains in its cluster.
+      parameters:
+        - name: subclusterId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '204':
+          description: Node removed from subcluster.
+        '400':
+          description: Invalid path parameter.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '404':
+          description: Subcluster not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '502':
+          description: Graph backend error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+  /v1/graph/editor/transactions:
+    post:
+      summary: Execute graph editor operations in sequence
+      operationId: executeGraphEditorBatch
+      tags: [Graph Editor]
+      description: >
+        Executes up to 100 graph editor operations sequentially. This endpoint is
+        not ACID: it does not wrap the full batch in one transaction and it does
+        not roll back operations that already completed. On the first operation
+        failure, execution stops and the API returns a Problem response; earlier
+        successful operations may already be persisted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/graph-editor-requests.json#/$defs/BatchEditorRequestDto
+      responses:
+        '200':
+          description: All operations completed successfully.
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/graph-editor-responses.json#/$defs/BatchEditorResponseDto
+        '400':
+          description: Invalid request body, empty operations array, or more than 100 operations.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
+        '502':
+          description: >
+            A graph backend error or operation-level failure occurred. Because
+            execution is best-effort and sequential, earlier operations may have
+            been persisted before this response.
+          content:
+            application/problem+json:
+              schema:
+                $ref: ../schemas/problem.json
   /v1/sync/pull:
     get:
       summary: Pull changes from server
@@ -3209,10 +4199,48 @@ components:
       $ref: ../schemas/graph-edge.json
     GraphCluster:
       $ref: ../schemas/graph-cluster.json
+    GraphSubcluster:
+      $ref: ../schemas/graph-subcluster.json
     GraphStats:
       $ref: ../schemas/graph-stats.json
     GraphSnapshot:
       $ref: ../schemas/graph-snapshot.json
+    CreateNodeEditorDto:
+      $ref: ../schemas/graph-editor-requests.json#/$defs/CreateNodeEditorDto
+    UpdateNodeEditorDto:
+      $ref: ../schemas/graph-editor-requests.json#/$defs/UpdateNodeEditorDto
+    CreateEdgeEditorDto:
+      $ref: ../schemas/graph-editor-requests.json#/$defs/CreateEdgeEditorDto
+    UpdateEdgeEditorDto:
+      $ref: ../schemas/graph-editor-requests.json#/$defs/UpdateEdgeEditorDto
+    CreateClusterEditorDto:
+      $ref: ../schemas/graph-editor-requests.json#/$defs/CreateClusterEditorDto
+    UpdateClusterEditorDto:
+      $ref: ../schemas/graph-editor-requests.json#/$defs/UpdateClusterEditorDto
+    CreateSubclusterEditorDto:
+      $ref: ../schemas/graph-editor-requests.json#/$defs/CreateSubclusterEditorDto
+    UpdateSubclusterEditorDto:
+      $ref: ../schemas/graph-editor-requests.json#/$defs/UpdateSubclusterEditorDto
+    MoveNodeToClusterDto:
+      $ref: ../schemas/graph-editor-requests.json#/$defs/MoveNodeToClusterDto
+    MoveSubclusterToClusterDto:
+      $ref: ../schemas/graph-editor-requests.json#/$defs/MoveSubclusterToClusterDto
+    AddNodeToSubclusterDto:
+      $ref: ../schemas/graph-editor-requests.json#/$defs/AddNodeToSubclusterDto
+    EditorBatchOperation:
+      $ref: ../schemas/graph-editor-requests.json#/$defs/EditorBatchOperation
+    BatchEditorRequestDto:
+      $ref: ../schemas/graph-editor-requests.json#/$defs/BatchEditorRequestDto
+    CreateNodeEditorResponseDto:
+      $ref: ../schemas/graph-editor-responses.json#/$defs/CreateNodeEditorResponseDto
+    CreateEdgeEditorResponseDto:
+      $ref: ../schemas/graph-editor-responses.json#/$defs/CreateEdgeEditorResponseDto
+    CreateClusterEditorResponseDto:
+      $ref: ../schemas/graph-editor-responses.json#/$defs/CreateClusterEditorResponseDto
+    CreateSubclusterEditorResponseDto:
+      $ref: ../schemas/graph-editor-responses.json#/$defs/CreateSubclusterEditorResponseDto
+    BatchEditorResponseDto:
+      $ref: ../schemas/graph-editor-responses.json#/$defs/BatchEditorResponseDto
     Note:
       $ref: ../schemas/note.json
     Folder:

@@ -20,7 +20,8 @@ import {
   GraphSubclusterDoc,
   GraphSummaryDoc,
 } from '../../src/core/types/persistence/graph.persistence';
-import { GraphDocumentStore, RepoOptions } from '../../src/core/ports/GraphDocumentStore';
+import type { MacroGraphStoreOptions } from '../../src/core/ports/MacroGraphStore';
+type RepoOptions = MacroGraphStoreOptions;
 import { GraphManagementService } from '../../src/core/services/GraphManagementService';
 import { NoteService } from '../../src/core/services/NoteService';
 
@@ -384,7 +385,7 @@ class InMemoryMsgRepo implements MessageRepository {
   }
 }
 
-class InMemoryGraphRepo implements GraphDocumentStore {
+class InMemoryGraphRepo {
   nodes = new Map<number, GraphNodeDoc>();
 
   async upsertNode(node: GraphNodeDoc, _options?: RepoOptions): Promise<void> {
@@ -576,7 +577,7 @@ describe('ChatManagementService', () => {
       countNotes: jest.fn(),
       getNoteDoc: jest.fn(),
     } as any;
-    graphSvc = new GraphManagementService(graphRepo);
+    graphSvc = new GraphManagementService(graphRepo as any);
     chatSvc = new ChatManagementService(convSvc, msgSvc, graphSvc);
   });
 

@@ -11,7 +11,7 @@ import nock from 'nock';
 
 import { createApp } from '../../src/bootstrap/server';
 import { generateAccessToken } from '../../src/app/utils/jwt';
-import { GraphRepositoryMongo } from '../../src/infra/repositories/GraphRepositoryMongo';
+import { Neo4jMacroGraphAdapter } from '../../src/infra/graph/Neo4jMacroGraphAdapter';
 import { AwsSqsAdapter } from '../../src/infra/aws/AwsSqsAdapter';
 import { AwsS3Adapter } from '../../src/infra/aws/AwsS3Adapter';
 import { ConversationRepositoryMongo } from '../../src/infra/repositories/ConversationRepositoryMongo';
@@ -20,7 +20,7 @@ import { NoteRepositoryMongo } from '../../src/infra/repositories/NoteRepository
 import { UserRepositoryMySQL } from '../../src/infra/repositories/UserRepositoryMySQL';
 
 // --- Mocks ---
-jest.mock('../../src/infra/repositories/GraphRepositoryMongo');
+jest.mock('../../src/infra/graph/Neo4jMacroGraphAdapter');
 jest.mock('../../src/infra/aws/AwsSqsAdapter');
 jest.mock('../../src/infra/aws/AwsS3Adapter');
 jest.mock('../../src/infra/repositories/ConversationRepositoryMongo');
@@ -42,6 +42,33 @@ jest.mock('../../src/infra/redis/RedisEventBusAdapter', () => ({
     subscribe() { return Promise.resolve(); }
     unsubscribe() { return Promise.resolve(); }
   }
+}));
+
+jest.mock('../../src/infra/repositories/CreditRepositoryPrisma', () => ({
+  CreditRepositoryPrisma: jest.fn().mockImplementation(() => ({
+    findBalanceByUserId: jest.fn<any>().mockResolvedValue({
+      id: 'bal-1',
+      userId: 'user-12345',
+      balance: 100,
+      holdAmount: 0,
+      planType: 'FREE',
+      cycleStart: new Date(),
+      cycleEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      updatedAt: new Date(),
+    }),
+    createBalance: jest.fn<any>().mockResolvedValue({}),
+    holdBalance: jest.fn<any>().mockResolvedValue({ success: true, availableAfter: 90 }),
+    commitHold: jest.fn<any>().mockResolvedValue(true),
+    rollbackHold: jest.fn<any>().mockResolvedValue(true),
+    deductBalance: jest.fn<any>().mockResolvedValue({ success: true, availableAfter: 90 }),
+    refundBalance: jest.fn<any>().mockResolvedValue(undefined),
+    refillBalance: jest.fn<any>().mockResolvedValue(undefined),
+    findUsersWithExpiredCycle: jest.fn<any>().mockResolvedValue([]),
+    findExpiredHolds: jest.fn<any>().mockResolvedValue([]),
+    findHoldByTaskId: jest.fn<any>().mockResolvedValue(null),
+    createUsageLog: jest.fn<any>().mockResolvedValue(undefined),
+    findUsageLogs: jest.fn<any>().mockResolvedValue({ items: [], total: 0 }),
+  })),
 }));
 
 // GraphAi 테스트는 큐잉만 검증. 알림 전송 시 NotificationService가 Mongo insert를 시도하는데,
@@ -166,7 +193,7 @@ describe('GraphAi API Integration Tests', () => {
     };
 
     beforeAll(async () => {
-        (GraphRepositoryMongo as jest.Mock).mockImplementation(() => mockGraphRepo);
+        (Neo4jMacroGraphAdapter as jest.Mock).mockImplementation(() => mockGraphRepo);
         (ConversationRepositoryMongo as jest.Mock).mockImplementation(() => mockConvRepo);
         (MessageRepositoryMongo as jest.Mock).mockImplementation(() => mockMsgRepo);
         (NoteRepositoryMongo as jest.Mock).mockImplementation(() => mockNoteRepo);

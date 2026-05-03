@@ -1,14 +1,13 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 
 import { GraphManagementService } from '../../src/core/services/GraphManagementService';
-import { GraphDocumentStore } from '../../src/core/ports/GraphDocumentStore';
+import { MacroGraphStore } from '../../src/core/ports/MacroGraphStore';
 import { GraphNodeDto, GraphEdgeDto, GraphStatsDto } from '../../src/shared/dtos/graph';
 import { ValidationError, UpstreamError } from '../../src/shared/errors/domain';
-import { GraphNodeDoc } from '../../src/core/types/persistence/graph.persistence';
 
 describe('GraphManagementService', () => {
   let service: GraphManagementService;
-  let mockRepo: jest.Mocked<GraphDocumentStore>;
+  let mockRepo: jest.Mocked<MacroGraphStore>;
 
   beforeEach(() => {
     mockRepo = {
@@ -43,7 +42,7 @@ describe('GraphManagementService', () => {
       restoreAllGraphData: jest.fn(),
       deleteNodesByOrigIds: jest.fn(),
       restoreNodesByOrigIds: jest.fn(),
-    } as unknown as jest.Mocked<GraphDocumentStore>;
+    } as unknown as jest.Mocked<MacroGraphStore>;
 
     service = new GraphManagementService(mockRepo);
   });
@@ -61,12 +60,12 @@ describe('GraphManagementService', () => {
       updatedAt: new Date().toISOString(),
     };
 
-    it('should call repo.upsertNode with correct doc', async () => {
+    it('should call repo.upsertNode with DTO', async () => {
       await service.upsertNode(validNode);
 
       expect(mockRepo.upsertNode).toHaveBeenCalledTimes(1);
-      const calledDoc = mockRepo.upsertNode.mock.calls[0][0];
-      expect(calledDoc).toMatchObject({
+      const calledDto = mockRepo.upsertNode.mock.calls[0][0];
+      expect(calledDto).toMatchObject({
         id: validNode.id,
         userId: validNode.userId,
         origId: validNode.origId,
@@ -123,7 +122,7 @@ describe('GraphManagementService', () => {
 
   describe('findNode', () => {
     it('should return DTO if node exists', async () => {
-      const mockDoc: GraphNodeDoc = {
+      const mockNode: GraphNodeDto = {
         id: 1,
         userId: 'user-1',
         origId: 'conv-1',
@@ -134,7 +133,7 @@ describe('GraphManagementService', () => {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      mockRepo.findNode.mockResolvedValue(mockDoc);
+      mockRepo.findNode.mockResolvedValue(mockNode);
 
       const result = await service.findNode('user-1', 1);
       expect(result).toMatchObject({
@@ -255,7 +254,7 @@ describe('GraphManagementService', () => {
       });
 
       it('getStats calls repo', async () => {
-          mockRepo.getStats.mockResolvedValue({ id: 'u1', userId: 'u1', nodes: 10, edges: 5, clusters: 2, status: 'CREATED', generatedAt: new Date().toISOString(), metadata: {} });
+          mockRepo.getStats.mockResolvedValue({ userId: 'u1', nodes: 10, edges: 5, clusters: 2, status: 'CREATED', generatedAt: new Date().toISOString(), metadata: {} });
           const res = await service.getStats('u1');
           expect(res).toBeDefined();
           expect(res?.nodes).toBe(10);
@@ -304,4 +303,3 @@ describe('GraphManagementService', () => {
     });
   });
 });
-

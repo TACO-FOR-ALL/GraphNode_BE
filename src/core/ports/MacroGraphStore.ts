@@ -1,11 +1,11 @@
 import type {
-  GraphClusterDoc,
-  GraphEdgeDoc,
-  GraphNodeDoc,
-  GraphStatsDoc,
-  GraphSubclusterDoc,
-  GraphSummaryDoc,
-} from '../types/persistence/graph.persistence';
+  GraphClusterDto,
+  GraphEdgeDto,
+  GraphNodeDto,
+  GraphStatsDto,
+  GraphSubclusterDto,
+} from '../../shared/dtos/graph';
+import type { GraphSummaryDoc } from '../types/persistence/graph.persistence';
 
 /**
  * @description Graph RAG 이웃 탐색 결과 단일 항목입니다.
@@ -50,6 +50,8 @@ export interface GraphRagNeighborResult {
 export interface MacroGraphStoreOptions {
   /** 구현체가 해석할 수 있는 opaque transaction 객체입니다. */
   transaction?: unknown;
+  session?: unknown;
+  afterCommit?: Array<() => Promise<void>>;
   /** soft delete 된 항목을 조회 결과에 포함할지 여부입니다. 기본값은 Mongo와 동일하게 false입니다. */
   includeDeleted?: boolean;
 }
@@ -71,16 +73,11 @@ export interface MacroGraphStoreOptions {
 export interface MacroGraphUpsertInput {
   /** 저장 대상 사용자 ID입니다. */
   userId: string;
-  /** 저장할 graph node 문서 목록입니다. */
-  nodes: GraphNodeDoc[];
-  /** 저장할 graph edge 문서 목록입니다. */
-  edges: GraphEdgeDoc[];
-  /** 저장할 cluster 문서 목록입니다. */
-  clusters: GraphClusterDoc[];
-  /** 저장할 subcluster 문서 목록입니다. */
-  subclusters: GraphSubclusterDoc[];
-  /** 저장할 graph stats 문서입니다. */
-  stats: GraphStatsDoc;
+  nodes: GraphNodeDto[];
+  edges: GraphEdgeDto[];
+  clusters: GraphClusterDto[];
+  subclusters: GraphSubclusterDto[];
+  stats: GraphStatsDto;
   /** 저장할 graph summary 문서입니다. */
   summary?: GraphSummaryDoc;
 }
@@ -146,7 +143,7 @@ export interface MacroGraphStore {
    * @param node 저장할 graph node 문서입니다.
    * @param options transaction 등 adapter 전용 옵션입니다.
    */
-  upsertNode(node: GraphNodeDoc, options?: MacroGraphStoreOptions): Promise<void>;
+  upsertNode(node: GraphNodeDto, options?: MacroGraphStoreOptions): Promise<void>;
 
   /**
    * @description 다수의 graph node를 독립적으로 일괄 upsert 합니다. (Incremental Write)
@@ -154,8 +151,7 @@ export interface MacroGraphStore {
    * @param nodes 저장할 graph node 문서 목록입니다.
    * @param options transaction 등 adapter 전용 옵션입니다.
    */
-  upsertNodes(nodes: GraphNodeDoc[], options?: MacroGraphStoreOptions): Promise<void>;
-
+  upsertNodes(nodes: GraphNodeDto[], options?: MacroGraphStoreOptions): Promise<void>;
   /**
    * @description 단일 graph node를 부분 업데이트합니다. (Incremental Write)
    *
@@ -167,7 +163,7 @@ export interface MacroGraphStore {
   updateNode(
     userId: string,
     id: number,
-    patch: Partial<GraphNodeDoc>,
+    patch: Partial<GraphNodeDto>,
     options?: MacroGraphStoreOptions
   ): Promise<void>;
 
@@ -178,7 +174,7 @@ export interface MacroGraphStore {
    * @param options transaction 등 adapter 전용 옵션입니다.
    * @returns 저장된 edge id입니다.
    */
-  upsertEdge(edge: GraphEdgeDoc, options?: MacroGraphStoreOptions): Promise<string>;
+  upsertEdge(edge: GraphEdgeDto, options?: MacroGraphStoreOptions): Promise<string>;
 
   /**
    * @description 다수의 graph edge를 독립적으로 일괄 upsert 합니다. (Incremental Write)
@@ -186,7 +182,7 @@ export interface MacroGraphStore {
    * @param edges 저장할 graph edge 문서 목록입니다.
    * @param options transaction 등 adapter 전용 옵션입니다.
    */
-  upsertEdges(edges: GraphEdgeDoc[], options?: MacroGraphStoreOptions): Promise<void>;
+  upsertEdges(edges: GraphEdgeDto[], options?: MacroGraphStoreOptions): Promise<void>;
 
   /**
    * @description 단일 cluster를 독립적으로 upsert 합니다. (Incremental Write)
@@ -194,7 +190,7 @@ export interface MacroGraphStore {
    * @param cluster 저장할 cluster 문서입니다.
    * @param options transaction 등 adapter 전용 옵션입니다.
    */
-  upsertCluster(cluster: GraphClusterDoc, options?: MacroGraphStoreOptions): Promise<void>;
+  upsertCluster(cluster: GraphClusterDto, options?: MacroGraphStoreOptions): Promise<void>;
 
   /**
    * @description 다수의 cluster를 독립적으로 일괄 upsert 합니다. (Incremental Write)
@@ -202,8 +198,7 @@ export interface MacroGraphStore {
    * @param clusters 저장할 cluster 문서 목록입니다.
    * @param options transaction 등 adapter 전용 옵션입니다.
    */
-  upsertClusters(clusters: GraphClusterDoc[], options?: MacroGraphStoreOptions): Promise<void>;
-
+  upsertClusters(clusters: GraphClusterDto[], options?: MacroGraphStoreOptions): Promise<void>;
   /**
    * @description 단일 subcluster를 독립적으로 upsert 합니다. (Incremental Write)
    *
@@ -211,10 +206,9 @@ export interface MacroGraphStore {
    * @param options transaction 등 adapter 전용 옵션입니다.
    */
   upsertSubcluster(
-    subcluster: GraphSubclusterDoc,
+    subcluster: GraphSubclusterDto,
     options?: MacroGraphStoreOptions
   ): Promise<void>;
-
   /**
    * @description 다수의 subcluster를 독립적으로 일괄 upsert 합니다. (Incremental Write)
    *
@@ -222,7 +216,7 @@ export interface MacroGraphStore {
    * @param options transaction 등 adapter 전용 옵션입니다.
    */
   upsertSubclusters(
-    subclusters: GraphSubclusterDoc[],
+    subclusters: GraphSubclusterDto[],
     options?: MacroGraphStoreOptions
   ): Promise<void>;
 
@@ -232,8 +226,7 @@ export interface MacroGraphStore {
    * @param stats 저장할 stats 문서입니다.
    * @param options transaction 등 adapter 전용 옵션입니다.
    */
-  saveStats(stats: GraphStatsDoc, options?: MacroGraphStoreOptions): Promise<void>;
-
+  saveStats(stats: GraphStatsDto, options?: MacroGraphStoreOptions): Promise<void>;
   /**
    * @description 사용자 graph summary를 독립적으로 upsert 합니다. (Incremental Write)
    *
@@ -246,7 +239,6 @@ export interface MacroGraphStore {
     summary: GraphSummaryDoc,
     options?: MacroGraphStoreOptions
   ): Promise<void>;
-
   /**
    * @description 논리적 삭제(Soft Delete)된 graph summary를 복원합니다.
    *
@@ -254,7 +246,6 @@ export interface MacroGraphStore {
    * @param options transaction 등 adapter 전용 옵션입니다.
    */
   restoreGraphSummary(userId: string, options?: MacroGraphStoreOptions): Promise<void>;
-
   /**
    * @description 사용자의 Macro Graph 전체 데이터를 삭제합니다. deleteGraph의 alias입니다.
    *
@@ -267,7 +258,6 @@ export interface MacroGraphStore {
     permanent?: boolean,
     options?: MacroGraphStoreOptions
   ): Promise<void>;
-
   /**
    * @description 논리적 삭제(Soft Delete)된 사용자 전체 그래프 데이터를 복원합니다.
    *
@@ -275,7 +265,6 @@ export interface MacroGraphStore {
    * @param options transaction 등 adapter 전용 옵션입니다.
    */
   restoreAllGraphData(userId: string, options?: MacroGraphStoreOptions): Promise<void>;
-
   /**
    * @description graph node id로 단일 node를 조회합니다.
    *
@@ -288,8 +277,7 @@ export interface MacroGraphStore {
     userId: string,
     id: number,
     options?: MacroGraphStoreOptions
-  ): Promise<GraphNodeDoc | null>;
-
+  ): Promise<GraphNodeDto | null>;
   /**
    * @description 원천 데이터 ID 목록으로 node를 조회합니다.
    *
@@ -302,7 +290,7 @@ export interface MacroGraphStore {
     userId: string,
     origIds: string[],
     options?: MacroGraphStoreOptions
-  ): Promise<GraphNodeDoc[]>;
+  ): Promise<GraphNodeDto[]>;
 
   /**
    * @description 사용자 graph node 목록을 조회합니다. (active only)
@@ -311,19 +299,14 @@ export interface MacroGraphStore {
    * @param options transaction 등 adapter 전용 옵션입니다.
    * @returns node 문서 목록입니다.
    */
-  listNodes(userId: string, options?: MacroGraphStoreOptions): Promise<GraphNodeDoc[]>;
+  listNodes(userId: string, options?: MacroGraphStoreOptions): Promise<GraphNodeDto[]>;
 
   /**
-   * @description soft-deleted 포함 전체 사용자 graph node 목록을 조회합니다.
    *
-   * GraphDocumentStore.listNodesAll과 동일한 계약입니다.
+   * listNodes의 includeDeleted=true 조회 계약입니다.
    *
-   * @param userId 조회 대상 사용자 ID입니다.
-   * @param options transaction 등 adapter 전용 옵션입니다.
-   * @returns soft-deleted 포함 전체 node 문서 목록입니다.
    */
-  listNodesAll(userId: string, options?: MacroGraphStoreOptions): Promise<GraphNodeDoc[]>;
-
+  listNodesAll(userId: string, options?: MacroGraphStoreOptions): Promise<GraphNodeDto[]>;
   /**
    * @description 특정 cluster에 속한 node 목록을 조회합니다.
    *
@@ -336,7 +319,7 @@ export interface MacroGraphStore {
     userId: string,
     clusterId: string,
     options?: MacroGraphStoreOptions
-  ): Promise<GraphNodeDoc[]>;
+  ): Promise<GraphNodeDto[]>;
 
   /**
    * @description 사용자 graph edge 목록을 조회합니다.
@@ -345,8 +328,7 @@ export interface MacroGraphStore {
    * @param options transaction 등 adapter 전용 옵션입니다.
    * @returns edge 문서 목록입니다.
    */
-  listEdges(userId: string, options?: MacroGraphStoreOptions): Promise<GraphEdgeDoc[]>;
-
+  listEdges(userId: string, options?: MacroGraphStoreOptions): Promise<GraphEdgeDto[]>;
   /**
    * @description cluster id로 단일 cluster를 조회합니다.
    *
@@ -359,7 +341,7 @@ export interface MacroGraphStore {
     userId: string,
     clusterId: string,
     options?: MacroGraphStoreOptions
-  ): Promise<GraphClusterDoc | null>;
+  ): Promise<GraphClusterDto | null>;
 
   /**
    * @description 사용자 cluster 목록을 조회합니다.
@@ -368,7 +350,7 @@ export interface MacroGraphStore {
    * @param options transaction 등 adapter 전용 옵션입니다.
    * @returns cluster 문서 목록입니다.
    */
-  listClusters(userId: string, options?: MacroGraphStoreOptions): Promise<GraphClusterDoc[]>;
+  listClusters(userId: string, options?: MacroGraphStoreOptions): Promise<GraphClusterDto[]>;
 
   /**
    * @description 사용자 subcluster 목록을 조회합니다.
@@ -377,7 +359,7 @@ export interface MacroGraphStore {
    * @param options transaction 등 adapter 전용 옵션입니다.
    * @returns subcluster 문서 목록입니다.
    */
-  listSubclusters(userId: string, options?: MacroGraphStoreOptions): Promise<GraphSubclusterDoc[]>;
+  listSubclusters(userId: string, options?: MacroGraphStoreOptions): Promise<GraphSubclusterDto[]>;
 
   /**
    * @description 사용자 graph stats를 조회합니다.
@@ -386,8 +368,7 @@ export interface MacroGraphStore {
    * @param options transaction 등 adapter 전용 옵션입니다.
    * @returns stats 문서입니다. 없으면 `null`입니다.
    */
-  getStats(userId: string, options?: MacroGraphStoreOptions): Promise<GraphStatsDoc | null>;
-
+  getStats(userId: string, options?: MacroGraphStoreOptions): Promise<GraphStatsDto | null>;
   /**
    * @description 사용자 graph summary를 조회합니다.
    *
@@ -399,7 +380,6 @@ export interface MacroGraphStore {
     userId: string,
     options?: MacroGraphStoreOptions
   ): Promise<GraphSummaryDoc | null>;
-
   /**
    * @description 단일 graph node를 삭제합니다.
    *
@@ -414,7 +394,6 @@ export interface MacroGraphStore {
     permanent?: boolean,
     options?: MacroGraphStoreOptions
   ): Promise<void>;
-
   /**
    * @description 다수의 graph node를 삭제합니다.
    *
@@ -429,7 +408,6 @@ export interface MacroGraphStore {
     permanent?: boolean,
     options?: MacroGraphStoreOptions
   ): Promise<void>;
-
   /**
    * @description 원천 데이터 ID(origId) 목록을 기반으로 graph node를 삭제합니다.
    *
@@ -444,7 +422,6 @@ export interface MacroGraphStore {
     permanent?: boolean,
     options?: MacroGraphStoreOptions
   ): Promise<void>;
-
   /**
    * @description 논리적 삭제(Soft Delete)된 단일 graph node를 복원합니다.
    *
@@ -453,7 +430,6 @@ export interface MacroGraphStore {
    * @param options transaction 등 adapter 전용 옵션입니다.
    */
   restoreNode(userId: string, id: number, options?: MacroGraphStoreOptions): Promise<void>;
-
   /**
    * @description 논리적 삭제(Soft Delete)된 다수의 graph node를 원천 데이터 ID를 기반으로 복원합니다.
    *
@@ -466,7 +442,6 @@ export interface MacroGraphStore {
     origIds: string[],
     options?: MacroGraphStoreOptions
   ): Promise<void>;
-
   /**
    * @description 단일 graph edge를 삭제합니다.
    *
@@ -481,7 +456,6 @@ export interface MacroGraphStore {
     permanent?: boolean,
     options?: MacroGraphStoreOptions
   ): Promise<void>;
-
   /**
    * @description 특정 Source와 Target 노드 사이의 graph edge를 삭제합니다.
    *
@@ -498,7 +472,6 @@ export interface MacroGraphStore {
     permanent?: boolean,
     options?: MacroGraphStoreOptions
   ): Promise<void>;
-
   /**
    * @description 특정 노드(들)에 연결된 모든 graph edge를 삭제합니다.
    *
@@ -513,7 +486,6 @@ export interface MacroGraphStore {
     permanent?: boolean,
     options?: MacroGraphStoreOptions
   ): Promise<void>;
-
   /**
    * @description 논리적 삭제(Soft Delete)된 graph edge를 복원합니다.
    *
@@ -522,7 +494,6 @@ export interface MacroGraphStore {
    * @param options transaction 등 adapter 전용 옵션입니다.
    */
   restoreEdge(userId: string, edgeId: string, options?: MacroGraphStoreOptions): Promise<void>;
-
   /**
    * @description 단일 cluster를 삭제합니다.
    *
@@ -537,7 +508,6 @@ export interface MacroGraphStore {
     permanent?: boolean,
     options?: MacroGraphStoreOptions
   ): Promise<void>;
-
   /**
    * @description 논리적 삭제(Soft Delete)된 cluster를 복원합니다.
    *
@@ -550,7 +520,6 @@ export interface MacroGraphStore {
     clusterId: string,
     options?: MacroGraphStoreOptions
   ): Promise<void>;
-
   /**
    * @description 단일 subcluster를 삭제합니다.
    *
@@ -565,7 +534,6 @@ export interface MacroGraphStore {
     permanent?: boolean,
     options?: MacroGraphStoreOptions
   ): Promise<void>;
-
   /**
    * @description 논리적 삭제(Soft Delete)된 subcluster를 복원합니다.
    *
@@ -578,7 +546,6 @@ export interface MacroGraphStore {
     subclusterId: string,
     options?: MacroGraphStoreOptions
   ): Promise<void>;
-
   /**
    * @description 사용자 graph stats를 삭제합니다.
    *
@@ -587,7 +554,6 @@ export interface MacroGraphStore {
    * @param options transaction 등 adapter 전용 옵션입니다.
    */
   deleteStats(userId: string, permanent?: boolean, options?: MacroGraphStoreOptions): Promise<void>;
-
   /**
    * @description 사용자 Macro Graph를 삭제합니다.
    *
@@ -596,16 +562,11 @@ export interface MacroGraphStore {
    * @returns 삭제가 끝나면 resolve됩니다.
    */
   deleteGraph(userId: string, options?: MacroGraphStoreOptions): Promise<void>;
-
-  /**
-   * @description 사용자 graph summary를 삭제합니다.
-   *
-   * @param userId 삭제 대상 사용자 ID입니다.
-   * @param options transaction 등 adapter 전용 옵션입니다.
-   * @returns 삭제가 끝나면 resolve됩니다.
-   */
-  deleteGraphSummary(userId: string, options?: MacroGraphStoreOptions): Promise<void>;
-
+  deleteGraphSummary(
+    userId: string,
+    permanent?: boolean,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
   /**
    * @description Seed 노드 origId 목록을 기반으로 Graph RAG용 이웃 노드를 탐색합니다.
    *
@@ -625,7 +586,6 @@ export interface MacroGraphStore {
     limit?: number,
     options?: MacroGraphStoreOptions
   ): Promise<GraphRagNeighborResult[]>;
-
   /**
    * @description Seed 노드와 동일 클러스터에 속하는 시블링 노드를 탐색합니다. 작성일자: 2026-04-30.
    *
@@ -647,8 +607,182 @@ export interface MacroGraphStore {
     limit?: number,
     options?: MacroGraphStoreOptions
   ): Promise<GraphRagClusterSiblingResult[]>;
-}
 
+  // =====================
+  // Graph Editor 편집 메서드 (작성일: 2026-05-01)
+  // =====================
+
+  /**
+   * @description 사용자의 다음 사용 가능한 node ID를 반환합니다. 작성일: 2026-05-01
+   *
+   * 현재 저장된 MacroNode 중 최대 id + 1을 반환합니다.
+   * 노드가 없으면 1을 반환합니다.
+   *
+   * @param userId 사용자 ID
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 다음 사용 가능한 정수 node ID
+   */
+  getNextNodeId(userId: string, options?: MacroGraphStoreOptions): Promise<number>;
+
+  /**
+   * @description edge id로 단일 edge를 조회합니다. 작성일: 2026-05-01
+   *
+   * @param userId 조회 대상 사용자 ID
+   * @param edgeId 조회할 edge id
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 조회된 GraphEdgeDto. 없으면 null.
+   */
+  findEdge(
+    userId: string,
+    edgeId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<GraphEdgeDto | null>;
+
+  /**
+   * @description subcluster id로 단일 subcluster를 조회합니다. 작성일: 2026-05-01
+   *
+   * @param userId 조회 대상 사용자 ID
+   * @param subclusterId 조회할 subcluster id
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 조회된 GraphSubclusterDto. 없으면 null.
+   */
+  findSubcluster(
+    userId: string,
+    subclusterId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<GraphSubclusterDto | null>;
+
+  /**
+   * @description 단일 graph edge를 부분 업데이트합니다. 작성일: 2026-05-01
+   *
+   * @param userId 사용자 ID
+   * @param edgeId 업데이트할 edge id
+   * @param patch 업데이트할 필드 부분 객체
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  updateEdge(
+    userId: string,
+    edgeId: string,
+    patch: Partial<GraphEdgeDto>,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description 단일 cluster를 부분 업데이트합니다. 작성일: 2026-05-01
+   *
+   * @param userId 사용자 ID
+   * @param clusterId 업데이트할 cluster id
+   * @param patch 업데이트할 필드 부분 객체
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  updateCluster(
+    userId: string,
+    clusterId: string,
+    patch: Partial<GraphClusterDto>,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description 단일 subcluster를 부분 업데이트합니다. 작성일: 2026-05-01
+   *
+   * @param userId 사용자 ID
+   * @param subclusterId 업데이트할 subcluster id
+   * @param patch 업데이트할 필드 부분 객체
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  updateSubcluster(
+    userId: string,
+    subclusterId: string,
+    patch: Partial<GraphSubclusterDto>,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description node를 다른 cluster로 이동합니다 (BELONGS_TO 관계 교체). 작성일: 2026-05-01
+   *
+   * 기존 BELONGS_TO 관계를 삭제하고 newClusterId cluster와 새 BELONGS_TO를 생성합니다.
+   *
+   * @param userId 사용자 ID
+   * @param nodeId 이동할 node id
+   * @param newClusterId 이동 대상 cluster id
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  moveNodeToCluster(
+    userId: string,
+    nodeId: number,
+    newClusterId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description subcluster를 다른 cluster로 이동합니다 (HAS_SUBCLUSTER 관계 교체). 작성일: 2026-05-01
+   *
+   * 기존 HAS_SUBCLUSTER 관계를 삭제하고 newClusterId cluster와 새 HAS_SUBCLUSTER를 생성합니다.
+   * subcluster에 속한 node들도 함께 newClusterId로 BELONGS_TO를 재설정합니다.
+   *
+   * @param userId 사용자 ID
+   * @param subclusterId 이동할 subcluster id
+   * @param newClusterId 이동 대상 cluster id
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  moveSubclusterToCluster(
+    userId: string,
+    subclusterId: string,
+    newClusterId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description node를 subcluster에 편입합니다 (CONTAINS 관계 생성). 작성일: 2026-05-01
+   *
+   * node의 clusterId와 subcluster의 clusterId가 일치해야 합니다.
+   * 불일치 시 adapter는 에러를 던집니다.
+   *
+   * @param userId 사용자 ID
+   * @param subclusterId 대상 subcluster id
+   * @param nodeId 편입할 node id
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  addNodeToSubcluster(
+    userId: string,
+    subclusterId: string,
+    nodeId: number,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description subcluster에서 node를 제거합니다 (CONTAINS 관계 삭제). 작성일: 2026-05-01
+   *
+   * node 자체는 cluster에 잔류합니다. CONTAINS 관계만 삭제됩니다.
+   *
+   * @param userId 사용자 ID
+   * @param subclusterId 대상 subcluster id
+   * @param nodeId 제거할 node id
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  removeNodeFromSubcluster(
+    userId: string,
+    subclusterId: string,
+    nodeId: number,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description cluster에 활성 node가 하나 이상 있는지 확인합니다. 작성일: 2026-05-01
+   *
+   * cluster 삭제 전 guard check 용도로 사용됩니다.
+   *
+   * @param userId 사용자 ID
+   * @param clusterId 확인할 cluster id
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 활성 node가 1개 이상 있으면 true
+   */
+  clusterHasNodes(
+    userId: string,
+    clusterId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<boolean>;
+}
 /**
  * @description Graph RAG 클러스터 시블링 탐색 결과 단일 항목입니다.
  *
@@ -670,3 +804,6 @@ export interface GraphRagClusterSiblingResult {
   connectedSeeds: string[];
   connectionCount: number;
 }
+
+
+
