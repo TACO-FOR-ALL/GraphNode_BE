@@ -56,6 +56,9 @@ import { AwsSqsAdapter } from '../infra/aws/AwsSqsAdapter';
 import { AwsS3Adapter } from '../infra/aws/AwsS3Adapter';
 import { RedisEventBusAdapter } from '../infra/redis/RedisEventBusAdapter';
 import { FeedbackRepositoryPrisma } from '../infra/repositories/FeedbackRepositoryPrisma';
+import { CreditRepositoryPrisma } from '../infra/repositories/CreditRepositoryPrisma';
+import { ICreditRepository } from '../core/ports/ICreditRepository';
+import { CreditService } from '../core/services/CreditService';
 /**
  * 애플리케이션의 의존성 주입(Dependency Injection)을 관리하는 싱글톤 컨테이너입니다.
  *
@@ -82,6 +85,7 @@ export class Container {
   private microscopeWorkspaceRepo: MicroscopeWorkspaceStore | null = null;
   private notificationRepo: NotificationRepository | null = null;
   private feedbackRepo: FeedbackRepository | null = null;
+  private creditRepo: ICreditRepository | null = null;
 
   // Infra Adapters
   private queueAdapter: QueuePort | null = null;
@@ -109,6 +113,7 @@ export class Container {
   private searchService: SearchService | null = null;
   private feedbackService: FeedbackService | null = null;
   private graphEditorService: GraphEditorService | null = null;
+  private creditService: CreditService | null = null;
 
   private constructor() {}
   /**
@@ -289,6 +294,13 @@ export class Container {
     return this.feedbackRepo;
   }
 
+  getCreditRepository(): ICreditRepository {
+    if (!this.creditRepo) {
+      this.creditRepo = new CreditRepositoryPrisma();
+    }
+    return this.creditRepo;
+  }
+
   // --- Services ---
   /**
    * ConversationService 인스턴스를 반환합니다.
@@ -414,7 +426,8 @@ export class Container {
         this.getUserService(),
         this.getAwsSqsAdapter(),
         this.getAwsS3Adapter(),
-        this.getNotificationService()
+        this.getNotificationService(),
+        this.getCreditService()
       );
       this.graphGenerationService = createAuditProxy(raw, 'GraphGenerationService');
     }
@@ -463,6 +476,7 @@ export class Container {
           graphEmbeddingService: this.getGraphEmbeddingService(),
           graphVectorService: this.getGraphVectorService(),
           searchService: this.getSearchService(),
+          creditService: this.getCreditService(),
         }
       );
       this.agentService = createAuditProxy(raw, 'AgentService');
@@ -477,7 +491,8 @@ export class Container {
       const raw = new AiInteractionService(
         this.getChatManagementService(),
         this.getUserService(),
-        this.getAwsS3Adapter()
+        this.getAwsS3Adapter(),
+        this.getCreditService()
       );
       this.aiInteractionService = createAuditProxy(raw, 'AiInteractionService');
     }
@@ -528,7 +543,8 @@ export class Container {
         this.getConversationRepository(),
         this.getNoteRepository(),
         this.getNotificationService(),
-        this.getUserService()
+        this.getUserService(),
+        this.getCreditService()
       );
       this.microscopeManagementService = createAuditProxy(raw, 'MicroscopeManagementService');
     }
@@ -557,6 +573,14 @@ export class Container {
       this.feedbackService = createAuditProxy(raw, 'FeedbackService');
     }
     return this.feedbackService;
+  }
+
+  getCreditService(): CreditService {
+    if (!this.creditService) {
+      const raw = new CreditService(this.getCreditRepository());
+      this.creditService = createAuditProxy(raw, 'CreditService');
+    }
+    return this.creditService;
   }
 
   /**

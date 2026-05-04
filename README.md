@@ -191,6 +191,7 @@ infisical run --env=prod -- npm start
 
 - **[Code Style & Contribution Guide](docs/architecture/CODE_STYLE.md)**: 네이�?컨벤�? 아키텍처 패턴, 에러 핸들�?규칙 �?
 - **[Daily Dev Logs](docs/guides/Daily)**: 일별 작업 상세 기록
+  - [2026-05-02 Credit API 통합 및 SDK 연결](docs/guides/Daily/20260502-credit-api-integration.md)
   - [2026-04-29 Graph RAG DevTest 엔드포인트 구축 및 문서 최신화](docs/guides/Daily/20260429-graph-rag-devtest-endpoints.md)
   - [2026-04-28 Neo4j 배치 마이그레이션 스크립트](docs/guides/Daily/20260428-neo4j-batch-migration-script.md)
   - [2026-04-23 AI Tool 구현](docs/guides/Daily/20260423-ai-tool-implementation.md)

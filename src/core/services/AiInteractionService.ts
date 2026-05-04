@@ -43,6 +43,9 @@ import { loadEnv } from '../../config/env';
 import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 import { ToolExecutionContext } from '../../shared/ai-providers/toolContext';
 import { STORAGE_BUCKETS, buildStorageKey } from '../../config/storageConfig';
+import { FEATURE_COSTS, CreditContext } from '../../config/billing.config';
+import { ICreditService } from '../ports/ICreditService';
+import { CreditFeature } from '../types/persistence/credit.persistence';
 
 /** 항상 그대로 전송하는 최신 메시지 수 (Direct Window). */
 const MAX_DIRECT_WINDOW = 20;
@@ -58,7 +61,8 @@ export class AiInteractionService {
   constructor(
     private readonly chatManagementService: ChatManagementService,
     private readonly userService: UserService,
-    private readonly storageAdapter: StoragePort
+    private readonly storageAdapter: StoragePort,
+    private readonly creditService?: ICreditService
   ) {}
 
   /**
@@ -306,6 +310,9 @@ export class AiInteractionService {
     files?: Express.Multer.File[],
     onStream?: (chunk: string) => void
   ): Promise<AIChatResponseDto> {
+    let creditDeducted = false;
+    let deductedCreditAmount = 0;
+
     try {
       // 1. 파일 업로드 (S3 저장 및 첨부파일 메타데이터 생성)
       const userAttachments: Attachment[] = await this.handleFiles(files);
@@ -396,6 +403,14 @@ export class AiInteractionService {
 
       // 6. AI Provider 호출 (ToolContext 포함 — ReAct 루프)
       const toolCtx = this.buildToolCtx();
+      const creditContext = this.buildAiChatCreditContext(
+        chatbody.chatContent,
+        userAttachments.length,
+        chatbody.modelName
+      );
+      deductedCreditAmount = await this.deductAiChatCredit(ownerUserId, creditContext);
+      creditDeducted = deductedCreditAmount > 0;
+
       const aiResponseResult = await withRetry(
         async () =>
           await provider.generateChat(
@@ -454,6 +469,9 @@ export class AiInteractionService {
 
       return { title: newTitle ?? undefined, messages: [userMessage, aiMessage] };
     } catch (err: unknown) {
+      if (creditDeducted) {
+        await this.refundAiChatCredit(ownerUserId, deductedCreditAmount, err);
+      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('AiInteractionService.handleAIChat failed', { cause: String(err) });
     }
@@ -489,6 +507,9 @@ export class AiInteractionService {
     files?: Express.Multer.File[],
     onStream?: (chunk: string) => void
   ): Promise<AIChatResponseDto> {
+    let creditDeducted = false;
+    let deductedCreditAmount = 0;
+
     try {
       const userAttachments = await this.handleFiles(files);
 
@@ -560,6 +581,14 @@ export class AiInteractionService {
 
       // 4. AI 생성 (ToolContext 포함 — ReAct 루프)
       const toolCtx = this.buildToolCtx();
+      const creditContext = this.buildAiChatCreditContext(
+        chatbody.chatContent,
+        userAttachments.length,
+        chatbody.modelName
+      );
+      deductedCreditAmount = await this.deductAiChatCredit(ownerUserId, creditContext);
+      creditDeducted = deductedCreditAmount > 0;
+
       const result = await withRetry(
         () =>
           provider.generateChat(
@@ -615,6 +644,9 @@ export class AiInteractionService {
         messages: [dbUserMsg, dbAiMsg],
       };
     } catch (err) {
+      if (creditDeducted) {
+        await this.refundAiChatCredit(ownerUserId, deductedCreditAmount, err);
+      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('AiInteractionService.handleRagAIChat failed', {
         cause: String(err),
@@ -645,6 +677,9 @@ export class AiInteractionService {
     files?: Express.Multer.File[],
     onStream?: (chunk: string) => void
   ): Promise<AIChatResponseDto> {
+    let creditDeducted = false;
+    let deductedCreditAmount = 0;
+
     try {
       // 1. 서비스 자체 API 키 조회 & Provider 획득
       const apiKey = this.getSystemApiKey(retrybody.model);
@@ -725,6 +760,14 @@ export class AiInteractionService {
 
       // 8. AI Provider 호출 (ToolContext 포함 — ReAct 루프)
       const toolCtx = this.buildToolCtx();
+      const creditContext = this.buildAiChatCreditContext(
+        lastUserMsg?.content ?? '',
+        newAttachments.length,
+        retrybody.modelName
+      );
+      deductedCreditAmount = await this.deductAiChatCredit(ownerUserId, creditContext);
+      creditDeducted = deductedCreditAmount > 0;
+
       const aiResponseResult = await withRetry(
         async () =>
           await provider.generateChat(
@@ -769,6 +812,9 @@ export class AiInteractionService {
 
       return { title: conversation.title, messages: [newAiMessage] };
     } catch (err: unknown) {
+      if (creditDeducted) {
+        await this.refundAiChatCredit(ownerUserId, deductedCreditAmount, err);
+      }
       if (err instanceof AppError) throw err;
       throw new UpstreamError('AiInteractionService.handleRetryAIChat failed', {
         cause: String(err),
@@ -816,5 +862,51 @@ export class AiInteractionService {
       });
     }
     return attachments;
+  }
+
+  /**
+   * AI Chat에 사용된 토큰 수 계산에 필요한 컨텍스트를 빌드합니다.
+   * @param content 메시지 내용
+   * @param attachmentCount 첨부파일 개수
+   * @param modelName 모델 이름
+   * @returns 토큰 수 계산에 필요한 컨텍스트
+   */
+  private buildAiChatCreditContext(
+    content: string,
+    attachmentCount: number,
+    modelName?: string
+  ): CreditContext {
+    return {
+      messageLength: content.length,
+      attachmentCount,
+      modelName,
+    };
+  }
+
+  /**
+   * AI Chat에 사용된 토큰 수를 기반으로 크레딧을 차감합니다.
+   * @param userId 사용자 ID
+   * @param context 토큰 수 계산에 필요한 컨텍스트
+   * @returns 차감된 크레딧 수
+   */
+  private async deductAiChatCredit(userId: string, context: CreditContext): Promise<number> {
+    if (!this.creditService) return 0;
+
+    const cost = FEATURE_COSTS[CreditFeature.AI_CHAT].calculate(context);
+    await this.creditService.deduct(userId, CreditFeature.AI_CHAT, context);
+    return cost;
+  }
+
+  /**
+   * AI Chat 실패 시 크레딧을 환불합니다.
+   * @param userId 사용자 ID
+   * @param amount 환불할 크레딧 수
+   * @param err 에러 객체
+   */
+  private async refundAiChatCredit(userId: string, amount: number, err: unknown): Promise<void> {
+    if (!this.creditService || amount <= 0) return;
+
+    const reason = err instanceof Error ? err.message : String(err);
+    await this.creditService.refund(userId, amount, `AI chat failed: ${reason}`);
   }
 }

@@ -8,6 +8,7 @@ import { SearchConversationsTool } from './tools/SearchConversationsTool';
 import { GetRecentConversationsTool } from './tools/GetRecentConversationsTool';
 import { GetConversationMessagesTool } from './tools/GetConversationMessagesTool';
 import { GetGraphSummaryTool } from './tools/GetGraphSummaryTool';
+import type { ICreditService } from '../core/ports/ICreditService';
 
 /**
  * Agent Tool Registry
@@ -52,12 +53,16 @@ export class ToolRegistry {
     return Array.from(this.tools.values()).map((t) => t.definition);
   }
 
-  /** 도구 실행
+  /**
+   * 도구 실행
+   *
+   * @description 도구를 실행하고, 도구에 creditFeature가 설정된 경우 성공 후 creditService.deduct()를 호출합니다.
    * @param name 도구 이름
    * @param userId 사용자 ID
    * @param args 도구 인자
    * @param deps AgentServiceDeps
    * @param openai OpenAI
+   * @param creditService 크레딧 서비스 (Tool별 과금 확장 시 사용, 없으면 무과금)
    * @returns Promise<string>
    */
   async execute(
@@ -65,19 +70,24 @@ export class ToolRegistry {
     userId: string,
     args: any,
     deps: AgentServiceDeps,
-    openai: OpenAI
+    openai: OpenAI,
+    creditService?: ICreditService
   ): Promise<string> {
-    // Tool 찾기
     const tool = this.tools.get(name);
 
-    // Tool이 없으면 에러 반환
     if (!tool) {
       return JSON.stringify({ error: `Unknown tool: ${name}` });
     }
 
-    // Tool 실행
     try {
-      return await tool.execute(userId, args, deps, openai);
+      const result = await tool.execute(userId, args, deps, openai);
+
+      // Tool에 creditFeature가 지정된 경우 성공 후 과금
+      if (tool.creditFeature && creditService) {
+        await creditService.deduct(userId, tool.creditFeature);
+      }
+
+      return result;
     } catch (error: any) {
       return JSON.stringify({ error: error.message });
     }

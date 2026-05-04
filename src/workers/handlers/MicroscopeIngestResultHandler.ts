@@ -21,7 +21,10 @@ import { notifyWorkerFailed } from '../../shared/utils/discord';
  * 4. 대상 워크스페이스 내 모든 문서 처리가 완료되었는지 확인하고 합산 통계(개수)와 함께 "전체 종료" 알림 발송
  */
 export class MicroscopeIngestResultHandler implements JobHandler {
-  async handle(message: MicroscopeIngestFromNodeResultQueuePayload, container: Container): Promise<void> {
+  async handle(
+    message: MicroscopeIngestFromNodeResultQueuePayload,
+    container: Container
+  ): Promise<void> {
     const { payload, taskId } = message;
     const { user_id, group_id, status, source_id, chunks_count, error } = payload;
 
@@ -30,7 +33,7 @@ export class MicroscopeIngestResultHandler implements JobHandler {
     const groupId = group_id;
     const sourceId = source_id;
     const standardizedS3Key = payload.standardized_s3_key;
-    
+
     // Envelope의 taskId를 통해 문서 ID 식별
     const docId = taskId;
 
@@ -40,6 +43,7 @@ export class MicroscopeIngestResultHandler implements JobHandler {
     const microscopeService = container.getMicroscopeManagementService();
     const notiService = container.getNotificationService();
     const storagePort = container.getAwsS3Adapter();
+    const creditService = container.getCreditService();
 
     try {
       let downloadedGraphData: any = undefined;
@@ -48,35 +52,48 @@ export class MicroscopeIngestResultHandler implements JobHandler {
       if (status === 'COMPLETED' && standardizedS3Key) {
         try {
           downloadedGraphData = await withRetry(
-            async () => await storagePort.downloadJson<AiMicroscopeIngestResultItem[]>(standardizedS3Key, { bucketType: 'payload' }),
+            async () =>
+              await storagePort.downloadJson<AiMicroscopeIngestResultItem[]>(standardizedS3Key, {
+                bucketType: 'payload',
+              }),
             { label: 'MicroscopeIngestResultHandler.downloadJson.graph' }
           );
-          logger.info({ taskId, standardizedS3Key }, 'Successfully downloaded standardized graph JSON from S3');
+          logger.info(
+            { taskId, standardizedS3Key },
+            'Successfully downloaded standardized graph JSON from S3'
+          );
         } catch (downloadErr) {
-          logger.error({ err: downloadErr, taskId, standardizedS3Key }, 'Failed to download graph JSON from S3');
+          logger.error(
+            { err: downloadErr, taskId, standardizedS3Key },
+            'Failed to download graph JSON from S3'
+          );
           // S3 다운로드 실패 시 상태를 FAILED로 간주해야 할 수도 있으나 현재는 에러만 로깅
         }
       }
 
       // 1. 서비스 호출을 통한 개별 문서 진행상태 갱신 및 Mongo 페이로드 저장
-      const updatedWorkspace : MicroscopeWorkspaceMetaDoc = await microscopeService.updateDocumentStatus(
-        userId,
-        groupId,
-        docId,
-        status,
-        sourceId,
-        downloadedGraphData,
-        error
-      );
+      const updatedWorkspace: MicroscopeWorkspaceMetaDoc =
+        await microscopeService.updateDocumentStatus(
+          userId,
+          groupId,
+          docId,
+          status,
+          sourceId,
+          downloadedGraphData,
+          error
+        );
 
       // S3 Key 값은 Workspace에서 찾아서 알림용으로 활용합니다.
-      const targetDoc = updatedWorkspace.documents.find(d => d.id === docId);
+      const targetDoc = updatedWorkspace.documents.find((d) => d.id === docId);
       const s3Key = targetDoc?.s3Key || 'unknown_s3_key';
 
       // 2. 단일 파일 처리 완료(혹은 실패) Noti 발송
       if (status === 'FAILED') {
         const errorMsg = error || 'Unknown error from Microscope AI Pipeline';
-        logger.warn({ taskId, userId, groupId, s3Key, error: errorMsg }, 'Microscope document processing failed');
+        logger.warn(
+          { taskId, userId, groupId, s3Key, error: errorMsg },
+          'Microscope document processing failed'
+        );
 
         Sentry.addBreadcrumb({
           type: 'error',
@@ -107,15 +124,28 @@ export class MicroscopeIngestResultHandler implements JobHandler {
         }).catch(() => {});
 
         await notiService.sendMicroscopeDocumentFailed(userId, taskId, errorMsg);
+
+        // 4-1. 선제적 차감된 크레딧 롤백 (Rollback)
+        try {
+          await creditService.rollbackByTaskId(taskId);
+        } catch (creditErr) {
+          logger.error(
+            { err: creditErr, taskId, userId },
+            'Credit rollback failed after microscope ingest failure'
+          );
+        }
       } else {
-        logger.info({ taskId, userId, groupId, s3Key, chunks_count }, 'Microscope document processing completed successfully');
-        
+        logger.info(
+          { taskId, userId, groupId, s3Key, chunks_count },
+          'Microscope document processing completed successfully'
+        );
+
         let totalNodes = 0;
         let totalEdges = 0;
         if (downloadedGraphData && Array.isArray(downloadedGraphData)) {
           downloadedGraphData.forEach((chunk: any) => {
-            totalNodes += (chunk.nodes?.length || 0);
-            totalEdges += (chunk.edges?.length || 0);
+            totalNodes += chunk.nodes?.length || 0;
+            totalEdges += chunk.edges?.length || 0;
           });
         }
 
@@ -128,6 +158,16 @@ export class MicroscopeIngestResultHandler implements JobHandler {
         });
 
         await notiService.sendMicroscopeDocumentCompleted(userId, taskId, sourceId, chunks_count);
+
+        // 4-2. 선제적 차감된 크레딧 커밋 (Commit)
+        try {
+          await creditService.commitByTaskId(taskId);
+        } catch (creditErr) {
+          logger.error(
+            { err: creditErr, taskId, userId },
+            'Credit commit failed after microscope ingest success'
+          );
+        }
       }
 
       // 3. 워크스페이스 내에 남은 PENDING/PROCESSING 문서가 있는지 검사하여 최종 종합 Noti 판별
@@ -144,8 +184,11 @@ export class MicroscopeIngestResultHandler implements JobHandler {
 
       // 대기 중인 문서가 하나도 없다면, 모든 작업이 완료된 것임!
       if (pendingCount === 0) {
-        logger.info({ userId, groupId, totalDocs, completedCount, failedCount }, 'All documents in Microscope workspace have been processed');
-        
+        logger.info(
+          { userId, groupId, totalDocs, completedCount, failedCount },
+          'All documents in Microscope workspace have been processed'
+        );
+
         await Promise.allSettled([
           notiService.sendMicroscopeWorkspaceCompleted(userId, taskId),
           // FCM 푸시 알림 (전체 완료 건)
@@ -158,11 +201,14 @@ export class MicroscopeIngestResultHandler implements JobHandler {
               groupId,
               completedCount: String(completedCount),
             }
-          )
+          ),
         ]);
       }
     } catch (err) {
-      logger.error({ err, taskId, userId, groupId, docId }, 'Exception during Microscope Result Handling');
+      logger.error(
+        { err, taskId, userId, groupId, docId },
+        'Exception during Microscope Result Handling'
+      );
       // 핸들링 도중 발생한 에러 기록 시 SQS 큐가 재전송(nack)하도록 throw 유지 결정 가능
       // 여기서는 메시지 소모를 방해하지 않도록 처리합니다. (단일 업데이트 실패이므로 Retry 고려)
       throw err;

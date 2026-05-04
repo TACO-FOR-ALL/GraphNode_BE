@@ -61,7 +61,11 @@ export class GraphGenerationResultHandler implements JobHandler {
     const notiService = container.getNotificationService();
     const conversationService = container.getConversationService();
     const noteService = container.getNoteService();
+<<<<<<< feature/파일데이터추가for매크로
     const userFileService = container.getUserFileService();
+=======
+    const creditService = container.getCreditService();
+>>>>>>> develop
 
     try {
       // 그래프 생성 실패 처리 (AI 서버 응답 FAILED)
@@ -124,6 +128,16 @@ export class GraphGenerationResultHandler implements JobHandler {
           errorMessage: errorMsg,
           finishedAt: new Date().toISOString(),
         });
+
+        // 4-1. 선제적 차감된 크레딧 롤백 (Rollback)
+        try {
+          await creditService.rollbackByTaskId(taskId);
+        } catch (creditErr) {
+          logger.error(
+            { err: creditErr, taskId, userId },
+            'Credit rollback failed after graph generation failure'
+          );
+        }
         return;
       }
 
@@ -333,6 +347,16 @@ export class GraphGenerationResultHandler implements JobHandler {
           status: 'COMPLETED',
           finishedAt: new Date().toISOString(),
         });
+
+        // 4-2. 선제적 차감된 크레딧 커밋 (Commit)
+        try {
+          await creditService.commitByTaskId(taskId);
+        } catch (creditErr) {
+          logger.error(
+            { err: creditErr, taskId, userId },
+            'Credit commit failed after graph generation success'
+          );
+        }
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Processing failed internally';

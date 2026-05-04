@@ -9,7 +9,194 @@ tags:
   - name: Graph Editor
     description: Direct macro graph editing endpoints for nodes, edges, clusters, subclusters, and best-effort batch operations.
 paths:
+  /v1/me:
+    get:
+      summary: 현재 로그인 사용자 정보 조회
+      description: >-
+        현재 세션의 사용자 프로필 및 크레딧 잔액(JIT 갱신 후)을 반환합니다.
+        `credit` 필드는 항상 포함됩니다.
+      tags: [Me]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [userId]
+                properties:
+                  userId:
+                    type: string
+                    description: 사용자 ID
+                  profile:
+                    type: object
+                    description: 사용자 프로필 정보
+                  credit:
+                    type: object
+                    description: 크레딧 잔액 정보 (JIT 갱신 후)
+                    required: [balance, holdAmount, availableBalance, planType, cycleStart, cycleEnd]
+                    properties:
+                      balance:
+                        type: number
+                      holdAmount:
+                        type: number
+                      availableBalance:
+                        type: number
+                      planType:
+                        type: string
+                        enum: [FREE, PRO, ENTERPRISE]
+                      cycleStart:
+                        type: string
+                        format: date-time
+                      cycleEnd:
+                        type: string
+                        format: date-time
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '502':
+          description: Bad Gateway
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+
+  /v1/me/credits:
+    get:
+      summary: 크레딧 잔액 상세 조회
+      description: >-
+        현재 사용자의 크레딧 잔액을 조회합니다.
+        구독 주기가 만료된 경우 JIT(Just-In-Time) 갱신이 자동으로 실행됩니다.
+      tags: [Me]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [balance, holdAmount, availableBalance, planType, cycleStart, cycleEnd]
+                properties:
+                  balance:
+                    type: number
+                    description: 현재 보유 크레딧 (총량)
+                  holdAmount:
+                    type: number
+                    description: 에스크로 중인 크레딧 (비동기 작업 진행 중)
+                  availableBalance:
+                    type: number
+                    description: 실제 사용 가능한 크레딧 (balance - holdAmount)
+                  planType:
+                    type: string
+                    enum: [FREE, PRO, ENTERPRISE]
+                    description: 구독 플랜
+                  cycleStart:
+                    type: string
+                    format: date-time
+                    description: 현재 청구 주기 시작 일시
+                  cycleEnd:
+                    type: string
+                    format: date-time
+                    description: 현재 청구 주기 종료 일시
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '503':
+          description: Service Unavailable — 크레딧 서비스 미초기화
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+
+  /v1/me/credits/usage:
+    get:
+      summary: 크레딧 사용 내역 조회
+      description: >-
+        현재 사용자의 크레딧 사용 내역을 최신순으로 페이지네이션 조회합니다.
+      tags: [Me]
+      parameters:
+        - name: limit
+          in: query
+          description: 한 번에 가져올 항목 수 (기본 20, 최대 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          description: 건너뛸 항목 수 (기본 0)
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, feature, creditUsed, status, taskId, createdAt]
+                      properties:
+                        id:
+                          type: string
+                          description: UsageLog ID
+                        feature:
+                          type: string
+                          enum: [AI_CHAT, GRAPH_GENERATION, ADD_NODE, MICROSCOPE_INGEST]
+                          description: 사용된 기능
+                        creditUsed:
+                          type: number
+                          description: 사용한 크레딧 수
+                        status:
+                          type: string
+                          enum: [SUCCESS, FAILED]
+                          description: 결과 상태
+                        taskId:
+                          type: string
+                          nullable: true
+                          description: 비동기 작업 ID (동기 작업이면 null)
+                        createdAt:
+                          type: string
+                          format: date-time
+                          description: 사용 일시
+                  total:
+                    type: integer
+                    description: 전체 항목 수
+        '400':
+          description: Bad Request — limit/offset 파라미터 유효성 오류
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '503':
+          description: Service Unavailable — 크레딧 서비스 미초기화
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+
   /v1/search:
+
     get:
       summary: Integrated keyword search across notes and AI chats
       tags: [Search]

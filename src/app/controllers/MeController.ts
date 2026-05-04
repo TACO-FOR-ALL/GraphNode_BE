@@ -10,18 +10,25 @@ import {
   removeSessionBySessionId,
 } from '../../infra/redis/SessionStoreRedis';
 import { ValidationError } from '../../shared/errors/domain';
+import type { ICreditService } from '../../core/ports/ICreditService';
+
 
 /**
  * /v1/me 엔드포인트의 컨트롤러 클래스.
  */
 export class MeController {
   /**
-   * @param userService 사용자 관련 비즈니스 로직을 처리하는 서비스
+   * @param userService   사용자 관련 비즈니스 로직을 승리하는 서비스
+   * @param creditService 크레딧 관련 비즈니스 로직을 승리하는 서비스 (선택)
    */
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly creditService?: ICreditService,
+  ) {}
 
   /**
    * GET /v1/me - 현재 로그인된 사용자의 정보를 반환합니다.
+   * creditService 가 주입된 경우 JIT 갱신된 크레딧 잔액도 함께 반환합니다.
    */
   async getMe(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
@@ -32,6 +39,21 @@ export class MeController {
         userId: userProfile.id,
         profile: userProfile,
       };
+
+      // creditService가 주입된 경우 잔액도 함께 반환 (여기서 JIT 갱신 트리거)
+      if (this.creditService) {
+        const credit = await this.creditService.getBalance(userId).catch(() => undefined);
+        if (credit) {
+          body.credit = {
+            balance:          credit.balance,
+            holdAmount:       credit.holdAmount,
+            availableBalance: credit.availableBalance,
+            planType:         credit.planType,
+            cycleStart:       credit.cycleStart.toISOString(),
+            cycleEnd:         credit.cycleEnd.toISOString(),
+          };
+        }
+      }
 
       res.status(200).json(body);
     } catch (e) {
@@ -254,6 +276,61 @@ export class MeController {
       return payload.sessionId ?? null;
     } catch {
       return null;
+    }
+  }
+
+  // ── Credit endpoints ────────────────────────────────────────────────────────
+
+  /**
+   * GET /v1/me/credits
+   * 현재 크레딧 잔액을 조회합니다.
+   * JIT 갱신 로직이 내장되어 있어 구독 주기가 만료된 경우 자동으로 충전됩니다.
+   */
+  async getCredits(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!this.creditService) {
+        res.status(503).json({ type: 'https://httpstatuses.com/503', status: 503, title: 'Credit service unavailable' });
+        return;
+      }
+      const userId = getUserIdFromRequest(req)!;
+      const balance = await this.creditService.getBalance(userId);
+
+      res.status(200).json({
+        balance:          balance.balance,
+        holdAmount:       balance.holdAmount,
+        availableBalance: balance.availableBalance,
+        planType:         balance.planType,
+        cycleStart:       balance.cycleStart.toISOString(),
+        cycleEnd:         balance.cycleEnd.toISOString(),
+      });
+    } catch (e) {
+      next(e);
+    }
+  }
+
+  /**
+   * GET /v1/me/credits/usage
+   * 크레딧 사용 내역을 최신순으로 페이지네이션 조회합니다.
+   * Query: limit (1끐20, max 100), offset (기본 0)
+   */
+  async getCreditUsage(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!this.creditService) {
+        res.status(503).json({ type: 'https://httpstatuses.com/503', status: 503, title: 'Credit service unavailable' });
+        return;
+      }
+      const userId = getUserIdFromRequest(req)!;
+
+      const schema = z.object({
+        limit:  z.coerce.number().int().min(1).max(100).default(20),
+        offset: z.coerce.number().int().min(0).default(0),
+      });
+      const { limit, offset } = schema.parse(req.query);
+
+      const result = await this.creditService.getUsageLogs(userId, limit, offset);
+      res.status(200).json(result);
+    } catch (e) {
+      next(e);
     }
   }
 }
