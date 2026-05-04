@@ -94,6 +94,7 @@ export type {
   UpdateNodePayload,
   GraphEdgeType,
   GraphStatus,
+  GraphRelationType,
 } from './types/graph.js';
 export { GRAPH_SOURCE_TYPES } from './types/graph.js';
 export type {
@@ -178,6 +179,8 @@ export type {
   MoveNodeToClusterDto,
   MoveSubclusterToClusterDto,
   AddNodeToSubclusterDto,
+  EditorBatchOperation,
+  BatchEditorRequestDto,
   BatchOperationResult,
   BatchEditorResponseDto,
 } from './types/graphEditor.js';

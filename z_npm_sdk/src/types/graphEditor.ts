@@ -123,6 +123,33 @@ export interface AddNodeToSubclusterDto {
 
 // ── 배치 트랜잭션 ─────────────────────────────────────────────
 
+/**
+ * 배치 편집 작업 단위 타입.
+ * 각 operation은 `type` 필드로 구분되며, 단일 트랜잭션 내에서 순서대로 실행됩니다.
+ */
+export type EditorBatchOperation =
+  | { type: 'createNode'; payload: CreateNodeEditorDto }
+  | { type: 'updateNode'; nodeId: number; payload: UpdateNodeEditorDto }
+  | { type: 'deleteNode'; nodeId: number; permanent?: boolean }
+  | { type: 'createEdge'; payload: CreateEdgeEditorDto }
+  | { type: 'updateEdge'; edgeId: string; payload: UpdateEdgeEditorDto }
+  | { type: 'deleteEdge'; edgeId: string; permanent?: boolean }
+  | { type: 'createCluster'; payload: CreateClusterEditorDto }
+  | { type: 'updateCluster'; clusterId: string; payload: UpdateClusterEditorDto }
+  | { type: 'deleteCluster'; clusterId: string; cascade?: boolean; permanent?: boolean }
+  | { type: 'createSubcluster'; payload: CreateSubclusterEditorDto }
+  | { type: 'updateSubcluster'; subclusterId: string; payload: UpdateSubclusterEditorDto }
+  | { type: 'deleteSubcluster'; subclusterId: string; permanent?: boolean }
+  | { type: 'moveNodeToCluster'; nodeId: number; newClusterId: string }
+  | { type: 'moveSubclusterToCluster'; subclusterId: string; newClusterId: string }
+  | { type: 'addNodeToSubcluster'; subclusterId: string; nodeId: number }
+  | { type: 'removeNodeFromSubcluster'; subclusterId: string; nodeId: number };
+
+/** 배치 편집 트랜잭션 요청 DTO (최대 100개 operation) */
+export interface BatchEditorRequestDto {
+  operations: EditorBatchOperation[];
+}
+
 /** 배치 오퍼레이션 단건 결과 */
 export interface BatchOperationResult {
   operationIndex: number;
