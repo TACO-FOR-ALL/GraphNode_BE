@@ -57,11 +57,8 @@ export class AddNodeResultHandler implements JobHandler {
     const notiService = container.getNotificationService();
     const conversationService = container.getConversationService();
     const noteService = container.getNoteService();
-<<<<<<< feature/파일데이터추가for매크로
     const userFileService = container.getUserFileService();
-=======
     const creditService = container.getCreditService();
->>>>>>> develop
 
     // AI 서버에서 실패한 경우
     if (status === 'FAILED' || error) {

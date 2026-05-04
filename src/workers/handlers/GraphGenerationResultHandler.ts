@@ -61,11 +61,8 @@ export class GraphGenerationResultHandler implements JobHandler {
     const notiService = container.getNotificationService();
     const conversationService = container.getConversationService();
     const noteService = container.getNoteService();
-<<<<<<< feature/파일데이터추가for매크로
     const userFileService = container.getUserFileService();
-=======
     const creditService = container.getCreditService();
->>>>>>> develop
 
     try {
       // 그래프 생성 실패 처리 (AI 서버 응답 FAILED)
