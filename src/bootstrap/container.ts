@@ -2,6 +2,7 @@ import { ConversationRepositoryMongo } from '../infra/repositories/ConversationR
 import { MessageRepositoryMongo } from '../infra/repositories/MessageRepositoryMongo';
 import { UserRepositoryMySQL } from '../infra/repositories/UserRepositoryMySQL';
 import { NoteRepositoryMongo } from '../infra/repositories/NoteRepositoryMongo';
+import { UserFileRepositoryMongo } from '../infra/repositories/UserFileRepositoryMongo';
 import { DailyUsageRepositoryPrisma } from '../infra/repositories/DailyUsageRepositoryPrisma';
 import { GraphVectorService } from '../core/services/GraphVectorService';
 import { ConversationService } from '../core/services/ConversationService';
@@ -10,6 +11,7 @@ import { ChatManagementService } from '../core/services/ChatManagementService';
 import { UserService } from '../core/services/UserService';
 import { DailyUsageService } from '../core/services/DailyUsageService';
 import { NoteService } from '../core/services/NoteService';
+import { UserFileService } from '../core/services/UserFileService';
 import { GraphManagementService } from '../core/services/GraphManagementService';
 import { GraphEmbeddingService } from '../core/services/GraphEmbeddingService';
 import { GraphGenerationService } from '../core/services/GraphGenerationService';
@@ -39,6 +41,7 @@ import { Neo4jMacroGraphAdapter } from '../infra/graph/Neo4jMacroGraphAdapter';
 import { ChromaVectorAdapter } from '../infra/vector/ChromaVectorAdapter';
 // import { QdrantClientAdapter } from '../infra/repositories/QdrantClientAdapter'; // Removed
 import { NoteRepository } from '../core/ports/NoteRepository';
+import { UserFileRepository } from '../core/ports/UserFileRepository';
 // Ports
 import { GraphNeo4jStore } from '../core/ports/GraphNeo4jStore';
 import { MacroGraphStore } from '../core/ports/MacroGraphStore';
@@ -71,6 +74,7 @@ export class Container {
   private userRepo: UserRepository | null = null;
   private dailyUsageRepo: DailyUsageRepository | null = null;
   private noteRepo: NoteRepository | null = null;
+  private userFileRepo: UserFileRepository | null = null;
   private macroGraphStore: MacroGraphStore | null = null;
   private neo4jStore: GraphNeo4jStore | null = null;
   private vectorStore: VectorStore | null = null;
@@ -91,6 +95,7 @@ export class Container {
   private userService: UserService | null = null;
   private dailyUsageService: DailyUsageService | null = null;
   private noteService: NoteService | null = null;
+  private userFileService: UserFileService | null = null;
   private graphManagementService: GraphManagementService | null = null;
   private graphEmbeddingService: GraphEmbeddingService | null = null;
   private graphGenerationService: GraphGenerationService | null = null;
@@ -242,6 +247,16 @@ export class Container {
   }
 
   /**
+   * UserFileRepository(Mongo, `user_files`) 인스턴스를 반환합니다.
+   */
+  getUserFileRepository(): UserFileRepository {
+    if (!this.userFileRepo) {
+      this.userFileRepo = new UserFileRepositoryMongo();
+    }
+    return this.userFileRepo;
+  }
+
+  /**
    * MacroGraphStore 인스턴스를 반환합니다.
    * @returns MacroGraphStore 인스턴스
    */
@@ -340,6 +355,26 @@ export class Container {
     }
     return this.noteService;
   }
+
+  /**
+   * UserFileService 인스턴스를 반환합니다.
+   * 업로드·요약 큐·사이드바 병합 및 그래프 연동을 담당합니다.
+   */
+  getUserFileService(): UserFileService {
+    if (!this.userFileService) {
+      const env = loadEnv();
+      const raw = new UserFileService(
+        this.getUserFileRepository(),
+        this.getNoteRepository(),
+        this.getAwsS3Adapter(),
+        this.getAwsSqsAdapter(),
+        this.getGraphManagementService(),
+        env.SQS_REQUEST_QUEUE_URL || process.env.SQS_REQUEST_QUEUE_URL || 'TO_BE_CONFIGURED'
+      );
+      this.userFileService = createAuditProxy(raw, 'UserFileService');
+    }
+    return this.userFileService;
+  }
   /**
    * GraphManagementService 인스턴스를 반환합니다.
    */
@@ -375,6 +410,7 @@ export class Container {
         this.getChatManagementService(),
         this.getGraphEmbeddingService(),
         this.getNoteService(),
+        this.getUserFileService(),
         this.getUserService(),
         this.getAwsSqsAdapter(),
         this.getAwsS3Adapter(),

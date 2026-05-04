@@ -19,6 +19,8 @@ export enum TaskType {
   ADD_NODE_RESULT = 'ADD_NODE_RESULT', // AI -> Worker (AddNode result)
   MICROSCOPE_INGEST_FROM_NODE_REQUEST = 'MICROSCOPE_INGEST_FROM_NODE_REQUEST', // API -> AI (Microscope document ingest)
   MICROSCOPE_INGEST_FROM_NODE_RESULT = 'MICROSCOPE_INGEST_FROM_NODE_RESULT', // AI -> Worker (Microscope ingest result)
+  FILE_SUMMARY_REQUEST = 'FILE_SUMMARY_REQUEST', // API -> AI (사용자 라이브러리 파일 요약)
+  FILE_SUMMARY_RESULT = 'FILE_SUMMARY_RESULT', // AI -> Worker (사용자 파일 요약 결과)
 }
 
 // 공통 메시지 베이스
@@ -248,6 +250,48 @@ export interface MicroscopeIngestFromNodeResultQueuePayload extends BaseQueueMes
   };
 }
 
+// 9. API -> AI: 사용자 라이브러리 파일 요약 요청
+/**
+ * 사용자 업로드 파일에 대한 AI 요약 파이프라인 요청 (API -> SQS -> AI Worker).
+ * - payload.s3Key: 원본 바이너리가 저장된 S3 객체 키
+ * - payload.fileId: Mongo `user_files` 문서 `_id` (결과 상관에 사용)
+ */
+export interface FileSummaryRequestPayload extends BaseQueueMessage {
+  taskType: TaskType.FILE_SUMMARY_REQUEST;
+  payload: {
+    /** 요청 사용자 ID */
+    userId: string;
+    /** `user_files` 컬렉션 문서 ID */
+    fileId: string;
+    /** 원본 파일 S3 키 */
+    s3Key: string;
+    /** 페이로드 버킷명 (선택) */
+    bucket?: string;
+    /** UI 표시명 (AI 로깅·디버그용, 선택) */
+    displayName?: string;
+  };
+}
+
+// 10. AI -> Worker: 사용자 파일 요약 결과
+/**
+ * AI가 생성한 파일 요약 결과 (AI Worker -> SQS -> API Worker).
+ * - 성공 시 `summary` 또는 `summaryS3Key` 중 하나 이상으로 본문을 전달할 수 있다.
+ */
+export interface FileSummaryResultPayload extends BaseQueueMessage {
+  taskType: TaskType.FILE_SUMMARY_RESULT;
+  payload: {
+    userId: string;
+    fileId: string;
+    status: 'COMPLETED' | 'FAILED';
+    /** 인라인 요약 텍스트 (선택) */
+    summary?: string;
+    /** 요약 JSON 등이 담긴 S3 키 (선택) */
+    summaryS3Key?: string;
+    /** 실패 시 사유 */
+    error?: string;
+  };
+}
+
 // 전체 메시지 유니온 타입 (확장성을 위해)
 export type QueueMessage =
   | GraphGenRequestPayload
@@ -258,5 +302,7 @@ export type QueueMessage =
   | AddNodeRequestPayload
   | AddNodeResultPayload
   | MicroscopeIngestFromNodeQueuePayload
-  | MicroscopeIngestFromNodeResultQueuePayload;
+  | MicroscopeIngestFromNodeResultQueuePayload
+  | FileSummaryRequestPayload
+  | FileSummaryResultPayload;
 

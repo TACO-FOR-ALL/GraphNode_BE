@@ -25,6 +25,7 @@ import { GraphGenerationProgressHandler } from './handlers/GraphGenerationProgre
 import { GraphSummaryResultHandler } from './handlers/GraphSummaryResultHandler';
 import { AddNodeResultHandler } from './handlers/AddNodeResultHandler';
 import { MicroscopeIngestResultHandler } from './handlers/MicroscopeIngestResultHandler';
+import { FileSummaryResultHandler } from './handlers/FileSummaryResultHandler';
 
 async function startWorker() {
   initSentry();
@@ -52,6 +53,7 @@ async function startWorker() {
     [TaskType.GRAPH_SUMMARY_RESULT]: new GraphSummaryResultHandler(),
     [TaskType.ADD_NODE_RESULT]: new AddNodeResultHandler(),
     [TaskType.MICROSCOPE_INGEST_FROM_NODE_RESULT]: new MicroscopeIngestResultHandler(),
+    [TaskType.FILE_SUMMARY_RESULT]: new FileSummaryResultHandler(),
   };
 
   const queueUrl = env.SQS_RESULT_QUEUE_URL || '';

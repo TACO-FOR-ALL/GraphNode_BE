@@ -26,6 +26,7 @@ import { makeAiRouter } from './modules/ai.module';
 import { makeGraphRouter } from './modules/graph.module';
 import { makeGraphAiRouter } from './modules/graphAi.module';
 import { makeNoteRouter } from './modules/note.module';
+import { makeUserFileRouter } from './modules/userFile.module';
 import { makeSyncRouter } from './modules/sync.module';
 import { makeAgentRouter } from './modules/agent.module';
 import { makeNotificationRouter } from './modules/notification.module';
@@ -122,6 +123,9 @@ export function createApp() {
   app.use('/auth/google', authGoogleRouter);
   app.use('/auth/apple', authAppleRouter);
   app.use('/v1/me', makeMeRouter());
+
+  // User files + sidebar (노트 라우터보다 먼저 마운트하여 `/v1/files` 등이 `/v1/notes/:id`에 가려지지 않게 함)
+  app.use('/v1', makeUserFileRouter());
 
   // Note Router (가장 넓은 범위이므로 구체적인 v1 하위 라우터 아래에 배치)
   app.use('/v1', makeNoteRouter());

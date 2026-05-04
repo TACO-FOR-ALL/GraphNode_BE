@@ -25,13 +25,14 @@ const LEGACY_TO_MACRO_NODE_TYPE: Record<GraphSourceType, MacroNodeType> = {
   chat: 'conversation',
   markdown: 'note',
   notion: 'notion',
+  file: 'file',
 };
 
 const MACRO_TO_LEGACY_SOURCE_TYPE: Record<MacroNodeType, GraphSourceType> = {
   conversation: 'chat',
   note: 'markdown',
   notion: 'notion',
-  file: 'markdown',
+  file: 'file',
 };
 
 /**

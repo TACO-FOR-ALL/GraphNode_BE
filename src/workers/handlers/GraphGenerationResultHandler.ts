@@ -61,6 +61,7 @@ export class GraphGenerationResultHandler implements JobHandler {
     const notiService = container.getNotificationService();
     const conversationService = container.getConversationService();
     const noteService = container.getNoteService();
+    const userFileService = container.getUserFileService();
 
     try {
       // 그래프 생성 실패 처리 (AI 서버 응답 FAILED)
@@ -187,7 +188,7 @@ export class GraphGenerationResultHandler implements JobHandler {
         const sourceTypeResult: BatchResolvedSourceTypeResult = await resolveSourceTypesByOrigIds(
           this.collectGraphOrigIds(normalizedGraphOutputResult.normalizedAiGraphOutput),
           userId,
-          { conversationService, noteService }
+          { conversationService, noteService, userFileService }
         );
 
         // 3. sourceType을 끝내 판별하지 못한 origId가 있으면 저장하지 않는다.
@@ -262,13 +263,14 @@ export class GraphGenerationResultHandler implements JobHandler {
                 // 2026_04_12 기준, 임시로 for문 루프 돌려서 메서드로 만들어둠. 나중에 최적화 필요,
                 // FIXME TODO
 
-                const { chatCount, noteCount, notionCount } =
+                const { chatCount, noteCount, notionCount, fileCount } =
                   countSourceTypesFromSnapshot(snapshot);
 
                 // Chat Cnt, Note Cnt, Notion Cnt 계산 된 값으로 덮어쓰기
                 summaryJson.overview.total_conversations = chatCount;
                 summaryJson.overview.total_notes = noteCount;
                 summaryJson.overview.total_notions = notionCount;
+                summaryJson.overview.total_files = fileCount;
 
                 // GraphSummaryDoc 생성
                 const summaryDoc: GraphSummaryDoc = {
@@ -636,6 +638,10 @@ export class GraphGenerationResultHandler implements JobHandler {
         resolvedMarkdownCount: this.countResolvedSourceTypes(
           sourceTypeResult.sourceTypesByOrigId,
           'markdown'
+        ),
+        resolvedFileCount: this.countResolvedSourceTypes(
+          sourceTypeResult.sourceTypesByOrigId,
+          'file'
         ),
         sampleNodeIds,
       },

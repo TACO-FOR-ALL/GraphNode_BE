@@ -10,11 +10,13 @@ import { HttpClient } from '../../infra/http/httpClient';
 import {
   AiAddNodeBatchRequest,
   AiInputConversation,
+  AiInputFile,
   AiInputMappingNode,
   AiInputNote,
   AiInputSection,
   AiInputSourceNode,
 } from '../../shared/dtos/ai_input';
+import { UserFileService } from './UserFileService';
 import { logger } from '../../shared/utils/logger';
 import { AppError, UpstreamError, GraphNotFoundError } from '../../shared/errors/domain';
 import { ChatMessage } from '../../shared/dtos/ai';
@@ -53,6 +55,7 @@ export class GraphGenerationService {
     private readonly chatManagementService: ChatManagementService,
     private readonly graphEmbeddingService: GraphEmbeddingService,
     private readonly noteService: NoteService,
+    private readonly userFileService: UserFileService,
     private readonly userService: UserService,
     private readonly queuePort: QueuePort,
     private readonly storagePort: StoragePort,
@@ -93,9 +96,16 @@ export class GraphGenerationService {
         { label: 'NoteService.findNotesModifiedSince.check' }
       );
       const activeNotes = notes.filter((n) => !n.deletedAt);
+      const userFiles = await withRetry(
+        async () => await this.userFileService.listAllActiveFiles(userId),
+        { label: 'UserFileService.listAllActiveFiles.check' }
+      );
 
-      if (convs.items.length === 0 && activeNotes.length === 0) {
-        logger.info({ userId }, 'No conversation or note data found. Skipping graph generation.');
+      if (convs.items.length === 0 && activeNotes.length === 0 && userFiles.length === 0) {
+        logger.info(
+          { userId },
+          'No conversation, note, or user file data found. Skipping graph generation.'
+        );
         return null;
       }
 
@@ -131,6 +141,25 @@ export class GraphGenerationService {
         { label: 'Storage.upload.notes' }
       );
 
+      const extraS3Keys: string[] = [noteS3Key];
+      if (userFiles.length > 0) {
+        const filesS3Key = `graph-generation/${taskId}/files.json`;
+        const filesPayload = JSON.stringify({
+          files: userFiles.map((f) => ({
+            id: f._id,
+            title: f.displayName,
+            s3_key: f.s3Key,
+            mime_type: f.mimeType,
+            update_time: Math.floor(f.updatedAt.getTime() / 1000),
+          })),
+        });
+        await withRetry(
+          async () => await this.storagePort.upload(filesS3Key, filesPayload, 'application/json'),
+          { label: 'Storage.upload.files' }
+        );
+        extraS3Keys.push(filesS3Key);
+      }
+
       // 3. 사용자 언어 조회
       const language = await withRetry(
         async () => await this.userService.getPreferredLanguage(userId),
@@ -148,7 +177,7 @@ export class GraphGenerationService {
           includeSummary: options?.includeSummary ?? true,
           summaryLanguage: language,
           language: language,
-          extraS3Keys: [noteS3Key], // 통합된 노트 데이터 S3 키 전달
+          extraS3Keys,
         },
         timestamp: new Date().toISOString(),
       };
@@ -418,8 +447,19 @@ export class GraphGenerationService {
       );
       const updatedNotes = modifiedNotes.filter((note) => !note.deletedAt);
 
-      // 대화도 노트도 변경 없으면 작업 불필요
-      if (updatedConversations.length === 0 && updatedNotes.length === 0) {
+      const modifiedUserFiles = await withRetry(
+        async () =>
+          await this.userFileService.findFilesModifiedSince(userId, new Date(lastGraphUpdatedAt)),
+        { label: 'UserFileService.findFilesModifiedSince' }
+      );
+      const updatedUserFiles = modifiedUserFiles.filter((f) => !f.deletedAt);
+
+      // 대화·노트·사용자 파일 모두 변경 없으면 작업 불필요
+      if (
+        updatedConversations.length === 0 &&
+        updatedNotes.length === 0 &&
+        updatedUserFiles.length === 0
+      ) {
         return null;
       }
 
@@ -474,6 +514,13 @@ export class GraphGenerationService {
         content: note.content,
       }));
 
+      const mappedFiles: AiInputFile[] = updatedUserFiles.map((f) => ({
+        fileId: f._id,
+        title: f.displayName,
+        s3Key: f.s3Key,
+        mimeType: f.mimeType,
+      }));
+
       // 기존 클러스터 정보 가져오기
       const existingClusters: GraphClusterDto[] =
         await this.graphEmbeddingService.listClusters(userId);
@@ -482,6 +529,7 @@ export class GraphGenerationService {
         existingClusters,
         conversations: mappedConversations,
         notes: mappedNotes,
+        files: mappedFiles.length > 0 ? mappedFiles : undefined,
       };
 
       // S3에 데이터 업로드

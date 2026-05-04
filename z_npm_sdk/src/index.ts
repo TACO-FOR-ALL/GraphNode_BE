@@ -21,6 +21,7 @@ export { SyncApi } from './endpoints/sync.js';
 export { AiApi } from './endpoints/ai.js';
 export { NotificationApi } from './endpoints/notification.js';
 export { FileApi } from './endpoints/file.js';
+export { UserFilesApi } from './endpoints/userFiles.js';
 export { MicroscopeApi } from './endpoints/microscope.js';
 export { FeedbackApi } from './endpoints/feedback.js';
 export { GraphEditorApi } from './endpoints/graphEditor.js';
@@ -80,6 +81,15 @@ export type {
   SearchNotesAndAIChatsResponse,
 } from './types/search.js';
 export type { FileAttachment, FileUploadResponse } from './types/file.js';
+export type {
+  UserFileSummaryStatusDto,
+  UserFileCategoryDto,
+  UserFileDto,
+  SidebarItemKindDto,
+  SidebarItemDto,
+  SidebarItemsResponseDto,
+  UserFileListResponseDto,
+} from './types/userFile.js';
 export type { MicroscopeDocument, MicroscopeWorkspace, MicroscopeGraphNode, MicroscopeGraphEdge, MicroscopeGraphData } from './types/microscope.js';
 export type {
   GraphSourceType,

@@ -57,6 +57,7 @@ export class AddNodeResultHandler implements JobHandler {
     const notiService = container.getNotificationService();
     const conversationService = container.getConversationService();
     const noteService = container.getNoteService();
+    const userFileService = container.getUserFileService();
 
     // AI 서버에서 실패한 경우
     if (status === 'FAILED' || error) {
@@ -127,6 +128,7 @@ export class AddNodeResultHandler implements JobHandler {
         {
           conversationService,
           noteService,
+          userFileService,
         }
       );
 
@@ -286,6 +288,10 @@ export class AddNodeResultHandler implements JobHandler {
           resolvedMarkdownCount: this.countResolvedSourceTypes(
             sourceTypeResult.sourceTypesByOrigId,
             'markdown'
+          ),
+          resolvedFileCount: this.countResolvedSourceTypes(
+            sourceTypeResult.sourceTypesByOrigId,
+            'file'
           ),
         },
         'AddNode normalized origIds and resolved source types before edge persistence'
@@ -529,8 +535,8 @@ export class AddNodeResultHandler implements JobHandler {
     node: NormalizedAddNodeItem,
     sourceType: ResolvedGraphSourceType
   ): number {
-    if (sourceType === 'markdown') {
-      return node.numSections ?? 0;
+    if (sourceType === 'markdown' || sourceType === 'file') {
+      return node.numSections ?? (sourceType === 'file' ? 1 : 0);
     }
     return node.numMessages ?? 0;
   }

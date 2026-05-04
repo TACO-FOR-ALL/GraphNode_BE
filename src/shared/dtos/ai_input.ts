@@ -105,12 +105,25 @@ export interface AiInputNote {
  * @property existingClusters - 현재 사용자가 보유한 기존 클러스터 정보 리스트 (clusterId, name, themes 등).
  * @property conversations - 새롭게 추가 또는 갱신된 대화의 내용 배열. `mapping` 형식 또는 `messages[]` 형식 모두 허용.
  * @property notes - 새롭게 추가 또는 갱신된 노트의 내용 배열.
+ * @property files - (선택) 변경된 사용자 라이브러리 파일 메타. 원본 바이너리는 S3(`s3Key`)에 있으며, AI 파이프라인이 지원할 때만 처리된다.
  */
+/** AddNode 배치에 실리는 사용자 파일 한 건의 메타데이터. */
+export interface AiInputFile {
+  /** Mongo `user_files._id` */
+  fileId: string;
+  /** 표시명(파일 제목) */
+  title: string;
+  /** 페이로드 버킷 등에 저장된 객체 키 */
+  s3Key: string;
+  mimeType: string;
+}
+
 export interface AiAddNodeBatchRequest {
   userId: string;
   existingClusters: any[];
   conversations: AiInputConversation[];
   notes: AiInputNote[];
+  files?: AiInputFile[];
 }
 
 /**

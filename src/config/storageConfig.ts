@@ -51,6 +51,11 @@ export const STORAGE_BUCKETS = {
     prefix: 'ai-generated',
     proxyRoute: null,
   },
+  /** 사용자 라이브러리 원본(문서). 프록시 URL은 S3 prefix와 동일 규칙을 따른다. */
+  USER_FILES: {
+    prefix: 'user-files',
+    proxyRoute: '/user-files',
+  },
 } as const satisfies Record<string, StorageBucketConfig>;
 
 /**
