@@ -43,12 +43,22 @@ import { loadEnv } from '../../config/env';
 import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 import { ToolExecutionContext } from '../../shared/ai-providers/toolContext';
 import { STORAGE_BUCKETS, buildStorageKey } from '../../config/storageConfig';
+import { logger } from '../../shared/utils/logger';
+import { documentProcessor } from '../../shared/utils/documentProcessor';
+
+/** 사용자 라이브러리 파일 요약(OpenAI·첨부 파이프라인) 결과 */
+export type UserLibraryFileSummaryResult =
+  | { ok: true; data: { summary: string } }
+  | { ok: false; error: string };
 import { FEATURE_COSTS, CreditContext } from '../../config/billing.config';
 import { ICreditService } from '../ports/ICreditService';
 import { CreditFeature } from '../types/persistence/credit.persistence';
 
 /** 항상 그대로 전송하는 최신 메시지 수 (Direct Window). */
 const MAX_DIRECT_WINDOW = 20;
+
+/** 사용자 파일 요약용 추출 텍스트 상한 (토큰 비용·상한 방어). */
+const USER_FILE_SUMMARY_MAX_EXTRACT_CHARS = 120_000;
 
 /**
  * 요약 갱신을 트리거하는 최소 expelled 턴 수.
@@ -819,6 +829,104 @@ export class AiInteractionService {
       throw new UpstreamError('AiInteractionService.handleRetryAIChat failed', {
         cause: String(err),
       });
+    }
+  }
+
+  /**
+   * 사용자 라이브러리 파일을 S3에서 읽어 텍스트를 추출한 뒤 LLM으로 요약합니다.
+   * - API 키: 채팅과 동일한 서비스(환경변수) 키 (`getSystemApiKey('openai')`).
+   * - 추출: `documentProcessor` (PDF/DOCX/PPT 등) → 평문으로 요약 요청.
+   * - 출력 언어: `UserService.getPreferredLanguage` (조회 실패 시 `en`).
+   */
+  async summarizeUserLibraryFile(input: {
+    userId: string;
+    s3Key: string;
+    displayName: string;
+    mimeType: string;
+    sizeBytes: number;
+  }): Promise<UserLibraryFileSummaryResult> {
+    try {
+      const downloaded = await withRetry(
+        async () => this.storageAdapter.downloadFile(input.s3Key),
+        { label: 'summarizeUserLibraryFile.downloadFile' }
+      );
+
+      const processed = await documentProcessor.process(
+        downloaded.buffer,
+        input.mimeType,
+        input.displayName
+      );
+
+      if (processed.type === 'image') {
+        return {
+          ok: false,
+          error: '이 파일 형식은 요약을 지원하지 않습니다.',
+        };
+      }
+
+      let bodyText = processed.content.trim();
+      if (!bodyText) {
+        return { ok: false, error: '추출된 텍스트가 없습니다.' };
+      }
+      if (bodyText.length > USER_FILE_SUMMARY_MAX_EXTRACT_CHARS) {
+        bodyText =
+          bodyText.slice(0, USER_FILE_SUMMARY_MAX_EXTRACT_CHARS) +
+          '\n\n[문서가 길어 이후 내용은 생략되었습니다.]';
+      }
+
+      let preferredLanguage = 'en';
+      try {
+        preferredLanguage = await withRetry(
+          async () => this.userService.getPreferredLanguage(input.userId),
+          { label: 'summarizeUserLibraryFile.getPreferredLanguage' }
+        );
+      } catch (err: unknown) {
+        logger.warn(
+          { err, userId: input.userId },
+          'summarizeUserLibraryFile: 선호 언어 조회 실패, en 으로 요약'
+        );
+      }
+
+      const apiKey = this.getSystemApiKey('openai');
+      const provider = getAiProvider('openai');
+
+      const messages: ChatMessage[] = [
+        {
+          id: uuidv4(),
+          role: 'system',
+          content:
+            `You summarize documents for a compact in-app preview (e.g. graph node tooltip). Be concise (roughly 2–6 sentences). ` +
+            `Write the entire summary in the user's preferred language (BCP-47 / locale code: "${preferredLanguage}"). ` +
+            `If the document is entirely in a single other language and translating would distort technical terms, you may keep those terms in the original language.`,
+        },
+        {
+          id: uuidv4(),
+          role: 'user',
+          content: `File name: "${input.displayName}"\n\nSummarize the following extracted text for a short preview.\n\n${bodyText}`,
+        },
+      ];
+
+      const aiResult = await provider.generateChat(
+        apiKey,
+        { model: 'gpt-4o-mini', messages },
+        undefined,
+        undefined
+      );
+
+      if (!aiResult.ok) {
+        return { ok: false, error: aiResult.error };
+      }
+
+      const summary = aiResult.data.content?.trim();
+      if (!summary) {
+        return { ok: false, error: '요약 결과가 비어 있습니다.' };
+      }
+
+      return { ok: true, data: { summary } };
+    } catch (err: unknown) {
+      logger.error({ err, userId: input.userId }, 'summarizeUserLibraryFile failed');
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ok: false, error: msg };
     }
   }
 

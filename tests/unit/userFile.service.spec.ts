@@ -1,6 +1,6 @@
 /**
  * 목적: UserFileService 단위 테스트 (인메모리 목 Repository / 목 인프라).
- * - 실제 Mongo·S3·SQS 없이 업로드·목록·사이드바 병합·삭제 흐름을 검증한다.
+ * - 실제 Mongo·S3 없이 업로드·목록·사이드바 병합·삭제·백그라운드 요약 흐름을 검증한다.
  */
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
@@ -8,13 +8,17 @@ import { UserFileService } from '../../src/core/services/UserFileService';
 import type { UserFileRepository } from '../../src/core/ports/UserFileRepository';
 import type { NoteRepository } from '../../src/core/ports/NoteRepository';
 import type { StoragePort } from '../../src/core/ports/StoragePort';
-import type { QueuePort } from '../../src/core/ports/QueuePort';
 import type { GraphManagementService } from '../../src/core/services/GraphManagementService';
+import type { AiInteractionService } from '../../src/core/services/AiInteractionService';
 import type { UserFileDoc } from '../../src/core/types/persistence/userFile.persistence';
 import type { FolderDoc, NoteDoc } from '../../src/core/types/persistence/note.persistence';
 
 const userId = 'user-file-spec-1';
-const jobQueueUrl = 'http://mock-sqs.local/request';
+
+async function flushBackgroundJobs(): Promise<void> {
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  await new Promise<void>((resolve) => setImmediate(resolve));
+}
 
 function docTemplate(overrides: Partial<UserFileDoc> = {}): UserFileDoc {
   const now = new Date();
@@ -40,8 +44,10 @@ describe('UserFileService', () => {
   let userFileRepo: jest.Mocked<UserFileRepository>;
   let noteRepo: jest.Mocked<NoteRepository>;
   let storage: jest.Mocked<StoragePort>;
-  let queue: jest.Mocked<QueuePort>;
   let graph: jest.Mocked<GraphManagementService>;
+  let aiInteraction: jest.Mocked<
+    Pick<AiInteractionService, 'summarizeUserLibraryFile'>
+  >;
   let service: UserFileService;
 
   beforeEach(() => {
@@ -168,40 +174,90 @@ describe('UserFileService', () => {
         contentType: 'application/pdf',
       })),
       delete: jest.fn(async () => undefined),
+      getPresignedGetUrl: jest.fn(async () => 'https://s3.example/presigned'),
     } as unknown as jest.Mocked<StoragePort>;
-
-    queue = {
-      sendMessage: jest.fn(async () => undefined),
-    } as unknown as jest.Mocked<QueuePort>;
 
     graph = {
       deleteNodesByOrigIds: jest.fn(async () => undefined),
     } as unknown as jest.Mocked<GraphManagementService>;
 
+    aiInteraction = {
+      summarizeUserLibraryFile: jest.fn(async () => ({
+        ok: true as const,
+        data: { summary: '요약본' },
+      })),
+    };
+
     service = new UserFileService(
       userFileRepo,
       noteRepo,
       storage,
-      queue,
       graph,
-      jobQueueUrl
+      aiInteraction as unknown as AiInteractionService
     );
   });
 
-  it('PDF 업로드 시 S3 업로드·큐 발행·문서 생성이 수행된다', async () => {
+  it('PDF 업로드 시 S3 업로드·문서 생성 후 백그라운드 요약이 실행된다', async () => {
     const dto = await service.uploadFile(userId, 'report.pdf', Buffer.from('%PDF-1'), null);
 
     expect(dto.displayName).toBe('report.pdf');
     expect(dto.mimeType).toBe('application/pdf');
-    expect(storage.upload).toHaveBeenCalled();
-    expect(queue.sendMessage).toHaveBeenCalledWith(
-      jobQueueUrl,
-      expect.objectContaining({
-        taskType: 'FILE_SUMMARY_REQUEST',
-        payload: expect.objectContaining({ userId, fileId: dto.id }),
-      })
+    expect(storage.upload).toHaveBeenCalledWith(
+      expect.stringContaining(`user-files/${userId}/`),
+      expect.any(Buffer),
+      'application/pdf'
     );
     expect(userFileRepo.insert).toHaveBeenCalled();
+
+    await flushBackgroundJobs();
+
+    expect(aiInteraction.summarizeUserLibraryFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId,
+        displayName: 'report.pdf',
+        mimeType: 'application/pdf',
+      })
+    );
+    const call = aiInteraction.summarizeUserLibraryFile.mock.calls[0][0];
+    expect(call.s3Key).toContain(userId);
+    expect(call.sizeBytes).toBeGreaterThan(0);
+  });
+
+  it('백그라운드 요약 성공 시 DB에 summary·completed로 갱신된다', async () => {
+    aiInteraction.summarizeUserLibraryFile.mockResolvedValue({
+      ok: true,
+      data: { summary: '완료된 요약' },
+    });
+
+    const dto = await service.uploadFile(userId, 'ok.pdf', Buffer.from('%PDF-1'), null);
+    await flushBackgroundJobs();
+
+    const stored = files.get(dto.id);
+    expect(stored?.summary).toBe('완료된 요약');
+    expect(stored?.summaryStatus).toBe('completed');
+    expect(stored?.summaryError).toBeNull();
+    expect(userFileRepo.updateById).toHaveBeenCalledWith(
+      dto.id,
+      userId,
+      expect.objectContaining({
+        summaryStatus: 'completed',
+        summary: '완료된 요약',
+      })
+    );
+  });
+
+  it('백그라운드 요약 실패 시 summaryStatus·summaryError로 갱신된다', async () => {
+    aiInteraction.summarizeUserLibraryFile.mockResolvedValue({
+      ok: false,
+      error: 'LLM 호출 실패',
+    });
+
+    const dto = await service.uploadFile(userId, 'bad.pdf', Buffer.from('%PDF-1'), null);
+    await flushBackgroundJobs();
+
+    const stored = files.get(dto.id);
+    expect(stored?.summaryStatus).toBe('failed');
+    expect(stored?.summaryError).toBe('LLM 호출 실패');
   });
 
   it('허용되지 않은 확장자는 ValidationError로 거절된다', async () => {
@@ -248,5 +304,23 @@ describe('UserFileService', () => {
     expect(r.displayName).toBe('a.pdf');
     expect(storage.downloadFile).toHaveBeenCalledWith('user-files/u/f3.pdf');
     expect(r.buffer.length).toBeGreaterThan(0);
+  });
+
+  it('getPresignedViewUrl은 소유 파일의 S3 키로 Presigned URL을 요청한다', async () => {
+    files.set('f4', docTemplate({ _id: 'f4', s3Key: 'user-files/u/f4.pdf', displayName: '한글.pdf' }));
+
+    const result = await service.getPresignedViewUrl(userId, 'f4', { disposition: 'inline' });
+
+    expect(result.url).toBe('https://s3.example/presigned');
+    expect(result.expiresInSeconds).toBeGreaterThanOrEqual(60);
+    expect(new Date(result.expiresAt).getTime()).toBeGreaterThan(Date.now());
+    expect(storage.getPresignedGetUrl).toHaveBeenCalledWith(
+      'user-files/u/f4.pdf',
+      expect.objectContaining({
+        expiresInSeconds: result.expiresInSeconds,
+        responseContentType: 'application/pdf',
+        responseContentDisposition: expect.stringContaining("filename*=UTF-8''"),
+      })
+    );
   });
 });

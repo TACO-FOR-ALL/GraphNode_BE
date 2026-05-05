@@ -23,7 +23,6 @@ export interface UserFileDoc {
   summary?: string;
   summaryStatus: UserFileSummaryStatus;
   summaryError?: string | null;
-  aiTaskId?: string | null;
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date | null;

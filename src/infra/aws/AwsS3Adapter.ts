@@ -3,6 +3,7 @@ import {
   GetObjectCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Readable } from 'stream';
 import { Upload } from '@aws-sdk/lib-storage';
 
@@ -215,6 +216,43 @@ export class AwsS3Adapter implements StoragePort {
     } catch (error) {
       logger.error({ err: error, key, bucket }, 'Failed to delete from S3');
       throw new UpstreamError('Failed to delete from S3', { originalError: error });
+    }
+  }
+
+  /**
+   * 단건 객체 GET용 Presigned URL을 생성합니다.
+   *
+   * 실제 HTTP 요청 시 서명에 포함된 응답 헤더 파라미터와 일치해야 하므로,
+   * `responseContentType` 등을 넘긴 경우 클라이언트는 반환 URL을 수정하지 말고 그대로 사용해야 합니다.
+   */
+  async getPresignedGetUrl(
+    key: string,
+    options: {
+      expiresInSeconds: number;
+      bucketType?: 'payload' | 'file';
+      responseContentType?: string;
+      responseContentDisposition?: string;
+    }
+  ): Promise<string> {
+    const bucket = options.bucketType === 'file' ? this.fileBucket : this.payloadBucket;
+    try {
+      const command = new GetObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        ...(options.responseContentType
+          ? { ResponseContentType: options.responseContentType }
+          : {}),
+        ...(options.responseContentDisposition
+          ? { ResponseContentDisposition: options.responseContentDisposition }
+          : {}),
+      });
+
+      return await getSignedUrl(this.client, command, {
+        expiresIn: options.expiresInSeconds,
+      });
+    } catch (error) {
+      logger.error({ err: error, key, bucket }, 'Failed to create presigned GET URL');
+      throw new UpstreamError('Failed to create presigned GET URL', { originalError: error });
     }
   }
 }

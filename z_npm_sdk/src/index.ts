@@ -96,6 +96,7 @@ export type {
   SidebarItemDto,
   SidebarItemsResponseDto,
   UserFileListResponseDto,
+  UserFilePresignedViewUrlDto,
 } from './types/userFile.js';
 export type { MicroscopeDocument, MicroscopeWorkspace, MicroscopeGraphNode, MicroscopeGraphEdge, MicroscopeGraphData } from './types/microscope.js';
 export type {

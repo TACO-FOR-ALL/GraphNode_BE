@@ -16,8 +16,8 @@ const upload = multer({
 /**
  * 사용자 라이브러리 파일 라우터 팩토리.
  *
- * - `/v1` 에 마운트되는 전제로 경로는 `files`, `sidebar-items` 만 포함한다.
- * - `GET /files/:id` 가 `GET /files` 보다 뒤에 오면 안 되므로, 구체적인 경로(`content`)를 먼저 등록한다.
+ * - `/v1` 에 마운트되는 전제로 경로는 `files`, `sidebar-items`, `files/:id/view-url` 등을 포함한다.
+ * - `GET /files/:id` 보다 구체적인 경로(`content`, `view-url`)를 먼저 등록한다.
  */
 export function createUserFileRouter(deps: { userFileService: UserFileService }) {
   const router = Router();
@@ -29,6 +29,7 @@ export function createUserFileRouter(deps: { userFileService: UserFileService })
   router.get('/files', asyncHandler(controller.list.bind(controller)));
   router.get('/sidebar-items', asyncHandler(controller.sidebarItems.bind(controller)));
   router.get('/files/:id/content', asyncHandler(controller.downloadContent.bind(controller)));
+  router.get('/files/:id/view-url', asyncHandler(controller.presignedViewUrl.bind(controller)));
   router.get('/files/:id', asyncHandler(controller.getOne.bind(controller)));
   router.delete('/files/:id', asyncHandler(controller.remove.bind(controller)));
 

@@ -4,18 +4,19 @@ import { UserFileRepository } from '../ports/UserFileRepository';
 import { NoteRepository } from '../ports/NoteRepository';
 import { GraphManagementService } from './GraphManagementService';
 import { StoragePort } from '../ports/StoragePort';
-import { QueuePort } from '../ports/QueuePort';
 import { UserFileDoc } from '../types/persistence/userFile.persistence';
 import {
   assertAllowedUserFile,
   defaultMimeForUserFile,
 } from '../../shared/config/fileUploadSpec';
 import { buildStorageKey, STORAGE_BUCKETS } from '../../config/storageConfig';
+import { loadEnv } from '../../config/env';
 import { NotFoundError, ValidationError } from '../../shared/errors/domain';
 import { withRetry } from '../../shared/utils/retry';
-import { TaskType, FileSummaryRequestPayload } from '../../shared/dtos/queue';
-import type { UserFileDto, SidebarItemDto, SidebarItemsResponseDto } from '../../shared/dtos/userFile';
+import type { UserFileDto, SidebarItemDto, SidebarItemsResponseDto, UserFilePresignedViewUrlDto } from '../../shared/dtos/userFile';
 import type { NoteDoc } from '../types/persistence/note.persistence';
+import type { AiInteractionService } from './AiInteractionService';
+import { logger } from '../../shared/utils/logger';
 
 /** 영속 문서를 API용 DTO로 변환한다. */
 function toUserFileDto(doc: UserFileDoc): UserFileDto {
@@ -29,10 +30,21 @@ function toUserFileDto(doc: UserFileDoc): UserFileDto {
     summary: doc.summary,
     summaryStatus: doc.summaryStatus,
     summaryError: doc.summaryError ?? undefined,
-    aiTaskId: doc.aiTaskId ?? undefined,
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
   };
+}
+
+/**
+ * 브라우저 뷰어용 `Content-Disposition` 값을 만든다.
+ * RFC 5987 `filename*` 형식만 사용해 비 ASCII 파일명도 표시 가능하게 한다.
+ */
+function buildViewerContentDisposition(
+  displayName: string,
+  disposition: 'inline' | 'attachment'
+): string {
+  const encoded = encodeURIComponent(displayName);
+  return `${disposition}; filename*=UTF-8''${encoded}`;
 }
 
 /** 경로 요소 제거·`..` 무력화 후 파일명만 남긴다. */
@@ -64,17 +76,17 @@ function resolveDisplayName(original: string, existing: string[]): string {
  *
  * 책임:
  * - 업로드·목록·조회·삭제(소프트/하드) 및 S3·그래프 연동
- * - 업로드 후 요약 큐(`FILE_SUMMARY_REQUEST`) 발행
+ * - 업로드 후 백그라운드에서 추출+LLM 요약을 실행하고 DB에 저장 (외부 AI 서버 큐 없음)
  * - 사이드바용 노트+파일 병합 목록 제공
+ * - 프론트 파일 뷰어용 S3 Presigned GET URL 발급 (소유 검증 후)
  */
 export class UserFileService {
   constructor(
     private readonly userFileRepo: UserFileRepository,
     private readonly noteRepo: NoteRepository,
     private readonly storagePort: StoragePort,
-    private readonly queuePort: QueuePort,
     private readonly graphManagementService: GraphManagementService,
-    private readonly jobQueueUrl: string
+    private readonly aiInteractionService: AiInteractionService
   ) {}
 
   /** 기준 시각 이후 수정된 활성 파일 (AddNode 증분 등). */
@@ -140,7 +152,7 @@ export class UserFileService {
   }
 
   /**
-   * 바이너리를 S3에 올리고 DB에 메타를 저장한 뒤 요약 큐를 발행한다.
+   * 바이너리를 S3에 올리고 DB에 메타를 저장한 뒤, 요약 작업을 백그라운드에서 시작한다.
    * `folderId`가 있으면 해당 폴더가 존재하고 삭제되지 않았는지 검증한다.
    */
   async uploadFile(
@@ -185,8 +197,6 @@ export class UserFileService {
       { label: 'UserFileService.upload.s3' }
     );
 
-    const taskId = `file_summary_${userId}_${ulid()}`;
-
     const doc: UserFileDoc = {
       _id: id,
       ownerUserId: userId,
@@ -197,7 +207,6 @@ export class UserFileService {
       sizeBytes: buffer.length,
       category: allowed.category,
       summaryStatus: 'processing',
-      aiTaskId: taskId,
       createdAt: new Date(0),
       updatedAt: new Date(0),
       deletedAt: null,
@@ -207,36 +216,60 @@ export class UserFileService {
       label: 'UserFileService.upload.insert',
     });
 
-    const messageBody: FileSummaryRequestPayload = {
-      taskId,
-      taskType: TaskType.FILE_SUMMARY_REQUEST,
-      payload: {
-        userId,
-        fileId: id,
-        s3Key,
-        bucket: process.env.S3_PAYLOAD_BUCKET,
-        displayName,
-      },
-      timestamp: new Date().toISOString(),
-    };
-
-    try {
-      await withRetry(async () => this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
-        label: 'QueuePort.sendMessage.FileSummary',
-      });
-    } catch (err) {
-      await withRetry(
-        async () =>
-          this.userFileRepo.updateById(id, userId, {
-            summaryStatus: 'failed',
-            summaryError: `큐_발행_실패: ${String(err)}`,
-          }),
-        { label: 'UserFileService.upload.enqueueRollback' }
-      );
-      throw err;
-    }
+    this.enqueueSummaryJob(userId, id);
 
     return toUserFileDto(created);
+  }
+
+  /**
+   * 업로드 응답을 막지 않기 위해 `setImmediate`로 요약 파이프라인을 비동기 실행한다.
+   */
+  private enqueueSummaryJob(userId: string, fileId: string): void {
+    setImmediate(() => {
+      void this.runSummaryJob(userId, fileId).catch((err: unknown) => {
+        logger.error(
+          { err, userId, fileId },
+          'UserFileService.runSummaryJob failed (unhandled)'
+        );
+      });
+    });
+  }
+
+  private async runSummaryJob(userId: string, fileId: string): Promise<void> {
+    const doc =
+      (await withRetry(async () => this.userFileRepo.getById(fileId, userId, false), {
+        label: 'UserFileService.runSummaryJob.getById',
+      })) ?? null;
+    if (!doc || doc.deletedAt) return;
+
+    const result = await this.aiInteractionService.summarizeUserLibraryFile({
+      userId,
+      s3Key: doc.s3Key,
+      displayName: doc.displayName,
+      mimeType: doc.mimeType,
+      sizeBytes: doc.sizeBytes,
+    });
+
+    if (result.ok) {
+      await withRetry(
+        async () =>
+          this.userFileRepo.updateById(fileId, userId, {
+            summaryStatus: 'completed',
+            summary: result.data.summary,
+            summaryError: null,
+          }),
+        { label: 'UserFileService.runSummaryJob.completed' }
+      );
+    } else {
+      await withRetry(
+        async () =>
+          this.userFileRepo.updateById(fileId, userId, {
+            summaryStatus: 'failed',
+            summaryError: result.error,
+          }),
+        { label: 'UserFileService.runSummaryJob.failed' }
+      );
+    }
   }
 
   async getFile(userId: string, fileId: string): Promise<UserFileDto> {
@@ -270,6 +303,39 @@ export class UserFileService {
       contentType: doc.mimeType || downloaded.contentType || 'application/octet-stream',
       displayName: doc.displayName,
     };
+  }
+
+  /**
+   * 파일 뷰어용 Presigned GET URL을 발급한다.
+   *
+   * - 소유자·활성 파일만 허용 (`getFileDocForOwner`와 동일 검증).
+   * - 업로드 시 사용한 버킷과 동일하게 `downloadFile` 기본(페이로드 버킷)으로 서명한다.
+   * - 만료 시간은 `USER_FILE_PRESIGN_TTL_SECONDS` 환경 변수로 조정한다.
+   */
+  async getPresignedViewUrl(
+    userId: string,
+    fileId: string,
+    opts?: { disposition?: 'inline' | 'attachment' }
+  ): Promise<UserFilePresignedViewUrlDto> {
+    const doc = await this.getFileDocForOwner(userId, fileId);
+    const env = loadEnv();
+    const expiresInSeconds = env.USER_FILE_PRESIGN_TTL_SECONDS;
+    const disposition = opts?.disposition === 'attachment' ? 'attachment' : 'inline';
+    const contentType = doc.mimeType || 'application/octet-stream';
+    const contentDisposition = buildViewerContentDisposition(doc.displayName, disposition);
+
+    const url = await withRetry(
+      async () =>
+        this.storagePort.getPresignedGetUrl(doc.s3Key, {
+          expiresInSeconds,
+          responseContentType: contentType,
+          responseContentDisposition: contentDisposition,
+        }),
+      { label: 'UserFileService.getPresignedViewUrl' }
+    );
+
+    const expiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
+    return { url, expiresInSeconds, expiresAt };
   }
 
   async listFiles(

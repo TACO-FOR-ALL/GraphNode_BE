@@ -370,18 +370,16 @@ export class Container {
 
   /**
    * UserFileService 인스턴스를 반환합니다.
-   * 업로드·요약 큐·사이드바 병합 및 그래프 연동을 담당합니다.
+   * 업로드·백그라운드 요약·사이드바 병합 및 그래프 연동을 담당합니다.
    */
   getUserFileService(): UserFileService {
     if (!this.userFileService) {
-      const env = loadEnv();
       const raw = new UserFileService(
         this.getUserFileRepository(),
         this.getNoteRepository(),
         this.getAwsS3Adapter(),
-        this.getAwsSqsAdapter(),
         this.getGraphManagementService(),
-        env.SQS_REQUEST_QUEUE_URL || process.env.SQS_REQUEST_QUEUE_URL || 'TO_BE_CONFIGURED'
+        this.getAiInteractionService()
       );
       this.userFileService = createAuditProxy(raw, 'UserFileService');
     }

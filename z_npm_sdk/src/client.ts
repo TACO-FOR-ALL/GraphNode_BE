@@ -45,7 +45,7 @@ export interface GraphNodeClientOptions extends Omit<BuilderOptions, 'baseUrl' |
  * @property ai AI 채팅 API
  * @property notification SSE 알림 API
  * @property file AI 채팅용 파일 업로드 API (`/api/v1/ai/files`)
- * @property userFiles 사용자 노트 첨부 파일 API (`/v1/files`, `/v1/file-links`)
+ * @property userFiles 사용자 라이브러리 파일 API (`/v1/files`, `/v1/sidebar-items`, Presigned 뷰 URL 등)
  * @property microscope 마이크로스코프 API
  */
 export class GraphNodeClient {

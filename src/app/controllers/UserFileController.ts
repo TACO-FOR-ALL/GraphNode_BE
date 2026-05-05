@@ -15,7 +15,7 @@ function parseFolderIdParam(value: unknown): string | null {
  * 모듈: 사용자 라이브러리 파일 HTTP 컨트롤러
  *
  * 책임:
- * - `/v1/files`, `/v1/sidebar-items` 요청을 검증하고 `UserFileService`에 위임한다.
+ * - `/v1/files`, `/v1/sidebar-items`, `/v1/files/:id/view-url` 요청을 검증하고 서비스에 위임한다.
  */
 export class UserFileController {
   constructor(private readonly userFileService: UserFileService) {}
@@ -60,6 +60,30 @@ export class UserFileController {
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(displayName)}`);
     res.send(buffer);
+  }
+
+  /**
+   * `GET /v1/files/:id/view-url`
+   *
+   * 프론트 파일 뷰어용: 인증된 소유자에게만 S3 Presigned GET URL을 내려준다.
+   * Query `disposition`: `inline`(기본) | `attachment`
+   */
+  async presignedViewUrl(req: Request, res: Response) {
+    const userId = getUserIdFromRequest(req)!;
+    const raw = req.query.disposition;
+    let disposition: 'inline' | 'attachment' | undefined;
+    if (raw === undefined || raw === '') {
+      disposition = undefined;
+    } else if (raw === 'inline' || raw === 'attachment') {
+      disposition = raw;
+    } else {
+      throw new ValidationError('disposition 쿼리는 inline 또는 attachment 만 허용됩니다.');
+    }
+
+    const body = await this.userFileService.getPresignedViewUrl(userId, req.params.id, {
+      disposition,
+    });
+    res.json(body);
   }
 
   /** `DELETE /v1/files/:id` — `?permanent=true` 시 영구 삭제. */

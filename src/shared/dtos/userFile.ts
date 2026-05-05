@@ -24,8 +24,6 @@ export interface UserFileDto {
   summary?: string;
   summaryStatus: UserFileSummaryStatusDto;
   summaryError?: string | null;
-  /** 요약 큐 발행 시 correlation용 task 식별자 */
-  aiTaskId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -46,4 +44,15 @@ export interface SidebarItemDto {
 /** `GET /v1/sidebar-items` 응답 */
 export interface SidebarItemsResponseDto {
   items: SidebarItemDto[];
+}
+
+/**
+ * `GET /v1/files/:id/view-url` 응답
+ *
+ * 프론트 파일 뷰어는 `url`로 직접 GET 하며, 만료 후에는 동일 API를 다시 호출합니다.
+ */
+export interface UserFilePresignedViewUrlDto {
+  url: string;
+  expiresInSeconds: number;
+  expiresAt: string;
 }

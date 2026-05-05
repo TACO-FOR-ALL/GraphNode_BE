@@ -19,7 +19,6 @@ export interface UserFileDto {
   summary?: string;
   summaryStatus: UserFileSummaryStatusDto;
   summaryError?: string | null;
-  aiTaskId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -42,4 +41,15 @@ export interface SidebarItemsResponseDto {
 export interface UserFileListResponseDto {
   items: UserFileDto[];
   nextCursor: string | null;
+}
+
+/**
+ * `GET /v1/files/:id/view-url` 응답 — S3 Presigned GET URL (단기 유효).
+ * 뷰어는 `url`에 직접 요청하며, 만료 시 동일 API로 재발급받는다.
+ */
+export interface UserFilePresignedViewUrlDto {
+  url: string;
+  expiresInSeconds: number;
+  /** ISO 8601 */
+  expiresAt: string;
 }
