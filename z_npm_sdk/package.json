@@ -1,10 +1,6 @@
 {
   "name": "@taco_tsinghua/graphnode-sdk",
-<<<<<<< HEAD
   "version": "0.2.10",
-=======
-  "version": "0.1.100",
->>>>>>> 20b08cb (FEAT/파일관련fe기능추가)
   "description": "GraphNode frontend SDK (cookie-based session)",
   "type": "module",
   "main": "./dist/index.js",
