@@ -12,6 +12,7 @@ import { QueuePort } from '../../src/core/ports/QueuePort';
 import { StoragePort } from '../../src/core/ports/StoragePort';
 import { UserService } from '../../src/core/services/UserService';
 import { NoteService } from '../../src/core/services/NoteService';
+import { UserFileService } from '../../src/core/services/UserFileService';
 import { NotificationService } from '../../src/core/services/NotificationService';
 
 // Mock HttpClient
@@ -29,6 +30,7 @@ describe('GraphGenerationService', () => {
   let mockStoragePort: jest.Mocked<StoragePort>;
   let mockUserSvc: jest.Mocked<UserService>;
   let mockNoteSvc: jest.Mocked<NoteService>;
+  let mockUserFileSvc: jest.Mocked<UserFileService>;
   let mockNotificationSvc: jest.Mocked<NotificationService>;
 
   beforeEach(() => {
@@ -56,6 +58,11 @@ describe('GraphGenerationService', () => {
 
     mockNoteSvc = {
       findNotesModifiedSince: jest.fn<any>().mockResolvedValue([]),
+    } as any;
+
+    mockUserFileSvc = {
+      listAllActiveFiles: jest.fn<any>().mockResolvedValue([]),
+      findFilesModifiedSince: jest.fn<any>().mockResolvedValue([]),
     } as any;
 
     mockNotificationSvc = {
@@ -115,6 +122,7 @@ describe('GraphGenerationService', () => {
       mockChatSvc,
       mockGraphEmbSvc,
       mockNoteSvc,
+      mockUserFileSvc,
       mockUserSvc,
       mockQueuePort,
       mockStoragePort,
@@ -172,6 +180,7 @@ describe('GraphGenerationService', () => {
         nextCursor: null,
       });
       mockNoteSvc.findNotesModifiedSince.mockResolvedValue([]);
+      mockUserFileSvc.listAllActiveFiles.mockResolvedValue([]);
 
       // Act
       const result = await service.requestGraphGenerationViaQueue(userId);
@@ -189,6 +198,7 @@ describe('GraphGenerationService', () => {
         items: [{ id: 'c1', title: 'T1', messages: [] } as any],
         nextCursor: null,
       });
+      mockUserFileSvc.listAllActiveFiles.mockResolvedValue([]);
       mockQueuePort.sendMessage.mockResolvedValue(undefined);
       mockGraphEmbSvc.saveStats.mockResolvedValue(undefined);
 
@@ -223,6 +233,7 @@ describe('GraphGenerationService', () => {
         items: [],
         nextCursor: null,
       });
+      mockUserFileSvc.listAllActiveFiles.mockResolvedValue([]);
       mockNoteSvc.findNotesModifiedSince.mockResolvedValue([
         {
           _id: 'n1',

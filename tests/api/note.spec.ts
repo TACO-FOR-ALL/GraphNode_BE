@@ -30,6 +30,58 @@ jest.mock('../../src/infra/db/mongodb', () => ({
     }),
   }),
   initMongo: jest.fn(),
+  disconnectMongo: jest.fn<any>().mockResolvedValue(undefined),
+}));
+
+/** FileRepositoryMongo는 실제 getMongo().db()를 쓰는데, 이 스펙의 getMongo 목에는 db가 없다. 인메모리 목으로 대체한다. */
+jest.mock('../../src/infra/repositories/FileRepositoryMongo', () => ({
+  FileRepositoryMongo: class {
+    async softDeleteLinksByNoteId(_noteId: string, _ownerUserId: string) {
+      return 0;
+    }
+    async insertFile() {
+      throw new Error('FileRepositoryMongo not used in note API spec');
+    }
+    async getFileById() {
+      return null;
+    }
+    async existsActiveDisplayName() {
+      return false;
+    }
+    async softDeleteFile() {
+      return true;
+    }
+    async hardDeleteFile() {
+      return true;
+    }
+    async updateFileSummary() {
+      return true;
+    }
+    async listFilesLinkedToActiveNotes() {
+      return [];
+    }
+    async listFilesForIncrementalAddNode() {
+      return [];
+    }
+    async insertLink() {
+      throw new Error('FileRepositoryMongo not used in note API spec');
+    }
+    async getLinkById() {
+      return null;
+    }
+    async findActiveLink() {
+      return null;
+    }
+    async listLinksWithFilesByNoteId() {
+      return [];
+    }
+    async softDeleteLink() {
+      return true;
+    }
+    async hardDeleteLink() {
+      return true;
+    }
+  },
 }));
 jest.mock('../../src/infra/db', () => ({
   initDatabases: jest.fn(),

@@ -88,6 +88,18 @@ const EnvSchema = z.object({
   S3_PAYLOAD_BUCKET: z.string().min(1, 'S3_PAYLOAD_BUCKET required'),
   S3_FILE_BUCKET: z.string().min(1, 'S3_FILE_BUCKET required'),
 
+  /**
+   * 사용자 라이브러리 파일 뷰어용 Presigned GET URL 만료 시간(초).
+   * 짧을수록 유출 시 피해가 작고, 길면 큰 파일 미리보기 시 재발급이 덜합니다. (AWS 최대 604800)
+   */
+  USER_FILE_PRESIGN_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .min(60)
+    .max(604800)
+    .default(900),
+
   // JWT 설정
   JWT_SECRET: z.string().min(1, 'JWT_SECRET required'),
   JWT_ACCESS_EXPIRY: z.string().default('1h'),

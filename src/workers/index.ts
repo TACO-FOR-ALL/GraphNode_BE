@@ -25,7 +25,6 @@ import { GraphGenerationProgressHandler } from './handlers/GraphGenerationProgre
 import { GraphSummaryResultHandler } from './handlers/GraphSummaryResultHandler';
 import { AddNodeResultHandler } from './handlers/AddNodeResultHandler';
 import { MicroscopeIngestResultHandler } from './handlers/MicroscopeIngestResultHandler';
-
 async function startWorker() {
   initSentry();
   const env = loadEnv();
