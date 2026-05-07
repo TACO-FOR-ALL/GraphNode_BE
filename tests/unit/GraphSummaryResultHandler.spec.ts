@@ -63,6 +63,7 @@ describe('GraphSummaryResultHandler', () => {
           total_conversations: 0,
           total_notes: 0,
           total_notions: 0,
+          total_files: 0,
         }),
         generatedAt: '2023-01-02T00:00:00Z',
       })

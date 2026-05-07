@@ -9,10 +9,12 @@ export function countSourceTypesFromSnapshot(snapshot: GraphSnapshotDto): {
   chatCount: number;
   noteCount: number;
   notionCount: number;
+  fileCount: number;
 } {
   let chatCount = 0;
   let noteCount = 0;
   let notionCount = 0;
+  let fileCount = 0;
 
   for (const node of snapshot.nodes) {
     if (node.sourceType === 'chat') {
@@ -21,10 +23,12 @@ export function countSourceTypesFromSnapshot(snapshot: GraphSnapshotDto): {
       noteCount++;
     } else if (node.sourceType === 'notion') {
       notionCount++;
+    } else if (node.sourceType === 'file') {
+      fileCount++;
     }
   }
 
-  return { chatCount, noteCount, notionCount };
+  return { chatCount, noteCount, notionCount, fileCount };
 }
 
 /**
@@ -36,10 +40,12 @@ export function countSourceTypesFromNodeList(nodeList: GraphNodeDto[]): {
   chatCount: number;
   noteCount: number;
   notionCount: number;
+  fileCount: number;
 } {
   let chatCount = 0;
   let noteCount = 0;
   let notionCount = 0;
+  let fileCount = 0;
 
   for (const node of nodeList) {
     if (node.sourceType === 'chat') {
@@ -48,8 +54,10 @@ export function countSourceTypesFromNodeList(nodeList: GraphNodeDto[]): {
       noteCount++;
     } else if (node.sourceType === 'notion') {
       notionCount++;
+    } else if (node.sourceType === 'file') {
+      fileCount++;
     }
   }
 
-  return { chatCount, noteCount, notionCount };
+  return { chatCount, noteCount, notionCount, fileCount };
 }

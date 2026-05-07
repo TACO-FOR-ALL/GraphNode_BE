@@ -2,6 +2,7 @@ import { ConversationRepositoryMongo } from '../infra/repositories/ConversationR
 import { MessageRepositoryMongo } from '../infra/repositories/MessageRepositoryMongo';
 import { UserRepositoryMySQL } from '../infra/repositories/UserRepositoryMySQL';
 import { NoteRepositoryMongo } from '../infra/repositories/NoteRepositoryMongo';
+import { UserFileRepositoryMongo } from '../infra/repositories/UserFileRepositoryMongo';
 import { DailyUsageRepositoryPrisma } from '../infra/repositories/DailyUsageRepositoryPrisma';
 import { GraphVectorService } from '../core/services/GraphVectorService';
 import { ConversationService } from '../core/services/ConversationService';
@@ -10,6 +11,7 @@ import { ChatManagementService } from '../core/services/ChatManagementService';
 import { UserService } from '../core/services/UserService';
 import { DailyUsageService } from '../core/services/DailyUsageService';
 import { NoteService } from '../core/services/NoteService';
+import { UserFileService } from '../core/services/UserFileService';
 import { GraphManagementService } from '../core/services/GraphManagementService';
 import { GraphEmbeddingService } from '../core/services/GraphEmbeddingService';
 import { GraphGenerationService } from '../core/services/GraphGenerationService';
@@ -39,6 +41,7 @@ import { Neo4jMacroGraphAdapter } from '../infra/graph/Neo4jMacroGraphAdapter';
 import { ChromaVectorAdapter } from '../infra/vector/ChromaVectorAdapter';
 // import { QdrantClientAdapter } from '../infra/repositories/QdrantClientAdapter'; // Removed
 import { NoteRepository } from '../core/ports/NoteRepository';
+import { UserFileRepository } from '../core/ports/UserFileRepository';
 // Ports
 import { GraphNeo4jStore } from '../core/ports/GraphNeo4jStore';
 import { MacroGraphStore } from '../core/ports/MacroGraphStore';
@@ -53,6 +56,9 @@ import { AwsSqsAdapter } from '../infra/aws/AwsSqsAdapter';
 import { AwsS3Adapter } from '../infra/aws/AwsS3Adapter';
 import { RedisEventBusAdapter } from '../infra/redis/RedisEventBusAdapter';
 import { FeedbackRepositoryPrisma } from '../infra/repositories/FeedbackRepositoryPrisma';
+import { CreditRepositoryPrisma } from '../infra/repositories/CreditRepositoryPrisma';
+import { ICreditRepository } from '../core/ports/ICreditRepository';
+import { CreditService } from '../core/services/CreditService';
 /**
  * 애플리케이션의 의존성 주입(Dependency Injection)을 관리하는 싱글톤 컨테이너입니다.
  *
@@ -71,6 +77,7 @@ export class Container {
   private userRepo: UserRepository | null = null;
   private dailyUsageRepo: DailyUsageRepository | null = null;
   private noteRepo: NoteRepository | null = null;
+  private userFileRepo: UserFileRepository | null = null;
   private macroGraphStore: MacroGraphStore | null = null;
   private neo4jStore: GraphNeo4jStore | null = null;
   private vectorStore: VectorStore | null = null;
@@ -78,6 +85,7 @@ export class Container {
   private microscopeWorkspaceRepo: MicroscopeWorkspaceStore | null = null;
   private notificationRepo: NotificationRepository | null = null;
   private feedbackRepo: FeedbackRepository | null = null;
+  private creditRepo: ICreditRepository | null = null;
 
   // Infra Adapters
   private queueAdapter: QueuePort | null = null;
@@ -91,6 +99,7 @@ export class Container {
   private userService: UserService | null = null;
   private dailyUsageService: DailyUsageService | null = null;
   private noteService: NoteService | null = null;
+  private userFileService: UserFileService | null = null;
   private graphManagementService: GraphManagementService | null = null;
   private graphEmbeddingService: GraphEmbeddingService | null = null;
   private graphGenerationService: GraphGenerationService | null = null;
@@ -104,6 +113,7 @@ export class Container {
   private searchService: SearchService | null = null;
   private feedbackService: FeedbackService | null = null;
   private graphEditorService: GraphEditorService | null = null;
+  private creditService: CreditService | null = null;
 
   private constructor() {}
   /**
@@ -242,6 +252,16 @@ export class Container {
   }
 
   /**
+   * UserFileRepository(Mongo, `user_files`) 인스턴스를 반환합니다.
+   */
+  getUserFileRepository(): UserFileRepository {
+    if (!this.userFileRepo) {
+      this.userFileRepo = new UserFileRepositoryMongo();
+    }
+    return this.userFileRepo;
+  }
+
+  /**
    * MacroGraphStore 인스턴스를 반환합니다.
    * @returns MacroGraphStore 인스턴스
    */
@@ -272,6 +292,13 @@ export class Container {
       this.feedbackRepo = new FeedbackRepositoryPrisma();
     }
     return this.feedbackRepo;
+  }
+
+  getCreditRepository(): ICreditRepository {
+    if (!this.creditRepo) {
+      this.creditRepo = new CreditRepositoryPrisma();
+    }
+    return this.creditRepo;
   }
 
   // --- Services ---
@@ -340,6 +367,24 @@ export class Container {
     }
     return this.noteService;
   }
+
+  /**
+   * UserFileService 인스턴스를 반환합니다.
+   * 업로드·백그라운드 요약·사이드바 병합 및 그래프 연동을 담당합니다.
+   */
+  getUserFileService(): UserFileService {
+    if (!this.userFileService) {
+      const raw = new UserFileService(
+        this.getUserFileRepository(),
+        this.getNoteRepository(),
+        this.getAwsS3Adapter(),
+        this.getGraphManagementService(),
+        this.getAiInteractionService()
+      );
+      this.userFileService = createAuditProxy(raw, 'UserFileService');
+    }
+    return this.userFileService;
+  }
   /**
    * GraphManagementService 인스턴스를 반환합니다.
    */
@@ -375,10 +420,12 @@ export class Container {
         this.getChatManagementService(),
         this.getGraphEmbeddingService(),
         this.getNoteService(),
+        this.getUserFileService(),
         this.getUserService(),
         this.getAwsSqsAdapter(),
         this.getAwsS3Adapter(),
-        this.getNotificationService()
+        this.getNotificationService(),
+        this.getCreditService()
       );
       this.graphGenerationService = createAuditProxy(raw, 'GraphGenerationService');
     }
@@ -427,6 +474,7 @@ export class Container {
           graphEmbeddingService: this.getGraphEmbeddingService(),
           graphVectorService: this.getGraphVectorService(),
           searchService: this.getSearchService(),
+          creditService: this.getCreditService(),
         }
       );
       this.agentService = createAuditProxy(raw, 'AgentService');
@@ -441,7 +489,8 @@ export class Container {
       const raw = new AiInteractionService(
         this.getChatManagementService(),
         this.getUserService(),
-        this.getAwsS3Adapter()
+        this.getAwsS3Adapter(),
+        this.getCreditService()
       );
       this.aiInteractionService = createAuditProxy(raw, 'AiInteractionService');
     }
@@ -492,7 +541,8 @@ export class Container {
         this.getConversationRepository(),
         this.getNoteRepository(),
         this.getNotificationService(),
-        this.getUserService()
+        this.getUserService(),
+        this.getCreditService()
       );
       this.microscopeManagementService = createAuditProxy(raw, 'MicroscopeManagementService');
     }
@@ -521,6 +571,14 @@ export class Container {
       this.feedbackService = createAuditProxy(raw, 'FeedbackService');
     }
     return this.feedbackService;
+  }
+
+  getCreditService(): CreditService {
+    if (!this.creditService) {
+      const raw = new CreditService(this.getCreditRepository());
+      this.creditService = createAuditProxy(raw, 'CreditService');
+    }
+    return this.creditService;
   }
 
   /**

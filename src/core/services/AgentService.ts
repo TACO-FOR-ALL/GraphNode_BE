@@ -18,6 +18,11 @@ import { UserService } from './UserService';
 import { InvalidApiKeyError } from '../../shared/errors/domain';
 import { ToolRegistry } from '../../agent/ToolRegistry';
 import { loadEnv } from '../../config/env';
+import { AppError } from '../../shared/errors/base';
+import { UpstreamError } from '../../shared/errors/domain';
+import { ICreditService } from '../ports/ICreditService';
+import { CreditFeature } from '../types/persistence/credit.persistence';
+import { FEATURE_COSTS, CreditContext } from '../../config/billing.config';
 
 /** SSE 이벤트 전송 함수 타입 */
 export type SendEventFn = (event: string, data: unknown) => void;
@@ -33,6 +38,8 @@ export interface AgentServiceDeps {
   graphVectorService: GraphVectorService;
   /** Graph RAG 검색 파이프라인 (SearchConversationsTool에서 사용) */
   searchService: SearchService;
+  /** 크레딧 서비스 (에이전트 및 Tool 과금 처리) */
+  creditService?: ICreditService;
 }
 
 export class AgentService {
@@ -47,6 +54,8 @@ export class AgentService {
    * @param body 채팅 요청 바디
    * @param sendEvent SSE 이벤트 전달 함수
    * @returns void
+   * @throws {InsufficientCreditError} INSUFFICIENT_CREDIT — 크레딧 부족
+   * @throws {UpstreamError} UPSTREAM_ERROR — AI 생성 실패
    */
   async handleChatStream(
     userId: string,
@@ -60,8 +69,13 @@ export class AgentService {
       messageService,
       graphEmbeddingService,
       graphVectorService,
+      creditService,
     } = this.deps;
 
+    let creditDeducted = false;
+    let deductedCreditAmount = 0;
+
+    try {
     const trimmedUser = (body.userMessage || '').trim();
     const context = (body.contextText || '').trim();
     const hasContext = context.length > 0;
@@ -78,6 +92,11 @@ export class AgentService {
     // 환경 변수에서 OpenAI API Key 로드
     const env = loadEnv();
     const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+
+    // 크레딧 차감 (분류 분석 시작 전 — 실패 시 refund)
+    const creditContext: CreditContext = { messageLength: trimmedUser.length };
+    deductedCreditAmount = await this.deductAgentChatCredit(userId, creditContext, creditService);
+    creditDeducted = deductedCreditAmount > 0;
 
     // 시작 Event 전달
     sendEvent('status', { phase: 'analyzing', message: '요청 분석 중...' });
@@ -129,8 +148,12 @@ export class AgentService {
     // 모드 결정 후 Event 전달
     sendEvent('status', { phase: 'analyzing', message: `요청 분석 완료 (mode = ${mode})` });
 
-    // 무관계한 질문 처리
+    // 무관계한 질문 처리 — irrelevant는 AI 응답 생성 없이 종료, 차감된 크레딧 환불
     if (mode === 'irrelevant') {
+      if (creditDeducted) {
+        await this.refundAgentChatCredit(userId, deductedCreditAmount, 'irrelevant mode', creditService);
+        creditDeducted = false;
+      }
       sendEvent('chunk', { text: rejectionMessage || '죄송합니다. 요청하신 질문은 현재 에이전트와 무관하여 답변드리기 어렵습니다.' });
       sendEvent('status', { phase: 'done', message: '답변 불가' });
       return;
@@ -148,6 +171,13 @@ export class AgentService {
     }
 
     await this.handleNoteMode(trimmedUser, context, openai, sendEvent);
+    } catch (err: unknown) {
+      if (creditDeducted) {
+        await this.refundAgentChatCredit(userId, deductedCreditAmount, err, creditService);
+      }
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('AgentService.handleChatStream failed', { cause: String(err) });
+    }
   }
 
   /**
@@ -347,7 +377,43 @@ export class AgentService {
     args: Record<string, unknown>,
     openai: OpenAI
   ): Promise<string> {
-    return this.toolRegistry.execute(toolName, userId, args, this.deps, openai);
+    return this.toolRegistry.execute(toolName, userId, args, this.deps, openai, this.deps.creditService);
+  }
+
+  /**
+   * 에이전트 채팅 크레딧을 차감합니다.
+   * @param userId 사용자 ID
+   * @param context 크레딧 컨텍스트
+   * @param creditService 크레딧 서비스
+   * @returns 차감된 크레딧 수
+   */
+  private async deductAgentChatCredit(
+    userId: string,
+    context: CreditContext,
+    creditService?: ICreditService
+  ): Promise<number> {
+    if (!creditService) return 0;
+    const cost = FEATURE_COSTS[CreditFeature.AGENT_CHAT].calculate(context);
+    await creditService.deduct(userId, CreditFeature.AGENT_CHAT, context);
+    return cost;
+  }
+
+  /**
+   * 에이전트 채팅 실패 시 크레딧을 환불합니다.
+   * @param userId 사용자 ID
+   * @param amount 환불할 크레딧 수
+   * @param err 에러 객체 또는 환불 사유 문자열
+   * @param creditService 크레딧 서비스
+   */
+  private async refundAgentChatCredit(
+    userId: string,
+    amount: number,
+    err: unknown,
+    creditService?: ICreditService
+  ): Promise<void> {
+    if (!creditService || amount <= 0) return;
+    const reason = err instanceof Error ? err.message : String(err);
+    await creditService.refund(userId, amount, `Agent chat failed: ${reason}`);
   }
 
   // --- Prompt 관련 메서드 ---

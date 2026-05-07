@@ -30,6 +30,8 @@ import { NotificationService } from './NotificationService';
 import { UserService } from './UserService';
 import { AiMicroscopeIngestResultItem } from '../../shared/dtos/ai_graph_output';
 import { withRetry } from '../../shared/utils/retry';
+import { ICreditService } from '../ports/ICreditService';
+import { CreditFeature } from '../types/persistence/credit.persistence';
 
 /**
  * Microscope 기능(지식 그래프 분석, RAG 파이프라인)의 전반적인 메타데이터 관리와 작업 요청을 조율하는 서비스 객체.
@@ -61,7 +63,8 @@ export class MicroscopeManagementService {
     private readonly conversationRepo: ConversationRepository,
     private readonly noteRepo: NoteRepository,
     private readonly notificationService: NotificationService,
-    private readonly userService: UserService
+    private readonly userService: UserService,
+    private readonly creditService?: ICreditService
   ) {
     // SQS Request URL for AI tasks (Microscope 워커 요청 큐)
     this.jobQueueUrl = process.env.SQS_REQUEST_QUEUE_URL || 'TO_BE_CONFIGURED';
@@ -255,7 +258,14 @@ export class MicroscopeManagementService {
       updatedAt: now,
     };
 
+    let creditHeld = false;
+    let messageSent = false;
+
     try {
+      // 3-1. 선제적 크레딧 차감 (Hold)
+      await this.holdCredit(userId, CreditFeature.MICROSCOPE_INGEST, docId);
+      creditHeld = true;
+
       // 4. MongoDB 상태 트리거 등록
       await this.microscopeWorkspaceStore.addDocument(groupId, newDocument);
 
@@ -277,6 +287,7 @@ export class MicroscopeManagementService {
       await withRetry(async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
         label: 'QueuePort.sendMessage',
       });
+      messageSent = true;
 
       // 성공 알림 전송
       await this.notificationService.sendMicroscopeIngestRequested(userId, docId);
@@ -289,6 +300,11 @@ export class MicroscopeManagementService {
 
       return workspace;
     } catch (err) {
+      // 3-2. 선제적 차감된 크레딧 롤백 (Rollback)
+      if (creditHeld && !messageSent) {
+        await this.rollbackCreditHold(docId, 'microscope ingest enqueue failed');
+      }
+
       logger.error(
         { err, userId, groupId, nodeId },
         'Failed to process node for Microscope workspace, createWorkspaceAndMicroscopeIngestFromNode'
@@ -301,7 +317,36 @@ export class MicroscopeManagementService {
         String(err)
       );
 
+      if (err instanceof AppError) throw err;
       throw new UpstreamError(`Failed to process node ${nodeId}`, { cause: String(err) });
+    }
+  }
+
+  /**
+   * 크레딧 차감 (Hold)
+   * @param userId 사용자 ID
+   * @param feature 기능
+   * @param taskId 작업 ID
+   * @returns
+   */
+  private async holdCredit(userId: string, feature: CreditFeature, taskId: string): Promise<void> {
+    if (!this.creditService) return;
+    await this.creditService.hold(userId, feature, taskId);
+  }
+
+  /**
+   * 크레딧 차감 롤백 (Rollback)
+   * @param taskId 작업 ID
+   * @param reason 사유
+   * @returns
+   */
+  private async rollbackCreditHold(taskId: string, reason: string): Promise<void> {
+    if (!this.creditService) return;
+
+    try {
+      await this.creditService.rollbackByTaskId(taskId);
+    } catch (err) {
+      logger.error({ err, taskId, reason }, 'Failed to rollback credit hold after queue failure');
     }
   }
 
@@ -457,8 +502,10 @@ export class MicroscopeManagementService {
     userId: string,
     nodeId: string
   ): Promise<MicroscopeWorkspaceMetaDoc> {
-    const workspace =
-      await this.microscopeWorkspaceStore.findWorkspaceByMostRecentDocumentNodeId(userId, nodeId);
+    const workspace = await this.microscopeWorkspaceStore.findWorkspaceByMostRecentDocumentNodeId(
+      userId,
+      nodeId
+    );
 
     if (!workspace) {
       throw new NotFoundError(`No microscope workspace found for node ${nodeId}`);

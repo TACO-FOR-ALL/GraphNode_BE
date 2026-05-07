@@ -26,6 +26,7 @@ import { makeAiRouter } from './modules/ai.module';
 import { makeGraphRouter } from './modules/graph.module';
 import { makeGraphAiRouter } from './modules/graphAi.module';
 import { makeNoteRouter } from './modules/note.module';
+import { makeUserFileRouter } from './modules/userFile.module';
 import { makeSyncRouter } from './modules/sync.module';
 import { makeAgentRouter } from './modules/agent.module';
 import { makeNotificationRouter } from './modules/notification.module';
@@ -37,6 +38,7 @@ import { makeGraphEditorRouter } from './modules/graphEditor.module';
 import { makeFileProxyRouter } from './modules/fileProxy.module';
 import { STORAGE_BUCKETS } from '../config/storageConfig';
 import { CleanupCron } from '../infra/cron/CleanupCron';
+import { BillingCron } from '../infra/cron/BillingCron';
 // import { createTestAgentRouter } from '../app/routes/agent.test';
 
 import { setupSentryErrorHandler } from '../shared/utils/sentry';
@@ -123,6 +125,9 @@ export function createApp() {
   app.use('/auth/apple', authAppleRouter);
   app.use('/v1/me', makeMeRouter());
 
+  // User files + sidebar (노트 라우터보다 먼저 마운트하여 `/v1/files` 등이 `/v1/notes/:id`에 가려지지 않게 함)
+  app.use('/v1', makeUserFileRouter());
+
   // Note Router (가장 넓은 범위이므로 구체적인 v1 하위 라우터 아래에 배치)
   app.use('/v1', makeNoteRouter());
 
@@ -154,6 +159,9 @@ export async function bootstrap() {
 
   // 오래된 삭제된 항목 자동 정리 크론 시작
   CleanupCron.start();
+
+  // 크레딧 HOLD 만료 정리 및 구독 갱신 크론 시작
+  BillingCron.start();
 
   return { app, database };
 }

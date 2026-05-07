@@ -82,12 +82,13 @@ export class GraphSummaryResultHandler implements JobHandler {
         const nodeList: GraphNodeDto[] = await graphService.listNodes(userId);
 
         // SnapShot 정보 통해서 chat, note, notion 개수 계산
-        const { chatCount, noteCount, notionCount } = countSourceTypesFromNodeList(nodeList);
+        const { chatCount, noteCount, notionCount, fileCount } = countSourceTypesFromNodeList(nodeList);
 
         // Chat Cnt, Note Cnt, Notion Cnt 계산 된 값으로 덮어쓰기
         summaryJson.overview.total_conversations = chatCount;
         summaryJson.overview.total_notes = noteCount;
         summaryJson.overview.total_notions = notionCount;
+        summaryJson.overview.total_files = fileCount;
 
         // 2. Persist to DB
         // Map snake_case contract to internal CamelCase persistence doc

@@ -400,7 +400,7 @@ export class NoteApi {
 
   /**
    * 특정 ID의 폴더 정보를 조회합니다.
-   * 
+   *
    * @param id - 조회할 폴더의 ID (UUID)
    * @returns 요청한 폴더 상세 정보
    * @example
@@ -432,7 +432,8 @@ export class NoteApi {
 
   /**
    * 특정 폴더를 소프트 삭제합니다 (휴지통으로 이동).
-   * 
+   * 폴더 산하에 있는 다른 폴더/노트도 같이 소프트 삭제
+   *
    * @param id - 삭제할 폴더의 ID
    * @example
    * await client.note.softDeleteFolder('folder-123');
@@ -443,7 +444,8 @@ export class NoteApi {
 
   /**
    * 특정 폴더를 영구 삭제합니다.
-   * 
+   * 폴더 산하에 있는 다른 폴더/노트도 같이 소프트 삭제
+   *
    * @param id - 삭제할 폴더의 ID
    * @example
    * await client.note.hardDeleteFolder('folder-123');
@@ -454,7 +456,7 @@ export class NoteApi {
 
   /**
    * 모든 폴더를 삭제합니다.
-   * 
+   *
    * @returns 삭제된 폴더 수
    * @example
    * const response = await client.note.deleteAllFolders();
@@ -466,7 +468,7 @@ export class NoteApi {
 
   /**
    * 삭제된 폴더를 복구합니다.
-   * 
+   *
    * @param id - 복구할 폴더의 ID
    * @returns 복구된 폴더 정보
    * @example
