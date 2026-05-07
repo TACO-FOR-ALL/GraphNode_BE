@@ -383,7 +383,6 @@ export class GraphEmbeddingService {
       this.graphManagementService.listEdges(userId),
       this.graphManagementService.listClusters(userId),
       this.graphManagementService.listSubclusters(userId),
-      this.graphManagementService.getStats(userId),
       this.graphManagementService.getStatsMetadata(userId),
     ]);
     const enrichedNodes = await this.attachNodeTitles(userId, nodes);
