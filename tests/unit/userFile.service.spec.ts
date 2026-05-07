@@ -323,4 +323,113 @@ describe('UserFileService', () => {
       })
     );
   });
+
+  // ──────────────────────────────────────────────────────────────
+  // updateFile
+  // ──────────────────────────────────────────────────────────────
+
+  describe('updateFile', () => {
+    it('displayName만 변경하면 이름이 갱신된다', async () => {
+      files.set('u1', docTemplate({ _id: 'u1', displayName: 'old.pdf', folderId: null }));
+
+      const dto = await service.updateFile(userId, 'u1', { displayName: 'new.pdf' });
+
+      expect(dto.displayName).toBe('new.pdf');
+      expect(userFileRepo.updateById).toHaveBeenCalledWith(
+        'u1',
+        userId,
+        expect.objectContaining({ displayName: 'new.pdf', folderId: null })
+      );
+    });
+
+    it('동일 이름으로 변경 요청 시 접미사가 붙지 않는다 (자기참조 오탐 버그 수정)', async () => {
+      // 같은 폴더에 'report.pdf'가 자기 자신 하나뿐인 상황
+      files.set('u2', docTemplate({ _id: 'u2', displayName: 'report.pdf', folderId: null }));
+
+      const dto = await service.updateFile(userId, 'u2', { displayName: 'report.pdf' });
+
+      // 'report.pdf' → 'report.pdf'여야 하고, 'report(1).pdf'가 되면 안 된다
+      expect(dto.displayName).toBe('report.pdf');
+    });
+
+    it('대상 폴더에 같은 이름이 있으면 자동 접미사가 붙는다', async () => {
+      // folder-1 안에 이미 'doc.pdf'가 존재
+      files.set('other', docTemplate({ _id: 'other', displayName: 'doc.pdf', folderId: null }));
+      files.set('u3', docTemplate({ _id: 'u3', displayName: 'another.pdf', folderId: null }));
+
+      const dto = await service.updateFile(userId, 'u3', { displayName: 'doc.pdf' });
+
+      // 충돌 → 'doc(1).pdf'로 조정
+      expect(dto.displayName).toBe('doc(1).pdf');
+    });
+
+    it('folderId만 변경하면 폴더 이동이 된다', async () => {
+      files.set('u4', docTemplate({ _id: 'u4', displayName: 'move.pdf', folderId: null }));
+
+      const dto = await service.updateFile(userId, 'u4', { folderId: 'folder-1' });
+
+      expect(dto.folderId).toBe('folder-1');
+      expect(userFileRepo.updateById).toHaveBeenCalledWith(
+        'u4',
+        userId,
+        expect.objectContaining({ folderId: 'folder-1' })
+      );
+    });
+
+    it('폴더 이동 시 목적지에 같은 이름이 있으면 자동 접미사가 붙는다', async () => {
+      // folder-1 안에 이미 'a.pdf'가 존재
+      files.set('conflict', docTemplate({ _id: 'conflict', displayName: 'a.pdf', folderId: 'folder-1' }));
+      // 루트의 'a.pdf'를 folder-1로 이동
+      files.set('u5', docTemplate({ _id: 'u5', displayName: 'a.pdf', folderId: null }));
+
+      const dto = await service.updateFile(userId, 'u5', { folderId: 'folder-1' });
+
+      expect(dto.displayName).toBe('a(1).pdf');
+      expect(dto.folderId).toBe('folder-1');
+    });
+
+    it('이름 + 폴더 동시 변경이 동작한다', async () => {
+      files.set('u6', docTemplate({ _id: 'u6', displayName: 'x.pdf', folderId: null }));
+
+      const dto = await service.updateFile(userId, 'u6', {
+        displayName: 'renamed.pdf',
+        folderId: 'folder-1',
+      });
+
+      expect(dto.displayName).toBe('renamed.pdf');
+      expect(dto.folderId).toBe('folder-1');
+    });
+
+    it('두 필드 모두 undefined이면 ValidationError가 발생한다', async () => {
+      files.set('u7', docTemplate({ _id: 'u7' }));
+
+      await expect(service.updateFile(userId, 'u7', {})).rejects.toMatchObject({
+        code: 'VALIDATION_FAILED',
+      });
+      expect(userFileRepo.updateById).not.toHaveBeenCalled();
+    });
+
+    it('존재하지 않는 파일이면 NotFoundError가 발생한다', async () => {
+      await expect(
+        service.updateFile(userId, 'nonexistent', { displayName: 'x.pdf' })
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('존재하지 않는 folderId로 이동하면 NotFoundError가 발생한다', async () => {
+      files.set('u8', docTemplate({ _id: 'u8' }));
+
+      await expect(
+        service.updateFile(userId, 'u8', { folderId: 'nonexistent-folder' })
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('빈 문자열 displayName은 ValidationError가 발생한다', async () => {
+      files.set('u9', docTemplate({ _id: 'u9' }));
+
+      await expect(service.updateFile(userId, 'u9', { displayName: '   ' })).rejects.toMatchObject({
+        code: 'VALIDATION_FAILED',
+      });
+    });
+  });
 });
+

@@ -56,3 +56,17 @@ export interface UserFilePresignedViewUrlDto {
   expiresInSeconds: number;
   expiresAt: string;
 }
+
+/**
+ * `PATCH /v1/files/:id` 요청 바디.
+ *
+ * `displayName`과 `folderId` 중 최소 하나는 포함해야 하며,
+ * 두 필드 모두 생략한 경우 서비스가 ValidationError를 던진다.
+ * `folderId: null`은 루트로 이동을 의미하며, `undefined`는 변경하지 않음을 의미한다.
+ */
+export interface UserFilePatchDto {
+  /** 새 표시 이름. 폴더 내 중복 시 서버가 자동으로 `이름(1).ext` 형태로 조정한다. */
+  displayName?: string;
+  /** 이동할 폴더 ID. `null`이면 루트, 필드 자체가 없으면 현재 폴더 유지. */
+  folderId?: string | null;
+}

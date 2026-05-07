@@ -5,15 +5,18 @@ import { NoteRepository } from '../ports/NoteRepository';
 import { GraphManagementService } from './GraphManagementService';
 import { StoragePort } from '../ports/StoragePort';
 import { UserFileDoc } from '../types/persistence/userFile.persistence';
-import {
-  assertAllowedUserFile,
-  defaultMimeForUserFile,
-} from '../../shared/config/fileUploadSpec';
+import { assertAllowedUserFile, defaultMimeForUserFile } from '../../shared/config/fileUploadSpec';
 import { buildStorageKey, STORAGE_BUCKETS } from '../../config/storageConfig';
 import { loadEnv } from '../../config/env';
 import { NotFoundError, ValidationError } from '../../shared/errors/domain';
 import { withRetry } from '../../shared/utils/retry';
-import type { UserFileDto, SidebarItemDto, SidebarItemsResponseDto, UserFilePresignedViewUrlDto } from '../../shared/dtos/userFile';
+import type {
+  UserFileDto,
+  SidebarItemDto,
+  SidebarItemsResponseDto,
+  UserFilePresignedViewUrlDto,
+  UserFilePatchDto,
+} from '../../shared/dtos/userFile';
 import type { NoteDoc } from '../types/persistence/note.persistence';
 import type { AiInteractionService } from './AiInteractionService';
 import { logger } from '../../shared/utils/logger';
@@ -227,14 +230,16 @@ export class UserFileService {
   private enqueueSummaryJob(userId: string, fileId: string): void {
     setImmediate(() => {
       void this.runSummaryJob(userId, fileId).catch((err: unknown) => {
-        logger.error(
-          { err, userId, fileId },
-          'UserFileService.runSummaryJob failed (unhandled)'
-        );
+        logger.error({ err, userId, fileId }, 'UserFileService.runSummaryJob failed (unhandled)');
       });
     });
   }
 
+  /**
+   * 요약 작업을 비동기 실행한다.
+   * @param userId 유저 ID
+   * @param fileId 파일 ID
+   */
   private async runSummaryJob(userId: string, fileId: string): Promise<void> {
     const doc =
       (await withRetry(async () => this.userFileRepo.getById(fileId, userId, false), {
@@ -272,6 +277,12 @@ export class UserFileService {
     }
   }
 
+  /**
+   * 파일 메타데이터와 요약본을 조회한다.
+   * @param userId 유저 ID
+   * @param fileId 파일 ID
+   * @returns 파일 DTO
+   */
   async getFile(userId: string, fileId: string): Promise<UserFileDto> {
     const doc = await withRetry(async () => this.userFileRepo.getById(fileId, userId), {
       label: 'UserFileService.getFile',
@@ -338,6 +349,14 @@ export class UserFileService {
     return { url, expiresInSeconds, expiresAt };
   }
 
+  /**
+   * 파일 목록을 조회한다.
+   * @param userId 유저 ID
+   * @param folderId 폴더 ID
+   * @param limit 제한
+   * @param cursor 커서
+   * @returns 파일 목록
+   */
   async listFiles(
     userId: string,
     folderId: string | null,
@@ -388,5 +407,72 @@ export class UserFileService {
     });
     if (!ok) throw new NotFoundError(`파일을 찾을 수 없습니다: ${fileId}`);
     await this.graphManagementService.deleteNodesByOrigIds(userId, [fileId], false);
+  }
+
+  /**
+   * 파일 표시 이름(`displayName`) 또는 폴더 위치(`folderId`)를 변경한다.
+   *
+   * - 두 필드 모두 `undefined`이면 ValidationError.
+   * - `folderId`를 변경할 경우 대상 폴더 존재·소유 검증 후 목적지 폴더 기준으로 이름 중복을 확인한다.
+   * - `displayName`만 변경할 경우 현재 폴더 기준으로 이름 중복을 확인한다.
+   * - 중복 검사 시 **자기 자신의 현재 이름은 목록에서 제외**한다.
+   *   (예: `a.pdf → a.pdf` 동명 변경 시 `a(1).pdf`가 되는 오탐 방지)
+   */
+  async updateFile(
+    userId: string,
+    fileId: string,
+    patch: UserFilePatchDto
+  ): Promise<UserFileDto> {
+    if (patch.displayName === undefined && patch.folderId === undefined) {
+      throw new ValidationError('변경할 내용이 없습니다. displayName 또는 folderId 중 하나를 포함해야 합니다.');
+    }
+
+    const doc = await this.getFileDocForOwner(userId, fileId);
+
+    // folderId 변경이 있으면 대상 폴더 존재·소유 검증
+    const targetFolderId: string | null =
+      patch.folderId !== undefined ? patch.folderId : doc.folderId;
+    if (patch.folderId !== undefined && patch.folderId !== null) {
+      const folder = await withRetry(
+        async () => this.noteRepo.getFolder(patch.folderId as string, userId),
+        { label: 'UserFileService.update.getFolder' }
+      );
+      if (!folder || folder.deletedAt) {
+        throw new NotFoundError(`폴더를 찾을 수 없습니다: ${patch.folderId}`);
+      }
+    }
+
+    // 최종 적용할 displayName 결정 (중복 검사)
+    let resolvedDisplayName: string = doc.displayName;
+    if (patch.displayName !== undefined) {
+      const rawName = patch.displayName.trim();
+      if (!rawName) throw new ValidationError('파일 이름이 비어 있습니다.');
+
+      const existingNames = await withRetry(
+        async () => this.userFileRepo.listActiveDisplayNamesInFolder(userId, targetFolderId),
+        { label: 'UserFileService.update.listNames' }
+      );
+      // 자기 자신의 현재 이름을 목록에서 제거해 동명 변경 시 오탐 방지
+      const filteredNames = existingNames.filter((n) => n !== doc.displayName);
+      resolvedDisplayName = resolveDisplayName(rawName, filteredNames);
+    } else if (patch.folderId !== undefined) {
+      // 이름 변경 없이 폴더 이동만 하는 경우: 목적지 폴더에서 이름 충돌 확인
+      const existingNames = await withRetry(
+        async () => this.userFileRepo.listActiveDisplayNamesInFolder(userId, targetFolderId),
+        { label: 'UserFileService.update.listNamesMoveOnly' }
+      );
+      resolvedDisplayName = resolveDisplayName(doc.displayName, existingNames);
+    }
+
+    const updated = await withRetry(
+      async () =>
+        this.userFileRepo.updateById(fileId, userId, {
+          displayName: resolvedDisplayName,
+          folderId: targetFolderId,
+        }),
+      { label: 'UserFileService.update' }
+    );
+    if (!updated) throw new NotFoundError(`파일을 찾을 수 없습니다: ${fileId}`);
+    return toUserFileDto(updated);
   }
 }

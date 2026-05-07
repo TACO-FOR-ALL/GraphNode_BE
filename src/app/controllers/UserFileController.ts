@@ -86,6 +86,26 @@ export class UserFileController {
     res.json(body);
   }
 
+  /** `PATCH /v1/files/:id` — `displayName`·`folderId` 변경. */
+  async patch(req: Request, res: Response) {
+    const userId = getUserIdFromRequest(req)!;
+    const { displayName, folderId } = req.body as {
+      displayName?: unknown;
+      folderId?: unknown;
+    };
+
+    const patchDisplayName =
+      displayName !== undefined ? String(displayName) : undefined;
+    const patchFolderId =
+      folderId !== undefined ? parseFolderIdParam(folderId) : undefined;
+
+    const dto = await this.userFileService.updateFile(userId, req.params.id, {
+      displayName: patchDisplayName,
+      folderId: patchFolderId,
+    });
+    res.json(dto);
+  }
+
   /** `DELETE /v1/files/:id` — `?permanent=true` 시 영구 삭제. */
   async remove(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;

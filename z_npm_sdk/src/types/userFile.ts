@@ -53,3 +53,37 @@ export interface UserFilePresignedViewUrlDto {
   /** ISO 8601 */
   expiresAt: string;
 }
+
+/**
+ * `PATCH /v1/files/:id` 요청 바디 — 파일 이름 변경 또는 폴더 이동.
+ *
+ * `displayName`과 `folderId` 중 **최소 하나**는 포함해야 한다.
+ * 두 필드 모두 생략하면 서버가 400(ValidationError)을 반환한다.
+ *
+ * @example 이름만 변경
+ * ```typescript
+ * await client.userFiles.updateUserFile(id, { displayName: '새이름.pdf' });
+ * ```
+ *
+ * @example 루트로 이동
+ * ```typescript
+ * await client.userFiles.updateUserFile(id, { folderId: null });
+ * ```
+ *
+ * @example 이름 변경 + 폴더 이동 동시
+ * ```typescript
+ * await client.userFiles.updateUserFile(id, { displayName: '보고서.pdf', folderId: 'folder-abc' });
+ * ```
+ */
+export interface UserFilePatchDto {
+  /** 새 표시 이름. 폴더 내 중복 시 서버가 자동으로 `이름(1).ext` 형태로 조정한다. */
+  displayName?: string;
+  /**
+   * 이동할 폴더 ID.
+   * - `null`: 루트(최상위)로 이동
+   * - 문자열: 해당 폴더 ID로 이동
+   * - `undefined`(필드 생략): 현재 폴더 유지
+   */
+  folderId?: string | null;
+}
+
