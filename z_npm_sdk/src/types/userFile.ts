@@ -5,15 +5,48 @@
 /** AI 요약 상태 */
 export type UserFileSummaryStatusDto = 'pending' | 'processing' | 'completed' | 'failed';
 
-/** MVP 문서 카테고리 */
-export type UserFileCategoryDto = 'document';
+/** MVP 문서 카테고리 (서버의 UserFileCategory와 동기화) */
+export type UserFileCategoryDto = 'pdf' | 'word' | 'ppt' | 'document' | 'unknown';
 
-/** 서버 `UserFileDto` 와 동일한 형태 */
+/** 
+ * SDK 내에서 편의용으로 제공하는 알려진 MIME 타입 모음. 
+ * 백엔드의 fileUploadSpec.ts 와 동기화됩니다.
+ * FE에서 아이콘 분기 처리 등에 활용하세요.
+ */
+export const KnownMimeTypes = {
+  PDF: 'application/pdf',
+  DOC: 'application/msword',
+  DOCX: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  PPT: 'application/vnd.ms-powerpoint',
+  PPTX: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+} as const;
+
+/** 서버 `UserFileDto` 와 동일한 형태
+ * @param id: 파일 ID
+ * @param folderId: 폴더 ID
+ * @param displayName: 파일 이름
+ * @param mimeType: 파일 MIME 타입 (자동 완성을 위해 KnownMimeTypes 활용 권장)
+ * @param sizeBytes: 파일 크기
+ * @param category: 파일 카테고리 ('pdf' | 'word' | 'ppt' | 'document' | 'unknown')
+ * @param summary: 파일 요약
+ * @param summaryStatus: 파일 요약 상태
+ * @param summaryError: 파일 요약 에러
+ * @param createdAt: 파일 생성 시간
+ * @param updatedAt: 파일 수정 시간
+ */
 export interface UserFileDto {
   id: string;
   folderId: string | null;
   displayName: string;
+  
+  /** 
+   * 파일의 MIME 타입 (열린 문자열 스펙).
+   * @remarks
+   * 자동 완성과 안전한 비교를 위해 FE에서는 `KnownMimeTypes` 상수를 활용하는 것을 권장합니다.
+   * 예: `if (file.mimeType === KnownMimeTypes.PDF)`
+   */
   mimeType: string;
+  
   sizeBytes: number;
   category: UserFileCategoryDto;
   summary?: string;
@@ -38,6 +71,11 @@ export interface SidebarItemsResponseDto {
   items: SidebarItemDto[];
 }
 
+/**
+ * GET
+ * @param items : 파일 목록
+ * @param nextCursor : 다음 페이지 토큰
+ */
 export interface UserFileListResponseDto {
   items: UserFileDto[];
   nextCursor: string | null;
@@ -46,6 +84,9 @@ export interface UserFileListResponseDto {
 /**
  * `GET /v1/files/:id/view-url` 응답 — S3 Presigned GET URL (단기 유효).
  * 뷰어는 `url`에 직접 요청하며, 만료 시 동일 API로 재발급받는다.
+ * @param url : S3 Presigned GET URL
+ * @param expiresInSeconds : Presigned URL 유효 시간(초)
+ * @param expiresAt : Presigned URL 만료 시간(ISO 8601)
  */
 export interface UserFilePresignedViewUrlDto {
   url: string;
@@ -86,4 +127,3 @@ export interface UserFilePatchDto {
    */
   folderId?: string | null;
 }
-

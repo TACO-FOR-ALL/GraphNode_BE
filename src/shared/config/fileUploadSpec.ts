@@ -5,16 +5,17 @@
  * - 허용 확장자·MIME 매핑을 한곳에서 관리한다.
  * - MVP는 문서류만 허용하고, `UserFileCategory`로 이미지 등 확장을 열어 둔다.
  */
-export type UserFileCategory = 'document';
+export type UserFileCategory = 'pdf' | 'word' | 'ppt' | 'document' | 'unknown';
 
 /** MVP에서 허용하는 문서 확장자(소문자, 점 포함) */
-export const USER_FILE_DOCUMENT_EXTENSIONS = ['.pdf', '.docx', '.ppt', '.pptx'] as const;
+export const USER_FILE_DOCUMENT_EXTENSIONS = ['.pdf', '.doc', '.docx', '.ppt', '.pptx'] as const;
 
 const DOCUMENT_EXT_SET = new Set<string>(USER_FILE_DOCUMENT_EXTENSIONS);
 
 /** 확장자별 기본 Content-Type (S3 업로드·응답 헤더 참고) */
 const MIME_BY_EXT: Record<string, string> = {
   '.pdf': 'application/pdf',
+  '.doc': 'application/msword',
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   '.ppt': 'application/vnd.ms-powerpoint',
   '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
@@ -23,8 +24,20 @@ const MIME_BY_EXT: Record<string, string> = {
 /** 파일명으로 카테고리를 추론한다. 허용되지 않으면 `null`. */
 export function inferUserFileCategory(originalName: string): UserFileCategory | null {
   const ext = extnameLower(originalName);
-  if (DOCUMENT_EXT_SET.has(ext)) return 'document';
-  return null;
+  if (!DOCUMENT_EXT_SET.has(ext)) return null;
+
+  switch (ext) {
+    case '.pdf':
+      return 'pdf';
+    case '.doc':
+    case '.docx':
+      return 'word';
+    case '.ppt':
+    case '.pptx':
+      return 'ppt';
+    default:
+      return 'document';
+  }
 }
 
 /**
