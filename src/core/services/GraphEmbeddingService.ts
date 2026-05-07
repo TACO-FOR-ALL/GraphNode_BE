@@ -384,6 +384,7 @@ export class GraphEmbeddingService {
       this.graphManagementService.listClusters(userId),
       this.graphManagementService.listSubclusters(userId),
       this.graphManagementService.getStats(userId),
+      this.graphManagementService.getStatsMetadata(userId),
     ]);
     const enrichedNodes = await this.attachNodeTitles(userId, nodes);
 
@@ -399,7 +400,7 @@ export class GraphEmbeddingService {
         };
       }),
       stats: stats
-        ? { nodes: stats.nodes, edges: stats.edges, clusters: stats.clusters, status: stats.status }
+        ? { nodes: nodes.length, edges: edges.length, clusters: clusters.length, status: stats.status }
         : { nodes: 0, edges: 0, clusters: 0, status: 'NOT_CREATED' },
     };
   }

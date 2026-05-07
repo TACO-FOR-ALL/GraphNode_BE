@@ -710,6 +710,14 @@ export class GraphManagementService {
    * @param userId 사용자 ID
    * @returns GraphStatsDto 또는 null
    */
+  /**
+   * @deprecated 2026-05-08.
+   * Neo4j macro graph에서는 node/edge/cluster 개수를 MacroStats에 직접 저장하지 않습니다.
+   * 현재 repository의 getStats 구현은 graph 관계를 다시 count하므로, 큰 graph에서 Cypher
+   * optional match 조합으로 query 시간이 폭증할 수 있습니다. snapshot API처럼 목록을 이미
+   * 조회하는 경로에서는 이 메서드를 호출하지 말고 `getStatsMetadata`로 상태 메타데이터만
+   * 읽은 뒤, count는 실제 조회된 nodes/edges/clusters 배열 길이로 계산해야 합니다.
+   */
   async getStats(userId: string): Promise<GraphStatsDto> {
     try {
       this.assertUser(userId);
@@ -726,6 +734,40 @@ export class GraphManagementService {
       throw new UpstreamError('GraphService.getStats failed', { cause: String(err) });
     }
   }
+  /**
+   * Snapshot 전용 graph stats 메타데이터 조회입니다.
+   *
+   * @since 2026-05-08
+   * 이 메서드는 DB에서 실제 node/edge/cluster 개수를 가져오지 않습니다.
+   * Neo4j MacroStats 노드는 count 값을 직접 보관하지 않으므로, 이 메서드는 graph 생성 상태
+   * `status`, `generatedAt`, `updatedAt`, `metadata` 같은 상태 메타데이터만 읽는 역할입니다.
+   * 반환 타입은 기존 내부 DTO 호환을 위해 GraphStatsDto를 유지하지만, nodes/edges/clusters는
+   * 저장된 통계값이 아니므로 snapshot count 산정에 사용하면 안 됩니다.
+   * `GraphEmbeddingService.getSnapshotForUser`는 이 메서드로 status만 얻고, count는 이미 조회한
+   * nodes/edges/clusters 배열 길이로 계산합니다.
+   *
+   * @param userId 사용자 ID
+   * @returns 상태 메타데이터를 포함한 stats DTO. MacroStats가 없으면 NOT_CREATED 기본값을 반환합니다.
+   */
+  async getStatsMetadata(userId: string): Promise<GraphStatsDto> {
+    try {
+      this.assertUser(userId);
+      const stats = this.repo.getStatsMetadata
+        ? await this.repo.getStatsMetadata(userId)
+        : await this.repo.getStats(userId);
+      return stats ?? {
+            userId,
+            nodes: 0,
+            edges: 0,
+            clusters: 0,
+            status: 'NOT_CREATED',
+          };
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.getStatsMetadata failed', { cause: String(err) });
+    }
+  }
+
   /**
    * 그래프 통계 삭제
    *
