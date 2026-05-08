@@ -48,6 +48,7 @@ describe('WebhookProcessingService', () => {
   let paymentHistoryRepo: jest.Mocked<IPaymentHistoryRepository>;
   let webhookEventRepo: jest.Mocked<IWebhookEventRepository>;
   let creditService: jest.Mocked<ICreditService>;
+  let billingConfig: BillingConfig;
   let service: WebhookProcessingService;
 
   beforeEach(() => {
@@ -81,12 +82,14 @@ describe('WebhookProcessingService', () => {
       expireStaleHolds: jest.fn(),
     } as any;
 
+    billingConfig = new BillingConfig();
+
     service = new WebhookProcessingService(
       subscriptionRepo,
       paymentHistoryRepo,
       webhookEventRepo,
       creditService,
-      new BillingConfig()
+      billingConfig
     );
   });
 
@@ -213,7 +216,13 @@ describe('WebhookProcessingService', () => {
   // ── PAYMENT_FAILED ────────────────────────────────────────────────────────
 
   describe('PAYMENT_FAILED', () => {
-    it('expires current subscription, records FAILED payment, downgrades to FREE', async () => {
+    it('expires current subscription and downgrades to FREE immediately when grace period is disabled', async () => {
+      // grace period 비활성화 정책 강제
+      (billingConfig as any).operationPolicy = {
+        ...billingConfig.operationPolicy,
+        grace: { enabled: false, days: 0 }
+      };
+
       const active = makeSub({ status: 'ACTIVE' });
       subscriptionRepo.findActiveByUserId
         .mockResolvedValueOnce(active) // find current ACTIVE
@@ -232,6 +241,28 @@ describe('WebhookProcessingService', () => {
         expect.objectContaining({ status: 'FAILED', amount: 9900 })
       );
       expect(creditService.refill).toHaveBeenCalledWith('user-1', PlanType.FREE);
+    });
+
+    it('grants grace period (CANCELED status) when grace period is enabled (default)', async () => {
+      // 기본 정책 사용 (grace.enabled = true)
+      const active = makeSub({ status: 'ACTIVE' });
+      subscriptionRepo.findActiveByUserId.mockResolvedValueOnce(active);
+      subscriptionRepo.updateStatus.mockResolvedValue(makeSub({ status: 'CANCELED' }));
+      paymentHistoryRepo.create.mockResolvedValue({} as any);
+
+      await service.process(makeEvent({ eventType: 'PAYMENT_FAILED' }));
+
+      // EXPIRED가 아닌 CANCELED로 업데이트되어야 함
+      expect(subscriptionRepo.updateStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status:          'CANCELED',
+          canceledAt:      expect.any(Date),
+          currentPeriodEnd: expect.any(Date),
+        })
+      );
+      // 즉시 FREE로 전환되거나 리필되지 않아야 함 (BillingCron이 나중에 처리)
+      expect(subscriptionRepo.create).not.toHaveBeenCalled();
+      expect(creditService.refill).not.toHaveBeenCalled();
     });
   });
 
