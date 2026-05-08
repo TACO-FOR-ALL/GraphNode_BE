@@ -127,6 +127,18 @@ const EnvSchema = z.object({
   DISCORD_WEBHOOK_URL_ERRORS: z.string().optional(), // BE HTTP 500 에러 알림 채널
   DISCORD_WEBHOOK_URL_GRAPH: z.string().optional(),  // Graph Worker FAILED 알림 채널
 
+  // PG사 Webhook 서명 검증 시크릿 (미설정 시 해당 PG사 어댑터 비활성)
+  PORTONE_API_SECRET: z.string().optional(),
+  PORTONE_WEBHOOK_SECRET: z.string().optional(),
+  PORTONE_STORE_ID: z.string().optional(),
+  TOSS_SECRET_KEY: z.string().optional(),
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_PRICE_ID_PRO_MONTHLY: z.string().optional(),
+  STRIPE_PRICE_ID_PRO_YEARLY: z.string().optional(),
+  STRIPE_PRICE_ID_ENTERPRISE_MONTHLY: z.string().optional(),
+  STRIPE_PRICE_ID_ENTERPRISE_YEARLY: z.string().optional(),
+
   //PostHog
   POSTHOG_API_KEY: z.string().min(1, 'POSTHOG_API_KEY required'),
   POSTHOG_HOST: z.string().min(1, 'POSTHOG_HOST required'),

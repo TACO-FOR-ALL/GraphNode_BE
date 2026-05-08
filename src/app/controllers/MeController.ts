@@ -11,6 +11,7 @@ import {
 } from '../../infra/redis/SessionStoreRedis';
 import { ValidationError } from '../../shared/errors/domain';
 import type { ICreditService } from '../../core/ports/ICreditService';
+import type { SubscriptionService } from '../../core/services/SubscriptionService';
 
 
 /**
@@ -24,6 +25,7 @@ export class MeController {
   constructor(
     private readonly userService: UserService,
     private readonly creditService?: ICreditService,
+    private readonly subscriptionService?: SubscriptionService,
   ) {}
 
   /**
@@ -34,6 +36,7 @@ export class MeController {
     try {
       const userId = getUserIdFromRequest(req)!;
       const userProfile = await this.userService.getUserProfile(userId);
+      await this.subscriptionService?.createFreeSubscription(userId).catch(() => undefined);
 
       const body: MeResponseDto = {
         userId: userProfile.id,

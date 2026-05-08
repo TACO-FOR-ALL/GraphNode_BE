@@ -29,6 +29,7 @@ describe('GraphManagementService', () => {
       listClusters: jest.fn(),
       saveStats: jest.fn(),
       getStats: jest.fn(),
+      getStatsMetadata: jest.fn(),
       deleteStats: jest.fn(),
       upsertGraphSummary: jest.fn(),
       getGraphSummary: jest.fn(),
@@ -257,6 +258,25 @@ describe('GraphManagementService', () => {
           mockRepo.getStats.mockResolvedValue({ userId: 'u1', nodes: 10, edges: 5, clusters: 2, status: 'CREATED', generatedAt: new Date().toISOString(), metadata: {} });
           const res = await service.getStats('u1');
           expect(res).toBeDefined();
+          expect(res?.nodes).toBe(10);
+      });
+
+      it('getStatsMetadata calls repo lightweight path', async () => {
+          const getStatsMetadataMock = mockRepo.getStatsMetadata as jest.MockedFunction<
+            NonNullable<MacroGraphStore['getStatsMetadata']>
+          >;
+          getStatsMetadataMock.mockResolvedValue({ userId: 'u1', nodes: 0, edges: 0, clusters: 0, status: 'CREATED', generatedAt: new Date().toISOString(), metadata: {} });
+          const res = await service.getStatsMetadata('u1');
+          expect(mockRepo.getStatsMetadata).toHaveBeenCalledWith('u1');
+          expect(mockRepo.getStats).not.toHaveBeenCalled();
+          expect(res?.status).toBe('CREATED');
+      });
+
+      it('getStatsMetadata falls back to getStats when repo has no lightweight path', async () => {
+          delete (mockRepo as Partial<MacroGraphStore>).getStatsMetadata;
+          mockRepo.getStats.mockResolvedValue({ userId: 'u1', nodes: 10, edges: 5, clusters: 2, status: 'CREATED', generatedAt: new Date().toISOString(), metadata: {} });
+          const res = await service.getStatsMetadata('u1');
+          expect(mockRepo.getStats).toHaveBeenCalledWith('u1');
           expect(res?.nodes).toBe(10);
       });
 
