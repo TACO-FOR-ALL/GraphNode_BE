@@ -25,7 +25,9 @@ model User {
   userInfoId        String?     @unique @map("user_info_id")
   dailyUsage        DailyUsage?    @relation("UserToDailyUsage")
   userInfo          UserInfo?      @relation("UserToUserInfo", fields: [userInfoId], references: [id])
-  creditBalance     CreditBalance? @relation("UserToCreditBalance")
+  creditBalance     CreditBalance?        @relation("UserToCreditBalance")
+  subscriptions     Subscription[]        @relation("UserToSubscriptions")
+  paymentMethods    UserPaymentMethod[]   @relation("UserToPaymentMethods")
 
   @@unique([provider, providerUserId], map: "uniq_provider_user")
   @@map("users")
@@ -80,6 +82,148 @@ enum OnboardingAgentMode {
   formal
   friendly
   casual
+}
+
+// ── Subscription & Billing System ─────────────────────────────────────────────
+
+enum SubscriptionStatus {
+  PENDING  // 결제 진행 중 (최초 생성 직후)
+  ACTIVE   // 정상 활성
+  CANCELED // 취소됨 (currentPeriodEnd까지 서비스 유지)
+  EXPIRED  // 기간 만료 → FREE 전환 완료
+}
+
+enum SubscriptionSource {
+  PAYMENT     // 정상 결제
+  ADMIN_GRANT // 관리자 직접 부여 (이벤트, 학생 인증 등)
+  TRIAL       // 무료 체험 (확장 대비)
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+// PG사 식별자 enum (TypeScript IPaymentProvider 인터페이스와 이름 충돌 방지를 위해 PgProvider로 명명)
+enum PgProvider {
+  PORTONE
+  TOSS
+  STRIPE
+  GOOGLE
+  APPLE
+}
+
+enum WebhookEventStatus {
+  RECEIVED  // 수신 완료, 처리 전
+  PROCESSED // 처리 완료
+  FAILED    // 처리 실패 (재처리 대상)
+}
+
+enum WebhookEventType {
+  PAYMENT_COMPLETED
+  PAYMENT_READY
+  SUBSCRIPTION_RENEWED
+  SUBSCRIPTION_CANCELED
+  PAYMENT_FAILED
+  PAYMENT_REFUNDED
+  WEBHOOK_IGNORED
+}
+
+// 사용자 구독 상태 원장 (1:N with User — 이력 보존, 단일 ACTIVE)
+// source=PAYMENT        : externalSubscriptionId 존재, billingCycle 필수
+// source=ADMIN_GRANT/TRIAL : externalSubscriptionId null, billingCycle null 허용
+model Subscription {
+  id                     String             @id @default(uuid())
+  userId                 String             @map("user_id") @db.VarChar(191)
+  planType               PlanType           @map("plan_type")
+  status                 SubscriptionStatus @map("status")
+  source                 SubscriptionSource @map("source")
+  billingCycle           BillingCycle?      @map("billing_cycle")
+  currentPeriodStart     DateTime           @map("current_period_start") @db.Timestamp(0)
+  currentPeriodEnd       DateTime           @map("current_period_end") @db.Timestamp(0)
+  grantedUntil           DateTime?          @map("granted_until") @db.Timestamp(0)
+  externalSubscriptionId String?            @map("external_subscription_id") @db.VarChar(191)
+  paymentMethodId        String?            @map("payment_method_id")
+  canceledAt             DateTime?          @map("canceled_at") @db.Timestamp(0)
+  createdAt              DateTime           @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt              DateTime           @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  user           User               @relation("UserToSubscriptions", fields: [userId], references: [id], onDelete: Cascade)
+  paymentMethod  UserPaymentMethod? @relation("PaymentMethodToSubscriptions", fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  paymentHistory PaymentHistory[]
+
+  @@index([userId, status],   map: "idx_subscription_user_status")
+  @@index([paymentMethodId],  map: "idx_subscription_payment_method")
+  @@index([currentPeriodEnd], map: "idx_subscription_period_end")
+  @@map("subscriptions")
+}
+
+// 실제 금전 거래 불변 원장 (append-only)
+// idempotencyKey: 서버 생성 UUID — 네트워크 재시도 시 중복 결제 방지
+model PaymentHistory {
+  id                    String        @id @default(uuid())
+  userId                String        @map("user_id") @db.VarChar(191)
+  subscriptionId        String        @map("subscription_id")
+  amount                Int           @map("amount")
+  currency              String        @map("currency") @db.VarChar(3)
+  status                PaymentStatus @map("status")
+  pgProvider            PgProvider    @map("pg_provider")
+  idempotencyKey        String        @unique @map("idempotency_key") @db.VarChar(191)
+  externalTransactionId String?       @map("external_transaction_id") @db.VarChar(191)
+  pgReceiptData         Json?         @map("pg_receipt_data")
+  createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamp(0)
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt(sort: Desc)], map: "idx_payment_user")
+  @@index([idempotencyKey],               map: "idx_payment_idempotency")
+  @@map("payment_histories")
+}
+
+// PG사 비동기 이벤트 수신 불변 원장 (append-only, FK 없음 — 결제 처리 전 수신 대비)
+// idempotencyKey: PG사 고유 이벤트 ID — 중복 이벤트 처리 방지
+model WebhookEvent {
+  id             String             @id @default(uuid())
+  provider       PgProvider         @map("provider")
+  eventType      WebhookEventType   @map("event_type")
+  idempotencyKey String             @unique @map("idempotency_key") @db.VarChar(191)
+  rawPayload     Json               @map("raw_payload")
+  status         WebhookEventStatus @map("status")
+  errorMessage   String?            @map("error_message") @db.VarChar(512)
+  processedAt    DateTime?          @map("processed_at") @db.Timestamp(0)
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamp(0)
+
+  @@index([provider, eventType, createdAt(sort: Desc)], map: "idx_webhook_provider_type")
+  @@index([status, createdAt],                          map: "idx_webhook_status")
+  @@map("webhook_events")
+}
+
+// ── UserPaymentMethod ────────────────────────────────────────────────────────
+// PG사별 billingKey(카드 토큰) 저장 테이블 — Subscription과 분리하여 복수 카드 대응
+// billingKey: customer_uid(Portone) | billingKey(Toss) | paymentMethodId(Stripe)
+// externalCustomerId: Stripe customerId 등 PG사별 고객 ID
+model UserPaymentMethod {
+  id                 String     @id @default(uuid()) @map("id")
+  userId             String     @map("user_id") @db.VarChar(191)
+  pgProvider         PgProvider @map("pg_provider")
+  billingKey         String     @map("billing_key") @db.VarChar(191)
+  externalCustomerId String?    @map("external_customer_id") @db.VarChar(191)
+  cardLast4          String?    @map("card_last_4") @db.VarChar(4)
+  isDefault          Boolean    @default(false) @map("is_default")
+  createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamp(0)
+
+  user          User           @relation("UserToPaymentMethods", fields: [userId], references: [id], onDelete: Cascade)
+  subscriptions Subscription[] @relation("PaymentMethodToSubscriptions")
+
+  @@index([userId, isDefault], map: "idx_payment_method_user_default")
+  @@map("user_payment_methods")
 }
 
 // ── Credit System ──────────────────────────────────────────────────────────────

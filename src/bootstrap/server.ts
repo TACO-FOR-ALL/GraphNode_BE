@@ -36,6 +36,7 @@ import { makeSearchRouter } from './modules/search.module';
 import { makeFeedbackRouter } from './modules/feedback.module';
 import { makeGraphEditorRouter } from './modules/graphEditor.module';
 import { makeFileProxyRouter } from './modules/fileProxy.module';
+import { makeWebhookRouter, makeSubscriptionRouter } from './modules/billing.module';
 import { STORAGE_BUCKETS } from '../config/storageConfig';
 import { CleanupCron } from '../infra/cron/CleanupCron';
 import { BillingCron } from '../infra/cron/BillingCron';
@@ -104,6 +105,11 @@ export function createApp() {
 
   // Feedback Router
   app.use('/v1/feedback', makeFeedbackRouter());
+
+  // Billing (Webhook + Subscription) Routers
+  // express.raw() is applied per-route inside WebhookRouter (원본 body가 필요한 서명 검증)
+  app.use('/v1/webhooks', makeWebhookRouter());
+  app.use('/v1', makeSubscriptionRouter());
 
   // Notification Router (SSE)
   app.use('/v1/notifications', makeNotificationRouter());

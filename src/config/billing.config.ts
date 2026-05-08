@@ -118,3 +118,94 @@ export const HOLD_EXPIRY_MS = 2 * 60 * 60 * 1000; // 2시간
 
 /** 청구 주기 (일) */
 export const BILLING_CYCLE_DAYS = 30;
+
+export interface BillingOperationPolicy {
+  retry: {
+    maxAttempts: number;
+    intervalHours: number;
+  };
+  grace: {
+    enabled: boolean;
+    days: number;
+  };
+  cancellation: {
+    effective: 'IMMEDIATE' | 'PERIOD_END';
+  };
+  refund: {
+    allowPartial: boolean;
+    creditClawback: 'NONE' | 'REFUND_PERIOD_CREDITS' | 'ALL_GRANTED_CREDITS';
+  };
+  creditGrant: {
+    grantOn: 'PAYMENT_CONFIRMED' | 'SUBSCRIPTION_ACTIVE';
+  };
+  recovery: {
+    downgradePlan: PlanType;
+    downgradeAfterFailedAttempts: boolean;
+  };
+}
+
+export const DEFAULT_BILLING_OPERATION_POLICY: BillingOperationPolicy = {
+  retry: { maxAttempts: 3, intervalHours: 24 },
+  grace: { enabled: true, days: 7 },
+  cancellation: { effective: 'PERIOD_END' },
+  refund: { allowPartial: true, creditClawback: 'REFUND_PERIOD_CREDITS' },
+  creditGrant: { grantOn: 'PAYMENT_CONFIRMED' },
+  recovery: { downgradePlan: PlanType.FREE, downgradeAfterFailedAttempts: true },
+};
+
+// ── BillingConfig Injectable Class ────────────────────────────────────────────
+
+/**
+ * 플랜별 가격 정보 (월간/연간)
+ * @param monthly 월간 결제 금액 (정수, KRW 또는 USD 최소 단위)
+ * @param yearly  연간 결제 금액 (정수, 할인 적용 후 총액)
+ */
+export interface PlanPrice {
+  monthly: number;
+  yearly: number;
+}
+
+/**
+ * 결제·구독 설정을 캡슐화하는 injectable class.
+ * bootstrap/container.ts에서 단일 인스턴스로 생성하여 주입합니다.
+ * 서버 재시작으로 설정 변경이 가능하며, 핫-리로드가 필요해지면 DB 기반으로 교체 가능합니다.
+ *
+ * @example
+ * const billingConfig = new BillingConfig();
+ * const proMonthly = billingConfig.getPlanPrice(PlanType.PRO).monthly; // 9900
+ */
+export class BillingConfig {
+  /** 플랜별 가격 (KRW 기준) */
+  private readonly planPrices: Record<PlanType, PlanPrice> = {
+    [PlanType.FREE]:       { monthly: 0,    yearly: 0 },
+    [PlanType.PRO]:        { monthly: 9900, yearly: 95040 }, // 9900 * 12 * 0.8
+    [PlanType.ENTERPRISE]: { monthly: 0,    yearly: 0 },     // Contact Sales
+  };
+
+  /** 연결제 할인율 (0.0 ~ 1.0) */
+  readonly yearlyDiscountRate: number = 0.20;
+
+  /** 플랜별 월간 크레딧 한도 (PLAN_CREDIT_LIMITS와 동기화) */
+  readonly planCreditLimits: Record<PlanType, number> = PLAN_CREDIT_LIMITS;
+
+  readonly operationPolicy: BillingOperationPolicy = DEFAULT_BILLING_OPERATION_POLICY;
+
+  /**
+   * 플랜별 가격 정보를 반환합니다.
+   * @param plan 조회할 플랜 타입
+   * @returns PlanPrice (monthly, yearly)
+   */
+  getPlanPrice(plan: PlanType): PlanPrice {
+    return this.planPrices[plan];
+  }
+
+  /**
+   * 연간 결제 금액을 계산합니다 (월간 * 12 * (1 - 할인율)).
+   * @param plan 플랜 타입
+   * @returns 연간 결제 총액 (정수, 반올림)
+   */
+  calcYearlyAmount(plan: PlanType): number {
+    const monthly = this.planPrices[plan].monthly;
+    return Math.round(monthly * 12 * (1 - this.yearlyDiscountRate));
+  }
+}

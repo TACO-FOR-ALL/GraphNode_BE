@@ -6,6 +6,7 @@ import { MeController } from '../controllers/MeController';
 import { UserService } from '../../core/services/UserService';
 import { asyncHandler } from '../utils/asyncHandler';
 import type { ICreditService } from '../../core/ports/ICreditService';
+import type { SubscriptionService } from '../../core/services/SubscriptionService';
 
 
 /**
@@ -13,9 +14,13 @@ import type { ICreditService } from '../../core/ports/ICreditService';
  * @param deps 라우터가 의존하는 서비스들
  * @returns Express 라우터
  */
-export function createMeRouter(deps: { userService: UserService; creditService: ICreditService }): Router {
+export function createMeRouter(deps: {
+  userService: UserService;
+  creditService: ICreditService;
+  subscriptionService?: SubscriptionService;
+}): Router {
   const router = Router();
-  const meController = new MeController(deps.userService, deps.creditService);
+  const meController = new MeController(deps.userService, deps.creditService, deps.subscriptionService);
 
 
   router.use(bindSessionUser);
