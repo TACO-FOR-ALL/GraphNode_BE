@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 import { WebhookProcessingService } from '../../src/core/services/WebhookProcessingService';
-import { DEFAULT_BILLING_OPERATION_POLICY } from '../../src/config/billing.config';
+import { BillingConfig } from '../../src/config/billing.config';
 import type { ISubscriptionRepository } from '../../src/core/ports/ISubscriptionRepository';
 import type { IPaymentHistoryRepository } from '../../src/core/ports/IPaymentHistoryRepository';
 import type { IWebhookEventRepository } from '../../src/core/ports/IWebhookEventRepository';
@@ -86,7 +86,7 @@ describe('WebhookProcessingService', () => {
       paymentHistoryRepo,
       webhookEventRepo,
       creditService,
-      DEFAULT_BILLING_OPERATION_POLICY
+      new BillingConfig()
     );
   });
 
