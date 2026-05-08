@@ -6,6 +6,7 @@
  */
 
 import crypto from 'crypto';
+import type { PaymentProvider } from '../../core/ports/PaymentProvider';
 import { UpstreamError } from '../../shared/errors/domain';
 import { logger } from '../../shared/utils/logger';
 
