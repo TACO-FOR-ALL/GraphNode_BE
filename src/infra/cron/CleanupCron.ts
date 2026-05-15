@@ -38,6 +38,7 @@ export class CleanupCron {
 
     const chatManagementService = container.getChatManagementService();
     const noteService = container.getNoteService();
+    const chatExportService = container.getChatExportService();
 
     // 1. 대화(Conversations) 및 연관 메시지/그래프 정리
     const deletedConvs = await chatManagementService.cleanupExpiredConversations(expiredBefore);
@@ -49,6 +50,12 @@ export class CleanupCron {
     const deletedItems = await noteService.cleanupExpiredNotesAndFolders(expiredBefore);
     if (deletedItems > 0) {
       logger.info(`[CleanupCron] Hard deleted ${deletedItems} expired notes/folders (including recursive cascade and graph nodes).`);
+    }
+
+    // 3. 만료된 채팅보내기 ZIP (S3 + job 메타)
+    const removedExports = await chatExportService.cleanupExpiredExports();
+    if (removedExports > 0) {
+      logger.info(`[CleanupCron] Removed ${removedExports} expired chat export jobs.`);
     }
   }
 }

@@ -34,6 +34,7 @@ import { makeFileRouter } from './modules/file.module';
 import { makeMicroscopeRouter } from './modules/microscope.module';
 import { makeSearchRouter } from './modules/search.module';
 import { makeFeedbackRouter } from './modules/feedback.module';
+import { makeExportRouter } from './modules/export.module';
 import { makeGraphEditorRouter } from './modules/graphEditor.module';
 import { makeFileProxyRouter } from './modules/fileProxy.module';
 import { makeWebhookRouter, makeSubscriptionRouter } from './modules/billing.module';
@@ -105,6 +106,9 @@ export function createApp() {
 
   // Feedback Router
   app.use('/v1/feedback', makeFeedbackRouter());
+
+  // Chat export Router
+  app.use('/v1/exports', makeExportRouter());
 
   // Billing (Webhook + Subscription) Routers
   // express.raw() is applied per-route inside WebhookRouter (원본 body가 필요한 서명 검증)

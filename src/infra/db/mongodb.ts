@@ -127,6 +127,23 @@ async function ensureIndexes() {
   // notes 컬렉션: listNotes 쿼리 패턴 { ownerUserId, folderId, deletedAt: null } + sort(updatedAt: -1) 커버
   await db.collection('notes').createIndex({ ownerUserId: 1, folderId: 1, deletedAt: 1, updatedAt: -1 });
 
+  // chat_export_jobs: jobId+userId 복합 조회, 진행 중 job 중복 방지, 만료 정리
+  await db.collection('chat_export_jobs').createIndex(
+    { jobId: 1, userId: 1 },
+    { name: 'chat_export_jobs_job_user' }
+  );
+  await db.collection('chat_export_jobs').createIndex(
+    { userId: 1, exportScope: 1, conversationId: 1, status: 1 },
+    { name: 'chat_export_jobs_active_lookup' }
+  );
+  await db.collection('chat_export_jobs').createIndex(
+    { expiresAt: 1 },
+    {
+      name: 'chat_export_jobs_expires',
+      partialFilterExpression: { status: 'DONE' },
+    }
+  );
+
   // (이전 텍스트 인덱스들은 용량 문제로 제거되었습니다. Atlas Search 등으로 대체 필요)
 
   logger.info({ event: 'db.migrations_checked' }, 'DB indexes ensured');

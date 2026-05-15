@@ -50,6 +50,23 @@
 | **attachments** | `Array<Attachment>` | 첨부 파일 정보 (`id`, `type`, `url`, `name`, `mimeType`, `size`) |
 | **metadata** | `Object` | 확장 메타데이터. `toolCalls[]` (GraphNode AI 툴 결과 또는 OpenAI tool 결과), `searchResults[]` (web_search 링크) 포함 (Optional) |
 
+### chat_export_jobs 컬렉션
+
+**소스**: `src/core/types/persistence/chat_export.persistence.ts`
+
+채팅 내역 비동기 내보내기 작업 메타데이터입니다. 결과 JSON은 S3 `chat-files/` prefix 하에 저장됩니다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| **jobId** | `String` | 작업 식별자 (ULID) |
+| **userId** | `String` | 요청 사용자 ID |
+| **conversationId** | `String` | 내보낸 대화 ID |
+| **status** | `String` | `PENDING`, `PROCESSING`, `DONE`, `FAILED` |
+| **fileKey** | `String` | 완료 시 S3 객체 키 (Optional) |
+| **errorMessage** | `String` | 실패 시 메시지 (Optional) |
+| **createdAt** | `Number` (ms) | 생성 시각 |
+| **updatedAt** | `Number` (ms) | 갱신 시각 |
+
 ---
 
 ## B. Notification Domain
