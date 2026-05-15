@@ -1,6 +1,10 @@
 import { RequestBuilder, type HttpResponse } from '../http-builder.js';
 import type { ApiKeyModel } from '../types/me.js';
 import type { MessageDto } from '../types/message.js';
+import type {
+  ChatExportStatusResponseDto,
+  StartChatExportResponseDto,
+} from '../types/chatExport.js';
 import { AiStreamEvent } from '../types/ai-event.js';
 
 /**
@@ -65,21 +69,13 @@ export interface AIChatRetryRequestDto {
  * 채팅 내보내기 작업 시작 응답
  * @public
  */
-export interface StartChatExportResponseDto {
-  jobId: string;
-  status: 'PENDING' | 'PROCESSING' | 'DONE' | 'FAILED';
-}
+export type { StartChatExportResponseDto } from '../types/chatExport.js';
 
 /**
  * 채팅 내보내기 작업 상태
  * @public
  */
-export interface ChatExportStatusResponseDto {
-  jobId: string;
-  status: 'PENDING' | 'PROCESSING' | 'DONE' | 'FAILED';
-  downloadUrl?: string;
-  errorMessage?: string;
-}
+export type { ChatExportStatusResponseDto, ChatExportJobStatus, ChatExportScope } from '../types/chatExport.js';
 
 /**
  * AI Chat API
@@ -492,7 +488,7 @@ export class AiApi {
   async startChatExport(
     conversationId: string
   ): Promise<HttpResponse<StartChatExportResponseDto>> {
-    return this.rb.path(`/v1/ai/conversations/${conversationId}/exports`).post();
+    return this.rb.path(`/v1/exports/conversations/${conversationId}`).post();
   }
 
   /**
@@ -504,7 +500,7 @@ export class AiApi {
   async getChatExportStatus(
     jobId: string
   ): Promise<HttpResponse<ChatExportStatusResponseDto>> {
-    return this.rb.path(`/v1/ai/chat-exports/${jobId}`).get();
+    return this.rb.path(`/v1/exports/${jobId}`).get();
   }
 
   /**
@@ -514,7 +510,7 @@ export class AiApi {
    * @throws {Error} HTTP 비정상 응답 시 (`409` 등 미완료 상태)
    */
   async downloadChatExport(jobId: string): Promise<Blob> {
-    const rb = this.rb.path(`/v1/ai/chat-exports/${jobId}/download`);
+    const rb = this.rb.path(`/v1/exports/${jobId}/download`);
     const res = await rb.sendRaw('GET', undefined, {});
 
     if (!res.ok) {

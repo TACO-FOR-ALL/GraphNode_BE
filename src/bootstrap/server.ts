@@ -33,6 +33,7 @@ import { makeFileRouter } from './modules/file.module';
 import { makeMicroscopeRouter } from './modules/microscope.module';
 import { makeSearchRouter } from './modules/search.module';
 import { makeFeedbackRouter } from './modules/feedback.module';
+import { makeExportRouter } from './modules/export.module';
 import { makeGraphEditorRouter } from './modules/graphEditor.module';
 import { makeFileProxyRouter } from './modules/fileProxy.module';
 import { STORAGE_BUCKETS } from '../config/storageConfig';
@@ -103,6 +104,9 @@ export function createApp() {
 
   // Feedback Router
   app.use('/v1/feedback', makeFeedbackRouter());
+
+  // Chat export Router
+  app.use('/v1/exports', makeExportRouter());
 
   // Notification Router (SSE)
   app.use('/v1/notifications', makeNotificationRouter());

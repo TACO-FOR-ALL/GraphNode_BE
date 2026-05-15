@@ -24,6 +24,7 @@ export { FileApi } from './endpoints/file.js';
 export { MicroscopeApi } from './endpoints/microscope.js';
 export { FeedbackApi } from './endpoints/feedback.js';
 export { GraphEditorApi } from './endpoints/graphEditor.js';
+export { ExportApi } from './endpoints/export.js';
 export type { BatchOperation } from './endpoints/graphEditor.js';
 
 // Types
@@ -112,12 +113,13 @@ export type {
   AgentChatStreamHandler,
 } from './endpoints/agent.js';
 export { openAgentChatStream } from './endpoints/agent.js';
+export type { AIChatRequestDto, AIChatResponseDto } from './endpoints/ai.js';
 export type {
-  AIChatRequestDto,
-  AIChatResponseDto,
   StartChatExportResponseDto,
   ChatExportStatusResponseDto,
-} from './endpoints/ai.js';
+  ChatExportJobStatus,
+  ChatExportScope,
+} from './types/chatExport.js';
 export { AiStreamEvent } from './types/ai-event.js';
 export {
   TaskType,

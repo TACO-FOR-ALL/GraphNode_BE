@@ -18,6 +18,8 @@ import { notifyHttp500, notifyWorkerFailed } from '../../shared/utils/discord';
 import { UpstreamError, ValidationError, NotFoundError } from '../../shared/errors/domain';
 import { container } from '../../bootstrap/container';
 import { loadEnv } from '../../config/env';
+import { getMongo } from '../../infra/db/mongodb';
+import type { ConversationDoc } from '../../core/types/persistence/ai.persistence';
 import { ApiKeyModel } from '../../shared/dtos/me';
 import type { ChatStreamRequestBody } from '../../agent/types';
 
@@ -135,7 +137,7 @@ router.post('/email/chat-export-smtp-ping', async (req: Request, res: Response, 
         'This is a development-only test message.',
         'If you see this, CHAT_EXPORT_SMTP_* is configured and nodemailer can send mail.',
         '',
-        'Next: POST /v1/ai/conversations/{conversationId}/exports while logged in (email uses your profile address).',
+        'Next: POST /v1/exports/conversations/{conversationId} while logged in (email uses your profile address).',
       ].join('\n'),
       attachmentFilename: 'smtp-ping.txt',
       attachmentContentType: 'text/plain; charset=utf-8',
@@ -145,6 +147,97 @@ router.post('/email/chat-export-smtp-ping', async (req: Request, res: Response, 
     res.json({
       ok: true,
       message: `Test email sent to ${to}. Check inbox and spam folder.`,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /dev/test/chat-export/top-user-smoke
+// 메시지 수 최다 사용자·해당 사용자의 최대 메시지 대화를 서버(DB)에서 집계한 뒤 export 작업을 시작합니다.
+//
+// Headers: x-internal-token — `loadEnv().TEST_LOGIN_SECRET`과 동일(min 16 chars).
+// 스크립트가 Atlas에 직접 붙지 못하는 환경에서, 로컬 `npm run dev` 프로세스가 Mongo에 붙어 있으면 이 경로로 검증합니다.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/chat-export/top-user-smoke', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const env = loadEnv();
+    const expectedSecret = env.TEST_LOGIN_SECRET?.trim();
+    const providedSecret = req.header('x-internal-token')?.trim();
+    if (!expectedSecret || expectedSecret.length < 16) {
+      res.status(403).json({
+        ok: false,
+        message:
+          'Set TEST_LOGIN_SECRET (at least 16 characters) in .env or Infisical before using this endpoint.',
+      });
+      return;
+    }
+    if (!providedSecret || providedSecret !== expectedSecret) {
+      res.status(403).json({
+        ok: false,
+        message: 'Send header x-internal-token with the same value as TEST_LOGIN_SECRET.',
+      });
+      return;
+    }
+
+    const db = getMongo().db();
+
+    interface AggRow {
+      _id: string;
+      messageCount: number;
+    }
+
+    const topUserRows = await db
+      .collection('messages')
+      .aggregate<AggRow>([
+        { $match: { deletedAt: null, ownerUserId: { $type: 'string', $ne: '' } } },
+        { $group: { _id: '$ownerUserId', messageCount: { $sum: 1 } } },
+        { $sort: { messageCount: -1 } },
+        { $limit: 5 },
+      ])
+      .toArray();
+
+    const winner = topUserRows[0];
+    if (!winner?._id) {
+      res.status(404).json({ ok: false, message: '메시지가 있는 사용자가 없습니다.' });
+      return;
+    }
+
+    const convRows = await db
+      .collection('messages')
+      .aggregate<AggRow>([
+        { $match: { deletedAt: null, ownerUserId: winner._id } },
+        { $group: { _id: '$conversationId', messageCount: { $sum: 1 } } },
+        { $sort: { messageCount: -1 } },
+        { $limit: 1 },
+      ])
+      .toArray();
+
+    const topConv = convRows[0];
+    if (!topConv?._id) {
+      res.status(404).json({ ok: false, message: '해당 사용자의 대화가 없습니다.', userId: winner._id });
+      return;
+    }
+
+    const conv = await db
+      .collection<ConversationDoc>('conversations')
+      .findOne({ _id: topConv._id, deletedAt: null }, { projection: { title: 1 } });
+
+    const chatExport = container.getChatExportService();
+    const started = await chatExport.startExport(winner._id, String(topConv._id));
+
+    res.json({
+      ok: true,
+      winner: { userId: winner._id, messageCount: winner.messageCount },
+      top5: topUserRows.map((r) => ({ userId: r._id, messageCount: r.messageCount })),
+      pickedConversation: {
+        conversationId: String(topConv._id),
+        messageCount: topConv.messageCount,
+        title: conv?.title,
+      },
+      startExport: started,
     });
   } catch (err) {
     next(err);

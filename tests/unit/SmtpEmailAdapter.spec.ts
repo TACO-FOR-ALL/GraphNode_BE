@@ -26,6 +26,7 @@ describe('SmtpEmailAdapter', () => {
     CHAT_EXPORT_SMTP_HOST: 'smtp.example.com',
     CHAT_EXPORT_SMTP_PORT: 587,
     CHAT_EXPORT_SMTP_SECURE: false,
+    CHAT_EXPORT_SMTP_MAX_ATTACHMENT_BYTES: 1024,
   };
 
   beforeEach(() => {
@@ -108,6 +109,40 @@ describe('SmtpEmailAdapter', () => {
     });
 
     expect(sendMailMock).not.toHaveBeenCalled();
+  });
+
+  it('throws ValidationError when attachment exceeds SMTP max bytes', async () => {
+    const adapter = new SmtpEmailAdapter();
+    const big = Buffer.alloc(2048);
+
+    await expect(
+      adapter.sendEmailWithAttachment({
+        to: 'r@example.com',
+        subject: 'S',
+        text: 'T',
+        attachmentFilename: 'big.zip',
+        attachmentContentType: 'application/zip',
+        attachmentBuffer: big,
+      })
+    ).rejects.toThrow(ValidationError);
+
+    expect(sendMailMock).not.toHaveBeenCalled();
+  });
+
+  it('sends plain email without attachment via sendEmail', async () => {
+    const adapter = new SmtpEmailAdapter();
+    await adapter.sendEmail({
+      to: 'r@example.com',
+      subject: 'Export ready',
+      text: 'Download from the app.',
+    });
+
+    expect(sendMailMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'r@example.com',
+        attachments: undefined,
+      })
+    );
   });
 
   it('throws ValidationError when "to" is empty', async () => {

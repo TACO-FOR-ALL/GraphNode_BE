@@ -98,6 +98,16 @@ const EnvSchema = z.object({
     .transform((v) => v === 'true'),
   CHAT_EXPORT_SMTP_USER: z.string().optional(),
   CHAT_EXPORT_SMTP_PASS: z.string().optional(),
+  /** SMTP 첨부 최대 바이트(기본 20MB, Gmail 25MB 한도 대비) */
+  CHAT_EXPORT_SMTP_MAX_ATTACHMENT_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(20 * 1024 * 1024),
+  /**보내기 ZIP S3 보관 일수(기본 3일). CleanupCron 및 expiresAt 계산에 사용 */
+  CHAT_EXPORT_RETENTION_DAYS: z.coerce.number().int().positive().default(3),
+  /** 상태 API downloadUrl 절대 경로 조립용(미설정 시 Request Host 사용) */
+  PUBLIC_API_BASE_URL: z.string().url().optional(),
 
   // JWT 설정
   JWT_SECRET: z.string().min(1, 'JWT_SECRET required'),

@@ -42,6 +42,11 @@ export const STORAGE_BUCKETS = {
     prefix: 'chat-files',
     proxyRoute: '/chat-files',
   },
+  /** 채팅보내기 ZIP 등 임시 산출물. S3 lifecycle prefix `chat-exports/` 3일 삭제 권장. */
+  CHAT_EXPORT_FILES: {
+    prefix: 'chat-exports',
+    proxyRoute: null,
+  },
   SDK_FILES: {
     prefix: 'sdk-files',
     proxyRoute: '/sdk-files',
