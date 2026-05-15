@@ -1046,6 +1046,15 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
       });
     }, options);
   }
+  /**
+   * @deprecated 2026-05-08.
+   * 이 메서드는 MacroStats 노드에 저장된 값을 그대로 읽는 것이 아니라
+   * MacroNode, MacroRelation, MacroCluster를 다시 count해서 GraphStatsDto를 구성합니다.
+   * Neo4j migration 이후 getStats Cypher의 연속 OPTIONAL MATCH가 큰 graph에서
+   * node x edge x cluster에 가까운 중간 row 폭증을 만들 수 있어 snapshot 조회 경로에서는
+   * 사용하면 안 됩니다. snapshot처럼 목록을 이미 조회한 API에서는 `getStatsMetadata`로
+   * 상태 메타데이터만 읽고 count는 조회된 배열 길이로 계산해야 합니다.
+   */
   async getStats(userId: string, options?: MacroGraphStoreOptions): Promise<GraphStatsDto | null> {
     return this.runRead(async (runner) => {
       const result = await runner.run(
@@ -1070,6 +1079,54 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
         nodes: toJsNumber(record.get('nodes')),
         edges: toJsNumber(record.get('edges')),
         clusters: toJsNumber(record.get('clusters')),
+      };
+
+      return toGraphStatsDto(fromNeo4jMacroStats(row));
+    }, options);
+  }
+
+  /**
+   * @description MacroStats 노드에서 상태 메타데이터만 읽는 경량 조회입니다.
+   *
+   * @since 2026-05-08
+   * 이 메서드는 `HAS_STATS` 관계로 연결된 MacroStats 노드만 조회하고,
+   * MacroNode/MacroRelation/MacroCluster count 집계를 수행하지 않습니다.
+   * 현재 Neo4j macro graph 모델은 count 값을 MacroStats 노드에 직접 저장하지 않으므로,
+   * 반환되는 GraphStatsDto의 nodes/edges/clusters 값은 저장 count가 아닙니다.
+   * 호출자는 status/generatedAt/updatedAt/metadata만 신뢰해야 하며, snapshot 응답의 count는
+   * 이미 조회한 nodes/edges/clusters 배열 길이로 계산해야 합니다.
+   *
+   * @param userId 사용자 ID
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 상태 메타데이터를 포함한 GraphStatsDto, MacroStats가 없으면 null
+   */
+  async getStatsMetadata(
+    userId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<GraphStatsDto | null> {
+    return this.runRead(async (runner) => {
+      const result = await runner.run(
+        MACRO_GRAPH_CYPHER.getStatsMetadata,
+        this.readParams(userId, options)
+      );
+      const records = result.records as unknown[];
+      if (records.length === 0) return null;
+
+      const record = records[0] as { get(key: string): unknown };
+      const stProps = (record.get('st') as { properties: Record<string, unknown> }).properties;
+
+      const row = {
+        stats: {
+          id: String(stProps['id'] ?? userId),
+          userId: String(stProps['userId'] ?? userId),
+          status: stProps['status'] as GraphStatsDoc['status'],
+          generatedAt: String(stProps['generatedAt'] ?? ''),
+          updatedAt: stProps['updatedAt'] as string | undefined,
+          metadataJson: String(stProps['metadataJson'] ?? '{}'),
+        },
+        nodes: 0,
+        edges: 0,
+        clusters: 0,
       };
 
       return toGraphStatsDto(fromNeo4jMacroStats(row));

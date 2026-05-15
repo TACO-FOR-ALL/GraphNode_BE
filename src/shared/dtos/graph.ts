@@ -22,7 +22,7 @@ export { GRAPH_SOURCE_TYPES, type GraphSourceType } from './graph.source-types';
  * @param clusterName - 노드가 속한 클러스터 이름
  * @param timestamp - 대화 발생 시각(ISO 8601) 또는 null
  * @param numMessages - 노드에 포함된 메시지 턴/섹션 수
- * @param sourceType - 노드의 출처 ('chat' | 'markdown' | 'notion')
+ * @param sourceType - 노드의 출처 ('chat' | 'markdown' | 'notion' | 'file')
  * @param createdAt - 생성 시각(ISO 8601 UTC)
  * @param updatedAt - 갱신 시각(ISO 8601 UTC)
  * @remarks

@@ -109,6 +109,18 @@ const EnvSchema = z.object({
   /** 상태 API downloadUrl 절대 경로 조립용(미설정 시 Request Host 사용) */
   PUBLIC_API_BASE_URL: z.string().url().optional(),
 
+  /**
+   * 사용자 라이브러리 파일 뷰어용 Presigned GET URL 만료 시간(초).
+   * 짧을수록 유출 시 피해가 작고, 길면 큰 파일 미리보기 시 재발급이 덜합니다. (AWS 최대 604800)
+   */
+  USER_FILE_PRESIGN_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .min(60)
+    .max(604800)
+    .default(900),
+
   // JWT 설정
   JWT_SECRET: z.string().min(1, 'JWT_SECRET required'),
   JWT_ACCESS_EXPIRY: z.string().default('1h'),
@@ -135,6 +147,18 @@ const EnvSchema = z.object({
   // 채널별 웹훅 URL: Discord 채널 설정 → 연동 → 웹훅 → 새 웹훅 생성
   DISCORD_WEBHOOK_URL_ERRORS: z.string().optional(), // BE HTTP 500 에러 알림 채널
   DISCORD_WEBHOOK_URL_GRAPH: z.string().optional(),  // Graph Worker FAILED 알림 채널
+
+  // PG사 Webhook 서명 검증 시크릿 (미설정 시 해당 PG사 어댑터 비활성)
+  PORTONE_API_SECRET: z.string().optional(),
+  PORTONE_WEBHOOK_SECRET: z.string().optional(),
+  PORTONE_STORE_ID: z.string().optional(),
+  TOSS_SECRET_KEY: z.string().optional(),
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_PRICE_ID_PRO_MONTHLY: z.string().optional(),
+  STRIPE_PRICE_ID_PRO_YEARLY: z.string().optional(),
+  STRIPE_PRICE_ID_ENTERPRISE_MONTHLY: z.string().optional(),
+  STRIPE_PRICE_ID_ENTERPRISE_YEARLY: z.string().optional(),
 
   //PostHog
   POSTHOG_API_KEY: z.string().min(1, 'POSTHOG_API_KEY required'),

@@ -30,6 +30,7 @@ describe('GraphEmbeddingService', () => {
       listClusters: jest.fn(),
       saveStats: jest.fn(),
       getStats: jest.fn(),
+      getStatsMetadata: jest.fn(),
       deleteStats: jest.fn(),
       listNodesByCluster: jest.fn(),
       deleteEdgesByNodeIds: jest.fn(),
@@ -157,11 +158,11 @@ describe('GraphEmbeddingService', () => {
       mockGraphService.listEdges.mockResolvedValue([]);
       mockGraphService.listClusters.mockResolvedValue([]);
       mockGraphService.listSubclusters.mockResolvedValue([]);
-      mockGraphService.getStats.mockResolvedValue({
+      mockGraphService.getStatsMetadata.mockResolvedValue({
         userId: 'u1',
-        nodes: 3,
+        nodes: 0,
         edges: 0,
-        clusters: 2,
+        clusters: 0,
         status: 'CREATED',
       });
       mockConversationService.findDocsByIds.mockResolvedValue([
@@ -181,7 +182,15 @@ describe('GraphEmbeddingService', () => {
 
       expect(mockConversationService.findDocsByIds).toHaveBeenCalledWith(['conv-1'], 'u1');
       expect(mockNoteService.getNoteDoc).toHaveBeenCalledWith('note-1', 'u1');
+      expect(mockGraphService.getStatsMetadata).toHaveBeenCalledWith('u1');
+      expect(mockGraphService.getStats).not.toHaveBeenCalled();
       expect(snapshot.nodes).toHaveLength(3);
+      expect(snapshot.stats).toMatchObject({
+        nodes: 3,
+        edges: 0,
+        clusters: 0,
+        status: 'CREATED',
+      });
       expect(snapshot.nodes[0]).toMatchObject({
         origId: 'conv-1',
         nodeTitle: 'Conversation Title',

@@ -50,4 +50,24 @@ export interface StoragePort {
    * @param options 추가 옵션 (예: bucketType)
    */
   delete(key: string, options?: { bucketType?: 'payload' | 'file' }): Promise<void>;
+
+  /**
+   * S3 객체에 대한 단건 GET용 Presigned URL을 발급합니다.
+   *
+   * 브라우저·뷰어가 백엔드를 거치지 않고 객체 바이트를 받을 때 사용합니다.
+   * `ResponseContentType` / `ResponseContentDisposition`을 넣으면 서명된 요청과
+   * 동일한 쿼리 파라미터로만 다운로드할 수 있으므로, 클라이언트는 반환된 URL을 그대로 열어야 합니다.
+   *
+   * @param key 객체 키 (`downloadFile` 등과 동일한 버킷 선택 규칙)
+   * @param options 만료 시간·버킷 구분·응답 헤더 오버라이드
+   */
+  getPresignedGetUrl(
+    key: string,
+    options: {
+      expiresInSeconds: number;
+      bucketType?: 'payload' | 'file';
+      responseContentType?: string;
+      responseContentDisposition?: string;
+    }
+  ): Promise<string>;
 }

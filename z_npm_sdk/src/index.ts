@@ -21,10 +21,12 @@ export { SyncApi } from './endpoints/sync.js';
 export { AiApi } from './endpoints/ai.js';
 export { NotificationApi } from './endpoints/notification.js';
 export { FileApi } from './endpoints/file.js';
+export { UserFilesApi } from './endpoints/userFiles.js';
 export { MicroscopeApi } from './endpoints/microscope.js';
 export { FeedbackApi } from './endpoints/feedback.js';
 export { GraphEditorApi } from './endpoints/graphEditor.js';
 export { ExportApi } from './endpoints/export.js';
+export { BillingApi } from './endpoints/billing.js';
 export type { BatchOperation } from './endpoints/graphEditor.js';
 
 // Types
@@ -53,6 +55,17 @@ export type {
   CreditPlanType,
   CreditFeatureType,
 } from './types/credit.js';
+export type {
+  PgProvider,
+  BillingCycle,
+  BillingPlanType,
+  RegisterPaymentMethodRequest,
+  CreateSubscriptionRequest,
+  ConfirmPaymentRequest,
+  CancelSubscriptionRequest,
+  RequestRefundRequest,
+  BillingStatusResponse,
+} from './types/billing.js';
 export type {
   ConversationDto,
   ConversationCreateDto,
@@ -88,6 +101,17 @@ export type {
   SearchNotesAndAIChatsResponse,
 } from './types/search.js';
 export type { FileAttachment, FileUploadResponse } from './types/file.js';
+export type {
+  UserFileSummaryStatusDto,
+  UserFileCategoryDto,
+  UserFileDto,
+  SidebarItemKindDto,
+  SidebarItemDto,
+  SidebarItemsResponseDto,
+  UserFileListResponseDto,
+  UserFilePresignedViewUrlDto,
+  UserFilePatchDto,
+} from './types/userFile.js';
 export type { MicroscopeDocument, MicroscopeWorkspace, MicroscopeGraphNode, MicroscopeGraphEdge, MicroscopeGraphData } from './types/microscope.js';
 export type {
   GraphSourceType,
@@ -102,6 +126,7 @@ export type {
   UpdateNodePayload,
   GraphEdgeType,
   GraphStatus,
+  GraphRelationType,
 } from './types/graph.js';
 export { GRAPH_SOURCE_TYPES } from './types/graph.js';
 export type {
@@ -192,6 +217,8 @@ export type {
   MoveNodeToClusterDto,
   MoveSubclusterToClusterDto,
   AddNodeToSubclusterDto,
+  EditorBatchOperation,
+  BatchEditorRequestDto,
   BatchOperationResult,
   BatchEditorResponseDto,
 } from './types/graphEditor.js';

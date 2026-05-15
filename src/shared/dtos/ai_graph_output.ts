@@ -11,6 +11,7 @@ export interface OverviewSection {
   total_conversations?: number;
   total_notes?: number;
   total_notions?: number;
+  total_files?: number;
   time_span: string; // "YYYY-MM-DD ~ YYYY-MM-DD" or "N/A"
   primary_interests: string[];
   conversation_style: string;

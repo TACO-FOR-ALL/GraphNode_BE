@@ -171,6 +171,14 @@ services:
       - CLAUDE_API_KEY=dummy
       - HF_API_TOKEN=${HF_API_TOKEN:-dummy}
       - TAVILY_API_KEY=dummy
+      # --- Billing/Payment (Dummy for tests) ---
+      - PORTONE_API_SECRET=dummy_portone_api_secret
+      - PORTONE_WEBHOOK_SECRET=dummy_portone_webhook_secret
+      - STRIPE_SECRET_KEY=sk_test_dummy
+      - STRIPE_WEBHOOK_SECRET=whsec_dummy
+      - STRIPE_PRICE_ID_PRO_MONTHLY=price_dummy_pro_monthly
+      - STRIPE_PRICE_ID_PRO_YEARLY=price_dummy_pro_yearly
+      - STRIPE_PRICE_ID_ENTERPRISE_MONTHLY=price_dummy_enterprise_monthly
     ports:
       - "3000:3000"
     healthcheck:
@@ -251,6 +259,14 @@ services:
       - CLAUDE_API_KEY=dummy
       - HF_API_TOKEN=${HF_API_TOKEN:-dummy}
       - TAVILY_API_KEY=dummy
+      # --- Billing/Payment (Dummy for tests) ---
+      - PORTONE_API_SECRET=dummy_portone_api_secret
+      - PORTONE_WEBHOOK_SECRET=dummy_portone_webhook_secret
+      - STRIPE_SECRET_KEY=sk_test_dummy
+      - STRIPE_WEBHOOK_SECRET=whsec_dummy
+      - STRIPE_PRICE_ID_PRO_MONTHLY=price_dummy_pro_monthly
+      - STRIPE_PRICE_ID_PRO_YEARLY=price_dummy_pro_yearly
+      - STRIPE_PRICE_ID_ENTERPRISE_MONTHLY=price_dummy_enterprise_monthly
 
   graphnode-ai:
     image: graphnode-ai:test # GHA workflow에서 빌드된 이미지 사용

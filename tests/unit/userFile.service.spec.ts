@@ -1,0 +1,435 @@
+/**
+ * 목적: UserFileService 단위 테스트 (인메모리 목 Repository / 목 인프라).
+ * - 실제 Mongo·S3 없이 업로드·목록·사이드바 병합·삭제·백그라운드 요약 흐름을 검증한다.
+ */
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+
+import { UserFileService } from '../../src/core/services/UserFileService';
+import type { UserFileRepository } from '../../src/core/ports/UserFileRepository';
+import type { NoteRepository } from '../../src/core/ports/NoteRepository';
+import type { StoragePort } from '../../src/core/ports/StoragePort';
+import type { GraphManagementService } from '../../src/core/services/GraphManagementService';
+import type { AiInteractionService } from '../../src/core/services/AiInteractionService';
+import type { UserFileDoc } from '../../src/core/types/persistence/userFile.persistence';
+import type { FolderDoc, NoteDoc } from '../../src/core/types/persistence/note.persistence';
+
+const userId = 'user-file-spec-1';
+
+async function flushBackgroundJobs(): Promise<void> {
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  await new Promise<void>((resolve) => setImmediate(resolve));
+}
+
+function docTemplate(overrides: Partial<UserFileDoc> = {}): UserFileDoc {
+  const now = new Date();
+  return {
+    _id: 'uf1',
+    ownerUserId: userId,
+    folderId: null,
+    displayName: 'a.pdf',
+    s3Key: 'user-files/x/a.pdf',
+    mimeType: 'application/pdf',
+    sizeBytes: 4,
+    category: 'document',
+    summaryStatus: 'pending',
+    createdAt: now,
+    updatedAt: now,
+    deletedAt: null,
+    ...overrides,
+  };
+}
+
+describe('UserFileService', () => {
+  let files: Map<string, UserFileDoc>;
+  let userFileRepo: jest.Mocked<UserFileRepository>;
+  let noteRepo: jest.Mocked<NoteRepository>;
+  let storage: jest.Mocked<StoragePort>;
+  let graph: jest.Mocked<GraphManagementService>;
+  let aiInteraction: jest.Mocked<
+    Pick<AiInteractionService, 'summarizeUserLibraryFile'>
+  >;
+  let service: UserFileService;
+
+  beforeEach(() => {
+    files = new Map();
+    userFileRepo = {
+      insert: jest.fn(async (d: UserFileDoc): Promise<UserFileDoc> => {
+        files.set(d._id, { ...d });
+        return d;
+      }),
+      getById: jest.fn(
+        async (id: string, owner: string, includeDeleted = false): Promise<UserFileDoc | null> => {
+          const f = files.get(id);
+          if (!f || f.ownerUserId !== owner) return null;
+          if (!includeDeleted && f.deletedAt) return null;
+          return f;
+        }
+      ),
+      listFiles: jest.fn(
+        async (
+          owner: string,
+          folderId: string | null,
+          limit: number,
+          cursor?: string
+        ): Promise<{ items: UserFileDoc[]; nextCursor: string | null }> => {
+          let rows = [...files.values()].filter(
+            (f) => f.ownerUserId === owner && f.folderId === folderId && !f.deletedAt
+          );
+          rows.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+          if (cursor) {
+            const t = new Date(parseInt(String(cursor), 10));
+            rows = rows.filter((f) => f.updatedAt < t);
+          }
+          const items = rows.slice(0, limit);
+          const last = items[items.length - 1];
+          const nextCursor =
+            items.length === limit && last ? String(last.updatedAt.getTime()) : null;
+          return { items, nextCursor };
+        }
+      ),
+      listActiveDisplayNamesInFolder: jest.fn(
+        async (owner: string, folderId: string | null): Promise<string[]> =>
+          [...files.values()]
+            .filter((f) => f.ownerUserId === owner && f.folderId === folderId && !f.deletedAt)
+            .map((f) => f.displayName)
+      ),
+      updateById: jest.fn(
+        async (id: string, owner: string, patch: Partial<UserFileDoc>): Promise<UserFileDoc | null> => {
+          const f = files.get(id);
+          if (!f || f.ownerUserId !== owner || f.deletedAt) return null;
+          const next = { ...f, ...patch, updatedAt: new Date() } as UserFileDoc;
+          files.set(id, next);
+          return next;
+        }
+      ),
+      softDelete: jest.fn(async (id: string, owner: string): Promise<boolean> => {
+        const f = files.get(id);
+        if (!f || f.ownerUserId !== owner || f.deletedAt) return false;
+        f.deletedAt = new Date();
+        return true;
+      }),
+      hardDelete: jest.fn(async (id: string, owner: string): Promise<boolean> => {
+        const f = files.get(id);
+        if (!f || f.ownerUserId !== owner) return false;
+        files.delete(id);
+        return true;
+      }),
+      findModifiedSince: jest.fn(async (owner: string, since: Date): Promise<UserFileDoc[]> =>
+        [...files.values()].filter(
+          (f) => f.ownerUserId === owner && !f.deletedAt && f.updatedAt > since
+        )
+      ),
+      listAllActive: jest.fn(async (owner: string): Promise<UserFileDoc[]> =>
+        [...files.values()].filter((f) => f.ownerUserId === owner && !f.deletedAt)
+      ),
+    } as unknown as jest.Mocked<UserFileRepository>;
+
+    noteRepo = {
+      getFolder: jest.fn(
+        async (id: string, owner: string, _includeDeleted?: boolean): Promise<FolderDoc | null> => {
+          if (id === 'folder-1' && owner === userId) {
+            const f: FolderDoc = {
+              _id: 'folder-1',
+              ownerUserId: userId,
+              name: 'F',
+              parentId: null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              deletedAt: null,
+            };
+            return f;
+          }
+          return null;
+        }
+      ),
+      listNotes: jest.fn(
+        async (
+          owner: string,
+          folderId: string | null,
+          _limit: number,
+          _cursor?: string
+        ): Promise<{ items: NoteDoc[]; nextCursor: string | null }> => {
+          const n: NoteDoc = {
+            _id: 'note-1',
+            ownerUserId: owner,
+            title: 'N',
+            content: '',
+            folderId,
+            createdAt: new Date('2020-01-02'),
+            updatedAt: new Date('2020-01-02'),
+            deletedAt: null,
+          };
+          if (owner === userId && folderId === null) {
+            return { items: [n], nextCursor: null };
+          }
+          return { items: [], nextCursor: null };
+        }
+      ),
+    } as unknown as jest.Mocked<NoteRepository>;
+
+    storage = {
+      upload: jest.fn(async () => undefined),
+      downloadFile: jest.fn(async (key: string) => ({
+        buffer: Buffer.from(`bytes-for-${key}`),
+        contentType: 'application/pdf',
+      })),
+      delete: jest.fn(async () => undefined),
+      getPresignedGetUrl: jest.fn(async () => 'https://s3.example/presigned'),
+    } as unknown as jest.Mocked<StoragePort>;
+
+    graph = {
+      deleteNodesByOrigIds: jest.fn(async () => undefined),
+    } as unknown as jest.Mocked<GraphManagementService>;
+
+    aiInteraction = {
+      summarizeUserLibraryFile: jest.fn(async () => ({
+        ok: true as const,
+        data: { summary: '요약본' },
+      })),
+    };
+
+    service = new UserFileService(
+      userFileRepo,
+      noteRepo,
+      storage,
+      graph,
+      aiInteraction as unknown as AiInteractionService
+    );
+  });
+
+  it('PDF 업로드 시 S3 업로드·문서 생성 후 백그라운드 요약이 실행된다', async () => {
+    const dto = await service.uploadFile(userId, 'report.pdf', Buffer.from('%PDF-1'), null);
+
+    expect(dto.displayName).toBe('report.pdf');
+    expect(dto.mimeType).toBe('application/pdf');
+    expect(storage.upload).toHaveBeenCalledWith(
+      expect.stringContaining(`user-files/${userId}/`),
+      expect.any(Buffer),
+      'application/pdf'
+    );
+    expect(userFileRepo.insert).toHaveBeenCalled();
+
+    await flushBackgroundJobs();
+
+    expect(aiInteraction.summarizeUserLibraryFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId,
+        displayName: 'report.pdf',
+        mimeType: 'application/pdf',
+      })
+    );
+    const call = aiInteraction.summarizeUserLibraryFile.mock.calls[0][0];
+    expect(call.s3Key).toContain(userId);
+    expect(call.sizeBytes).toBeGreaterThan(0);
+  });
+
+  it('백그라운드 요약 성공 시 DB에 summary·completed로 갱신된다', async () => {
+    aiInteraction.summarizeUserLibraryFile.mockResolvedValue({
+      ok: true,
+      data: { summary: '완료된 요약' },
+    });
+
+    const dto = await service.uploadFile(userId, 'ok.pdf', Buffer.from('%PDF-1'), null);
+    await flushBackgroundJobs();
+
+    const stored = files.get(dto.id);
+    expect(stored?.summary).toBe('완료된 요약');
+    expect(stored?.summaryStatus).toBe('completed');
+    expect(stored?.summaryError).toBeNull();
+    expect(userFileRepo.updateById).toHaveBeenCalledWith(
+      dto.id,
+      userId,
+      expect.objectContaining({
+        summaryStatus: 'completed',
+        summary: '완료된 요약',
+      })
+    );
+  });
+
+  it('백그라운드 요약 실패 시 summaryStatus·summaryError로 갱신된다', async () => {
+    aiInteraction.summarizeUserLibraryFile.mockResolvedValue({
+      ok: false,
+      error: 'LLM 호출 실패',
+    });
+
+    const dto = await service.uploadFile(userId, 'bad.pdf', Buffer.from('%PDF-1'), null);
+    await flushBackgroundJobs();
+
+    const stored = files.get(dto.id);
+    expect(stored?.summaryStatus).toBe('failed');
+    expect(stored?.summaryError).toBe('LLM 호출 실패');
+  });
+
+  it('허용되지 않은 확장자는 ValidationError로 거절된다', async () => {
+    await expect(
+      service.uploadFile(userId, 'x.exe', Buffer.from('MZ'), null)
+    ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    expect(storage.upload).not.toHaveBeenCalled();
+  });
+
+  it('listSidebarItems는 노트와 파일을 updatedAt 기준으로 합친다', async () => {
+    const older = new Date('2019-01-01');
+    const newer = new Date('2021-06-01');
+    files.set('f1', {
+      ...docTemplate({
+        _id: 'f1',
+        displayName: 'doc.pdf',
+        updatedAt: newer,
+        createdAt: older,
+        summaryStatus: 'completed',
+      }),
+    });
+
+    const res = await service.listSidebarItems(userId, null, 10);
+    expect(res.items.length).toBe(2);
+    expect(res.items[0].kind).toBe('file');
+    expect(res.items[0].updatedAt >= res.items[1].updatedAt).toBe(true);
+    const kinds = res.items.map((i) => i.kind).sort();
+    expect(kinds).toEqual(['file', 'note']);
+  });
+
+  it('소프트 삭제 시 그래프 연쇄 삭제를 비영구로 호출한다', async () => {
+    files.set('f2', docTemplate({ _id: 'f2', displayName: 'a.pdf' }));
+
+    await service.deleteFile(userId, 'f2', false);
+
+    expect(userFileRepo.softDelete).toHaveBeenCalledWith('f2', userId);
+    expect(graph.deleteNodesByOrigIds).toHaveBeenCalledWith(userId, ['f2'], false);
+  });
+
+  it('readFileBytes는 S3에서 바이트를 읽어온다', async () => {
+    files.set('f3', docTemplate({ _id: 'f3', s3Key: 'user-files/u/f3.pdf' }));
+
+    const r = await service.readFileBytes(userId, 'f3');
+    expect(r.displayName).toBe('a.pdf');
+    expect(storage.downloadFile).toHaveBeenCalledWith('user-files/u/f3.pdf');
+    expect(r.buffer.length).toBeGreaterThan(0);
+  });
+
+  it('getPresignedViewUrl은 소유 파일의 S3 키로 Presigned URL을 요청한다', async () => {
+    files.set('f4', docTemplate({ _id: 'f4', s3Key: 'user-files/u/f4.pdf', displayName: '한글.pdf' }));
+
+    const result = await service.getPresignedViewUrl(userId, 'f4', { disposition: 'inline' });
+
+    expect(result.url).toBe('https://s3.example/presigned');
+    expect(result.expiresInSeconds).toBeGreaterThanOrEqual(60);
+    expect(new Date(result.expiresAt).getTime()).toBeGreaterThan(Date.now());
+    expect(storage.getPresignedGetUrl).toHaveBeenCalledWith(
+      'user-files/u/f4.pdf',
+      expect.objectContaining({
+        expiresInSeconds: result.expiresInSeconds,
+        responseContentType: 'application/pdf',
+        responseContentDisposition: expect.stringContaining("filename*=UTF-8''"),
+      })
+    );
+  });
+
+  // ──────────────────────────────────────────────────────────────
+  // updateFile
+  // ──────────────────────────────────────────────────────────────
+
+  describe('updateFile', () => {
+    it('displayName만 변경하면 이름이 갱신된다', async () => {
+      files.set('u1', docTemplate({ _id: 'u1', displayName: 'old.pdf', folderId: null }));
+
+      const dto = await service.updateFile(userId, 'u1', { displayName: 'new.pdf' });
+
+      expect(dto.displayName).toBe('new.pdf');
+      expect(userFileRepo.updateById).toHaveBeenCalledWith(
+        'u1',
+        userId,
+        expect.objectContaining({ displayName: 'new.pdf', folderId: null })
+      );
+    });
+
+    it('동일 이름으로 변경 요청 시 접미사가 붙지 않는다 (자기참조 오탐 버그 수정)', async () => {
+      // 같은 폴더에 'report.pdf'가 자기 자신 하나뿐인 상황
+      files.set('u2', docTemplate({ _id: 'u2', displayName: 'report.pdf', folderId: null }));
+
+      const dto = await service.updateFile(userId, 'u2', { displayName: 'report.pdf' });
+
+      // 'report.pdf' → 'report.pdf'여야 하고, 'report(1).pdf'가 되면 안 된다
+      expect(dto.displayName).toBe('report.pdf');
+    });
+
+    it('대상 폴더에 같은 이름이 있으면 자동 접미사가 붙는다', async () => {
+      // folder-1 안에 이미 'doc.pdf'가 존재
+      files.set('other', docTemplate({ _id: 'other', displayName: 'doc.pdf', folderId: null }));
+      files.set('u3', docTemplate({ _id: 'u3', displayName: 'another.pdf', folderId: null }));
+
+      const dto = await service.updateFile(userId, 'u3', { displayName: 'doc.pdf' });
+
+      // 충돌 → 'doc(1).pdf'로 조정
+      expect(dto.displayName).toBe('doc(1).pdf');
+    });
+
+    it('folderId만 변경하면 폴더 이동이 된다', async () => {
+      files.set('u4', docTemplate({ _id: 'u4', displayName: 'move.pdf', folderId: null }));
+
+      const dto = await service.updateFile(userId, 'u4', { folderId: 'folder-1' });
+
+      expect(dto.folderId).toBe('folder-1');
+      expect(userFileRepo.updateById).toHaveBeenCalledWith(
+        'u4',
+        userId,
+        expect.objectContaining({ folderId: 'folder-1' })
+      );
+    });
+
+    it('폴더 이동 시 목적지에 같은 이름이 있으면 자동 접미사가 붙는다', async () => {
+      // folder-1 안에 이미 'a.pdf'가 존재
+      files.set('conflict', docTemplate({ _id: 'conflict', displayName: 'a.pdf', folderId: 'folder-1' }));
+      // 루트의 'a.pdf'를 folder-1로 이동
+      files.set('u5', docTemplate({ _id: 'u5', displayName: 'a.pdf', folderId: null }));
+
+      const dto = await service.updateFile(userId, 'u5', { folderId: 'folder-1' });
+
+      expect(dto.displayName).toBe('a(1).pdf');
+      expect(dto.folderId).toBe('folder-1');
+    });
+
+    it('이름 + 폴더 동시 변경이 동작한다', async () => {
+      files.set('u6', docTemplate({ _id: 'u6', displayName: 'x.pdf', folderId: null }));
+
+      const dto = await service.updateFile(userId, 'u6', {
+        displayName: 'renamed.pdf',
+        folderId: 'folder-1',
+      });
+
+      expect(dto.displayName).toBe('renamed.pdf');
+      expect(dto.folderId).toBe('folder-1');
+    });
+
+    it('두 필드 모두 undefined이면 ValidationError가 발생한다', async () => {
+      files.set('u7', docTemplate({ _id: 'u7' }));
+
+      await expect(service.updateFile(userId, 'u7', {})).rejects.toMatchObject({
+        code: 'VALIDATION_FAILED',
+      });
+      expect(userFileRepo.updateById).not.toHaveBeenCalled();
+    });
+
+    it('존재하지 않는 파일이면 NotFoundError가 발생한다', async () => {
+      await expect(
+        service.updateFile(userId, 'nonexistent', { displayName: 'x.pdf' })
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('존재하지 않는 folderId로 이동하면 NotFoundError가 발생한다', async () => {
+      files.set('u8', docTemplate({ _id: 'u8' }));
+
+      await expect(
+        service.updateFile(userId, 'u8', { folderId: 'nonexistent-folder' })
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('빈 문자열 displayName은 ValidationError가 발생한다', async () => {
+      files.set('u9', docTemplate({ _id: 'u9' }));
+
+      await expect(service.updateFile(userId, 'u9', { displayName: '   ' })).rejects.toMatchObject({
+        code: 'VALIDATION_FAILED',
+      });
+    });
+  });
+});
+

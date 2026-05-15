@@ -368,7 +368,34 @@ export interface MacroGraphStore {
    * @param options transaction 등 adapter 전용 옵션입니다.
    * @returns stats 문서입니다. 없으면 `null`입니다.
    */
+  /**
+   * @deprecated 2026-05-08.
+   * Neo4j macro graph에서는 node/edge/cluster 개수를 MacroStats 노드에 직접 저장하지 않습니다.
+   * 이 메서드의 Neo4j 구현은 MacroNode, MacroRelation, MacroCluster를 다시 count하므로,
+   * graph 크기가 커진 사용자에서는 optional match 조합으로 중간 row 수가 폭증할 수 있습니다.
+   * snapshot처럼 목록을 이미 조회하는 경로에서는 `getStatsMetadata`로 상태 메타데이터만 읽고,
+   * count는 실제 조회된 배열 길이로 계산해야 합니다.
+   */
   getStats(userId: string, options?: MacroGraphStoreOptions): Promise<GraphStatsDto | null>;
+
+  /**
+   * @description 저장된 MacroStats 노드만 조회합니다.
+   *
+   * Snapshot 조회처럼 node/edge/cluster 목록을 이미 별도로 가져온 경로에서는
+   * count 재집계 없이 status/generatedAt 같은 상태 메타데이터만 필요합니다.
+   */
+  /**
+   * @since 2026-05-08
+   * 저장된 MacroStats 노드에서 상태 메타데이터만 조회합니다.
+   * 이 메서드는 count 재집계를 수행하지 않습니다. Neo4j의 MacroStats 노드는 현재
+   * node/edge/cluster 개수를 직접 보관하지 않으므로, 반환 DTO의 count 필드는 저장값으로
+   * 간주하면 안 됩니다. snapshot API처럼 목록을 이미 조회한 경로에서 status/generatedAt
+   * 같은 상태 메타데이터만 얻기 위한 경량 조회 용도입니다.
+   */
+  getStatsMetadata?(
+    userId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<GraphStatsDto | null>;
   /**
    * @description 사용자 graph summary를 조회합니다.
    *

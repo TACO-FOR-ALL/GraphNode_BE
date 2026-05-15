@@ -26,6 +26,7 @@ import { makeAiRouter } from './modules/ai.module';
 import { makeGraphRouter } from './modules/graph.module';
 import { makeGraphAiRouter } from './modules/graphAi.module';
 import { makeNoteRouter } from './modules/note.module';
+import { makeUserFileRouter } from './modules/userFile.module';
 import { makeSyncRouter } from './modules/sync.module';
 import { makeAgentRouter } from './modules/agent.module';
 import { makeNotificationRouter } from './modules/notification.module';
@@ -36,6 +37,7 @@ import { makeFeedbackRouter } from './modules/feedback.module';
 import { makeExportRouter } from './modules/export.module';
 import { makeGraphEditorRouter } from './modules/graphEditor.module';
 import { makeFileProxyRouter } from './modules/fileProxy.module';
+import { makeWebhookRouter, makeSubscriptionRouter } from './modules/billing.module';
 import { STORAGE_BUCKETS } from '../config/storageConfig';
 import { CleanupCron } from '../infra/cron/CleanupCron';
 import { BillingCron } from '../infra/cron/BillingCron';
@@ -108,6 +110,11 @@ export function createApp() {
   // Chat export Router
   app.use('/v1/exports', makeExportRouter());
 
+  // Billing (Webhook + Subscription) Routers
+  // express.raw() is applied per-route inside WebhookRouter (원본 body가 필요한 서명 검증)
+  app.use('/v1/webhooks', makeWebhookRouter());
+  app.use('/v1', makeSubscriptionRouter());
+
   // Notification Router (SSE)
   app.use('/v1/notifications', makeNotificationRouter());
 
@@ -127,6 +134,9 @@ export function createApp() {
   app.use('/auth/google', authGoogleRouter);
   app.use('/auth/apple', authAppleRouter);
   app.use('/v1/me', makeMeRouter());
+
+  // User files + sidebar (노트 라우터보다 먼저 마운트하여 `/v1/files` 등이 `/v1/notes/:id`에 가려지지 않게 함)
+  app.use('/v1', makeUserFileRouter());
 
   // Note Router (가장 넓은 범위이므로 구체적인 v1 하위 라우터 아래에 배치)
   app.use('/v1', makeNoteRouter());

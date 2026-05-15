@@ -12,11 +12,13 @@ import { SyncApi } from './endpoints/sync.js';
 import { AiApi } from './endpoints/ai.js';
 import { NotificationApi } from './endpoints/notification.js';
 import { FileApi } from './endpoints/file.js';
+import { UserFilesApi } from './endpoints/userFiles.js';
 import { MicroscopeApi } from './endpoints/microscope.js';
 import { SearchApi } from './endpoints/search.js';
 import { FeedbackApi } from './endpoints/feedback.js';
 import { GraphEditorApi } from './endpoints/graphEditor.js';
 import { ExportApi } from './endpoints/export.js';
+import { BillingApi } from './endpoints/billing.js';
 
 /**
  * GraphNode 클라이언트 옵션
@@ -44,7 +46,8 @@ export interface GraphNodeClientOptions extends Omit<BuilderOptions, 'baseUrl' |
  * @property sync 데이터 동기화 API
  * @property ai AI 채팅 API
  * @property notification SSE 알림 API
- * @property file 파일 업로드/다운로드 API
+ * @property file AI 채팅용 파일 업로드 API (`/api/v1/ai/files`)
+ * @property userFiles 사용자 라이브러리 파일 API (`/v1/files`, `/v1/sidebar-items`, Presigned 뷰 URL 등)
  * @property microscope 마이크로스코프 API
  */
 export class GraphNodeClient {
@@ -60,11 +63,13 @@ export class GraphNodeClient {
   readonly ai: AiApi;
   readonly notification: NotificationApi;
   readonly file: FileApi;
+  readonly userFiles: UserFilesApi;
   readonly microscope: MicroscopeApi;
   readonly search: SearchApi;
   readonly feedback: FeedbackApi;
   readonly graphEditor: GraphEditorApi;
   readonly export: ExportApi;
+  readonly billing: BillingApi;
 
   /**
    * HTTP 요청 빌더 인스턴스.
@@ -132,11 +137,13 @@ export class GraphNodeClient {
     this.ai = new AiApi(this.rb);
     this.notification = new NotificationApi(this.rb); 
     this.file = new FileApi(this.rb);
+    this.userFiles = new UserFilesApi(this.rb);
     this.microscope = new MicroscopeApi(this.rb);
     this.search = new SearchApi(this.rb);
     this.feedback = new FeedbackApi(this.rb);
     this.graphEditor = new GraphEditorApi(this.rb);
     this.export = new ExportApi(this.rb);
+    this.billing = new BillingApi(this.rb);
   }
 
   /**
