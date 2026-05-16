@@ -10,6 +10,11 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { bindSessionUser } from '../middlewares/session';
 import { requireLogin } from '../middlewares/auth';
 
+/**
+ * @description Export 관련 라우터를 생성합니다.
+ * @param deps 의존성 객체 (chatExportService 등)
+ * @returns 설정된 라우터 객체
+ */
 export function createExportRouter(deps: { chatExportService: ChatExportService }) {
   const router = Router();
   const controller = new ChatExportController(deps.chatExportService);

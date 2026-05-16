@@ -3,7 +3,10 @@ import { ulid } from 'ulid';
 import type { ChatExportRepository } from '../ports/ChatExportRepository';
 import type { StoragePort } from '../ports/StoragePort';
 import type { EmailPort } from '../ports/EmailPort';
-import type { ChatExportJobDoc, ChatExportScope } from '../types/persistence/chat_export.persistence';
+import type {
+  ChatExportJobDoc,
+  ChatExportScope,
+} from '../types/persistence/chat_export.persistence';
 import type {
   ChatExportStatusResponseDto,
   StartChatExportResponseDto,
@@ -57,6 +60,8 @@ export class ChatExportService {
 
   /**
    * @description 작업 상태를 조회합니다(downloadUrl은 Controller에서 조립).
+   * @param userId 사용자 ID
+   * @param jobId Job Id
    */
   async getExportStatus(userId: string, jobId: string): Promise<ChatExportStatusResponseDto> {
     const job = await this.requireJob(jobId, userId);
@@ -71,6 +76,7 @@ export class ChatExportService {
 
   /**
    * @description 완료된보내기 ZIP을 바이너리로 반환합니다.
+   * @param userId
    */
   async downloadExportFile(
     userId: string,
@@ -113,19 +119,33 @@ export class ChatExportService {
         await this.chatExportRepository.delete(job.jobId, job.userId);
         removed += 1;
       } catch (err: unknown) {
-        logger.warn({ err, jobId: job.jobId, userId: job.userId }, 'Failed to cleanup expired export job');
+        logger.warn(
+          { err, jobId: job.jobId, userId: job.userId },
+          'Failed to cleanup expired export job'
+        );
       }
     }
 
     return removed;
   }
 
+  /**
+   * @description 내보내기 작업을 큐에 등록하고(실제로 비동기 처리 시작), 생성된 작업 정보를 반환합니다.
+   * @param userId 로그인 사용자 ID
+   * @param exportScope 내보내기 범위 ('conversation' 또는 'all')
+   * @param conversationId 대상 대화 ID (단일 대화 내보내기 시)
+   * @returns 시작된 작업의 ID 및 상태 정보
+   */
   private async enqueueExport(
     userId: string,
     exportScope: ChatExportScope,
     conversationId?: string
   ): Promise<StartChatExportResponseDto> {
-    const active = await this.chatExportRepository.findActiveJob(userId, exportScope, conversationId);
+    const active = await this.chatExportRepository.findActiveJob(
+      userId,
+      exportScope,
+      conversationId
+    );
     if (active) {
       throw new ConflictError(
         `An export job is already in progress (jobId: ${active.jobId}, status: ${active.status})`
@@ -159,21 +179,21 @@ export class ChatExportService {
     return { jobId, status: job.status, exportScope };
   }
 
+  /**
+   * @description 내보내기 작업을 실제로 백그라운드에서 처리합니다. (대화 조회, 압축, 업로드, 알림 발송)
+   * @param job 처리할 내보내기 작업 문서
+   */
   private async processExportJob(job: ChatExportJobDoc): Promise<void> {
     await this.chatExportRepository.update(job.jobId, job.userId, {
       status: 'PROCESSING',
       updatedAt: Date.now(),
     });
 
+    // TODO : 대화 전체를 Memory에 적재하고 있음. Stream을 이용해 처리하는 등 우회 방법 추후 요망(2026_05_16)
     const conversations =
       job.exportScope === 'all'
         ? await this.loadAllConversationThreads(job.userId)
-        : [
-            await this.chatManagementService.getConversation(
-              job.conversationId!,
-              job.userId
-            ),
-          ];
+        : [await this.chatManagementService.getConversation(job.conversationId!, job.userId)];
 
     const payload: ChatExportPayload = {
       exportedAt: new Date().toISOString(),
@@ -181,6 +201,7 @@ export class ChatExportService {
       conversations: conversations.map(threadToExportConversation),
     };
 
+    // TODO : 첨부파일도 Stream을 이용해 다운로드하여 ZIP에 저장하는 것이 좋음.
     const zipBuffer = await buildExportZipBuffer(payload, this.storage);
     const fileKey = buildStorageKey(
       STORAGE_BUCKETS.CHAT_EXPORT_FILES,
@@ -218,6 +239,12 @@ export class ChatExportService {
     return threads;
   }
 
+  /**
+   * @description 작업 완료 후 이메일 알림을 발송합니다. 파일이 SMTP 제한 이내면 첨부하고, 초과하면 다운로드 링크를 포함합니다.
+   * @param job 작업 문서
+   * @param payload 내보내기 페이로드 정보
+   * @param zipBuffer 생성된 ZIP 버퍼
+   */
   private async sendExportNotification(
     job: ChatExportJobDoc,
     payload: ChatExportPayload,
@@ -226,7 +253,10 @@ export class ChatExportService {
     try {
       const profile = await this.userService.getUserProfile(job.userId);
       if (!profile.email?.trim()) {
-        logger.warn({ userId: job.userId, jobId: job.jobId }, 'User email is empty — skip export email');
+        logger.warn(
+          { userId: job.userId, jobId: job.jobId },
+          'User email is empty — skip export email'
+        );
         return;
       }
 
@@ -276,8 +306,8 @@ export class ChatExportService {
       const linkBlock = downloadUrl
         ? [
             `The export file (${zipBuffer.length} bytes) is too large to attach to this email.`,
-            '', 
-            'Download (authentication required — use your app session or Authorization: Bearer):', 
+            '',
+            'Download (authentication required — use your app session or Authorization: Bearer):',
             downloadUrl,
             '',
             `Job ID: ${job.jobId}`,
@@ -316,6 +346,11 @@ export class ChatExportService {
     return `${base}/v1/exports/${jobId}/download`;
   }
 
+  /**
+   * @description 작업 범위와 대화 ID에 따라 다운로드 될 ZIP 파일의 이름을 생성합니다.
+   * @param job 작업 문서
+   * @returns 생성된 파일 이름
+   */
   private buildDownloadFilename(job: ChatExportJobDoc): string {
     if (job.exportScope === 'all') {
       return 'all-conversations-export.zip';
@@ -323,6 +358,13 @@ export class ChatExportService {
     return `${job.conversationId ?? 'conversation'}-export.zip`;
   }
 
+  /**
+   * @description Job ID가 유효한지 검사하고 데이터베이스에서 조회하여 반환합니다. 존재하지 않으면 에러를 던집니다.
+   * @param jobId 조회할 작업 ID
+   * @param userId 작업 소유자 ID
+   * @returns 조회된 작업 문서
+   * @throws ValidationError, NotFoundError
+   */
   private async requireJob(jobId: string, userId: string): Promise<ChatExportJobDoc> {
     if (!jobId?.trim()) {
       throw new ValidationError('jobId is required');

@@ -75,9 +75,14 @@ export async function buildExportZipBuffer(
   const zip = new AdmZip();
   zip.addFile('export.json', Buffer.from(JSON.stringify(payload, null, 2), 'utf-8'));
 
+  // TODO : 3중 For 문을 이후에는 최적화 필요함, 현재는 빠른 구현 위해 배제(2026_05_17)
   const seenS3Keys = new Set<string>();
+
+  // Message 들에 대해서
   for (const conv of payload.conversations) {
+    // Message 들에 대해서
     for (const message of conv.messages) {
+      // 첨부파일에 대해서
       for (const att of message.attachments ?? []) {
         if (!att.s3Key?.trim() || seenS3Keys.has(att.s3Key)) continue;
         seenS3Keys.add(att.s3Key);

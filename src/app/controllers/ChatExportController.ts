@@ -12,6 +12,7 @@ export class ChatExportController {
   constructor(private readonly chatExportService: ChatExportService) {}
 
   /**
+   * @description 특정 대화(Conversation)의 내보내기를 시작합니다.
    * POST /conversations/:conversationId/exports
    */
   async startConversationExport(req: Request, res: Response, _next: NextFunction) {
@@ -22,6 +23,7 @@ export class ChatExportController {
   }
 
   /**
+   * @description 사용자의 전체 대화 내역에 대한 내보내기를 시작합니다.
    * POST /all
    */
   async startAllExports(req: Request, res: Response, _next: NextFunction) {
@@ -31,6 +33,7 @@ export class ChatExportController {
   }
 
   /**
+   * @description 요청된 내보내기 작업의 현재 진행 상태를 조회합니다. 완료 시 다운로드 URL이 포함될 수 있습니다.
    * GET /:jobId
    */
   async getStatus(req: Request, res: Response, _next: NextFunction) {
@@ -47,6 +50,7 @@ export class ChatExportController {
   }
 
   /**
+   * @description 완료된 내보내기 파일(ZIP)을 다운로드합니다.
    * GET /:jobId/download
    */
   async download(req: Request, res: Response, _next: NextFunction) {
