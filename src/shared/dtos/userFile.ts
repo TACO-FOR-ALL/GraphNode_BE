@@ -9,6 +9,30 @@ import type { UserFileCategory } from '../config/fileUploadSpec';
 /** AI 요약 파이프라인 상태 (API 응답용 문자열) */
 export type UserFileSummaryStatusDto = 'pending' | 'processing' | 'completed' | 'failed';
 
+export type { UserFileSummaryStructured } from '../types/userFileSummaryStructured';
+
+/**
+ * `GET /v1/files/:id/summary/preview` 응답 — 한 줄 요약만.
+ */
+export interface UserFileSummaryPreviewResponseDto {
+  summaryStatus: UserFileSummaryStatusDto;
+  summaryError?: string | null;
+  /** `completed`이고 요약이 있으면 문자열, 그 외는 null */
+  oneLine: string | null;
+}
+
+/**
+ * `GET /v1/files/:id/summary/full` 응답 — 구조화 요약 전체.
+ */
+export interface UserFileSummaryFullResponseDto {
+  summaryStatus: UserFileSummaryStatusDto;
+  summaryError?: string | null;
+  oneLine: string | null;
+  purpose: string | null;
+  keyPoints: string[];
+  conclusion: string | null;
+}
+
 /** 단일 사용자 파일 응답 본문 */
 export interface UserFileDto {
   /** Mongo `user_files._id` */
@@ -20,7 +44,10 @@ export interface UserFileDto {
   mimeType: string;
   sizeBytes: number;
   category: UserFileCategory;
-  /** AI 요약 본문 (완료 후) */
+  /**
+   * AI 요약 1번(한 줄). 완료 후 `summaryStructured.oneLine`과 동일.
+   * 목록·미리보기에서 가벼운 응답용으로 사용한다.
+   */
   summary?: string;
   summaryStatus: UserFileSummaryStatusDto;
   summaryError?: string | null;

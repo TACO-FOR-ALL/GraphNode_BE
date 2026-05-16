@@ -5,6 +5,31 @@
 /** AI 요약 상태 */
 export type UserFileSummaryStatusDto = 'pending' | 'processing' | 'completed' | 'failed';
 
+/** 구조화 파일 요약 (서버 `summaryStructured` 스키마와 동일). */
+export interface UserFileSummaryStructuredDto {
+  oneLine: string;
+  purpose: string;
+  keyPoints: string[];
+  conclusion: string;
+}
+
+/** `GET /v1/files/:id/summary/preview` 응답 */
+export interface UserFileSummaryPreviewResponseDto {
+  summaryStatus: UserFileSummaryStatusDto;
+  summaryError?: string | null;
+  oneLine: string | null;
+}
+
+/** `GET /v1/files/:id/summary/full` 응답 */
+export interface UserFileSummaryFullResponseDto {
+  summaryStatus: UserFileSummaryStatusDto;
+  summaryError?: string | null;
+  oneLine: string | null;
+  purpose: string | null;
+  keyPoints: string[];
+  conclusion: string | null;
+}
+
 /** MVP 문서 카테고리 (서버의 UserFileCategory와 동기화) */
 export type UserFileCategoryDto = 'pdf' | 'word' | 'ppt' | 'document' | 'unknown';
 

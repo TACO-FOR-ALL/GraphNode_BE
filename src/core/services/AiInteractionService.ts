@@ -45,14 +45,20 @@ import { ToolExecutionContext } from '../../shared/ai-providers/toolContext';
 import { STORAGE_BUCKETS, buildStorageKey } from '../../config/storageConfig';
 import { logger } from '../../shared/utils/logger';
 import { documentProcessor } from '../../shared/utils/documentProcessor';
-
-/** 사용자 라이브러리 파일 요약(OpenAI·첨부 파이프라인) 결과 */
-export type UserLibraryFileSummaryResult =
-  | { ok: true; data: { summary: string } }
-  | { ok: false; error: string };
+import { buildUserLibraryFileSummarySystemPrompt } from '../../shared/prompts/userLibraryFileSummaryPrompt';
+import {
+  localeToUserFileSummaryGenerationLanguage,
+  parseUserFileSummaryStructured,
+} from '../../shared/utils/userFileSummaryStructured';
+import type { UserFileSummaryStructured } from '../../shared/types/userFileSummaryStructured';
 import { FEATURE_COSTS, CreditContext } from '../../config/billing.config';
 import { ICreditService } from '../ports/ICreditService';
 import { CreditFeature } from '../types/persistence/credit.persistence';
+
+/** 사용자 라이브러리 파일 요약(OpenAI·첨부 파이프라인) 결과 */
+export type UserLibraryFileSummaryResult =
+  | { ok: true; data: { summary: string; structured: UserFileSummaryStructured } }
+  | { ok: false; error: string };
 
 /** 항상 그대로 전송하는 최신 메시지 수 (Direct Window). */
 const MAX_DIRECT_WINDOW = 20;
@@ -833,10 +839,11 @@ export class AiInteractionService {
   }
 
   /**
-   * 사용자 라이브러리 파일을 S3에서 읽어 텍스트를 추출한 뒤 LLM으로 요약합니다.
+   * 사용자 라이브러리 파일을 S3에서 읽어 텍스트를 추출한 뒤 LLM으로 구조화 요약합니다.
    * - API 키: 채팅과 동일한 서비스(환경변수) 키 (`getSystemApiKey('openai')`).
    * - 추출: `documentProcessor` (PDF/DOCX/PPT 등) → 평문으로 요약 요청.
-   * - 출력 언어: `UserService.getPreferredLanguage` (조회 실패 시 `en`).
+   * - 출력 언어: `UserService.getPreferredLanguage` → Korean / English / Chinese 라벨로 매핑 (조회 실패 시 English).
+   * - 모델 출력: JSON `{ oneLine, purpose, keyPoints, conclusion }` 파싱 후 저장.
    */
   async summarizeUserLibraryFile(input: {
     userId: string;
@@ -887,6 +894,8 @@ export class AiInteractionService {
         );
       }
 
+      const generationLanguage = localeToUserFileSummaryGenerationLanguage(preferredLanguage);
+
       const apiKey = this.getSystemApiKey('openai');
       const provider = getAiProvider('openai');
 
@@ -894,15 +903,15 @@ export class AiInteractionService {
         {
           id: uuidv4(),
           role: 'system',
-          content:
-            `You summarize documents for a compact in-app preview (e.g. graph node tooltip). Be concise (roughly 2–6 sentences). ` +
-            `Write the entire summary in the user's preferred language (BCP-47 / locale code: "${preferredLanguage}"). ` +
-            `If the document is entirely in a single other language and translating would distort technical terms, you may keep those terms in the original language.`,
+          content: buildUserLibraryFileSummarySystemPrompt(generationLanguage),
         },
         {
           id: uuidv4(),
           role: 'user',
-          content: `File name: "${input.displayName}"\n\nSummarize the following extracted text for a short preview.\n\n${bodyText}`,
+          content:
+            `파일명: "${input.displayName}"\n\n` +
+            `---\n[파일 내용]\n\n` +
+            `${bodyText}`,
         },
       ];
 
@@ -917,12 +926,18 @@ export class AiInteractionService {
         return { ok: false, error: aiResult.error };
       }
 
-      const summary = aiResult.data.content?.trim();
-      if (!summary) {
+      const raw = aiResult.data.content?.trim();
+      if (!raw) {
         return { ok: false, error: '요약 결과가 비어 있습니다.' };
       }
 
-      return { ok: true, data: { summary } };
+      const parsed = parseUserFileSummaryStructured(raw);
+      if (!parsed.ok) {
+        return { ok: false, error: parsed.error };
+      }
+
+      const structured = parsed.data;
+      return { ok: true, data: { summary: structured.oneLine, structured } };
     } catch (err: unknown) {
       logger.error({ err, userId: input.userId }, 'summarizeUserLibraryFile failed');
       const msg = err instanceof Error ? err.message : String(err);

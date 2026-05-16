@@ -146,7 +146,7 @@
 
 ## D. Note Domain
 
-**소스**: `src/core/types/persistence/note.persistence.ts`
+**소스**: `src/core/types/persistence/note.persistence.ts`, `src/core/types/persistence/userFile.persistence.ts`
 
 ### notes 컬렉션
 
@@ -169,6 +169,28 @@
 | **ownerUserId** | `String` | 소유자 ID |
 | **name** | `String` | 폴더명 |
 | **parentId** | `String` | 상위 폴더 ID (null = Root) |
+| **createdAt** | `Date` | 생성 일시 |
+| **updatedAt** | `Date` | 수정 일시 |
+| **deletedAt** | `Date` | 삭제 일시 (Soft Delete, Optional) |
+
+### user_files 컬렉션
+
+사용자 라이브러리에 업로드된 파일 메타데이터 및 AI 구조화 요약을 저장합니다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| **_id** | `String` (ULID) | 파일 고유 ID |
+| **ownerUserId** | `String` | 소유자 ID |
+| **folderId** | `String` \| `null` | 소속 폴더 (`null` = 루트) |
+| **displayName** | `String` | 폴더 내 표시 파일명 |
+| **s3Key** | `String` | S3 객체 키 |
+| **mimeType** | `String` | MIME 타입 |
+| **sizeBytes** | `Number` | 바이트 크기 |
+| **category** | `String` | `fileUploadSpec` 기준 카테고리 |
+| **summary** | `String` | AI 한 줄 요약(1번). `summaryStructured.oneLine`과 동일 (Optional) |
+| **summaryStructured** | `Object` | AI 구조화 요약 `{ oneLine, purpose, keyPoints[], conclusion }` (Optional) |
+| **summaryStatus** | `String` | `pending` \| `processing` \| `completed` \| `failed` |
+| **summaryError** | `String` | 실패 시 사유 (Optional) |
 | **createdAt** | `Date` | 생성 일시 |
 | **updatedAt** | `Date` | 수정 일시 |
 | **deletedAt** | `Date` | 삭제 일시 (Soft Delete, Optional) |
