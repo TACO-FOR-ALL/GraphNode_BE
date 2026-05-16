@@ -686,6 +686,19 @@ export const MACRO_GRAPH_CYPHER = {
   `,
 
   /**
+   * @description MacroStats 노드의 상태 메타데이터만 조회합니다.
+   *
+   * @since 2026-05-08
+   * count 재집계를 수행하지 않는 snapshot 전용 경량 조회입니다. Neo4j MacroStats 노드는
+   * node/edge/cluster 개수를 직접 저장하지 않으므로, 이 쿼리 결과는 status/generatedAt
+   * 같은 메타데이터 용도로만 사용해야 합니다. snapshot count는 이미 조회한 목록 길이로 계산합니다.
+   */
+  getStatsMetadata: `
+    MATCH (g:MacroGraph {userId: $userId})-[:HAS_STATS]->(st:MacroStats)
+    RETURN st
+  `,
+
+  /**
    * @description MacroSummary 노드를 조회합니다. aggregate context는 별도 쿼리로 구합니다.
    *
    * @param userId 사용자 ID

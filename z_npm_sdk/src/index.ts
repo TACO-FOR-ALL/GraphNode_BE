@@ -25,6 +25,8 @@ export { UserFilesApi } from './endpoints/userFiles.js';
 export { MicroscopeApi } from './endpoints/microscope.js';
 export { FeedbackApi } from './endpoints/feedback.js';
 export { GraphEditorApi } from './endpoints/graphEditor.js';
+export { ExportApi } from './endpoints/export.js';
+export { BillingApi } from './endpoints/billing.js';
 export type { BatchOperation } from './endpoints/graphEditor.js';
 
 // Types
@@ -53,6 +55,17 @@ export type {
   CreditPlanType,
   CreditFeatureType,
 } from './types/credit.js';
+export type {
+  PgProvider,
+  BillingCycle,
+  BillingPlanType,
+  RegisterPaymentMethodRequest,
+  CreateSubscriptionRequest,
+  ConfirmPaymentRequest,
+  CancelSubscriptionRequest,
+  RequestRefundRequest,
+  BillingStatusResponse,
+} from './types/billing.js';
 export type {
   ConversationDto,
   ConversationCreateDto,
@@ -126,6 +139,12 @@ export type {
 } from './endpoints/agent.js';
 export { openAgentChatStream } from './endpoints/agent.js';
 export type { AIChatRequestDto, AIChatResponseDto } from './endpoints/ai.js';
+export type {
+  StartChatExportResponseDto,
+  ChatExportStatusResponseDto,
+  ChatExportJobStatus,
+  ChatExportScope,
+} from './types/chatExport.js';
 export { AiStreamEvent } from './types/ai-event.js';
 export {
   TaskType,

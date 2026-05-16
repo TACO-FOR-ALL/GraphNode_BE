@@ -17,6 +17,8 @@ import { MicroscopeApi } from './endpoints/microscope.js';
 import { SearchApi } from './endpoints/search.js';
 import { FeedbackApi } from './endpoints/feedback.js';
 import { GraphEditorApi } from './endpoints/graphEditor.js';
+import { ExportApi } from './endpoints/export.js';
+import { BillingApi } from './endpoints/billing.js';
 
 /**
  * GraphNode 클라이언트 옵션
@@ -66,6 +68,8 @@ export class GraphNodeClient {
   readonly search: SearchApi;
   readonly feedback: FeedbackApi;
   readonly graphEditor: GraphEditorApi;
+  readonly export: ExportApi;
+  readonly billing: BillingApi;
 
   /**
    * HTTP 요청 빌더 인스턴스.
@@ -138,6 +142,8 @@ export class GraphNodeClient {
     this.search = new SearchApi(this.rb);
     this.feedback = new FeedbackApi(this.rb);
     this.graphEditor = new GraphEditorApi(this.rb);
+    this.export = new ExportApi(this.rb);
+    this.billing = new BillingApi(this.rb);
   }
 
   /**

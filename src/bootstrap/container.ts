@@ -21,6 +21,7 @@ import { AiInteractionService } from '../core/services/AiInteractionService';
 import { AgentService } from '../core/services/AgentService';
 import { SearchService } from '../core/services/SearchService';
 import { FeedbackService } from '../core/services/FeedbackService';
+import { ChatExportService } from '../core/services/ChatExportService';
 import { GraphEditorService } from '../core/services/GraphEditorService';
 import { GoogleOAuthService } from '../core/services/GoogleOAuthService';
 import { AppleOAuthService } from '../core/services/AppleOAuthService';
@@ -49,16 +50,37 @@ import { VectorStore } from '../core/ports/VectorStore';
 import { QueuePort } from '../core/ports/QueuePort';
 import { StoragePort } from '../core/ports/StoragePort';
 import { EventBusPort } from '../core/ports/EventBusPort';
+import { EmailPort } from '../core/ports/EmailPort';
 import { NotificationRepository } from '../core/ports/NotificationRepository';
+import { ChatExportRepository } from '../core/ports/ChatExportRepository';
 import { FeedbackRepository } from '../core/ports/FeedbackRepository';
 // Infra Adapters
-import { AwsSqsAdapter } from '../infra/aws/AwsSqsAdapter';
 import { AwsS3Adapter } from '../infra/aws/AwsS3Adapter';
+import { AwsSqsAdapter } from '../infra/aws/AwsSqsAdapter';
+import { SmtpEmailAdapter } from '../infra/email/SmtpEmailAdapter';
 import { RedisEventBusAdapter } from '../infra/redis/RedisEventBusAdapter';
 import { FeedbackRepositoryPrisma } from '../infra/repositories/FeedbackRepositoryPrisma';
+import { ChatExportRepositoryMongo } from '../infra/repositories/ChatExportRepositoryMongo';
+
 import { CreditRepositoryPrisma } from '../infra/repositories/CreditRepositoryPrisma';
 import { ICreditRepository } from '../core/ports/ICreditRepository';
 import { CreditService } from '../core/services/CreditService';
+import { SubscriptionRepository } from '../infra/repositories/SubscriptionRepository';
+import { PaymentHistoryRepository } from '../infra/repositories/PaymentHistoryRepository';
+import { WebhookEventRepository } from '../infra/repositories/WebhookEventRepository';
+import { UserPaymentMethodRepository } from '../infra/repositories/UserPaymentMethodRepository';
+import { PortoneAdapter } from '../infra/payment/PortoneAdapter';
+import { TossAdapter } from '../infra/payment/TossAdapter';
+import { StripeAdapter } from '../infra/payment/StripeAdapter';
+import { SubscriptionService } from '../core/services/SubscriptionService';
+import { WebhookProcessingService } from '../core/services/WebhookProcessingService';
+import { WebhookController } from '../app/controllers/WebhookController';
+import { SubscriptionController } from '../app/controllers/SubscriptionController';
+import { BillingConfig } from '../config/billing.config';
+import type { ISubscriptionRepository } from '../core/ports/ISubscriptionRepository';
+import type { IPaymentHistoryRepository } from '../core/ports/IPaymentHistoryRepository';
+import type { IWebhookEventRepository } from '../core/ports/IWebhookEventRepository';
+import type { IUserPaymentMethodRepository } from '../core/ports/IUserPaymentMethodRepository';
 /**
  * 애플리케이션의 의존성 주입(Dependency Injection)을 관리하는 싱글톤 컨테이너입니다.
  *
@@ -85,11 +107,17 @@ export class Container {
   private microscopeWorkspaceRepo: MicroscopeWorkspaceStore | null = null;
   private notificationRepo: NotificationRepository | null = null;
   private feedbackRepo: FeedbackRepository | null = null;
+  private chatExportRepo: ChatExportRepository | null = null;
   private creditRepo: ICreditRepository | null = null;
+  private subscriptionRepo: ISubscriptionRepository | null = null;
+  private paymentHistoryRepo: IPaymentHistoryRepository | null = null;
+  private webhookEventRepo: IWebhookEventRepository | null = null;
+  private userPaymentMethodRepo: IUserPaymentMethodRepository | null = null;
 
   // Infra Adapters
   private queueAdapter: QueuePort | null = null;
   private storageAdapter: StoragePort | null = null;
+  private emailAdapter: EmailPort | null = null;
   private eventBusAdapter: EventBusPort | null = null;
 
   // Services
@@ -112,8 +140,14 @@ export class Container {
   private microscopeManagementService: MicroscopeManagementService | null = null;
   private searchService: SearchService | null = null;
   private feedbackService: FeedbackService | null = null;
+  private chatExportService: ChatExportService | null = null;
   private graphEditorService: GraphEditorService | null = null;
   private creditService: CreditService | null = null;
+  private subscriptionService: SubscriptionService | null = null;
+  private webhookProcessingService: WebhookProcessingService | null = null;
+  private webhookController: WebhookController | null = null;
+  private subscriptionController: SubscriptionController | null = null;
+  private billingConfig: BillingConfig | null = null;
 
   private constructor() {}
   /**
@@ -187,6 +221,18 @@ export class Container {
     }
     return this.storageAdapter;
   }
+  /**
+   * SmtpEmailAdapter 인스턴스를 반환합니다.
+   * @remarks `CHAT_EXPORT_SMTP_USER` / `CHAT_EXPORT_SMTP_PASS` 미설정 시 발송은 건너뜁니다.
+   */
+  getEmailAdapter(): EmailPort {
+    if (!this.emailAdapter) {
+      const raw = new SmtpEmailAdapter();
+      this.emailAdapter = createAuditProxy(raw, 'SmtpEmailAdapter');
+    }
+    return this.emailAdapter;
+  }
+
   /**
    * RedisEventBusAdapter 인스턴스를 반환합니다.
    * @returns RedisEventBusAdapter 인스턴스
@@ -294,11 +340,51 @@ export class Container {
     return this.feedbackRepo;
   }
 
+  getChatExportRepository(): ChatExportRepository {
+    if (!this.chatExportRepo) {
+      this.chatExportRepo = new ChatExportRepositoryMongo();
+    }
+    return this.chatExportRepo;
+  }
+
+  // --- Services ---
   getCreditRepository(): ICreditRepository {
     if (!this.creditRepo) {
       this.creditRepo = new CreditRepositoryPrisma();
     }
     return this.creditRepo;
+  }
+
+  getSubscriptionRepository(): ISubscriptionRepository {
+    if (!this.subscriptionRepo) {
+      this.subscriptionRepo = new SubscriptionRepository();
+    }
+    return this.subscriptionRepo;
+  }
+
+  getPaymentHistoryRepository(): IPaymentHistoryRepository {
+    if (!this.paymentHistoryRepo) {
+      this.paymentHistoryRepo = new PaymentHistoryRepository();
+    }
+    return this.paymentHistoryRepo;
+  }
+
+  getWebhookEventRepository(): IWebhookEventRepository {
+    if (!this.webhookEventRepo) {
+      this.webhookEventRepo = new WebhookEventRepository();
+    }
+    return this.webhookEventRepo;
+  }
+
+  /**
+   * UserPaymentMethodRepository 인스턴스를 반환합니다.
+   * @returns IUserPaymentMethodRepository 인스턴스
+   */
+  getUserPaymentMethodRepository(): IUserPaymentMethodRepository {
+    if (!this.userPaymentMethodRepo) {
+      this.userPaymentMethodRepo = new UserPaymentMethodRepository();
+    }
+    return this.userPaymentMethodRepo;
   }
 
   // --- Services ---
@@ -496,6 +582,21 @@ export class Container {
     }
     return this.aiInteractionService;
   }
+
+  getChatExportService(): ChatExportService {
+    if (!this.chatExportService) {
+      const raw = new ChatExportService(
+        this.getChatManagementService(),
+        this.getUserService(),
+        this.getChatExportRepository(),
+        this.getAwsS3Adapter(),
+        this.getEmailAdapter()
+      );
+      this.chatExportService = createAuditProxy(raw, 'ChatExportService');
+    }
+    return this.chatExportService;
+  }
+
   /**
    * GoogleOAuthService 인스턴스를 반환합니다.
    */
@@ -579,6 +680,136 @@ export class Container {
       this.creditService = createAuditProxy(raw, 'CreditService');
     }
     return this.creditService;
+  }
+
+  getBillingConfig(): BillingConfig {
+    if (!this.billingConfig) {
+      this.billingConfig = new BillingConfig();
+    }
+    return this.billingConfig;
+  }
+
+  /**
+   * SubscriptionService 인스턴스를 반환합니다.
+   * pgAdapters를 주입하여 cancelSubscription 시 PG 스케줄러 해지가 가능합니다.
+   * @returns SubscriptionService 인스턴스
+   */
+  getSubscriptionService(): SubscriptionService {
+    if (!this.subscriptionService) {
+      const env = loadEnv();
+      const pgAdapters: Record<string, import('../core/ports/PaymentProvider').PaymentProvider> = {
+        portone: new PortoneAdapter({
+          apiSecret:     env.PORTONE_API_SECRET,
+          webhookSecret: env.PORTONE_WEBHOOK_SECRET,
+          storeId:       env.PORTONE_STORE_ID,
+        }),
+        toss:    new TossAdapter(env.TOSS_SECRET_KEY ?? ''),
+        stripe:  new StripeAdapter({
+          secretKey:     env.STRIPE_SECRET_KEY,
+          webhookSecret: env.STRIPE_WEBHOOK_SECRET,
+          priceIds: {
+            PRO_MONTHLY:        env.STRIPE_PRICE_ID_PRO_MONTHLY,
+            PRO_YEARLY:         env.STRIPE_PRICE_ID_PRO_YEARLY,
+            ENTERPRISE_MONTHLY: env.STRIPE_PRICE_ID_ENTERPRISE_MONTHLY,
+            ENTERPRISE_YEARLY:  env.STRIPE_PRICE_ID_ENTERPRISE_YEARLY,
+          },
+        }),
+      };
+      this.subscriptionService = new SubscriptionService(
+        this.getSubscriptionRepository(),
+        this.getCreditService(),
+        this.getBillingConfig(),
+        pgAdapters
+      );
+    }
+    return this.subscriptionService;
+  }
+
+  /**
+   * WebhookProcessingService 인스턴스를 반환합니다.
+   * @returns WebhookProcessingService 인스턴스
+   */
+  getWebhookProcessingService(): WebhookProcessingService {
+    if (!this.webhookProcessingService) {
+      this.webhookProcessingService = new WebhookProcessingService(
+        this.getSubscriptionRepository(),
+        this.getPaymentHistoryRepository(),
+        this.getWebhookEventRepository(),
+        this.getCreditService(),
+        this.getBillingConfig()
+      );
+    }
+    return this.webhookProcessingService;
+  }
+
+  /**
+   * WebhookController 인스턴스를 반환합니다.
+   * PG 어댑터는 환경변수에서 시크릿을 읽어 초기화합니다.
+   * @returns WebhookController 인스턴스
+   */
+  getWebhookController(): WebhookController {
+    if (!this.webhookController) {
+      const env = loadEnv();
+      const adapters: Record<string, import('../core/ports/PaymentProvider').PaymentProvider> = {
+        portone: new PortoneAdapter({
+          apiSecret:     env.PORTONE_API_SECRET,
+          webhookSecret: env.PORTONE_WEBHOOK_SECRET,
+          storeId:       env.PORTONE_STORE_ID,
+        }),
+        toss:    new TossAdapter(env.TOSS_SECRET_KEY ?? ''),
+        stripe:  new StripeAdapter({
+          secretKey:     env.STRIPE_SECRET_KEY,
+          webhookSecret: env.STRIPE_WEBHOOK_SECRET,
+          priceIds: {
+            PRO_MONTHLY:        env.STRIPE_PRICE_ID_PRO_MONTHLY,
+            PRO_YEARLY:         env.STRIPE_PRICE_ID_PRO_YEARLY,
+            ENTERPRISE_MONTHLY: env.STRIPE_PRICE_ID_ENTERPRISE_MONTHLY,
+            ENTERPRISE_YEARLY:  env.STRIPE_PRICE_ID_ENTERPRISE_YEARLY,
+          },
+        }),
+      };
+      this.webhookController = new WebhookController(
+        this.getWebhookEventRepository(),
+        adapters,
+        this.getWebhookProcessingService()
+      );
+    }
+    return this.webhookController;
+  }
+
+  /**
+   * SubscriptionController 인스턴스를 반환합니다.
+   * @returns SubscriptionController 인스턴스
+   */
+  getSubscriptionController(): SubscriptionController {
+    if (!this.subscriptionController) {
+      const env = loadEnv();
+      const pgAdapters: Record<string, import('../core/ports/PaymentProvider').PaymentProvider> = {
+        portone: new PortoneAdapter({
+          apiSecret:     env.PORTONE_API_SECRET,
+          webhookSecret: env.PORTONE_WEBHOOK_SECRET,
+          storeId:       env.PORTONE_STORE_ID,
+        }),
+        toss:    new TossAdapter(env.TOSS_SECRET_KEY ?? ''),
+        stripe:  new StripeAdapter({
+          secretKey:     env.STRIPE_SECRET_KEY,
+          webhookSecret: env.STRIPE_WEBHOOK_SECRET,
+          priceIds: {
+            PRO_MONTHLY:        env.STRIPE_PRICE_ID_PRO_MONTHLY,
+            PRO_YEARLY:         env.STRIPE_PRICE_ID_PRO_YEARLY,
+            ENTERPRISE_MONTHLY: env.STRIPE_PRICE_ID_ENTERPRISE_MONTHLY,
+            ENTERPRISE_YEARLY:  env.STRIPE_PRICE_ID_ENTERPRISE_YEARLY,
+          },
+        }),
+      };
+      this.subscriptionController = new SubscriptionController(
+        this.getSubscriptionService(),
+        this.getSubscriptionRepository(),
+        this.getUserPaymentMethodRepository(),
+        pgAdapters
+      );
+    }
+    return this.subscriptionController;
   }
 
   /**

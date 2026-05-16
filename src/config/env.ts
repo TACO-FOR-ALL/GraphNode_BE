@@ -88,6 +88,27 @@ const EnvSchema = z.object({
   S3_PAYLOAD_BUCKET: z.string().min(1, 'S3_PAYLOAD_BUCKET required'),
   S3_FILE_BUCKET: z.string().min(1, 'S3_FILE_BUCKET required'),
 
+  // 채팅 내보내기 알림 — SMTP(nodemailer) 직접 발송. USER/PASS 미설정 시 메일만 건너뜁니다.
+  CHAT_EXPORT_EMAIL_FROM: z.email().optional(),
+  CHAT_EXPORT_SMTP_HOST: z.string().min(1).default('smtp.gmail.com'),
+  CHAT_EXPORT_SMTP_PORT: z.coerce.number().int().positive().default(587),
+  CHAT_EXPORT_SMTP_SECURE: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
+  CHAT_EXPORT_SMTP_USER: z.string().optional(),
+  CHAT_EXPORT_SMTP_PASS: z.string().optional(),
+  /** SMTP 첨부 최대 바이트(기본 20MB, Gmail 25MB 한도 대비) */
+  CHAT_EXPORT_SMTP_MAX_ATTACHMENT_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(20 * 1024 * 1024),
+  /**보내기 ZIP S3 보관 일수(기본 3일). CleanupCron 및 expiresAt 계산에 사용 */
+  CHAT_EXPORT_RETENTION_DAYS: z.coerce.number().int().positive().default(3),
+  /** 상태 API downloadUrl 절대 경로 조립용(미설정 시 Request Host 사용) */
+  PUBLIC_API_BASE_URL: z.string().default(`https://taco4graphnode.online`),
+
   /**
    * 사용자 라이브러리 파일 뷰어용 Presigned GET URL 만료 시간(초).
    * 짧을수록 유출 시 피해가 작고, 길면 큰 파일 미리보기 시 재발급이 덜합니다. (AWS 최대 604800)
@@ -125,7 +146,19 @@ const EnvSchema = z.object({
   // Discord 웹훅 알림 설정 (미설정 시 알림 비활성화 — 운영 권장)
   // 채널별 웹훅 URL: Discord 채널 설정 → 연동 → 웹훅 → 새 웹훅 생성
   DISCORD_WEBHOOK_URL_ERRORS: z.string().optional(), // BE HTTP 500 에러 알림 채널
-  DISCORD_WEBHOOK_URL_GRAPH: z.string().optional(),  // Graph Worker FAILED 알림 채널
+  DISCORD_WEBHOOK_URL_GRAPH: z.string().optional(), // Graph Worker FAILED 알림 채널
+
+  // PG사 Webhook 서명 검증 시크릿 (미설정 시 해당 PG사 어댑터 비활성)
+  PORTONE_API_SECRET: z.string().optional(),
+  PORTONE_WEBHOOK_SECRET: z.string().optional(),
+  PORTONE_STORE_ID: z.string().optional(),
+  TOSS_SECRET_KEY: z.string().optional(),
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_PRICE_ID_PRO_MONTHLY: z.string().optional(),
+  STRIPE_PRICE_ID_PRO_YEARLY: z.string().optional(),
+  STRIPE_PRICE_ID_ENTERPRISE_MONTHLY: z.string().optional(),
+  STRIPE_PRICE_ID_ENTERPRISE_YEARLY: z.string().optional(),
 
   //PostHog
   POSTHOG_API_KEY: z.string().min(1, 'POSTHOG_API_KEY required'),
@@ -170,6 +203,17 @@ export type Env = z.infer<typeof EnvSchema>;
  * @returns 검증된 환경 변수 객체 (Env)
  */
 let cachedEnv: Env | null = null;
+
+/**
+ * @internal Jest 등에서 `process.env`를 바꾼 뒤 `loadEnv()`가 다시 파싱하도록 캐시를 비웁니다.
+ * @throws {Error} NODE_ENV가 test가 아닐 때
+ */
+export function resetEnvCacheForTests(): void {
+  if (process.env.NODE_ENV !== 'test') {
+    throw new Error('resetEnvCacheForTests is only allowed when NODE_ENV=test');
+  }
+  cachedEnv = null;
+}
 
 export function loadEnv(): Env {
   if (cachedEnv) return cachedEnv;

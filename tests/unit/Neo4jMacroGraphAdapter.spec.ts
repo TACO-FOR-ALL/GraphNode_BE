@@ -195,6 +195,48 @@ describe('Neo4jMacroGraphAdapter', () => {
     });
   });
 
+  describe('getStatsMetadata', () => {
+    it('MacroStats row만 조회하고 count aggregate는 요구하지 않는다', async () => {
+      const statsProps = {
+        id: 'user1',
+        userId: 'user1',
+        status: 'CREATED',
+        generatedAt: '2026-01-01T00:00:00.000Z',
+        metadataJson: '{}',
+      };
+
+      const statsRecord = {
+        get: jest.fn().mockImplementation((key: string) => {
+          if (key === 'st') return { properties: statsProps };
+          return null;
+        }),
+      };
+
+      const tx = {
+        run: jest.fn().mockResolvedValue({ records: [statsRecord] }),
+      };
+      const session = {
+        executeRead: jest.fn().mockImplementation(async (fn: (t: typeof tx) => Promise<void>) => fn(tx)),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      const driver = { session: jest.fn().mockReturnValue(session) };
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      const result = await adapter.getStatsMetadata('user1');
+
+      expect(tx.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.getStatsMetadata,
+        expect.objectContaining({ userId: 'user1' })
+      );
+      expect(result).not.toBeNull();
+      expect(result!.nodes).toBe(0);
+      expect(result!.edges).toBe(0);
+      expect(result!.clusters).toBe(0);
+      expect(result!.status).toBe('CREATED');
+    });
+  });
+
   describe('deleteGraph', () => {
     it('write session에서 deleteGraph Cypher를 실행한다', async () => {
       const tx = makeMockTx();
