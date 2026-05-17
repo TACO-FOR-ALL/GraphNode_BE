@@ -23,6 +23,7 @@ import { UpstreamError } from '../../shared/errors/domain';
 import { ICreditService } from '../ports/ICreditService';
 import { CreditFeature } from '../types/persistence/credit.persistence';
 import { FEATURE_COSTS, CreditContext } from '../../config/billing.config';
+import type { MicroscopeWorkspaceStore } from '../ports/MicroscopeWorkspaceStore';
 
 /** SSE 이벤트 전송 함수 타입 */
 export type SendEventFn = (event: string, data: unknown) => void;
@@ -40,6 +41,8 @@ export interface AgentServiceDeps {
   searchService: SearchService;
   /** 크레딧 서비스 (에이전트 및 Tool 과금 처리) */
   creditService?: ICreditService;
+  /** Microscope 워크스페이스 저장소 (MicroscopeContextTool에서 사용) */
+  microscopeWorkspaceStore?: MicroscopeWorkspaceStore;
 }
 
 export class AgentService {
@@ -79,7 +82,7 @@ export class AgentService {
     const trimmedUser = (body.userMessage || '').trim();
     const context = (body.contextText || '').trim();
     const hasContext = context.length > 0;
-    const { modeHint } = body;
+    const { modeHint, microscopeGroupId } = body;
 
     // FIXED(강현일) : Service 단에서 API KEY 검증하던 로직 제거 (환경변수 공통 Key 사용)
     /*
@@ -161,7 +164,7 @@ export class AgentService {
 
     // 모드에 따른 처리
     if (mode === 'chat') {
-      await this.handleChatMode(userId, trimmedUser, context, hasContext, openai, sendEvent);
+      await this.handleChatMode(userId, trimmedUser, context, hasContext, openai, sendEvent, microscopeGroupId);
       return;
     }
 
@@ -196,10 +199,11 @@ export class AgentService {
     context: string,
     hasContext: boolean,
     openai: OpenAI,
-    sendEvent: SendEventFn
+    sendEvent: SendEventFn,
+    microscopeGroupId?: string
   ): Promise<void> {
     // FIXED (강현일) : Chat Mode의 System Prompt를 반환하는 메서드 추가
-    const systemPrompt = this.getChatSystemPrompt();
+    const systemPrompt = this.getChatSystemPrompt(microscopeGroupId);
 
     // FIXED (강현일) : User Message도 그렇고, 밖으로 빼내서 메서드 형태로 변경
     const userMessage = this.getChatUserPrompt(trimmedUser, context, hasContext);
@@ -499,13 +503,29 @@ export class AgentService {
 
   /**
    * HandleChatMode 메서드에서 필요로하는 chatSystemPrompt를 반환하는 메서드
+   * @param microscopeGroupId Microscope 워크스페이스 ID — 존재하면 Microscope 전용 지침 추가
    * @returns System Prompt
    */
-  private getChatSystemPrompt(): string {
+  private getChatSystemPrompt(microscopeGroupId?: string): string {
+    const microscopeSection = microscopeGroupId
+      ? `
+      ## MICROSCOPE CONTEXT MODE (활성)
+      사용자는 현재 Microscope 지식 그래프 뷰를 보고 있습니다.
+      Workspace ID: ${microscopeGroupId}
+
+      [필수 규칙]
+      1. 사용자 질문에 답하기 전에 반드시 get_microscope_context 도구를 먼저 호출하세요.
+      2. get_microscope_context 호출 시 microscopeGroupId = "${microscopeGroupId}" 를 전달하세요.
+      3. 도구가 반환한 지식 그래프(nodes, edges)와 원본 소스를 주요 근거로 답변하세요.
+      4. 이 workspace 데이터로 답할 수 없는 경우에만 search_conversations 등 다른 도구를 사용하세요.
+      `
+      : '';
+
     return `
       You are the "GraphNode AI Assistant".
       You help users manage their notes, conversations, and knowledge graph.
       You have access to the following tools to retrieve user data:
+      - get_microscope_context: Microscope 워크스페이스의 지식 그래프와 원본 소스 로드 (Microscope 뷰 전용)
       - search_notes: Search notes by keyword
       - get_recent_notes: Get recent notes
       - search_conversations: Search conversations by keyword (Graph RAG)
@@ -515,7 +535,7 @@ export class AgentService {
       - get_conversation_messages: Get messages from a specific conversation
       When the user asks about their data (notes, conversations, graph), use these tools to fetch the information.
       Always respond in the same language as the user's message.
-
+      ${microscopeSection}
       ## 지식 그래프 구조 이해 (Graph RAG 사용 시 필수 숙지)
       search_conversations 도구는 Graph RAG 방식으로 작동합니다. 이 그래프는 파편화된 노드들을
       연결하기 위해 광범위한 클러스터 정보를 포함하므로, 점수가 높더라도 실제 질문과 무관한

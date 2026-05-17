@@ -154,25 +154,25 @@ infisical run --env=prod -- npm start
 
 ## 📚 Documentation Portal
 
-프로젝트�?모든 문서�?내장�?**[문서 포털](docs/index.html)**�?통해 정적 �?페이지 형태�?확인하실 �?있습니다.
+프로젝트의 모든 문서는 내장된 **[문서 포털](docs/index.html)**을 통해 정적 웹페이지 형태로 확인하실 수 있습니다.
 
-- **API Reference**: [OpenAPI Spec (HTML)](docs/api/openapi.html) / Swagger UI / Redoc�?통한 인터랙티�?명세
-- **TypeDoc**: 소스 코드 레벨�?클래�?함수 레퍼런스
+- **API Reference**: [OpenAPI Spec (HTML)](docs/api/openapi.html) / Swagger UI / Redoc을 통한 인터랙티브 명세
+- **TypeDoc**: 소스 코드 레벨의 클래스 함수 레퍼런스
 - **Architecture**:
   - [Project Structure](docs/PROJECT_STRUCTURE.md) | [Database & ERD Data Models](docs/architecture/DATABASE.md) | [Ports](docs/architecture/PORTS.md) | [CI/CD & AWS Deployment](docs/architecture/CI_CD_and_AWS.md)
   - [SQS Logic](docs/architecture/LOGIC_SQS.md) | [FCM Logic](docs/architecture/LOGIC_FCM.md) | [Workers](docs/architecture/WORKERS.md)
   - [Security](docs/architecture/SECURITY.md) | [Observability](docs/architecture/OBSERVABILITY.md) | [Audit Logs](docs/architecture/AUDIT_LOGS.md) | [Sentry](docs/architecture/sentry.md)
-  - [AI Provider Architecture](docs/architecture/ai-provider-architecture.md) | [Soft/Hard_Delete](docs/architecture/soft-hard-delete-flow.md) | [Retry Policy](docs/architecture/retry-policy.md)
-  - [�?기능 명세�?(Functional Specification)](functional_specification.md)
+  - [AI Agent Architecture](docs/architecture/AI_Agent_ARCHITECTURE.md) | [AI Provider Architecture](docs/architecture/ai-provider-architecture.md) | [Soft/Hard Delete](docs/architecture/soft-hard-delete-flow.md) | [Retry Policy](docs/architecture/retry-policy.md)
+  - [기능 명세서 (Functional Specification)](functional_specification.md)
 
 ---
 
-## �?Features
+## ✨ Features
 
-- **지�?그래�?생성**: 비정�?대�?내용�?구조화된 지�?그래프로 변�?
-- **그래�?요약**: 대규모 그래�?네트워크�?대�?AI 기반 요약 제공
+- **지식 그래프 생성**: 비정형 대화 내용을 구조화된 지식 그래프로 변환
+- **그래프 요약**: 대규모 그래프 네트워크에 대한 AI 기반 요약 제공
 - **의미 기반 검색 (Semantic Search)**: ChromaDB(MiniLM 384차원) 기반 그래프 노드 유사도 검색
-- **Graph RAG**: ChromaDB Seed 추출 + Neo4j 1홉/2홉 이웃 탐색 결합 검색 (`GET /v1/search/graph-rag`)
+- **Graph RAG**: ChromaDB Seed 추출 + Neo4j 1홉/2홉 이웃 탐색 결합 검색 (GET /v1/search/graph-rag)
 - **비동기 처리**: 대용량 AI 워크로드를 위한 SQS/ECS 기반 오토스케일링 아키텍처
 
 ---
