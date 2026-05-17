@@ -20,21 +20,22 @@ export class MicroscopeController {
           title: 'Bad Request',
           status: 400,
           detail: 'nodeId and nodeType are required',
-          instance: req.originalUrl
+          instance: req.originalUrl,
         });
       }
 
-      const workspace : MicroscopeWorkspaceMetaDoc= await this.microscopeService.createWorkspaceAndMicroscopeIngestFromNode(
-        getUserIdFromRequest(req)!, 
-        nodeId,
-        nodeType,
-        schemaName
-      );
+      const workspace: MicroscopeWorkspaceMetaDoc =
+        await this.microscopeService.createWorkspaceAndMicroscopeIngestFromNode(
+          getUserIdFromRequest(req)!,
+          nodeId,
+          nodeType,
+          schemaName
+        );
 
-      captureEvent(getUserIdFromRequest(req)!, POSTHOG_EVENT.MICROSCOPE_INGEST_REQUESTED, { 
-        node_id: nodeId, 
+      captureEvent(getUserIdFromRequest(req)!, POSTHOG_EVENT.MICROSCOPE_INGEST_REQUESTED, {
+        node_id: nodeId,
         node_type: nodeType,
-        schema_name: schemaName 
+        schema_name: schemaName,
       });
       res.status(201).json(workspace);
     } catch (err) {
@@ -60,7 +61,10 @@ export class MicroscopeController {
   getWorkspace = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { groupId } = req.params;
-      const workspace = await this.microscopeService.getWorkspaceActivity(getUserIdFromRequest(req)!, groupId);
+      const workspace = await this.microscopeService.getWorkspaceActivity(
+        getUserIdFromRequest(req)!,
+        groupId
+      );
       res.status(200).json(workspace);
     } catch (err) {
       next(err);
@@ -121,6 +125,70 @@ export class MicroscopeController {
   };
 
   /**
+   * 다중 소스(Multi-source)를 하나의 워크스페이스에 묶어 Ingest 파이프라인을 시작합니다.
+   * 각 소스별 SQS 발행에 실패해도 나머지는 계속 진행되며(부분 성공 허용),
+   * 크레딧은 워크스페이스 단위 flat 1회 차감합니다.
+   *
+   * @param req.body.sources { nodeId: string, nodeType: 'note' | 'conversation' }[]
+   * @param req.body.schemaName 선택적 스키마 명칭
+   * @returns 201 MicroscopeWorkspaceMetaDoc
+   */
+  batchIngest = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // TODO : body의 zod schema 통한 강 type 처리 필요
+      const { sources, schemaName } = req.body;
+
+      if (!Array.isArray(sources) || sources.length === 0) {
+        return res.status(400).json({
+          type: 'about:blank',
+          title: 'Bad Request',
+          status: 400,
+          detail: 'sources must be a non-empty array',
+          instance: req.originalUrl,
+        });
+      }
+
+      for (const src of sources) {
+        if (!src.nodeId || !src.nodeType) {
+          return res.status(400).json({
+            type: 'about:blank',
+            title: 'Bad Request',
+            status: 400,
+            detail: 'each source must have nodeId and nodeType',
+            instance: req.originalUrl,
+          });
+        }
+
+        // TODO : 이후 nodeType이 추가되면, 거기에 따른 변경 필요
+        if (src.nodeType !== 'note' && src.nodeType !== 'conversation') {
+          return res.status(400).json({
+            type: 'about:blank',
+            title: 'Bad Request',
+            status: 400,
+            detail: `unsupported nodeType "${src.nodeType}": must be "note" or "conversation"`,
+            instance: req.originalUrl,
+          });
+        }
+      }
+
+      const workspace = await this.microscopeService.createMultiSourceWorkspace(
+        getUserIdFromRequest(req)!,
+        sources,
+        schemaName
+      );
+
+      captureEvent(getUserIdFromRequest(req)!, POSTHOG_EVENT.MICROSCOPE_INGEST_REQUESTED, {
+        source_count: sources.length,
+        schema_name: schemaName,
+      });
+
+      res.status(201).json(workspace);
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  /**
    * 워크스페이스 삭제
    */
   deleteWorkspace = async (req: Request, res: Response, next: NextFunction) => {
@@ -132,5 +200,4 @@ export class MicroscopeController {
       next(err);
     }
   };
-
 }
