@@ -103,6 +103,9 @@ export type {
 export type { FileAttachment, FileUploadResponse } from './types/file.js';
 export type {
   UserFileSummaryStatusDto,
+  UserFileSummaryStructuredDto,
+  UserFileSummaryPreviewResponseDto,
+  UserFileSummaryFullResponseDto,
   UserFileCategoryDto,
   UserFileDto,
   SidebarItemKindDto,

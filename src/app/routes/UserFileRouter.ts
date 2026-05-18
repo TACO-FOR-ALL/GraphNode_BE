@@ -30,6 +30,8 @@ export function createUserFileRouter(deps: { userFileService: UserFileService })
   router.get('/sidebar-items', asyncHandler(controller.sidebarItems.bind(controller)));
   router.get('/files/:id/content', asyncHandler(controller.downloadContent.bind(controller)));
   router.get('/files/:id/view-url', asyncHandler(controller.presignedViewUrl.bind(controller)));
+  router.get('/files/:id/summary/preview', asyncHandler(controller.summaryPreview.bind(controller)));
+  router.get('/files/:id/summary/full', asyncHandler(controller.summaryFull.bind(controller)));
   router.patch('/files/:id', asyncHandler(controller.patch.bind(controller)));
   router.get('/files/:id', asyncHandler(controller.getOne.bind(controller)));
   router.delete('/files/:id', asyncHandler(controller.remove.bind(controller)));

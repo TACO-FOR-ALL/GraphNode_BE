@@ -6,6 +6,8 @@ info:
     Backend API for GraphNode. Errors follow RFC 9457 Problem Details.
 jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 tags:
+  - name: User Library
+    description: 사용자 라이브러리 파일 업로드·조회·AI 요약 등 `/v1/files` 계열 엔드포인트.
   - name: Graph Editor
     description: Direct macro graph editing endpoints for nodes, edges, clusters, subclusters, and best-effort batch operations.
 paths:
@@ -659,27 +661,6 @@ paths:
           description: Bad Request (missing token)
         '401':
           description: Not authenticated
-  /v1/me:
-    get:
-      summary: Check login status
-      description: Returns current user if session cookie (server session) exists.
-      responses:
-        '200':
-          description: Authenticated
-          content:
-            application/json:
-              schema:
-                $ref: ../schemas/me-response.json
-              example:
-                $ref: './examples/me-get-200.json'
-        '401':
-          description: Not authenticated
-          content:
-            application/problem+json:
-              schema:
-                $ref: ../schemas/problem.json
-              example:
-                $ref: './examples/me-get-401.json'
   /v1/me/sessions:
     get:
       summary: List active sessions
@@ -4181,6 +4162,91 @@ paths:
                   status: { type: string }
         '401':
           description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+
+  /v1/files/{id}/summary/preview:
+    get:
+      summary: 라이브러리 파일 AI 요약 미리보기 (한 줄)
+      description: >-
+        업로드된 사용자 파일의 구조화 요약 중 1번(한 줄 요약)만 반환합니다.
+        `summaryStatus`가 `completed`일 때 `oneLine`이 채워질 수 있습니다.
+      tags: [User Library]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 파일 ID (ULID)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [summaryStatus, oneLine]
+                properties:
+                  summaryStatus:
+                    type: string
+                    enum: [pending, processing, completed, failed]
+                  summaryError:
+                    type: ['string', 'null']
+                  oneLine:
+                    type: ['string', 'null']
+                    description: 한 줄 요약 (미완료 시 null)
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '404':
+          description: 파일 없음
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+
+  /v1/files/{id}/summary/full:
+    get:
+      summary: 라이브러리 파일 AI 구조화 요약 전체
+      description: >-
+        1~4번 전체(한 줄·목적·핵심 포인트·결론)를 반환합니다. `summaryStatus`가 `completed`가 아니면
+        본문 필드는 null 또는 빈 배열일 수 있습니다.
+      tags: [User Library]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 파일 ID (ULID)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [summaryStatus, oneLine, purpose, keyPoints, conclusion]
+                properties:
+                  summaryStatus:
+                    type: string
+                    enum: [pending, processing, completed, failed]
+                  summaryError:
+                    type: ['string', 'null']
+                  oneLine: { type: ['string', 'null'] }
+                  purpose: { type: ['string', 'null'] }
+                  keyPoints:
+                    type: array
+                    items: { type: string }
+                  conclusion: { type: ['string', 'null'] }
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '404':
+          description: 파일 없음
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }

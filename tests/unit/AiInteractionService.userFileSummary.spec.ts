@@ -3,10 +3,11 @@
  * - S3 다운로드 → 텍스트 추출 → 선호 언어 → LLM 호출 흐름을 목으로 검증한다.
  */
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import type { ProcessedDocument } from '../../src/shared/utils/documentProcessor';
 
 const mockDocumentProcess = jest.fn() as jest.MockedFunction<
-  (buffer: Buffer, mimetype: string, filename: string) => Promise<ProcessedDocument>
+  (buffer: Buffer, mimetype: string, filename: string) => Promise<
+    import('../../src/shared/utils/documentProcessor').ProcessedDocument
+  >
 >;
 
 jest.mock('../../src/shared/utils/documentProcessor', () => ({
@@ -72,7 +73,12 @@ describe('AiInteractionService.summarizeUserLibraryFile', () => {
     mockProvider.generateChat.mockResolvedValue({
       ok: true,
       data: {
-        content: '한 줄 요약 결과',
+        content: JSON.stringify({
+          oneLine: '한 줄 요약 결과',
+          purpose: '문서는 테스트 목적으로 작성되었습니다.',
+          keyPoints: ['첫째', '둘째', '셋째'],
+          conclusion: '결론입니다.',
+        }),
         attachments: [],
       },
     });
@@ -98,21 +104,28 @@ describe('AiInteractionService.summarizeUserLibraryFile', () => {
         messages: expect.arrayContaining([
           expect.objectContaining({
             role: 'system',
-            content: expect.stringContaining('preferred language'),
+            content: expect.stringMatching(/Korean|\[ 생성 언어 \]/),
           }),
           expect.objectContaining({
             role: 'user',
-            content: expect.stringContaining('본문 텍스트입니다.'),
+            content: expect.stringMatching(
+              /\[파일 내용\][\s\S]*본문 텍스트입니다\./
+            ),
           }),
         ]),
       }),
       undefined,
       undefined
     );
-    expect(result).toEqual({ ok: true, data: { summary: '한 줄 요약 결과' } });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.summary).toBe('한 줄 요약 결과');
+      expect(result.data.structured.oneLine).toBe('한 줄 요약 결과');
+      expect(result.data.structured.keyPoints).toHaveLength(3);
+    }
   });
 
-  it('시스템 프롬프트에 선호 언어 코드가 포함된다', async () => {
+  it('시스템 프롬프트에 생성 언어 라벨이 포함된다 (일본어 선호 → English 라벨)', async () => {
     mockUserSvc.getPreferredLanguage.mockResolvedValue('ja');
 
     await service.summarizeUserLibraryFile(baseInput);
@@ -120,10 +133,10 @@ describe('AiInteractionService.summarizeUserLibraryFile', () => {
     const call = mockProvider.generateChat.mock.calls[0];
     const messages = call[1].messages as { role: string; content: string }[];
     const systemContent = messages.find((m) => m.role === 'system')?.content ?? '';
-    expect(systemContent).toMatch(/locale code: "ja"/);
+    expect(systemContent).toContain('English');
   });
 
-  it('선호 언어 조회 실패 시 en으로 요약한다', async () => {
+  it('선호 언어 조회 실패 시 English 라벨로 요약한다', async () => {
     mockUserSvc.getPreferredLanguage.mockRejectedValue(new Error('no user'));
 
     await service.summarizeUserLibraryFile(baseInput);
@@ -131,7 +144,7 @@ describe('AiInteractionService.summarizeUserLibraryFile', () => {
     const call = mockProvider.generateChat.mock.calls[0];
     const messages = call[1].messages as { role: string; content: string }[];
     const systemContent = messages.find((m) => m.role === 'system')?.content ?? '';
-    expect(systemContent).toMatch(/locale code: "en"/);
+    expect(systemContent).toContain('English');
   });
 
   it('추출 결과가 이미지면 지원하지 않는다고 반환한다', async () => {
@@ -175,5 +188,19 @@ describe('AiInteractionService.summarizeUserLibraryFile', () => {
     const result = await service.summarizeUserLibraryFile(baseInput);
 
     expect(result).toEqual({ ok: false, error: '요약 결과가 비어 있습니다.' });
+  });
+
+  it('JSON 파싱 실패 시 ok: false를 반환한다', async () => {
+    mockProvider.generateChat.mockResolvedValue({
+      ok: true,
+      data: { content: 'not-json', attachments: [] },
+    });
+
+    const result = await service.summarizeUserLibraryFile(baseInput);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain('JSON');
+    }
   });
 });
