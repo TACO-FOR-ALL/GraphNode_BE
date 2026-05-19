@@ -184,7 +184,15 @@ describe('UserFileService', () => {
     aiInteraction = {
       summarizeUserLibraryFile: jest.fn(async () => ({
         ok: true as const,
-        data: { summary: '요약본' },
+        data: {
+          summary: '요약본',
+          structured: {
+            oneLine: '요약본',
+            purpose: '목적',
+            keyPoints: ['a', 'b', 'c'],
+            conclusion: '결론',
+          },
+        },
       })),
     };
 
@@ -223,10 +231,16 @@ describe('UserFileService', () => {
     expect(call.sizeBytes).toBeGreaterThan(0);
   });
 
-  it('백그라운드 요약 성공 시 DB에 summary·completed로 갱신된다', async () => {
+  it('백그라운드 요약 성공 시 DB에 summary·summaryStructured·completed로 갱신된다', async () => {
+    const structured = {
+      oneLine: '완료된 요약',
+      purpose: '문서 목적',
+      keyPoints: ['p1', 'p2', 'p3'],
+      conclusion: '마무리',
+    };
     aiInteraction.summarizeUserLibraryFile.mockResolvedValue({
       ok: true,
-      data: { summary: '완료된 요약' },
+      data: { summary: structured.oneLine, structured },
     });
 
     const dto = await service.uploadFile(userId, 'ok.pdf', Buffer.from('%PDF-1'), null);
@@ -234,6 +248,7 @@ describe('UserFileService', () => {
 
     const stored = files.get(dto.id);
     expect(stored?.summary).toBe('완료된 요약');
+    expect(stored?.summaryStructured).toEqual(structured);
     expect(stored?.summaryStatus).toBe('completed');
     expect(stored?.summaryError).toBeNull();
     expect(userFileRepo.updateById).toHaveBeenCalledWith(
@@ -242,6 +257,7 @@ describe('UserFileService', () => {
       expect.objectContaining({
         summaryStatus: 'completed',
         summary: '완료된 요약',
+        summaryStructured: structured,
       })
     );
   });
@@ -286,6 +302,72 @@ describe('UserFileService', () => {
     expect(res.items[0].updatedAt >= res.items[1].updatedAt).toBe(true);
     const kinds = res.items.map((i) => i.kind).sort();
     expect(kinds).toEqual(['file', 'note']);
+  });
+
+  it('getUserFileSummaryPreview는 completed일 때 oneLine을 반환한다', async () => {
+    files.set('sf1', {
+      ...docTemplate({
+        _id: 'sf1',
+        summaryStatus: 'completed',
+        summaryStructured: {
+          oneLine: '미리보기',
+          purpose: '목적',
+          keyPoints: ['a', 'b'],
+          conclusion: '결론',
+        },
+        summary: '미리보기',
+      }),
+    });
+    const r = await service.getUserFileSummaryPreview(userId, 'sf1');
+    expect(r).toEqual({
+      summaryStatus: 'completed',
+      summaryError: null,
+      oneLine: '미리보기',
+    });
+  });
+
+  it('getUserFileSummaryFull는 structured 전체를 반환한다', async () => {
+    const structured = {
+      oneLine: 'L',
+      purpose: 'P',
+      keyPoints: ['1', '2'],
+      conclusion: 'C',
+    };
+    files.set('sf2', {
+      ...docTemplate({
+        _id: 'sf2',
+        summaryStatus: 'completed',
+        summaryStructured: structured,
+        summary: 'L',
+      }),
+    });
+    const r = await service.getUserFileSummaryFull(userId, 'sf2');
+    expect(r).toEqual({
+      summaryStatus: 'completed',
+      summaryError: null,
+      oneLine: 'L',
+      purpose: 'P',
+      keyPoints: ['1', '2'],
+      conclusion: 'C',
+    });
+  });
+
+  it('getUserFileSummaryFull는 미완료 시 본문 필드를 비운다', async () => {
+    files.set('sf3', {
+      ...docTemplate({
+        _id: 'sf3',
+        summaryStatus: 'processing',
+      }),
+    });
+    const r = await service.getUserFileSummaryFull(userId, 'sf3');
+    expect(r).toEqual({
+      summaryStatus: 'processing',
+      summaryError: null,
+      oneLine: null,
+      purpose: null,
+      keyPoints: [],
+      conclusion: null,
+    });
   });
 
   it('소프트 삭제 시 그래프 연쇄 삭제를 비영구로 호출한다', async () => {

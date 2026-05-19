@@ -50,6 +50,20 @@ export class UserFileController {
     res.json(dto);
   }
 
+  /** `GET /v1/files/:id/summary/preview` — 구조화 요약 1번(한 줄)만. */
+  async summaryPreview(req: Request, res: Response) {
+    const userId = getUserIdFromRequest(req)!;
+    const body = await this.userFileService.getUserFileSummaryPreview(userId, req.params.id);
+    res.json(body);
+  }
+
+  /** `GET /v1/files/:id/summary/full` — 구조화 요약 1~4번 전체. */
+  async summaryFull(req: Request, res: Response) {
+    const userId = getUserIdFromRequest(req)!;
+    const body = await this.userFileService.getUserFileSummaryFull(userId, req.params.id);
+    res.json(body);
+  }
+
   /** `GET /v1/files/:id/content` — 원본 바이너리 스트리밍에 가깝게 응답. */
   async downloadContent(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;

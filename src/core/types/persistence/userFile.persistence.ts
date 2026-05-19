@@ -1,4 +1,5 @@
 import type { UserFileCategory } from '../../../shared/config/fileUploadSpec';
+import type { UserFileSummaryStructured } from '../../../shared/types/userFileSummaryStructured';
 
 /**
  * AI 요약 처리 상태 (Mongo에 저장되는 값).
@@ -20,7 +21,10 @@ export interface UserFileDoc {
   mimeType: string;
   sizeBytes: number;
   category: UserFileCategory;
+  /** 1번 한 줄 요약(미리보기). `summaryStructured.oneLine`과 동일 값으로 저장한다. */
   summary?: string;
+  /** AI 구조화 요약 1~4번 전체 (완료 시). */
+  summaryStructured?: UserFileSummaryStructured;
   summaryStatus: UserFileSummaryStatus;
   summaryError?: string | null;
   createdAt: Date;
