@@ -23,6 +23,7 @@ import { UpstreamError } from '../../shared/errors/domain';
 import { ICreditService } from '../ports/ICreditService';
 import { CreditFeature } from '../types/persistence/credit.persistence';
 import { FEATURE_COSTS, CreditContext } from '../../config/billing.config';
+import type { MicroscopeWorkspaceStore } from '../ports/MicroscopeWorkspaceStore';
 
 /** SSE 이벤트 전송 함수 타입 */
 export type SendEventFn = (event: string, data: unknown) => void;
@@ -40,6 +41,8 @@ export interface AgentServiceDeps {
   searchService: SearchService;
   /** 크레딧 서비스 (에이전트 및 Tool 과금 처리) */
   creditService?: ICreditService;
+  /** Microscope 워크스페이스 저장소 (MicroscopeContextTool에서 사용) */
+  microscopeWorkspaceStore?: MicroscopeWorkspaceStore;
 }
 
 export class AgentService {
@@ -79,7 +82,7 @@ export class AgentService {
     const trimmedUser = (body.userMessage || '').trim();
     const context = (body.contextText || '').trim();
     const hasContext = context.length > 0;
-    const { modeHint } = body;
+    const { modeHint, microscopeGroupId } = body;
 
     // FIXED(강현일) : Service 단에서 API KEY 검증하던 로직 제거 (환경변수 공통 Key 사용)
     /*
@@ -154,14 +157,20 @@ export class AgentService {
         await this.refundAgentChatCredit(userId, deductedCreditAmount, 'irrelevant mode', creditService);
         creditDeducted = false;
       }
-      sendEvent('chunk', { text: rejectionMessage || '죄송합니다. 요청하신 질문은 현재 에이전트와 무관하여 답변드리기 어렵습니다.' });
+      const answerText = rejectionMessage || '죄송합니다. 요청하신 질문은 현재 에이전트와 무관하여 답변드리기 어렵습니다.';
+      sendEvent('chunk', { text: answerText });
       sendEvent('status', { phase: 'done', message: '답변 불가' });
+      sendEvent('result', {
+        mode: 'chat' as any,
+        answer: answerText,
+        noteContent: null,
+      });
       return;
     }
 
     // 모드에 따른 처리
     if (mode === 'chat') {
-      await this.handleChatMode(userId, trimmedUser, context, hasContext, openai, sendEvent);
+      await this.handleChatMode(userId, trimmedUser, context, hasContext, openai, sendEvent, microscopeGroupId);
       return;
     }
 
@@ -196,10 +205,11 @@ export class AgentService {
     context: string,
     hasContext: boolean,
     openai: OpenAI,
-    sendEvent: SendEventFn
+    sendEvent: SendEventFn,
+    microscopeGroupId?: string
   ): Promise<void> {
     // FIXED (강현일) : Chat Mode의 System Prompt를 반환하는 메서드 추가
-    const systemPrompt = this.getChatSystemPrompt();
+    const systemPrompt = this.getChatSystemPrompt(microscopeGroupId);
 
     // FIXED (강현일) : User Message도 그렇고, 밖으로 빼내서 메서드 형태로 변경
     const userMessage = this.getChatUserPrompt(trimmedUser, context, hasContext);
@@ -221,28 +231,86 @@ export class AgentService {
     while (continueLoop && loopCount < maxLoops) {
       loopCount++;
 
-      // 응답 생성
-      const response = await openai.chat.completions.create({
+      // 응답 스트림 생성
+      const stream = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages,
         tools: this.toolRegistry.getDefinitions(),
         tool_choice: 'auto',
+        stream: true,
       });
 
-      // 응답 선택
-      const choice = response.choices[0];
-      const assistantMessage = choice.message;
+      let assistantContent = '';
+      const toolCallsMap: Record<number, {
+        id?: string;
+        type?: 'function';
+        function?: { name?: string; arguments?: string };
+      }> = {};
+
+      for await (const chunk of stream) {
+        const choice = chunk.choices[0];
+        if (!choice) continue;
+
+        const delta = choice.delta;
+
+        // 1. 일반 텍스트 답변 스트리밍
+        if (delta.content) {
+          assistantContent += delta.content;
+          sendEvent('chunk', { text: delta.content });
+        }
+
+        // 2. Tool Calls 누적
+        if (delta.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const index = tc.index;
+            if (!toolCallsMap[index]) {
+              toolCallsMap[index] = {};
+            }
+            if (tc.id) toolCallsMap[index].id = tc.id;
+            if (tc.type) toolCallsMap[index].type = tc.type;
+            if (tc.function) {
+              if (!toolCallsMap[index].function) {
+                toolCallsMap[index].function = {};
+              }
+              if (tc.function.name) toolCallsMap[index].function!.name = tc.function.name;
+              if (tc.function.arguments) {
+                toolCallsMap[index].function!.arguments = (toolCallsMap[index].function!.arguments || '') + tc.function.arguments;
+              }
+            }
+          }
+        }
+      }
+
+      // Map을 배열로 변환
+      const toolCalls = Object.keys(toolCallsMap)
+        .sort((a, b) => Number(a) - Number(b))
+        .map(key => toolCallsMap[Number(key)]);
+
+      // 메시지 히스토리에 기록할 어시스턴트 메시지 구조 생성
+      const assistantMessage: OpenAI.Chat.Completions.ChatCompletionMessageParam = {
+        role: 'assistant',
+        content: assistantContent || null,
+      };
+
+      if (toolCalls.length > 0) {
+        (assistantMessage as any).tool_calls = toolCalls.map(tc => ({
+          id: tc.id || '',
+          type: tc.type || 'function',
+          function: {
+            name: tc.function?.name || '',
+            arguments: tc.function?.arguments || '{}',
+          }
+        }));
+      }
 
       // tool_calls가 있는지 확인
-      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+      if (toolCalls.length > 0) {
         messages.push(assistantMessage);
 
         sendEvent('status', { phase: 'searching', message: '데이터 검색 중...' });
 
         // tool_calls가 있는 경우, tool_calls를 처리
-        for (const toolCall of assistantMessage.tool_calls) {
-          if (toolCall.type !== 'function') continue;
-
+        for (const toolCall of (assistantMessage as any).tool_calls) {
           const toolName = toolCall.function.name;
           const toolArgs = JSON.parse(toolCall.function.arguments || '{}');
 
@@ -257,13 +325,10 @@ export class AgentService {
       } else {
         continueLoop = false;
 
-        const finalContent = assistantMessage.content || '';
-
-        sendEvent('chunk', { text: finalContent });
         sendEvent('status', { phase: 'done', message: '응답 생성 완료' });
         sendEvent('result', {
           mode: 'chat' as AgentMode,
-          answer: finalContent,
+          answer: assistantContent,
           noteContent: null,
         });
       }
@@ -290,8 +355,9 @@ export class AgentService {
     const userMessage = this.getSummaryUserPrompt(trimmedUser, context);
 
     // FIXME TODO : OpenAI 하드코딩 부분 이후 수정 필요. 26/03/12 기준으로는 IAiProvider의 interface에 미구현되어 있어 수정 보류
-    const summaryResp = await openai.chat.completions.create({
+    const summaryStream = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
+      stream: true,
       messages: [
         { role: 'system', content: systemPrompt },
         {
@@ -301,10 +367,20 @@ export class AgentService {
       ],
     });
 
-    const summary = summaryResp.choices[0]?.message?.content ?? '';
+    let fullSummary = '';
+    for await (const chunk of summaryStream) {
+      const delta = chunk.choices[0]?.delta?.content ?? '';
+      if (!delta) continue;
+      fullSummary += delta;
+      sendEvent('chunk', { text: delta });
+    }
 
-    sendEvent('chunk', { text: summary });
     sendEvent('status', { phase: 'done', message: '요약 생성 완료' });
+    sendEvent('result', {
+      mode: 'summary' as any,
+      answer: fullSummary,
+      noteContent: null,
+    });
   }
 
   /**
@@ -499,13 +575,29 @@ export class AgentService {
 
   /**
    * HandleChatMode 메서드에서 필요로하는 chatSystemPrompt를 반환하는 메서드
+   * @param microscopeGroupId Microscope 워크스페이스 ID — 존재하면 Microscope 전용 지침 추가
    * @returns System Prompt
    */
-  private getChatSystemPrompt(): string {
+  private getChatSystemPrompt(microscopeGroupId?: string): string {
+    const microscopeSection = microscopeGroupId
+      ? `
+      ## MICROSCOPE CONTEXT MODE (활성)
+      사용자는 현재 Microscope 지식 그래프 뷰를 보고 있습니다.
+      Workspace ID: ${microscopeGroupId}
+
+      [필수 규칙]
+      1. 사용자 질문에 답하기 전에 반드시 get_microscope_context 도구를 먼저 호출하세요.
+      2. get_microscope_context 호출 시 microscopeGroupId = "${microscopeGroupId}" 를 전달하세요.
+      3. 도구가 반환한 지식 그래프(nodes, edges)와 원본 소스를 주요 근거로 답변하세요.
+      4. 이 workspace 데이터로 답할 수 없는 경우에만 search_conversations 등 다른 도구를 사용하세요.
+      `
+      : '';
+
     return `
       You are the "GraphNode AI Assistant".
       You help users manage their notes, conversations, and knowledge graph.
       You have access to the following tools to retrieve user data:
+      - get_microscope_context: Microscope 워크스페이스의 지식 그래프와 원본 소스 로드 (Microscope 뷰 전용)
       - search_notes: Search notes by keyword
       - get_recent_notes: Get recent notes
       - search_conversations: Search conversations by keyword (Graph RAG)
@@ -515,7 +607,7 @@ export class AgentService {
       - get_conversation_messages: Get messages from a specific conversation
       When the user asks about their data (notes, conversations, graph), use these tools to fetch the information.
       Always respond in the same language as the user's message.
-
+      ${microscopeSection}
       ## 지식 그래프 구조 이해 (Graph RAG 사용 시 필수 숙지)
       search_conversations 도구는 Graph RAG 방식으로 작동합니다. 이 그래프는 파편화된 노드들을
       연결하기 위해 광범위한 클러스터 정보를 포함하므로, 점수가 높더라도 실제 질문과 무관한

@@ -186,6 +186,42 @@ export class MicroscopeApi {
 
 
   /**
+   * 다중 소스(Note/Conversation 혼합)를 하나의 워크스페이스에 묶어 지식 그래프 구축(Ingest)
+   * 파이프라인을 비동기로 시작합니다.
+   * 각 소스별 Ingest가 독립적으로 실행되어 일부 소스 실패 시에도 나머지는 계속 처리됩니다.
+   * 크레딧은 소스 수와 무관하게 워크스페이스 단위로 1회 차감됩니다.
+   *
+   * @param sources Ingest할 소스 배열. nodeId와 nodeType을 포함합니다.
+   * @param schemaName 추출에 사용할 커스텀 엔티티 스키마 명칭 (옵션)
+   * @returns {Promise<HttpResponse<MicroscopeWorkspace>>} 생성된 워크스페이스 메타데이터
+   *
+   * **응답 상태 코드:**
+   * - `201 Created`: 워크스페이스 생성 및 Ingest 파이프라인 시작 성공
+   * - `400 Bad Request`: sources 배열이 비어있거나 nodeId/nodeType 누락
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `502 Bad Gateway`: SQS 전송 또는 데이터베이스 오류
+   *
+   * @example
+   * const res = await sdk.microscope.ingestMultipleSources([
+   *   { nodeId: 'note_abc', nodeType: 'note' },
+   *   { nodeId: 'conv_xyz', nodeType: 'conversation' },
+   * ]);
+   * const groupId = res.data._id;
+   * // 개별 소스 처리 상태 확인
+   * const doc = res.data.documents.find(d => d.nodeId === 'note_abc');
+   * console.log(doc?.status); // 'PROCESSING'
+   */
+  async ingestMultipleSources(
+    sources: Array<{ nodeId: string; nodeType: 'note' | 'conversation' }>,
+    schemaName?: string
+  ): Promise<HttpResponse<MicroscopeWorkspace>> {
+    return this.rb.path('/workspaces/batch-ingest').post<MicroscopeWorkspace>({
+      sources,
+      schemaName,
+    });
+  }
+
+  /**
    * 워크스페이스를 삭제합니다. 연관된 Neo4j 그래프와 메타데이터가 파기됩니다.
    *
    * @param microscopeWorkspaceId - 삭제할 워크스페이스 ID

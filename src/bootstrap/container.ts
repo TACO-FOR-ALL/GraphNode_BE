@@ -561,6 +561,7 @@ export class Container {
           graphVectorService: this.getGraphVectorService(),
           searchService: this.getSearchService(),
           creditService: this.getCreditService(),
+          microscopeWorkspaceStore: this.getMicroscopeWorkspaceStore(),
         }
       );
       this.agentService = createAuditProxy(raw, 'AgentService');
