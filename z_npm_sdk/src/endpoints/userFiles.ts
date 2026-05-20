@@ -1,10 +1,11 @@
 import { RequestBuilder, type HttpResponse } from '../http-builder.js';
 import type {
-  SidebarItemsResponseDto,
   UserFileDto,
   UserFileListResponseDto,
   UserFilePresignedViewUrlDto,
   UserFilePatchDto,
+  UserFileSummaryPreviewResponseDto,
+  UserFileSummaryFullResponseDto,
 } from '../types/userFile.js';
 
 /**
@@ -150,6 +151,28 @@ export class UserFilesApi {
    */
   async getUserFile(id: string): Promise<HttpResponse<UserFileDto>> {
     return this.rb.path('files').path(id).get<UserFileDto>();
+  }
+
+  /**
+   * AI 구조화 요약의 한 줄(1번)만 조회합니다 (`GET /v1/files/:id/summary/preview`).
+   *
+   * @param id 파일 ID (ULID)
+   */
+  async getUserFileSummaryPreview(
+    id: string
+  ): Promise<HttpResponse<UserFileSummaryPreviewResponseDto>> {
+    return this.rb.path('files').path(id).path('summary').path('preview').get<UserFileSummaryPreviewResponseDto>();
+  }
+
+  /**
+   * AI 구조화 요약 전체(1~4번)를 조회합니다 (`GET /v1/files/:id/summary/full`).
+   *
+   * @param id 파일 ID (ULID)
+   */
+  async getUserFileSummaryFull(
+    id: string
+  ): Promise<HttpResponse<UserFileSummaryFullResponseDto>> {
+    return this.rb.path('files').path(id).path('summary').path('full').get<UserFileSummaryFullResponseDto>();
   }
 
   /**

@@ -16,6 +16,8 @@ import type {
   SidebarItemsResponseDto,
   UserFilePresignedViewUrlDto,
   UserFilePatchDto,
+  UserFileSummaryPreviewResponseDto,
+  UserFileSummaryFullResponseDto,
 } from '../../shared/dtos/userFile';
 import type { NoteDoc } from '../types/persistence/note.persistence';
 import type { AiInteractionService } from './AiInteractionService';
@@ -261,6 +263,7 @@ export class UserFileService {
           this.userFileRepo.updateById(fileId, userId, {
             summaryStatus: 'completed',
             summary: result.data.summary,
+            summaryStructured: result.data.structured,
             summaryError: null,
           }),
         { label: 'UserFileService.runSummaryJob.completed' }
@@ -289,6 +292,73 @@ export class UserFileService {
     });
     if (!doc) throw new NotFoundError(`파일을 찾을 수 없습니다: ${fileId}`);
     return toUserFileDto(doc);
+  }
+
+  /**
+   * AI 구조화 요약의 1번(한 줄)만 조회한다.
+   * @param userId 소유자 ID
+   * @param fileId 파일 ID
+   */
+  async getUserFileSummaryPreview(
+    userId: string,
+    fileId: string
+  ): Promise<UserFileSummaryPreviewResponseDto> {
+    const doc = await withRetry(async () => this.userFileRepo.getById(fileId, userId), {
+      label: 'UserFileService.getUserFileSummaryPreview',
+    });
+    if (!doc) throw new NotFoundError(`파일을 찾을 수 없습니다: ${fileId}`);
+    const oneLine =
+      doc.summaryStructured?.oneLine?.trim() || doc.summary?.trim() || null;
+    return {
+      summaryStatus: doc.summaryStatus,
+      summaryError: doc.summaryError ?? null,
+      oneLine: doc.summaryStatus === 'completed' ? oneLine : null,
+    };
+  }
+
+  /**
+   * AI 구조화 요약 전체(1~4번)를 조회한다.
+   * @param userId 소유자 ID
+   * @param fileId 파일 ID
+   */
+  async getUserFileSummaryFull(
+    userId: string,
+    fileId: string
+  ): Promise<UserFileSummaryFullResponseDto> {
+    const doc = await withRetry(async () => this.userFileRepo.getById(fileId, userId), {
+      label: 'UserFileService.getUserFileSummaryFull',
+    });
+    if (!doc) throw new NotFoundError(`파일을 찾을 수 없습니다: ${fileId}`);
+    if (doc.summaryStatus !== 'completed') {
+      return {
+        summaryStatus: doc.summaryStatus,
+        summaryError: doc.summaryError ?? null,
+        oneLine: null,
+        purpose: null,
+        keyPoints: [],
+        conclusion: null,
+      };
+    }
+    if (doc.summaryStructured) {
+      const s = doc.summaryStructured;
+      return {
+        summaryStatus: 'completed',
+        summaryError: doc.summaryError ?? null,
+        oneLine: s.oneLine,
+        purpose: s.purpose,
+        keyPoints: s.keyPoints,
+        conclusion: s.conclusion,
+      };
+    }
+    const legacy = doc.summary?.trim();
+    return {
+      summaryStatus: 'completed',
+      summaryError: null,
+      oneLine: legacy ?? null,
+      purpose: null,
+      keyPoints: [],
+      conclusion: null,
+    };
   }
 
   /** 소유권이 맞는 활성 파일 문서 (내부용). */
