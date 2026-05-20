@@ -136,8 +136,13 @@ export type {
   AgentChatStreamParams,
   AgentChatStreamOptions,
   AgentChatStreamHandler,
+  StreamStatusEvent,
+  StreamChunkEvent,
+  StreamResultEvent,
+  StreamErrorEvent,
+  StreamEventCallbacks,
 } from './endpoints/agent.js';
-export { openAgentChatStream } from './endpoints/agent.js';
+export { AgentApi, openAgentChatStream, agentChatStream } from './endpoints/agent.js';
 export type { AIChatRequestDto, AIChatResponseDto } from './endpoints/ai.js';
 export type {
   StartChatExportResponseDto,

@@ -19,6 +19,7 @@ import { FeedbackApi } from './endpoints/feedback.js';
 import { GraphEditorApi } from './endpoints/graphEditor.js';
 import { ExportApi } from './endpoints/export.js';
 import { BillingApi } from './endpoints/billing.js';
+import { AgentApi } from './endpoints/agent.js';
 
 /**
  * GraphNode 클라이언트 옵션
@@ -70,6 +71,8 @@ export class GraphNodeClient {
   readonly graphEditor: GraphEditorApi;
   readonly export: ExportApi;
   readonly billing: BillingApi;
+  /** AI 에이전트 채팅 스트림 API */
+  readonly agent: AgentApi;
 
   /**
    * HTTP 요청 빌더 인스턴스.
@@ -144,6 +147,7 @@ export class GraphNodeClient {
     this.graphEditor = new GraphEditorApi(this.rb);
     this.export = new ExportApi(this.rb);
     this.billing = new BillingApi(this.rb);
+    this.agent = new AgentApi(this.rb);
   }
 
   /**
