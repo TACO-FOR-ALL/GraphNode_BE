@@ -57,9 +57,9 @@ export type StreamStatusEvent = {
  * `chunk` 이벤트 페이로드 — 실시간 텍스트 조각.
  *
  * @remarks
- * 모드별 전송 방식이 다릅니다:
- * - **chat**: 최종 답변 전체를 **1회** 전송
- * - **summary**: 요약 전체를 **1회** 전송
+ * 모드별 전송 방식:
+ * - **chat**: OpenAI 스트리밍으로 답변 조각을 **여러 번** 전송
+ * - **summary**: OpenAI 스트리밍으로 요약 조각을 **여러 번** 전송
  * - **note**: OpenAI 스트리밍으로 조각을 **여러 번** 전송 — `text`를 누적해야 전체가 됩니다
  */
 export type StreamChunkEvent = {
@@ -71,9 +71,7 @@ export type StreamChunkEvent = {
  * `result` 이벤트 페이로드 — 스트림 최종 결과.
  *
  * @remarks
- * **⚠️ summary 모드는 이 이벤트를 전송하지 않습니다.**
- * summary 모드의 결과는 `chunk` 이벤트로만 수신됩니다.
- * `onResult` 콜백은 `chat`·`note` 모드에서만 호출됩니다.
+ * `onResult` 콜백은 모든 모드(`chat`·`summary`·`note`)가 정상 완료되었을 때 최종 결과를 반환하며 호출됩니다.
  *
  * @example
  * // note 모드 — noteContent 마크다운 코드펜스 제거 예시
@@ -192,7 +190,7 @@ export type StreamEventCallbacks = {
   onChunk?: (event: StreamChunkEvent) => void;
   /**
    * 최종 결과를 수신했을 때 호출됩니다.
-   * **⚠️ summary 모드에서는 호출되지 않습니다.** summary 결과는 `onChunk`로 수신하세요.
+   * `chat`, `summary`, `note` 모든 모드에서 완료 시 호출됩니다.
    */
   onResult?: (event: StreamResultEvent) => void;
   /**
@@ -400,15 +398,19 @@ export class AgentApi {
    *   → [status(searching)] : Function Calling 도구 실행 시 (chat 모드만)
    *   → chunk(text)...      : 응답 텍스트 스트리밍
    *   → status(done)        : 처리 완료
-   *   → [result]            : 최종 결과 (chat·note 모드만 전송, summary는 전송 안 함)
+   *   → [result]            : 최종 결과 (모든 모드에서 전송됨)
    * ```
    *
    * ### 모드별 이벤트 차이
    * | 모드 | chunk 전송 방식 | result 이벤트 |
    * |---|---|---|
-   * | `chat` | 최종 답변 전체 1회 | 전송됨 (`noteContent: null`) |
-   * | `summary` | 요약 전체 1회 | **전송 안 됨** |
+   * | `chat` | 스트리밍 조각 여러 번 | 전송됨 (`noteContent: null`) |
+   * | `summary` | 스트리밍 조각 여러 번 | 전송됨 (`noteContent: null`) |
    * | `note` | 스트리밍 조각 여러 번 | 전송됨 (`noteContent` = 노트 전문) |
+   *
+   * ### 예외 및 특수 상황 (Edge Cases)
+   * - **무관계 질문 (`irrelevant` 판정)**: 사용자의 질문이 서비스 맥락과 전혀 관계없는 경우, 서버 분류기가 `irrelevant` 모드로 자동 판정합니다. 이 경우 거절 메시지가 실시간으로 스트리밍되며 최종 완료 시 `result` 이벤트가 정상 수신됩니다. 또한 차감되었던 크레딧은 서버 백엔드 내에서 자동으로 즉시 환불(`refund`)됩니다.
+   * - **인증 만료 또는 유효하지 않은 요청**: 비로그인 상태이거나 `userMessage`가 공백일 경우 `onError` 콜백이 트리거된 후 Promise가 reject됩니다.
    *
    * @param params - 요청 파라미터 및 이벤트 콜백
    *   - `userMessage`: 사용자 입력 메시지
@@ -417,10 +419,10 @@ export class AgentApi {
    *   - `microscopeGroupId`: (선택) Microscope 워크스페이스 ID
    *   - `callbacks.onStatus`: 처리 단계 변경 콜백
    *   - `callbacks.onChunk`: 텍스트 조각 수신 콜백
-   *   - `callbacks.onResult`: 최종 결과 수신 콜백 (chat·note 모드만 호출됨)
+   *   - `callbacks.onResult`: 최종 결과 수신 콜백
    *   - `callbacks.onError`: 에러 발생 콜백 (호출 후 Promise reject)
    * @param options - (선택) `signal`: 스트림 취소용 AbortSignal
-   * @returns 스트림 종료 시 `StreamResultEvent` (summary 모드 또는 취소 시 `null`)
+   * @returns 스트림 종료 시 `StreamResultEvent` (취소 시 `null`)
    * @throws {Error} HTTP 요청 실패 또는 서버 `error` 이벤트 수신 시
    *
    * **응답 상태 코드:**
@@ -462,12 +464,23 @@ export class AgentApi {
    *   { userMessage: '노트 검색해줘', callbacks: { onChunk: ({ text }) => appendToUI(text) } },
    *   { signal: ctrl.signal }
    * );
+   *
+   * @example
+   * // try-catch를 이용한 에러 예외 처리
+   * try {
+   *   await client.agent.chatStream({
+   *     userMessage: '유효한 질문 내용',
+   *     callbacks: {
+   *       onChunk: ({ text }) => console.log(text),
+   *       onError: ({ message }) => console.error('이벤트 에러:', message),
+   *     }
+   *   });
+   * } catch (error) {
+   *   console.error('HTTP 요청 에러 또는 스트림 실패:', error);
+   * }
    */
   async chatStream(
-    {
-      callbacks,
-      ...params
-    }: AgentChatStreamParams & { callbacks: StreamEventCallbacks },
+    { callbacks, ...params }: AgentChatStreamParams & { callbacks: StreamEventCallbacks },
     options?: { signal?: AbortSignal }
   ): Promise<StreamResultEvent | null> {
     const res = await this.rb
@@ -538,20 +551,6 @@ export class AgentApi {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Standalone Functions (TacoClient 없이 사용 가능 — 독립 export)
-// ---------------------------------------------------------------------------
-
-/** @internal 독립 fetch 환경 resolve */
-function _resolveFetch(fetchImpl?: FetchLike): FetchLike {
-  if (fetchImpl) return fetchImpl;
-  if (typeof window !== 'undefined' && window.fetch) return window.fetch.bind(window);
-  if (typeof globalThis !== 'undefined' && (globalThis as any).fetch) {
-    return (globalThis as any).fetch.bind(globalThis);
-  }
-  throw new Error('fetch is not available. Provide options.fetchImpl.');
-}
-
 /**
  * `AgentChatStreamOptions` — 독립형 standalone 함수 전용 옵션.
  *
@@ -566,140 +565,4 @@ export interface AgentChatStreamOptions {
   fetchImpl?: FetchLike;
   /** 스트림 취소용 `AbortSignal` */
   signal?: AbortSignal;
-}
-
-/**
- * `TacoClient` 인스턴스 없이 에이전트 채팅 스트림을 여는 **독립형 고수준 함수**.
- *
- * `client.agent.chatStream()`과 동일한 기능을 제공하지만,
- * `GraphNodeClient` 없이 `getGraphNodeBaseUrl()` 설정만으로 동작합니다.
- * 단, `RequestBuilder`를 사용하지 않으므로 **AccessToken 자동 갱신이 적용되지 않습니다.**
- * 가능하면 `client.agent.chatStream()`을 사용하세요.
- *
- * @remarks
- * ### `agentChatStream` vs `openAgentChatStream`
- *
- * | | `agentChatStream` | `openAgentChatStream` |
- * |---|---|---|
- * | **Promise 해결 시점** | 스트림이 **완전히 종료**될 때 | fetch 완료 후 **스트림 시작** 시점 |
- * | **반환값** | `StreamResultEvent \| null` (최종 결과) | `() => void` (cancel 함수) |
- * | **콜백 인터페이스** | 이벤트별 콜백: `onStatus`, `onChunk`, `onResult`, `onError` | 단일 핸들러: `onEvent` |
- * | **사용 패턴** | `await agentChatStream(...)` | 백그라운드 스트림 + 즉시 cancel 필요 시 |
- *
- * @param params - 요청 파라미터 + `callbacks` 이벤트 콜백
- * @param options - (선택) `fetchImpl`, `signal`
- * @returns `StreamResultEvent | null`
- *
- * @example
- * import { agentChatStream } from '@taco_tsinghua/graphnode-sdk';
- *
- * const result = await agentChatStream({
- *   userMessage: '최근 회의 내용을 정리해줘',
- *   callbacks: {
- *     onStatus: ({ phase, message }) => console.log(`[${phase}] ${message}`),
- *     onChunk:  ({ text }) => process.stdout.write(text),
- *     onResult: ({ mode, answer }) => console.log('\n최종:', answer),
- *     onError:  ({ message }) => console.error('에러:', message),
- *   },
- * });
- *
- * @example
- * // Microscope 워크스페이스 기반 RAG 채팅
- * await agentChatStream({
- *   userMessage: '이 그래프의 핵심 개념을 찾아줘',
- *   microscopeGroupId: 'ws_01JXXXXXXXXXXXXX',
- *   callbacks: { onChunk: ({ text }) => appendToUI(text) },
- * });
- */
-export async function agentChatStream(
-  {
-    callbacks,
-    ...params
-  }: AgentChatStreamParams & { callbacks: StreamEventCallbacks },
-  options: AgentChatStreamOptions = {}
-): Promise<StreamResultEvent | null> {
-  const fetchFn = _resolveFetch(options.fetchImpl);
-  const url = `${getGraphNodeBaseUrl()}/v1/agent/chat/stream`;
-
-  const controller = new AbortController();
-  if (options.signal) {
-    if (options.signal.aborted) {
-      controller.abort(options.signal.reason);
-    } else {
-      options.signal.addEventListener('abort', () => controller.abort(options.signal!.reason));
-    }
-  }
-
-  const res = await fetchFn(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-    credentials: 'include',
-    body: JSON.stringify(params),
-    signal: controller.signal,
-  } as RequestInit);
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`agent-chat-stream failed: ${res.status} ${text}`);
-  }
-
-  return _readStreamWithCallbacks(res, callbacks, controller.signal);
-}
-
-/**
- * `TacoClient` 인스턴스 없이 에이전트 채팅 SSE 스트림을 여는 **독립형 저수준 함수**.
- *
- * `client.agent.openChatStream()`과 동일한 기능을 제공하지만,
- * `GraphNodeClient` 없이 동작합니다.
- * 단, **AccessToken 자동 갱신이 적용되지 않습니다.**
- * 가능하면 `client.agent.openChatStream()`을 사용하세요.
- *
- * @remarks
- * `agentChatStream`과의 차이점: 위 {@link agentChatStream} JSDoc의 비교표를 참조하세요.
- *
- * @param params - 요청 파라미터
- * @param onEvent - 단일 이벤트 핸들러
- * @param options - (선택) `fetchImpl`, `signal`
- * @returns cancel 함수
- *
- * @example
- * import { openAgentChatStream } from '@taco_tsinghua/graphnode-sdk';
- *
- * const cancel = await openAgentChatStream(
- *   { userMessage: '내 노트 요약해줘', modeHint: 'summary' },
- *   (ev) => {
- *     if (ev.event === 'chunk') process.stdout.write(ev.data.text);
- *     if (ev.event === 'result') console.log('\n완료:', ev.data.answer);
- *   }
- * );
- * // cancel(); // 필요 시 취소
- */
-export async function openAgentChatStream(
-  params: AgentChatStreamParams,
-  onEvent: AgentChatStreamHandler,
-  options: AgentChatStreamOptions = {}
-): Promise<() => void> {
-  const controller = new AbortController();
-  if (options.signal) {
-    if (options.signal.aborted) {
-      controller.abort(options.signal.reason);
-      return () => controller.abort();
-    }
-    options.signal.addEventListener('abort', () => controller.abort(options.signal!.reason));
-  }
-
-  const fetchFn = _resolveFetch(options.fetchImpl);
-  const url = `${getGraphNodeBaseUrl()}/v1/agent/chat/stream`;
-
-  const res = await fetchFn(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-    credentials: 'include',
-    body: JSON.stringify(params),
-    signal: controller.signal,
-  } as RequestInit);
-
-  _readStreamWithHandler(res, onEvent, controller);
-
-  return () => controller.abort();
 }

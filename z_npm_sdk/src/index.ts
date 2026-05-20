@@ -112,7 +112,13 @@ export type {
   UserFilePresignedViewUrlDto,
   UserFilePatchDto,
 } from './types/userFile.js';
-export type { MicroscopeDocument, MicroscopeWorkspace, MicroscopeGraphNode, MicroscopeGraphEdge, MicroscopeGraphData } from './types/microscope.js';
+export type {
+  MicroscopeDocument,
+  MicroscopeWorkspace,
+  MicroscopeGraphNode,
+  MicroscopeGraphEdge,
+  MicroscopeGraphData,
+} from './types/microscope.js';
 export type {
   GraphSourceType,
   GraphNodeDto,
@@ -142,7 +148,7 @@ export type {
   StreamErrorEvent,
   StreamEventCallbacks,
 } from './endpoints/agent.js';
-export { AgentApi, openAgentChatStream, agentChatStream } from './endpoints/agent.js';
+export { AgentApi } from './endpoints/agent.js';
 export type { AIChatRequestDto, AIChatResponseDto } from './endpoints/ai.js';
 export type {
   StartChatExportResponseDto,
@@ -151,10 +157,7 @@ export type {
   ChatExportScope,
 } from './types/chatExport.js';
 export { AiStreamEvent } from './types/ai-event.js';
-export {
-  TaskType,
-  NotificationType,
-} from './types/notification.js';
+export { TaskType, NotificationType } from './types/notification.js';
 export type {
   NotificationTypeValue,
   NotificationEvent,

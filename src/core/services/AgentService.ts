@@ -157,8 +157,14 @@ export class AgentService {
         await this.refundAgentChatCredit(userId, deductedCreditAmount, 'irrelevant mode', creditService);
         creditDeducted = false;
       }
-      sendEvent('chunk', { text: rejectionMessage || '죄송합니다. 요청하신 질문은 현재 에이전트와 무관하여 답변드리기 어렵습니다.' });
+      const answerText = rejectionMessage || '죄송합니다. 요청하신 질문은 현재 에이전트와 무관하여 답변드리기 어렵습니다.';
+      sendEvent('chunk', { text: answerText });
       sendEvent('status', { phase: 'done', message: '답변 불가' });
+      sendEvent('result', {
+        mode: 'chat' as any,
+        answer: answerText,
+        noteContent: null,
+      });
       return;
     }
 
@@ -225,28 +231,86 @@ export class AgentService {
     while (continueLoop && loopCount < maxLoops) {
       loopCount++;
 
-      // 응답 생성
-      const response = await openai.chat.completions.create({
+      // 응답 스트림 생성
+      const stream = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages,
         tools: this.toolRegistry.getDefinitions(),
         tool_choice: 'auto',
+        stream: true,
       });
 
-      // 응답 선택
-      const choice = response.choices[0];
-      const assistantMessage = choice.message;
+      let assistantContent = '';
+      const toolCallsMap: Record<number, {
+        id?: string;
+        type?: 'function';
+        function?: { name?: string; arguments?: string };
+      }> = {};
+
+      for await (const chunk of stream) {
+        const choice = chunk.choices[0];
+        if (!choice) continue;
+
+        const delta = choice.delta;
+
+        // 1. 일반 텍스트 답변 스트리밍
+        if (delta.content) {
+          assistantContent += delta.content;
+          sendEvent('chunk', { text: delta.content });
+        }
+
+        // 2. Tool Calls 누적
+        if (delta.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const index = tc.index;
+            if (!toolCallsMap[index]) {
+              toolCallsMap[index] = {};
+            }
+            if (tc.id) toolCallsMap[index].id = tc.id;
+            if (tc.type) toolCallsMap[index].type = tc.type;
+            if (tc.function) {
+              if (!toolCallsMap[index].function) {
+                toolCallsMap[index].function = {};
+              }
+              if (tc.function.name) toolCallsMap[index].function!.name = tc.function.name;
+              if (tc.function.arguments) {
+                toolCallsMap[index].function!.arguments = (toolCallsMap[index].function!.arguments || '') + tc.function.arguments;
+              }
+            }
+          }
+        }
+      }
+
+      // Map을 배열로 변환
+      const toolCalls = Object.keys(toolCallsMap)
+        .sort((a, b) => Number(a) - Number(b))
+        .map(key => toolCallsMap[Number(key)]);
+
+      // 메시지 히스토리에 기록할 어시스턴트 메시지 구조 생성
+      const assistantMessage: OpenAI.Chat.Completions.ChatCompletionMessageParam = {
+        role: 'assistant',
+        content: assistantContent || null,
+      };
+
+      if (toolCalls.length > 0) {
+        (assistantMessage as any).tool_calls = toolCalls.map(tc => ({
+          id: tc.id || '',
+          type: tc.type || 'function',
+          function: {
+            name: tc.function?.name || '',
+            arguments: tc.function?.arguments || '{}',
+          }
+        }));
+      }
 
       // tool_calls가 있는지 확인
-      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+      if (toolCalls.length > 0) {
         messages.push(assistantMessage);
 
         sendEvent('status', { phase: 'searching', message: '데이터 검색 중...' });
 
         // tool_calls가 있는 경우, tool_calls를 처리
-        for (const toolCall of assistantMessage.tool_calls) {
-          if (toolCall.type !== 'function') continue;
-
+        for (const toolCall of (assistantMessage as any).tool_calls) {
           const toolName = toolCall.function.name;
           const toolArgs = JSON.parse(toolCall.function.arguments || '{}');
 
@@ -261,13 +325,10 @@ export class AgentService {
       } else {
         continueLoop = false;
 
-        const finalContent = assistantMessage.content || '';
-
-        sendEvent('chunk', { text: finalContent });
         sendEvent('status', { phase: 'done', message: '응답 생성 완료' });
         sendEvent('result', {
           mode: 'chat' as AgentMode,
-          answer: finalContent,
+          answer: assistantContent,
           noteContent: null,
         });
       }
@@ -294,8 +355,9 @@ export class AgentService {
     const userMessage = this.getSummaryUserPrompt(trimmedUser, context);
 
     // FIXME TODO : OpenAI 하드코딩 부분 이후 수정 필요. 26/03/12 기준으로는 IAiProvider의 interface에 미구현되어 있어 수정 보류
-    const summaryResp = await openai.chat.completions.create({
+    const summaryStream = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
+      stream: true,
       messages: [
         { role: 'system', content: systemPrompt },
         {
@@ -305,10 +367,20 @@ export class AgentService {
       ],
     });
 
-    const summary = summaryResp.choices[0]?.message?.content ?? '';
+    let fullSummary = '';
+    for await (const chunk of summaryStream) {
+      const delta = chunk.choices[0]?.delta?.content ?? '';
+      if (!delta) continue;
+      fullSummary += delta;
+      sendEvent('chunk', { text: delta });
+    }
 
-    sendEvent('chunk', { text: summary });
     sendEvent('status', { phase: 'done', message: '요약 생성 완료' });
+    sendEvent('result', {
+      mode: 'summary' as any,
+      answer: fullSummary,
+      noteContent: null,
+    });
   }
 
   /**
