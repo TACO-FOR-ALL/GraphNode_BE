@@ -5,6 +5,8 @@
  * 변경: AI 서버의 schema.py가 변경되면 이 파일도 반드시 변경되어야 한다.
  */
 
+import type { GraphSourceType } from './graph.source-types';
+
 export interface OverviewSection {
   /** Python AI 서버(discovery/schema.py)의 실제 출력 필드명. total_source_nodes = 분석에 사용된 소스 노드 수 */
   total_source_nodes: number;
@@ -12,6 +14,8 @@ export interface OverviewSection {
   total_notes?: number;
   total_notions?: number;
   total_files?: number;
+  /** Macro 원시 파일 노드 확장자·포맷별 개수 — BE가 Neo4j 스냅샷 기준으로 덮어쓸 수 있음 */
+  file_counts_by_extension?: Record<string, number>;
   time_span: string; // "YYYY-MM-DD ~ YYYY-MM-DD" or "N/A"
   primary_interests: string[];
   conversation_style: string;
@@ -69,7 +73,10 @@ export interface GraphSummary {
   detail_level: 'brief' | 'standard' | 'detailed';
 }
 
-import type { GraphSourceType } from './graph.source-types';
+/**
+ * AI 그래프 노드가 반환할 수 있는 출처 문자열(FE 계약값 또는 원시 파일 포맷 등).
+ */
+export type AiGraphNodeSourceType = GraphSourceType | string;
 
 /**
  * Legacy/Generation DTOs (Restored for graph_ai_input.mapper.ts)
@@ -84,7 +91,10 @@ export interface AiGraphNodeOutput {
   top_keywords: string[];
   timestamp: string | null;
   num_sections: number;
-  source_type: GraphSourceType;
+  /** AI 파이프라인 값 — `chat`/`markdown`/`file` 또는 `pdf`·`pptx` 등 원시 포맷 문자열이 올 수 있음 */
+  source_type: AiGraphNodeSourceType;
+  /** BE 보정 단계에서 채우는 부가 메타(예: 파일 MIME·MacroFileType) */
+  metadata?: Record<string, unknown>;
 }
 
 export interface AiGraphEdgeOutput {

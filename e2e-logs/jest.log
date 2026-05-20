@@ -1,0 +1,122 @@
+(node:89737) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+FAIL tests/e2e/specs/graph-flow.spec.ts
+  ● Console
+
+    console.log
+      --- Starting DB Seeding ---
+
+      at seedTestData (utils/db-seed.ts:87:11)
+
+    console.log
+      PostgreSQL User seeded.
+
+      at seedTestData (utils/db-seed.ts:101:11)
+
+    console.log
+      [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-pdf.pdf
+
+      at uploadUserFileToS3 (utils/db-seed.ts:73:11)
+
+    console.log
+      [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-docx.docx
+
+      at uploadUserFileToS3 (utils/db-seed.ts:73:11)
+
+    console.log
+      [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-pptx.pptx
+
+      at uploadUserFileToS3 (utils/db-seed.ts:73:11)
+
+    console.log
+      MongoDB data seeded (3 user_files: pdf, docx, pptx).
+
+      at seedTestData (utils/db-seed.ts:195:13)
+
+    console.log
+      --- DB Seeding Completed ---
+
+      at seedTestData (utils/db-seed.ts:202:11)
+
+  ● End-to-End Graph Flow › Scenario 1: Full Graph Generation Flow
+
+    Neo4jError: The client is unauthorized due to authentication failure.
+
+      43 |     const neo4jSession = neo4jDriver.session();
+      44 |     try {
+    > 45 |       await neo4jSession.run(
+         |                          ^
+      46 |         'MATCH (n {userId: $userId}) DETACH DELETE n',
+      47 |         { userId }
+      48 |       );
+
+      at captureStacktrace (../../node_modules/neo4j-driver-core/lib/result.js:101:17)
+      at Result.GenericResult (../../node_modules/neo4j-driver-core/lib/result.js:141:23)
+      at new Result (../../node_modules/neo4j-driver-core/lib/result.js:711:42)
+      at Session.Object.<anonymous>.Session._run (../../node_modules/neo4j-driver-core/lib/session.js:224:16)
+      at Session.Object.<anonymous>.Session.run (../../node_modules/neo4j-driver-core/lib/session.js:188:27)
+      at Object.<anonymous> (specs/graph-flow.spec.ts:45:26)
+
+  ● End-to-End Graph Flow › Scenario 2: Graph Summary Flow
+
+    Neo4jError: The client is unauthorized due to authentication failure.
+
+      43 |     const neo4jSession = neo4jDriver.session();
+      44 |     try {
+    > 45 |       await neo4jSession.run(
+         |                          ^
+      46 |         'MATCH (n {userId: $userId}) DETACH DELETE n',
+      47 |         { userId }
+      48 |       );
+
+      at captureStacktrace (../../node_modules/neo4j-driver-core/lib/result.js:101:17)
+      at Result.GenericResult (../../node_modules/neo4j-driver-core/lib/result.js:141:23)
+      at new Result (../../node_modules/neo4j-driver-core/lib/result.js:711:42)
+      at Session.Object.<anonymous>.Session._run (../../node_modules/neo4j-driver-core/lib/session.js:224:16)
+      at Session.Object.<anonymous>.Session.run (../../node_modules/neo4j-driver-core/lib/session.js:188:27)
+      at Object.<anonymous> (specs/graph-flow.spec.ts:45:26)
+
+  ● End-to-End Graph Flow › Scenario 3: Add Node to existing Graph (Conversation + Note)
+
+    Neo4jError: The client is unauthorized due to authentication failure.
+
+      43 |     const neo4jSession = neo4jDriver.session();
+      44 |     try {
+    > 45 |       await neo4jSession.run(
+         |                          ^
+      46 |         'MATCH (n {userId: $userId}) DETACH DELETE n',
+      47 |         { userId }
+      48 |       );
+
+      at captureStacktrace (../../node_modules/neo4j-driver-core/lib/result.js:101:17)
+      at Result.GenericResult (../../node_modules/neo4j-driver-core/lib/result.js:141:23)
+      at new Result (../../node_modules/neo4j-driver-core/lib/result.js:711:42)
+      at Session.Object.<anonymous>.Session._run (../../node_modules/neo4j-driver-core/lib/session.js:224:16)
+      at Session.Object.<anonymous>.Session.run (../../node_modules/neo4j-driver-core/lib/session.js:188:27)
+      at Object.<anonymous> (specs/graph-flow.spec.ts:45:26)
+
+  ● End-to-End Graph Flow › Scenario 4: Graph Node Soft Delete Consistency Verification
+
+    Neo4jError: The client is unauthorized due to authentication failure.
+
+      43 |     const neo4jSession = neo4jDriver.session();
+      44 |     try {
+    > 45 |       await neo4jSession.run(
+         |                          ^
+      46 |         'MATCH (n {userId: $userId}) DETACH DELETE n',
+      47 |         { userId }
+      48 |       );
+
+      at captureStacktrace (../../node_modules/neo4j-driver-core/lib/result.js:101:17)
+      at Result.GenericResult (../../node_modules/neo4j-driver-core/lib/result.js:141:23)
+      at new Result (../../node_modules/neo4j-driver-core/lib/result.js:711:42)
+      at Session.Object.<anonymous>.Session._run (../../node_modules/neo4j-driver-core/lib/session.js:224:16)
+      at Session.Object.<anonymous>.Session.run (../../node_modules/neo4j-driver-core/lib/session.js:188:27)
+      at Object.<anonymous> (specs/graph-flow.spec.ts:45:26)
+
+
+--- Waiting for microscope ingest... (0s) ......
+--- Waiting for microscope ingest... (60s) ......
+--- Waiting for microscope ingest... (120s) ......
+--- Waiting for microscope ingest... (180s) ......
+--- Waiting for microscope ingest... (240s) .

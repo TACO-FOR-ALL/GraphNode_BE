@@ -38,8 +38,9 @@ tests/e2e/
 ### 테스트 픽스처 (고정값)
 
 - **테스트 유저 ID**: `user-12345` (PostgreSQL + MongoDB 공통)
-- **시딩 데이터**: `conv-e2e-123` (대화방), `msg-e2e-123` (메시지), `note-e2e-123` (노트)
+- **시딩 데이터**: `conv-e2e-123` (대화방), `msg-e2e-123` (메시지), `note-e2e-123` (노트), `uf-e2e-pdf` / `uf-e2e-docx` / `uf-e2e-pptx` (Macro용 mock `user_files` + LocalStack S3 원본)
 - **내부 인증 토큰**: `ci-test-key` (모든 서비스에서 동일하게 사용)
+- **Macro bundle 전용 스펙**: `tests/e2e/specs/macro-s3-bundle.spec.ts` — `graph-generation/{taskId}/` S3 키 검증 (AI 완료 대기 없음)
 
 > `db-seed.ts`는 `beforeAll`에서 실행되며, 매 실행마다 테스트 유저의 모든 그래프 관련 데이터를 **삭제 후 재생성**하여 멱등성을 보장합니다.
 

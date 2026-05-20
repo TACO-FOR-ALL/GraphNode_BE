@@ -38,20 +38,28 @@ export interface BaseQueueMessage {
  * - taskType: 메시지 타입 식별자
  * - payload: 실제 요청 데이터
  *  - userId: 요청한 사용자 ID
- * - s3Key: 입력 데이터가 담긴 S3 키
+ * - s3Key: Macro bundle prefix(`graph-generation/{taskId}/`, 끝 `/` 필수) 또는 legacy 단일 객체 키
  * - bucket: 버킷명 (옵션)
  */
 export interface GraphGenRequestPayload extends BaseQueueMessage {
   taskType: TaskType.GRAPH_GENERATION_REQUEST;
   payload: {
     userId: string;
-    s3Key: string; // 입력 데이터가 담긴 S3 키
+    /**
+     * Bundle: `graph-generation/{taskId}/` — 반드시 `/`로 끝남.
+     * Legacy: `graph-generation/{taskId}/input.json` 등 단일 객체 키.
+     */
+    s3Key: string;
     bucket?: string; // 버킷명 (옵션)
+    chatId?: string;
     includeSummary?: boolean; // 요약 파이프라인 동시 실행 여부
     summaryLanguage?: string; // 요약 언어
-    language? : string // Cluster 이름 언어(사용자 선호 언어)
-    inputType?: string; // 'chat' 
-    extraS3Keys?: string[]; // 추가 소스(마크다운 등)의 s3 키 배열
+    language?: string; // Cluster 이름 언어(사용자 선호 언어)
+    inputType?: string;
+    minClusters?: number;
+    maxClusters?: number;
+    /** Legacy: primary 외 추가 키. Bundle에서는 생략. */
+    extraS3Keys?: string[];
   };
 }
 

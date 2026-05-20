@@ -17,6 +17,8 @@ echo "============================================"
 echo "🔍 Checking service health..."
 docker compose -f $DOCKER_COMPOSE_FILE ps
 
+chmod +x scripts/localstack-init/ready.sh 2>/dev/null || true
+
 echo "⚙️ Initializing MongoDB Replica Set..."
 docker exec graphnode-test-mongo mongosh --eval "rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongo:27017'}]})" || true
 sleep 5
@@ -25,7 +27,18 @@ sleep 5
 # ts-node를 사용하여 TypeScript로 작성된 시딩 스크립트 실행
 # dotenv를 로드하여 환경변수(DB URI 등)가 정상적으로 적용되도록 함
 echo "🌱 Seeding test data..."
-export MONGODB_URI="mongodb://127.0.0.1:27017/graphnode?directConnection=true"
+# Infisical/프로덕션이 아닌 LocalStack·compose 테스트 스택용 env (docs: docker-compose.test.yml)
+export MONGODB_URI="${MONGODB_URI:-mongodb://127.0.0.1:27017/graphnode?directConnection=true}"
+export DATABASE_URL="${DATABASE_URL:-postgresql://app:app@127.0.0.1:5432/graphnode}"
+export AWS_ENDPOINT_URL="${AWS_ENDPOINT_URL:-http://127.0.0.1:4566}"
+export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-test}"
+export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-test}"
+export AWS_REGION="${AWS_REGION:-ap-northeast-2}"
+export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-ap-northeast-2}"
+export S3_PAYLOAD_BUCKET="${S3_PAYLOAD_BUCKET:-taco5-graphnode-graphdata-s3}"
+export S3_FILE_BUCKET="${S3_FILE_BUCKET:-taco5-graphnode-filedata-chat-and-note-s3}"
+export INTERNAL_SERVICE_TOKEN="${INTERNAL_SERVICE_TOKEN:-ci-test-key}"
+export API_BASE_URL="${API_BASE_URL:-http://localhost:3000}"
 npx ts-node -r dotenv/config tests/e2e/utils/db-seed.ts 2>&1 | tee e2e-logs/db-seed.log
 
 # 3. 로그 수집 함수 정의
@@ -51,7 +64,9 @@ trap collect_logs EXIT
 # --runInBand: 테스트를 순차적으로 실행하여 DB 경쟁 상태(Race Condition) 방지
 # --forceExit: 비동기 작업 종료 대기 없이 테스트 완료 후 강제 종료 (네이티브 모듈 잔여 핸들 방지)
 echo "🧪 Running E2E tests with Jest..."
-npx jest --config $E2E_CONFIG --runInBand --forceExit 2>&1 | tee e2e-logs/jest.log
+# AWS SDK v3 + Jest VM: flexible-checksums dynamic import (--experimental-vm-modules)
+NODE_OPTIONS="${NODE_OPTIONS:---experimental-vm-modules}" \
+  npx jest --config $E2E_CONFIG --runInBand --forceExit 2>&1 | tee e2e-logs/jest.log
 
 echo "============================================"
 echo "🎉 All Integrated Tests Completed Successfully!"

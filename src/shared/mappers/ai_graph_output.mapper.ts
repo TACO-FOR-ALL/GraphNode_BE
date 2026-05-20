@@ -33,7 +33,11 @@ export function mapAiOutputToSnapshot(output: AiGraphOutputDto, userId: string):
     clusterName: node.cluster_name,
     timestamp: node.timestamp,
     numMessages: node.num_sections,
-    sourceType: node.source_type,
+    sourceType: node.source_type as GraphNodeDto['sourceType'],
+    metadata:
+      node.metadata && typeof node.metadata === 'object'
+        ? { ...node.metadata }
+        : undefined,
     // createdAt/updatedAt 생략 — repository layer가 항상 책임지고 설정합니다.
   }));
 

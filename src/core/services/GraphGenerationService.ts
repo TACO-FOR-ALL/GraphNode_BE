@@ -42,7 +42,7 @@ import { CreditFeature } from '../types/persistence/credit.persistence';
  * 모듈: GraphGenerationService
  * 책임:
  * - 지식 그래프 생성 및 요약 작업을 위한 Orchestration을 담당합니다.
- * - 사용자의 대화 데이터 및 노트(Markdown) 데이터를 수집하여 S3에 업로드합니다.
+ * - 사용자의 대화·노트·사용자 파일을 **S3 prefix bundle**(`graph-generation/{taskId}/`)에 적재합니다.
  * - SQS를 통해 AI Worker에게 그래프 생성/요약/추가 노드 작업을 요청합니다.
  * - 작업 상태(CREATING, UPDATING 등)를 관리하고 알림을 전송합니다.
  */
@@ -52,6 +52,8 @@ export class GraphGenerationService {
   private readonly httpClient: HttpClient;
   private readonly jobQueueUrl: string;
   private static readonly GRAPH_GEN_START_TTL_SECONDS = 60 * 60 * 24; // 24시간
+  private static readonly MACRO_DEFAULT_MIN_CLUSTERS = 3;
+  private static readonly MACRO_DEFAULT_MAX_CLUSTERS = 8;
 
   constructor(
     private readonly chatManagementService: ChatManagementService,
@@ -74,17 +76,32 @@ export class GraphGenerationService {
   }
 
   /**
+   * Macro S3 bundle의 `files/` 세그먼트용: 표시명에서 경로·`..`만 제거하고 확장자는 유지합니다.
+   *
+   * @param displayName 사용자 파일 표시명입니다.
+   * @returns `files/` 아래에 쓸 단일 파일명 조각입니다.
+   */
+  private sanitizeMacroBundleFileSegment(displayName: string): string {
+    const base = displayName.replace(/\\/g, '/').split('/').pop() || 'file';
+    return base.replace(/\.\./g, '_').replace(/[/\\]/g, '_').trim() || 'file';
+  }
+
+  /**
    * SQS 기반 그래프 생성 요청
    * 사용자의 대화 및 노트 데이터를 S3에 업로드하고 작업 요청을 보냅니다.
    *
    * @param userId 사용자 ID
-   * @param options 옵션 (요약 포함 여부 등)
+   * @param options 옵션 (요약 포함 여부, Macro 클러스터 범위 등)
    * @returns 발행된 작업의 Task ID 또는 건너뛴 경우 null
    */
   async requestGraphGenerationViaQueue(
     userId: string,
     options?: {
       includeSummary?: boolean;
+      /** Macro 파이프라인 `minClusters` (기본 3). */
+      macroMinClusters?: number;
+      /** Macro 파이프라인 `maxClusters` (기본 8). */
+      macroMaxClusters?: number;
     }
   ): Promise<string | null> {
     let taskId: string | undefined;
@@ -115,7 +132,10 @@ export class GraphGenerationService {
       }
 
       taskId = `task_${userId}_${ulid()}`;
-      const s3Key = `graph-generation/${taskId}/input.json`;
+      /** GraphNode_AI Macro bundle: prefix는 반드시 `/`로 끝남. */
+      const taskPrefix = `graph-generation/${taskId}/`;
+      const inputObjectKey = `${taskPrefix}input.json`;
+      const noteObjectKey = `${taskPrefix}notes.json`;
 
       // 선제적 크레딧 차감 (Hold)
       await this.holdCredit(userId, CreditFeature.GRAPH_GENERATION, taskId);
@@ -135,58 +155,58 @@ export class GraphGenerationService {
         { label: 'GraphEmbeddingService.saveStats' }
       );
 
-      // 1. 대화 데이터 S3 업로드
+      // 1. 대화 JSON → bundle/input.json
       const dataStream = Readable.from(this.streamUserData(userId));
       await withRetry(
-        async () => await this.storagePort.upload(s3Key, dataStream, 'application/json'),
+        async () => await this.storagePort.upload(inputObjectKey, dataStream, 'application/json'),
         { label: 'Storage.upload.input' }
       );
 
-      // 2. 노트 데이터 S3 업로드
-      const noteS3Key = `graph-generation/${taskId}/notes.json`;
+      // 2. 노트 manifest → bundle/notes.json
       const noteStream = Readable.from(this.streamNotes(userId));
       await withRetry(
-        async () => await this.storagePort.upload(noteS3Key, noteStream, 'application/json'),
+        async () => await this.storagePort.upload(noteObjectKey, noteStream, 'application/json'),
         { label: 'Storage.upload.notes' }
       );
 
-      const extraS3Keys: string[] = [noteS3Key];
-      if (userFiles.length > 0) {
-        const filesS3Key = `graph-generation/${taskId}/files.json`;
-        const filesPayload = JSON.stringify({
-          files: userFiles.map((f) => ({
-            id: f._id,
-            title: f.displayName,
-            s3_key: f.s3Key,
-            mime_type: f.mimeType,
-            update_time: Math.floor(f.updatedAt.getTime() / 1000),
-          })),
-        });
-        await withRetry(
-          async () => await this.storagePort.upload(filesS3Key, filesPayload, 'application/json'),
-          { label: 'Storage.upload.files' }
+      // 3. 사용자 라이브러리 원본 바이트 → bundle/files/{id}_{displayName} (확장자 유지)
+      for (const f of userFiles) {
+        const downloaded = await withRetry(
+          async () => await this.storagePort.downloadFile(f.s3Key),
+          { label: 'Storage.downloadFile.userFileForMacroBundle' }
         );
-        extraS3Keys.push(filesS3Key);
+        const segment = this.sanitizeMacroBundleFileSegment(f.displayName);
+        const destKey = `${taskPrefix}files/${f._id}_${segment}`;
+        const contentType =
+          f.mimeType?.trim() || downloaded.contentType || 'application/octet-stream';
+        await withRetry(
+          async () => await this.storagePort.upload(destKey, downloaded.buffer, contentType),
+          { label: 'Storage.upload.macroBundleUserFile' }
+        );
       }
 
-      // 3. 사용자 언어 조회
+      // 4. 사용자 언어 조회
       const language = await withRetry(
         async () => await this.userService.getPreferredLanguage(userId),
         { label: 'UserService.getPreferredLanguage' }
       );
 
-      // 4. SQS 메시지 전송
+      // 5. SQS 메시지 전송 (prefix bundle: s3Key는 `/`로 끝남, extraS3Keys 생략)
       const messageBody: GraphGenRequestPayload = {
         taskId,
         taskType: TaskType.GRAPH_GENERATION_REQUEST,
         payload: {
           userId,
-          s3Key,
+          s3Key: taskPrefix,
           bucket: process.env.S3_PAYLOAD_BUCKET,
           includeSummary: options?.includeSummary ?? true,
           summaryLanguage: language,
-          language: language,
-          extraS3Keys,
+          language,
+          inputType: 'auto',
+          minClusters:
+            options?.macroMinClusters ?? GraphGenerationService.MACRO_DEFAULT_MIN_CLUSTERS,
+          maxClusters:
+            options?.macroMaxClusters ?? GraphGenerationService.MACRO_DEFAULT_MAX_CLUSTERS,
         },
         timestamp: new Date().toISOString(),
       };

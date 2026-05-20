@@ -218,16 +218,22 @@ describe('GraphGenerationService', () => {
         expect.objectContaining({
           payload: expect.objectContaining({
             userId,
-            bucket: process.env.S3_PAYLOAD_BUCKET
-          })
+            bucket: process.env.S3_PAYLOAD_BUCKET,
+            s3Key: expect.stringMatching(/graph-generation\/task_user1_[^/]+\/$/),
+            inputType: 'auto',
+            minClusters: 3,
+            maxClusters: 8,
+          }),
         })
       );
+      const sent = mockQueuePort.sendMessage.mock.calls[0][1] as { payload: { extraS3Keys?: string[] } };
+      expect(sent.payload.extraS3Keys).toBeUndefined();
       expect(mockGraphEmbSvc.saveStats).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'CREATING' })
       );
     });
 
-    it('should include note data S3 key if notes exist', async () => {
+    it('should upload notes.json into bundle prefix when only notes exist', async () => {
       // Arrange
       mockChatSvc.listConversations.mockResolvedValue({
         items: [],
@@ -260,9 +266,100 @@ describe('GraphGenerationService', () => {
         expect.anything(),
         expect.objectContaining({
           payload: expect.objectContaining({
-            extraS3Keys: expect.arrayContaining([expect.stringContaining('notes.json')])
-          })
+            s3Key: expect.stringMatching(/graph-generation\/task_user1_[^/]+\/$/),
+          }),
         })
+      );
+      const sent = mockQueuePort.sendMessage.mock.calls[0][1] as { payload: { extraS3Keys?: string[] } };
+      expect(sent.payload.extraS3Keys).toBeUndefined();
+    });
+
+    it('should copy user library files into bundle files/ prefix', async () => {
+      mockChatSvc.listConversations.mockResolvedValue({
+        items: [{ id: 'c1', title: 'T1', messages: [] } as any],
+        nextCursor: null,
+      });
+      mockUserFileSvc.listAllActiveFiles.mockResolvedValue([
+        {
+          _id: 'uf1',
+          displayName: 'report.pdf',
+          s3Key: 'user-files/user1/uf1.pdf',
+          mimeType: 'application/pdf',
+          updatedAt: new Date(),
+        } as any,
+      ]);
+      mockStoragePort.downloadFile.mockResolvedValue({
+        buffer: Buffer.from('%PDF-1.1'),
+        contentType: 'application/pdf',
+      });
+      mockQueuePort.sendMessage.mockResolvedValue(undefined);
+      mockGraphEmbSvc.saveStats.mockResolvedValue(undefined);
+
+      await service.requestGraphGenerationViaQueue(userId);
+
+      expect(mockStoragePort.downloadFile).toHaveBeenCalledWith('user-files/user1/uf1.pdf');
+      expect(mockStoragePort.upload).toHaveBeenCalledWith(
+        expect.stringMatching(/graph-generation\/task_user1_[^/]+\/files\/uf1_report\.pdf$/),
+        expect.any(Buffer),
+        'application/pdf'
+      );
+    });
+
+    it('should copy multiple user library files (pdf, docx, pptx) into bundle files/ prefix', async () => {
+      mockChatSvc.listConversations.mockResolvedValue({
+        items: [{ id: 'c1', title: 'T1', messages: [] } as any],
+        nextCursor: null,
+      });
+      mockUserFileSvc.listAllActiveFiles.mockResolvedValue([
+        {
+          _id: 'uf-pdf',
+          displayName: 'report.pdf',
+          s3Key: 'user-files/user1/uf-pdf.pdf',
+          mimeType: 'application/pdf',
+          updatedAt: new Date(),
+        } as any,
+        {
+          _id: 'uf-docx',
+          displayName: 'notes.docx',
+          s3Key: 'user-files/user1/uf-docx.docx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          updatedAt: new Date(),
+        } as any,
+        {
+          _id: 'uf-pptx',
+          displayName: 'slides.pptx',
+          s3Key: 'user-files/user1/uf-pptx.pptx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          updatedAt: new Date(),
+        } as any,
+      ]);
+      mockStoragePort.downloadFile.mockImplementation(async (key: string) => ({
+        buffer: Buffer.from(`bytes-for-${key}`),
+        contentType: key.endsWith('.pdf')
+          ? 'application/pdf'
+          : key.endsWith('.docx')
+            ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            : 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      }));
+      mockQueuePort.sendMessage.mockResolvedValue(undefined);
+      mockGraphEmbSvc.saveStats.mockResolvedValue(undefined);
+
+      await service.requestGraphGenerationViaQueue(userId);
+
+      expect(mockStoragePort.upload).toHaveBeenCalledWith(
+        expect.stringMatching(/\/files\/uf-pdf_report\.pdf$/),
+        expect.any(Buffer),
+        'application/pdf'
+      );
+      expect(mockStoragePort.upload).toHaveBeenCalledWith(
+        expect.stringMatching(/\/files\/uf-docx_notes\.docx$/),
+        expect.any(Buffer),
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      );
+      expect(mockStoragePort.upload).toHaveBeenCalledWith(
+        expect.stringMatching(/\/files\/uf-pptx_slides\.pptx$/),
+        expect.any(Buffer),
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation'
       );
     });
   });
