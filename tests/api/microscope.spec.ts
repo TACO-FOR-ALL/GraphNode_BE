@@ -59,6 +59,35 @@ jest.mock('../../src/core/services/MicroscopeManagementService', () => ({
             status: 'PROCESSING',
             createdAt: new Date().toISOString(),
         }),
+        createMultiSourceWorkspace: jest.fn<any>().mockResolvedValue({
+            _id: 'ws-multi-1',
+            userId: 'user-12345',
+            name: 'Multi-source Workspace (2)',
+            documents: [
+                {
+                    id: 'doc-ms-1',
+                    s3Key: '',
+                    fileName: 'note-1.md',
+                    status: 'PROCESSING',
+                    nodeId: 'note-1',
+                    nodeType: 'note',
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                },
+                {
+                    id: 'doc-ms-2',
+                    s3Key: '',
+                    fileName: 'conv-1.md',
+                    status: 'PROCESSING',
+                    nodeId: 'conv-1',
+                    nodeType: 'conversation',
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                },
+            ],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        }),
         listWorkspaces: jest.fn<any>().mockResolvedValue([
             { _id: 'ws-1', groupId: 'group-1', status: 'COMPLETED' },
             { _id: 'ws-2', groupId: 'group-2', status: 'PROCESSING' },
@@ -297,6 +326,108 @@ describe('Microscope API Integration Tests', () => {
                 .delete('/v1/microscope/group-1')
                 .set('Authorization', `Bearer ${accessToken}`)
                 .expect(204);
+        });
+    });
+
+    // --- POST /v1/microscope/workspaces/batch-ingest ---
+    describe('POST /v1/microscope/workspaces/batch-ingest', () => {
+        it('should return 401 if unauthenticated', async () => {
+            await request(app)
+                .post('/v1/microscope/workspaces/batch-ingest')
+                .send({ sources: [{ nodeId: 'n1', nodeType: 'note' }] })
+                .expect(401);
+        });
+
+        it('should return 400 if sources is missing', async () => {
+            const res = await request(app)
+                .post('/v1/microscope/workspaces/batch-ingest')
+                .set('Authorization', `Bearer ${accessToken}`)
+                .send({});
+
+            expect(res.status).toBe(400);
+            expect(res.body.detail).toContain('sources');
+        });
+
+        it('should return 400 if sources is an empty array', async () => {
+            const res = await request(app)
+                .post('/v1/microscope/workspaces/batch-ingest')
+                .set('Authorization', `Bearer ${accessToken}`)
+                .send({ sources: [] });
+
+            expect(res.status).toBe(400);
+            expect(res.body.detail).toContain('sources');
+        });
+
+        it('should return 400 if a source is missing nodeId', async () => {
+            const res = await request(app)
+                .post('/v1/microscope/workspaces/batch-ingest')
+                .set('Authorization', `Bearer ${accessToken}`)
+                .send({ sources: [{ nodeType: 'note' }] });
+
+            expect(res.status).toBe(400);
+            expect(res.body.detail).toContain('nodeId');
+        });
+
+        it('should return 400 if a source has unsupported nodeType', async () => {
+            const res = await request(app)
+                .post('/v1/microscope/workspaces/batch-ingest')
+                .set('Authorization', `Bearer ${accessToken}`)
+                .send({ sources: [{ nodeId: 'n1', nodeType: 'file' }] });
+
+            expect(res.status).toBe(400);
+            expect(res.body.detail).toContain('nodeType');
+        });
+
+        it('should create multi-source workspace and return 201', async () => {
+            const res = await request(app)
+                .post('/v1/microscope/workspaces/batch-ingest')
+                .set('Authorization', `Bearer ${accessToken}`)
+                .send({
+                    sources: [
+                        { nodeId: 'note-1', nodeType: 'note' },
+                        { nodeId: 'conv-1', nodeType: 'conversation' },
+                    ],
+                });
+
+            expect(res.status).toBe(201);
+            expect(res.body).toHaveProperty('_id', 'ws-multi-1');
+            expect(res.body).toHaveProperty('documents');
+            expect(Array.isArray(res.body.documents)).toBe(true);
+            expect(res.body.documents).toHaveLength(2);
+        });
+
+        it('should pass sources and schemaName to service', async () => {
+            const { MicroscopeManagementService } = require('../../src/core/services/MicroscopeManagementService');
+            const mockInstance = (MicroscopeManagementService as jest.Mock).mock.results[0].value as any;
+
+            await request(app)
+                .post('/v1/microscope/workspaces/batch-ingest')
+                .set('Authorization', `Bearer ${accessToken}`)
+                .send({
+                    sources: [{ nodeId: 'note-42', nodeType: 'note' }],
+                    schemaName: 'my_schema',
+                });
+
+            expect(mockInstance.createMultiSourceWorkspace).toHaveBeenCalledWith(
+                userId,
+                [{ nodeId: 'note-42', nodeType: 'note' }],
+                'my_schema'
+            );
+        });
+
+        it('should forward service errors to next()', async () => {
+            const { MicroscopeManagementService } = require('../../src/core/services/MicroscopeManagementService');
+            const mockInstance = (MicroscopeManagementService as jest.Mock).mock.results[0].value as any;
+            mockInstance.createMultiSourceWorkspace.mockRejectedValueOnce(
+                Object.assign(new Error('upstream failure'), { statusCode: 502, code: 'UPSTREAM_ERROR' })
+            );
+
+            const res = await request(app)
+                .post('/v1/microscope/workspaces/batch-ingest')
+                .set('Authorization', `Bearer ${accessToken}`)
+                .send({ sources: [{ nodeId: 'n1', nodeType: 'note' }] });
+
+            expect(res.status).toBe(502);
         });
     });
 });

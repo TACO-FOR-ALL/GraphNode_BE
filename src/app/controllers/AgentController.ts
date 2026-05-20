@@ -19,7 +19,7 @@ export class AgentController {
    * SSE 스트리밍 채팅
    */
   async chatStream(req: Request, res: Response): Promise<void> {
-    const { userMessage, contextText, modeHint } = req.body as ChatStreamRequestBody;
+    const { userMessage, contextText, modeHint, microscopeGroupId } = req.body as ChatStreamRequestBody;
 
     // 사용자 메시지 검증
     const trimmedUser = (userMessage || '').trim();
@@ -48,7 +48,12 @@ export class AgentController {
       // FIXED(강현일) : AgentService가 내부에서 UserService를 통해 API Key를 조회하고 AI 호출을 관리합니다.
       await this.agentService.handleChatStream(
         userId,
-        { userMessage: trimmedUser, contextText: contextText?.trim(), modeHint },
+        {
+          userMessage: trimmedUser,
+          contextText: contextText?.trim(),
+          modeHint,
+          microscopeGroupId: microscopeGroupId?.trim() || undefined,
+        },
         sendEvent
       );
     } catch (err) {
