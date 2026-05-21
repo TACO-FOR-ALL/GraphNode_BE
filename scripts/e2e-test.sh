@@ -12,6 +12,13 @@ echo "============================================"
 echo "🚀 Starting Integrated E2E Test Suite"
 echo "============================================"
 
+if ! docker info >/dev/null 2>&1; then
+  echo "❌ Docker daemon is not running."
+  echo "   macOS: Docker Desktop을 실행한 뒤 다시 시도하세요."
+  echo "   확인: docker info"
+  exit 1
+fi
+
 # 1. 서비스 헬스체크 확인
 # GitHub Actions의 Wait 단계 이후 실행되지만, 로컬 실행 시를 대비한 재확인
 echo "🔍 Checking service health..."
@@ -30,6 +37,10 @@ echo "🌱 Seeding test data..."
 # Infisical/프로덕션이 아닌 LocalStack·compose 테스트 스택용 env (docs: docker-compose.test.yml)
 export MONGODB_URI="${MONGODB_URI:-mongodb://127.0.0.1:27017/graphnode?directConnection=true}"
 export DATABASE_URL="${DATABASE_URL:-postgresql://app:app@127.0.0.1:5432/graphnode}"
+export NEO4J_URI="${NEO4J_URI:-bolt://127.0.0.1:7687}"
+export NEO4J_USER="${NEO4J_USER:-neo4j}"
+export NEO4J_USERNAME="${NEO4J_USERNAME:-neo4j}"
+export NEO4J_PASSWORD="${NEO4J_PASSWORD:-neo4j-password}"
 export AWS_ENDPOINT_URL="${AWS_ENDPOINT_URL:-http://127.0.0.1:4566}"
 export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-test}"
 export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-test}"
