@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from '@jest/globals';
 import { apiClient, getTestUserId } from '../utils/api-client';
-import { isE2eLlmEnabled, e2eLlmSkipReason } from '../utils/e2e-llm-env';
+import { isE2eFullSuiteEnabled, e2eFullSuiteSkipReason } from '../utils/e2e-llm-env';
 import { seedTestData } from '../utils/db-seed';
 import { MongoClient } from 'mongodb';
 
@@ -11,11 +11,11 @@ import { MongoClient } from 'mongodb';
  * - 특정 노드를 기반으로 심층 분석 워크스페이스를 생성하고,
  *   AI가 문서 분석을 완료하여 'COMPLETED' 상태가 되는지 검증합니다.
  *
- * OPENAI/GROQ 키 없으면 스킵.
+ * E2E_SCOPE=full + LLM 키 있을 때만 실행.
  */
-const describeMicroscope = isE2eLlmEnabled() ? describe : describe.skip;
+const describeMicroscope = isE2eFullSuiteEnabled() ? describe : describe.skip;
 
-describeMicroscope(e2eLlmSkipReason() || 'End-to-End Microscope Flow', () => {
+describeMicroscope(e2eFullSuiteSkipReason() || 'End-to-End Microscope Flow', () => {
   const userId = getTestUserId();
   const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/graphnode';
 

@@ -26,13 +26,8 @@ docker compose -f $DOCKER_COMPOSE_FILE ps
 
 chmod +x scripts/localstack-init/ready.sh 2>/dev/null || true
 
-# .env placeholder 키는 Jest에서 graph-flow/microscope 스킵 (macro-s3-bundle 만 필수 통과)
-if [[ -f .env ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source .env
-  set +a
-fi
+# shellcheck disable=SC1091
+source scripts/e2e-load-env.sh
 
 echo "⚙️ Initializing MongoDB Replica Set..."
 docker exec graphnode-test-mongo mongosh --eval "rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongo:27017'}]})" || true
@@ -82,17 +77,22 @@ trap collect_logs EXIT
 # 4. Jest 통합 테스트(E2E) 실행
 # --runInBand: 테스트를 순차적으로 실행하여 DB 경쟁 상태(Race Condition) 방지
 # --forceExit: 비동기 작업 종료 대기 없이 테스트 완료 후 강제 종료 (네이티브 모듈 잔여 핸들 방지)
-echo "🧪 Running E2E tests with Jest..."
-_openai_ok=false
-_groq_ok=false
-[[ -n "${OPENAI_API_KEY:-}" && "${OPENAI_API_KEY}" != *placeholder* && "${OPENAI_API_KEY}" != dummy ]] && _openai_ok=true
-[[ -n "${GROQ_API_KEY:-}" && "${GROQ_API_KEY}" != *placeholder* && "${GROQ_API_KEY}" != dummy ]] && _groq_ok=true
-if [[ "$_openai_ok" == false && "$_groq_ok" == false ]]; then
-  echo "ℹ️  No LLM API key — graph-flow & microscope skipped; macro-s3-bundle (PR scope) runs."
+export E2E_SCOPE="${E2E_SCOPE:-bundle}"
+
+echo "🧪 Running E2E tests with Jest (E2E_SCOPE=${E2E_SCOPE})..."
+JEST_ARGS=(--config "$E2E_CONFIG" --runInBand --forceExit)
+if [[ "$E2E_SCOPE" == "bundle" ]]; then
+  echo "ℹ️  PR gate: macro-s3-bundle.spec.ts only (graph-flow/microscope require E2E_SCOPE=full)."
+  JEST_ARGS+=(tests/e2e/specs/macro-s3-bundle.spec.ts)
+elif [[ "$E2E_SCOPE" == "full" ]]; then
+  echo "ℹ️  Full LLM E2E: all specs (needs valid OPENAI_API_KEY or GROQ_API_KEY)."
+else
+  echo "❌ Unknown E2E_SCOPE=${E2E_SCOPE} (use bundle or full)"
+  exit 1
 fi
 # AWS SDK v3 + Jest VM: flexible-checksums dynamic import (--experimental-vm-modules)
 NODE_OPTIONS="${NODE_OPTIONS:---experimental-vm-modules}" \
-  npx jest --config $E2E_CONFIG --runInBand --forceExit 2>&1 | tee e2e-logs/jest.log
+  npx jest "${JEST_ARGS[@]}" 2>&1 | tee e2e-logs/jest.log
 
 echo "============================================"
 echo "🎉 All Integrated Tests Completed Successfully!"

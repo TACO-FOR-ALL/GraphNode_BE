@@ -12,13 +12,8 @@ if ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 
-# graphnode-ai는 호스트 env의 OPENAI_API_KEY를 compose에 전달합니다 (.env.example placeholder면 401).
-if [[ -f "$ROOT/.env" ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source "$ROOT/.env"
-  set +a
-fi
+# shellcheck disable=SC1091
+source "$ROOT/scripts/e2e-load-env.sh" "$ROOT/.env"
 _openai_ok=false
 _groq_ok=false
 if [[ -n "${OPENAI_API_KEY:-}" && "${OPENAI_API_KEY}" != *placeholder* && "${OPENAI_API_KEY}" != dummy ]]; then

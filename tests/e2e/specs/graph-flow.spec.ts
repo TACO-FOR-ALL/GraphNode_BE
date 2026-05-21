@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from '@jest/globals';
 import { apiClient, getTestUserId } from '../utils/api-client';
-import { isE2eLlmEnabled, e2eLlmSkipReason } from '../utils/e2e-llm-env';
+import { isE2eFullSuiteEnabled, e2eFullSuiteSkipReason } from '../utils/e2e-llm-env';
 import { E2E_MACRO_USER_FILE_SEEDS, seedTestData } from '../utils/db-seed';
 import { assertMacroGraphBundleUploaded } from '../utils/localstack-s3';
 import { macroFileTypeFromUserFileDoc } from '../../../src/workers/utils/sourceTypeResolver';
@@ -32,11 +32,11 @@ import type { Session } from 'neo4j-driver';
  * 시나리오 4: Graph Node Soft Delete 정합성 검증
  * - Neo4j에서 활성 노드를 찾아 API 소프트 삭제 후 Neo4j deletedAt 설정 여부를 검증합니다.
  *
- * OPENAI/GROQ 키 없으면 스킵 (macro-s3-bundle.spec.ts 가 PR S3 번들을 검증).
+ * E2E_SCOPE=full + LLM 키 있을 때만 실행 (CI/PR 기본 bundle 은 macro-s3-bundle 만).
  */
-const describeGraphFlow = isE2eLlmEnabled() ? describe : describe.skip;
+const describeGraphFlow = isE2eFullSuiteEnabled() ? describe : describe.skip;
 
-describeGraphFlow(e2eLlmSkipReason() || 'End-to-End Graph Flow', () => {
+describeGraphFlow(e2eFullSuiteSkipReason() || 'End-to-End Graph Flow', () => {
   const userId = getTestUserId();
   const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/graphnode';
   let scenario1Passed = false;
