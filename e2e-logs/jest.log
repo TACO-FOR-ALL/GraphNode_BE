@@ -1,6 +1,9 @@
-(node:89737) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(node:8469) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
-FAIL tests/e2e/specs/graph-flow.spec.ts
+
+--- Waiting for graph creation... (0s) ......
+--- Waiting for graph creation... (60s) ......
+--- Waiting for graph creation... (120s) ...FAIL tests/e2e/specs/graph-flow.spec.ts (152.749 s)
   ● Console
 
     console.log
@@ -38,85 +41,239 @@ FAIL tests/e2e/specs/graph-flow.spec.ts
 
       at seedTestData (utils/db-seed.ts:202:11)
 
+    console.log
+      --- Starting Scenario 1: Graph Generation ---
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:56:13)
+
+    console.log
+      Task Enqueued: task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:63:13)
+
+    console.log
+      Macro S3 prefix bundle verified on LocalStack.
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:72:13)
+
+    console.log
+      Expected nodes: 5 (Conversations: 1, Notes: 1, UserFiles: 3)
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:102:15)
+
+    console.log
+      Expected origIds: ["conv-e2e-123","note-e2e-123","uf-e2e-docx","uf-e2e-pdf","uf-e2e-pptx"]
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:105:15)
+
+    console.error
+      [Scenario 1] Graph generation permanently failed (status=NOT_CREATED). Aborting poll.
+
+      122 |
+      123 |         if (status === 'NOT_CREATED') {
+    > 124 |           console.error('[Scenario 1] Graph generation permanently failed (status=NOT_CREATED). Aborting poll.');
+          |                   ^
+      125 |           break;
+      126 |         }
+      127 |
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:124:19)
+
+    console.log
+      
+      --- Starting Scenario 2: Graph Summary ---
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:241:13)
+
+    console.log
+      
+      --- Starting Scenario 3: Add Node (Conversation + Note) ---
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:333:13)
+
+    console.log
+      
+      --- Starting Scenario 4: Soft Delete Verification ---
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:530:13)
+
   ● End-to-End Graph Flow › Scenario 1: Full Graph Generation Flow
 
-    Neo4jError: The client is unauthorized due to authentication failure.
+    expect(received).toBe(expected) // Object.is equality
 
-      43 |     const neo4jSession = neo4jDriver.session();
-      44 |     try {
-    > 45 |       await neo4jSession.run(
-         |                          ^
-      46 |         'MATCH (n {userId: $userId}) DETACH DELETE n',
-      47 |         { userId }
-      48 |       );
+    Expected: true
+    Received: false
 
-      at captureStacktrace (../../node_modules/neo4j-driver-core/lib/result.js:101:17)
-      at Result.GenericResult (../../node_modules/neo4j-driver-core/lib/result.js:141:23)
-      at new Result (../../node_modules/neo4j-driver-core/lib/result.js:711:42)
-      at Session.Object.<anonymous>.Session._run (../../node_modules/neo4j-driver-core/lib/session.js:224:16)
-      at Session.Object.<anonymous>.Session.run (../../node_modules/neo4j-driver-core/lib/session.js:188:27)
-      at Object.<anonymous> (specs/graph-flow.spec.ts:45:26)
+      234 |     }
+      235 |
+    > 236 |     expect(isFinished).toBe(true);
+          |                        ^
+      237 |     console.log('\nGraph creation confirmed in Neo4j.');
+      238 |   });
+      239 |
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:236:24)
 
   ● End-to-End Graph Flow › Scenario 2: Graph Summary Flow
 
-    Neo4jError: The client is unauthorized due to authentication failure.
+    Scenario 1 did not complete successfully. Scenario 2 requires a generated graph and cannot proceed.
 
-      43 |     const neo4jSession = neo4jDriver.session();
-      44 |     try {
-    > 45 |       await neo4jSession.run(
-         |                          ^
-      46 |         'MATCH (n {userId: $userId}) DETACH DELETE n',
-      47 |         { userId }
-      48 |       );
+      242 |
+      243 |     if (!scenario1Passed) {
+    > 244 |       throw new Error(
+          |             ^
+      245 |         'Scenario 1 did not complete successfully. Scenario 2 requires a generated graph and cannot proceed.'
+      246 |       );
+      247 |     }
 
-      at captureStacktrace (../../node_modules/neo4j-driver-core/lib/result.js:101:17)
-      at Result.GenericResult (../../node_modules/neo4j-driver-core/lib/result.js:141:23)
-      at new Result (../../node_modules/neo4j-driver-core/lib/result.js:711:42)
-      at Session.Object.<anonymous>.Session._run (../../node_modules/neo4j-driver-core/lib/session.js:224:16)
-      at Session.Object.<anonymous>.Session.run (../../node_modules/neo4j-driver-core/lib/session.js:188:27)
-      at Object.<anonymous> (specs/graph-flow.spec.ts:45:26)
+      at Object.<anonymous> (specs/graph-flow.spec.ts:244:13)
 
   ● End-to-End Graph Flow › Scenario 3: Add Node to existing Graph (Conversation + Note)
 
-    Neo4jError: The client is unauthorized due to authentication failure.
+    Scenario 1 did not complete successfully. Scenario 3 requires graph_nodes to be populated and cannot proceed.
 
-      43 |     const neo4jSession = neo4jDriver.session();
-      44 |     try {
-    > 45 |       await neo4jSession.run(
-         |                          ^
-      46 |         'MATCH (n {userId: $userId}) DETACH DELETE n',
-      47 |         { userId }
-      48 |       );
+      334 |
+      335 |     if (!scenario1Passed) {
+    > 336 |       throw new Error(
+          |             ^
+      337 |         'Scenario 1 did not complete successfully. Scenario 3 requires graph_nodes to be populated and cannot proceed.'
+      338 |       );
+      339 |     }
 
-      at captureStacktrace (../../node_modules/neo4j-driver-core/lib/result.js:101:17)
-      at Result.GenericResult (../../node_modules/neo4j-driver-core/lib/result.js:141:23)
-      at new Result (../../node_modules/neo4j-driver-core/lib/result.js:711:42)
-      at Session.Object.<anonymous>.Session._run (../../node_modules/neo4j-driver-core/lib/session.js:224:16)
-      at Session.Object.<anonymous>.Session.run (../../node_modules/neo4j-driver-core/lib/session.js:188:27)
-      at Object.<anonymous> (specs/graph-flow.spec.ts:45:26)
+      at Object.<anonymous> (specs/graph-flow.spec.ts:336:13)
 
   ● End-to-End Graph Flow › Scenario 4: Graph Node Soft Delete Consistency Verification
 
-    Neo4jError: The client is unauthorized due to authentication failure.
+    Scenario 1 did not complete successfully. Scenario 4 requires graph_nodes to be populated.
 
-      43 |     const neo4jSession = neo4jDriver.session();
-      44 |     try {
-    > 45 |       await neo4jSession.run(
-         |                          ^
-      46 |         'MATCH (n {userId: $userId}) DETACH DELETE n',
-      47 |         { userId }
-      48 |       );
+      531 |
+      532 |     if (!scenario1Passed) {
+    > 533 |       throw new Error(
+          |             ^
+      534 |         'Scenario 1 did not complete successfully. Scenario 4 requires graph_nodes to be populated.'
+      535 |       );
+      536 |     }
 
-      at captureStacktrace (../../node_modules/neo4j-driver-core/lib/result.js:101:17)
-      at Result.GenericResult (../../node_modules/neo4j-driver-core/lib/result.js:141:23)
-      at new Result (../../node_modules/neo4j-driver-core/lib/result.js:711:42)
-      at Session.Object.<anonymous>.Session._run (../../node_modules/neo4j-driver-core/lib/session.js:224:16)
-      at Session.Object.<anonymous>.Session.run (../../node_modules/neo4j-driver-core/lib/session.js:188:27)
-      at Object.<anonymous> (specs/graph-flow.spec.ts:45:26)
+      at Object.<anonymous> (specs/graph-flow.spec.ts:533:13)
 
 
 --- Waiting for microscope ingest... (0s) ......
 --- Waiting for microscope ingest... (60s) ......
 --- Waiting for microscope ingest... (120s) ......
 --- Waiting for microscope ingest... (180s) ......
---- Waiting for microscope ingest... (240s) .
+--- Waiting for microscope ingest... (240s) ......
+--- Waiting for microscope ingest... (300s) ......
+--- Waiting for microscope ingest... (360s) ......
+--- Waiting for microscope ingest... (420s) ......
+--- Waiting for microscope ingest... (480s) ......
+--- Waiting for microscope ingest... (540s) ......FAIL tests/e2e/specs/microscope.spec.ts (600.799 s)
+  ● Console
+
+    console.log
+      --- Starting DB Seeding ---
+
+      at seedTestData (utils/db-seed.ts:87:11)
+
+    console.log
+      PostgreSQL User seeded.
+
+      at seedTestData (utils/db-seed.ts:101:11)
+
+    console.log
+      [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-pdf.pdf
+
+      at uploadUserFileToS3 (utils/db-seed.ts:73:11)
+
+    console.log
+      [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-docx.docx
+
+      at uploadUserFileToS3 (utils/db-seed.ts:73:11)
+
+    console.log
+      [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-pptx.pptx
+
+      at uploadUserFileToS3 (utils/db-seed.ts:73:11)
+
+    console.log
+      MongoDB data seeded (3 user_files: pdf, docx, pptx).
+
+      at seedTestData (utils/db-seed.ts:195:13)
+
+    console.log
+      --- DB Seeding Completed ---
+
+      at seedTestData (utils/db-seed.ts:202:11)
+
+    console.log
+      
+      --- Starting Scenario 3: Microscope Ingest ---
+
+      at Object.<anonymous> (specs/microscope.spec.ts:22:13)
+
+    console.log
+      Microscope Task Enqueued: task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ in Workspace: 01KS56T4D6NGJZGA8EH1VCMWEC
+
+      at Object.<anonymous> (specs/microscope.spec.ts:36:13)
+
+  ● End-to-End Microscope Flow › Scenario 3: Microscope Ingest from Note
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      66 |     }
+      67 |
+    > 68 |     expect(isFinished).toBe(true);
+         |                        ^
+      69 |     console.log('\nMicroscope ingest confirmed in DB.');
+      70 |   });
+      71 | });
+
+      at Object.<anonymous> (specs/microscope.spec.ts:68:24)
+
+PASS tests/e2e/specs/macro-s3-bundle.spec.ts
+  ● Console
+
+    console.log
+      --- Starting DB Seeding ---
+
+      at seedTestData (utils/db-seed.ts:87:11)
+
+    console.log
+      PostgreSQL User seeded.
+
+      at seedTestData (utils/db-seed.ts:101:11)
+
+    console.log
+      [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-pdf.pdf
+
+      at uploadUserFileToS3 (utils/db-seed.ts:73:11)
+
+    console.log
+      [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-docx.docx
+
+      at uploadUserFileToS3 (utils/db-seed.ts:73:11)
+
+    console.log
+      [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-pptx.pptx
+
+      at uploadUserFileToS3 (utils/db-seed.ts:73:11)
+
+    console.log
+      MongoDB data seeded (3 user_files: pdf, docx, pptx).
+
+      at seedTestData (utils/db-seed.ts:195:13)
+
+    console.log
+      --- DB Seeding Completed ---
+
+      at seedTestData (utils/db-seed.ts:202:11)
+
+
+Test Suites: 2 failed, 1 passed, 3 total
+Tests:       5 failed, 1 passed, 6 total
+Snapshots:   0 total
+Time:        754.149 s
+Ran all test suites.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

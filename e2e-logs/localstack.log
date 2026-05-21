@@ -1,0 +1,871 @@
+graphnode-test-localstack  | LocalStack supervisor: starting
+graphnode-test-localstack  | LocalStack supervisor: localstack process (PID 15) starting
+graphnode-test-localstack  | 2026-05-20T11:48:24.920  WARN --- [  MainThread] l.services.internal        : Enabling diagnose endpoint, please be aware that this can expose sensitive information via your network.
+graphnode-test-localstack  | 
+graphnode-test-localstack  | LocalStack version: 3.8.1
+graphnode-test-localstack  | LocalStack build date: 2024-10-08
+graphnode-test-localstack  | LocalStack build git hash: 529aba7d8
+graphnode-test-localstack  | 
+graphnode-test-localstack  | 2026-05-20T11:48:25.993  WARN --- [  MainThread] localstack.deprecations    : DEFAULT_REGION is deprecated (since 0.12.7) and will be removed in upcoming releases of LocalStack! LocalStack now has full multi-region support. This option has no effect. Please remove it from your configuration.
+graphnode-test-localstack  | 2026-05-20T11:48:26.118 ERROR --- [ady_monitor)] localstack.runtime.init    : Error while running script Script(path='/etc/localstack/init/ready.d/ready.sh', stage=READY, state=ERROR): [Errno 13] Permission denied: '/etc/localstack/init/ready.d/ready.sh'
+graphnode-test-localstack  | Ready.
+graphnode-test-localstack  | LocalStack supervisor: Shutting down localstack (PID 15)...
+graphnode-test-localstack  | Localstack runtime received signal 15
+graphnode-test-localstack  | 2026-05-20T11:50:35.738  INFO --- [ime-Shutdown] l.runtime.shutdown         : [shutdown] Stopping all services
+graphnode-test-localstack  | LocalStack supervisor: starting
+graphnode-test-localstack  | LocalStack supervisor: localstack process (PID 15) starting
+graphnode-test-localstack  | 2026-05-20T11:50:37.191  WARN --- [  MainThread] l.services.internal        : Enabling diagnose endpoint, please be aware that this can expose sensitive information via your network.
+graphnode-test-localstack  | 
+graphnode-test-localstack  | LocalStack version: 3.8.1
+graphnode-test-localstack  | LocalStack build date: 2024-10-08
+graphnode-test-localstack  | LocalStack build git hash: 529aba7d8
+graphnode-test-localstack  | 
+graphnode-test-localstack  | 2026-05-20T11:50:38.250  WARN --- [  MainThread] localstack.deprecations    : DEFAULT_REGION is deprecated (since 0.12.7) and will be removed in upcoming releases of LocalStack! LocalStack now has full multi-region support. This option has no effect. Please remove it from your configuration.
+graphnode-test-localstack  | + export AWS_ACCESS_KEY_ID=test
+graphnode-test-localstack  | + AWS_ACCESS_KEY_ID=test
+graphnode-test-localstack  | + export AWS_SECRET_ACCESS_KEY=test
+graphnode-test-localstack  | + AWS_SECRET_ACCESS_KEY=test
+graphnode-test-localstack  | + export AWS_DEFAULT_REGION=ap-northeast-2
+graphnode-test-localstack  | + AWS_DEFAULT_REGION=ap-northeast-2
+graphnode-test-localstack  | + echo '----------- Initializing LocalStack Resources -----------'
+graphnode-test-localstack  | + tee /tmp/localstack_init.log
+graphnode-test-localstack  | ----------- Initializing LocalStack Resources -----------
+graphnode-test-localstack  | + awslocal s3 mb s3://taco5-graphnode-graphdata-s3 --region ap-northeast-2
+graphnode-test-localstack  | 2026-05-20T11:50:38.666  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.CreateBucket => 200
+graphnode-test-localstack  | make_bucket: taco5-graphnode-graphdata-s3
+graphnode-test-localstack  | + awslocal s3 mb s3://taco5-graphnode-filedata-chat-and-note-s3 --region ap-northeast-2
+graphnode-test-localstack  | 2026-05-20T11:50:38.824  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.CreateBucket => 200
+graphnode-test-localstack  | make_bucket: taco5-graphnode-filedata-chat-and-note-s3
+graphnode-test-localstack  | + awslocal sqs create-queue --queue-name taco-graphnode-request-graph-sqs --region ap-northeast-2
+graphnode-test-localstack  | 2026-05-20T11:50:39.047  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.CreateQueue => 200
+graphnode-test-localstack  | {
+graphnode-test-localstack  |     "QueueUrl": "http://sqs.ap-northeast-2.localhost.localstack.cloud:4566/000000000000/taco-graphnode-request-graph-sqs"
+graphnode-test-localstack  | }
+graphnode-test-localstack  | + awslocal sqs create-queue --queue-name taco-graphnode-response-graph-sqs --region ap-northeast-2
+graphnode-test-localstack  | 2026-05-20T11:50:39.200  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.CreateQueue => 200
+graphnode-test-localstack  | {
+graphnode-test-localstack  |     "QueueUrl": "http://sqs.ap-northeast-2.localhost.localstack.cloud:4566/000000000000/taco-graphnode-response-graph-sqs"
+graphnode-test-localstack  | }
+graphnode-test-localstack  | + echo '----------- LocalStack Resources Created -----------'
+graphnode-test-localstack  | + tee -a /tmp/localstack_init.log
+graphnode-test-localstack  | ----------- LocalStack Resources Created -----------
+graphnode-test-localstack  | + awslocal s3 ls --region ap-northeast-2
+graphnode-test-localstack  | + tee -a /tmp/localstack_init.log
+graphnode-test-localstack  | 2026-05-20T11:50:39.357  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.ListBuckets => 200
+graphnode-test-localstack  | 2026-05-20 11:50:38 taco5-graphnode-graphdata-s3
+graphnode-test-localstack  | 2026-05-20 11:50:38 taco5-graphnode-filedata-chat-and-note-s3
+graphnode-test-localstack  | + awslocal sqs list-queues --region ap-northeast-2
+graphnode-test-localstack  | + tee -a /tmp/localstack_init.log
+graphnode-test-localstack  | 2026-05-20T11:50:39.510  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ListQueues => 200
+graphnode-test-localstack  | {
+graphnode-test-localstack  |     "QueueUrls": [
+graphnode-test-localstack  |         "http://sqs.ap-northeast-2.localhost.localstack.cloud:4566/000000000000/taco-graphnode-request-graph-sqs",
+graphnode-test-localstack  |         "http://sqs.ap-northeast-2.localhost.localstack.cloud:4566/000000000000/taco-graphnode-response-graph-sqs"
+graphnode-test-localstack  |     ]
+graphnode-test-localstack  | }
+graphnode-test-localstack  | Ready.
+graphnode-test-localstack  | 2026-05-20T11:51:13.537  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:51:13.546  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:51:13.553  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 404 (NoSuchKey)
+graphnode-test-localstack  | 2026-05-20T11:51:14.578  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 404 (NoSuchKey)
+graphnode-test-localstack  | 2026-05-20T11:51:17.735  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 404 (NoSuchKey)
+graphnode-test-localstack  | 2026-05-20T11:51:22.323  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 404 (NoSuchKey)
+graphnode-test-localstack  | 2026-05-20T11:51:25.762  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:51:45.772  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:51:46.533  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:51:46.544  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:51:46.558  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:51:59.637  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:52:05.783  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:52:09.641  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:52:19.650  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:52:25.803  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:52:29.661  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:52:39.673  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:52:45.818  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:52:49.678  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:52:59.689  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:05.830  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:09.460  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:09.465  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:09.471  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:09.475  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:09.479  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:09.482  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:09.485  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:09.488  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:09.497  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:09.498  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:09.521  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.ListObjectsV2 => 200
+graphnode-test-localstack  | 2026-05-20T11:53:09.526  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:09.529  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:09.533  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:09.535  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:09.538  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:09.539  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:09.541  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:09.543  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:09.546  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:09.547  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.396  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.396  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.424  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.492  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.492  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.500  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.552  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.552  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.560  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.607  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.608  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.609  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.615  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.621  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.627  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.795  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.795  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.796  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.798  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.800  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.800  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.804  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.812  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.816  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:17.817  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:19.508  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:37.830  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:39.559  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T11:53:52.609  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:52.616  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:52.623  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:55.473  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:55.479  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:55.483  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:55.487  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:55.489  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:55.492  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:55.495  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:55.497  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:53:55.501  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:53:57.856  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:09.569  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T11:54:10.651  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:10.666  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:10.674  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:10.720  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:10.725  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:10.727  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:10.730  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:10.733  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:10.735  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:10.738  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:10.740  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:10.744  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:10.755  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.ListObjectsV2 => 200
+graphnode-test-localstack  | 2026-05-20T11:54:10.762  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:17.870  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:31.677  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:31.677  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:31.679  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:31.808  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:31.813  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:31.815  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.ListObjectsV2 => 200
+graphnode-test-localstack  | 2026-05-20T11:54:31.820  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:31.823  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:31.826  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:31.829  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:31.832  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:31.835  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:31.837  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:31.840  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:31.842  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:31.845  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:32.140  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:39.852  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:39.852  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:39.861  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:39.916  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:39.917  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:39.924  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:39.979  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:39.980  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:39.987  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:40.042  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:40.042  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:40.044  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:40.050  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:40.054  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:40.060  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:40.230  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:40.230  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:40.232  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:40.233  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:40.235  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:40.236  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:40.240  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:40.250  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:40.252  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:40.252  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:41.447  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:41.447  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:41.448  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:41.451  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.ListObjectsV2 => 200
+graphnode-test-localstack  | 2026-05-20T11:54:41.454  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:41.456  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:41.458  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:41.460  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:41.463  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:41.465  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:41.468  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:41.469  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:41.470  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:41.471  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:41.473  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.034  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.035  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.043  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.097  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.097  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.103  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.156  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.156  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.162  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.209  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.209  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.211  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.218  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.222  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.227  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.397  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.397  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.399  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.400  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.401  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.402  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.406  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.413  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.414  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:49.414  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:50.764  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:50.764  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:50.765  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:54:50.784  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:55:00.930  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:55:10.788  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:55:10.945  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:55:20.955  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:55:30.804  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:55:30.973  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:55:40.980  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:55:50.816  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:55:50.990  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:56:01.001  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:56:10.828  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:56:11.005  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:56:21.009  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:56:30.841  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:56:31.013  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:56:31.093  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:56:31.102  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:56:31.115  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:56:41.018  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:56:50.853  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:56:51.031  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:57:01.039  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:57:10.863  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:57:11.050  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:57:21.055  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:57:30.878  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:57:31.065  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.079  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.271  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.282  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.293  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.384  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.388  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.391  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.396  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.398  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.400  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.402  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.404  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.409  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.409  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.416  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.ListObjectsV2 => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.419  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.ListObjectsV2 => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.420  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.423  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.426  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.427  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.428  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.430  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.432  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.435  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.437  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.439  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:41.440  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T11:57:50.889  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:57:51.417  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:58:00.300  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:58:00.311  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:58:00.321  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:58:03.139  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:58:03.151  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:58:03.160  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:58:03.495  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:58:03.505  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:58:03.514  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T11:58:03.555  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:58:10.897  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:58:11.447  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T11:58:30.915  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:58:41.460  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T11:58:50.933  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:59:10.948  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:59:11.477  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T11:59:30.960  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T11:59:41.492  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T11:59:50.971  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:00:10.974  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:00:11.499  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:00:30.990  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:00:41.502  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:00:51.004  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:01:11.018  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:01:11.507  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:01:31.028  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:01:41.511  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:01:51.035  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:02:11.050  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:02:11.521  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:02:31.066  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:02:41.535  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:02:51.079  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:03:11.089  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:03:11.547  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:03:31.100  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:03:41.557  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:03:51.113  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:04:11.132  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:04:11.566  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:04:31.145  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:04:41.582  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:04:51.158  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:05:11.170  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:05:11.588  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:05:31.185  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:05:41.598  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:05:51.198  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:06:11.204  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:06:11.603  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:06:31.220  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:06:41.612  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:06:51.234  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:07:11.248  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:07:11.624  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:07:22.000  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T12:07:22.008  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T12:07:22.013  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T12:07:24.544  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T12:07:24.554  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T12:07:24.562  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T12:07:24.741  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T12:07:24.747  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T12:07:24.752  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T12:07:24.798  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:07:31.263  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:07:41.639  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:07:51.274  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:08:11.287  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:08:11.644  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:08:31.301  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:08:41.649  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:08:51.309  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:09:07.445  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.GetQueueAttributes => 200
+graphnode-test-localstack  | 2026-05-20T12:09:11.320  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:09:11.662  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:09:31.334  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:09:41.677  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:09:51.347  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:10:07.236  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T12:10:07.244  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T12:10:07.250  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T12:10:07.314  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T12:10:07.320  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T12:10:07.323  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T12:10:07.326  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T12:10:07.328  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T12:10:07.330  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T12:10:07.332  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T12:10:07.334  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-20T12:10:07.337  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:10:07.346  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.ListObjectsV2 => 200
+graphnode-test-localstack  | 2026-05-20T12:10:07.352  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T12:10:11.358  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:10:11.686  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:10:15.847  INFO --- [et.reactor-1] l.services.sqs.models      : terminating the visibility timeout of ac3ec154-931f-473d-baf6-d35438e63700
+graphnode-test-localstack  | 2026-05-20T12:10:15.848  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:10:31.366  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:10:51.377  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:11:11.387  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:11:31.400  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:11:51.416  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:12:11.430  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:12:31.434  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:12:51.441  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:13:11.457  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:13:31.470  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:13:51.486  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:14:11.498  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:14:31.506  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:14:51.515  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:05.048  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:05.050  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:05.060  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.ListObjectsV2 => 200
+graphnode-test-localstack  | 2026-05-20T12:15:05.064  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T12:15:05.066  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T12:15:05.069  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T12:15:05.071  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T12:15:05.073  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T12:15:05.075  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T12:15:05.076  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T12:15:05.078  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T12:15:05.080  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T12:15:05.081  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T12:15:11.527  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:13.957  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:13.958  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:13.971  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.002  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.003  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.009  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.061  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.061  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.066  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.095  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.095  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.097  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.100  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.104  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.108  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.249  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.249  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.251  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.252  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.254  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.255  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.258  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.267  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.268  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:14.268  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:34.277  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:15:35.091  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:15:54.290  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:05.103  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:16:14.298  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:34.306  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:35.109  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-20T12:16:37.612  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:37.612  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:37.614  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:37.649  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:49.743  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:49.744  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:49.745  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:50.484  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:50.490  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:50.559  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:50.559  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:50.562  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:50.567  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.ListObjectsV2 => 200
+graphnode-test-localstack  | 2026-05-20T12:16:50.572  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T12:16:50.574  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T12:16:50.577  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T12:16:50.579  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T12:16:50.582  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T12:16:50.584  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T12:16:50.586  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T12:16:50.588  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T12:16:50.590  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-20T12:16:50.593  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.553  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.554  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.563  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.588  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.588  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.594  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.624  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.624  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.629  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.643  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.643  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.645  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.648  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.651  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.657  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.731  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.732  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.733  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.734  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.735  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.737  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.741  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.746  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.747  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:16:59.748  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:17:01.106  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:17:01.106  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:17:01.109  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:17:01.137  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:17:11.552  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:17:20.036  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:17:21.035  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:17:21.562  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:17:31.575  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:17:41.049  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:17:41.585  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:17:50.036  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:17:51.036  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:17:51.595  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:18:01.600  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:18:11.046  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:18:11.610  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:18:21.036  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:18:21.621  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:18:22.036  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:18:31.624  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:18:41.636  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:18:42.056  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:18:51.041  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:18:51.639  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:18:53.037  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:19:01.647  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:19:11.656  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:19:13.054  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:19:21.667  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:19:22.038  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:19:24.036  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:19:31.678  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:19:41.687  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:19:44.055  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:19:51.700  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:19:52.039  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:19:54.035  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:20:01.710  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:20:11.720  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:20:14.043  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:20:21.725  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:20:23.034  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:20:25.034  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:20:31.736  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:20:41.746  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:20:45.048  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:20:51.751  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:20:53.035  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:20:55.040  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:21:01.761  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:21:11.770  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:21:15.053  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:21:21.781  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:21:23.036  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:21:26.036  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:21:31.791  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:21:41.802  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:21:46.054  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:21:51.813  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:21:53.038  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:21:56.036  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:22:01.825  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:22:11.833  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:22:16.044  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:22:21.837  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:22:24.036  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:22:27.036  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:22:31.846  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:22:41.857  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:22:47.051  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:22:51.866  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:22:55.035  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:22:57.037  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:23:01.877  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:23:11.886  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:23:17.049  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:23:21.896  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:23:25.036  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:23:28.034  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:23:31.904  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:23:41.914  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:23:48.046  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:23:51.922  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:23:55.040  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:23:58.036  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:24:01.928  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:24:11.937  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:24:18.052  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:24:21.940  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:24:26.035  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:24:28.038  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:24:31.950  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:24:41.959  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:24:48.053  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:24:51.967  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:24:56.039  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-20T12:24:58.040  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | LocalStack supervisor: Shutting down localstack (PID 15)...
+graphnode-test-localstack  | Localstack runtime received signal 15
+graphnode-test-localstack  | 2026-05-20T12:25:01.526  INFO --- [ime-Shutdown] l.runtime.shutdown         : [shutdown] Stopping all services
+graphnode-test-localstack  | 2026-05-20T12:25:01.974  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | LocalStack supervisor: starting
+graphnode-test-localstack  | LocalStack supervisor: localstack process (PID 15) starting
+graphnode-test-localstack  | 2026-05-21T12:01:41.392  WARN --- [  MainThread] l.services.internal        : Enabling diagnose endpoint, please be aware that this can expose sensitive information via your network.
+graphnode-test-localstack  | 
+graphnode-test-localstack  | LocalStack version: 3.8.1
+graphnode-test-localstack  | LocalStack build date: 2024-10-08
+graphnode-test-localstack  | LocalStack build git hash: 529aba7d8
+graphnode-test-localstack  | 
+graphnode-test-localstack  | 2026-05-21T12:01:42.487  WARN --- [  MainThread] localstack.deprecations    : DEFAULT_REGION is deprecated (since 0.12.7) and will be removed in upcoming releases of LocalStack! LocalStack now has full multi-region support. This option has no effect. Please remove it from your configuration.
+graphnode-test-localstack  | + export AWS_ACCESS_KEY_ID=test
+graphnode-test-localstack  | + AWS_ACCESS_KEY_ID=test
+graphnode-test-localstack  | + export AWS_SECRET_ACCESS_KEY=test
+graphnode-test-localstack  | + AWS_SECRET_ACCESS_KEY=test
+graphnode-test-localstack  | + export AWS_DEFAULT_REGION=ap-northeast-2
+graphnode-test-localstack  | + AWS_DEFAULT_REGION=ap-northeast-2
+graphnode-test-localstack  | + echo '----------- Initializing LocalStack Resources -----------'
+graphnode-test-localstack  | + tee /tmp/localstack_init.log
+graphnode-test-localstack  | ----------- Initializing LocalStack Resources -----------
+graphnode-test-localstack  | + awslocal s3 mb s3://taco5-graphnode-graphdata-s3 --region ap-northeast-2
+graphnode-test-localstack  | 2026-05-21T12:01:43.085  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.CreateBucket => 200
+graphnode-test-localstack  | make_bucket: taco5-graphnode-graphdata-s3
+graphnode-test-localstack  | + awslocal s3 mb s3://taco5-graphnode-filedata-chat-and-note-s3 --region ap-northeast-2
+graphnode-test-localstack  | 2026-05-21T12:01:43.275  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.CreateBucket => 200
+graphnode-test-localstack  | make_bucket: taco5-graphnode-filedata-chat-and-note-s3
+graphnode-test-localstack  | + awslocal sqs create-queue --queue-name taco-graphnode-request-graph-sqs --region ap-northeast-2
+graphnode-test-localstack  | 2026-05-21T12:01:43.535  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.CreateQueue => 200
+graphnode-test-localstack  | {
+graphnode-test-localstack  |     "QueueUrl": "http://sqs.ap-northeast-2.localhost.localstack.cloud:4566/000000000000/taco-graphnode-request-graph-sqs"
+graphnode-test-localstack  | }
+graphnode-test-localstack  | + awslocal sqs create-queue --queue-name taco-graphnode-response-graph-sqs --region ap-northeast-2
+graphnode-test-localstack  | 2026-05-21T12:01:43.723  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.CreateQueue => 200
+graphnode-test-localstack  | {
+graphnode-test-localstack  |     "QueueUrl": "http://sqs.ap-northeast-2.localhost.localstack.cloud:4566/000000000000/taco-graphnode-response-graph-sqs"
+graphnode-test-localstack  | }
+graphnode-test-localstack  | + echo '----------- LocalStack Resources Created -----------'
+graphnode-test-localstack  | + tee -a /tmp/localstack_init.log
+graphnode-test-localstack  | ----------- LocalStack Resources Created -----------
+graphnode-test-localstack  | + awslocal s3 ls --region ap-northeast-2
+graphnode-test-localstack  | + tee -a /tmp/localstack_init.log
+graphnode-test-localstack  | 2026-05-21T12:01:43.897  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.ListBuckets => 200
+graphnode-test-localstack  | 2026-05-21 12:01:43 taco5-graphnode-graphdata-s3
+graphnode-test-localstack  | 2026-05-21 12:01:43 taco5-graphnode-filedata-chat-and-note-s3
+graphnode-test-localstack  | + awslocal sqs list-queues --region ap-northeast-2
+graphnode-test-localstack  | + tee -a /tmp/localstack_init.log
+graphnode-test-localstack  | 2026-05-21T12:01:44.074  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ListQueues => 200
+graphnode-test-localstack  | {
+graphnode-test-localstack  |     "QueueUrls": [
+graphnode-test-localstack  |         "http://sqs.ap-northeast-2.localhost.localstack.cloud:4566/000000000000/taco-graphnode-request-graph-sqs",
+graphnode-test-localstack  |         "http://sqs.ap-northeast-2.localhost.localstack.cloud:4566/000000000000/taco-graphnode-response-graph-sqs"
+graphnode-test-localstack  |     ]
+graphnode-test-localstack  | }
+graphnode-test-localstack  | Ready.
+graphnode-test-localstack  | 2026-05-21T12:02:19.663  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:02:39.680  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:02:48.401  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:02:48.408  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:02:48.413  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:02:51.202  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:02:51.210  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:02:51.218  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:02:51.681  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:02:51.686  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:02:51.689  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-21T12:02:51.692  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:02:51.694  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-21T12:02:51.696  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:02:51.698  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-21T12:02:51.699  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:02:51.705  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:02:51.726  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.ListObjectsV2 => 200
+graphnode-test-localstack  | 2026-05-21T12:02:51.737  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-21T12:02:59.692  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:19.704  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:31.643  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:31.653  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.ListObjectsV2 => 200
+graphnode-test-localstack  | 2026-05-21T12:03:31.656  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-21T12:03:31.658  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-21T12:03:31.660  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-21T12:03:31.661  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-21T12:03:31.663  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-21T12:03:31.664  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-21T12:03:31.666  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-21T12:03:31.667  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-21T12:03:31.668  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-21T12:03:31.670  INFO --- [et.reactor-2] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-21T12:03:39.719  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:41.645  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.562  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.563  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.583  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.617  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.617  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.624  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.641  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.641  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.648  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.662  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.662  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.664  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.669  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.674  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.679  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.745  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.745  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.747  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.748  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.749  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.750  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.754  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.761  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.765  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:03:45.765  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:04:01.679  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-21T12:04:05.775  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:04:25.787  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:04:31.701  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-21T12:04:45.804  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:05:01.714  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ChangeMessageVisibility => 200
+graphnode-test-localstack  | 2026-05-21T12:05:05.811  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:05:19.621  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:05:19.622  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:05:19.624  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:05:20.011  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:05:22.422  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:05:22.431  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:05:22.441  INFO --- [et.reactor-1] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:05:22.494  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:05:22.495  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:05:32.505  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:05:34.352  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:05:34.352  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:05:34.355  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.DeleteMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:05:44.531  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:05:54.374  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:05:54.540  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:06:04.525  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:06:04.550  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:06:14.558  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:06:24.541  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:06:24.570  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:06:34.572  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:06:35.527  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:06:44.577  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:06:54.587  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:06:55.537  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:07:04.601  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:07:06.525  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:07:14.612  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:07:24.620  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:07:26.542  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:07:34.634  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:07:36.527  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:07:44.648  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:07:54.656  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:07:56.544  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:08:04.666  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:08:07.523  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:08:14.678  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:08:24.687  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:08:27.538  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:08:34.696  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:08:37.524  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:08:44.701  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:08:54.713  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:08:57.539  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:09:04.722  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:09:08.526  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:09:14.726  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:09:24.732  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:09:28.547  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:09:34.746  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:09:39.522  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:09:44.760  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:09:54.773  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:09:59.534  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:10:04.781  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:10:09.523  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:10:14.788  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:10:24.802  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:10:29.534  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:10:34.812  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:10:39.525  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:10:44.820  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:10:54.829  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:10:59.542  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:11:04.841  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:11:09.527  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:11:14.845  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:11:24.852  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:11:29.546  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:11:34.863  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:11:40.522  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:11:44.872  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:11:54.876  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:12:00.531  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:12:04.882  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:12:11.526  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:12:14.894  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:12:24.907  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:12:31.540  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:12:34.922  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:12:42.523  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:12:44.933  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:12:54.936  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:13:02.543  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:13:04.947  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:13:12.528  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:13:14.959  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:13:24.967  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:13:32.547  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:13:34.979  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:13:43.528  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:13:44.989  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:13:54.996  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:14:03.542  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:14:05.000  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:14:14.523  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:14:15.005  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:14:25.013  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:14:34.514  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:14:35.001  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:14:45.010  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:14:45.524  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:14:55.014  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:15:05.021  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:15:05.534  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:15:15.029  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:15:15.525  INFO --- [et.reactor-1] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.194  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.204  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.216  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.299  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.303  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.309  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.314  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.319  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.323  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.326  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.334  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.PutObject => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.338  INFO --- [et.reactor-0] localstack.request.aws     : AWS sqs.SendMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.338  INFO --- [et.reactor-2] localstack.request.aws     : AWS sqs.ReceiveMessage => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.343  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.ListObjectsV2 => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.346  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.348  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.ListObjectsV2 => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.348  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.351  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.352  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.353  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.354  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.356  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.358  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.359  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.GetObject => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.361  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.HeadObject => 200
+graphnode-test-localstack  | 2026-05-21T12:15:23.363  INFO --- [et.reactor-0] localstack.request.aws     : AWS s3.GetObject => 200

@@ -1,0 +1,228 @@
+graphnode-ai-1  | [2026-05-21 12:02:45] [jieba] Building prefix dict from the default dictionary ...
+graphnode-ai-1  | Building prefix dict from the default dictionary ...
+graphnode-ai-1  | [2026-05-21 12:02:45] [jieba] Dumping model to file cache /tmp/jieba.cache
+graphnode-ai-1  | Dumping model to file cache /tmp/jieba.cache
+graphnode-ai-1  | Loading model cost 0.236 seconds.
+graphnode-ai-1  | Prefix dict has been built successfully.
+graphnode-ai-1  | [2026-05-21 12:02:45] [jieba] Loading model cost 0.236 seconds.
+graphnode-ai-1  | [2026-05-21 12:02:45] [jieba] Prefix dict has been built successfully.
+graphnode-ai-1  | [2026-05-21 12:02:45.586776] jieba dictionary preloaded.
+graphnode-ai-1  | [2026-05-21 12:02:45] [sentence_transformers.SentenceTransformer] Load pretrained SentenceTransformer: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+graphnode-ai-1  | [2026-05-21 12:03:31] [chromadb.telemetry.product.posthog] Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+graphnode-ai-1  | [2026-05-21 12:03:31] [httpx] HTTP Request: GET http://chroma:8000/api/v2/auth/identity "HTTP/1.1 200 OK"
+graphnode-ai-1  | [2026-05-21 12:03:31] [chromadb.telemetry.product.posthog] Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+graphnode-ai-1  | [2026-05-21 12:03:31] [httpx] HTTP Request: GET http://chroma:8000/api/v2/tenants/default_tenant "HTTP/1.1 200 OK"
+graphnode-ai-1  | [2026-05-21 12:03:31] [httpx] HTTP Request: GET http://chroma:8000/api/v2/tenants/default_tenant/databases/default_database "HTTP/1.1 200 OK"
+graphnode-ai-1  | [2026-05-21 12:03:31] [httpx] HTTP Request: POST http://chroma:8000/api/v2/tenants/default_tenant/databases/default_database/collections "HTTP/1.1 200 OK"
+graphnode-ai-1  | [2026-05-21 12:03:31] [httpx] HTTP Request: POST http://chroma:8000/api/v2/tenants/default_tenant/databases/default_database/collections "HTTP/1.1 200 OK"
+graphnode-ai-1  | [2026-05-21 12:03:31] [infra.repositories.vectordb.macro_node_store] MacroNodeStore initialized with collection 'macro_node_paraphrase_multilingual_minilm_l12_v2'
+graphnode-ai-1  | [Microscope] provider=openai  model=gpt-5-mini
+graphnode-ai-1  | [2026-05-21 12:03:31.640354] Worker started (concurrency=1). Polling Request Queue: http://localstack:4566/000000000000/taco-graphnode-request-graph-sqs...
+graphnode-ai-1  | [2026-05-21 12:03:31.643664] [poll] 1 message(s) received  active=0/1
+graphnode-ai-1  | [2026-05-21 12:03:31.643690] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] dispatching taskType=GRAPH_GENERATION_REQUEST
+graphnode-ai-1  | [2026-05-21 12:03:31.644197] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] Downloading prefix from s3://taco5-graphnode-graphdata-s3/graph-generation/task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G/
+graphnode-ai-1  | [2026-05-21 12:03:31.654518] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G]   -> graph-generation/task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G/files/uf-e2e-docx_e2e-macro-sample.docx
+graphnode-ai-1  | [2026-05-21 12:03:31.659024] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G]   -> graph-generation/task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G/files/uf-e2e-pdf_e2e-macro-sample.pdf
+graphnode-ai-1  | [2026-05-21 12:03:31.662218] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G]   -> graph-generation/task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G/files/uf-e2e-pptx_e2e-macro-sample.pptx
+graphnode-ai-1  | [2026-05-21 12:03:31.665204] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G]   -> graph-generation/task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G/input.json
+graphnode-ai-1  | [2026-05-21 12:03:31.667965] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G]   -> graph-generation/task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G/notes.json
+graphnode-ai-1  | [2026-05-21 12:03:31.670927] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] Running command: python -u /app/macro/src/run_pipeline.py --input /app/input_data/task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G/bundle --config /app/macro/config.yaml --output-dir /app/output_data/macro/task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G --provider openai --model gpt-5-mini --skip-indexing --verbose --no-llm-edges --min-clusters 3 --max-clusters 8 --language en
+graphnode-ai-1  | [2026-05-21 12:03:34.063694] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] ============================================================
+graphnode-ai-1  | [2026-05-21 12:03:34.063728] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G]  Starting Conversation Graph Building Pipeline
+graphnode-ai-1  | [2026-05-21 12:03:34.063733] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] ============================================================
+graphnode-ai-1  | [2026-05-21 12:03:34.063736] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] Input: /app/input_data/task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G/bundle
+graphnode-ai-1  | [2026-05-21 12:03:34.063741] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] Config: /app/macro/config.yaml
+graphnode-ai-1  | [2026-05-21 12:03:34.063748] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] Output directory: /app/output_data/macro/task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G
+graphnode-ai-1  | [2026-05-21 12:03:34.063751] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] ============================================================
+graphnode-ai-1  | [2026-05-21 12:03:34.063754] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] 
+graphnode-ai-1  | [2026-05-21 12:03:34.063757] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] ============================================================
+graphnode-ai-1  | [2026-05-21 12:03:34.063760] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G]  Running Step 1: Keyword & Embedding Extraction
+graphnode-ai-1  | [2026-05-21 12:03:34.063762] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] ============================================================
+graphnode-ai-1  | [2026-05-21 12:03:34.063765] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] 
+graphnode-ai-1  | [2026-05-21 12:03:45.563533] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] Result sent to SQS Result Queue (GRAPH_GENERATION_PROGRESS).
+graphnode-ai-1  | [2026-05-21 12:03:45.563585] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] STEP_START:embedding
+graphnode-ai-1  | [2026-05-21 12:03:45.618323] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] Result sent to SQS Result Queue (GRAPH_GENERATION_PROGRESS).
+graphnode-ai-1  | [2026-05-21 12:03:45.618346] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] Embedding:   0%|          | 0/3 [00:00<?, ?it/s]PROGRESS:embedding:33:1:3:0
+graphnode-ai-1  | [2026-05-21 12:03:45.642164] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] Result sent to SQS Result Queue (GRAPH_GENERATION_PROGRESS).
+graphnode-ai-1  | [2026-05-21 12:03:45.642178] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] PROGRESS:embedding:66:2:3:0
+graphnode-ai-1  | [2026-05-21 12:03:45.663022] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] Result sent to SQS Result Queue (GRAPH_GENERATION_PROGRESS).
+graphnode-ai-1  | [2026-05-21 12:03:45.663039] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] PROGRESS:embedding:100:3:3:0
+graphnode-ai-1  | [2026-05-21 12:03:45.663078] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] Embedding: 100%|██████████| 3/3 [00:00<00:00, 28.84it/s]Embedding: 100%|██████████| 3/3 [00:00<00:00, 28.82it/s]
+graphnode-ai-1  | [2026-05-21 12:03:45.663109] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G]   ⏱️  Embedding generation: 0.1s
+graphnode-ai-1  | [2026-05-21 12:03:45.663118] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G]       └─ Generated 3 embeddings (384-dimensional vectors)
+graphnode-ai-1  | [2026-05-21 12:03:45.663122] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G]       └─ Encoded 3 chunk segments before mean pooling (avg 1.00 per conversation)
+graphnode-ai-1  | [2026-05-21 12:03:45.663126] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] STEP_DONE:embedding
+graphnode-ai-1  | [2026-05-21 12:03:45.664395] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] Result sent to SQS Result Queue (GRAPH_GENERATION_PROGRESS).
+graphnode-ai-1  | [2026-05-21 12:03:45.664410] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] STEP_START:keywords
+graphnode-ai-1  | [2026-05-21 12:03:45.746245] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] Result sent to SQS Result Queue (GRAPH_GENERATION_PROGRESS).
+graphnode-ai-1  | [2026-05-21 12:03:45.746258] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] Keywords:   0%|          | 0/3 [00:00<?, ?it/s]PROGRESS:keywords:33:1:3:0
+graphnode-ai-1  | [2026-05-21 12:03:45.747348] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] Result sent to SQS Result Queue (GRAPH_GENERATION_PROGRESS).
+graphnode-ai-1  | [2026-05-21 12:03:45.747358] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] PROGRESS:keywords:66:2:3:0
+graphnode-ai-1  | [2026-05-21 12:03:45.748505] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] Result sent to SQS Result Queue (GRAPH_GENERATION_PROGRESS).
+graphnode-ai-1  | [2026-05-21 12:03:45.748517] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] PROGRESS:keywords:100:3:3:0
+graphnode-ai-1  | [2026-05-21 12:03:45.748523] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] Keywords: 100%|██████████| 3/3 [00:00<00:00, 35.17it/s]
+graphnode-ai-1  | [2026-05-21 12:03:45.748527] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G]   ⏱️  Keyword extraction: 0.1s
+graphnode-ai-1  | [2026-05-21 12:03:45.748529] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] STEP_DONE:keywords
+graphnode-ai-1  | [2026-05-21 12:03:45.748532] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] 
+graphnode-ai-1  | [2026-05-21 12:03:45.748534] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] ⏱️  Feature extraction completed in 11.5s
+graphnode-ai-1  | [2026-05-21 12:03:45.748538] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G]     └─ Embedding: 0.1s, Keyword: 0.1s
+graphnode-ai-1  | [2026-05-21 12:03:45.748545] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G]     └─ Embeddings count: 3 (384 dims)
+graphnode-ai-1  | [2026-05-21 12:03:45.748548] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G]     └─ Chunk segments encoded before pooling: 3 (avg 1.00 per conversation)
+graphnode-ai-1  | [2026-05-21 12:03:45.748551] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] Feature data extracted for 3 conversations. Output saved to /app/output_data/macro/task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G/features.json.
+graphnode-ai-1  | [2026-05-21 12:03:45.748581] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G]  Step 1 completed in 11.5s
+graphnode-ai-1  | [2026-05-21 12:03:45.748588] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G]   └─ Embedding: 0.1s, Keyword: 0.1s
+graphnode-ai-1  | [2026-05-21 12:03:45.748591] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] 
+graphnode-ai-1  | [2026-05-21 12:03:45.748594] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] 
+graphnode-ai-1  | [2026-05-21 12:03:45.748596] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] ============================================================
+graphnode-ai-1  | [2026-05-21 12:03:45.748599] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G]  Running Step 2: LLM-based Clustering
+graphnode-ai-1  | [2026-05-21 12:03:45.748602] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] ============================================================
+graphnode-ai-1  | [2026-05-21 12:03:45.748605] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] 
+graphnode-ai-1  | [2026-05-21 12:03:45.749689] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] Result sent to SQS Result Queue (GRAPH_GENERATION_PROGRESS).
+graphnode-ai-1  | [2026-05-21 12:03:45.749698] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] STEP_START:clustering
+graphnode-ai-1  | [2026-05-21 12:03:45.749703] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] 🚀 Starting LLM-based conversation clustering
+graphnode-ai-1  | [2026-05-21 12:03:45.749706] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G]   Provider: openai
+graphnode-ai-1  | [2026-05-21 12:03:45.749709] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G]   Target cluster range: 3-8
+graphnode-ai-1  | [2026-05-21 12:03:45.749712] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] 📂 Loaded 3 conversations from /app/output_data/macro/task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G/features.json
+graphnode-ai-1  | [2026-05-21 12:03:45.834754] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G]   Model: gpt-5-mini
+graphnode-ai-1  | [2026-05-21 12:05:15.780880] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] 
+graphnode-ai-1  | [2026-05-21 12:05:15.780918] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] 📊 Phase 1: Letting LLM choose between 3-8 topic clusters...
+graphnode-ai-1  | [2026-05-21 12:05:15.780931] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G]   Sending 3 conversations to LLM...
+graphnode-ai-1  | [2026-05-21 12:05:18.876137] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] ❌ Error calling OpenAI LLM: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}
+graphnode-ai-1  | [2026-05-21 12:05:18.876468] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR] Traceback (most recent call last):
+graphnode-ai-1  | [2026-05-21 12:05:18.876482] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]   File "/app/macro/src/run_pipeline.py", line 674, in <module>
+graphnode-ai-1  | [2026-05-21 12:05:18.876619] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]     main()
+graphnode-ai-1  | [2026-05-21 12:05:18.876639] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]   File "/app/macro/src/run_pipeline.py", line 402, in main
+graphnode-ai-1  | [2026-05-21 12:05:18.876705] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]     _cluster_mod.main(cluster_argv)
+graphnode-ai-1  | [2026-05-21 12:05:18.876722] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]   File "/app/macro/src/cluster_with_llm.py", line 917, in main
+graphnode-ai-1  | [2026-05-21 12:05:18.876877] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]     clusters = client.generate_clusters(
+graphnode-ai-1  | [2026-05-21 12:05:18.876885] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]                ^^^^^^^^^^^^^^^^^^^^^^^^^
+graphnode-ai-1  | [2026-05-21 12:05:18.876895] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]   File "/app/macro/src/cluster_with_llm.py", line 447, in generate_clusters
+graphnode-ai-1  | [2026-05-21 12:05:18.876991] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]     response = self._call_llm_with_token_tracking(
+graphnode-ai-1  | [2026-05-21 12:05:18.877004] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+graphnode-ai-1  | [2026-05-21 12:05:18.877006] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]   File "/app/macro/src/cluster_with_llm.py", line 97, in _call_llm_with_token_tracking
+graphnode-ai-1  | [2026-05-21 12:05:18.877069] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]     response = self.llm_client.call_llm(
+graphnode-ai-1  | [2026-05-21 12:05:18.877081] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]                ^^^^^^^^^^^^^^^^^^^^^^^^^
+graphnode-ai-1  | [2026-05-21 12:05:18.877084] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]   File "/app/macro/src/util/llm_clients.py", line 214, in call_llm
+graphnode-ai-1  | [2026-05-21 12:05:18.877107] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]     response_text = self._call_responses_api(
+graphnode-ai-1  | [2026-05-21 12:05:18.877115] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]                     ^^^^^^^^^^^^^^^^^^^^^^^^^
+graphnode-ai-1  | [2026-05-21 12:05:18.877118] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]   File "/app/macro/src/util/llm_clients.py", line 301, in _call_responses_api
+graphnode-ai-1  | [2026-05-21 12:05:18.877154] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]     response = self.client.responses.create(**request_kwargs)
+graphnode-ai-1  | [2026-05-21 12:05:18.877177] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+graphnode-ai-1  | [2026-05-21 12:05:18.877184] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]   File "/usr/local/lib/python3.11/site-packages/openai/resources/responses/responses.py", line 866, in create
+graphnode-ai-1  | [2026-05-21 12:05:18.877856] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]     return self._post(
+graphnode-ai-1  | [2026-05-21 12:05:18.877864] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]            ^^^^^^^^^^^
+graphnode-ai-1  | [2026-05-21 12:05:18.877866] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]   File "/usr/local/lib/python3.11/site-packages/openai/_base_client.py", line 1259, in post
+graphnode-ai-1  | [2026-05-21 12:05:18.878412] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]     return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+graphnode-ai-1  | [2026-05-21 12:05:18.878434] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+graphnode-ai-1  | [2026-05-21 12:05:18.878443] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]   File "/usr/local/lib/python3.11/site-packages/openai/_base_client.py", line 1047, in request
+graphnode-ai-1  | [2026-05-21 12:05:18.878563] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR]     raise self._make_status_error_from_response(err.response) from None
+graphnode-ai-1  | [2026-05-21 12:05:18.878582] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G:ERR] openai.AuthenticationError: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}
+graphnode-ai-1  | [2026-05-21 12:05:19.618509] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] Error processing message: Pipeline process failed with return code 1
+graphnode-ai-1  | Traceback (most recent call last):
+graphnode-ai-1  |   File "/app/server/worker.py", line 958, in _dispatch_and_delete
+graphnode-ai-1  |     await _dispatch(task_id, envelope)
+graphnode-ai-1  |   File "/app/server/worker.py", line 875, in _dispatch
+graphnode-ai-1  |     result = await handle_graph_generation(task_id, envelope.payload)
+graphnode-ai-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+graphnode-ai-1  |   File "/app/server/worker.py", line 395, in handle_graph_generation
+graphnode-ai-1  |     await run_subprocess_pipeline(cmd, task_id, MACRO_DIR, env=pipeline_env, user_id=req.userId, include_summary=bool(req.includeSummary))
+graphnode-ai-1  |   File "/app/server/worker.py", line 243, in run_subprocess_pipeline
+graphnode-ai-1  |     raise RuntimeError(f"Pipeline process failed with return code {returncode}")
+graphnode-ai-1  | RuntimeError: Pipeline process failed with return code 1
+graphnode-ai-1  | [2026-05-21 12:05:19.622894] [task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G] Result sent to SQS Result Queue (GRAPH_GENERATION_RESULT).
+graphnode-ai-1  | [2026-05-21 12:05:22.496007] [poll] 1 message(s) received  active=0/1
+graphnode-ai-1  | [2026-05-21 12:05:22.496113] [task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ] dispatching taskType=MICROSCOPE_INGEST_FROM_NODE_REQUEST
+graphnode-ai-1  | [2026-05-21 12:05:22] [microscope.call] Schema 'test_schema' not found, falling back to default
+graphnode-ai-1  | [2026-05-21 12:05:22] [microscope.call] Using schema: /app/microscope/schema/ontology_schema_general.json
+graphnode-ai-1  | [2026-05-21 12:05:22] [microscope.call] Processing document: /app/microscope/tmp/note-e2e-123_c7443a6a.md
+graphnode-ai-1  | /usr/local/lib/python3.11/site-packages/nltk/downloader.py:980: RuntimeWarning: Security Violation [pathsec.urlopen]: SSRF attempt to restricted IP 198.18.0.40
+graphnode-ai-1  |   ElementTree.parse(urlopen(self._url)).getroot()
+graphnode-ai-1  | /usr/local/lib/python3.11/site-packages/nltk/downloader.py:718: RuntimeWarning: Security Violation [pathsec.urlopen]: SSRF attempt to restricted IP 198.18.0.40
+graphnode-ai-1  |   infile = urlopen(info.url)
+graphnode-ai-1  | [2026-05-21 12:05:28] [microscope.call] Loaded 1 document(s)
+graphnode-ai-1  | [2026-05-21 12:05:28] [microscope.call] Created 1 chunks
+graphnode-ai-1  | [2026-05-21 12:05:28] [GraphGenerator] Extracting graph from chunks...
+graphnode-ai-1  | [2026-05-21 12:05:28] [GraphGenerator] Encoding chunk content...
+graphnode-ai-1  | [2026-05-21 12:05:28] [GraphGenerator] LLM에 요청하는 배치 수: 1
+graphnode-ai-1  | [2026-05-21 12:05:28] [GraphGenerator] LLM에 요청중: [1/1]
+graphnode-ai-1  | [2026-05-21 12:05:34] [httpx] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+graphnode-ai-1  | [2026-05-21 12:05:34.338381] [task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ] Error processing message: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}
+graphnode-ai-1  | Traceback (most recent call last):
+graphnode-ai-1  |   File "/app/server/worker.py", line 958, in _dispatch_and_delete
+graphnode-ai-1  |     await _dispatch(task_id, envelope)
+graphnode-ai-1  |   File "/app/server/worker.py", line 895, in _dispatch
+graphnode-ai-1  |     result = await handle_microscope_ingest_from_node(task_id, envelope.payload)
+graphnode-ai-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+graphnode-ai-1  |   File "/app/server/worker.py", line 713, in handle_microscope_ingest_from_node
+graphnode-ai-1  |     result = await asyncio.get_event_loop().run_in_executor(
+graphnode-ai-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+graphnode-ai-1  |   File "/usr/local/lib/python3.11/concurrent/futures/thread.py", line 58, in run
+graphnode-ai-1  |     result = self.fn(*self.args, **self.kwargs)
+graphnode-ai-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+graphnode-ai-1  |   File "/app/server/worker.py", line 714, in <lambda>
+graphnode-ai-1  |     None, lambda: microscope_call(**_call_kwargs)
+graphnode-ai-1  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+graphnode-ai-1  |   File "/app/microscope/call.py", line 152, in call
+graphnode-ai-1  |     graph_generator.extract_entity_relation_from_chunks(chunks, True)
+graphnode-ai-1  |   File "/app/microscope/graph_generation/generator.py", line 167, in extract_entity_relation_from_chunks
+graphnode-ai-1  |     raw = self._invoke_llm(schema_extraction_system_prompt, user_prompt)
+graphnode-ai-1  |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+graphnode-ai-1  |   File "/app/microscope/graph_generation/generator.py", line 110, in _invoke_llm
+graphnode-ai-1  |     return self.api_provider.chat_completion_text(
+graphnode-ai-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+graphnode-ai-1  |   File "/app/shared/api_provider.py", line 165, in chat_completion_text
+graphnode-ai-1  |     response = self.client.bind(**bind_kwargs).invoke(lc_messages)
+graphnode-ai-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+graphnode-ai-1  |   File "/usr/local/lib/python3.11/site-packages/langchain_core/runnables/base.py", line 5557, in invoke
+graphnode-ai-1  |     return self.bound.invoke(
+graphnode-ai-1  |            ^^^^^^^^^^^^^^^^^^
+graphnode-ai-1  |   File "/usr/local/lib/python3.11/site-packages/langchain_core/language_models/chat_models.py", line 402, in invoke
+graphnode-ai-1  |     self.generate_prompt(
+graphnode-ai-1  |   File "/usr/local/lib/python3.11/site-packages/langchain_core/language_models/chat_models.py", line 1121, in generate_prompt
+graphnode-ai-1  |     return self.generate(prompt_messages, stop=stop, callbacks=callbacks, **kwargs)
+graphnode-ai-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+graphnode-ai-1  |   File "/usr/local/lib/python3.11/site-packages/langchain_core/language_models/chat_models.py", line 931, in generate
+graphnode-ai-1  |     self._generate_with_cache(
+graphnode-ai-1  |   File "/usr/local/lib/python3.11/site-packages/langchain_core/language_models/chat_models.py", line 1233, in _generate_with_cache
+graphnode-ai-1  |     result = self._generate(
+graphnode-ai-1  |              ^^^^^^^^^^^^^^^
+graphnode-ai-1  |   File "/usr/local/lib/python3.11/site-packages/langchain_openai/chat_models/base.py", line 1333, in _generate
+graphnode-ai-1  |     raise e
+graphnode-ai-1  |   File "/usr/local/lib/python3.11/site-packages/langchain_openai/chat_models/base.py", line 1328, in _generate
+graphnode-ai-1  |     raw_response = self.client.with_raw_response.create(**payload)
+graphnode-ai-1  |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+graphnode-ai-1  |   File "/usr/local/lib/python3.11/site-packages/openai/_legacy_response.py", line 364, in wrapped
+graphnode-ai-1  |     return cast(LegacyAPIResponse[R], func(*args, **kwargs))
+graphnode-ai-1  |                                       ^^^^^^^^^^^^^^^^^^^^^
+graphnode-ai-1  |   File "/usr/local/lib/python3.11/site-packages/openai/_utils/_utils.py", line 286, in wrapper
+graphnode-ai-1  |     return func(*args, **kwargs)
+graphnode-ai-1  |            ^^^^^^^^^^^^^^^^^^^^^
+graphnode-ai-1  |   File "/usr/local/lib/python3.11/site-packages/openai/resources/chat/completions/completions.py", line 1192, in create
+graphnode-ai-1  |     return self._post(
+graphnode-ai-1  |            ^^^^^^^^^^^
+graphnode-ai-1  |   File "/usr/local/lib/python3.11/site-packages/openai/_base_client.py", line 1259, in post
+graphnode-ai-1  |     return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+graphnode-ai-1  |                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+graphnode-ai-1  |   File "/usr/local/lib/python3.11/site-packages/openai/_base_client.py", line 1047, in request
+graphnode-ai-1  |     raise self._make_status_error_from_response(err.response) from None
+graphnode-ai-1  | openai.AuthenticationError: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}
+graphnode-ai-1  | [2026-05-21 12:05:34.354018] [task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ] Result sent to SQS Result Queue (MICROSCOPE_INGEST_FROM_NODE_RESULT).
+graphnode-ai-1  | [2026-05-21 12:05:54.543782] [idle] polling... active=0/1
+graphnode-ai-1  | [2026-05-21 12:06:54.590895] [idle] polling... active=0/1
+graphnode-ai-1  | [2026-05-21 12:07:54.659971] [idle] polling... active=0/1
+graphnode-ai-1  | [2026-05-21 12:08:54.716913] [idle] polling... active=0/1
+graphnode-ai-1  | [2026-05-21 12:09:54.776377] [idle] polling... active=0/1
+graphnode-ai-1  | [2026-05-21 12:10:54.831862] [idle] polling... active=0/1
+graphnode-ai-1  | [2026-05-21 12:11:54.877934] [idle] polling... active=0/1
+graphnode-ai-1  | [2026-05-21 12:12:54.939327] [idle] polling... active=0/1
+graphnode-ai-1  | [2026-05-21 12:13:54.998582] [idle] polling... active=0/1
+graphnode-ai-1  | [2026-05-21 12:14:55.017045] [idle] polling... active=0/1
+graphnode-ai-1  | [2026-05-21 12:15:23.339768] [poll] 1 message(s) received  active=0/1
+graphnode-ai-1  | [2026-05-21 12:15:23.339885] [task_user-12345_01KS57CF3B9SD0MQ7K3VN27JRA] dispatching taskType=GRAPH_GENERATION_REQUEST
+graphnode-ai-1  | [2026-05-21 12:15:23.340791] [task_user-12345_01KS57CF3B9SD0MQ7K3VN27JRA] Downloading prefix from s3://taco5-graphnode-graphdata-s3/graph-generation/task_user-12345_01KS57CF3B9SD0MQ7K3VN27JRA/
+graphnode-ai-1  | [2026-05-21 12:15:23.344748] [task_user-12345_01KS57CF3B9SD0MQ7K3VN27JRA]   -> graph-generation/task_user-12345_01KS57CF3B9SD0MQ7K3VN27JRA/files/uf-e2e-docx_e2e-macro-sample.docx
+graphnode-ai-1  | [2026-05-21 12:15:23.349846] [task_user-12345_01KS57CF3B9SD0MQ7K3VN27JRA]   -> graph-generation/task_user-12345_01KS57CF3B9SD0MQ7K3VN27JRA/files/uf-e2e-pdf_e2e-macro-sample.pdf
+graphnode-ai-1  | [2026-05-21 12:15:23.353478] [task_user-12345_01KS57CF3B9SD0MQ7K3VN27JRA]   -> graph-generation/task_user-12345_01KS57CF3B9SD0MQ7K3VN27JRA/files/uf-e2e-pptx_e2e-macro-sample.pptx
+graphnode-ai-1  | [2026-05-21 12:15:23.356951] [task_user-12345_01KS57CF3B9SD0MQ7K3VN27JRA]   -> graph-generation/task_user-12345_01KS57CF3B9SD0MQ7K3VN27JRA/input.json
+graphnode-ai-1  | [2026-05-21 12:15:23.360372] [task_user-12345_01KS57CF3B9SD0MQ7K3VN27JRA]   -> graph-generation/task_user-12345_01KS57CF3B9SD0MQ7K3VN27JRA/notes.json
+graphnode-ai-1  | [2026-05-21 12:15:23.364097] [task_user-12345_01KS57CF3B9SD0MQ7K3VN27JRA] Running command: python -u /app/macro/src/run_pipeline.py --input /app/input_data/task_user-12345_01KS57CF3B9SD0MQ7K3VN27JRA/bundle --config /app/macro/config.yaml --output-dir /app/output_data/macro/task_user-12345_01KS57CF3B9SD0MQ7K3VN27JRA --provider openai --model gpt-5-mini --skip-indexing --verbose --no-llm-edges --min-clusters 3 --max-clusters 8 --language en

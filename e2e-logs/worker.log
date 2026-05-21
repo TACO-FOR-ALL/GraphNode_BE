@@ -1,0 +1,1576 @@
+graphnode-worker-1  | Invalid Sentry Dsn: dummy
+graphnode-worker-1  | Worker process starting...
+graphnode-worker-1  | prisma:info Starting a postgresql pool with 29 connections.
+graphnode-worker-1  | [12:01:58.298] [33mWARN[39m (1): [36mFailed to initialize Firebase Admin (check credentials)[39m 
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "FirebaseAppError",
+graphnode-worker-1  |       "message": "Failed to parse private key: Error: Too few bytes to read ASN.1 value.",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Failed to parse private key: Error: Too few bytes to read ASN.1 value.
+graphnode-worker-1  |               at new ServiceAccount (/app/node_modules/firebase-admin/lib/app/credential-internal.js:182:19)
+graphnode-worker-1  |               at new ServiceAccountCredential (/app/node_modules/firebase-admin/lib/app/credential-internal.js:118:15)
+graphnode-worker-1  |               at Object.cert (/app/node_modules/firebase-admin/lib/app/credential-factory.js:105:54)
+graphnode-worker-1  |               at Object.<anonymous> (/app/dist/core/services/NotificationService.js:52:46)
+graphnode-worker-1  |               at Module._compile (node:internal/modules/cjs/loader:1521:14)
+graphnode-worker-1  |               at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+graphnode-worker-1  |               at Module.load (node:internal/modules/cjs/loader:1266:32)
+graphnode-worker-1  |               at Module._load (node:internal/modules/cjs/loader:1091:12)
+graphnode-worker-1  |               at Module.require (node:internal/modules/cjs/loader:1289:19)
+graphnode-worker-1  |               at require (node:internal/modules/helpers:182:18)
+graphnode-worker-1  |               at Object.<anonymous> (/app/dist/bootstrap/container.js:22:31)
+graphnode-worker-1  |               at Module._compile (node:internal/modules/cjs/loader:1521:14)
+graphnode-worker-1  |               at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+graphnode-worker-1  |               at Module.load (node:internal/modules/cjs/loader:1266:32)
+graphnode-worker-1  |               at Module._load (node:internal/modules/cjs/loader:1091:12)
+graphnode-worker-1  |               at Module.require (node:internal/modules/cjs/loader:1289:19)
+graphnode-worker-1  |       "errorInfo": {
+graphnode-worker-1  |         "type": "Object",
+graphnode-worker-1  |         "message": "Failed to parse private key: Error: Too few bytes to read ASN.1 value.",
+graphnode-worker-1  |         "stack":
+graphnode-worker-1  |             
+graphnode-worker-1  |         "code": "app/invalid-credential"
+graphnode-worker-1  |       },
+graphnode-worker-1  |       "codePrefix": "app"
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:01:58.424] [32mINFO[39m (1): [36mStarting Worker Process...[39m
+graphnode-worker-1  | [12:01:58.469] [32mINFO[39m (1): [36mMongoDB connected[39m [90m{"event":"db.connected","system":"mongodb"}[39m
+graphnode-worker-1  | [12:01:58.481] [32mINFO[39m (1): [36mDB indexes ensured[39m [90m{"event":"db.migrations_checked"}[39m
+graphnode-worker-1  | [12:01:58.481] [32mINFO[39m (1): [36mInitializing Redis connections...[39m [90m{"url":"redis://redis:6379"}[39m
+graphnode-worker-1  | [12:01:58.484] [32mINFO[39m (1): [36mRedis Subscriber connected[39m
+graphnode-worker-1  | [12:01:58.484] [32mINFO[39m (1): [36mRedis Publisher connected[39m
+graphnode-worker-1  | [12:01:58.486] [32mINFO[39m (1): [36mRedis infrastructure initialized successfully[39m
+graphnode-worker-1  | [12:01:58.486] [32mINFO[39m (1): [36mInitializing ChromaDB client...[39m
+graphnode-worker-1  | (node:1) Warning: NodeVersionSupportWarning: The AWS SDK for JavaScript (v3)
+graphnode-worker-1  | versions published after the first week of January 2027
+graphnode-worker-1  | will require node >=22. You are running node v20.20.2.
+graphnode-worker-1  | 
+graphnode-worker-1  | To continue receiving updates to AWS services, bug fixes,
+graphnode-worker-1  | and security updates please upgrade to node >=22.
+graphnode-worker-1  | 
+graphnode-worker-1  | More information can be found at: https://a.co/c895JFp
+graphnode-worker-1  | (Use `node --trace-warnings ...` to show where the warning was created)
+graphnode-worker-1  | [12:01:59.555] [32mINFO[39m (1): [36m✅ ChromaDB connected[39m [90m{"heartbeat":1779364919460846300}[39m
+graphnode-worker-1  | [12:01:59.555] [32mINFO[39m (1): [36mInitializing Neo4j driver...[39m [90m{"uri":"bolt://neo4j:7687","user":"neo4j"}[39m
+graphnode-worker-1  | [12:01:59.608] [32mINFO[39m (1): [36mNeo4j server info[39m [90m{"address":"neo4j:7687","agent":"Neo4j/5.26.26","protocolVersion":{"major":5,"minor":8}}[39m
+graphnode-worker-1  | [12:01:59.649] [32mINFO[39m (1): [36mNeo4j Macro Graph schema ensured[39m [90m{"count":15}[39m
+graphnode-worker-1  | [12:01:59.649] [32mINFO[39m (1): [36mNeo4j connected[39m
+graphnode-worker-1  | [12:01:59.652] [32mINFO[39m (1): [36mWorker is running and polling SQS...[39m [90m{"queueUrl":"http://localstack:4566/000000000000/taco-graphnode-response-graph-sqs"}[39m
+graphnode-worker-1  | [12:01:59.654] [32mINFO[39m (1): [36mWorker health check server running on port 3001[39m
+graphnode-worker-1  | [12:03:45.571] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","taskType":"GRAPH_GENERATION_PROGRESS"}[39m
+graphnode-worker-1  | [12:03:45.571] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"sendGraphGenerationProgressUpdated","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":[{"type":"object","keys":["userId","taskId","sourceTimestamp","currentStage","progressPercent","etaSeconds"]}]}[39m
+graphnode-worker-1  | [12:03:45.572] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"sendNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345","GRAPH_GENERATION_PROGRESS_UPDATED",{"type":"object","keys":["taskId","currentStage","progressPercent","etaSeconds"]},{"type":"object","keys":["logicalTimestamp"]}]}[39m
+graphnode-worker-1  | [12:03:45.572] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"getUserChannel","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [12:03:45.572] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"getUserChannel","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":0,"result":"notification:user:user-12345"}[39m
+graphnode-worker-1  | [12:03:45.579] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"RedisEventBusAdapter","method":"publish","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["notification:user:user-12345",{"type":"object","keys":["id","type","payload","timestamp"]}]}[39m
+graphnode-worker-1  | [12:03:45.580] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"RedisEventBusAdapter","method":"publish","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [12:03:45.580] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"sendNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":8,"result":null}[39m
+graphnode-worker-1  | [12:03:45.580] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"sendGraphGenerationProgressUpdated","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":9,"result":null}[39m
+graphnode-worker-1  | [12:03:45.580] [32mINFO[39m (1): [36m그래프 생성 진행률 알림 발행 완료[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","currentStage":"[1단계] 임베딩 생성 시작","progressPercent":0,"etaSeconds":null}[39m
+graphnode-worker-1  | [12:03:45.619] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","taskType":"GRAPH_GENERATION_PROGRESS"}[39m
+graphnode-worker-1  | [12:03:45.619] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"sendGraphGenerationProgressUpdated","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":[{"type":"object","keys":["userId","taskId","sourceTimestamp","currentStage","progressPercent","etaSeconds"]}]}[39m
+graphnode-worker-1  | [12:03:45.619] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"sendNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345","GRAPH_GENERATION_PROGRESS_UPDATED",{"type":"object","keys":["taskId","currentStage","progressPercent","etaSeconds"]},{"type":"object","keys":["logicalTimestamp"]}]}[39m
+graphnode-worker-1  | [12:03:45.619] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"getUserChannel","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [12:03:45.619] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"getUserChannel","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":0,"result":"notification:user:user-12345"}[39m
+graphnode-worker-1  | [12:03:45.622] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"RedisEventBusAdapter","method":"publish","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["notification:user:user-12345",{"type":"object","keys":["id","type","payload","timestamp"]}]}[39m
+graphnode-worker-1  | [12:03:45.622] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"RedisEventBusAdapter","method":"publish","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [12:03:45.622] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"sendNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":3,"result":null}[39m
+graphnode-worker-1  | [12:03:45.622] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"sendGraphGenerationProgressUpdated","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":3,"result":null}[39m
+graphnode-worker-1  | [12:03:45.622] [32mINFO[39m (1): [36m그래프 생성 진행률 알림 발행 완료[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","currentStage":"[1단계] 임베딩 생성 중","progressPercent":33,"etaSeconds":0}[39m
+graphnode-worker-1  | [12:03:45.643] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","taskType":"GRAPH_GENERATION_PROGRESS"}[39m
+graphnode-worker-1  | [12:03:45.643] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"sendGraphGenerationProgressUpdated","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":[{"type":"object","keys":["userId","taskId","sourceTimestamp","currentStage","progressPercent","etaSeconds"]}]}[39m
+graphnode-worker-1  | [12:03:45.643] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"sendNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345","GRAPH_GENERATION_PROGRESS_UPDATED",{"type":"object","keys":["taskId","currentStage","progressPercent","etaSeconds"]},{"type":"object","keys":["logicalTimestamp"]}]}[39m
+graphnode-worker-1  | [12:03:45.643] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"getUserChannel","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [12:03:45.643] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"getUserChannel","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":0,"result":"notification:user:user-12345"}[39m
+graphnode-worker-1  | [12:03:45.645] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"RedisEventBusAdapter","method":"publish","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["notification:user:user-12345",{"type":"object","keys":["id","type","payload","timestamp"]}]}[39m
+graphnode-worker-1  | [12:03:45.645] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"RedisEventBusAdapter","method":"publish","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [12:03:45.645] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"sendNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":2,"result":null}[39m
+graphnode-worker-1  | [12:03:45.645] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"sendGraphGenerationProgressUpdated","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":2,"result":null}[39m
+graphnode-worker-1  | [12:03:45.645] [32mINFO[39m (1): [36m그래프 생성 진행률 알림 발행 완료[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","currentStage":"[1단계] 임베딩 생성 중","progressPercent":66,"etaSeconds":0}[39m
+graphnode-worker-1  | [12:03:45.664] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","taskType":"GRAPH_GENERATION_PROGRESS"}[39m
+graphnode-worker-1  | [12:03:45.664] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"sendGraphGenerationProgressUpdated","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":[{"type":"object","keys":["userId","taskId","sourceTimestamp","currentStage","progressPercent","etaSeconds"]}]}[39m
+graphnode-worker-1  | [12:03:45.664] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"sendNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345","GRAPH_GENERATION_PROGRESS_UPDATED",{"type":"object","keys":["taskId","currentStage","progressPercent","etaSeconds"]},{"type":"object","keys":["logicalTimestamp"]}]}[39m
+graphnode-worker-1  | [12:03:45.664] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"getUserChannel","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [12:03:45.664] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"getUserChannel","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":0,"result":"notification:user:user-12345"}[39m
+graphnode-worker-1  | [12:03:45.666] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"RedisEventBusAdapter","method":"publish","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["notification:user:user-12345",{"type":"object","keys":["id","type","payload","timestamp"]}]}[39m
+graphnode-worker-1  | [12:03:45.667] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"RedisEventBusAdapter","method":"publish","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":1,"result":null}[39m
+graphnode-worker-1  | [12:03:45.667] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"sendNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":3,"result":null}[39m
+graphnode-worker-1  | [12:03:45.667] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"sendGraphGenerationProgressUpdated","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":3,"result":null}[39m
+graphnode-worker-1  | [12:03:45.667] [32mINFO[39m (1): [36m그래프 생성 진행률 알림 발행 완료[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","currentStage":"[1단계] 임베딩 생성 완료","progressPercent":100,"etaSeconds":0}[39m
+graphnode-worker-1  | [12:03:45.675] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","taskType":"GRAPH_GENERATION_PROGRESS"}[39m
+graphnode-worker-1  | [12:03:45.675] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"sendGraphGenerationProgressUpdated","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":[{"type":"object","keys":["userId","taskId","sourceTimestamp","currentStage","progressPercent","etaSeconds"]}]}[39m
+graphnode-worker-1  | [12:03:45.675] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"sendNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345","GRAPH_GENERATION_PROGRESS_UPDATED",{"type":"object","keys":["taskId","currentStage","progressPercent","etaSeconds"]},{"type":"object","keys":["logicalTimestamp"]}]}[39m
+graphnode-worker-1  | [12:03:45.675] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"getUserChannel","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [12:03:45.675] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"getUserChannel","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":0,"result":"notification:user:user-12345"}[39m
+graphnode-worker-1  | [12:03:45.678] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"RedisEventBusAdapter","method":"publish","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["notification:user:user-12345",{"type":"object","keys":["id","type","payload","timestamp"]}]}[39m
+graphnode-worker-1  | [12:03:45.678] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"RedisEventBusAdapter","method":"publish","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [12:03:45.678] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"sendNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":3,"result":null}[39m
+graphnode-worker-1  | [12:03:45.678] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"sendGraphGenerationProgressUpdated","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":3,"result":null}[39m
+graphnode-worker-1  | [12:03:45.678] [32mINFO[39m (1): [36m그래프 생성 진행률 알림 발행 완료[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","currentStage":"[2단계] 키워드 추출 시작","progressPercent":0,"etaSeconds":null}[39m
+graphnode-worker-1  | [12:03:45.747] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","taskType":"GRAPH_GENERATION_PROGRESS"}[39m
+graphnode-worker-1  | [12:03:45.747] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"sendGraphGenerationProgressUpdated","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":[{"type":"object","keys":["userId","taskId","sourceTimestamp","currentStage","progressPercent","etaSeconds"]}]}[39m
+graphnode-worker-1  | [12:03:45.747] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"sendNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345","GRAPH_GENERATION_PROGRESS_UPDATED",{"type":"object","keys":["taskId","currentStage","progressPercent","etaSeconds"]},{"type":"object","keys":["logicalTimestamp"]}]}[39m
+graphnode-worker-1  | [12:03:45.747] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"getUserChannel","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [12:03:45.747] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"getUserChannel","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":0,"result":"notification:user:user-12345"}[39m
+graphnode-worker-1  | [12:03:45.748] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"RedisEventBusAdapter","method":"publish","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["notification:user:user-12345",{"type":"object","keys":["id","type","payload","timestamp"]}]}[39m
+graphnode-worker-1  | [12:03:45.749] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"RedisEventBusAdapter","method":"publish","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":1,"result":null}[39m
+graphnode-worker-1  | [12:03:45.749] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"sendNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":2,"result":null}[39m
+graphnode-worker-1  | [12:03:45.749] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"sendGraphGenerationProgressUpdated","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":2,"result":null}[39m
+graphnode-worker-1  | [12:03:45.749] [32mINFO[39m (1): [36m그래프 생성 진행률 알림 발행 완료[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","currentStage":"[2단계] 키워드 추출 중","progressPercent":33,"etaSeconds":0}[39m
+graphnode-worker-1  | [12:03:45.755] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","taskType":"GRAPH_GENERATION_PROGRESS"}[39m
+graphnode-worker-1  | [12:03:45.755] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"sendGraphGenerationProgressUpdated","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":[{"type":"object","keys":["userId","taskId","sourceTimestamp","currentStage","progressPercent","etaSeconds"]}]}[39m
+graphnode-worker-1  | [12:03:45.755] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"sendNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345","GRAPH_GENERATION_PROGRESS_UPDATED",{"type":"object","keys":["taskId","currentStage","progressPercent","etaSeconds"]},{"type":"object","keys":["logicalTimestamp"]}]}[39m
+graphnode-worker-1  | [12:03:45.755] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"getUserChannel","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [12:03:45.755] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"getUserChannel","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":0,"result":"notification:user:user-12345"}[39m
+graphnode-worker-1  | [12:03:45.755] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","taskType":"GRAPH_GENERATION_PROGRESS"}[39m
+graphnode-worker-1  | [12:03:45.755] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"sendGraphGenerationProgressUpdated","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":[{"type":"object","keys":["userId","taskId","sourceTimestamp","currentStage","progressPercent","etaSeconds"]}]}[39m
+graphnode-worker-1  | [12:03:45.755] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"sendNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345","GRAPH_GENERATION_PROGRESS_UPDATED",{"type":"object","keys":["taskId","currentStage","progressPercent","etaSeconds"]},{"type":"object","keys":["logicalTimestamp"]}]}[39m
+graphnode-worker-1  | [12:03:45.756] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"getUserChannel","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [12:03:45.756] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"getUserChannel","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":0,"result":"notification:user:user-12345"}[39m
+graphnode-worker-1  | [12:03:45.756] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","taskType":"GRAPH_GENERATION_PROGRESS"}[39m
+graphnode-worker-1  | [12:03:45.756] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"sendGraphGenerationProgressUpdated","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":[{"type":"object","keys":["userId","taskId","sourceTimestamp","currentStage","progressPercent","etaSeconds"]}]}[39m
+graphnode-worker-1  | [12:03:45.756] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"sendNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345","GRAPH_GENERATION_PROGRESS_UPDATED",{"type":"object","keys":["taskId","currentStage","progressPercent","etaSeconds"]},{"type":"object","keys":["logicalTimestamp"]}]}[39m
+graphnode-worker-1  | [12:03:45.756] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"getUserChannel","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [12:03:45.756] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"getUserChannel","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":0,"result":"notification:user:user-12345"}[39m
+graphnode-worker-1  | [12:03:45.759] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"RedisEventBusAdapter","method":"publish","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["notification:user:user-12345",{"type":"object","keys":["id","type","payload","timestamp"]}]}[39m
+graphnode-worker-1  | [12:03:45.760] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"RedisEventBusAdapter","method":"publish","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":1,"result":null}[39m
+graphnode-worker-1  | [12:03:45.760] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"sendNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":5,"result":null}[39m
+graphnode-worker-1  | [12:03:45.760] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"sendGraphGenerationProgressUpdated","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":5,"result":null}[39m
+graphnode-worker-1  | [12:03:45.760] [32mINFO[39m (1): [36m그래프 생성 진행률 알림 발행 완료[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","currentStage":"[2단계] 키워드 추출 중","progressPercent":66,"etaSeconds":0}[39m
+graphnode-worker-1  | [12:03:45.761] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"RedisEventBusAdapter","method":"publish","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["notification:user:user-12345",{"type":"object","keys":["id","type","payload","timestamp"]}]}[39m
+graphnode-worker-1  | [12:03:45.761] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"RedisEventBusAdapter","method":"publish","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["notification:user:user-12345",{"type":"object","keys":["id","type","payload","timestamp"]}]}[39m
+graphnode-worker-1  | [12:03:45.761] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"RedisEventBusAdapter","method":"publish","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [12:03:45.761] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"RedisEventBusAdapter","method":"publish","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [12:03:45.761] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"sendNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":6,"result":null}[39m
+graphnode-worker-1  | [12:03:45.761] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"sendNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":5,"result":null}[39m
+graphnode-worker-1  | [12:03:45.761] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"sendGraphGenerationProgressUpdated","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":6,"result":null}[39m
+graphnode-worker-1  | [12:03:45.761] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"sendGraphGenerationProgressUpdated","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":5,"result":null}[39m
+graphnode-worker-1  | [12:03:45.761] [32mINFO[39m (1): [36m그래프 생성 진행률 알림 발행 완료[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","currentStage":"[2단계] 키워드 추출 완료","progressPercent":100,"etaSeconds":0}[39m
+graphnode-worker-1  | [12:03:45.761] [32mINFO[39m (1): [36m그래프 생성 진행률 알림 발행 완료[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","currentStage":"[3단계] 클러스터 생성 및 매핑 시작","progressPercent":0,"etaSeconds":null}[39m
+graphnode-worker-1  | prisma:error 
+graphnode-worker-1  | Invalid `prisma.$queryRaw()` invocation:
+graphnode-worker-1  | 
+graphnode-worker-1  | 
+graphnode-worker-1  | Raw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`
+graphnode-worker-1  | [12:05:19.624] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","taskType":"GRAPH_GENERATION_RESULT"}[39m
+graphnode-worker-1  | [12:05:19.625] [32mINFO[39m (1): [36mHandling graph generation result[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","status":"FAILED"}[39m
+graphnode-worker-1  | [12:05:19.628] [33mWARN[39m (1): [36mGraph generation failed[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345"}[39m
+graphnode-worker-1  |     error: "Pipeline process failed with return code 1"
+graphnode-worker-1  | [12:05:19.630] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"GraphEmbeddingService","method":"getStats","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [12:05:19.630] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"GraphManagementService","method":"getStats","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [12:05:19.630] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"GraphManagementService","method":"assertUser","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [12:05:19.630] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"GraphManagementService","method":"assertUser","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [12:05:19.918] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"GraphManagementService","method":"getStats","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":288,"result":{"type":"object","keys":["userId","nodes","edges","clusters","status","generatedAt","updatedAt","metadata"]}}[39m
+graphnode-worker-1  | [12:05:19.918] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"GraphEmbeddingService","method":"getStats","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":288,"result":{"type":"object","keys":["userId","nodes","edges","clusters","status","generatedAt","updatedAt","metadata"]}}[39m
+graphnode-worker-1  | [12:05:19.918] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"GraphEmbeddingService","method":"saveStats","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":[{"type":"object","keys":["userId","nodes","edges","clusters","status","generatedAt","updatedAt","metadata"]}]}[39m
+graphnode-worker-1  | [12:05:19.918] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"GraphManagementService","method":"saveStats","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":[{"type":"object","keys":["userId","nodes","edges","clusters","status","generatedAt","updatedAt","metadata"]}]}[39m
+graphnode-worker-1  | [12:05:19.918] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"GraphManagementService","method":"assertUser","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [12:05:19.918] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"GraphManagementService","method":"assertUser","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [12:05:19.989] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"GraphManagementService","method":"saveStats","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":71,"result":null}[39m
+graphnode-worker-1  | [12:05:19.989] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"GraphEmbeddingService","method":"saveStats","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":71,"result":null}[39m
+graphnode-worker-1  | [12:05:19.989] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"sendGraphGenerationFailed","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345","task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","Pipeline process failed with return code 1"]}[39m
+graphnode-worker-1  | [12:05:19.989] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"sendNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345","GRAPH_GENERATION_FAILED",{"type":"object","keys":["taskId","error"]}]}[39m
+graphnode-worker-1  | [12:05:19.989] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"getUserChannel","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [12:05:19.989] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"getUserChannel","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":0,"result":"notification:user:user-12345"}[39m
+graphnode-worker-1  | [12:05:19.992] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"RedisEventBusAdapter","method":"publish","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["notification:user:user-12345",{"type":"object","keys":["id","type","payload","timestamp"]}]}[39m
+graphnode-worker-1  | [12:05:19.992] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"RedisEventBusAdapter","method":"publish","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [12:05:19.992] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"sendNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":3,"result":null}[39m
+graphnode-worker-1  | [12:05:19.992] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"sendGraphGenerationFailed","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":3,"result":null}[39m
+graphnode-worker-1  | [12:05:19.992] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"sendFcmPushNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345","Graph Generation Failed","Failed to generate knowledge graph. Please try again.",{"type":"object","keys":["type","taskId","error"]}]}[39m
+graphnode-worker-1  | [12:05:19.992] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"NotificationService","method":"getFcmTokenKey","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [12:05:19.992] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"getFcmTokenKey","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":0,"result":"user:user-12345:fcm_tokens"}[39m
+graphnode-worker-1  | [12:05:19.993] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"NotificationService","method":"sendFcmPushNotification","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":1,"result":null}[39m
+graphnode-worker-1  | [12:05:19.994] [32mINFO[39m (1): [36mPostHog initialized[39m
+graphnode-worker-1  | [12:05:19.995] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"CreditService","method":"rollbackByTaskId","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","args":["task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G"]}[39m
+graphnode-worker-1  | [12:05:20.009] [31mERROR[39m (1): [36mCreditService.rollbackByTaskId 실패 (non-fatal)[39m [90m{"taskId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G"}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "PrismaClientKnownRequestError",
+graphnode-worker-1  |       "message": "\nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           PrismaClientKnownRequestError: 
+graphnode-worker-1  |           Invalid `prisma.$queryRaw()` invocation:
+graphnode-worker-1  |           
+graphnode-worker-1  |           
+graphnode-worker-1  |           Raw query failed. Code: `N/A`. Message: `Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.`
+graphnode-worker-1  |               at $n.handleRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:7315)
+graphnode-worker-1  |               at $n.handleAndLogRequestError (/app/node_modules/@prisma/client/runtime/library.js:121:6623)
+graphnode-worker-1  |               at $n.request (/app/node_modules/@prisma/client/runtime/library.js:121:6307)
+graphnode-worker-1  |               at async l (/app/node_modules/@prisma/client/runtime/library.js:130:9633)
+graphnode-worker-1  |               at async prisma_1.default.$transaction.isolationLevel (/app/dist/infra/repositories/CreditRepositoryPrisma.js:233:13)
+graphnode-worker-1  |               at async Proxy._transactionWithCallback (/app/node_modules/@prisma/client/runtime/library.js:130:8000)
+graphnode-worker-1  |               at async CreditRepositoryPrisma.rollbackHold (/app/dist/infra/repositories/CreditRepositoryPrisma.js:232:28)
+graphnode-worker-1  |               at async Proxy.rollbackByTaskId (/app/dist/core/services/CreditService.js:178:28)
+graphnode-worker-1  |               at async GraphGenerationResultHandler.handle (/app/dist/workers/handlers/GraphGenerationResultHandler.js:124:21)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "name": "PrismaClientKnownRequestError",
+graphnode-worker-1  |       "code": "P2010",
+graphnode-worker-1  |       "clientVersion": "5.22.0",
+graphnode-worker-1  |       "meta": {
+graphnode-worker-1  |         "type": "Object",
+graphnode-worker-1  |         "message": "Failed to deserialize column of type 'void'. If you're using $queryRaw and this column is explicitly marked as `Unsupported` in your Prisma schema, try casting this column to any supported Prisma type such as `String`.",
+graphnode-worker-1  |         "stack":
+graphnode-worker-1  |             
+graphnode-worker-1  |         "code": "N/A"
+graphnode-worker-1  |       }
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:05:20.009] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service":"CreditService","method":"rollbackByTaskId","correlationId":"task_user-12345_01KS56NGWCKGYNAV4JMGP2ZH1G","userId":"user-12345","durationMs":14,"result":null}[39m
+graphnode-worker-1  | [12:05:34.355] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","taskType":"MICROSCOPE_INGEST_FROM_NODE_RESULT"}[39m
+graphnode-worker-1  | [12:05:34.356] [32mINFO[39m (1): [36mHandling Microscope ingest result[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","status":"FAILED"}[39m
+graphnode-worker-1  | [12:05:34.357] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","args":[null,null,"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","FAILED",null,null,"Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}"]}[39m
+graphnode-worker-1  | [12:05:34.361] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","durationMs":4}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:05:34.361] [31mERROR[39m (1): [36mException during Microscope Result Handling[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","docId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ"}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:05:34.361] [31mERROR[39m (1): [36mSQS Processing Error[39m 
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "StandardError",
+graphnode-worker-1  |       "message": "Unexpected message handler failure: Workspace undefined not found: Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           StandardError: Unexpected message handler failure: Workspace undefined not found
+graphnode-worker-1  |               at toStandardError (/app/node_modules/sqs-consumer/dist/cjs/errors.js:100:19)
+graphnode-worker-1  |               at Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:421:55)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |           caused by: Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "name": "StandardError",
+graphnode-worker-1  |       "messageIds": [
+graphnode-worker-1  |         "94408e8f-c2bf-4dd4-ae61-fc674502dc78"
+graphnode-worker-1  |       ],
+graphnode-worker-1  |       "time": "2026-05-21T12:05:34.361Z"
+graphnode-worker-1  |     }
+graphnode-worker-1  | Error while flushing PostHog PostHogFetchNetworkError: Network error while fetching PostHog
+graphnode-worker-1  |     at /app/node_modules/@posthog/core/dist/posthog-core-stateless.js:623:23
+graphnode-worker-1  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |     at async retriable (/app/node_modules/@posthog/core/dist/utils/index.js:252:29)
+graphnode-worker-1  |     at async PostHog.fetchWithRetry (/app/node_modules/@posthog/core/dist/posthog-core-stateless.js:615:16)
+graphnode-worker-1  |     at async PostHog._flush (/app/node_modules/@posthog/core/dist/posthog-core-stateless.js:582:17) {
+graphnode-worker-1  |   error: TypeError: fetch failed
+graphnode-worker-1  |       at node:internal/deps/undici/undici:14976:13
+graphnode-worker-1  |       at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |       at async /app/node_modules/@posthog/core/dist/posthog-core-stateless.js:618:23
+graphnode-worker-1  |       at async retriable (/app/node_modules/@posthog/core/dist/utils/index.js:252:29)
+graphnode-worker-1  |       at async PostHog.fetchWithRetry (/app/node_modules/@posthog/core/dist/posthog-core-stateless.js:615:16)
+graphnode-worker-1  |       at async PostHog._flush (/app/node_modules/@posthog/core/dist/posthog-core-stateless.js:582:17) {
+graphnode-worker-1  |     [cause]: AggregateError [ECONNREFUSED]: 
+graphnode-worker-1  |         at internalConnectMultiple (node:net:1122:18)
+graphnode-worker-1  |         at afterConnectMultiple (node:net:1689:7)
+graphnode-worker-1  |         at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17) {
+graphnode-worker-1  |       code: 'ECONNREFUSED',
+graphnode-worker-1  |       [errors]: [Array]
+graphnode-worker-1  |     }
+graphnode-worker-1  |   },
+graphnode-worker-1  |   [cause]: TypeError: fetch failed
+graphnode-worker-1  |       at node:internal/deps/undici/undici:14976:13
+graphnode-worker-1  |       at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |       at async /app/node_modules/@posthog/core/dist/posthog-core-stateless.js:618:23
+graphnode-worker-1  |       at async retriable (/app/node_modules/@posthog/core/dist/utils/index.js:252:29)
+graphnode-worker-1  |       at async PostHog.fetchWithRetry (/app/node_modules/@posthog/core/dist/posthog-core-stateless.js:615:16)
+graphnode-worker-1  |       at async PostHog._flush (/app/node_modules/@posthog/core/dist/posthog-core-stateless.js:582:17) {
+graphnode-worker-1  |     [cause]: AggregateError [ECONNREFUSED]: 
+graphnode-worker-1  |         at internalConnectMultiple (node:net:1122:18)
+graphnode-worker-1  |         at afterConnectMultiple (node:net:1689:7)
+graphnode-worker-1  |         at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17) {
+graphnode-worker-1  |       code: 'ECONNREFUSED',
+graphnode-worker-1  |       [errors]: [Array]
+graphnode-worker-1  |     }
+graphnode-worker-1  |   }
+graphnode-worker-1  | }
+graphnode-worker-1  | [12:06:04.530] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","taskType":"MICROSCOPE_INGEST_FROM_NODE_RESULT"}[39m
+graphnode-worker-1  | [12:06:04.530] [32mINFO[39m (1): [36mHandling Microscope ingest result[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","status":"FAILED"}[39m
+graphnode-worker-1  | [12:06:04.530] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","args":[null,null,"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","FAILED",null,null,"Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}"]}[39m
+graphnode-worker-1  | [12:06:04.533] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","durationMs":3}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:06:04.533] [31mERROR[39m (1): [36mException during Microscope Result Handling[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","docId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ"}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:06:04.534] [31mERROR[39m (1): [36mSQS Processing Error[39m 
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "StandardError",
+graphnode-worker-1  |       "message": "Unexpected message handler failure: Workspace undefined not found: Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           StandardError: Unexpected message handler failure: Workspace undefined not found
+graphnode-worker-1  |               at toStandardError (/app/node_modules/sqs-consumer/dist/cjs/errors.js:100:19)
+graphnode-worker-1  |               at Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:421:55)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |           caused by: Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "name": "StandardError",
+graphnode-worker-1  |       "messageIds": [
+graphnode-worker-1  |         "94408e8f-c2bf-4dd4-ae61-fc674502dc78"
+graphnode-worker-1  |       ],
+graphnode-worker-1  |       "time": "2026-05-21T12:06:04.534Z"
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:06:35.529] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","taskType":"MICROSCOPE_INGEST_FROM_NODE_RESULT"}[39m
+graphnode-worker-1  | [12:06:35.529] [32mINFO[39m (1): [36mHandling Microscope ingest result[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","status":"FAILED"}[39m
+graphnode-worker-1  | [12:06:35.529] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","args":[null,null,"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","FAILED",null,null,"Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}"]}[39m
+graphnode-worker-1  | [12:06:35.532] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","durationMs":3}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:06:35.532] [31mERROR[39m (1): [36mException during Microscope Result Handling[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","docId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ"}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:06:35.532] [31mERROR[39m (1): [36mSQS Processing Error[39m 
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "StandardError",
+graphnode-worker-1  |       "message": "Unexpected message handler failure: Workspace undefined not found: Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           StandardError: Unexpected message handler failure: Workspace undefined not found
+graphnode-worker-1  |               at toStandardError (/app/node_modules/sqs-consumer/dist/cjs/errors.js:100:19)
+graphnode-worker-1  |               at Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:421:55)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |           caused by: Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "name": "StandardError",
+graphnode-worker-1  |       "messageIds": [
+graphnode-worker-1  |         "94408e8f-c2bf-4dd4-ae61-fc674502dc78"
+graphnode-worker-1  |       ],
+graphnode-worker-1  |       "time": "2026-05-21T12:06:35.532Z"
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:07:06.530] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","taskType":"MICROSCOPE_INGEST_FROM_NODE_RESULT"}[39m
+graphnode-worker-1  | [12:07:06.530] [32mINFO[39m (1): [36mHandling Microscope ingest result[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","status":"FAILED"}[39m
+graphnode-worker-1  | [12:07:06.530] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","args":[null,null,"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","FAILED",null,null,"Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}"]}[39m
+graphnode-worker-1  | [12:07:06.533] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","durationMs":3}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:07:06.534] [31mERROR[39m (1): [36mException during Microscope Result Handling[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","docId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ"}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:07:06.534] [31mERROR[39m (1): [36mSQS Processing Error[39m 
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "StandardError",
+graphnode-worker-1  |       "message": "Unexpected message handler failure: Workspace undefined not found: Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           StandardError: Unexpected message handler failure: Workspace undefined not found
+graphnode-worker-1  |               at toStandardError (/app/node_modules/sqs-consumer/dist/cjs/errors.js:100:19)
+graphnode-worker-1  |               at Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:421:55)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |           caused by: Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "name": "StandardError",
+graphnode-worker-1  |       "messageIds": [
+graphnode-worker-1  |         "94408e8f-c2bf-4dd4-ae61-fc674502dc78"
+graphnode-worker-1  |       ],
+graphnode-worker-1  |       "time": "2026-05-21T12:07:06.534Z"
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:07:36.532] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","taskType":"MICROSCOPE_INGEST_FROM_NODE_RESULT"}[39m
+graphnode-worker-1  | [12:07:36.532] [32mINFO[39m (1): [36mHandling Microscope ingest result[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","status":"FAILED"}[39m
+graphnode-worker-1  | [12:07:36.532] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","args":[null,null,"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","FAILED",null,null,"Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}"]}[39m
+graphnode-worker-1  | [12:07:36.535] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","durationMs":3}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:07:36.536] [31mERROR[39m (1): [36mException during Microscope Result Handling[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","docId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ"}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:07:36.536] [31mERROR[39m (1): [36mSQS Processing Error[39m 
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "StandardError",
+graphnode-worker-1  |       "message": "Unexpected message handler failure: Workspace undefined not found: Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           StandardError: Unexpected message handler failure: Workspace undefined not found
+graphnode-worker-1  |               at toStandardError (/app/node_modules/sqs-consumer/dist/cjs/errors.js:100:19)
+graphnode-worker-1  |               at Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:421:55)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |           caused by: Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "name": "StandardError",
+graphnode-worker-1  |       "messageIds": [
+graphnode-worker-1  |         "94408e8f-c2bf-4dd4-ae61-fc674502dc78"
+graphnode-worker-1  |       ],
+graphnode-worker-1  |       "time": "2026-05-21T12:07:36.536Z"
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:08:07.528] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","taskType":"MICROSCOPE_INGEST_FROM_NODE_RESULT"}[39m
+graphnode-worker-1  | [12:08:07.528] [32mINFO[39m (1): [36mHandling Microscope ingest result[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","status":"FAILED"}[39m
+graphnode-worker-1  | [12:08:07.528] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","args":[null,null,"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","FAILED",null,null,"Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}"]}[39m
+graphnode-worker-1  | [12:08:07.531] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","durationMs":3}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:08:07.531] [31mERROR[39m (1): [36mException during Microscope Result Handling[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","docId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ"}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:08:07.531] [31mERROR[39m (1): [36mSQS Processing Error[39m 
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "StandardError",
+graphnode-worker-1  |       "message": "Unexpected message handler failure: Workspace undefined not found: Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           StandardError: Unexpected message handler failure: Workspace undefined not found
+graphnode-worker-1  |               at toStandardError (/app/node_modules/sqs-consumer/dist/cjs/errors.js:100:19)
+graphnode-worker-1  |               at Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:421:55)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |           caused by: Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "name": "StandardError",
+graphnode-worker-1  |       "messageIds": [
+graphnode-worker-1  |         "94408e8f-c2bf-4dd4-ae61-fc674502dc78"
+graphnode-worker-1  |       ],
+graphnode-worker-1  |       "time": "2026-05-21T12:08:07.531Z"
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:08:37.528] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","taskType":"MICROSCOPE_INGEST_FROM_NODE_RESULT"}[39m
+graphnode-worker-1  | [12:08:37.528] [32mINFO[39m (1): [36mHandling Microscope ingest result[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","status":"FAILED"}[39m
+graphnode-worker-1  | [12:08:37.528] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","args":[null,null,"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","FAILED",null,null,"Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}"]}[39m
+graphnode-worker-1  | [12:08:37.531] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","durationMs":3}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:08:37.531] [31mERROR[39m (1): [36mException during Microscope Result Handling[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","docId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ"}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:08:37.532] [31mERROR[39m (1): [36mSQS Processing Error[39m 
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "StandardError",
+graphnode-worker-1  |       "message": "Unexpected message handler failure: Workspace undefined not found: Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           StandardError: Unexpected message handler failure: Workspace undefined not found
+graphnode-worker-1  |               at toStandardError (/app/node_modules/sqs-consumer/dist/cjs/errors.js:100:19)
+graphnode-worker-1  |               at Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:421:55)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |           caused by: Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "name": "StandardError",
+graphnode-worker-1  |       "messageIds": [
+graphnode-worker-1  |         "94408e8f-c2bf-4dd4-ae61-fc674502dc78"
+graphnode-worker-1  |       ],
+graphnode-worker-1  |       "time": "2026-05-21T12:08:37.532Z"
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:09:08.531] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","taskType":"MICROSCOPE_INGEST_FROM_NODE_RESULT"}[39m
+graphnode-worker-1  | [12:09:08.531] [32mINFO[39m (1): [36mHandling Microscope ingest result[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","status":"FAILED"}[39m
+graphnode-worker-1  | [12:09:08.531] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","args":[null,null,"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","FAILED",null,null,"Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}"]}[39m
+graphnode-worker-1  | [12:09:08.535] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","durationMs":4}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:09:08.535] [31mERROR[39m (1): [36mException during Microscope Result Handling[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","docId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ"}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:09:08.535] [31mERROR[39m (1): [36mSQS Processing Error[39m 
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "StandardError",
+graphnode-worker-1  |       "message": "Unexpected message handler failure: Workspace undefined not found: Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           StandardError: Unexpected message handler failure: Workspace undefined not found
+graphnode-worker-1  |               at toStandardError (/app/node_modules/sqs-consumer/dist/cjs/errors.js:100:19)
+graphnode-worker-1  |               at Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:421:55)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |           caused by: Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "name": "StandardError",
+graphnode-worker-1  |       "messageIds": [
+graphnode-worker-1  |         "94408e8f-c2bf-4dd4-ae61-fc674502dc78"
+graphnode-worker-1  |       ],
+graphnode-worker-1  |       "time": "2026-05-21T12:09:08.535Z"
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:09:39.525] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","taskType":"MICROSCOPE_INGEST_FROM_NODE_RESULT"}[39m
+graphnode-worker-1  | [12:09:39.525] [32mINFO[39m (1): [36mHandling Microscope ingest result[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","status":"FAILED"}[39m
+graphnode-worker-1  | [12:09:39.525] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","args":[null,null,"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","FAILED",null,null,"Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}"]}[39m
+graphnode-worker-1  | [12:09:39.528] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","durationMs":3}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:09:39.528] [31mERROR[39m (1): [36mException during Microscope Result Handling[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","docId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ"}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:09:39.529] [31mERROR[39m (1): [36mSQS Processing Error[39m 
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "StandardError",
+graphnode-worker-1  |       "message": "Unexpected message handler failure: Workspace undefined not found: Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           StandardError: Unexpected message handler failure: Workspace undefined not found
+graphnode-worker-1  |               at toStandardError (/app/node_modules/sqs-consumer/dist/cjs/errors.js:100:19)
+graphnode-worker-1  |               at Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:421:55)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |           caused by: Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "name": "StandardError",
+graphnode-worker-1  |       "messageIds": [
+graphnode-worker-1  |         "94408e8f-c2bf-4dd4-ae61-fc674502dc78"
+graphnode-worker-1  |       ],
+graphnode-worker-1  |       "time": "2026-05-21T12:09:39.529Z"
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:10:09.524] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","taskType":"MICROSCOPE_INGEST_FROM_NODE_RESULT"}[39m
+graphnode-worker-1  | [12:10:09.524] [32mINFO[39m (1): [36mHandling Microscope ingest result[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","status":"FAILED"}[39m
+graphnode-worker-1  | [12:10:09.524] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","args":[null,null,"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","FAILED",null,null,"Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}"]}[39m
+graphnode-worker-1  | [12:10:09.524] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","durationMs":0}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:10:09.525] [31mERROR[39m (1): [36mException during Microscope Result Handling[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","docId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ"}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:10:09.525] [31mERROR[39m (1): [36mSQS Processing Error[39m 
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "StandardError",
+graphnode-worker-1  |       "message": "Unexpected message handler failure: Workspace undefined not found: Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           StandardError: Unexpected message handler failure: Workspace undefined not found
+graphnode-worker-1  |               at toStandardError (/app/node_modules/sqs-consumer/dist/cjs/errors.js:100:19)
+graphnode-worker-1  |               at Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:421:55)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |           caused by: Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "name": "StandardError",
+graphnode-worker-1  |       "messageIds": [
+graphnode-worker-1  |         "94408e8f-c2bf-4dd4-ae61-fc674502dc78"
+graphnode-worker-1  |       ],
+graphnode-worker-1  |       "time": "2026-05-21T12:10:09.525Z"
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:10:39.529] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","taskType":"MICROSCOPE_INGEST_FROM_NODE_RESULT"}[39m
+graphnode-worker-1  | [12:10:39.529] [32mINFO[39m (1): [36mHandling Microscope ingest result[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","status":"FAILED"}[39m
+graphnode-worker-1  | [12:10:39.529] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","args":[null,null,"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","FAILED",null,null,"Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}"]}[39m
+graphnode-worker-1  | [12:10:39.532] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","durationMs":3}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:10:39.532] [31mERROR[39m (1): [36mException during Microscope Result Handling[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","docId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ"}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:10:39.533] [31mERROR[39m (1): [36mSQS Processing Error[39m 
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "StandardError",
+graphnode-worker-1  |       "message": "Unexpected message handler failure: Workspace undefined not found: Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           StandardError: Unexpected message handler failure: Workspace undefined not found
+graphnode-worker-1  |               at toStandardError (/app/node_modules/sqs-consumer/dist/cjs/errors.js:100:19)
+graphnode-worker-1  |               at Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:421:55)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |           caused by: Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "name": "StandardError",
+graphnode-worker-1  |       "messageIds": [
+graphnode-worker-1  |         "94408e8f-c2bf-4dd4-ae61-fc674502dc78"
+graphnode-worker-1  |       ],
+graphnode-worker-1  |       "time": "2026-05-21T12:10:39.533Z"
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:11:09.531] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","taskType":"MICROSCOPE_INGEST_FROM_NODE_RESULT"}[39m
+graphnode-worker-1  | [12:11:09.531] [32mINFO[39m (1): [36mHandling Microscope ingest result[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","status":"FAILED"}[39m
+graphnode-worker-1  | [12:11:09.531] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","args":[null,null,"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","FAILED",null,null,"Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}"]}[39m
+graphnode-worker-1  | [12:11:09.535] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","durationMs":4}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:11:09.536] [31mERROR[39m (1): [36mException during Microscope Result Handling[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","docId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ"}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:11:09.536] [31mERROR[39m (1): [36mSQS Processing Error[39m 
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "StandardError",
+graphnode-worker-1  |       "message": "Unexpected message handler failure: Workspace undefined not found: Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           StandardError: Unexpected message handler failure: Workspace undefined not found
+graphnode-worker-1  |               at toStandardError (/app/node_modules/sqs-consumer/dist/cjs/errors.js:100:19)
+graphnode-worker-1  |               at Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:421:55)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |           caused by: Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "name": "StandardError",
+graphnode-worker-1  |       "messageIds": [
+graphnode-worker-1  |         "94408e8f-c2bf-4dd4-ae61-fc674502dc78"
+graphnode-worker-1  |       ],
+graphnode-worker-1  |       "time": "2026-05-21T12:11:09.536Z"
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:11:40.524] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","taskType":"MICROSCOPE_INGEST_FROM_NODE_RESULT"}[39m
+graphnode-worker-1  | [12:11:40.524] [32mINFO[39m (1): [36mHandling Microscope ingest result[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","status":"FAILED"}[39m
+graphnode-worker-1  | [12:11:40.524] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","args":[null,null,"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","FAILED",null,null,"Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}"]}[39m
+graphnode-worker-1  | [12:11:40.525] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","durationMs":1}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:11:40.525] [31mERROR[39m (1): [36mException during Microscope Result Handling[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","docId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ"}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:11:40.525] [31mERROR[39m (1): [36mSQS Processing Error[39m 
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "StandardError",
+graphnode-worker-1  |       "message": "Unexpected message handler failure: Workspace undefined not found: Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           StandardError: Unexpected message handler failure: Workspace undefined not found
+graphnode-worker-1  |               at toStandardError (/app/node_modules/sqs-consumer/dist/cjs/errors.js:100:19)
+graphnode-worker-1  |               at Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:421:55)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |           caused by: Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "name": "StandardError",
+graphnode-worker-1  |       "messageIds": [
+graphnode-worker-1  |         "94408e8f-c2bf-4dd4-ae61-fc674502dc78"
+graphnode-worker-1  |       ],
+graphnode-worker-1  |       "time": "2026-05-21T12:11:40.525Z"
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:12:11.530] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","taskType":"MICROSCOPE_INGEST_FROM_NODE_RESULT"}[39m
+graphnode-worker-1  | [12:12:11.530] [32mINFO[39m (1): [36mHandling Microscope ingest result[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","status":"FAILED"}[39m
+graphnode-worker-1  | [12:12:11.530] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","args":[null,null,"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","FAILED",null,null,"Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}"]}[39m
+graphnode-worker-1  | [12:12:11.533] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","durationMs":3}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:12:11.534] [31mERROR[39m (1): [36mException during Microscope Result Handling[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","docId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ"}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:12:11.534] [31mERROR[39m (1): [36mSQS Processing Error[39m 
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "StandardError",
+graphnode-worker-1  |       "message": "Unexpected message handler failure: Workspace undefined not found: Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           StandardError: Unexpected message handler failure: Workspace undefined not found
+graphnode-worker-1  |               at toStandardError (/app/node_modules/sqs-consumer/dist/cjs/errors.js:100:19)
+graphnode-worker-1  |               at Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:421:55)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |           caused by: Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "name": "StandardError",
+graphnode-worker-1  |       "messageIds": [
+graphnode-worker-1  |         "94408e8f-c2bf-4dd4-ae61-fc674502dc78"
+graphnode-worker-1  |       ],
+graphnode-worker-1  |       "time": "2026-05-21T12:12:11.534Z"
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:12:42.527] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","taskType":"MICROSCOPE_INGEST_FROM_NODE_RESULT"}[39m
+graphnode-worker-1  | [12:12:42.527] [32mINFO[39m (1): [36mHandling Microscope ingest result[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","status":"FAILED"}[39m
+graphnode-worker-1  | [12:12:42.527] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","args":[null,null,"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","FAILED",null,null,"Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}"]}[39m
+graphnode-worker-1  | [12:12:42.531] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","durationMs":4}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:12:42.531] [31mERROR[39m (1): [36mException during Microscope Result Handling[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","docId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ"}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:12:42.532] [31mERROR[39m (1): [36mSQS Processing Error[39m 
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "StandardError",
+graphnode-worker-1  |       "message": "Unexpected message handler failure: Workspace undefined not found: Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           StandardError: Unexpected message handler failure: Workspace undefined not found
+graphnode-worker-1  |               at toStandardError (/app/node_modules/sqs-consumer/dist/cjs/errors.js:100:19)
+graphnode-worker-1  |               at Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:421:55)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |           caused by: Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "name": "StandardError",
+graphnode-worker-1  |       "messageIds": [
+graphnode-worker-1  |         "94408e8f-c2bf-4dd4-ae61-fc674502dc78"
+graphnode-worker-1  |       ],
+graphnode-worker-1  |       "time": "2026-05-21T12:12:42.532Z"
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:13:12.533] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","taskType":"MICROSCOPE_INGEST_FROM_NODE_RESULT"}[39m
+graphnode-worker-1  | [12:13:12.533] [32mINFO[39m (1): [36mHandling Microscope ingest result[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","status":"FAILED"}[39m
+graphnode-worker-1  | [12:13:12.533] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","args":[null,null,"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","FAILED",null,null,"Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}"]}[39m
+graphnode-worker-1  | [12:13:12.536] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","durationMs":3}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:13:12.537] [31mERROR[39m (1): [36mException during Microscope Result Handling[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","docId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ"}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:13:12.537] [31mERROR[39m (1): [36mSQS Processing Error[39m 
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "StandardError",
+graphnode-worker-1  |       "message": "Unexpected message handler failure: Workspace undefined not found: Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           StandardError: Unexpected message handler failure: Workspace undefined not found
+graphnode-worker-1  |               at toStandardError (/app/node_modules/sqs-consumer/dist/cjs/errors.js:100:19)
+graphnode-worker-1  |               at Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:421:55)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |           caused by: Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "name": "StandardError",
+graphnode-worker-1  |       "messageIds": [
+graphnode-worker-1  |         "94408e8f-c2bf-4dd4-ae61-fc674502dc78"
+graphnode-worker-1  |       ],
+graphnode-worker-1  |       "time": "2026-05-21T12:13:12.537Z"
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:13:43.532] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","taskType":"MICROSCOPE_INGEST_FROM_NODE_RESULT"}[39m
+graphnode-worker-1  | [12:13:43.532] [32mINFO[39m (1): [36mHandling Microscope ingest result[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","status":"FAILED"}[39m
+graphnode-worker-1  | [12:13:43.533] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","args":[null,null,"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","FAILED",null,null,"Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}"]}[39m
+graphnode-worker-1  | [12:13:43.536] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","durationMs":3}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:13:43.536] [31mERROR[39m (1): [36mException during Microscope Result Handling[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","docId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ"}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:13:43.537] [31mERROR[39m (1): [36mSQS Processing Error[39m 
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "StandardError",
+graphnode-worker-1  |       "message": "Unexpected message handler failure: Workspace undefined not found: Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           StandardError: Unexpected message handler failure: Workspace undefined not found
+graphnode-worker-1  |               at toStandardError (/app/node_modules/sqs-consumer/dist/cjs/errors.js:100:19)
+graphnode-worker-1  |               at Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:421:55)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |           caused by: Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "name": "StandardError",
+graphnode-worker-1  |       "messageIds": [
+graphnode-worker-1  |         "94408e8f-c2bf-4dd4-ae61-fc674502dc78"
+graphnode-worker-1  |       ],
+graphnode-worker-1  |       "time": "2026-05-21T12:13:43.537Z"
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:14:14.528] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","taskType":"MICROSCOPE_INGEST_FROM_NODE_RESULT"}[39m
+graphnode-worker-1  | [12:14:14.528] [32mINFO[39m (1): [36mHandling Microscope ingest result[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","status":"FAILED"}[39m
+graphnode-worker-1  | [12:14:14.528] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","args":[null,null,"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","FAILED",null,null,"Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}"]}[39m
+graphnode-worker-1  | [12:14:14.533] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","durationMs":5}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:14:14.533] [31mERROR[39m (1): [36mException during Microscope Result Handling[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","docId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ"}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:14:14.533] [31mERROR[39m (1): [36mSQS Processing Error[39m 
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "StandardError",
+graphnode-worker-1  |       "message": "Unexpected message handler failure: Workspace undefined not found: Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           StandardError: Unexpected message handler failure: Workspace undefined not found
+graphnode-worker-1  |               at toStandardError (/app/node_modules/sqs-consumer/dist/cjs/errors.js:100:19)
+graphnode-worker-1  |               at Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:421:55)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |           caused by: Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "name": "StandardError",
+graphnode-worker-1  |       "messageIds": [
+graphnode-worker-1  |         "94408e8f-c2bf-4dd4-ae61-fc674502dc78"
+graphnode-worker-1  |       ],
+graphnode-worker-1  |       "time": "2026-05-21T12:14:14.533Z"
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:14:45.528] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","taskType":"MICROSCOPE_INGEST_FROM_NODE_RESULT"}[39m
+graphnode-worker-1  | [12:14:45.528] [32mINFO[39m (1): [36mHandling Microscope ingest result[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","status":"FAILED"}[39m
+graphnode-worker-1  | [12:14:45.528] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","args":[null,null,"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","FAILED",null,null,"Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}"]}[39m
+graphnode-worker-1  | [12:14:45.531] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","durationMs":3}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:14:45.531] [31mERROR[39m (1): [36mException during Microscope Result Handling[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","docId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ"}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:14:45.532] [31mERROR[39m (1): [36mSQS Processing Error[39m 
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "StandardError",
+graphnode-worker-1  |       "message": "Unexpected message handler failure: Workspace undefined not found: Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           StandardError: Unexpected message handler failure: Workspace undefined not found
+graphnode-worker-1  |               at toStandardError (/app/node_modules/sqs-consumer/dist/cjs/errors.js:100:19)
+graphnode-worker-1  |               at Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:421:55)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |           caused by: Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "name": "StandardError",
+graphnode-worker-1  |       "messageIds": [
+graphnode-worker-1  |         "94408e8f-c2bf-4dd4-ae61-fc674502dc78"
+graphnode-worker-1  |       ],
+graphnode-worker-1  |       "time": "2026-05-21T12:14:45.532Z"
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:15:15.530] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","taskType":"MICROSCOPE_INGEST_FROM_NODE_RESULT"}[39m
+graphnode-worker-1  | [12:15:15.530] [32mINFO[39m (1): [36mHandling Microscope ingest result[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","status":"FAILED"}[39m
+graphnode-worker-1  | [12:15:15.530] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","args":[null,null,"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","FAILED",null,null,"Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}"]}[39m
+graphnode-worker-1  | [12:15:15.533] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"MicroscopeManagementService","method":"updateDocumentStatus","correlationId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","userId":"user-12345","durationMs":3}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:15:15.533] [31mERROR[39m (1): [36mException during Microscope Result Handling[39m [90m{"taskId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ","docId":"task_microscope_node_user-12345_01KS56T4DAN2E96ESQ505TYKQJ"}[39m
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "NotFoundError",
+graphnode-worker-1  |       "message": "Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "retryable": false,
+graphnode-worker-1  |       "code": "NOT_FOUND",
+graphnode-worker-1  |       "httpStatus": 404
+graphnode-worker-1  |     }
+graphnode-worker-1  | [12:15:15.533] [31mERROR[39m (1): [36mSQS Processing Error[39m 
+graphnode-worker-1  |     err: {
+graphnode-worker-1  |       "type": "StandardError",
+graphnode-worker-1  |       "message": "Unexpected message handler failure: Workspace undefined not found: Workspace undefined not found",
+graphnode-worker-1  |       "stack":
+graphnode-worker-1  |           StandardError: Unexpected message handler failure: Workspace undefined not found
+graphnode-worker-1  |               at toStandardError (/app/node_modules/sqs-consumer/dist/cjs/errors.js:100:19)
+graphnode-worker-1  |               at Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:421:55)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |           caused by: Error: Workspace undefined not found
+graphnode-worker-1  |               at Proxy.updateDocumentStatus (/app/dist/core/services/MicroscopeManagementService.js:307:19)
+graphnode-worker-1  |               at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+graphnode-worker-1  |               at async MicroscopeIngestResultHandler.handle (/app/dist/workers/handlers/MicroscopeIngestResultHandler.js:85:38)
+graphnode-worker-1  |               at async /app/dist/workers/index.js:172:33
+graphnode-worker-1  |               at async Consumer.executeHandler (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:396:26)
+graphnode-worker-1  |               at async Consumer.processMessage (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:261:34)
+graphnode-worker-1  |               at async Promise.all (index 0)
+graphnode-worker-1  |               at async Consumer.handleSqsResponse (/app/node_modules/sqs-consumer/dist/cjs/consumer.js:241:17)
+graphnode-worker-1  |       "name": "StandardError",
+graphnode-worker-1  |       "messageIds": [
+graphnode-worker-1  |         "94408e8f-c2bf-4dd4-ae61-fc674502dc78"
+graphnode-worker-1  |       ],
+graphnode-worker-1  |       "time": "2026-05-21T12:15:15.533Z"
+graphnode-worker-1  |     }
