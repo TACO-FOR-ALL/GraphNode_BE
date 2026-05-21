@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from '@jest/globals';
 import { apiClient, getTestUserId } from '../utils/api-client';
+import { isE2eLlmEnabled, e2eLlmSkipReason } from '../utils/e2e-llm-env';
 import { seedTestData } from '../utils/db-seed';
 import { MongoClient } from 'mongodb';
 
@@ -9,8 +10,12 @@ import { MongoClient } from 'mongodb';
  * 시나리오 3: Microscope 분석 인입 (Microscope Ingest)
  * - 특정 노드를 기반으로 심층 분석 워크스페이스를 생성하고,
  *   AI가 문서 분석을 완료하여 'COMPLETED' 상태가 되는지 검증합니다.
+ *
+ * OPENAI/GROQ 키 없으면 스킵.
  */
-describe('End-to-End Microscope Flow', () => {
+const describeMicroscope = isE2eLlmEnabled() ? describe : describe.skip;
+
+describeMicroscope(e2eLlmSkipReason() || 'End-to-End Microscope Flow', () => {
   const userId = getTestUserId();
   const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/graphnode';
 

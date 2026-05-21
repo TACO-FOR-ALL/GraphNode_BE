@@ -27,12 +27,19 @@ fi
 if [[ -n "${GROQ_API_KEY:-}" && "${GROQ_API_KEY}" != *placeholder* && "${GROQ_API_KEY}" != dummy ]]; then
   _groq_ok=true
 fi
+echo "==> Building graphnode-be:test"
+docker build -t graphnode-be:test .
+
 if [[ "$_openai_ok" == false && "$_groq_ok" == false ]]; then
-  echo "OpenAI/Groq API 키가 없습니다. 전체 E2E(graph-flow)는 LLM 키가 필요합니다."
-  echo "  PR S3 번들만 검증: npm run e2e:bundle   (키 불필요, 이미 로컬 PASS 가능)"
-  echo "  Groq 무료 키: https://console.groq.com → export GROQ_API_KEY='gsk_...' 후 e2e:local"
-  exit 1
+  echo "==> No LLM key — infra + BE only, then bundle E2E (graph-flow/microscope skipped in Jest)"
+  docker compose -f docker-compose.test.yml up -d postgres mongo redis neo4j chroma localstack graphnode-be
+  for _ in $(seq 1 30); do
+    docker exec graphnode-test-postgres pg_isready -U app -d graphnode >/dev/null 2>&1 && break
+    sleep 2
+  done
+  exec bash scripts/e2e-bundle-only.sh
 fi
+
 if [[ "$_openai_ok" == false && "$_groq_ok" == true ]]; then
   export MACRO_LLM_PROVIDER="${MACRO_LLM_PROVIDER:-groq}"
   export MACRO_LLM_MODEL="${MACRO_LLM_MODEL:-llama-3.3-70b-versatile}"
@@ -40,9 +47,6 @@ if [[ "$_openai_ok" == false && "$_groq_ok" == true ]]; then
   export MICROSCOPE_LLM_MODEL="${MICROSCOPE_LLM_MODEL:-llama-3.3-70b-versatile}"
   echo "Using Groq for macro/microscope (MACRO_LLM_PROVIDER=groq)"
 fi
-
-echo "==> Building graphnode-be:test"
-docker build -t graphnode-be:test .
 
 if [[ ! -d "$AI_DIR" ]]; then
   echo "GraphNode_AI not found at: $AI_DIR"
