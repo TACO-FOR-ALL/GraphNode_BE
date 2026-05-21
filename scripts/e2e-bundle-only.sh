@@ -13,8 +13,12 @@ if ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "==> Building graphnode-be:test (if needed)"
-docker build -t graphnode-be:test .
+if docker image inspect graphnode-be:test >/dev/null 2>&1 && [[ "${E2E_FORCE_REBUILD:-}" != "1" ]]; then
+  echo "==> Using existing graphnode-be:test image (set E2E_FORCE_REBUILD=1 to rebuild)"
+else
+  echo "==> Building graphnode-be:test"
+  docker build -t graphnode-be:test .
+fi
 
 echo "==> Starting infra + graphnode-be only (AI/Worker 없음)"
 docker compose -f "$COMPOSE" up -d postgres mongo redis neo4j chroma localstack graphnode-be
