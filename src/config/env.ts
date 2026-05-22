@@ -88,6 +88,11 @@ const EnvSchema = z.object({
   S3_PAYLOAD_BUCKET: z.string().min(1, 'S3_PAYLOAD_BUCKET required'),
   S3_FILE_BUCKET: z.string().min(1, 'S3_FILE_BUCKET required'),
 
+  /** File Service MSA (VPC internal). 미설정 시 import API 비활성 */
+  FILE_SERVICE_BASE_URL: z.string().url().optional(),
+  FILE_SERVICE_INTERNAL_API_KEY: z.string().min(1).optional(),
+  FILE_SERVICE_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
+
   // JWT 설정
   JWT_SECRET: z.string().min(1, 'JWT_SECRET required'),
   JWT_ACCESS_EXPIRY: z.string().default('1h'),

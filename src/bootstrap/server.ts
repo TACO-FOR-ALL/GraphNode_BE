@@ -35,6 +35,7 @@ import { makeSearchRouter } from './modules/search.module';
 import { makeFeedbackRouter } from './modules/feedback.module';
 import { makeGraphEditorRouter } from './modules/graphEditor.module';
 import { makeFileProxyRouter } from './modules/fileProxy.module';
+import { makeImportRouter } from './modules/import.module';
 import { STORAGE_BUCKETS } from '../config/storageConfig';
 import { CleanupCron } from '../infra/cron/CleanupCron';
 // import { createTestAgentRouter } from '../app/routes/agent.test';
@@ -77,6 +78,11 @@ export function createApp() {
 
   // AI 라우터(조립된 Router 장착)
   app.use('/v1/ai', makeAiRouter());
+
+  // AI export import (File Service 프록시)
+  if (env.FILE_SERVICE_BASE_URL && env.FILE_SERVICE_INTERNAL_API_KEY) {
+    app.use('/v1', makeImportRouter());
+  }
 
   // Graph Router(조립된 Router 장착)
   app.use('/v1/graph', makeGraphRouter());

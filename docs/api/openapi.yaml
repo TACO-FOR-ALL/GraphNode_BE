@@ -3008,6 +3008,84 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+  /v1/import-providers:
+    get:
+      summary: List AI export import providers
+      responses:
+        '200':
+          description: Provider list
+        '401':
+          description: Not authenticated
+  /v1/imports:
+    post:
+      summary: Upload AI export ZIP (async import job)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [provider, file]
+              properties:
+                provider: { type: string }
+                file: { type: string, format: binary }
+      responses:
+        '202':
+          description: Import job queued
+        '400':
+          description: Bad Request
+        '401':
+          description: Not authenticated
+  /v1/imports/{jobId}:
+    get:
+      summary: Get import job status
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Job status
+        '404':
+          description: Not found
+    delete:
+      summary: Cancel import job
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Cancelled
+  /v1/imports/{jobId}/finalize:
+    post:
+      summary: Finalize import — save conversations to GraphNode
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+      responses:
+        '201':
+          description: Conversations created
+        '409':
+          description: Job not completed yet
+  /v1/files/{fileId}/access-url:
+    get:
+      summary: Presigned URL for imported attachment (fileId)
+      parameters:
+        - in: path
+          name: fileId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: disposition
+          schema: { type: string, enum: [inline, attachment] }
+      responses:
+        '200':
+          description: Presigned access URL
   /v1/notes:
     post:
       summary: Create a note

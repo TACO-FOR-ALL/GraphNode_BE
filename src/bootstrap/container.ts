@@ -53,6 +53,10 @@ import { AwsSqsAdapter } from '../infra/aws/AwsSqsAdapter';
 import { AwsS3Adapter } from '../infra/aws/AwsS3Adapter';
 import { RedisEventBusAdapter } from '../infra/redis/RedisEventBusAdapter';
 import { FeedbackRepositoryPrisma } from '../infra/repositories/FeedbackRepositoryPrisma';
+import { FileServiceClient } from '../infra/http/FileServiceClient';
+import { ImportArchiveService } from '../core/services/ImportArchiveService';
+import type { FileServicePort } from '../core/ports/FileServicePort';
+import { ValidationError } from '../shared/errors/domain';
 /**
  * 애플리케이션의 의존성 주입(Dependency Injection)을 관리하는 싱글톤 컨테이너입니다.
  *
@@ -104,6 +108,8 @@ export class Container {
   private searchService: SearchService | null = null;
   private feedbackService: FeedbackService | null = null;
   private graphEditorService: GraphEditorService | null = null;
+  private fileServiceClient: FileServicePort | null = null;
+  private importArchiveService: ImportArchiveService | null = null;
 
   private constructor() {}
   /**
@@ -533,6 +539,34 @@ export class Container {
       this.graphEditorService = createAuditProxy(raw, 'GraphEditorService');
     }
     return this.graphEditorService;
+  }
+
+  getFileServiceClient(): FileServicePort {
+    if (!this.fileServiceClient) {
+      const env = loadEnv();
+      if (!env.FILE_SERVICE_BASE_URL || !env.FILE_SERVICE_INTERNAL_API_KEY) {
+        throw new ValidationError(
+          'FILE_SERVICE_BASE_URL and FILE_SERVICE_INTERNAL_API_KEY are required for import APIs'
+        );
+      }
+      this.fileServiceClient = new FileServiceClient({
+        baseURL: env.FILE_SERVICE_BASE_URL,
+        apiKey: env.FILE_SERVICE_INTERNAL_API_KEY,
+        timeoutMs: env.FILE_SERVICE_TIMEOUT_MS,
+      });
+    }
+    return this.fileServiceClient;
+  }
+
+  getImportArchiveService(): ImportArchiveService {
+    if (!this.importArchiveService) {
+      const raw = new ImportArchiveService(
+        this.getFileServiceClient(),
+        this.getChatManagementService()
+      );
+      this.importArchiveService = createAuditProxy(raw, 'ImportArchiveService');
+    }
+    return this.importArchiveService;
   }
 }
 

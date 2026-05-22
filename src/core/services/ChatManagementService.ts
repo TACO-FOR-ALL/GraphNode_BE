@@ -245,6 +245,7 @@ export class ChatManagementService {
                         createdAt: now,
                         updatedAt: now,
                         deletedAt: null,
+                        attachments: m.attachments,
                       });
                     }
                   }
