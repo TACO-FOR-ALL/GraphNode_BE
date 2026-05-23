@@ -13,9 +13,13 @@ import { MongoClient } from 'mongodb';
  *
  * E2E_SCOPE=full + LLM 키 있을 때만 실행.
  */
-const describeMicroscope = isE2eFullSuiteEnabled() ? describe : describe.skip;
+function describeMicroscope(title: string, fn: () => void): void {
+  const enabled = isE2eFullSuiteEnabled();
+  const block = enabled ? describe : describe.skip;
+  block(enabled ? title : e2eFullSuiteSkipReason() || title, fn);
+}
 
-describeMicroscope(e2eFullSuiteSkipReason() || 'End-to-End Microscope Flow', () => {
+describeMicroscope('End-to-End Microscope Flow', () => {
   const userId = getTestUserId();
   const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/graphnode';
 

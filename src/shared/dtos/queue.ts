@@ -235,10 +235,16 @@ export interface MicroscopeIngestFromNodeQueuePayload extends BaseQueueMessage {
 export interface MicroscopeIngestFromNodeResultQueuePayload extends BaseQueueMessage {
   taskType: TaskType.MICROSCOPE_INGEST_FROM_NODE_RESULT;
   payload: {
-    /** Python 런타임 호환을 위한 snake_case 유저 식별자 */
-    user_id: string; 
-    /** 작업이 진행된 워크스페이스의 식별자 */
-    group_id: string;
+    /**
+     * Python 런타임 호환을 위한 snake_case 유저 식별자.
+     * 일부 AI 빌드는 생략할 수 있으며, Worker가 taskId에서 userId를 파싱합니다.
+     */
+    user_id?: string;
+    /**
+     * 작업이 진행된 워크스페이스의 식별자.
+     * 일부 AI 빌드는 생략할 수 있으며, 이 경우 Worker가 taskId로 Mongo 워크스페이스를 조회합니다.
+     */
+    group_id?: string;
     /** 작업 최종 상태 (성공 또는 실패) */
     status: 'COMPLETED' | 'FAILED';
     /** (성공 시) 새로 파싱되어 Neo4j에 기록된 문서 청크들의 최상위 소스 노드 uuid */

@@ -155,6 +155,29 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
   }
 
   /**
+   * @description 문서 taskId(`documents.id`)로 워크스페이스를 조회합니다.
+   * @param userId 유저 ID입니다.
+   * @param docId ingest 작업 ID (SQS envelope taskId와 동일)입니다.
+   * @param session MongoDB 트랜잭션 세션(선택)입니다.
+   * @returns 매칭 워크스페이스 또는 null입니다.
+   */
+  async findWorkspaceByDocumentId(
+    userId: string | undefined,
+    docId: string,
+    session?: ClientSession
+  ): Promise<MicroscopeWorkspaceMetaDoc | null> {
+    try {
+      const filter = userId
+        ? ({ userId, 'documents.id': docId } as const)
+        : ({ 'documents.id': docId } as const);
+      const doc = await this.microscope_workspaces_collection().findOne(filter as any, { session });
+      return doc ? (doc as unknown as MicroscopeWorkspaceMetaDoc) : null;
+    } catch (err: unknown) {
+      this.handleError('MicroscopeWorkspaceRepositoryMongo.findWorkspaceByDocumentId', err);
+    }
+  }
+
+  /**
    * 워크스페이스를 삭제(Hard Delete)합니다.
    * 워크스페이스 하위의 문서 및 진행 상태(documents 배열)도 함께 소멸됩니다.
    * 

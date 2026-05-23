@@ -161,13 +161,13 @@ jobs:
           echo "==================================="
           exit 1
 
-      # 9. PR E2E: S3 prefix bundle만 검증 (graph-flow/microscope는 E2E_SCOPE=full 일 때만)
+      # 9. 통합 E2E (macro-s3-bundle + graph-flow + microscope, LLM 파이프라인 포함)
       - name: Run Integrated E2E Tests
         run: |
           chmod +x be/scripts/e2e-test.sh be/scripts/localstack-init/ready.sh
           cd be && ./scripts/e2e-test.sh
         env:
-          E2E_SCOPE: bundle
+          E2E_SCOPE: full
           MONGODB_URI: mongodb://127.0.0.1:27017/graphnode?directConnection=true
           MONGODB_URL: mongodb://127.0.0.1:27017/graphnode?directConnection=true
           DATABASE_URL: postgresql://app:app@localhost:5432/graphnode

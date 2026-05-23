@@ -35,6 +35,7 @@ describe('MicroscopeManagementService', () => {
       deleteGraphPayloadsByGroupId: jest.fn(),
       findLatestWorkspaceByNodeId: jest.fn(),
       findWorkspaceByMostRecentDocumentNodeId: jest.fn(),
+      findWorkspaceByDocumentId: jest.fn(),
     } as any;
 
     mockGraphNeo4jStore = {
@@ -205,6 +206,53 @@ describe('MicroscopeManagementService', () => {
        await expect(
         service.createWorkspaceAndMicroscopeIngestFromNode('user', 'id', 'invalid' as any)
       ).rejects.toThrow(ValidationError);
+    });
+  });
+
+  describe('resolveGroupIdForIngestResult', () => {
+    it('returns group_id from payload when present', async () => {
+      const groupId = await service.resolveGroupIdForIngestResult(
+        'user_1',
+        'task_doc_1',
+        'ws-from-payload'
+      );
+      expect(groupId).toBe('ws-from-payload');
+      expect(mockWorkspaceStore.findWorkspaceByDocumentId).not.toHaveBeenCalled();
+    });
+
+    it('falls back to Mongo lookup by docId when group_id is missing', async () => {
+      mockWorkspaceStore.findWorkspaceByDocumentId.mockResolvedValue({
+        _id: 'ws-from-db',
+        userId: 'user_1',
+        documents: [{ id: 'task_doc_1', status: 'PROCESSING' }],
+      } as any);
+
+      const groupId = await service.resolveGroupIdForIngestResult('user_1', 'task_doc_1');
+
+      expect(mockWorkspaceStore.findWorkspaceByDocumentId).toHaveBeenCalledWith('user_1', 'task_doc_1');
+      expect(groupId).toBe('ws-from-db');
+    });
+
+    it('parses userId from taskId when userId argument is omitted', async () => {
+      const docId = 'task_microscope_node_user-12345_01KSB1ZRG9WP64HKHWT79EFQH5';
+      mockWorkspaceStore.findWorkspaceByDocumentId.mockResolvedValue({
+        _id: 'ws-from-task',
+        userId: 'user-12345',
+        documents: [{ id: docId, status: 'PROCESSING' }],
+      } as any);
+
+      const groupId = await service.resolveGroupIdForIngestResult(undefined, docId);
+
+      expect(mockWorkspaceStore.findWorkspaceByDocumentId).toHaveBeenCalledWith('user-12345', docId);
+      expect(groupId).toBe('ws-from-task');
+    });
+
+    it('throws NotFoundError when group_id and doc lookup both fail', async () => {
+      mockWorkspaceStore.findWorkspaceByDocumentId.mockResolvedValue(null);
+
+      await expect(
+        service.resolveGroupIdForIngestResult('user_1', 'missing_task')
+      ).rejects.toThrow(NotFoundError);
     });
   });
 

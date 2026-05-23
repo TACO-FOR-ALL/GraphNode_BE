@@ -56,6 +56,7 @@ echo "==> Seeding test data"
 npx ts-node -r dotenv/config tests/e2e/utils/db-seed.ts
 
 echo "==> Running macro-s3-bundle E2E only"
+export E2E_SCOPE=bundle
 NODE_OPTIONS="${NODE_OPTIONS:---experimental-vm-modules}" \
   npx jest --config "$E2E_CONFIG" tests/e2e/specs/macro-s3-bundle.spec.ts --runInBand --forceExit
 

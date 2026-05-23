@@ -69,5 +69,5 @@ for _ in $(seq 1 30); do
   sleep 2
 done
 
-echo "==> Running integrated E2E (seed + jest)"
-bash scripts/e2e-test.sh
+echo "==> Running integrated E2E (seed + jest, E2E_SCOPE=full)"
+E2E_SCOPE=full bash scripts/e2e-test.sh

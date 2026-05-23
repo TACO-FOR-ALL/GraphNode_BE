@@ -82,6 +82,30 @@ export function buildUserFileResolvedHint(doc: UserFileDoc): UserFileResolvedHin
   };
 }
 
+/**
+ * @description UserFile 힌트에서 E2E·집계용 `ai_raw_source_type` 라벨을 유도합니다.
+ * AI가 노드를 생략해 BE가 보강한 파일 노드에도 동일 규칙을 적용합니다.
+ *
+ * @param hint UserFile 메타 힌트입니다.
+ * @returns `pdf`·`docx`·`pptx` 등 확장자 버킷 키.
+ */
+export function aiRawSourceTypeFromMacroFileHint(hint: UserFileResolvedHint): string {
+  switch (hint.macroFileType) {
+    case 'pdf':
+      return 'pdf';
+    case 'word':
+      return 'docx';
+    case 'powerpoint':
+      return 'pptx';
+    case 'spreadsheet':
+      return 'xlsx';
+    case 'text':
+      return 'txt';
+    default:
+      return 'other';
+  }
+}
+
 export async function resolveSourceTypeByOrigId(
   origId: string,
   userId: string,

@@ -9,6 +9,7 @@ import {
   MINIMAL_DOCX_BYTES,
   MINIMAL_PDF_BYTES,
   MINIMAL_PPTX_BYTES,
+  MINIMAL_UNKNOWN_BYTES,
 } from '../fixtures/macro-file-stubs';
 
 /** E2E compose 전용 연결 정보(.env의 로컬 PG 계정과 분리) */
@@ -42,6 +43,14 @@ export const E2E_MACRO_USER_FILE_SEEDS = [
     category: 'ppt' as const,
     bytes: MINIMAL_PPTX_BYTES,
     summary: 'E2E stub PPTX summary for macro graph.',
+  },
+  {
+    _id: 'uf-e2e-unknown',
+    displayName: 'e2e-macro-unknown.xyz',
+    mimeType: 'application/octet-stream',
+    category: 'unknown' as const,
+    bytes: MINIMAL_UNKNOWN_BYTES,
+    summary: 'E2E stub unknown extension for macro graph.',
   },
 ] as const;
 
@@ -193,7 +202,7 @@ export async function seedTestData() {
     }
 
     console.log(
-      `MongoDB data seeded (${E2E_MACRO_USER_FILE_SEEDS.length} user_files: pdf, docx, pptx).`
+      `MongoDB data seeded (${E2E_MACRO_USER_FILE_SEEDS.length} user_files: pdf, docx, pptx, unknown.xyz).`
     );
   } finally {
     await mongoClient.close();

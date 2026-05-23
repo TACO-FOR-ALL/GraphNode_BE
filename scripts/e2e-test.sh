@@ -19,6 +19,24 @@ if ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 
+_wait_for_compose_service_healthy() {
+  local _service="$1"
+  local _max_attempts="${2:-120}"
+  local _sleep_sec="${3:-5}"
+  echo "⏳ Waiting for ${_service} to be healthy (max $((_max_attempts * _sleep_sec))s)..."
+  for _i in $(seq 1 "$_max_attempts"); do
+    if docker compose -f "$DOCKER_COMPOSE_FILE" ps "$_service" 2>/dev/null | grep -q '(healthy)'; then
+      echo "✅ ${_service} is healthy"
+      return 0
+    fi
+    sleep "$_sleep_sec"
+  done
+  echo "❌ Timed out waiting for ${_service} to become healthy"
+  docker compose -f "$DOCKER_COMPOSE_FILE" ps "$_service" || true
+  docker compose -f "$DOCKER_COMPOSE_FILE" logs --tail 80 "$_service" || true
+  return 1
+}
+
 # 1. 서비스 헬스체크 확인
 # GitHub Actions의 Wait 단계 이후 실행되지만, 로컬 실행 시를 대비한 재확인
 echo "🔍 Checking service health..."
@@ -27,7 +45,33 @@ docker compose -f $DOCKER_COMPOSE_FILE ps
 chmod +x scripts/localstack-init/ready.sh 2>/dev/null || true
 
 # shellcheck disable=SC1091
-source scripts/e2e-load-env.sh
+source scripts/e2e-load-env.sh .env
+
+# AI Worker가 .env·AWS SM LLM 키를 받도록 재기동
+_e2e_has_usable_llm_key=false
+if [[ -n "${OPENAI_API_KEY:-}" && "${OPENAI_API_KEY}" != *placeholder* && "${OPENAI_API_KEY}" != dummy ]]; then
+  _e2e_has_usable_llm_key=true
+fi
+if [[ -n "${GROQ_API_KEY:-}" && "${GROQ_API_KEY}" != *placeholder* && "${GROQ_API_KEY}" != dummy ]]; then
+  _e2e_has_usable_llm_key=true
+fi
+
+if [[ "$_e2e_has_usable_llm_key" == true ]]; then
+  export OPENAI_API_KEY GROQ_API_KEY DEV_OPENAI_API_KEY DEV_GROQ_API_KEY MACRO_LLM_PROVIDER MACRO_LLM_MODEL MICROSCOPE_LLM_PROVIDER MICROSCOPE_LLM_MODEL
+  _e2e_openai_status=unset
+  _e2e_groq_status=unset
+  [[ -n "${OPENAI_API_KEY:-}" && "${OPENAI_API_KEY}" != *placeholder* && "${OPENAI_API_KEY}" != dummy ]] && _e2e_openai_status=set
+  [[ -n "${GROQ_API_KEY:-}" && "${GROQ_API_KEY}" != *placeholder* && "${GROQ_API_KEY}" != dummy ]] && _e2e_groq_status=set
+  echo "🔑 LLM keys loaded (OPENAI=${_e2e_openai_status}, GROQ=${_e2e_groq_status}, MACRO_LLM_PROVIDER=${MACRO_LLM_PROVIDER:-openai}) — refreshing graphnode-ai / graphnode-worker"
+  docker compose -f "$DOCKER_COMPOSE_FILE" up -d --force-recreate graphnode-ai graphnode-worker graphnode-be
+  _wait_for_compose_service_healthy graphnode-ai 120 5 || exit 1
+  _wait_for_compose_service_healthy graphnode-worker 60 5 || exit 1
+  echo "⏳ graphnode-ai warmup (HuggingFace embedding model may take 1–3 min on first boot)..."
+  sleep 45
+else
+  echo "⚠️  No valid OPENAI_API_KEY or GROQ_API_KEY. graph-flow/microscope will skip."
+  echo "    Fix: .env 또는 AWS SM (DEV_OPENAI_API_KEY, DEV_GROQ_API_KEY) + aws configure/SSO."
+fi
 
 echo "⚙️ Initializing MongoDB Replica Set..."
 docker exec graphnode-test-mongo mongosh --eval "rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongo:27017'}]})" || true
@@ -77,15 +121,16 @@ trap collect_logs EXIT
 # 4. Jest 통합 테스트(E2E) 실행
 # --runInBand: 테스트를 순차적으로 실행하여 DB 경쟁 상태(Race Condition) 방지
 # --forceExit: 비동기 작업 종료 대기 없이 테스트 완료 후 강제 종료 (네이티브 모듈 잔여 핸들 방지)
-export E2E_SCOPE="${E2E_SCOPE:-bundle}"
+export E2E_SCOPE="${E2E_SCOPE:-full}"
 
 echo "🧪 Running E2E tests with Jest (E2E_SCOPE=${E2E_SCOPE})..."
 JEST_ARGS=(--config "$E2E_CONFIG" --runInBand --forceExit)
 if [[ "$E2E_SCOPE" == "bundle" ]]; then
-  echo "ℹ️  PR gate: macro-s3-bundle.spec.ts only (graph-flow/microscope require E2E_SCOPE=full)."
+  echo "ℹ️  Bundle-only: macro-s3-bundle.spec.ts (no LLM pipeline)."
   JEST_ARGS+=(tests/e2e/specs/macro-s3-bundle.spec.ts)
 elif [[ "$E2E_SCOPE" == "full" ]]; then
-  echo "ℹ️  Full LLM E2E: all specs (needs valid OPENAI_API_KEY or GROQ_API_KEY)."
+  echo "ℹ️  Full integrated E2E: all specs under tests/e2e/specs/ (needs valid OPENAI_API_KEY or GROQ_API_KEY for graph-flow/microscope)."
+  JEST_ARGS+=(tests/e2e/specs/)
 else
   echo "❌ Unknown E2E_SCOPE=${E2E_SCOPE} (use bundle or full)"
   exit 1

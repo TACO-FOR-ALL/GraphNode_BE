@@ -3,5 +3,6 @@ PostgreSQL User seeded.
 [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-pdf.pdf
 [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-docx.docx
 [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-pptx.pptx
-MongoDB data seeded (3 user_files: pdf, docx, pptx).
+[E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-unknown.xyz
+MongoDB data seeded (4 user_files: pdf, docx, pptx, unknown.xyz).
 --- DB Seeding Completed ---
