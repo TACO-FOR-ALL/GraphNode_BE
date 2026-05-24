@@ -47,7 +47,17 @@ chmod +x scripts/localstack-init/ready.sh 2>/dev/null || true
 # shellcheck disable=SC1091
 source scripts/e2e-load-env.sh .env
 
-# AI Worker가 .env·AWS SM LLM 키를 받도록 재기동
+export E2E_SCOPE="${E2E_SCOPE:-full}"
+
+# OpenAI-only E2E (GitHub Actions 기본): Groq env 제거 + 키 preflight
+if [[ "$E2E_SCOPE" == "full" ]] && [[ "${E2E_PREFER_GROQ:-0}" != "1" ]]; then
+  unset GROQ_API_KEY DEV_GROQ_API_KEY
+  if [[ -n "${OPENAI_API_KEY:-}" && "${OPENAI_API_KEY}" != *placeholder* && "${OPENAI_API_KEY}" != dummy ]]; then
+    _openai_preflight_for_e2e || exit 1
+  fi
+fi
+
+# AI Worker가 .env·Runner LLM 키를 받도록 재기동
 _e2e_has_usable_llm_key=false
 if [[ -n "${OPENAI_API_KEY:-}" && "${OPENAI_API_KEY}" != *placeholder* && "${OPENAI_API_KEY}" != dummy ]]; then
   _e2e_has_usable_llm_key=true
@@ -57,20 +67,25 @@ if [[ -n "${GROQ_API_KEY:-}" && "${GROQ_API_KEY}" != *placeholder* && "${GROQ_AP
 fi
 
 if [[ "$_e2e_has_usable_llm_key" == true ]]; then
-  export OPENAI_API_KEY GROQ_API_KEY DEV_OPENAI_API_KEY DEV_GROQ_API_KEY MACRO_LLM_PROVIDER MACRO_LLM_MODEL MICROSCOPE_LLM_PROVIDER MICROSCOPE_LLM_MODEL
+  export OPENAI_API_KEY DEV_OPENAI_API_KEY MACRO_LLM_PROVIDER MACRO_LLM_MODEL MICROSCOPE_LLM_PROVIDER MICROSCOPE_LLM_MODEL
+  if [[ -n "${GROQ_API_KEY:-}" ]]; then
+    export GROQ_API_KEY DEV_GROQ_API_KEY
+  else
+    unset GROQ_API_KEY DEV_GROQ_API_KEY
+  fi
   _e2e_openai_status=unset
   _e2e_groq_status=unset
   [[ -n "${OPENAI_API_KEY:-}" && "${OPENAI_API_KEY}" != *placeholder* && "${OPENAI_API_KEY}" != dummy ]] && _e2e_openai_status=set
   [[ -n "${GROQ_API_KEY:-}" && "${GROQ_API_KEY}" != *placeholder* && "${GROQ_API_KEY}" != dummy ]] && _e2e_groq_status=set
-  echo "🔑 LLM keys loaded (OPENAI=${_e2e_openai_status}, GROQ=${_e2e_groq_status}, MACRO_LLM_PROVIDER=${MACRO_LLM_PROVIDER:-openai}) — refreshing graphnode-ai / graphnode-worker"
+  echo "🔑 LLM keys loaded (OPENAI=${_e2e_openai_status}, GROQ=${_e2e_groq_status}, MACRO=${MACRO_LLM_PROVIDER:-openai}, MICROSCOPE=${MICROSCOPE_LLM_PROVIDER:-openai}) — refreshing graphnode-ai / graphnode-worker"
   docker compose -f "$DOCKER_COMPOSE_FILE" up -d --force-recreate graphnode-ai graphnode-worker graphnode-be
   _wait_for_compose_service_healthy graphnode-ai 120 5 || exit 1
   _wait_for_compose_service_healthy graphnode-worker 60 5 || exit 1
   echo "⏳ graphnode-ai warmup (HuggingFace embedding model may take 1–3 min on first boot)..."
   sleep 45
 else
-  echo "⚠️  No valid OPENAI_API_KEY or GROQ_API_KEY. graph-flow/microscope will skip."
-  echo "    Fix: .env 또는 AWS SM (DEV_OPENAI_API_KEY, DEV_GROQ_API_KEY) + aws configure/SSO."
+  echo "⚠️  No valid OPENAI_API_KEY (or GROQ with E2E_PREFER_GROQ=1). graph-flow/microscope will skip."
+  echo "    Fix: .env OPENAI_API_KEY 또는 GitHub Secrets와 동일한 키 설정."
 fi
 
 echo "⚙️ Initializing MongoDB Replica Set..."
@@ -129,7 +144,7 @@ if [[ "$E2E_SCOPE" == "bundle" ]]; then
   echo "ℹ️  Bundle-only: macro-s3-bundle.spec.ts (no LLM pipeline)."
   JEST_ARGS+=(tests/e2e/specs/macro-s3-bundle.spec.ts)
 elif [[ "$E2E_SCOPE" == "full" ]]; then
-  echo "ℹ️  Full integrated E2E: all specs under tests/e2e/specs/ (needs valid OPENAI_API_KEY or GROQ_API_KEY for graph-flow/microscope)."
+  echo "ℹ️  Full integrated E2E: all specs under tests/e2e/specs/ (OpenAI 기본; E2E_PREFER_GROQ=1 시 Groq)."
   JEST_ARGS+=(tests/e2e/specs/)
 else
   echo "❌ Unknown E2E_SCOPE=${E2E_SCOPE} (use bundle or full)"

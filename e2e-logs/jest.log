@@ -2,4 +2,336 @@
 (Use `node --trace-warnings ...` to show where the warning was created)
 
 --- Waiting for microscope ingest... (0s) ......
---- Waiting for microscope ingest... (60s) ..
+--- Waiting for microscope ingest... (60s) ......
+--- Waiting for microscope ingest... (120s) ......
+--- Waiting for microscope ingest... (180s) ....FAIL tests/e2e/specs/microscope.spec.ts (222.096 s)
+  ● Console
+
+    console.log
+      [dotenv@17.2.3] injecting env (25) from .env -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+
+      at _log (../../node_modules/dotenv/lib/main.js:142:11)
+
+    console.warn
+      [E2E] Full LLM E2E enabled (openai=true, groq=false).
+
+      25 | } else {
+      26 |   // eslint-disable-next-line no-console
+    > 27 |   console.warn(
+         |           ^
+      28 |     `[E2E] Full LLM E2E enabled (openai=${openAiResolved}, groq=${groqResolved}).`
+      29 |   );
+      30 | }
+
+      at Object.<anonymous> (jest.e2e.setup.ts:27:11)
+
+    console.log
+      --- Starting DB Seeding ---
+
+      at seedTestData (utils/db-seed.ts:96:11)
+
+    console.log
+      PostgreSQL User seeded.
+
+      at seedTestData (utils/db-seed.ts:110:11)
+
+    console.log
+      [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-pdf.pdf
+
+      at uploadUserFileToS3 (utils/db-seed.ts:82:11)
+
+    console.log
+      [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-docx.docx
+
+      at uploadUserFileToS3 (utils/db-seed.ts:82:11)
+
+    console.log
+      [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-pptx.pptx
+
+      at uploadUserFileToS3 (utils/db-seed.ts:82:11)
+
+    console.log
+      [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-unknown.xyz
+
+      at uploadUserFileToS3 (utils/db-seed.ts:82:11)
+
+    console.log
+      MongoDB data seeded (4 user_files: pdf, docx, pptx, unknown.xyz).
+
+      at seedTestData (utils/db-seed.ts:204:13)
+
+    console.log
+      --- DB Seeding Completed ---
+
+      at seedTestData (utils/db-seed.ts:211:11)
+
+    console.log
+      
+      --- Starting Scenario 3: Microscope Ingest ---
+
+      at Object.<anonymous> (specs/microscope.spec.ts:31:13)
+
+    console.log
+      Microscope Task Enqueued: task_microscope_node_user-12345_01KSCFW6Z60BZ6DT6Q2NARDSSD in Workspace: 01KSCFW6Z131CCXMAAEBJH9KJ2
+
+      at Object.<anonymous> (specs/microscope.spec.ts:45:13)
+
+  ● End-to-End Microscope Flow › Scenario 3: Microscope Ingest from Note
+
+    Microscope ingest failed: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-proj-********************************************************************************************************************************************************cVQA. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}
+
+      64 |           break;
+      65 |         } else if (doc && doc.status === 'FAILED') {
+    > 66 |           throw new Error(`Microscope ingest failed: ${doc.error}`);
+         |                 ^
+      67 |         }
+      68 |         if (i % 6 === 0)
+      69 |           process.stdout.write(`\n--- Waiting for microscope ingest... (${i * 10}s) `);
+
+      at Object.<anonymous> (specs/microscope.spec.ts:66:17)
+
+
+--- Waiting for graph creation... (0s) ..FAIL tests/e2e/specs/graph-flow.spec.ts (20.694 s)
+  ● Console
+
+    console.log
+      [dotenv@17.2.3] injecting env (25) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+
+      at _log (../../node_modules/dotenv/lib/main.js:142:11)
+
+    console.warn
+      [E2E] Full LLM E2E enabled (openai=true, groq=false).
+
+      25 | } else {
+      26 |   // eslint-disable-next-line no-console
+    > 27 |   console.warn(
+         |           ^
+      28 |     `[E2E] Full LLM E2E enabled (openai=${openAiResolved}, groq=${groqResolved}).`
+      29 |   );
+      30 | }
+
+      at Object.<anonymous> (jest.e2e.setup.ts:27:11)
+
+    console.log
+      --- Starting DB Seeding ---
+
+      at seedTestData (utils/db-seed.ts:96:11)
+
+    console.log
+      PostgreSQL User seeded.
+
+      at seedTestData (utils/db-seed.ts:110:11)
+
+    console.log
+      [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-pdf.pdf
+
+      at uploadUserFileToS3 (utils/db-seed.ts:82:11)
+
+    console.log
+      [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-docx.docx
+
+      at uploadUserFileToS3 (utils/db-seed.ts:82:11)
+
+    console.log
+      [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-pptx.pptx
+
+      at uploadUserFileToS3 (utils/db-seed.ts:82:11)
+
+    console.log
+      [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-unknown.xyz
+
+      at uploadUserFileToS3 (utils/db-seed.ts:82:11)
+
+    console.log
+      MongoDB data seeded (4 user_files: pdf, docx, pptx, unknown.xyz).
+
+      at seedTestData (utils/db-seed.ts:204:13)
+
+    console.log
+      --- DB Seeding Completed ---
+
+      at seedTestData (utils/db-seed.ts:211:11)
+
+    console.log
+      --- Starting Scenario 1: Graph Generation ---
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:87:13)
+
+    console.log
+      Task Enqueued: task_user-12345_01KSCG2YFGA1YBDVKHSFCWQ8H5
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:94:13)
+
+    console.log
+      Macro S3 prefix bundle verified on LocalStack.
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:103:13)
+
+    console.log
+      Expected nodes: 6 (Conversations: 1, Notes: 1, UserFiles: 4)
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:133:15)
+
+    console.log
+      Expected origIds: ["conv-e2e-123","note-e2e-123","uf-e2e-docx","uf-e2e-pdf","uf-e2e-pptx","uf-e2e-unknown"]
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:136:15)
+
+    console.error
+      [Scenario 1] Graph generation permanently failed (status=NOT_CREATED). Aborting poll.
+
+      153 |
+      154 |         if (status === 'NOT_CREATED') {
+    > 155 |           console.error('[Scenario 1] Graph generation permanently failed (status=NOT_CREATED). Aborting poll.');
+          |                   ^
+      156 |           break;
+      157 |         }
+      158 |
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:155:19)
+
+    console.log
+      
+      --- Starting Scenario 2: Graph Summary ---
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:323:13)
+
+    console.log
+      
+      --- Starting Scenario 3: Add Node (Conversation + Note) ---
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:418:13)
+
+    console.log
+      
+      --- Starting Scenario 4: Soft Delete Verification ---
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:615:13)
+
+  ● End-to-End Graph Flow › Scenario 1: Full Graph Generation Flow
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      316 |     }
+      317 |
+    > 318 |     expect(isFinished).toBe(true);
+          |                        ^
+      319 |     console.log('\nGraph creation confirmed in Neo4j.');
+      320 |   });
+      321 |
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:318:24)
+
+  ● End-to-End Graph Flow › Scenario 2: Graph Summary Flow
+
+    Scenario 1 did not complete successfully. Scenario 2 requires a generated graph and cannot proceed.
+
+      324 |
+      325 |     if (!scenario1Passed) {
+    > 326 |       throw new Error(
+          |             ^
+      327 |         'Scenario 1 did not complete successfully. Scenario 2 requires a generated graph and cannot proceed.'
+      328 |       );
+      329 |     }
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:326:13)
+
+  ● End-to-End Graph Flow › Scenario 3: Add Node to existing Graph (Conversation + Note)
+
+    Scenario 1 did not complete successfully. Scenario 3 requires graph_nodes to be populated and cannot proceed.
+
+      419 |
+      420 |     if (!scenario1Passed) {
+    > 421 |       throw new Error(
+          |             ^
+      422 |         'Scenario 1 did not complete successfully. Scenario 3 requires graph_nodes to be populated and cannot proceed.'
+      423 |       );
+      424 |     }
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:421:13)
+
+  ● End-to-End Graph Flow › Scenario 4: Graph Node Soft Delete Consistency Verification
+
+    Scenario 1 did not complete successfully. Scenario 4 requires graph_nodes to be populated.
+
+      616 |
+      617 |     if (!scenario1Passed) {
+    > 618 |       throw new Error(
+          |             ^
+      619 |         'Scenario 1 did not complete successfully. Scenario 4 requires graph_nodes to be populated.'
+      620 |       );
+      621 |     }
+
+      at Object.<anonymous> (specs/graph-flow.spec.ts:618:13)
+
+PASS tests/e2e/specs/macro-s3-bundle.spec.ts
+  ● Console
+
+    console.log
+      [dotenv@17.2.3] injecting env (25) from .env -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+
+      at _log (../../node_modules/dotenv/lib/main.js:142:11)
+
+    console.warn
+      [E2E] Full LLM E2E enabled (openai=true, groq=false).
+
+      25 | } else {
+      26 |   // eslint-disable-next-line no-console
+    > 27 |   console.warn(
+         |           ^
+      28 |     `[E2E] Full LLM E2E enabled (openai=${openAiResolved}, groq=${groqResolved}).`
+      29 |   );
+      30 | }
+
+      at Object.<anonymous> (jest.e2e.setup.ts:27:11)
+
+    console.log
+      --- Starting DB Seeding ---
+
+      at seedTestData (utils/db-seed.ts:96:11)
+
+    console.log
+      PostgreSQL User seeded.
+
+      at seedTestData (utils/db-seed.ts:110:11)
+
+    console.log
+      [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-pdf.pdf
+
+      at uploadUserFileToS3 (utils/db-seed.ts:82:11)
+
+    console.log
+      [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-docx.docx
+
+      at uploadUserFileToS3 (utils/db-seed.ts:82:11)
+
+    console.log
+      [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-pptx.pptx
+
+      at uploadUserFileToS3 (utils/db-seed.ts:82:11)
+
+    console.log
+      [E2E Seed] Uploaded user file to s3://taco5-graphnode-graphdata-s3/user-files/user-12345/uf-e2e-unknown.xyz
+
+      at uploadUserFileToS3 (utils/db-seed.ts:82:11)
+
+    console.log
+      MongoDB data seeded (4 user_files: pdf, docx, pptx, unknown.xyz).
+
+      at seedTestData (utils/db-seed.ts:204:13)
+
+    console.log
+      --- DB Seeding Completed ---
+
+      at seedTestData (utils/db-seed.ts:211:11)
+
+
+Test Suites: 2 failed, 1 passed, 3 total
+Tests:       5 failed, 1 passed, 6 total
+Snapshots:   0 total
+Time:        243.163 s
+Ran all test suites matching /tests\/e2e\/specs\//i.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

@@ -179,7 +179,33 @@ _apply_e2e_groq_test_only_policy() {
   if _is_e2e_prefer_groq; then
     return 0
   fi
-  unset GROQ_API_KEY
+  unset GROQ_API_KEY DEV_GROQ_API_KEY
+}
+
+# E2E full 스코프 + OpenAI 경로일 때 API 키 유효성 사전 검사 (Jest/AI 10분 대기 전 fail-fast)
+_openai_preflight_for_e2e() {
+  if [[ -z "${OPENAI_API_KEY:-}" || "${OPENAI_API_KEY}" == dummy || "${OPENAI_API_KEY}" == *placeholder* ]]; then
+    return 0
+  fi
+
+  local _model="${MACRO_LLM_MODEL:-gpt-4o-mini}"
+  local _http_code="000"
+  _http_code="$(
+    curl -sS -o /dev/null -w '%{http_code}' \
+      -H "Authorization: Bearer ${OPENAI_API_KEY}" \
+      -H 'Content-Type: application/json' \
+      -d "{\"model\":\"${_model}\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":1}" \
+      https://api.openai.com/v1/chat/completions 2>/dev/null || echo "000"
+  )"
+
+  if [[ "$_http_code" == "200" ]]; then
+    echo "✅ OpenAI API preflight OK (model=${_model})" >&2
+    return 0
+  fi
+
+  echo "❌ OpenAI API preflight failed (HTTP ${_http_code}). graph-flow/microscope will fail in graphnode-ai." >&2
+  echo "   Fix: .env OPENAI_API_KEY를 GitHub Secrets와 동일한 유효 키로 교체 (platform.openai.com/api-keys)." >&2
+  return 1
 }
 
 _apply_e2e_llm_provider_defaults() {
