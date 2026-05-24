@@ -3,7 +3,6 @@
 # Usage: source scripts/e2e-load-env.sh [path-to-.env]
 
 _ENV_FILE="${1:-.env}"
-[[ -f "$_ENV_FILE" ]] || return 0
 
 _e2e_trim() {
   local _s="$1"
@@ -50,15 +49,18 @@ _e2e_export_kv_line() {
   eval "export ${_key}=$(printf '%q' "$_val")"
 }
 
-while IFS= read -r _raw || [[ -n "$_raw" ]]; do
-  _line="${_raw%%#*}"
-  _line="$(_e2e_trim "$_line")"
-  [[ -z "$_line" ]] && continue
-  case "$_line" in
-    export\ *) _line="${_line#export }" ; _line="$(_e2e_trim "$_line")" ;;
-  esac
-  _e2e_export_kv_line "$_line" || true
-done < <(grep -E "$_E2E_KEY_PATTERN" "$_ENV_FILE" 2>/dev/null || true)
+# GitHub Actions: .env 없음 → Runner env(secrets.*) 유지. 로컬만 파일에서 KEY 로드.
+if [[ -f "$_ENV_FILE" ]]; then
+  while IFS= read -r _raw || [[ -n "$_raw" ]]; do
+    _line="${_raw%%#*}"
+    _line="$(_e2e_trim "$_line")"
+    [[ -z "$_line" ]] && continue
+    case "$_line" in
+      export\ *) _line="${_line#export }" ; _line="$(_e2e_trim "$_line")" ;;
+    esac
+    _e2e_export_kv_line "$_line" || true
+  done < <(grep -E "$_E2E_KEY_PATTERN" "$_ENV_FILE" 2>/dev/null || true)
+fi
 
 # 레거시 .env: OPEN_API_KEY / OPEN_AI_API_KEY → OPENAI_API_KEY
 _apply_openai_alias() {
@@ -74,7 +76,9 @@ _apply_openai_alias() {
     fi
   done
 }
-_apply_openai_alias
+if [[ -f "$_ENV_FILE" ]]; then
+  _apply_openai_alias
+fi
 
 # graphnode-ai(server/worker.py): MICROSCOPE/MACRO는 DEV_{PROVIDER}_API_KEY 우선, 없으면 OPENAI_API_KEY 폴백
 _apply_dev_provider_api_key_aliases() {
