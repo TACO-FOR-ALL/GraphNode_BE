@@ -31,14 +31,31 @@ function getSecret(): string {
  *   const state = createOauthState();
  *   const url = svc.buildAuthUrl(state);
  */
-export function createOauthState(): string {
+export interface OauthStatePayload {
+  nonce: string;
+  iat: number;
+  userId?: string;
+  purpose?: string;
+}
+
+/**
+ * @description HMAC-signed OAuth state 생성 (추가 payload optional).
+ * @param extra Notion 연동 등 userId 바인딩용 필드.
+ */
+export function createOauthState(extra?: Partial<Pick<OauthStatePayload, 'userId' | 'purpose'>>): string {
   const payload = JSON.stringify({
     nonce: randomUUID(),
     iat: Math.floor(Date.now() / 1000),
+    ...extra,
   });
   const payloadB64 = Buffer.from(payload).toString('base64url');
   const sig = createHmac('sha256', getSecret()).update(payloadB64).digest('base64url');
   return `${payloadB64}.${sig}`;
+}
+
+/** @description Notion workspace 연동용 state (로그인 사용자 ID 포함). */
+export function createNotionLinkOauthState(userId: string): string {
+  return createOauthState({ userId, purpose: 'notion_link' });
 }
 
 /**
@@ -51,35 +68,36 @@ export function createOauthState(): string {
  * @example
  *   if (!verifyOauthState(state)) throw new ValidationError('Invalid state');
  */
-export function verifyOauthState(state: string): boolean {
+/**
+ * @description state 서명·만료 검증 후 payload 반환.
+ */
+export function parseOauthState(state: string): OauthStatePayload | null {
   const dotIdx = state.lastIndexOf('.');
-  if (dotIdx === -1) return false;
+  if (dotIdx === -1) return null;
 
   const payloadB64 = state.slice(0, dotIdx);
   const receivedSig = state.slice(dotIdx + 1);
 
-  // 서명 재계산 후 timing-safe 비교 (timing attack 방지)
   const expectedSig = createHmac('sha256', getSecret()).update(payloadB64).digest('base64url');
   try {
     const a = Buffer.from(receivedSig, 'base64url');
     const b = Buffer.from(expectedSig, 'base64url');
-    if (a.length !== b.length) return false;
-    if (!timingSafeEqual(a, b)) return false;
+    if (a.length !== b.length) return null;
+    if (!timingSafeEqual(a, b)) return null;
   } catch {
-    return false;
+    return null;
   }
 
-  // 만료 확인
   try {
-    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString()) as {
-      nonce: string;
-      iat: number;
-    };
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString()) as OauthStatePayload;
     const ageSeconds = Math.floor(Date.now() / 1000) - payload.iat;
-    if (ageSeconds < 0 || ageSeconds > STATE_MAX_AGE_SECONDS) return false;
+    if (ageSeconds < 0 || ageSeconds > STATE_MAX_AGE_SECONDS) return null;
+    return payload;
   } catch {
-    return false;
+    return null;
   }
+}
 
-  return true;
+export function verifyOauthState(state: string): boolean {
+  return parseOauthState(state) !== null;
 }

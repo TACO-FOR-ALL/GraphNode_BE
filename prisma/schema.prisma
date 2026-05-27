@@ -28,9 +28,30 @@ model User {
   creditBalance     CreditBalance?        @relation("UserToCreditBalance")
   subscriptions     Subscription[]        @relation("UserToSubscriptions")
   paymentMethods    UserPaymentMethod[]   @relation("UserToPaymentMethods")
+  notionIntegrations NotionIntegration[]  @relation("UserToNotionIntegrations")
 
   @@unique([provider, providerUserId], map: "uniq_provider_user")
   @@map("users")
+}
+
+model NotionIntegration {
+  id                  String    @id @default(uuid()) @map("id")
+  userId              String    @map("user_id")
+  notionWorkspaceId   String    @map("notion_workspace_id") @db.VarChar(64)
+  notionWorkspaceName String?   @map("notion_workspace_name") @db.VarChar(191)
+  notionBotId         String?   @map("notion_bot_id") @db.VarChar(64)
+  accessToken         String    @map("access_token") @db.Text
+  refreshToken        String?   @map("refresh_token") @db.Text
+  tokenType           String    @default("bearer") @map("token_type") @db.VarChar(32)
+  tokenExpiresAt      DateTime? @map("token_expires_at") @db.Timestamp(0)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  user User @relation("UserToNotionIntegrations", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, notionWorkspaceId], map: "uniq_user_notion_workspace")
+  @@index([notionWorkspaceId], map: "idx_notion_workspace_id")
+  @@map("notion_integrations")
 }
 
 model DailyUsage {

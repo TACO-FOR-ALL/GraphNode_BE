@@ -307,6 +307,29 @@ erDiagram
 
 ---
 
+## NotionIntegration Table
+
+- **테이블명**: `notion_integrations`
+- **소스**: `prisma/schema.prisma`
+- **설계 전략**: Notion Public Integration OAuth. 사용자 1명이 여러 Notion 워크스페이스를 연동할 수 있음 (1:N).
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| **id** | `String` (UUID) | ✅ | PK |
+| **userId** | `String` | ✅ | `users.id` FK (Cascade delete) |
+| **notionWorkspaceId** | `String` | ✅ | Notion workspace_id |
+| **notionWorkspaceName** | `String` | ❌ | 표시용 워크스페이스 이름 |
+| **notionBotId** | `String` | ❌ | OAuth 응답 bot_id |
+| **accessToken** | `String` (Text) | ✅ | Notion access_token (서버 전용, FE 노출 금지) |
+| **refreshToken** | `String` (Text) | ❌ | refresh_token (있을 경우) |
+| **tokenType** | `String` | ✅ | 기본 `bearer` |
+| **tokenExpiresAt** | `DateTime` | ❌ | 만료 시각 |
+| **createdAt** / **updatedAt** | `DateTime` | ✅ | |
+
+Unique: `(userId, notionWorkspaceId)`
+
+---
+
 ## WebhookEvent Table
 
 - **테이블명**: `webhook_events`

@@ -76,6 +76,14 @@ import { SubscriptionService } from '../core/services/SubscriptionService';
 import { WebhookProcessingService } from '../core/services/WebhookProcessingService';
 import { WebhookController } from '../app/controllers/WebhookController';
 import { SubscriptionController } from '../app/controllers/SubscriptionController';
+import { NotionService } from '../core/services/NotionService';
+import { NotionApiClient } from '../infra/notion/NotionApiClient';
+import { NotionIntegrationRepositoryPrisma } from '../infra/repositories/NotionIntegrationRepositoryPrisma';
+import { NotionCacheRepositoryMongo } from '../infra/repositories/NotionCacheRepositoryMongo';
+import { AuthNotionController } from '../app/controllers/AuthNotion';
+import { NotionWebhookController } from '../app/controllers/NotionWebhookController';
+import type { NotionIntegrationRepository } from '../core/ports/NotionIntegrationRepository';
+import type { NotionCacheRepository } from '../core/ports/NotionCacheRepository';
 import { BillingConfig } from '../config/billing.config';
 import type { ISubscriptionRepository } from '../core/ports/ISubscriptionRepository';
 import type { IPaymentHistoryRepository } from '../core/ports/IPaymentHistoryRepository';
@@ -137,6 +145,11 @@ export class Container {
   private agentService: AgentService | null = null;
   private googleOAuthService: GoogleOAuthService | null = null;
   private appleOAuthService: AppleOAuthService | null = null;
+  private notionIntegrationRepo: NotionIntegrationRepository | null = null;
+  private notionCacheRepo: NotionCacheRepository | null = null;
+  private notionService: NotionService | null = null;
+  private authNotionController: AuthNotionController | null = null;
+  private notionWebhookController: NotionWebhookController | null = null;
   private microscopeManagementService: MicroscopeManagementService | null = null;
   private searchService: SearchService | null = null;
   private feedbackService: FeedbackService | null = null;
@@ -502,6 +515,12 @@ export class Container {
    */
   getGraphGenerationService(): GraphGenerationService {
     if (!this.graphGenerationService) {
+      const env = loadEnv();
+      const notionEnabled = Boolean(
+        env.OAUTH_NOTION_CLIENT_ID &&
+          env.OAUTH_NOTION_CLIENT_SECRET &&
+          env.OAUTH_NOTION_REDIRECT_URI
+      );
       const raw = new GraphGenerationService(
         this.getChatManagementService(),
         this.getGraphEmbeddingService(),
@@ -511,7 +530,8 @@ export class Container {
         this.getAwsSqsAdapter(),
         this.getAwsS3Adapter(),
         this.getNotificationService(),
-        this.getCreditService()
+        this.getCreditService(),
+        notionEnabled ? this.getNotionService() : undefined
       );
       this.graphGenerationService = createAuditProxy(raw, 'GraphGenerationService');
     }
@@ -629,6 +649,61 @@ export class Container {
     }
     return this.appleOAuthService;
   }
+
+  getNotionIntegrationRepository(): NotionIntegrationRepository {
+    if (!this.notionIntegrationRepo) {
+      this.notionIntegrationRepo = new NotionIntegrationRepositoryPrisma();
+    }
+    return this.notionIntegrationRepo;
+  }
+
+  getNotionCacheRepository(): NotionCacheRepository {
+    if (!this.notionCacheRepo) {
+      this.notionCacheRepo = new NotionCacheRepositoryMongo();
+    }
+    return this.notionCacheRepo;
+  }
+
+  getNotionService(): NotionService {
+    if (!this.notionService) {
+      const env = loadEnv();
+      if (
+        !env.OAUTH_NOTION_CLIENT_ID ||
+        !env.OAUTH_NOTION_CLIENT_SECRET ||
+        !env.OAUTH_NOTION_REDIRECT_URI
+      ) {
+        throw new Error('Notion integration is not configured (OAUTH_NOTION_* env missing)');
+      }
+      const client = new NotionApiClient({
+        clientId: env.OAUTH_NOTION_CLIENT_ID,
+        clientSecret: env.OAUTH_NOTION_CLIENT_SECRET,
+        redirectUri: env.OAUTH_NOTION_REDIRECT_URI,
+      });
+      const raw = new NotionService(
+        client,
+        this.getNotionIntegrationRepository(),
+        this.getNotionCacheRepository(),
+        env.NOTION_WEBHOOK_VERIFICATION_TOKEN
+      );
+      this.notionService = createAuditProxy(raw, 'NotionService');
+    }
+    return this.notionService;
+  }
+
+  getAuthNotionController(): AuthNotionController {
+    if (!this.authNotionController) {
+      this.authNotionController = new AuthNotionController(this.getNotionService());
+    }
+    return this.authNotionController;
+  }
+
+  getNotionWebhookController(): NotionWebhookController {
+    if (!this.notionWebhookController) {
+      this.notionWebhookController = new NotionWebhookController(this.getNotionService());
+    }
+    return this.notionWebhookController;
+  }
+
   /**
    * MicroscopeManagementService 인스턴스를 반환합니다.
    */
