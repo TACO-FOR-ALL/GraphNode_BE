@@ -48,6 +48,12 @@ export function toGraphSummaryDto(doc: GraphSummaryDoc): GraphSummaryDto {
       total_conversations: doc.overview.total_conversations || 0,
       total_notes: doc.overview.total_notes || 0,
       total_notions: doc.overview.total_notions || 0,
+      ...(doc.overview.total_files !== undefined
+        ? { total_files: doc.overview.total_files }
+        : {}),
+      ...(doc.overview.file_counts_by_extension !== undefined
+        ? { file_counts_by_extension: doc.overview.file_counts_by_extension }
+        : {}),
       time_span: doc.overview.time_span,
       primary_interests: doc.overview.primary_interests,
       conversation_style: doc.overview.conversation_style,
@@ -82,6 +88,7 @@ export function createEmptyGraphSummaryDto(): GraphSummaryDto {
       total_conversations: 0, // FE SDK 필드명 유지
       total_notes: 0,
       total_notions: 0,
+      total_files: 0,
       time_span: '',
       primary_interests: [],
       conversation_style: '',

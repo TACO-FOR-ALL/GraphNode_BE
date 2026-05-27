@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeAll } from '@jest/globals';
 import { apiClient, getTestUserId } from '../utils/api-client';
-import { seedTestData } from '../utils/db-seed';
+import { isE2eFullSuiteEnabled, e2eFullSuiteSkipReason } from '../utils/e2e-llm-env';
+import { E2E_MACRO_USER_FILE_SEEDS, seedTestData } from '../utils/db-seed';
+import { assertMacroGraphBundleUploaded } from '../utils/localstack-s3';
+import {
+  buildUserFileResolvedHint,
+  macroFileTypeFromUserFileDoc,
+} from '../../../src/workers/utils/sourceTypeResolver';
+import { toUserFileDoc } from '../utils/mongo-user-file';
 import { createNeo4jE2eDriver } from '../utils/neo4j-test-driver';
 import { MongoClient } from 'mongodb';
 import type { Session } from 'neo4j-driver';
@@ -13,7 +20,7 @@ import type { Session } from 'neo4j-driver';
  * 더 이상 사용하지 않으므로 모든 그래프 검증을 Neo4j 쿼리로 대체합니다.
  *
  * 시나리오 1: 전체 그래프 생성 (Graph Generation)
- * - 사용자의 대화/노트 데이터를 기반으로 지식 그래프 추출을 요청하고,
+ * - 사용자의 대화·노트·사용자 라이브러리 파일(UserFile)을 기반으로 지식 그래프 추출을 요청하고,
  *   비동기 작업(Worker/AI)이 완료되어 Neo4j에 'CREATED' 상태로 저장되는지 검증합니다.
  *
  * 시나리오 2: 그래프 요약 (Graph Summary)
@@ -27,8 +34,35 @@ import type { Session } from 'neo4j-driver';
  *
  * 시나리오 4: Graph Node Soft Delete 정합성 검증
  * - Neo4j에서 활성 노드를 찾아 API 소프트 삭제 후 Neo4j deletedAt 설정 여부를 검증합니다.
+ *
+ * E2E_SCOPE=full + LLM 키 있을 때만 실행 (`E2E_SCOPE=bundle` 은 macro-s3-bundle 만).
  */
-describe('End-to-End Graph Flow', () => {
+
+/**
+ * @description Neo4j `metadataJson` 문자열을 객체로 파싱합니다.
+ * @param raw JSON 문자열 또는 null.
+ * @returns 파싱된 metadata 객체. 실패 시 빈 객체.
+ */
+function parseNeo4jMetadataJson(raw: string | null | undefined): Record<string, unknown> {
+  if (!raw || !raw.trim()) return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * @description setupFiles 이후 시점에 LLM 키·E2E_SCOPE를 평가해 describe / describe.skip 선택.
+ */
+function describeGraphFlow(title: string, fn: () => void): void {
+  const enabled = isE2eFullSuiteEnabled();
+  const block = enabled ? describe : describe.skip;
+  block(enabled ? title : e2eFullSuiteSkipReason() || title, fn);
+}
+
+describeGraphFlow('End-to-End Graph Flow', () => {
   const userId = getTestUserId();
   const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/graphnode';
   let scenario1Passed = false;
@@ -59,7 +93,16 @@ describe('End-to-End Graph Flow', () => {
     const taskId = response.data.taskId;
     console.log(`Task Enqueued: ${taskId}`);
 
-    // MongoDB에서 conversations/notes 원본 ID 목록 수집 (여전히 MongoDB에 저장됨)
+    await assertMacroGraphBundleUploaded({
+      taskId,
+      userFiles: E2E_MACRO_USER_FILE_SEEDS.map((f) => ({
+        id: f._id,
+        displayName: f.displayName,
+      })),
+    });
+    console.log('Macro S3 prefix bundle verified on LocalStack.');
+
+    // MongoDB에서 conversations/notes/user_files 원본 ID 목록 수집 (원본은 MongoDB에 저장됨)
     const mongoClient = new MongoClient(MONGO_URI);
     await mongoClient.connect();
     const db = mongoClient.db();
@@ -75,13 +118,20 @@ describe('End-to-End Graph Flow', () => {
         .collection('notes')
         .find({ ownerUserId: userId, deletedAt: null })
         .toArray();
+      const userFiles = (
+        await db
+          .collection('user_files')
+          .find({ ownerUserId: userId, deletedAt: null })
+          .toArray()
+      ).map(toUserFileDoc);
       expectedOrigIds = [
         ...conversations.map((c) => c._id.toString()),
         ...notes.map((n) => n._id.toString()),
+        ...userFiles.map((f) => f._id),
       ];
       expectedCount = expectedOrigIds.length;
       console.log(
-        `Expected nodes: ${expectedCount} (Conversations: ${conversations.length}, Notes: ${notes.length})`
+        `Expected nodes: ${expectedCount} (Conversations: ${conversations.length}, Notes: ${notes.length}, UserFiles: ${userFiles.length})`
       );
       console.log(`Expected origIds: ${JSON.stringify([...expectedOrigIds].sort())}`);
     } finally {
@@ -113,6 +163,7 @@ describe('End-to-End Graph Flow', () => {
              WHERE n.deletedAt IS NULL
              OPTIONAL MATCH (n)-[:BELONGS_TO]->(c:MacroCluster {userId: $userId})
              RETURN n.id AS id, n.origId AS origId, n.nodeType AS nodeType,
+                    n.fileType AS fileType,
                     n.numMessages AS numMessages, n.updatedAt AS updatedAt,
                     coalesce(c.id, '') AS clusterId`,
             { userId }
@@ -122,6 +173,7 @@ describe('End-to-End Graph Flow', () => {
             id: r.get('id') as number,
             origId: r.get('origId') as string,
             nodeType: r.get('nodeType') as string,
+            fileType: r.get('fileType') as string | null,
             numMessages: r.get('numMessages') as number,
             updatedAt: r.get('updatedAt') as string,
             clusterId: r.get('clusterId') as string,
@@ -133,7 +185,13 @@ describe('End-to-End Graph Flow', () => {
           console.log(`Validation: Found ${actualCount} nodes in Neo4j MacroNode.`);
           console.log(
             `MacroNode dump: ${JSON.stringify(
-              nodes.map((n) => ({ id: n.id, origId: n.origId, nodeType: n.nodeType, clusterId: n.clusterId }))
+              nodes.map((n) => ({
+                id: n.id,
+                origId: n.origId,
+                nodeType: n.nodeType,
+                fileType: n.fileType,
+                clusterId: n.clusterId,
+              }))
             )}`
           );
 
@@ -166,9 +224,16 @@ describe('End-to-End Graph Flow', () => {
           const mongoClient2 = new MongoClient(MONGO_URI);
           await mongoClient2.connect();
           const db2 = mongoClient2.db();
+          let seededUserFiles: ReturnType<typeof toUserFileDoc>[] = [];
           try {
             const conversations = await db2.collection('conversations').find({ ownerUserId: userId }).toArray();
             const notes = await db2.collection('notes').find({ ownerUserId: userId, deletedAt: null }).toArray();
+            seededUserFiles = (
+              await db2
+                .collection('user_files')
+                .find({ ownerUserId: userId, deletedAt: null })
+                .toArray()
+            ).map(toUserFileDoc);
             for (const conv of conversations) {
               const node = nodes.find((n) => n.origId === conv._id.toString());
               expect(node?.nodeType).toBe('conversation');
@@ -177,9 +242,64 @@ describe('End-to-End Graph Flow', () => {
               const node = nodes.find((n) => n.origId === note._id.toString());
               expect(node?.nodeType).toBe('note');
             }
+            for (const uf of seededUserFiles) {
+              const node = nodes.find((n) => n.origId === uf._id);
+              expect(node?.nodeType).toBe('file');
+              const expectedMacroFileType = macroFileTypeFromUserFileDoc(uf);
+              expect(node?.fileType).toBe(expectedMacroFileType);
+
+              const metaRes = await neo4jSession.run(
+                `MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+                 WHERE n.origId = $origId AND n.deletedAt IS NULL
+                 RETURN n.metadataJson AS metadataJson, n.mimeType AS mimeType`,
+                { userId, origId: uf._id }
+              );
+              expect(metaRes.records.length).toBe(1);
+              const metadata = parseNeo4jMetadataJson(
+                metaRes.records[0]?.get('metadataJson') as string | undefined
+              );
+              const topLevelMime = metaRes.records[0]?.get('mimeType') as string | undefined;
+              const hint = buildUserFileResolvedHint(uf);
+
+              expect(metadata.mimeType).toBe(hint.mimeType);
+              expect(topLevelMime).toBe(hint.mimeType);
+              expect(metadata.macroFileType).toBe(hint.macroFileType);
+
+              if (uf._id === 'uf-e2e-unknown') {
+                expect(metadata.macroFileType).toBe('other');
+                expect(node?.fileType).toBe('other');
+              } else {
+                expect(typeof metadata.ai_raw_source_type).toBe('string');
+                expect((metadata.ai_raw_source_type as string).length).toBeGreaterThan(0);
+              }
+            }
           } finally {
             await mongoClient2.close();
           }
+
+          const statsApiRes = await apiClient.get('/v1/graph/stats');
+          expect(statsApiRes.status).toBe(200);
+          expect(statsApiRes.data?.status).toBe('CREATED');
+
+          const snapshotApiRes = await apiClient.get('/v1/graph/snapshot');
+          expect(snapshotApiRes.status).toBe(200);
+          const snapshotNodes = (snapshotApiRes.data?.nodes ?? []) as Array<{
+            origId: string;
+            sourceType?: string;
+            metadata?: Record<string, unknown>;
+          }>;
+          expect(snapshotNodes.length).toBeGreaterThanOrEqual(expectedCount);
+
+          for (const uf of seededUserFiles) {
+            const snapNode = snapshotNodes.find((n) => n.origId === uf._id);
+            expect(snapNode?.sourceType).toBe('file');
+            expect(snapNode?.metadata?.mimeType).toBe(uf.mimeType);
+            expect(snapNode?.metadata?.macroFileType).toBe(macroFileTypeFromUserFileDoc(uf));
+          }
+
+          console.log(
+            `Macro graph API snapshot verified (${snapshotNodes.length} nodes via GET /v1/graph/snapshot).`
+          );
 
           isFinished = true;
           scenario1Passed = true;
@@ -260,6 +380,9 @@ describe('End-to-End Graph Flow', () => {
       const actualNotes = await db
         .collection('notes')
         .countDocuments({ ownerUserId: userId, deletedAt: null });
+      const actualFiles = await db
+        .collection('user_files')
+        .countDocuments({ ownerUserId: userId, deletedAt: null });
 
       console.log(`\n[Summary Verification]`);
       console.log(
@@ -267,10 +390,25 @@ describe('End-to-End Graph Flow', () => {
       );
       console.log(`- Total Notes: actual=${actualNotes}, summary=${overview.total_notes}`);
       console.log(`- Total Notions: summary=${overview.total_notions}`);
+      console.log(`- Total Files: actual=${actualFiles}, summary=${overview.total_files}`);
 
       expect(overview.total_conversations).toBe(actualConversations);
       expect(overview.total_notes).toBe(actualNotes);
       expect(typeof overview.total_notions).toBe('number');
+      expect(overview.total_files).toBe(actualFiles);
+
+      expect(actualFiles).toBe(E2E_MACRO_USER_FILE_SEEDS.length);
+
+      if (overview.file_counts_by_extension && actualFiles > 0) {
+        const extCounts = overview.file_counts_by_extension as Record<string, number>;
+        // countSourceTypes: macroFileType word→docx, powerpoint→pptx; unknown → other
+        const expectedExtBuckets = ['pdf', 'docx', 'pptx'];
+        for (const ext of expectedExtBuckets) {
+          expect(extCounts[ext] ?? 0).toBeGreaterThanOrEqual(1);
+        }
+        expect(extCounts.other ?? 0).toBe(1);
+        console.log(`- File counts by extension: ${JSON.stringify(extCounts)}`);
+      }
     } finally {
       await mongoClient.close();
     }

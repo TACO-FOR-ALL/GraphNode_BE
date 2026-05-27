@@ -261,6 +261,10 @@ export interface GraphSummaryDto {
     total_conversations: number;
     total_notes: number;
     total_notions: number;
+    /** Macro graph 파일 노드 수 (Neo4j 스냅샷·요약 worker가 집계) */
+    total_files?: number;
+    /** 파일 포맷별 개수 (예: pdf, docx, pptx, other) */
+    file_counts_by_extension?: Record<string, number>;
     time_span: string;
     primary_interests: string[];
     conversation_style: string;

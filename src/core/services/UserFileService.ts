@@ -198,7 +198,10 @@ export class UserFileService {
     const s3Key = buildStorageKey(STORAGE_BUCKETS.USER_FILES, `${userId}/${physicalName}`);
 
     await withRetry(
-      async () => this.storagePort.upload(s3Key, buffer, defaultMimeForUserFile(allowed.ext)),
+      async () =>
+        this.storagePort.upload(s3Key, buffer, defaultMimeForUserFile(allowed.ext), {
+          bucketType: 'file',
+        }),
       { label: 'UserFileService.upload.s3' }
     );
 
@@ -376,9 +379,10 @@ export class UserFileService {
     fileId: string
   ): Promise<{ buffer: Buffer; contentType: string; displayName: string }> {
     const doc = await this.getFileDocForOwner(userId, fileId);
-    const downloaded = await withRetry(async () => this.storagePort.downloadFile(doc.s3Key), {
-      label: 'UserFileService.readFileBytes',
-    });
+    const downloaded = await withRetry(
+      async () => this.storagePort.downloadFile(doc.s3Key, { bucketType: 'file' }),
+      { label: 'UserFileService.readFileBytes' }
+    );
     return {
       buffer: downloaded.buffer,
       contentType: doc.mimeType || downloaded.contentType || 'application/octet-stream',
@@ -409,6 +413,7 @@ export class UserFileService {
       async () =>
         this.storagePort.getPresignedGetUrl(doc.s3Key, {
           expiresInSeconds,
+          bucketType: 'file',
           responseContentType: contentType,
           responseContentDisposition: contentDisposition,
         }),
@@ -462,7 +467,7 @@ export class UserFileService {
       });
       if (!ok) throw new NotFoundError(`파일을 찾을 수 없습니다: ${fileId}`);
       try {
-        await withRetry(async () => this.storagePort.delete(doc.s3Key), {
+        await withRetry(async () => this.storagePort.delete(doc.s3Key, { bucketType: 'file' }), {
           label: 'UserFileService.delete.s3',
         });
       } catch {

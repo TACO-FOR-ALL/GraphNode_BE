@@ -261,6 +261,12 @@ export class AddNodeResultHandler implements JobHandler {
           // 같은 배치의 edge가 raw AI string id를 참조할 수 있으므로 기록한다.
           createdNodeIds.set(normalizedItem.rawTempId, dbNodeId);
 
+          const hint = sourceTypeResult.userFileHintsByOrigId.get(normalizedItem.normalizedOrigId);
+          const metadata =
+            resolvedSourceType === 'file' && hint
+              ? { mimeType: hint.mimeType, macroFileType: hint.macroFileType }
+              : undefined;
+
           pendingNodes.push({
             id: dbNodeId,
             userId,
@@ -271,6 +277,7 @@ export class AddNodeResultHandler implements JobHandler {
             sourceType: resolvedSourceType,
             embedding: [],
             timestamp: normalizedItem.timestamp ?? null,
+            metadata,
           });
           totalNodesAdded += 1;
         }
