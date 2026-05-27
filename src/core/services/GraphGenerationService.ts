@@ -172,7 +172,7 @@ export class GraphGenerationService {
       // 3. 사용자 라이브러리 원본 바이트 → bundle/files/{id}_{displayName} (확장자 유지)
       for (const f of userFiles) {
         const downloaded = await withRetry(
-          async () => await this.storagePort.downloadFile(f.s3Key),
+          async () => await this.storagePort.downloadFile(f.s3Key, { bucketType: 'file' }),
           { label: 'Storage.downloadFile.userFileForMacroBundle' }
         );
         const segment = this.sanitizeMacroBundleFileSegment(f.displayName);
