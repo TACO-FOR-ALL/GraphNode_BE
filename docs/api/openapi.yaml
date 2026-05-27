@@ -3748,39 +3748,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: ../schemas/problem.json
-  /v1/agent/chat/stream:
-    post:
-      summary: Stream agent chat
-      description: Interactive chat with the AI agent, supporting multiple modes (chat, summary, note). Returns a Server-Sent Events (SSE) stream.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [userMessage]
-              properties:
-                userMessage: { type: string }
-                contextText: { type: string }
-                modeHint: { type: string, enum: [chat, summary, note, auto] }
-      responses:
-        '200':
-          description: SSE stream established
-          content:
-            text/event-stream:
-              schema:
-                type: string
-                example: |
-                  event: status
-                  data: {"phase":"analyzing","message":"..."}
 
-                  event: chunk
-                  data: {"text":"Hello"}
-        '401':
-          description: Not authenticated
-          content:
-            application/problem+json:
-              schema: { $ref: '../schemas/problem.json' }
   /v1/graph-ai/generate:
     post:
       summary: Generate graph from text (Async)
