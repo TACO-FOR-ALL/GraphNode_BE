@@ -297,7 +297,14 @@ services:
       - CHROMA_SERVER_HOST=chroma
       - CHROMA_SERVER_PORT=8000
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      # graphnode-ai worker는 provider별 DEV_*_API_KEY를 우선 사용 (없으면 OPENAI_API_KEY 폴백 → Groq 401)
+      - DEV_OPENAI_API_KEY=${DEV_OPENAI_API_KEY:-${OPENAI_API_KEY}}
+      - DEV_GROQ_API_KEY=${DEV_GROQ_API_KEY:-${GROQ_API_KEY:-}}
+      - MACRO_LLM_PROVIDER=${MACRO_LLM_PROVIDER:-openai}
+      - MACRO_LLM_MODEL=${MACRO_LLM_MODEL:-gpt-5-mini}
+      - MICROSCOPE_LLM_PROVIDER=${MICROSCOPE_LLM_PROVIDER:-openai}
+      - MICROSCOPE_LLM_MODEL=${MICROSCOPE_LLM_MODEL:-gpt-5-mini}
       - INTERNAL_SERVICE_TOKEN=ci-test-key
 
     healthcheck:

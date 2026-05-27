@@ -10,6 +10,8 @@ import { MicroscopeWorkspaceMetaDoc } from '../../core/types/persistence/microsc
 import { withRetry } from '../../shared/utils/retry';
 import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 import { notifyWorkerFailed } from '../../shared/utils/discord';
+import { parseUserIdFromMicroscopeNodeTaskId } from '../../shared/utils/microscopeTaskId';
+import { ValidationError } from '../../shared/errors/domain';
 
 /**
  * Microscope 문서 분석(Ingest) 결과 처리 핸들러
@@ -28,19 +30,37 @@ export class MicroscopeIngestResultHandler implements JobHandler {
     const { payload, taskId } = message;
     const { user_id, group_id, status, source_id, chunks_count, error } = payload;
 
-    // AI Python 워커가 보내는 snake_case 데이터를 camelCase 위주 백엔드 구조로 매핑
-    const userId = user_id;
-    const groupId = group_id;
+    const payloadRecord = payload as Record<string, unknown>;
+    // AI Python 워커가 보내는 snake_case / camelCase 혼용 및 taskId 내 userId 폴백
+    const userId =
+      user_id ??
+      (typeof payloadRecord.userId === 'string' ? payloadRecord.userId : undefined) ??
+      parseUserIdFromMicroscopeNodeTaskId(taskId);
+    if (!userId) {
+      throw new ValidationError('user_id is required in microscope ingest result payload');
+    }
+
     const sourceId = source_id;
     const standardizedS3Key = payload.standardized_s3_key;
 
     // Envelope의 taskId를 통해 문서 ID 식별
     const docId = taskId;
 
-    logger.info({ taskId, userId, groupId, status }, 'Handling Microscope ingest result');
-
     // 의존성 획득
     const microscopeService = container.getMicroscopeManagementService();
+
+    const groupIdFromPayload =
+      group_id ??
+      (typeof payloadRecord.workspace_id === 'string' ? payloadRecord.workspace_id : undefined) ??
+      (typeof payloadRecord.workspaceId === 'string' ? payloadRecord.workspaceId : undefined);
+
+    const groupId = await microscopeService.resolveGroupIdForIngestResult(
+      userId,
+      docId,
+      groupIdFromPayload
+    );
+
+    logger.info({ taskId, userId, groupId, status }, 'Handling Microscope ingest result');
     const notiService = container.getNotificationService();
     const storagePort = container.getAwsS3Adapter();
     const creditService = container.getCreditService();

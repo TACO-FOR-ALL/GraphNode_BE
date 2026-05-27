@@ -22,11 +22,14 @@ import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 import { notifyWorkerFailed } from '../../shared/utils/discord';
 import { normalizeAiOrigId } from '../../shared/utils/aiNodeId';
 import {
+  aiRawSourceTypeFromMacroFileHint,
   BatchResolvedSourceTypeResult,
   ResolvedGraphSourceType,
   resolveSourceTypesByOrigIds,
+  UserFileResolvedHint,
 } from '../utils/sourceTypeResolver';
 import { countSourceTypesFromSnapshot } from '../utils/countSourceTypes';
+import { augmentGraphOutputWithUserFileNodes } from '../utils/augmentGraphOutputWithUserFileNodes';
 
 interface NormalizedGraphOutputResult {
   normalizedAiGraphOutput: AiGraphOutputDto;
@@ -195,9 +198,20 @@ export class GraphGenerationResultHandler implements JobHandler {
         const normalizedGraphOutputResult: NormalizedGraphOutputResult =
           this.normalizeGraphOutput(aiGraphOutput);
 
+        // 1b. Macro bundle user_files 중 AI가 누락한 노드를 BE에서 보강한다.
+        const activeUserFiles = await userFileService.listAllActiveFiles(userId);
+        const graphWithBundleFiles = augmentGraphOutputWithUserFileNodes(
+          normalizedGraphOutputResult.normalizedAiGraphOutput,
+          activeUserFiles
+        );
+        const augmentedGraphOutputResult: NormalizedGraphOutputResult = {
+          normalizedAiGraphOutput: graphWithBundleFiles,
+          strippedOrigIdCount: normalizedGraphOutputResult.strippedOrigIdCount,
+        };
+
         // 2. 정규화된 origId 목록으로 실제 DB sourceType을 판별한다.
         const sourceTypeResult: BatchResolvedSourceTypeResult = await resolveSourceTypesByOrigIds(
-          this.collectGraphOrigIds(normalizedGraphOutputResult.normalizedAiGraphOutput),
+          this.collectGraphOrigIds(augmentedGraphOutputResult.normalizedAiGraphOutput),
           userId,
           { conversationService, noteService, userFileService }
         );
@@ -208,8 +222,9 @@ export class GraphGenerationResultHandler implements JobHandler {
         // 4. graph JSON의 각 node에 DB 기준 sourceType을 덮어쓴다.
         const sourceTypeResolvedGraphOutput: AiGraphOutputDto =
           this.applyResolvedSourceTypesToGraphOutput(
-            normalizedGraphOutputResult.normalizedAiGraphOutput,
-            sourceTypeResult.sourceTypesByOrigId
+            augmentedGraphOutputResult.normalizedAiGraphOutput,
+            sourceTypeResult.sourceTypesByOrigId,
+            sourceTypeResult.userFileHintsByOrigId
           );
         // 5. features JSON에도 같은 normalized origId / sourceType을 반영한다.
         const normalizedFeaturesJson = this.normalizeFeaturesJson(
@@ -222,7 +237,7 @@ export class GraphGenerationResultHandler implements JobHandler {
           taskId,
           userId,
           aiGraphOutput,
-          normalizedGraphOutputResult.strippedOrigIdCount,
+          augmentedGraphOutputResult.strippedOrigIdCount,
           sourceTypeResult
         );
 
@@ -274,7 +289,7 @@ export class GraphGenerationResultHandler implements JobHandler {
                 // 2026_04_12 기준, 임시로 for문 루프 돌려서 메서드로 만들어둠. 나중에 최적화 필요,
                 // FIXME TODO
 
-                const { chatCount, noteCount, notionCount, fileCount } =
+                const { chatCount, noteCount, notionCount, fileCount, fileCountsByExtension } =
                   countSourceTypesFromSnapshot(snapshot);
 
                 // Chat Cnt, Note Cnt, Notion Cnt 계산 된 값으로 덮어쓰기
@@ -282,6 +297,7 @@ export class GraphGenerationResultHandler implements JobHandler {
                 summaryJson.overview.total_notes = noteCount;
                 summaryJson.overview.total_notions = notionCount;
                 summaryJson.overview.total_files = fileCount;
+                summaryJson.overview.file_counts_by_extension = fileCountsByExtension;
 
                 // GraphSummaryDoc 생성
                 const summaryDoc: GraphSummaryDoc = {
@@ -550,22 +566,35 @@ export class GraphGenerationResultHandler implements JobHandler {
   }
 
   /**
-   * sourceType이 해결된 AI graph output을 반환합니다.
-   * @param aiGraphOutput AI graph output
-   * @param sourceTypesByOrigId orig_id별 sourceType 맵
-   * @returns sourceType이 해결된 AI graph output
+   * DB 기준으로 확정된 sourceType 및 파일 노드 메타(MIME·MacroFileType·AI 원시 포맷)를 반영합니다.
+   *
+   * @param aiGraphOutput 정규화된 AI 그래프 출력입니다.
+   * @param sourceTypesByOrigId orig_id별 표준 sourceType 맵입니다.
+   * @param userFileHintsByOrigId 사용자 파일 원천일 때 Neo4j 보조 속성입니다.
+   * @returns 스냅샷 매핑 가능한 형태로 보정된 출력입니다.
    */
   private applyResolvedSourceTypesToGraphOutput(
     aiGraphOutput: AiGraphOutputDto,
-    sourceTypesByOrigId: Map<string, ResolvedGraphSourceType>
+    sourceTypesByOrigId: Map<string, ResolvedGraphSourceType>,
+    userFileHintsByOrigId: Map<string, UserFileResolvedHint>
   ): AiGraphOutputDto {
     const resolvedNodes: AiGraphNodeOutput[] = [];
 
     for (const node of aiGraphOutput.nodes) {
-      const resolvedSourceType = sourceTypesByOrigId.get(node.orig_id) ?? node.source_type;
+      const resolvedSourceType = sourceTypesByOrigId.get(node.orig_id);
+      if (!resolvedSourceType) {
+        throw new Error(
+          `Missing resolved sourceType for graph-generation node origId=${node.orig_id}`
+        );
+      }
+
+      const hint = userFileHintsByOrigId.get(node.orig_id);
+      const mergedMetadata = this.mergeFileNodeMetadata(node, resolvedSourceType, hint);
+
       resolvedNodes.push({
         ...node,
         source_type: resolvedSourceType,
+        ...(mergedMetadata ? { metadata: mergedMetadata } : {}),
       });
     }
 
@@ -573,6 +602,40 @@ export class GraphGenerationResultHandler implements JobHandler {
       ...aiGraphOutput,
       nodes: resolvedNodes,
     };
+  }
+
+  /**
+   * 파일 원천 노드에 MIME·세부 타입·AI가 내려준 원시 포맷 문자열을 메타로 병합합니다.
+   *
+   * @param node AI 출력 노드입니다.
+   * @param resolvedSourceType DB에서 확정된 source 유형입니다.
+   * @param hint UserFile 레코드에서 유도한 힌트입니다.
+   * @returns 병합된 메타 객체. 비어 있으면 undefined입니다.
+   */
+  private mergeFileNodeMetadata(
+    node: AiGraphNodeOutput,
+    resolvedSourceType: ResolvedGraphSourceType,
+    hint?: UserFileResolvedHint
+  ): Record<string, unknown> | undefined {
+    const base =
+      node.metadata && typeof node.metadata === 'object' ? { ...node.metadata } : {};
+
+    const rawFromAi =
+      typeof node.source_type === 'string' ? node.source_type.trim().toLowerCase() : '';
+    const canonical = new Set<string>(['chat', 'markdown', 'notion', 'file']);
+    if (resolvedSourceType === 'file' && rawFromAi && !canonical.has(rawFromAi)) {
+      base['ai_raw_source_type'] = rawFromAi;
+    }
+
+    if (resolvedSourceType === 'file' && hint) {
+      base['mimeType'] = hint.mimeType;
+      base['macroFileType'] = hint.macroFileType;
+      if (typeof base['ai_raw_source_type'] !== 'string' || !base['ai_raw_source_type'].trim()) {
+        base['ai_raw_source_type'] = aiRawSourceTypeFromMacroFileHint(hint);
+      }
+    }
+
+    return Object.keys(base).length > 0 ? base : undefined;
   }
 
   /**

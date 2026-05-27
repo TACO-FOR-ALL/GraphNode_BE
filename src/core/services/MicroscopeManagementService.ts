@@ -30,6 +30,7 @@ import { NotificationService } from './NotificationService';
 import { UserService } from './UserService';
 import { AiMicroscopeIngestResultItem } from '../../shared/dtos/ai_graph_output';
 import { withRetry } from '../../shared/utils/retry';
+import { parseUserIdFromMicroscopeNodeTaskId } from '../../shared/utils/microscopeTaskId';
 import { ICreditService } from '../ports/ICreditService';
 import { CreditFeature } from '../types/persistence/credit.persistence';
 
@@ -534,6 +535,35 @@ export class MicroscopeManagementService {
    * - 동작 원리: `updateOne({ _id: groupId, 'documents.id': docId }, { $set: { 'documents.$.status': status } })`와 같은 쿼리가 실행되어
    *   해당 docId를 가진 특정 배열 내역(원소) 1개만을 정확하게 업데이트합니다. 다른 파일들의 진행 상황은 유지(Atomic update)됩니다.
    */
+  /**
+   * @description Microscope ingest 결과 payload에서 워크스페이스 ID(group_id)를 해석합니다.
+   * @param userId 요청 사용자 ID입니다.
+   * @param docId SQS taskId와 동일한 문서 작업 ID입니다.
+   * @param groupIdFromPayload AI가 반환한 group_id(또는 workspace_id)입니다. 없으면 Mongo 조회합니다.
+   * @returns Mongo 워크스페이스 `_id`입니다.
+   * @throws {NotFoundError} NOT_FOUND — payload·DB 모두에서 워크스페이스를 찾지 못한 경우
+   */
+  async resolveGroupIdForIngestResult(
+    userId: string | undefined,
+    docId: string,
+    groupIdFromPayload?: string
+  ): Promise<string> {
+    if (groupIdFromPayload?.trim()) {
+      return groupIdFromPayload.trim();
+    }
+
+    const resolvedUserId = userId?.trim() || parseUserIdFromMicroscopeNodeTaskId(docId);
+    const workspace = await this.microscopeWorkspaceStore.findWorkspaceByDocumentId(
+      resolvedUserId || undefined,
+      docId
+    );
+    if (!workspace) {
+      throw new NotFoundError(`Workspace for document ${docId} not found`);
+    }
+
+    return workspace._id;
+  }
+
   async updateDocumentStatus(
     userId: string,
     groupId: string,
