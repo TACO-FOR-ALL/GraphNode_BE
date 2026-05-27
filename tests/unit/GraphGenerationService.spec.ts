@@ -297,7 +297,7 @@ describe('GraphGenerationService', () => {
 
       await service.requestGraphGenerationViaQueue(userId);
 
-      expect(mockStoragePort.downloadFile).toHaveBeenCalledWith('user-files/user1/uf1.pdf');
+      expect(mockStoragePort.downloadFile).toHaveBeenCalledWith('user-files/user1/uf1.pdf', { bucketType: 'file' });
       expect(mockStoragePort.upload).toHaveBeenCalledWith(
         expect.stringMatching(/graph-generation\/task_user1_[^/]+\/files\/uf1_report\.pdf$/),
         expect.any(Buffer),
