@@ -16,3 +16,6 @@
 ## 🚦 Testing & Style
 - [테스트 가이드(Jest/Supertest)](TESTING.md)
 - [Auth — Google OAuth 스타일](../api/style/auth-google.md)
+
+## 🤖 Agent & Graph Views
+- [Macro Graph View — AI Agent 채팅(FE 가이드)](agent-macro-graph-fe.md)
