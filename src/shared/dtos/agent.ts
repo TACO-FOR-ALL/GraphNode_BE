@@ -14,9 +14,11 @@ export type AgentModeHint = 'summary' | 'note' | 'auto';
  * @property userMessage 사용자 메시지
  * @property contextText (선택) 컨텍스트 텍스트
  * @property modeHint (선택) 에이전트 채팅 모드 힌트
+ * @property microscopeGroupId (선택) Microscope 워크스페이스 ID — 존재하면 해당 workspace 기반 RAG 채팅 활성화
  */
 export interface ChatStreamRequestBody {
   userMessage: string;
   contextText?: string;
   modeHint?: AgentModeHint;
+  microscopeGroupId?: string;
 }

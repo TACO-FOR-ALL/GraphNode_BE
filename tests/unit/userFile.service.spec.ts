@@ -213,7 +213,8 @@ describe('UserFileService', () => {
     expect(storage.upload).toHaveBeenCalledWith(
       expect.stringContaining(`user-files/${userId}/`),
       expect.any(Buffer),
-      'application/pdf'
+      'application/pdf',
+      expect.objectContaining({ bucketType: 'file' })
     );
     expect(userFileRepo.insert).toHaveBeenCalled();
 
@@ -384,7 +385,7 @@ describe('UserFileService', () => {
 
     const r = await service.readFileBytes(userId, 'f3');
     expect(r.displayName).toBe('a.pdf');
-    expect(storage.downloadFile).toHaveBeenCalledWith('user-files/u/f3.pdf');
+    expect(storage.downloadFile).toHaveBeenCalledWith('user-files/u/f3.pdf', { bucketType: 'file' });
     expect(r.buffer.length).toBeGreaterThan(0);
   });
 

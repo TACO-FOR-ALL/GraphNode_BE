@@ -63,9 +63,9 @@ const prisma = new PrismaClient();
  * @param contentType MIME 타입.
  */
 async function uploadUserFileToS3(s3Key: string, body: Buffer, contentType: string): Promise<void> {
-  const bucket = process.env.S3_PAYLOAD_BUCKET;
+  const bucket = process.env.S3_FILE_BUCKET || process.env.S3_PAYLOAD_BUCKET;
   if (!bucket) {
-    console.warn('[E2E Seed] S3_PAYLOAD_BUCKET unset — skipping user file upload');
+    console.warn('[E2E Seed] S3_FILE_BUCKET unset — skipping user file upload');
     return;
   }
 
