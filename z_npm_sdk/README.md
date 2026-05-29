@@ -49,6 +49,7 @@ const client = createGraphNodeClient({
 - [Me API (`client.me`)](docs/endpoints/me.md): 프로필 조회, 설정, API 키 관리
 - [Google Auth Helper](docs/endpoints/auth.google.md): 구글 로그인 연동
 - [Apple Auth Helper](docs/endpoints/auth.apple.md): 애플 로그인 연동
+- [Notion Auth Helper](docs/endpoints/auth.notion.md): 노션 워크스페이스 연동 및 프록시 조회
 
 ### 🤖 2. AI 대화 (AI Chat)
 
@@ -167,6 +168,15 @@ onUnmount(() => closeStream());
 ---
 
 ## 📋 변경 내역 (Changelog)
+
+### v0.1.97
+
+**Notion OAuth 및 프록시 API 추가**
+
+- `client.notionAuth.getAuthUrl()`: 노션 연동을 위한 인가 URL 반환.
+- `client.notionAuth.getRootPages()`: 사용자가 접근 가능한 노션 루트 페이지(DB 포함) 조회.
+- `client.notionAuth.getBlockChildren()`: 특정 노션 블록의 자식 요소들을 커서 기반으로 페이징(Lazy Loading) 조회.
+- 429 에러(Rate Limit)에 대응하기 위해 서버 단에서 백오프 지연 처리되어 프론트에는 투명하게 응답.
 
 ### v0.1.96
 

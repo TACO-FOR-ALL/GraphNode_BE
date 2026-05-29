@@ -527,6 +527,71 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../schemas/problem.json'
+  /api/notion/pages:
+    get:
+      summary: Get accessible Notion root pages
+      description: Returns a list of Notion pages/databases the user has granted access to.
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                required: [results]
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '429':
+          description: Too Many Requests
+  /api/notion/blocks/{blockId}/children:
+    get:
+      summary: Get Notion block children
+      description: Fetches paginated children blocks of a given Notion block or page.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: blockId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: cursor
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                  next_cursor:
+                    type: string
+                    nullable: true
+                  has_more:
+                    type: boolean
+                required: [results, has_more]
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '429':
+          description: Too Many Requests
   /api/auth/notion:
     get:
       summary: Start Notion workspace link (OAuth)
