@@ -36,6 +36,12 @@ const EnvSchema = z.object({
   OAUTH_APPLE_PRIVATE_KEY: z.string().min(1, 'OAUTH_APPLE_PRIVATE_KEY required'),
   OAUTH_APPLE_REDIRECT_URI: z.string().url('OAUTH_APPLE_REDIRECT_URI must be URL'),
 
+  // Notion Public Integration (OAuth + Webhook) — 미설정 시 Notion 라우트 비활성
+  OAUTH_NOTION_CLIENT_ID: z.string().optional(),
+  OAUTH_NOTION_CLIENT_SECRET: z.string().optional(),
+  OAUTH_NOTION_REDIRECT_URI: z.string().url().optional(),
+  NOTION_WEBHOOK_VERIFICATION_TOKEN: z.string().optional(),
+
   // Qdrant(VectorDB)
   // QDRANT_URL: z.string().min(1, 'QDRANT_URL must be URL'),
   // QDRANT_API_KEY: z.string().min(1, 'QDRANT_API_KEY required'),

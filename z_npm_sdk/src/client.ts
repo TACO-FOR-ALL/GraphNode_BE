@@ -8,6 +8,7 @@ import { GraphApi } from './endpoints/graph.js';
 import { GraphAiApi } from './endpoints/graphAi.js';
 import { NoteApi } from './endpoints/note.js';
 import { AppleAuthApi } from './endpoints/auth.apple.js';
+import { NotionAuthApi } from './endpoints/auth.notion.js';
 import { SyncApi } from './endpoints/sync.js';
 import { AiApi } from './endpoints/ai.js';
 import { NotificationApi } from './endpoints/notification.js';
@@ -44,6 +45,7 @@ export interface GraphNodeClientOptions extends Omit<BuilderOptions, 'baseUrl' |
  * @property graphAi 그래프 AI 생성 API
  * @property note 노트/폴더 관리 API
  * @property appleAuth 애플 인증 API
+ * @property notionAuth 노션 연동 및 프록시 API
  * @property sync 데이터 동기화 API
  * @property ai AI 채팅 API
  * @property notification SSE 알림 API
@@ -60,6 +62,7 @@ export class GraphNodeClient {
   readonly graphAi: GraphAiApi;
   readonly note: NoteApi;
   readonly appleAuth: AppleAuthApi;
+  readonly notionAuth: NotionAuthApi;
   readonly sync: SyncApi;
   readonly ai: AiApi;
   readonly notification: NotificationApi;
@@ -136,6 +139,7 @@ export class GraphNodeClient {
     this.graphAi = new GraphAiApi(this.rb);
     this.note = new NoteApi(this.rb);
     this.appleAuth = new AppleAuthApi(getGraphNodeBaseUrl());
+    this.notionAuth = new NotionAuthApi(this.rb);
     this.sync = new SyncApi(this.rb);
     this.ai = new AiApi(this.rb);
     this.notification = new NotificationApi(this.rb); 

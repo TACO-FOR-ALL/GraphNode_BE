@@ -96,6 +96,27 @@
 > 동시에 `Neo4jMacroGraphAdapter`를 통해 Neo4j에도 Native Graph 구조로 미러링됩니다.  
 > Neo4j 상세는 [`DATABASE_NEO4J.md`](DATABASE_NEO4J.md)를 참조하세요.
 
+### notion_page_caches 컬렉션
+
+Notion Webhook·동기화로 적재되는 페이지 스냅샷. Macro Graph 생성 시 `notions.json` 입력으로 사용.  
+**텍스트 블록만** `plainText`·`blockTree`에 반영하며, Notion 이미지/파일의 S3 미러링은 하지 않습니다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| **_id** | `String` | Notion page ID (UUID) |
+| **ownerUserId** | `String` | GraphNode 사용자 ID |
+| **integrationId** | `String` | `notion_integrations.id` |
+| **notionWorkspaceId** | `String` | Notion workspace_id |
+| **title** | `String` | 페이지 제목 |
+| **blockTree** | `Array` | `NotionBlockTreeNode[]` (부모-자식 트리) |
+| **plainText** | `String` | AI 입력용 평문 |
+| **notionLastEditedAt** | `Date` | Notion `last_edited_time` |
+| **isStale** | `Boolean` | 지연 동기화(Lazy Sync) 마킹 플래그 (웹훅 수신 시 true) |
+| **createdAt** / **updatedAt** | `Date` | 캐시 시각 (`updatedAt` = Graph 증분 기준) |
+| **deletedAt** | `Date` | Soft delete (`page.deleted` 웹훅) |
+
+타입: `src/core/types/persistence/notion_cache.persistence.ts`
+
 ### graph_nodes 컬렉션
 
 | 필드 | 타입 | 설명 |

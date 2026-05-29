@@ -221,6 +221,14 @@ erDiagram
         string _id PK "UUID"
     }
 
+    NotionPageCacheDoc {
+        string _id PK "Notion UUID"
+        string ownerUserId FK
+        string integrationId FK
+        string title
+        boolean isStale "지연 동기화 마킹 플래그"
+    }
+
     GraphNodeDoc {
         number id PK "Macro 노드 정수형 ID"
         string userId FK
@@ -302,6 +310,7 @@ erDiagram
 
     ConversationDoc ||--o{ GraphNodeDoc : "origId = _id"
     NoteDoc ||--o{ GraphNodeDoc : "origId = _id"
+    NotionPageCacheDoc ||--o{ GraphNodeDoc : "origId = _id"
 
     GraphNodeDoc ||--o{ GraphEdgeDoc : "source / target"
     GraphClusterDoc ||--o{ GraphSubclusterDoc : "clusterId"

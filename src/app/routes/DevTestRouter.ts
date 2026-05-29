@@ -22,6 +22,7 @@ import { getMongo } from '../../infra/db/mongodb';
 import type { ConversationDoc } from '../../core/types/persistence/ai.persistence';
 import { ApiKeyModel } from '../../shared/dtos/me';
 import type { ChatStreamRequestBody } from '../../agent/types';
+import { isNotionIntegrationEnabled } from '../../bootstrap/modules/notion.module';
 
 /**
  * 환경은 **항상 `loadEnv()`(Zod `EnvSchema`)** 로만 접근합니다.
@@ -63,6 +64,154 @@ router.get('/ping', (_req: Request, res: Response) => {
     },
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notion 연동 로컬 검증 (OAuth 완료 후 웹훅 없이 페이지 sync 테스트)
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/notion/env', (_req: Request, res: Response) => {
+  const env = loadEnv();
+  res.json({
+    ok: true,
+    enabled: isNotionIntegrationEnabled(),
+    OAUTH_NOTION_CLIENT_ID: env.OAUTH_NOTION_CLIENT_ID?.trim() ? 'set' : 'missing',
+    OAUTH_NOTION_REDIRECT_URI: env.OAUTH_NOTION_REDIRECT_URI ?? null,
+    NOTION_WEBHOOK_VERIFICATION_TOKEN: env.NOTION_WEBHOOK_VERIFICATION_TOKEN?.trim()
+      ? 'set'
+      : 'missing',
+  });
+});
+
+router.get('/notion/integrations/:userId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!isNotionIntegrationEnabled()) {
+      throw new ValidationError('Notion integration env (OAUTH_NOTION_*) is not configured');
+    }
+    const userId = String(req.params.userId ?? '').trim();
+    if (!userId) throw new ValidationError('userId is required');
+    const list = await container.getNotionService().listIntegrations(userId);
+    res.json({
+      ok: true,
+      count: list.length,
+      integrations: list.map((i) => ({
+        id: i.id,
+        notionWorkspaceId: i.notionWorkspaceId,
+        notionWorkspaceName: i.notionWorkspaceName,
+        updatedAt: i.updatedAt,
+      })),
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/notion/sync-page', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!isNotionIntegrationEnabled()) {
+      throw new ValidationError('Notion integration env (OAUTH_NOTION_*) is not configured');
+    }
+    const userId =
+      typeof req.body?.userId === 'string' && req.body.userId.trim()
+        ? req.body.userId.trim()
+        : process.env.MIGRATION_TEST_USER_ID || 'user-12345';
+    const pageId =
+      typeof req.body?.pageId === 'string' && req.body.pageId.trim() ? req.body.pageId.trim() : '';
+    if (!pageId) throw new ValidationError('pageId is required (Notion page UUID from page URL)');
+
+    const notion = container.getNotionService();
+    const integrations = await notion.listIntegrations(userId);
+    if (integrations.length === 0) {
+      throw new NotFoundError(
+        `No NotionIntegration for userId=${userId}. Complete GET /api/auth/notion OAuth first.`
+      );
+    }
+
+    const integration =
+      integrations.find((i) => i.id === req.body?.integrationId) ?? integrations[0];
+    await notion.syncPageToCache(integration, pageId);
+    const cache = await container.getNotionCacheRepository().findByPageId(pageId, userId);
+    if (!cache) throw new NotFoundError('Cache upsert failed');
+
+    res.json({
+      ok: true,
+      pageId,
+      title: cache.title,
+      updatedAt: cache.updatedAt,
+      notionLastEditedAt: cache.notionLastEditedAt,
+      plainTextPreview: cache.plainText.slice(0, 500),
+      blockTreeDepth: cache.blockTree.length,
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get('/notion/cache/:userId/:pageId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = String(req.params.userId ?? '').trim();
+    const pageId = String(req.params.pageId ?? '').trim();
+    if (!userId || !pageId) throw new ValidationError('userId and pageId are required');
+    const cache = await container.getNotionCacheRepository().findByPageId(pageId, userId);
+    if (!cache) throw new NotFoundError('Notion page cache not found');
+    res.json({
+      ok: true,
+      pageId: cache._id,
+      title: cache.title,
+      updatedAt: cache.updatedAt,
+      notionLastEditedAt: cache.notionLastEditedAt,
+      plainTextPreview: cache.plainText.slice(0, 500),
+      blockTreeDepth: cache.blockTree.length,
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/notion/simulate-webhook', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!isNotionIntegrationEnabled()) {
+      throw new ValidationError('Notion integration env (OAUTH_NOTION_*) is not configured');
+    }
+    const workspaceId =
+      typeof req.body?.workspaceId === 'string' ? req.body.workspaceId.trim() : '';
+    const pageId = typeof req.body?.pageId === 'string' ? req.body.pageId.trim() : '';
+    const eventType =
+      typeof req.body?.type === 'string' && req.body.type.trim()
+        ? req.body.type.trim()
+        : 'page.content_updated';
+    if (!workspaceId || !pageId) {
+      throw new ValidationError('workspaceId and pageId are required');
+    }
+    await container.getNotionService().handleWebhookEvent({
+      type: eventType,
+      workspace_id: workspaceId,
+      entity: { id: pageId, type: 'page' },
+    });
+    res.json({ ok: true, workspaceId, pageId, type: eventType });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get(
+  '/notion/notions-bundle/:userId',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = String(req.params.userId ?? '').trim();
+      if (!userId) throw new ValidationError('userId is required');
+      const raw = await container.getGraphGenerationService().collectNotionsBundleJson(userId);
+      const parsed = JSON.parse(raw) as { source_nodes?: unknown[] };
+      res.json({
+        ok: true,
+        userId,
+        sourceNodeCount: Array.isArray(parsed.source_nodes) ? parsed.source_nodes.length : 0,
+        bundle: parsed,
+      });
+    } catch (e) {
+      next(e);
+    }
+  }
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /dev/test/chat-export-email-env

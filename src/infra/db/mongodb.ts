@@ -144,6 +144,13 @@ async function ensureIndexes() {
     }
   );
 
+  // notion_page_caches 컬렉션: ownerUserId + updatedAt 필터 기반 동기화 및 쿼리를 커버하는 인덱스
+  await db.collection('notion_page_caches').createIndex(
+    { ownerUserId: 1, updatedAt: 1 },
+    { name: 'notion_cache_owner_updated' }
+  );
+
+
   // (이전 텍스트 인덱스들은 용량 문제로 제거되었습니다. Atlas Search 등으로 대체 필요)
 
   logger.info({ event: 'db.migrations_checked' }, 'DB indexes ensured');
