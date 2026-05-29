@@ -38,3 +38,12 @@ export function makeNotionWebhookRouter(): Router | null {
   if (!isNotionIntegrationEnabled()) return null;
   return createNotionWebhookRouter(container.getNotionWebhookController());
 }
+
+/**
+ * @description Notion Proxy API 라우터 (`/api/notion`). 미설정 시 null.
+ */
+export function makeNotionApiRouter(): Router | null {
+  if (!isNotionIntegrationEnabled()) return null;
+  const { createNotionApiRouter } = require('../../app/routes/NotionApiRouter');
+  return createNotionApiRouter(container.getNotionApiController());
+}

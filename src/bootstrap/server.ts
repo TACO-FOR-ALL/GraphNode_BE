@@ -38,7 +38,7 @@ import { makeExportRouter } from './modules/export.module';
 import { makeGraphEditorRouter } from './modules/graphEditor.module';
 import { makeFileProxyRouter } from './modules/fileProxy.module';
 import { makeWebhookRouter, makeSubscriptionRouter } from './modules/billing.module';
-import { makeAuthNotionRouter, makeNotionWebhookRouter } from './modules/notion.module';
+import { makeAuthNotionRouter, makeNotionWebhookRouter, makeNotionApiRouter } from './modules/notion.module';
 import { STORAGE_BUCKETS } from '../config/storageConfig';
 import { CleanupCron } from '../infra/cron/CleanupCron';
 import { BillingCron } from '../infra/cron/BillingCron';
@@ -144,6 +144,10 @@ export function createApp() {
   const authNotionRouter = makeAuthNotionRouter();
   if (authNotionRouter) {
     app.use('/api/auth/notion', authNotionRouter);
+  }
+  const notionApiRouter = makeNotionApiRouter();
+  if (notionApiRouter) {
+    app.use('/api/notion', notionApiRouter);
   }
   app.use('/v1/me', makeMeRouter());
 

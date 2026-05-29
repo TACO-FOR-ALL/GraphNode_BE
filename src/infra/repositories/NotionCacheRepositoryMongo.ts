@@ -83,4 +83,45 @@ export class NotionCacheRepositoryMongo implements NotionCacheRepository {
       throw new UpstreamError('NotionCacheRepositoryMongo.softDeletePage failed', { cause: err });
     }
   }
+
+  /**
+   * @inheritdoc
+   */
+  async markAsStale(pageId: string, ownerUserId: string): Promise<void> {
+    try {
+      await this.col().updateOne(
+        { _id: pageId, ownerUserId },
+        { 
+          $set: { isStale: true, updatedAt: new Date() },
+          $setOnInsert: {
+            title: '',
+            url: '',
+            plainText: '',
+            createdAt: new Date(),
+            deletedAt: null
+          }
+        },
+        { upsert: true }
+      );
+    } catch (err: unknown) {
+      throw new UpstreamError('NotionCacheRepositoryMongo.markAsStale failed', { cause: err });
+    }
+  }
+
+  /**
+   * @inheritdoc
+   */
+  async findStalePages(ownerUserId: string): Promise<NotionPageCacheDoc[]> {
+    try {
+      return await this.col()
+        .find({
+          ownerUserId,
+          isStale: true,
+          $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }],
+        })
+        .toArray();
+    } catch (err: unknown) {
+      throw new UpstreamError('NotionCacheRepositoryMongo.findStalePages failed', { cause: err });
+    }
+  }
 }

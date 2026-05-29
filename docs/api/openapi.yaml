@@ -622,6 +622,12 @@ paths:
       responses:
         '200':
           description: Accepted (or verification echo)
+        '400':
+          description: Validation failed (Invalid JSON body)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
         '401':
           description: Invalid signature
   /auth/google/start:

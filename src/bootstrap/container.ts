@@ -704,6 +704,14 @@ export class Container {
     return this.notionWebhookController;
   }
 
+  getNotionApiController(): import('../app/controllers/NotionApiController').NotionApiController {
+    if (!(this as any)._notionApiController) {
+      const { NotionApiController } = require('../app/controllers/NotionApiController');
+      (this as any)._notionApiController = new NotionApiController(this.getNotionService());
+    }
+    return (this as any)._notionApiController;
+  }
+
   /**
    * MicroscopeManagementService 인스턴스를 반환합니다.
    */
