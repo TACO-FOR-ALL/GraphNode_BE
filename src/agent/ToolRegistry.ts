@@ -8,6 +8,7 @@ import { SearchConversationsTool } from './tools/SearchConversationsTool';
 import { GetRecentConversationsTool } from './tools/GetRecentConversationsTool';
 import { GetConversationMessagesTool } from './tools/GetConversationMessagesTool';
 import { GetGraphSummaryTool } from './tools/GetGraphSummaryTool';
+import { MicroscopeContextTool } from './tools/MicroscopeContextTool';
 import type { ICreditService } from '../core/ports/ICreditService';
 
 /**
@@ -29,6 +30,7 @@ export class ToolRegistry {
    * @constructor
    */
   constructor() {
+    this.register(new MicroscopeContextTool());
     this.register(new SearchNotesTool());
     this.register(new GetRecentNotesTool());
     this.register(new GetNoteContentTool());

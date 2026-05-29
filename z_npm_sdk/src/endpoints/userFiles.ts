@@ -6,6 +6,7 @@ import type {
   UserFilePatchDto,
   UserFileSummaryPreviewResponseDto,
   UserFileSummaryFullResponseDto,
+  SidebarItemsResponseDto,
 } from '../types/userFile.js';
 
 /**
@@ -350,18 +351,18 @@ export class UserFilesApi {
   }
 
   /** 노트와 파일을 합친 사이드바 목록. */
-  // async listSidebarItems(params?: {
-  //   folderId?: string | null;
-  //   limit?: number;
-  // }): Promise<HttpResponse<SidebarItemsResponseDto>> {
-  //   let b = this.rb.path('sidebar-items');
-  //   if (params?.folderId !== undefined && params.folderId !== null) {
-  //     b = b.query({ folderId: params.folderId });
-  //   }
-  //   if (params?.limit != null) {
-  //     b = b.query({ limit: params.limit });
-  //   }
-  //   return b.get<SidebarItemsResponseDto>();
-  // }
+  async listSidebarItems(params?: {
+    folderId?: string | null;
+    limit?: number;
+  }): Promise<HttpResponse<SidebarItemsResponseDto>> {
+    let b = this.rb.path('sidebar-items');
+    if (params?.folderId !== undefined && params.folderId !== null) {
+      b = b.query({ folderId: params.folderId });
+    }
+    if (params?.limit != null) {
+      b = b.query({ limit: params.limit });
+    }
+    return b.get<SidebarItemsResponseDto>();
+  }
 }
 

@@ -77,7 +77,7 @@ export class CreditRepositoryPrisma implements ICreditRepository {
   }): Promise<{ success: boolean; availableAfter: number }> {
     return prisma.$transaction(
       async (tx) => {
-        await tx.$queryRaw`
+        await tx.$executeRaw`
         SELECT user_id
         FROM credit_balances
         WHERE user_id = ${params.userId}
@@ -134,7 +134,7 @@ export class CreditRepositoryPrisma implements ICreditRepository {
   }): Promise<{ success: boolean; availableAfter: number }> {
     return prisma.$transaction(
       async (tx) => {
-        await tx.$queryRaw`
+        await tx.$executeRaw`
         SELECT user_id
         FROM credit_balances
         WHERE user_id = ${params.userId}
@@ -200,11 +200,11 @@ export class CreditRepositoryPrisma implements ICreditRepository {
     // Serializable 트랜잭션으로 동시성 충돌 방지
     const committed = await prisma.$transaction(
       async (tx) => {
-        await tx.$queryRaw`
+        await tx.$executeRaw`
         SELECT pg_advisory_xact_lock(hashtext(${taskId}))
       `;
 
-        await tx.$queryRaw`
+        await tx.$executeRaw`
         SELECT id
         FROM credit_transactions
         WHERE task_id = ${taskId}
@@ -221,7 +221,7 @@ export class CreditRepositoryPrisma implements ICreditRepository {
         if (alreadySettledInTx) return false;
 
         // 잔액 조회
-        await tx.$queryRaw`
+        await tx.$executeRaw`
         SELECT user_id
         FROM credit_balances
         WHERE user_id = ${holdTx.userId}
@@ -280,11 +280,11 @@ export class CreditRepositoryPrisma implements ICreditRepository {
 
     const rolledBack = await prisma.$transaction(
       async (tx) => {
-        await tx.$queryRaw`
+        await tx.$executeRaw`
         SELECT pg_advisory_xact_lock(hashtext(${taskId}))
       `;
 
-        await tx.$queryRaw`
+        await tx.$executeRaw`
         SELECT id
         FROM credit_transactions
         WHERE task_id = ${taskId}
@@ -300,7 +300,7 @@ export class CreditRepositoryPrisma implements ICreditRepository {
         });
         if (alreadySettledInTx) return false;
 
-        await tx.$queryRaw`
+        await tx.$executeRaw`
         SELECT user_id
         FROM credit_balances
         WHERE user_id = ${holdTx.userId}
