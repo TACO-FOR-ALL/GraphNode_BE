@@ -89,8 +89,8 @@ export class NotionService {
   verifyWebhookSignature(rawBody: string, signatureHeader: string | undefined): boolean {
     const secret = this.webhookVerificationToken;
     if (!secret) {
-      logger.warn('NOTION_WEBHOOK_VERIFICATION_TOKEN unset — skipping signature verification');
-      return true;
+      logger.error('NOTION_WEBHOOK_VERIFICATION_TOKEN unset — failing signature verification');
+      return false;
     }
     if (!signatureHeader?.startsWith('sha256=')) return false;
     const expected = `sha256=${createHmac('sha256', secret).update(rawBody).digest('hex')}`;
