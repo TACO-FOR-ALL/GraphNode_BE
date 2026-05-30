@@ -593,6 +593,174 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../schemas/problem.json'
+  /api/notion/pages:
+    get:
+      summary: Get accessible Notion root pages
+      description: Returns a list of Notion pages/databases the user has granted access to.
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                required: [results]
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '429':
+          description: Too Many Requests
+  /api/notion/blocks/{blockId}/children:
+    get:
+      summary: Get Notion block children
+      description: Fetches paginated children blocks of a given Notion block or page.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: blockId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: cursor
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                  next_cursor:
+                    type: string
+                    nullable: true
+                  has_more:
+                    type: boolean
+                required: [results, has_more]
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '429':
+          description: Too Many Requests
+  /api/auth/notion:
+    get:
+      summary: Start Notion workspace link (OAuth)
+      description: |
+        Returns Notion Public Integration authorize URL for the logged-in user.
+        Requires session cookie (JWT). Use `?redirect=true` for HTTP 302 instead of JSON.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: redirect
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Authorization URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+                required: [url]
+        '302':
+          description: Redirect to Notion consent screen
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+  /api/auth/notion/callback:
+    get:
+      summary: Notion OAuth callback
+      description: |
+        Exchanges authorization code for workspace access token and stores NotionIntegration (1 user : N workspaces).
+        Default response is HTML that `postMessage`s `{ type: "notion-link-success", integrationId, notionWorkspaceId, notionWorkspaceName }` to `window.opener` (same pattern as Google OAuth popup).
+        Use query `format=json` only for debugging.
+      parameters:
+        - in: query
+          name: code
+          schema:
+            type: string
+        - in: query
+          name: state
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: error
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Integration stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  integrationId:
+                    type: string
+                  notionWorkspaceId:
+                    type: string
+                  notionWorkspaceName:
+                    type: string
+                    nullable: true
+                required: [ok, integrationId, notionWorkspaceId]
+        '400':
+          description: Validation failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+  /api/webhooks/notion:
+    post:
+      summary: Notion integration webhook
+      description: |
+        Receives Notion subscription verification (`verification_token`) and page events.
+        Verifies `X-Notion-Signature` (HMAC-SHA256) when `NOTION_WEBHOOK_VERIFICATION_TOKEN` is set.
+        On `page.content_updated` etc., fetches page blocks and upserts Mongo `notion_page_caches`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Accepted (or verification echo)
+        '400':
+          description: Validation failed (Invalid JSON body)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '401':
+          description: Invalid signature
   /auth/google/start:
     get:
       summary: Start Google OAuth (redirects)
@@ -3748,39 +3916,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: ../schemas/problem.json
-  /v1/agent/chat/stream:
-    post:
-      summary: Stream agent chat
-      description: Interactive chat with the AI agent, supporting multiple modes (chat, summary, note). Returns a Server-Sent Events (SSE) stream.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [userMessage]
-              properties:
-                userMessage: { type: string }
-                contextText: { type: string }
-                modeHint: { type: string, enum: [chat, summary, note, auto] }
-      responses:
-        '200':
-          description: SSE stream established
-          content:
-            text/event-stream:
-              schema:
-                type: string
-                example: |
-                  event: status
-                  data: {"phase":"analyzing","message":"..."}
 
-                  event: chunk
-                  data: {"text":"Hello"}
-        '401':
-          description: Not authenticated
-          content:
-            application/problem+json:
-              schema: { $ref: '../schemas/problem.json' }
   /v1/graph-ai/generate:
     post:
       summary: Generate graph from text (Async)

@@ -17,6 +17,7 @@ export { GraphApi } from './endpoints/graph.js';
 export { GraphAiApi } from './endpoints/graphAi.js';
 export { NoteApi } from './endpoints/note.js';
 export { AppleAuthApi } from './endpoints/auth.apple.js';
+export { NotionAuthApi } from './endpoints/auth.notion.js';
 export { SyncApi } from './endpoints/sync.js';
 export { AiApi } from './endpoints/ai.js';
 export { NotificationApi } from './endpoints/notification.js';

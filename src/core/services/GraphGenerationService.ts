@@ -37,6 +37,7 @@ import { redis } from '../../infra/redis/client';
 import { GraphClusterDto } from '../../shared/dtos/graph';
 import { ICreditService } from '../ports/ICreditService';
 import { CreditFeature } from '../types/persistence/credit.persistence';
+import type { NotionService } from './NotionService';
 
 /**
  * 모듈: GraphGenerationService
@@ -64,7 +65,8 @@ export class GraphGenerationService {
     private readonly queuePort: QueuePort,
     private readonly storagePort: StoragePort,
     private readonly notificationService: NotificationService,
-    private readonly creditService?: ICreditService
+    private readonly creditService?: ICreditService,
+    private readonly notionService?: NotionService
   ) {
     const env = loadEnv();
     // FIXME TODO : HTTP Client 사용하지 않고 SQS로만 통신하도록 변경 예정
@@ -123,7 +125,20 @@ export class GraphGenerationService {
         { label: 'UserFileService.listAllActiveFiles.check' }
       );
 
-      if (convs.items.length === 0 && activeNotes.length === 0 && userFiles.length === 0) {
+      const notionPages = this.notionService
+        ? await withRetry(
+            async () =>
+              await this.notionService!.findCachedPagesModifiedSince(userId, new Date(0)),
+            { label: 'NotionService.findCachedPagesModifiedSince.check' }
+          )
+        : [];
+
+      if (
+        convs.items.length === 0 &&
+        activeNotes.length === 0 &&
+        userFiles.length === 0 &&
+        notionPages.length === 0
+      ) {
         logger.info(
           { userId },
           'No conversation, note, or user file data found. Skipping graph generation.'
@@ -136,6 +151,7 @@ export class GraphGenerationService {
       const taskPrefix = `graph-generation/${taskId}/`;
       const inputObjectKey = `${taskPrefix}input.json`;
       const noteObjectKey = `${taskPrefix}notes.json`;
+      const notionObjectKey = `${taskPrefix}notions.json`;
 
       // 선제적 크레딧 차감 (Hold)
       await this.holdCredit(userId, CreditFeature.GRAPH_GENERATION, taskId);
@@ -168,6 +184,16 @@ export class GraphGenerationService {
         async () => await this.storagePort.upload(noteObjectKey, noteStream, 'application/json'),
         { label: 'Storage.upload.notes' }
       );
+
+      // 2b. Notion 캐시 manifest → bundle/notions.json (연동·캐시된 페이지만)
+      if (this.notionService) {
+        const notionStream = Readable.from(this.streamNotionPages(userId));
+        await withRetry(
+          async () =>
+            await this.storagePort.upload(notionObjectKey, notionStream, 'application/json'),
+          { label: 'Storage.upload.notions' }
+        );
+      }
 
       // 3. 사용자 라이브러리 원본 바이트 → bundle/files/{id}_{displayName} (확장자 유지)
       for (const f of userFiles) {
@@ -756,5 +782,63 @@ export class GraphGenerationService {
     }
 
     yield ']}';
+  }
+
+  /**
+   * @description Mongo Notion 캐시를 AI source_nodes 형식으로 스트리밍.
+   * @param userId 사용자 ID.
+   */
+  private async *streamNotionPages(userId: string): AsyncGenerator<string> {
+    yield '{"source_nodes":[';
+    let isFirst = true;
+
+    if (!this.notionService) {
+      yield ']}';
+      return;
+    }
+
+    const pages = await withRetry(
+      async () => await this.notionService!.findCachedPagesModifiedSince(userId, new Date(0)),
+      { label: 'NotionService.findCachedPagesModifiedSince.stream' }
+    );
+
+    for (const page of pages) {
+      const aiNode: AiInputSourceNode = {
+        id: page._id,
+        title: page.title,
+        sections: [
+          {
+            id: `${page._id}-body`,
+            content: page.plainText,
+          },
+        ],
+        source_type: 'notion',
+        create_time: page.createdAt
+          ? Math.floor(new Date(page.createdAt).getTime() / 1000)
+          : 0,
+        update_time: page.updatedAt
+          ? Math.floor(new Date(page.updatedAt).getTime() / 1000)
+          : 0,
+      };
+
+      if (!isFirst) yield ',';
+      yield JSON.stringify(aiNode);
+      isFirst = false;
+    }
+
+    yield ']}';
+  }
+
+  /**
+   * @description Macro bundle `notions.json` 본문을 메모리에 조립 (SQS·크레딧 없음, dev/E2E용).
+   * @param userId 사용자 ID.
+   * @returns `{"source_nodes":[...]}` JSON 문자열.
+   */
+  async collectNotionsBundleJson(userId: string): Promise<string> {
+    const parts: string[] = [];
+    for await (const chunk of this.streamNotionPages(userId)) {
+      parts.push(chunk);
+    }
+    return parts.join('');
   }
 }

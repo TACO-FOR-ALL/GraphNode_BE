@@ -49,6 +49,7 @@ const client = createGraphNodeClient({
 - [Me API (`client.me`)](docs/endpoints/me.md): 프로필 조회, 설정, API 키 관리
 - [Google Auth Helper](docs/endpoints/auth.google.md): 구글 로그인 연동
 - [Apple Auth Helper](docs/endpoints/auth.apple.md): 애플 로그인 연동
+- [Notion Auth Helper](docs/endpoints/auth.notion.md): 노션 워크스페이스 연동 및 프록시 조회
 
 ### 🤖 2. AI 대화 (AI Chat)
 
@@ -173,6 +174,29 @@ onUnmount(() => closeStream());
 
 ## 📋 변경 내역 (Changelog)
 
+### v0.1.97
+
+**Notion OAuth 및 프록시 API 추가**
+
+- `client.notionAuth.getAuthUrl()`: 노션 연동을 위한 인가 URL 반환.
+- `client.notionAuth.getRootPages()`: 사용자가 접근 가능한 노션 루트 페이지(DB 포함) 조회.
+- `client.notionAuth.getBlockChildren()`: 특정 노션 블록의 자식 요소들을 커서 기반으로 페이징(Lazy Loading) 조회.
+- 429 에러(Rate Limit)에 대응하기 위해 서버 단에서 백오프 지연 처리되어 프론트에는 투명하게 응답.
+
+### v0.1.96
+
+**AI Tool Calling 결과 타입 정식 추가 (하위 호환)**
+
+- `MessageDto.metadata` 타입을 `MessageMetadata`로 분리하여 명확히 정의
+- `GraphNodeToolCall` 타입 추가: 웹 검색(`web_search`), 이미지 생성(`image_generation`), 웹 스크래핑(`web_scraper`) 결과 구조
+- `SearchResult` 타입 추가: `metadata.searchResults[]` 배열 항목 타입
+- `LegacyAssistantToolCall` — 기존 OpenAI Assistants 형식에 `@deprecated` 마킹 (삭제하지 않음, 하위 호환 유지)
+- `index.ts`에 신규 타입 4개 re-export 추가: `MessageMetadata`, `GraphNodeToolCall`, `LegacyAssistantToolCall`, `SearchResult`
+- 모든 신규 필드는 `?` Optional — **기존 FE 코드 수정 불필요**
+
+> 자세한 사용법 → [AI Tool 결과 가이드](docs/endpoints/ai.md#message-structure--tool-results)
+
+---
 ### v0.2.18 (2026-05-24)
 
 **API 스펙 최신화 및 README 대규모 갱신**

@@ -38,6 +38,7 @@ import { makeExportRouter } from './modules/export.module';
 import { makeGraphEditorRouter } from './modules/graphEditor.module';
 import { makeFileProxyRouter } from './modules/fileProxy.module';
 import { makeWebhookRouter, makeSubscriptionRouter } from './modules/billing.module';
+import { makeAuthNotionRouter, makeNotionWebhookRouter, makeNotionApiRouter } from './modules/notion.module';
 import { STORAGE_BUCKETS } from '../config/storageConfig';
 import { CleanupCron } from '../infra/cron/CleanupCron';
 import { BillingCron } from '../infra/cron/BillingCron';
@@ -66,6 +67,13 @@ export function createApp() {
 
   // app.use(helmet());
   app.use(cors({ origin: true, credentials: true }));
+
+  // Notion webhook: HMAC 검증을 위해 JSON 파서보다 먼저 raw body 라우트 등록
+  const notionWebhookRouter = makeNotionWebhookRouter();
+  if (notionWebhookRouter) {
+    app.use('/api/webhooks/notion', notionWebhookRouter);
+  }
+
   app.use(express.json({ limit: '100mb' }));
   app.use(express.urlencoded({ limit: '100mb', extended: true })); // Apple OAuth post request body 파싱
   app.use(cookieParser(sessionSecert));
@@ -133,6 +141,14 @@ export function createApp() {
   // Auth routes
   app.use('/auth/google', authGoogleRouter);
   app.use('/auth/apple', authAppleRouter);
+  const authNotionRouter = makeAuthNotionRouter();
+  if (authNotionRouter) {
+    app.use('/api/auth/notion', authNotionRouter);
+  }
+  const notionApiRouter = makeNotionApiRouter();
+  if (notionApiRouter) {
+    app.use('/api/notion', notionApiRouter);
+  }
   app.use('/v1/me', makeMeRouter());
 
   // User files + sidebar (노트 라우터보다 먼저 마운트하여 `/v1/files` 등이 `/v1/notes/:id`에 가려지지 않게 함)
