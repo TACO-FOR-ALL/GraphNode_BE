@@ -18,7 +18,7 @@ import {
   ResolvedGraphSourceType,
   resolveSourceTypesByOrigIds,
 } from '../utils/sourceTypeResolver';
-import { GraphNodeDto } from '../../shared/dtos/graph';
+import { GraphNodeDto, GraphEdgeDto, GraphClusterDto } from '../../shared/dtos/graph';
 
 interface NormalizedAddNodeItem {
   rawTempId: string;
@@ -173,7 +173,7 @@ export class AddNodeResultHandler implements JobHandler {
       let strippedOrigIdCount = 0;
       let unresolvedEdgeCount = 0;
 
-      const clusterPromises: Promise<void>[] = [];
+      const pendingClusters: GraphClusterDto[] = [];
       const pendingNodes: GraphNodeDto[] = [];
 
       /**
@@ -217,16 +217,14 @@ export class AddNodeResultHandler implements JobHandler {
           result.assignedCluster.isNewCluster &&
           result.assignedCluster.clusterId
         ) {
-          clusterPromises.push(
-            graphService.upsertCluster({
-              id: result.assignedCluster.clusterId,
-              userId,
-              name: result.assignedCluster.name || '',
-              description: result.assignedCluster.reasoning || '',
-              themes: result.assignedCluster.themes || [],
-              size: 1,
-            })
-          );
+          pendingClusters.push({
+            id: result.assignedCluster.clusterId,
+            userId,
+            name: result.assignedCluster.name || '',
+            description: result.assignedCluster.reasoning || '',
+            themes: result.assignedCluster.themes || [],
+            size: 1,
+          });
         }
 
         // 노드 처리
@@ -285,8 +283,16 @@ export class AddNodeResultHandler implements JobHandler {
 
       // Neo4j는 MacroNode.clusterId 속성을 저장하지 않고 BELONGS_TO 관계를 소속 정보의 source of truth로 사용합니다.
       // 따라서 신규 cluster가 포함된 AddNode 결과에서는 cluster upsert가 먼저 끝나야 node upsert 시 관계 생성 Cypher가 성공합니다.
-      await Promise.all(clusterPromises);
-      await Promise.all(pendingNodes.map((node) => graphService.upsertNode(node)));
+      if (pendingClusters.length > 0) {
+        await graphService.upsertClusters(pendingClusters); // 단일 트랜잭션 배치
+      }
+
+      // 노드 배치 처리: 20개 청크 단위로 순차 실행하여 Neo4j 커넥션 풀 고갈 방지
+      const NODE_CHUNK_SIZE = 20;
+      for (let i = 0; i < pendingNodes.length; i += NODE_CHUNK_SIZE) {
+        const chunk = pendingNodes.slice(i, i + NODE_CHUNK_SIZE);
+        await graphService.upsertNodes(chunk);
+      }
 
       // 260411: sourceType resolve 결과 로깅 추가
       logger.info(
@@ -317,7 +323,7 @@ export class AddNodeResultHandler implements JobHandler {
        * - edge는 AI 배치 전용 string ID를 가리킬 수 있으므로, node 저장이 끝난 뒤 숫자형 Mongo ID로 해소해야 합니다.
        * - 해소 순서는 "이번 배치에서 생성한 노드 -> 기존 Mongo 노드 -> 숫자형 fallback"입니다.
        */
-      const edgePromises: Promise<string>[] = [];
+      const pendingEdges: GraphEdgeDto[] = [];
       for (const result of batchResult.results || []) {
         for (const edge of result.edges || []) {
           // edge.source를 Mongo numeric id로 해석한다.
@@ -361,21 +367,24 @@ export class AddNodeResultHandler implements JobHandler {
             continue;
           }
 
-          edgePromises.push(
-            graphService.upsertEdge({
-              userId,
-              source: sourceId,
-              target: targetId,
-              weight: edge.weight || 1.0,
-              type: (edge.type || 'hard') as 'hard' | 'insight',
-              intraCluster: edge.intraCluster ?? true,
-            })
-          );
+          pendingEdges.push({
+            userId,
+            source: sourceId,
+            target: targetId,
+            weight: edge.weight || 1.0,
+            type: (edge.type || 'hard') as 'hard' | 'insight',
+            intraCluster: edge.intraCluster ?? true,
+          });
           totalEdgesAdded += 1;
         }
       }
 
-      await Promise.all(edgePromises);
+      // 엣지 배치 처리: 20개 청크 단위로 순차 실행하여 Neo4j 커넥션 풀 고갈 방지
+      const EDGE_CHUNK_SIZE = 20;
+      for (let i = 0; i < pendingEdges.length; i += EDGE_CHUNK_SIZE) {
+        const chunk = pendingEdges.slice(i, i + EDGE_CHUNK_SIZE);
+        await graphService.upsertEdges(chunk);
+      }
 
       // 260411: sourceType resolve 결과 로깅 추가
       logger.info(
@@ -438,7 +447,18 @@ export class AddNodeResultHandler implements JobHandler {
         'There was a problem adding conversations to your graph.',
         { taskId, status: 'FAILED' }
       );
-      throw err;
+
+      // BE 내부 처리 실패 시 선제 차감 크레딧 롤백
+      try {
+        await creditService.rollbackByTaskId(taskId);
+      } catch (creditErr) {
+        logger.error(
+          { err: creditErr, taskId, userId },
+          'Credit rollback failed after add-node BE exception'
+        );
+      }
+
+      throw err; // workers/index.ts 중앙 catch에서 Sentry + Discord 처리
     }
   }
 
