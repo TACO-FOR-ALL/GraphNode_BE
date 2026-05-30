@@ -14,9 +14,10 @@
 
 /** Discord Embed 색상 상수 (integer RGB) */
 const COLOR = {
-  RED: 0xff4444, // HTTP 500 에러
-  ORANGE: 0xff8800, // Worker FAILED (AI 서버 응답)
-  YELLOW: 0xffcc00, // Worker 내부 예외 (경고)
+  RED: 0xff4444,      // HTTP 500 에러
+  ORANGE: 0xff8800,   // Worker FAILED (AI 서버 응답)
+  YELLOW: 0xffcc00,   // Worker 내부 예외 (경고)
+  DARK_RED: 0xcc0000, // Worker BE 내부 처리 실패 (예외)
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -215,6 +216,82 @@ export async function notifyWorkerFailed(params: {
         fields,
         timestamp: new Date().toISOString(),
         footer: { text: 'GraphNode Worker (AI 서버 응답 실패)' },
+      },
+    ],
+  };
+
+  await postWebhook(webhookUrl, payload);
+}
+
+/**
+ * Worker BE 내부 처리 예외 Discord 알림 전송
+ *
+ * @description
+ * BE Worker 핸들러에서 내부 처리 중 예외(Neo4j 오류, S3 오류 등)가 발생한 경우 전송합니다.
+ * AI 서버가 FAILED 응답을 보낸 경우(notifyWorkerFailed)와 구별되는 별도 알림입니다.
+ * DISCORD_WEBHOOK_URL_GRAPH 환경 변수가 설정되지 않은 경우 즉시 반환(no-op)합니다.
+ *
+ * @param params.taskType SQS 메시지 타입 (예: ADD_NODE_RESULT)
+ * @param params.taskId 작업 고유 ID — CloudWatch Worker 로그 연결 키
+ * @param params.userId 작업을 요청한 사용자 ID (없으면 undefined)
+ * @param params.errorMessage 발생한 예외 메시지
+ * @param params.errorCode AppError 에러 코드 (있을 경우)
+ * @param params.sentryEventId Sentry captureException 반환값 — Sentry 링크 생성에 사용
+ *
+ * @returns void (fire-and-forget)
+ *
+ * @example
+ * // workers/index.ts — inner catch 블록
+ * void notifyWorkerException({
+ *   taskType,
+ *   taskId,
+ *   userId,
+ *   errorMessage: err.message,
+ *   sentryEventId,
+ * }).catch(() => {});
+ */
+export async function notifyWorkerException(params: {
+  taskType: string;
+  taskId: string;
+  userId?: string;
+  errorMessage: string;
+  errorCode?: string;
+  sentryEventId?: string;
+}): Promise<void> {
+  const webhookUrl = process.env.DISCORD_WEBHOOK_URL_GRAPH;
+  if (!webhookUrl) return;
+
+  const { taskType, taskId, userId, errorMessage, errorCode, sentryEventId } = params;
+  const sentryLink = buildSentryLink(sentryEventId);
+
+  const fields: Array<{ name: string; value: string; inline: boolean }> = [
+    { name: 'Task Type', value: `\`${taskType}\``, inline: true },
+    { name: 'taskId (CW 추적 키)', value: `\`${taskId}\``, inline: false },
+    { name: '에러 메시지', value: `\`${errorMessage.slice(0, 512)}\``, inline: false },
+  ];
+
+  if (userId) {
+    fields.push({ name: '사용자 ID', value: `\`${userId}\``, inline: true });
+  }
+  if (errorCode) {
+    fields.push({ name: '에러 코드', value: `\`${errorCode}\``, inline: true });
+  }
+  if (sentryLink) {
+    fields.push({
+      name: '📋 Sentry',
+      value: `[Breadcrumb Trail 포함 이벤트 보기](${sentryLink})`,
+      inline: false,
+    });
+  }
+
+  const payload = {
+    embeds: [
+      {
+        title: `🔥 [Worker] ${taskType} → BE 내부 처리 실패`,
+        color: COLOR.DARK_RED,
+        fields,
+        timestamp: new Date().toISOString(),
+        footer: { text: 'GraphNode Worker (BE 내부 예외)' },
       },
     ],
   };
