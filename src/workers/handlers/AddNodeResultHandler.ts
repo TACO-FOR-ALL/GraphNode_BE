@@ -398,6 +398,10 @@ export class AddNodeResultHandler implements JobHandler {
         'AddNode persistence finished with normalized node, edge, and sourceType resolution'
       );
 
+      // 고아 클러스터(Ghost Cluster) 정리
+      // 방금 전 배치에서 노드가 다른 클러스터로 모두 이동해 비어버린 이전 클러스터를 삭제합니다.
+      await graphService.removeEmptyClusters(userId);
+
       //
       // Stat 갱신
       const stats = await graphService.getStats(userId);

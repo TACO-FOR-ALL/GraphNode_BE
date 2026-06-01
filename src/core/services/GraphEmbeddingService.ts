@@ -339,6 +339,15 @@ export class GraphEmbeddingService {
   }
 
   /**
+   * 연결된 MacroNode가 없는 빈 MacroCluster(Ghost Cluster)를 삭제합니다.
+   *
+   * @param userId 사용자 ID
+   */
+  removeEmptyClusters(userId: string) {
+    return this.graphManagementService.removeEmptyClusters(userId);
+  }
+
+  /**
    * 그래프 통계를 저장합니다.
    * @param stats - 저장할 통계 데이터. `userId`는 필수입니다.
    * @returns Promise<void>
