@@ -409,4 +409,21 @@ describe('Neo4jMacroGraphAdapter', () => {
       expect(session2.close).toHaveBeenCalledTimes(1);
     });
   });
+  describe('removeEmptyClusters', () => {
+    it('write session에서 cleanupEmptyClusters Cypher를 실행한다', async () => {
+      const tx = makeMockTx();
+      const session = {
+        executeWrite: jest.fn().mockImplementation(async (fn: (t: typeof tx) => Promise<void>) => fn(tx)),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      const driver = { session: jest.fn().mockReturnValue(session) };
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      await adapter.removeEmptyClusters('user1');
+
+      const calledQuery = (tx.run as jest.Mock).mock.calls[0][0] as string;
+      expect(calledQuery).toContain(MACRO_GRAPH_CYPHER.cleanupEmptyClusters);
+    });
+  });
 });

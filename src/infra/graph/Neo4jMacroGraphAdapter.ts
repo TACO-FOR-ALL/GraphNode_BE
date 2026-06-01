@@ -2012,6 +2012,18 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
       return Boolean(record.get('hasNodes'));
     }, options);
   }
+
+  /**
+   * @description 연결된 MacroNode가 없는 빈 MacroCluster(Ghost Cluster)를 삭제합니다.
+   *
+   * @param userId 삭제 대상 사용자 ID
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  async removeEmptyClusters(userId: string, options?: MacroGraphStoreOptions): Promise<void> {
+    await this.runWrite(async (runner) => {
+      await runner.run(MACRO_GRAPH_CYPHER.cleanupEmptyClusters, { userId });
+    }, options);
+  }
 }
 
 

@@ -396,8 +396,27 @@ export const MACRO_GRAPH_CYPHER = {
   linkNodeBelongsToCluster: `
     UNWIND $rows AS row
     MATCH (n:MacroNode {userId: $userId, id: row.nodeId})
+    OPTIONAL MATCH (n)-[r:BELONGS_TO]->()
+    DELETE r
+    WITH n, row
     MATCH (c:MacroCluster {userId: $userId, id: row.clusterId})
     MERGE (n)-[:BELONGS_TO]->(c)
+  `,
+
+  /**
+   * @description 연결된 MacroNode가 없는 빈 MacroCluster(Ghost Cluster)를 삭제합니다.
+   *
+   * @param userId 사용자 ID
+   * @example
+   * // 파라미터 구조 예시:
+   * // {
+   * //   userId: '...',
+   * // }
+   */
+  cleanupEmptyClusters: `
+    MATCH (g:MacroGraph {userId: $userId})-[:HAS_CLUSTER]->(c:MacroCluster {userId: $userId})
+    WHERE NOT (c)<-[:BELONGS_TO]-()
+    DETACH DELETE c
   `,
 
   /**

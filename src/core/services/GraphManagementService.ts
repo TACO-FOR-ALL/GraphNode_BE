@@ -562,6 +562,22 @@ export class GraphManagementService {
     }
   }
 
+  /**
+   * 연결된 MacroNode가 없는 빈 MacroCluster(Ghost Cluster)를 삭제합니다.
+   *
+   * @param userId 사용자 ID
+   * @param options (선택) 트랜잭션 옵션
+   */
+  async removeEmptyClusters(userId: string, options?: RepoOptions): Promise<void> {
+    try {
+      this.assertUser(userId);
+      await this.repo.removeEmptyClusters(userId, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.removeEmptyClusters failed', { cause: String(err) });
+    }
+  }
+
   // --- Subclusters ---
   async upsertSubcluster(subcluster: GraphSubclusterDto, options?: RepoOptions): Promise<void> {
     try {

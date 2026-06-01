@@ -809,6 +809,14 @@ export interface MacroGraphStore {
     clusterId: string,
     options?: MacroGraphStoreOptions
   ): Promise<boolean>;
+
+  /**
+   * @description 연결된 MacroNode가 없는 빈 MacroCluster(Ghost Cluster)를 삭제합니다.
+   *
+   * @param userId 삭제 대상 사용자 ID
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  removeEmptyClusters(userId: string, options?: MacroGraphStoreOptions): Promise<void>;
 }
 /**
  * @description Graph RAG 클러스터 시블링 탐색 결과 단일 항목입니다.
