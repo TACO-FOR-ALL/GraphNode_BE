@@ -20,8 +20,8 @@
  *  NEO4J_PASSWORD
  */
 
-import { initNeo4j, closeNeo4j, getNeo4jDriver } from '../src/infra/db/neo4j';
-import { Neo4jMacroGraphAdapter } from '../src/infra/graph/Neo4jMacroGraphAdapter';
+import { initNeo4j, closeNeo4j, getNeo4jDriver } from '../../src/infra/db/neo4j';
+import { Neo4jMacroGraphAdapter } from '../../src/infra/graph/Neo4jMacroGraphAdapter';
 
 // ──────────────────────────────────────────────────────────────
 // 인터페이스
@@ -77,7 +77,7 @@ async function main(): Promise<void> {
     const session = driver.session();
     try {
       const result = await session.run('MATCH (g:MacroGraph) RETURN g.userId AS userId');
-      userIds = result.records.map((r) => String(r.get('userId') ?? '')).filter(Boolean);
+      userIds = result.records.map((r: any) => String(r.get('userId') ?? '')).filter(Boolean);
     } finally {
       await session.close();
     }

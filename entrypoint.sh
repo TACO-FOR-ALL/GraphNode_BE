@@ -20,7 +20,7 @@ npx prisma generate
 # - API/Worker 컨테이너가 동시에 실행해도 Neo4j 트랜잭션이 ACID를 보장하므로 안전
 echo "Running Neo4j BELONGS_TO dedup migration..."
 if [ -n "$NEO4J_URI" ]; then
-  node dist/scripts/migrate-dedup-belongs-to.js || echo "⚠ Neo4j migration failed (non-fatal, server will start anyway)"
+  node dist/scripts/migrations/migrate-dedup-belongs-to.js || echo "⚠ Neo4j migration failed (non-fatal, server will start anyway)"
 else
   echo "NEO4J_URI not set, skipping Neo4j migration."
 fi
