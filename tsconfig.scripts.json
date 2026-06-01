@@ -4,6 +4,6 @@
     "rootDir": ".",
     "outDir": "dist"
   },
-  "include": ["scripts/**/*", "src/**/*"],
+  "include": ["scripts/migrations/**/*", "src/**/*"],
   "exclude": ["node_modules", "dist", "tests"]
 }

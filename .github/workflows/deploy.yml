@@ -10,7 +10,7 @@ on:
       - '.github/workflows/deploy.yml'
       - 'ecs/**'
       - 'src/**'
-      - 'scripts/**'
+      - 'scripts/migrations/**'
       - 'Dockerfile'
       - 'entrypoint.sh'
       - 'package*.json'
