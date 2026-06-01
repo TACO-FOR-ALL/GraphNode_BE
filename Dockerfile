@@ -10,6 +10,8 @@ RUN npx prisma generate
 # 나머지 소스 코드 복사
 COPY . .
 RUN npm run build
+# scripts/ 폴더를 tsconfig.scripts.json으로 별도 컴파일 → dist/scripts/*.js 생성
+RUN npx tsc --project tsconfig.scripts.json
 
 # ---- runner ----
 FROM node:20-alpine AS runner

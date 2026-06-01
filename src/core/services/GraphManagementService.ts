@@ -578,6 +578,47 @@ export class GraphManagementService {
     }
   }
 
+  /**
+   * 한 MacroNode에 BELONGS_TO 관계가 복수 개 누적된 경우 중복을 정리합니다.
+   *
+   * clusterId 숫자 파트가 가장 큰 클러스터(가장 최신 AI 결정)를 유지하고
+   * 나머지 BELONGS_TO 관계를 삭제합니다.
+   *
+   * @param userId 사용자 ID
+   * @param options (선택) 트랜잭션 옵션
+   */
+  async deduplicateBelongsTo(userId: string, options?: RepoOptions): Promise<void> {
+    try {
+      this.assertUser(userId);
+      await this.repo.deduplicateBelongsTo(userId, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.deduplicateBelongsTo failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * dry-run 전용 — 중복 BELONGS_TO를 보유한 노드 수와 초과 관계 수를 반환합니다.
+   *
+   * @param userId 사용자 ID
+   * @param options (선택) 트랜잭션 옵션
+   * @returns duplicateNodeCount, excessRelCount
+   */
+  async countDuplicateBelongsTo(
+    userId: string,
+    options?: RepoOptions
+  ): Promise<{ duplicateNodeCount: number; excessRelCount: number }> {
+    try {
+      this.assertUser(userId);
+      return await this.repo.countDuplicateBelongsTo(userId, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.countDuplicateBelongsTo failed', {
+        cause: String(err),
+      });
+    }
+  }
+
   // --- Subclusters ---
   async upsertSubcluster(subcluster: GraphSubclusterDto, options?: RepoOptions): Promise<void> {
     try {

@@ -30,7 +30,10 @@
     "k6:users:delete": "tsx tests/scripts/delete-k6-users.ts",
     "k6:smoke:managed": "tsx tests/scripts/run-k6-smoke-managed.ts",
     "migrate:neo4j": "tsx scripts/sync-macro-graph.ts",
-    "migrate:neo4j:dry": "tsx scripts/sync-macro-graph.ts --dry-run"
+    "migrate:neo4j:dry": "tsx scripts/sync-macro-graph.ts --dry-run",
+    "migrate:neo4j:dedup": "tsx scripts/migrate-dedup-belongs-to.ts",
+    "migrate:neo4j:dedup:dry": "tsx scripts/migrate-dedup-belongs-to.ts --dry-run",
+    "build:scripts": "tsc --project tsconfig.scripts.json"
   },
   "repository": {
     "type": "git",

@@ -817,6 +817,31 @@ export interface MacroGraphStore {
    * @param options transaction 등 adapter 전용 옵션
    */
   removeEmptyClusters(userId: string, options?: MacroGraphStoreOptions): Promise<void>;
+
+  /**
+   * @description 한 MacroNode에 BELONGS_TO 관계가 복수 개 누적된 경우 중복을 정리합니다.
+   *
+   * clusterId의 숫자 파트가 가장 큰 클러스터(가장 최신 AI 결정)를 유지하고
+   * 나머지 BELONGS_TO 관계를 모두 삭제합니다.
+   *
+   * @param userId 사용자 ID
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  deduplicateBelongsTo(userId: string, options?: MacroGraphStoreOptions): Promise<void>;
+
+  /**
+   * @description dry-run 전용 — 중복 BELONGS_TO를 보유한 노드 수와 초과 관계 수를 반환합니다.
+   *
+   * 실제 DELETE 없이 `deduplicateBelongsTo` 실행 시 영향 범위만 미리 확인합니다.
+   *
+   * @param userId 사용자 ID
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns duplicateNodeCount (중복 보유 노드 수), excessRelCount (삭제될 관계 수)
+   */
+  countDuplicateBelongsTo(
+    userId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<{ duplicateNodeCount: number; excessRelCount: number }>;
 }
 /**
  * @description Graph RAG 클러스터 시블링 탐색 결과 단일 항목입니다.

@@ -2024,6 +2024,44 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
       await runner.run(MACRO_GRAPH_CYPHER.cleanupEmptyClusters, { userId });
     }, options);
   }
+
+  /**
+   * @description 한 MacroNode에 BELONGS_TO 관계가 복수 개 누적된 경우 중복을 정리합니다.
+   *
+   * clusterId의 숫자 파트가 가장 큰 클러스터(가장 최신 AI 결정)를 유지하고
+   * 나머지 BELONGS_TO 관계를 모두 삭제합니다.
+   *
+   * @param userId 사용자 ID
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  async deduplicateBelongsTo(userId: string, options?: MacroGraphStoreOptions): Promise<void> {
+    await this.runWrite(async (runner) => {
+      await runner.run(MACRO_GRAPH_CYPHER.deduplicateBelongsTo, { userId });
+    }, options);
+  }
+
+  /**
+   * @description dry-run 전용 — 중복 BELONGS_TO를 보유한 노드 수와 초과 관계 수를 반환합니다.
+   *
+   * @param userId 사용자 ID
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns duplicateNodeCount, excessRelCount
+   */
+  async countDuplicateBelongsTo(
+    userId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<{ duplicateNodeCount: number; excessRelCount: number }> {
+    return this.runRead(async (runner) => {
+      const result = await runner.run(MACRO_GRAPH_CYPHER.countDuplicateBelongsTo, { userId });
+      const records = result.records as unknown[];
+      if (records.length === 0) return { duplicateNodeCount: 0, excessRelCount: 0 };
+      const record = records[0] as { get(key: string): unknown };
+      return {
+        duplicateNodeCount: toJsNumber(record.get('duplicateNodeCount')),
+        excessRelCount: toJsNumber(record.get('excessRelCount')),
+      };
+    }, options);
+  }
 }
 
 

@@ -420,6 +420,51 @@ export const MACRO_GRAPH_CYPHER = {
   `,
 
   /**
+   * @description 한 MacroNode에 BELONGS_TO 관계가 복수 개 누적된 경우 중복을 정리합니다.
+   *
+   * clusterId 포맷이 `cluster_<숫자>` 임을 전제로, 숫자 파트가 가장 큰 클러스터(가장 최신 AI 결정)를
+   * 유지하고 나머지 BELONGS_TO 관계를 모두 DELETE 합니다.
+   * ORDER BY + collect 조합으로 내림차순 정렬된 목록의 첫 항목(keepEntry)을 보존합니다.
+   *
+   * @param userId 사용자 ID
+   * @example
+   * // 파라미터 구조 예시:
+   * // { userId: '...' }
+   */
+  deduplicateBelongsTo: `
+    MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+    WITH n
+    MATCH (n)-[r:BELONGS_TO]->(c:MacroCluster)
+    WITH n, r, c, toInteger(split(c.id, '_')[1]) AS clusterNum
+    ORDER BY clusterNum DESC
+    WITH n, collect({rel: r, clusterId: c.id}) AS entries
+    WHERE size(entries) > 1
+    WITH n, entries[0] AS keepEntry, entries[1..] AS deleteEntries
+    UNWIND deleteEntries AS toDelete
+    DELETE toDelete.rel
+  `,
+
+  /**
+   * @description dry-run 전용 — 중복 BELONGS_TO를 보유한 노드 수와 초과 관계 수를 반환합니다.
+   *
+   * 실제 DELETE 없이 `deduplicateBelongsTo` 실행 시 영향을 받을 항목만 카운트합니다.
+   *
+   * @param userId 사용자 ID
+   * @returns duplicateNodeCount (중복 노드 수), excessRelCount (삭제될 관계 수)
+   * @example
+   * // 파라미터 구조 예시:
+   * // { userId: '...' }
+   */
+  countDuplicateBelongsTo: `
+    MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+    WITH n
+    MATCH (n)-[r:BELONGS_TO]->(c:MacroCluster)
+    WITH n, count(r) AS relCount
+    WHERE relCount > 1
+    RETURN count(n) AS duplicateNodeCount, sum(relCount - 1) AS excessRelCount
+  `,
+
+  /**
    * @description MacroCluster와 소속 MacroSubcluster 사이에 HAS_SUBCLUSTER 관계를 생성합니다.
    *
    * @param userId 사용자 ID
