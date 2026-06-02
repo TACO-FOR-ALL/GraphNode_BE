@@ -22,6 +22,25 @@ jest.mock('jsonwebtoken', () => {
     };
 });
 
+// authJwt 미들웨어는 jsonwebtoken 대신 app/utils/jwt.verifyToken()을 사용한다.
+// CI 환경에서 jsonwebtoken mock 호출 순서/형태가 달라져도 테스트가 흔들리지 않도록,
+// verifyToken 레벨에서 "access token만 만료"를 강제한다.
+jest.mock('../../src/app/utils/jwt', () => {
+  const actual = jest.requireActual('../../src/app/utils/jwt') as any;
+  return {
+    ...actual,
+    verifyToken: jest.fn<any>().mockImplementation((token: string) => {
+      const decoded = actual.decodeToken(token) as null | { sessionId?: string };
+      if (decoded?.sessionId) {
+        const err = new Error('jwt expired');
+        (err as any).name = 'TokenExpiredError';
+        throw err;
+      }
+      return actual.verifyToken(token);
+    }),
+  };
+});
+
 import { createApp } from '../../src/bootstrap/server';
 
 // --- Mocks ---
@@ -187,20 +206,6 @@ describe('Auth Flow Integration', () => {
   });
 
   it('Step 4: Token Rotation (Expired Access Token)', async () => {
-    (jwt.verify as jest.Mock).mockImplementation((token: any, secret: any, options: any) => {
-        const decoded = actualJwt.decode(token) as null | { sessionId?: string };
-
-        // Expire ONLY access token (access token contains sessionId)
-        if (decoded?.sessionId) {
-            const err = new Error('jwt expired');
-            (err as any).name = 'TokenExpiredError';
-            throw err;
-        }
-
-        // Refresh token (no sessionId) should verify normally
-        return actualJwt.verify(token, secret, options);
-    });
-
     const res = await agent.get('/v1/me');
 
     if (res.status !== 200) {
