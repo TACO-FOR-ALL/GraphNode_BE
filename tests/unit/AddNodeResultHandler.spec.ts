@@ -153,7 +153,7 @@ describe('AddNodeResultHandler', () => {
     await handler.handle(message, mockContainer);
 
     expect(storagePort.downloadJson).toHaveBeenCalledWith(`add-node/${taskId}/batch.json`);
-    expect(graphService.upsertNodes).toHaveBeenCalled();
+    expect(graphService.upsertNode).toHaveBeenCalled();
   });
 });
 

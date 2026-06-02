@@ -187,21 +187,18 @@ describe('Auth Flow Integration', () => {
   });
 
   it('Step 4: Token Rotation (Expired Access Token)', async () => {
-    let callCount = 0;
-
-    // Custom implementation: First call throws expired, subsequent calls use actual logic
     (jwt.verify as jest.Mock).mockImplementation((token: any, secret: any, options: any) => {
-        callCount++;
-        // First verification is for Access Token (in authJwt)
-        if (callCount === 1) {
+        const decoded = actualJwt.decode(token) as null | { sessionId?: string };
+
+        // Expire ONLY access token (access token contains sessionId)
+        if (decoded?.sessionId) {
             const err = new Error('jwt expired');
             (err as any).name = 'TokenExpiredError';
             throw err;
         }
-        // Second verification should be for Refresh Token
-        const payload = actualJwt.verify(token, secret, options);
-        console.log('[DEBUG] Step 4 verifyToken payload:', payload);
-        return payload;
+
+        // Refresh token (no sessionId) should verify normally
+        return actualJwt.verify(token, secret, options);
     });
 
     const res = await agent.get('/v1/me');
