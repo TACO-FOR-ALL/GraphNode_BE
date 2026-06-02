@@ -1,4 +1,5 @@
 import { Readable } from 'stream';
+import { copyUserFilesToMacroBundlePrefix } from '../../shared/utils/macroBundleFiles';
 import { ulid } from 'ulid';
 
 import { ChatManagementService } from './ChatManagementService';
@@ -75,17 +76,6 @@ export class GraphGenerationService {
       timeout: 300000,
     });
     this.jobQueueUrl = process.env.SQS_REQUEST_QUEUE_URL || 'TO_BE_CONFIGURED';
-  }
-
-  /**
-   * Macro S3 bundle의 `files/` 세그먼트용: 표시명에서 경로·`..`만 제거하고 확장자는 유지합니다.
-   *
-   * @param displayName 사용자 파일 표시명입니다.
-   * @returns `files/` 아래에 쓸 단일 파일명 조각입니다.
-   */
-  private sanitizeMacroBundleFileSegment(displayName: string): string {
-    const base = displayName.replace(/\\/g, '/').split('/').pop() || 'file';
-    return base.replace(/\.\./g, '_').replace(/[/\\]/g, '_').trim() || 'file';
   }
 
   /**
@@ -196,20 +186,7 @@ export class GraphGenerationService {
       }
 
       // 3. 사용자 라이브러리 원본 바이트 → bundle/files/{id}_{displayName} (확장자 유지)
-      for (const f of userFiles) {
-        const downloaded = await withRetry(
-          async () => await this.storagePort.downloadFile(f.s3Key, { bucketType: 'file' }),
-          { label: 'Storage.downloadFile.userFileForMacroBundle' }
-        );
-        const segment = this.sanitizeMacroBundleFileSegment(f.displayName);
-        const destKey = `${taskPrefix}files/${f._id}_${segment}`;
-        const contentType =
-          f.mimeType?.trim() || downloaded.contentType || 'application/octet-stream';
-        await withRetry(
-          async () => await this.storagePort.upload(destKey, downloaded.buffer, contentType),
-          { label: 'Storage.upload.macroBundleUserFile' }
-        );
-      }
+      await copyUserFilesToMacroBundlePrefix(this.storagePort, taskPrefix, userFiles);
 
       // 4. 사용자 언어 조회
       const language = await withRetry(
@@ -498,7 +475,9 @@ export class GraphGenerationService {
 
     try {
       taskId = `task_add_node_${userId}_${ulid()}`;
-      const s3Key = `add-node/${taskId}/batch.json`;
+      /** GraphNode_AI AddNode raw file bundle: prefix는 반드시 `/`로 끝남. */
+      const taskPrefix = `add-node/${taskId}/`;
+      const batchObjectKey = `${taskPrefix}batch.json`;
 
       const stats = await withRetry(async () => await this.graphEmbeddingService.getStats(userId), {
         label: 'GraphEmbeddingService.getStats',
@@ -628,9 +607,15 @@ export class GraphGenerationService {
         files: mappedFiles.length > 0 ? mappedFiles : undefined,
       };
 
-      // S3에 데이터 업로드
+      // S3 bundle: batch.json + files/* (raw file bytes)
       const payloadJson: string = JSON.stringify(batchPayload);
-      await this.storagePort.upload(s3Key, payloadJson, 'application/json');
+      await withRetry(
+        async () => await this.storagePort.upload(batchObjectKey, payloadJson, 'application/json'),
+        { label: 'Storage.upload.addNodeBatch' }
+      );
+      if (updatedUserFiles.length > 0) {
+        await copyUserFilesToMacroBundlePrefix(this.storagePort, taskPrefix, updatedUserFiles);
+      }
 
       // 그래프 상태 업데이트
       stats.status = 'UPDATING';
@@ -642,7 +627,7 @@ export class GraphGenerationService {
         taskType: TaskType.ADD_NODE_REQUEST,
         payload: {
           userId,
-          s3Key,
+          s3Key: taskPrefix,
           bucket: process.env.S3_PAYLOAD_BUCKET,
         },
         timestamp: new Date().toISOString(),

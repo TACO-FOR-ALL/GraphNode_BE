@@ -52,6 +52,7 @@ async function startWorker() {
     [TaskType.GRAPH_SUMMARY_RESULT]: new GraphSummaryResultHandler(),
     [TaskType.ADD_NODE_RESULT]: new AddNodeResultHandler(),
     [TaskType.MICROSCOPE_INGEST_FROM_NODE_RESULT]: new MicroscopeIngestResultHandler(),
+    [TaskType.MICROSCOPE_INGEST_RESULT]: new MicroscopeIngestResultHandler(),
   };
 
   const queueUrl = env.SQS_RESULT_QUEUE_URL || '';

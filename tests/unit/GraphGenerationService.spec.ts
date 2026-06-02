@@ -49,6 +49,7 @@ describe('GraphGenerationService', () => {
       getSnapshotForUser: jest.fn(), // Added default mock
       getStats: jest.fn(),
       saveStats: jest.fn(),
+      listClusters: jest.fn<any>().mockResolvedValue([]),
     } as any;
 
     mockUserSvc = {
@@ -73,6 +74,8 @@ describe('GraphGenerationService', () => {
       sendGraphGenerationRequestFailed: jest.fn(),
       sendGraphSummaryRequested: jest.fn(),
       sendGraphSummaryRequestFailed: jest.fn(),
+      sendAddConversationRequested: jest.fn(),
+      sendAddConversationRequestFailed: jest.fn(),
     } as any;
 
     mockQueuePort = {
@@ -360,6 +363,81 @@ describe('GraphGenerationService', () => {
         expect.stringMatching(/\/files\/uf-pptx_slides\.pptx$/),
         expect.any(Buffer),
         'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+      );
+    });
+  });
+
+  describe('requestAddNodeViaQueue', () => {
+    const userId = 'user1';
+
+    it('returns null when no conversation, note, or user file changes', async () => {
+      mockGraphEmbSvc.getStats.mockResolvedValue({
+        userId,
+        nodes: 1,
+        edges: 0,
+        clusters: 1,
+        updatedAt: new Date().toISOString(),
+        status: 'CREATED',
+      });
+      mockChatSvc.listConversations.mockResolvedValue({ items: [], nextCursor: null });
+      mockNoteSvc.findNotesModifiedSince.mockResolvedValue([]);
+      mockUserFileSvc.findFilesModifiedSince.mockResolvedValue([]);
+
+      const result = await service.requestAddNodeViaQueue(userId);
+      expect(result).toBeNull();
+      expect(mockQueuePort.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('uploads add-node prefix bundle with batch.json and files/ for modified user_files', async () => {
+      const past = new Date('2020-01-01').toISOString();
+      mockGraphEmbSvc.getStats.mockResolvedValue({
+        userId,
+        nodes: 1,
+        edges: 0,
+        clusters: 1,
+        updatedAt: past,
+        status: 'CREATED',
+      });
+      mockChatSvc.listConversations.mockResolvedValue({ items: [], nextCursor: null });
+      mockNoteSvc.findNotesModifiedSince.mockResolvedValue([]);
+      mockUserFileSvc.findFilesModifiedSince.mockResolvedValue([
+        {
+          _id: 'uf-add',
+          displayName: 'report.pdf',
+          s3Key: 'user-files/user1/uf-add.pdf',
+          mimeType: 'application/pdf',
+          updatedAt: new Date(),
+          deletedAt: null,
+        } as any,
+      ]);
+      mockStoragePort.downloadFile.mockResolvedValue({
+        buffer: Buffer.from('%PDF'),
+        contentType: 'application/pdf',
+      });
+      mockQueuePort.sendMessage.mockResolvedValue(undefined);
+      mockGraphEmbSvc.saveStats.mockResolvedValue(undefined);
+
+      const taskId = await service.requestAddNodeViaQueue(userId);
+
+      expect(taskId).toContain('task_add_node_');
+      expect(mockStoragePort.upload).toHaveBeenCalledWith(
+        expect.stringMatching(/add-node\/task_add_node_[^/]+\/batch\.json$/),
+        expect.any(String),
+        'application/json'
+      );
+      expect(mockStoragePort.upload).toHaveBeenCalledWith(
+        expect.stringMatching(/add-node\/task_add_node_[^/]+\/files\/uf-add_report\.pdf$/),
+        expect.any(Buffer),
+        'application/pdf'
+      );
+      expect(mockQueuePort.sendMessage).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          taskType: 'ADD_NODE_REQUEST',
+          payload: expect.objectContaining({
+            s3Key: expect.stringMatching(/add-node\/task_add_node_[^/]+\/$/),
+          }),
+        })
       );
     });
   });

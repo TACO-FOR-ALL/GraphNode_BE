@@ -51,6 +51,7 @@ describe('MicroscopeManagementService', () => {
     } as any;
 
     mockStoragePort = {
+      upload: jest.fn(),
       uploadFile: jest.fn(),
       downloadFile: jest.fn(),
       deleteFile: jest.fn(),
@@ -337,6 +338,59 @@ describe('MicroscopeManagementService', () => {
       // Assert: 최신 워크스페이스가 반환됨
       expect(result._id).toBe('ws_newer');
       expect(result.documents[0].id).toBe('doc_newer');
+    });
+  });
+
+  describe('ingestRawDocumentsToWorkspace', () => {
+    it('uploads raw file to S3, adds document meta, and enqueues SQS message', async () => {
+      const userId = 'user-123';
+      const groupId = 'ws-1';
+      const workspace = { _id: groupId, userId, documents: [] as any[] };
+      mockWorkspaceStore.findById.mockResolvedValue(workspace as any);
+
+      mockStoragePort.upload.mockResolvedValue(undefined);
+      mockQueuePort.sendMessage.mockResolvedValue(undefined);
+      mockWorkspaceStore.addDocument.mockResolvedValue(undefined);
+      mockNotificationSvc.sendMicroscopeIngestRequested.mockResolvedValue(undefined as any);
+
+      const out = await service.ingestRawDocumentsToWorkspace(
+        userId,
+        groupId,
+        [
+          {
+            buffer: Buffer.from('PDF'),
+            originalname: 'report.pdf',
+            mimetype: 'application/pdf',
+          },
+        ],
+        'schema-a'
+      );
+
+      expect(mockStoragePort.upload).toHaveBeenCalledWith(
+        expect.stringMatching(new RegExp(`^microscope-ingest/${userId}/task_microscope_file_${userId}_.+/report\\.pdf$`)),
+        expect.any(Buffer),
+        'application/pdf',
+        expect.objectContaining({ bucketType: 'payload' })
+      );
+      expect(mockWorkspaceStore.addDocument).toHaveBeenCalledWith(groupId, expect.any(Object));
+      expect(mockQueuePort.sendMessage).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          taskType: TaskType.MICROSCOPE_INGEST_REQUEST,
+          payload: expect.objectContaining({
+            user_id: userId,
+            group_id: groupId,
+            schema_name: 'schema-a',
+            file_name: 'report.pdf',
+          }),
+        })
+      );
+      expect(out._id).toBe(groupId);
+      expect(out.documents.length).toBe(1);
+    });
+
+    it('throws ValidationError when files array is empty', async () => {
+      await expect(service.ingestRawDocumentsToWorkspace('u', 'ws', [])).rejects.toThrow(ValidationError);
     });
   });
 });

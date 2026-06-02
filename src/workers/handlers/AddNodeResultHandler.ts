@@ -3,7 +3,9 @@ import * as Sentry from '@sentry/node';
 import { JobHandler } from './JobHandler';
 import { Container } from '../../bootstrap/container';
 import { AddNodeResultPayload } from '../../shared/dtos/queue';
+import type { AiAddNodeBatchRequest } from '../../shared/dtos/ai_input';
 import { AiAddNodeBatchResult } from '../../shared/dtos/ai_graph_output';
+import { augmentAddNodeBatchWithUserFiles } from '../utils/augmentAddNodeBatchWithUserFiles';
 import { logger } from '../../shared/utils/logger';
 import { withRetry } from '../../shared/utils/retry';
 import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
@@ -117,10 +119,24 @@ export class AddNodeResultHandler implements JobHandler {
 
     try {
       // S3에서 결과 다운로드
-      const batchResult = await withRetry(
+      let batchResult = await withRetry(
         async () => storagePort.downloadJson<AiAddNodeBatchResult>(resultS3Key),
         { label: 'AddNodeResultHandler.downloadJson.batch' }
       );
+
+      const batchInputKey = `add-node/${taskId}/batch.json`;
+      try {
+        const batchInput = await withRetry(
+          async () => storagePort.downloadJson<AiAddNodeBatchRequest>(batchInputKey),
+          { label: 'AddNodeResultHandler.downloadJson.batchInput' }
+        );
+        batchResult = augmentAddNodeBatchWithUserFiles(batchResult, batchInput);
+      } catch (batchInputErr) {
+        logger.warn(
+          { err: batchInputErr, taskId, batchInputKey },
+          'AddNode batch.json not found for user_files backfill; continuing with AI result only'
+        );
+      }
 
       // 노드 정규화
       // 1. AI node들을 내부 처리용 정규화 구조로 바꾼다.
@@ -207,6 +223,7 @@ export class AddNodeResultHandler implements JobHandler {
               userId,
               conversationId: result.conversationId,
               noteId: result.noteId,
+              fileId: result.fileId,
               error: result.error,
             },
             'AddNode result item skipped by AI pipeline - no nodes to persist'

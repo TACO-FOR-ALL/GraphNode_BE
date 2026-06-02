@@ -191,6 +191,42 @@ export class MicroscopeController {
   /**
    * 워크스페이스 삭제
    */
+  /**
+   * 기존 워크스페이스에 raw file(PDF/DOCX/PPTX 등)을 업로드하고 Microscope ingest를 요청합니다.
+   */
+  ingestDocuments = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { groupId } = req.params;
+      const schemaName = typeof req.body?.schemaName === 'string' ? req.body.schemaName : undefined;
+      const uploaded = (req.files as Express.Multer.File[] | undefined) ?? [];
+      const userId = getUserIdFromRequest(req)!;
+
+      const workspace = await this.microscopeService.ingestRawDocumentsToWorkspace(
+        userId,
+        groupId,
+        uploaded.map((f) => ({
+          buffer: f.buffer,
+          originalname: f.originalname,
+          mimetype: f.mimetype,
+        })),
+        schemaName
+      );
+
+      captureEvent(userId, POSTHOG_EVENT.MICROSCOPE_INGEST_REQUESTED, {
+        group_id: groupId,
+        file_count: uploaded.length,
+        ingest_mode: 'raw_file',
+      });
+
+      res.status(202).json({
+        message: 'Microscope raw file ingest queued',
+        workspace,
+      });
+    } catch (err) {
+      next(err);
+    }
+  };
+
   deleteWorkspace = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { groupId } = req.params;

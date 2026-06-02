@@ -16,7 +16,8 @@ import { GraphNeo4jStore } from '../ports/GraphNeo4jStore';
 import { QueuePort } from '../ports/QueuePort';
 import { StoragePort } from '../ports/StoragePort';
 import { MicroscopeGraphDataDto } from '../../shared/dtos/microscope';
-import { TaskType } from '../../shared/dtos/queue';
+import { TaskType, type MicroscopeIngestRawFileQueuePayload } from '../../shared/dtos/queue';
+import { sanitizeMacroBundleFileSegment } from '../../shared/utils/macroBundleFiles';
 import {
   UpstreamError,
   NotFoundError,
@@ -129,6 +130,102 @@ export class MicroscopeManagementService {
     if (workspace.userId !== userId) {
       throw new ForbiddenError('You do not have permission to view this workspace');
     }
+    return workspace;
+  }
+
+  /**
+   * @description 기존 워크스페이스에 raw file을 업로드하고 Microscope ingest(raw_file) 파이프라인을 큐에 등록합니다.
+   * @param userId 요청 사용자 ID입니다.
+   * @param groupId 대상 워크스페이스 ID입니다.
+   * @param files multer가 수신한 파일 버퍼 목록입니다.
+   * @param schemaName 온톨로지 스키마 이름(선택)입니다.
+   * @returns 문서 메타가 추가된 워크스페이스입니다.
+   * @throws {ValidationError} 파일이 없을 때
+   * @throws {NotFoundError} 워크스페이스가 없을 때
+   * @throws {ForbiddenError} 소유권이 없을 때
+   */
+  async ingestRawDocumentsToWorkspace(
+    userId: string,
+    groupId: string,
+    files: Array<{ buffer: Buffer; originalname: string; mimetype: string }>,
+    schemaName?: string
+  ): Promise<MicroscopeWorkspaceMetaDoc> {
+    if (!files.length) {
+      throw new ValidationError('At least one file is required');
+    }
+
+    const workspace = await this.getWorkspaceActivity(userId, groupId);
+    const bucket = process.env.S3_PAYLOAD_BUCKET || 'graph-node-payloads';
+    const now = new Date().toISOString();
+
+    for (const file of files) {
+      const docId = `task_microscope_file_${userId}_${ulid()}`;
+      const safeName = sanitizeMacroBundleFileSegment(file.originalname);
+      const s3Key = `microscope-ingest/${userId}/${docId}/${safeName}`;
+
+      let creditHeld = false;
+      let messageSent = false;
+
+      try {
+        await this.holdCredit(userId, CreditFeature.MICROSCOPE_INGEST, docId);
+        creditHeld = true;
+
+        await withRetry(
+          async () =>
+            await this.storagePort.upload(s3Key, file.buffer, file.mimetype || 'application/octet-stream', {
+              bucketType: 'payload',
+            }),
+          { label: 'Storage.upload.microscopeRawFile' }
+        );
+
+        const newDocument: MicroscopeDocumentMetaDoc = {
+          id: docId,
+          s3Key,
+          fileName: file.originalname,
+          status: 'PROCESSING',
+          nodeType: 'file',
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        await this.microscopeWorkspaceStore.addDocument(groupId, newDocument);
+
+        const messageBody: MicroscopeIngestRawFileQueuePayload = {
+          taskId: docId,
+          taskType: TaskType.MICROSCOPE_INGEST_REQUEST,
+          payload: {
+            user_id: userId,
+            group_id: groupId,
+            s3_key: s3Key,
+            bucket,
+            file_name: file.originalname,
+            schema_name: schemaName,
+          },
+          timestamp: now,
+        };
+
+        await withRetry(async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
+          label: 'QueuePort.sendMessage.microscopeRawFile',
+        });
+        messageSent = true;
+
+        workspace.documents.push(newDocument);
+        await this.notificationService.sendMicroscopeIngestRequested(userId, docId);
+      } catch (err) {
+        if (creditHeld && !messageSent) {
+          await this.rollbackCreditHold(docId, 'microscope raw file enqueue failed');
+        }
+        logger.error({ err, userId, groupId, fileName: file.originalname }, 'Failed to ingest raw file');
+        if (err instanceof AppError) throw err;
+        throw new UpstreamError('Failed to enqueue microscope raw file ingest', { cause: String(err) });
+      }
+    }
+
+    logger.info(
+      { userId, groupId, fileCount: files.length },
+      'Enqueued Microscope raw file ingest tasks via SQS'
+    );
+
     return workspace;
   }
 

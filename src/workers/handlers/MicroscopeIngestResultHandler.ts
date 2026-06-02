@@ -41,7 +41,7 @@ export class MicroscopeIngestResultHandler implements JobHandler {
     }
 
     const sourceId = source_id;
-    const standardizedS3Key = payload.standardized_s3_key;
+    const standardizedS3Key = payload.standardized_s3_key ?? payload.block_graph_s3_key;
 
     // Envelope의 taskId를 통해 문서 ID 식별
     const docId = taskId;
