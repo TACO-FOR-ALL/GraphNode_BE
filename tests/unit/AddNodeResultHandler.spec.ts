@@ -48,7 +48,11 @@ describe('AddNodeResultHandler', () => {
       listNodesAll: jest.fn(async () => []),
       upsertNode: jest.fn(async () => undefined),
       upsertEdge: jest.fn(async () => 'ok'),
+      upsertNodes: jest.fn(async () => undefined),
+      upsertEdges: jest.fn(async () => undefined),
+      upsertClusters: jest.fn(async () => undefined),
       upsertCluster: jest.fn(async () => undefined),
+      removeEmptyClusters: jest.fn(async () => undefined),
     };
 
     mockContainer = {
@@ -149,7 +153,7 @@ describe('AddNodeResultHandler', () => {
     await handler.handle(message, mockContainer);
 
     expect(storagePort.downloadJson).toHaveBeenCalledWith(`add-node/${taskId}/batch.json`);
-    expect(graphService.upsertNode).toHaveBeenCalled();
+    expect(graphService.upsertNodes).toHaveBeenCalled();
   });
 });
 
