@@ -1,0 +1,506 @@
+﻿
+graphnode-worker-1  | [08:27:15.884] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_add_nod
+e_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","taskType":"ADD_NODE_RESULT"}[39m
+graphnode-worker-1  | [08:27:15.884] [32mINFO[39m (1): [36mHandling AddNode result[39m [90m{"taskId":"task_add_nod
+e_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"user-12345","status":"COMPLETED"}[39m
+graphnode-worker-1  | [08:27:15.884] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Aws
+S3Adapter","method":"downloadJson","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"user
+-12345","args":["results/add_node/user-12345/task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29/result.json"]}[39m
+graphnode-worker-1  | [08:27:15.884] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Aws
+S3Adapter","method":"downloadStream","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"us
+er-12345","args":["results/add_node/user-12345/task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29/result.json",null]}
+[39m
+graphnode-worker-1  | [08:27:15.887] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"AwsS3Adapter","method":"downloadStream","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userI
+d":"user-12345","durationMs":3,"result":{"type":"object","keys":["_events","_readableState","_writableState","allowHalf
+Open","_maxListeners","expectedChecksum","checksumSourceLocation","checksum","source","base64Encoder"]}}[39m
+graphnode-worker-1  | [08:27:15.887] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"AwsS3Adapter","method":"downloadJson","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId"
+:"user-12345","durationMs":3,"result":{"type":"object","keys":["userId","processedCount","results"]}}[39m
+graphnode-worker-1  | [08:27:15.887] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Con
+versationService","method":"findDocById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId"
+:"user-12345","args":["conv-dedup-rerun-1780388818373","user-12345"]}[39m
+graphnode-worker-1  | [08:27:15.888] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Not
+eService","method":"getNoteDoc","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"user-12
+345","args":["conv-dedup-rerun-1780388818373","user-12345"]}[39m
+graphnode-worker-1  | [08:27:15.888] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Use
+rFileService","method":"getActiveUserFileById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","u
+serId":"user-12345","args":["conv-dedup-rerun-1780388818373","user-12345"]}[39m
+graphnode-worker-1  | [08:27:15.889] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"NoteService","method":"getNoteDoc","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"u
+ser-12345","durationMs":1,"result":null}[39m
+graphnode-worker-1  | [08:27:15.889] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"ConversationService","method":"findDocById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","u
+serId":"user-12345","durationMs":2,"result":{"type":"object","keys":["_id","ownerUserId","title","updatedAt","createdAt
+"]}}[39m
+graphnode-worker-1  | [08:27:15.889] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"UserFileService","method":"getActiveUserFileById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ
+29","userId":"user-12345","durationMs":1,"result":null}[39m
+graphnode-worker-1  | [08:27:15.889] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Con
+versationService","method":"findDocById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId"
+:"user-12345","args":["conv-e2e-123","user-12345"]}[39m
+graphnode-worker-1  | [08:27:15.890] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Not
+eService","method":"getNoteDoc","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"user-12
+345","args":["conv-e2e-123","user-12345"]}[39m
+graphnode-worker-1  | [08:27:15.890] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Use
+rFileService","method":"getActiveUserFileById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","u
+serId":"user-12345","args":["conv-e2e-123","user-12345"]}[39m
+graphnode-worker-1  | [08:27:15.891] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"NoteService","method":"getNoteDoc","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"u
+ser-12345","durationMs":1,"result":null}[39m
+graphnode-worker-1  | [08:27:15.891] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"ConversationService","method":"findDocById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","u
+serId":"user-12345","durationMs":2,"result":{"type":"object","keys":["_id","ownerUserId","title","updatedAt","createdAt
+"]}}[39m
+graphnode-worker-1  | [08:27:15.891] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"UserFileService","method":"getActiveUserFileById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ
+29","userId":"user-12345","durationMs":1,"result":null}[39m
+graphnode-worker-1  | [08:27:15.891] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Con
+versationService","method":"findDocById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId"
+:"user-12345","args":["note-e2e-123","user-12345"]}[39m
+graphnode-worker-1  | [08:27:15.891] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Not
+eService","method":"getNoteDoc","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"user-12
+345","args":["note-e2e-123","user-12345"]}[39m
+graphnode-worker-1  | [08:27:15.892] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Use
+rFileService","method":"getActiveUserFileById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","u
+serId":"user-12345","args":["note-e2e-123","user-12345"]}[39m
+graphnode-worker-1  | [08:27:15.892] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"ConversationService","method":"findDocById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","u
+serId":"user-12345","durationMs":1,"result":null}[39m
+graphnode-worker-1  | [08:27:15.892] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"NoteService","method":"getNoteDoc","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"u
+ser-12345","durationMs":1,"result":{"type":"object","keys":["_id","ownerUserId","title","content","deletedAt","createdA
+t","updatedAt"]}}[39m
+graphnode-worker-1  | [08:27:15.893] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"UserFileService","method":"getActiveUserFileById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ
+29","userId":"user-12345","durationMs":1,"result":null}[39m
+graphnode-worker-1  | [08:27:15.893] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phEmbeddingService","method":"listNodesAll","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","user
+Id":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:15.893] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"listNodesAll","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","use
+rId":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:15.893] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userI
+d":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:15.893] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29",
+"userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [08:27:15.899] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"listNodesAll","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29
+","userId":"user-12345","durationMs":6,"result":{"type":"array","length":6}}[39m
+graphnode-worker-1  | [08:27:15.899] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphEmbeddingService","method":"listNodesAll","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29"
+,"userId":"user-12345","durationMs":6,"result":{"type":"array","length":6}}[39m
+graphnode-worker-1  | [08:27:15.899] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phEmbeddingService","method":"upsertNodes","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userI
+d":"user-12345","args":[{"type":"array","length":3}]}[39m
+graphnode-worker-1  | [08:27:15.899] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"upsertNodes","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","user
+Id":"user-12345","args":[{"type":"array","length":3}]}[39m
+graphnode-worker-1  | [08:27:15.899] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userI
+d":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:15.899] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29",
+"userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [08:27:15.899] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"parseId","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":
+"user-12345","args":[6]}[39m
+graphnode-worker-1  | [08:27:15.899] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"parseId","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","us
+erId":"user-12345","durationMs":0,"result":6}[39m
+graphnode-worker-1  | [08:27:15.899] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userI
+d":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:15.899] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29",
+"userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [08:27:15.899] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"parseId","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":
+"user-12345","args":[1]}[39m
+graphnode-worker-1  | [08:27:15.899] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"parseId","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","us
+erId":"user-12345","durationMs":0,"result":1}[39m
+graphnode-worker-1  | [08:27:15.899] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userI
+d":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:15.899] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29",
+"userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [08:27:15.899] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"parseId","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":
+"user-12345","args":[2]}[39m
+graphnode-worker-1  | [08:27:15.899] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"parseId","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","us
+erId":"user-12345","durationMs":0,"result":2}[39m
+graphnode-worker-1  | [08:27:16.007] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"upsertNodes","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29"
+,"userId":"user-12345","durationMs":108,"result":null}[39m
+graphnode-worker-1  | [08:27:16.007] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphEmbeddingService","method":"upsertNodes","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29",
+"userId":"user-12345","durationMs":108,"result":null}[39m
+graphnode-worker-1  | [08:27:16.007] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phEmbeddingService","method":"pruneIncompatibleSubclusterMemberships","correlationId":"task_add_node_user-12345_01KT3Q2
+VEK67D7VMTQTS9MDZ29","userId":"user-12345","args":["user-12345",{"type":"array","length":1}]}[39m
+graphnode-worker-1  | [08:27:16.007] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phEmbeddingService","method":"runGraphWriteTransaction","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9
+MDZ29","userId":"user-12345","args":["GraphEmbeddingService.pruneIncompatibleSubclusterMemberships.transaction",null]}
+[39m
+graphnode-worker-1  | [08:27:16.007] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"pruneIncompatibleSubclusterMemberships","correlationId":"task_add_node_user-12345_01KT3Q
+2VEK67D7VMTQTS9MDZ29","userId":"user-12345","args":["user-12345",{"type":"array","length":1},null,{"type":"object","key
+s":[]}]}[39m
+graphnode-worker-1  | [08:27:16.007] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userI
+d":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:16.007] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29",
+"userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [08:27:16.007] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"parseId","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":
+"user-12345","args":[1]}[39m
+graphnode-worker-1  | [08:27:16.007] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"parseId","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","us
+erId":"user-12345","durationMs":0,"result":1}[39m
+graphnode-worker-1  | [08:27:16.012] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"
+GraphManagementService","method":"pruneIncompatibleSubclusterMemberships","correlationId":"task_add_node_user-12345_01K
+T3Q2VEK67D7VMTQTS9MDZ29","userId":"user-12345","durationMs":5}[39m
+graphnode-worker-1  | [08:27:16.012] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"
+GraphEmbeddingService","method":"runGraphWriteTransaction","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQ
+TS9MDZ29","userId":"user-12345","durationMs":5}[39m
+graphnode-worker-1  | [08:27:16.012] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service":"
+GraphEmbeddingService","method":"pruneIncompatibleSubclusterMemberships","correlationId":"task_add_node_user-12345_01KT
+3Q2VEK67D7VMTQTS9MDZ29","userId":"user-12345","durationMs":5}[39m
+graphnode-worker-1  | [08:27:16.012] [31mERROR[39m (1): [36mFailed to process add node result[39m [90m{"taskId":"t
+ask_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"user-12345"}[39m
+graphnode-worker-1  | [08:27:16.012] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Not
+ificationService","method":"sendAddConversationFailed","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9M
+DZ29","userId":"user-12345","args":["user-12345","task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","GraphEmbeddingS
+ervice.pruneIncompatibleSubclusterMemberships.transaction"]}[39m
+graphnode-worker-1  | [08:27:16.012] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Not
+ificationService","method":"sendNotification","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","us
+erId":"user-12345","args":["user-12345","ADD_CONVERSATION_FAILED",{"type":"object","keys":["taskId","error"]}]}[39m
+graphnode-worker-1  | [08:27:16.012] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Not
+ificationService","method":"getUserChannel","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","user
+Id":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:16.012] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"NotificationService","method":"getUserChannel","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29"
+,"userId":"user-12345","durationMs":0,"result":"notification:user:user-12345"}[39m
+graphnode-worker-1  | [08:27:16.014] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Red
+isEventBusAdapter","method":"publish","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"u
+ser-12345","args":["notification:user:user-12345",{"type":"object","keys":["id","type","payload","timestamp"]}]}[39m
+graphnode-worker-1  | [08:27:16.015] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"RedisEventBusAdapter","method":"publish","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","user
+Id":"user-12345","durationMs":1,"result":null}[39m
+graphnode-worker-1  | [08:27:16.015] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"NotificationService","method":"sendNotification","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ2
+9","userId":"user-12345","durationMs":3,"result":null}[39m
+graphnode-worker-1  | [08:27:16.015] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"NotificationService","method":"sendAddConversationFailed","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VM
+TQTS9MDZ29","userId":"user-12345","durationMs":3,"result":null}[39m
+graphnode-worker-1  | [08:27:16.015] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Not
+ificationService","method":"sendFcmPushNotification","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ
+29","userId":"user-12345","args":["user-12345","Graph Update Failed","There was a problem adding conversations to your 
+graph.",{"type":"object","keys":["taskId","status"]}]}[39m
+graphnode-worker-1  | [08:27:16.015] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Not
+ificationService","method":"getFcmTokenKey","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","user
+Id":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:16.015] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"NotificationService","method":"getFcmTokenKey","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29"
+,"userId":"user-12345","durationMs":0,"result":"user:user-12345:fcm_tokens"}[39m
+graphnode-worker-1  | [08:27:16.015] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"NotificationService","method":"sendFcmPushNotification","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQ
+TS9MDZ29","userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [08:27:16.015] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Cre
+ditService","method":"rollbackByTaskId","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":
+"user-12345","args":["task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29"]}[39m
+graphnode-worker-1  | [08:27:16.023] [32mINFO[39m (1): [36mCredit hold rolled back[39m [90m{"taskId":"task_add_nod
+e_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29"}[39m
+graphnode-worker-1  | [08:27:16.023] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"CreditService","method":"rollbackByTaskId","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","us
+erId":"user-12345","durationMs":8,"result":null}[39m
+graphnode-worker-1  | [08:27:46.123] [32mINFO[39m (1): [36mWorker received message[39m [90m{"taskId":"task_add_nod
+e_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","taskType":"ADD_NODE_RESULT"}[39m
+graphnode-worker-1  | [08:27:46.123] [32mINFO[39m (1): [36mHandling AddNode result[39m [90m{"taskId":"task_add_nod
+e_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"user-12345","status":"COMPLETED"}[39m
+graphnode-worker-1  | [08:27:46.123] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Aws
+S3Adapter","method":"downloadJson","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"user
+-12345","args":["results/add_node/user-12345/task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29/result.json"]}[39m
+graphnode-worker-1  | [08:27:46.123] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Aws
+S3Adapter","method":"downloadStream","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"us
+er-12345","args":["results/add_node/user-12345/task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29/result.json",null]}
+[39m
+graphnode-worker-1  | [08:27:46.127] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"AwsS3Adapter","method":"downloadStream","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userI
+d":"user-12345","durationMs":4,"result":{"type":"object","keys":["_events","_readableState","_writableState","allowHalf
+Open","_maxListeners","expectedChecksum","checksumSourceLocation","checksum","source","base64Encoder"]}}[39m
+graphnode-worker-1  | [08:27:46.127] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"AwsS3Adapter","method":"downloadJson","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId"
+:"user-12345","durationMs":4,"result":{"type":"object","keys":["userId","processedCount","results"]}}[39m
+graphnode-worker-1  | [08:27:46.127] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Con
+versationService","method":"findDocById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId"
+:"user-12345","args":["conv-dedup-rerun-1780388818373","user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.127] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Not
+eService","method":"getNoteDoc","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"user-12
+345","args":["conv-dedup-rerun-1780388818373","user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.127] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Use
+rFileService","method":"getActiveUserFileById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","u
+serId":"user-12345","args":["conv-dedup-rerun-1780388818373","user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.129] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"ConversationService","method":"findDocById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","u
+serId":"user-12345","durationMs":1,"result":{"type":"object","keys":["_id","ownerUserId","title","updatedAt","createdAt
+"]}}[39m
+graphnode-worker-1  | [08:27:46.129] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"NoteService","method":"getNoteDoc","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"u
+ser-12345","durationMs":2,"result":null}[39m
+graphnode-worker-1  | [08:27:46.129] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"UserFileService","method":"getActiveUserFileById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ
+29","userId":"user-12345","durationMs":2,"result":null}[39m
+graphnode-worker-1  | [08:27:46.129] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Con
+versationService","method":"findDocById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId"
+:"user-12345","args":["conv-e2e-123","user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.129] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Not
+eService","method":"getNoteDoc","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"user-12
+345","args":["conv-e2e-123","user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.129] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Use
+rFileService","method":"getActiveUserFileById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","u
+serId":"user-12345","args":["conv-e2e-123","user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.130] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"UserFileService","method":"getActiveUserFileById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ
+29","userId":"user-12345","durationMs":1,"result":null}[39m
+graphnode-worker-1  | [08:27:46.130] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"NoteService","method":"getNoteDoc","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"u
+ser-12345","durationMs":1,"result":null}[39m
+graphnode-worker-1  | [08:27:46.131] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"ConversationService","method":"findDocById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","u
+serId":"user-12345","durationMs":2,"result":{"type":"object","keys":["_id","ownerUserId","title","updatedAt","createdAt
+"]}}[39m
+graphnode-worker-1  | [08:27:46.131] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Con
+versationService","method":"findDocById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId"
+:"user-12345","args":["note-e2e-123","user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.131] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Not
+eService","method":"getNoteDoc","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"user-12
+345","args":["note-e2e-123","user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.131] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Use
+rFileService","method":"getActiveUserFileById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","u
+serId":"user-12345","args":["note-e2e-123","user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.132] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"ConversationService","method":"findDocById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","u
+serId":"user-12345","durationMs":1,"result":null}[39m
+graphnode-worker-1  | [08:27:46.132] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"NoteService","method":"getNoteDoc","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"u
+ser-12345","durationMs":1,"result":{"type":"object","keys":["_id","ownerUserId","title","content","deletedAt","createdA
+t","updatedAt"]}}[39m
+graphnode-worker-1  | [08:27:46.133] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"UserFileService","method":"getActiveUserFileById","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ
+29","userId":"user-12345","durationMs":2,"result":null}[39m
+graphnode-worker-1  | [08:27:46.133] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phEmbeddingService","method":"listNodesAll","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","user
+Id":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.133] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"listNodesAll","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","use
+rId":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.133] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userI
+d":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.133] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29",
+"userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [08:27:46.138] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"listNodesAll","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29
+","userId":"user-12345","durationMs":5,"result":{"type":"array","length":7}}[39m
+graphnode-worker-1  | [08:27:46.138] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphEmbeddingService","method":"listNodesAll","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29"
+,"userId":"user-12345","durationMs":5,"result":{"type":"array","length":7}}[39m
+graphnode-worker-1  | [08:27:46.138] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phEmbeddingService","method":"upsertNodes","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userI
+d":"user-12345","args":[{"type":"array","length":3}]}[39m
+graphnode-worker-1  | [08:27:46.138] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"upsertNodes","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","user
+Id":"user-12345","args":[{"type":"array","length":3}]}[39m
+graphnode-worker-1  | [08:27:46.138] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userI
+d":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.138] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29",
+"userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [08:27:46.138] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"parseId","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":
+"user-12345","args":[6]}[39m
+graphnode-worker-1  | [08:27:46.138] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"parseId","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","us
+erId":"user-12345","durationMs":0,"result":6}[39m
+graphnode-worker-1  | [08:27:46.138] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userI
+d":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.138] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29",
+"userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [08:27:46.138] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"parseId","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":
+"user-12345","args":[1]}[39m
+graphnode-worker-1  | [08:27:46.138] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"parseId","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","us
+erId":"user-12345","durationMs":0,"result":1}[39m
+graphnode-worker-1  | [08:27:46.138] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userI
+d":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.138] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29",
+"userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [08:27:46.138] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"parseId","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":
+"user-12345","args":[2]}[39m
+graphnode-worker-1  | [08:27:46.138] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"parseId","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","us
+erId":"user-12345","durationMs":0,"result":2}[39m
+graphnode-worker-1  | [08:27:46.150] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"upsertNodes","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29"
+,"userId":"user-12345","durationMs":12,"result":null}[39m
+graphnode-worker-1  | [08:27:46.150] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphEmbeddingService","method":"upsertNodes","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29",
+"userId":"user-12345","durationMs":12,"result":null}[39m
+graphnode-worker-1  | [08:27:46.150] [32mINFO[39m (1): [36mAddNode normalized origIds and resolved source types befo
+re edge persistence[39m [90m{"taskId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"user-12345","ex
+istingNodeCount":7,"processedItems":3,"strippedOrigIdCount":0,"resolvedChatCount":2,"resolvedMarkdownCount":1,"resolved
+FileCount":0}[39m
+graphnode-worker-1  | [08:27:46.150] [33mWARN[39m (1): [36mAddNode edge skipped: could not resolve node ID to DB num
+eric id[39m [90m{"taskId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"user-12345","source":"user-
+12345_conv-dedup-rerun-1780388818373","target":"user-12345_conv-incremental-1780388635718"}[39m
+graphnode-worker-1  | [08:27:46.150] [33mWARN[39m (1): [36mAddNode edge skipped: could not resolve node ID to DB num
+eric id[39m [90m{"taskId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"user-12345","source":"user-
+12345_conv-e2e-123","target":"user-12345_note-incremental-1780388635721"}[39m
+graphnode-worker-1  | [08:27:46.150] [33mWARN[39m (1): [36mAddNode edge skipped: could not resolve node ID to DB num
+eric id[39m [90m{"taskId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"user-12345","source":"user-
+12345_conv-e2e-123","target":"user-12345_conv-incremental-1780388635718"}[39m
+graphnode-worker-1  | [08:27:46.150] [33mWARN[39m (1): [36mAddNode edge skipped: source and target resolved to the s
+ame DB node id[39m [90m{"taskId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"user-12345","source"
+:"user-12345_note-e2e-123","target":"user-12345_src2_note-e2e-123","resolvedNodeId":2}[39m
+graphnode-worker-1  | [08:27:46.150] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phEmbeddingService","method":"upsertEdges","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userI
+d":"user-12345","args":[{"type":"array","length":1}]}[39m
+graphnode-worker-1  | [08:27:46.150] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"upsertEdges","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","user
+Id":"user-12345","args":[{"type":"array","length":1}]}[39m
+graphnode-worker-1  | [08:27:46.150] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userI
+d":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.150] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29",
+"userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [08:27:46.276] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"upsertEdges","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29"
+,"userId":"user-12345","durationMs":126,"result":null}[39m
+graphnode-worker-1  | [08:27:46.276] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphEmbeddingService","method":"upsertEdges","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29",
+"userId":"user-12345","durationMs":126,"result":null}[39m
+graphnode-worker-1  | [08:27:46.276] [32mINFO[39m (1): [36mAddNode persistence finished with normalized node, edge, 
+and sourceType resolution[39m [90m{"taskId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"user-1234
+5","totalNodesAdded":3,"totalEdgesAdded":1,"unresolvedEdgeCount":4}[39m
+graphnode-worker-1  | [08:27:46.276] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phEmbeddingService","method":"removeEmptyClusters","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29
+","userId":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.276] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"removeEmptyClusters","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ2
+9","userId":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.276] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userI
+d":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.276] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29",
+"userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [08:27:46.279] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"removeEmptyClusters","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQT
+S9MDZ29","userId":"user-12345","durationMs":3,"result":null}[39m
+graphnode-worker-1  | [08:27:46.279] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphEmbeddingService","method":"removeEmptyClusters","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS
+9MDZ29","userId":"user-12345","durationMs":3,"result":null}[39m
+graphnode-worker-1  | [08:27:46.279] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phEmbeddingService","method":"getStats","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":
+"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.279] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"getStats","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId"
+:"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.280] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userI
+d":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.280] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29",
+"userId":"user-12345","durationMs":1,"result":null}[39m
+graphnode-worker-1  | [08:27:46.284] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"getStats","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","u
+serId":"user-12345","durationMs":5,"result":{"type":"object","keys":["userId","nodes","edges","clusters","status","gene
+ratedAt","updatedAt","metadata"]}}[39m
+graphnode-worker-1  | [08:27:46.285] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphEmbeddingService","method":"getStats","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","us
+erId":"user-12345","durationMs":6,"result":{"type":"object","keys":["userId","nodes","edges","clusters","status","gener
+atedAt","updatedAt","metadata"]}}[39m
+graphnode-worker-1  | [08:27:46.285] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phEmbeddingService","method":"saveStats","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId"
+:"user-12345","args":[{"type":"object","keys":["userId","nodes","edges","clusters","status","generatedAt","updatedAt","
+metadata"]}]}[39m
+graphnode-worker-1  | [08:27:46.285] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"saveStats","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId
+":"user-12345","args":[{"type":"object","keys":["userId","nodes","edges","clusters","status","generatedAt","updatedAt",
+"metadata"]}]}[39m
+graphnode-worker-1  | [08:27:46.285] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Gra
+phManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userI
+d":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.285] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29",
+"userId":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [08:27:46.294] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphManagementService","method":"saveStats","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","
+userId":"user-12345","durationMs":9,"result":null}[39m
+graphnode-worker-1  | [08:27:46.294] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"GraphEmbeddingService","method":"saveStats","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","u
+serId":"user-12345","durationMs":9,"result":null}[39m
+graphnode-worker-1  | [08:27:46.294] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Not
+ificationService","method":"sendAddConversationCompleted","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQT
+S9MDZ29","userId":"user-12345","args":["user-12345","task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29",3,1]}[39m
+graphnode-worker-1  | [08:27:46.294] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Not
+ificationService","method":"sendNotification","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","us
+erId":"user-12345","args":["user-12345","ADD_CONVERSATION_COMPLETED",{"type":"object","keys":["taskId","nodeCount","edg
+eCount"]}]}[39m
+graphnode-worker-1  | [08:27:46.294] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Not
+ificationService","method":"getUserChannel","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","user
+Id":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.294] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"NotificationService","method":"getUserChannel","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29"
+,"userId":"user-12345","durationMs":0,"result":"notification:user:user-12345"}[39m
+graphnode-worker-1  | [08:27:46.295] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Not
+ificationService","method":"sendFcmPushNotification","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ
+29","userId":"user-12345","args":["user-12345","Graph Updated","Your conversations are successfully added to your knowl
+edge graph.",{"type":"object","keys":["taskId","status"]}]}[39m
+graphnode-worker-1  | [08:27:46.295] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Not
+ificationService","method":"getFcmTokenKey","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","user
+Id":"user-12345","args":["user-12345"]}[39m
+graphnode-worker-1  | [08:27:46.295] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"NotificationService","method":"getFcmTokenKey","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29"
+,"userId":"user-12345","durationMs":0,"result":"user:user-12345:fcm_tokens"}[39m
+graphnode-worker-1  | [08:27:46.296] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"NotificationService","method":"sendFcmPushNotification","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQ
+TS9MDZ29","userId":"user-12345","durationMs":1,"result":null}[39m
+graphnode-worker-1  | [08:27:46.299] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Red
+isEventBusAdapter","method":"publish","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"u
+ser-12345","args":["notification:user:user-12345",{"type":"object","keys":["id","type","payload","timestamp"]}]}[39m
+graphnode-worker-1  | [08:27:46.299] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"RedisEventBusAdapter","method":"publish","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","user
+Id":"user-12345","durationMs":0,"result":null}[39m
+graphnode-worker-1  | [08:27:46.299] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"NotificationService","method":"sendNotification","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ2
+9","userId":"user-12345","durationMs":5,"result":null}[39m
+graphnode-worker-1  | [08:27:46.299] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"NotificationService","method":"sendAddConversationCompleted","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D
+7VMTQTS9MDZ29","userId":"user-12345","durationMs":5,"result":null}[39m
+graphnode-worker-1  | [08:27:46.299] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"Cre
+ditService","method":"commitByTaskId","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"u
+ser-12345","args":["task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29"]}[39m
+graphnode-worker-1  | [08:27:46.303] [33mWARN[39m (1): [36mcommitByTaskId: HOLD not found or already settled 鈥?no-op
+[39m [90m{"taskId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29"}[39m
+graphnode-worker-1  | [08:27:46.303] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","service
+":"CreditService","method":"commitByTaskId","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","user
+Id":"user-12345","durationMs":4,"result":null}[39m
+
+

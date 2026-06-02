@@ -21,8 +21,8 @@ const AI_SOURCE_PREFIX_PATTERN = /^src\d+_(.+)$/;
 const MACRO_BUNDLE_FILE_TYPE_PREFIX_PATTERN =
   /^(?:pdf|docx?|pptx?|word|powerpoint|other|unknown|[a-z]{2,16})_(.+)$/i;
 
-/** Mongo `user_files._id` 형태(예: `uf-e2e-docx`)를 bundle 조각에서 추출합니다. */
-const USER_FILE_ORIG_ID_IN_BUNDLE_PATTERN = /^(uf-[a-z0-9]+(?:-[a-z0-9]+)*)(?:_|$)/i;
+/** Mongo `user_files._id` 형태(예: `uf-e2e-docx` 또는 `01KT1AJS0YPC4C3805641TKH5E`)를 bundle 조각에서 추출합니다. */
+const USER_FILE_ORIG_ID_IN_BUNDLE_PATTERN = /^(uf-[a-z0-9]+(?:-[a-z0-9]+)*|[0-9a-z]{26})(?:_|$)/i;
 
 /**
  * AI가 반환한 원본 ID를 정규화한 결과를 담는 구조체입니다.

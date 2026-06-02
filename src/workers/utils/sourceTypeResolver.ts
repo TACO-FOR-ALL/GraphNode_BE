@@ -141,6 +141,26 @@ export async function resolveSourceTypeByOrigId(
     };
   }
 
+  // Fallback: extract ULID candidate directly from raw origId (26 chars alphanumeric)
+  const ulidMatch = /[0-9A-Z]{26}/i.exec(origId);
+  if (ulidMatch) {
+    const extractedUlid = ulidMatch[0].toUpperCase();
+    if (extractedUlid !== normalizedOrigId) {
+      const fallbackFileDoc = await deps.userFileService.getActiveUserFileById(
+        extractedUlid,
+        userId
+      );
+      if (fallbackFileDoc) {
+        return {
+          origId,
+          normalizedOrigId: extractedUlid,
+          sourceType: 'file',
+          userFileHint: buildUserFileResolvedHint(fallbackFileDoc),
+        };
+      }
+    }
+  }
+
   return { origId, normalizedOrigId, sourceType: null };
 }
 
@@ -158,7 +178,7 @@ export async function resolveSourceTypesByOrigIds(
       continue;
     }
     seenOrigIds.add(normalizedOrigId);
-    uniqueOrigIds.push(normalizedOrigId);
+    uniqueOrigIds.push(origId);
   }
 
   const resolvedResults: ResolvedSourceTypeResult[] = [];

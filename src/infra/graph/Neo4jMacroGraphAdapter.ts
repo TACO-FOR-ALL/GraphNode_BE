@@ -2066,7 +2066,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
         userId,
         nodeIds: nodeIds ?? [],
         hasNodeFilter: Array.isArray(nodeIds),
-        limit: boundedLimit,
+        limit: neo4j.int(boundedLimit),
       });
       const records = result.records as unknown[];
       if (records.length === 0) {
