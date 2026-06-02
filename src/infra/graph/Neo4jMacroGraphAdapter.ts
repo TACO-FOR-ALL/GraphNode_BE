@@ -1550,9 +1550,31 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
    * @param options 외부 transaction을 포함할 수 있는 adapter 옵션입니다.
    */
   async deleteGraph(userId: string, options?: MacroGraphStoreOptions): Promise<void> {
-    await this.runWrite(async (runner) => {
-      await runner.run(MACRO_GRAPH_CYPHER.deleteGraph, { userId });
-    }, options);
+    const tx = options?.transaction as ManagedTransaction | undefined;
+    
+    // 1. 외부에서 명시적 트랜잭션(tx)이 주입된 경우
+    if (tx && typeof tx.run === 'function') {
+      console.warn(
+        `[Warning] deleteGraph is bypassing the provided transaction. ` +
+        `Graph deletion requires Auto-Commit mode to prevent Transaction OOM.`
+      );
+    }
+
+    // 2. 외부 트랜잭션에 종속되지 않는 새로운 독립 세션 생성 (WRITE 모드)
+    const session = this.getDriver().session({ defaultAccessMode: neo4j.session.WRITE });
+    
+    try {
+      // 3. CALL {} IN TRANSACTIONS 기반의 배치 삭제 실행 (OOM 원천 차단)
+      await session.run(MACRO_GRAPH_CYPHER.deleteGraphBatch.relations, { userId });
+      await session.run(MACRO_GRAPH_CYPHER.deleteGraphBatch.nodes, { userId });
+      await session.run(MACRO_GRAPH_CYPHER.deleteGraphBatch.subclusters, { userId });
+      await session.run(MACRO_GRAPH_CYPHER.deleteGraphBatch.clusters, { userId });
+      await session.run(MACRO_GRAPH_CYPHER.deleteGraphBatch.statsAndSummary, { userId });
+      await session.run(MACRO_GRAPH_CYPHER.deleteGraphBatch.graphRoot, { userId });
+    } finally {
+      // 4. 예외 발생 여부와 상관없이 세션을 즉시 닫아 Connection Pool 누수/고갈 완벽 차단
+      await session.close(); 
+    }
   }
   /**
    * @description Seed origId 목록을 기반으로 Graph RAG 이웃 노드를 탐색합니다. 작성일자: 2026-04-29.

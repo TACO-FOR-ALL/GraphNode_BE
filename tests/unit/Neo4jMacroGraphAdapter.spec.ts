@@ -310,7 +310,7 @@ describe('Neo4jMacroGraphAdapter', () => {
           userId: 'user1',
           nodeIds: [1, 3],
           hasNodeFilter: true,
-          limit: 25,
+          limit: expect.objectContaining({ low: 25 }),
         }
       );
       expect(result).toEqual({ containsDeleted: 2, representsDeleted: 1 });

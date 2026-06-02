@@ -1227,6 +1227,39 @@ export const MACRO_GRAPH_CYPHER = {
    * //   userId: 'user-123'
    * // }
    */
+  
+  /**
+   * @description 사용자의 Macro Graph 전체를 엔티티 타입별로 나누어 삭제합니다 (Transaction OOM 방지용).
+   */
+  deleteGraphBatch: {
+    relations: `
+      MATCH (g:MacroGraph {userId: $userId})-[:HAS_RELATION]->(rel:MacroRelation)
+      CALL { WITH rel DETACH DELETE rel } IN TRANSACTIONS OF 1000 ROWS
+    `,
+    nodes: `
+      MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode)
+      CALL { WITH n DETACH DELETE n } IN TRANSACTIONS OF 1000 ROWS
+    `,
+    subclusters: `
+      MATCH (g:MacroGraph {userId: $userId})-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster)
+      CALL { WITH sc DETACH DELETE sc } IN TRANSACTIONS OF 1000 ROWS
+    `,
+    clusters: `
+      MATCH (g:MacroGraph {userId: $userId})-[:HAS_CLUSTER]->(cl:MacroCluster)
+      CALL { WITH cl DETACH DELETE cl } IN TRANSACTIONS OF 1000 ROWS
+    `,
+    statsAndSummary: `
+      MATCH (g:MacroGraph {userId: $userId})
+      OPTIONAL MATCH (g)-[:HAS_STATS]->(st:MacroStats)
+      OPTIONAL MATCH (g)-[:HAS_SUMMARY]->(sm:MacroSummary)
+      DETACH DELETE st, sm
+    `,
+    graphRoot: `
+      MATCH (g:MacroGraph {userId: $userId})
+      DETACH DELETE g
+    `
+  },
+
   deleteGraphSummary: `
     MATCH (:MacroGraph {userId: $userId})-[:HAS_SUMMARY]->(sm:MacroSummary)
     DETACH DELETE sm
