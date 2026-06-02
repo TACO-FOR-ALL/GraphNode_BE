@@ -8,6 +8,7 @@ import type {
   MacroGraphUpsertInput,
   MacroGraphUpsertResult,
   GraphRagClusterSiblingResult,
+  PruneIncompatibleSubclusterMembershipsResult,
 } from '../../core/ports/MacroGraphStore';
 import type {
   GraphClusterDoc,
@@ -656,6 +657,11 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
 
       const subclusterRows = subclusterDocs.map(toNeo4jMacroSubcluster);
       await runner.run(MACRO_GRAPH_CYPHER.upsertSubclusters, { rows: subclusterRows });
+
+      await runner.run(MACRO_GRAPH_CYPHER.clearSubclusterRelationshipsForReplacement, {
+        userId,
+        subclusterIds: subclusterDocs.map((sc) => sc.id),
+      });
 
       await runner.run(MACRO_GRAPH_CYPHER.linkSubclustersToGraph, {
         userId,
@@ -2037,6 +2043,40 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   async deduplicateBelongsTo(userId: string, options?: MacroGraphStoreOptions): Promise<void> {
     await this.runWrite(async (runner) => {
       await runner.run(MACRO_GRAPH_CYPHER.deduplicateBelongsTo, { userId });
+    }, options);
+  }
+
+  async pruneIncompatibleSubclusterMemberships(
+    userId: string,
+    nodeIds?: number[],
+    limit?: number,
+    options?: MacroGraphStoreOptions
+  ): Promise<PruneIncompatibleSubclusterMembershipsResult> {
+    if (Array.isArray(nodeIds) && nodeIds.length === 0) {
+      return { containsDeleted: 0, representsDeleted: 0 };
+    }
+
+    const boundedLimit =
+      typeof limit === 'number' && Number.isFinite(limit)
+        ? Math.max(0, Math.floor(limit))
+        : 10000;
+
+    return this.runWrite(async (runner) => {
+      const result = await runner.run(MACRO_GRAPH_CYPHER.pruneIncompatibleSubclusterMemberships, {
+        userId,
+        nodeIds: nodeIds ?? [],
+        hasNodeFilter: Array.isArray(nodeIds),
+        limit: boundedLimit,
+      });
+      const records = result.records as unknown[];
+      if (records.length === 0) {
+        return { containsDeleted: 0, representsDeleted: 0 };
+      }
+      const record = records[0] as { get(key: string): unknown };
+      return {
+        containsDeleted: toJsNumber(record.get('containsDeleted')),
+        representsDeleted: toJsNumber(record.get('representsDeleted')),
+      };
     }, options);
   }
 

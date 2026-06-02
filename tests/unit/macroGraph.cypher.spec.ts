@@ -21,6 +21,7 @@ describe('macroGraph.cypher', () => {
       'upsertNodes',
       'upsertClusters',
       'upsertSubclusters',
+      'clearSubclusterRelationshipsForReplacement',
       'upsertRelations',
       'upsertStats',
       'upsertSummary',
@@ -59,6 +60,7 @@ describe('macroGraph.cypher', () => {
       'addNodeToSubcluster',
       'removeNodeFromSubcluster',
       'clusterHasNodes',
+      'pruneIncompatibleSubclusterMemberships',
     ] as const;
 
     for (const key of requiredKeys) {
@@ -166,6 +168,46 @@ describe('macroGraph.cypher', () => {
       const q = MACRO_GRAPH_CYPHER.moveSubclusterToCluster;
       expect(q).toMatch(/MERGE \(newCluster\)-\[:HAS_SUBCLUSTER\]->\(sc\)/);
       expect(q).toMatch(/MERGE \(n\)-\[:BELONGS_TO\]->\(newCluster\)/);
+    });
+
+    it('pruneIncompatibleSubclusterMemberships: node cluster와 subcluster parent cluster가 다를 때 stale membership을 삭제한다', () => {
+      const q = MACRO_GRAPH_CYPHER.pruneIncompatibleSubclusterMemberships;
+
+      expect(q).toMatch(/HAS_NODE/);
+      expect(q).toMatch(/BELONGS_TO/);
+      expect(q).toMatch(/HAS_SUBCLUSTER/);
+      expect(q).toMatch(/CONTAINS\|REPRESENTS/);
+      expect(q).toMatch(/subclusterCluster\.id\s*<>\s*nodeCluster\.id/);
+      expect(q).toMatch(/DELETE rel/);
+      expect(q).toMatch(/containsDeleted/);
+      expect(q).toMatch(/representsDeleted/);
+    });
+
+    it('clearSubclusterRelationshipsForReplacement: 전달된 subcluster id 범위의 HAS_SUBCLUSTER/CONTAINS/REPRESENTS를 삭제한다', () => {
+      const q = MACRO_GRAPH_CYPHER.clearSubclusterRelationshipsForReplacement;
+
+      expect(q).toMatch(/UNWIND \$subclusterIds AS subclusterId/);
+      expect(q).toMatch(/MacroSubcluster \{userId: \$userId, id: subclusterId\}/);
+      expect(q).toMatch(/HAS_SUBCLUSTER/);
+      expect(q).toMatch(/CONTAINS/);
+      expect(q).toMatch(/REPRESENTS/);
+      expect(q).toMatch(/DELETE rel/);
+    });
+
+    it('linkSubclusterContainsNodes: node cluster와 subcluster parent cluster가 일치할 때만 CONTAINS를 생성한다', () => {
+      const q = MACRO_GRAPH_CYPHER.linkSubclusterContainsNodes;
+
+      expect(q).toMatch(/MacroCluster \{userId: \$userId\}\)-\[:HAS_SUBCLUSTER\]->\(sc\)/);
+      expect(q).toMatch(/\(n\)-\[:BELONGS_TO\]->\(cl\)/);
+      expect(q).toMatch(/MERGE \(sc\)-\[:CONTAINS\]->\(n\)/);
+    });
+
+    it('linkSubclusterRepresentsNode: node cluster와 subcluster parent cluster가 일치할 때만 REPRESENTS를 생성한다', () => {
+      const q = MACRO_GRAPH_CYPHER.linkSubclusterRepresentsNode;
+
+      expect(q).toMatch(/MacroCluster \{userId: \$userId\}\)-\[:HAS_SUBCLUSTER\]->\(sc\)/);
+      expect(q).toMatch(/\(n\)-\[:BELONGS_TO\]->\(cl\)/);
+      expect(q).toMatch(/MERGE \(sc\)-\[:REPRESENTS\]->\(n\)/);
     });
   });
 });

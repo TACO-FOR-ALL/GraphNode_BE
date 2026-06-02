@@ -104,6 +104,11 @@ export interface MacroGraphUpsertResult {
   summary: boolean;
 }
 
+export interface PruneIncompatibleSubclusterMembershipsResult {
+  containsDeleted: number;
+  representsDeleted: number;
+}
+
 /**
  * @description Macro Graph를 Neo4j Native Graph 구조로 저장하고 조회하기 위한 Port입니다.
  *
@@ -219,6 +224,13 @@ export interface MacroGraphStore {
     subclusters: GraphSubclusterDto[],
     options?: MacroGraphStoreOptions
   ): Promise<void>;
+
+  pruneIncompatibleSubclusterMemberships(
+    userId: string,
+    nodeIds?: number[],
+    limit?: number,
+    options?: MacroGraphStoreOptions
+  ): Promise<PruneIncompatibleSubclusterMembershipsResult>;
 
   /**
    * @description 사용자 graph stats를 독립적으로 저장합니다. (Incremental Write)

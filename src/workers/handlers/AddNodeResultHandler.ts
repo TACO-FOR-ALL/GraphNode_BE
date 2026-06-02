@@ -161,9 +161,12 @@ export class AddNodeResultHandler implements JobHandler {
 
       // 5. normalized origId -> Mongo numeric id 맵을 만든다.
       const origIdToDbId: Map<string, number> = this.buildOrigIdToDbIdMap(existingNodes);
+      const existingNodeByOrigId: Map<string, GraphNodeDto> =
+        this.buildExistingNodeByOrigIdMap(existingNodes);
 
       // 6. 이번 배치에서 생성한 AI string id -> Mongo numeric id 맵을 만든다.
       const createdNodeIds: Map<string, number> = new Map();
+      const movedNodeIds: Set<number> = new Set();
 
       // 7. 신규 노드가 필요할 때 사용할 다음 numeric id를 계산한다.
       let nextNodeId = this.calculateNextNodeId(existingNodes);
@@ -259,6 +262,11 @@ export class AddNodeResultHandler implements JobHandler {
           // 같은 배치의 edge가 raw AI string id를 참조할 수 있으므로 기록한다.
           createdNodeIds.set(normalizedItem.rawTempId, dbNodeId);
 
+          const existingNode = existingNodeByOrigId.get(normalizedItem.normalizedOrigId);
+          if (existingNode && existingNode.clusterId !== normalizedItem.clusterId) {
+            movedNodeIds.add(dbNodeId);
+          }
+
           const hint = sourceTypeResult.userFileHintsByOrigId.get(normalizedItem.normalizedOrigId);
           const metadata =
             resolvedSourceType === 'file' && hint
@@ -292,6 +300,24 @@ export class AddNodeResultHandler implements JobHandler {
       for (let i = 0; i < pendingNodes.length; i += NODE_CHUNK_SIZE) {
         const chunk = pendingNodes.slice(i, i + NODE_CHUNK_SIZE);
         await graphService.upsertNodes(chunk);
+      }
+
+      if (movedNodeIds.size > 0) {
+        const movedNodeIdList = Array.from(movedNodeIds);
+        const pruneResult = await graphService.pruneIncompatibleSubclusterMemberships(
+          userId,
+          movedNodeIdList
+        );
+        logger.info(
+          {
+            taskId,
+            userId,
+            movedNodeIds: movedNodeIdList,
+            containsDeleted: pruneResult.containsDeleted,
+            representsDeleted: pruneResult.representsDeleted,
+          },
+          'Pruned stale subcluster memberships after add-node cluster reassignment'
+        );
       }
 
       // 260411: sourceType resolve 결과 로깅 추가
@@ -552,6 +578,17 @@ export class AddNodeResultHandler implements JobHandler {
     }
 
     return origIdToDbId;
+  }
+
+  private buildExistingNodeByOrigIdMap(existingNodes: GraphNodeDto[]): Map<string, GraphNodeDto> {
+    const existingNodeByOrigId = new Map<string, GraphNodeDto>();
+
+    for (const node of existingNodes) {
+      const normalizedOrigId = normalizeAiOrigId(node.origId).normalizedOrigId;
+      existingNodeByOrigId.set(normalizedOrigId, node);
+    }
+
+    return existingNodeByOrigId;
   }
 
   /**

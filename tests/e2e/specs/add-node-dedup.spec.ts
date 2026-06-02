@@ -32,6 +32,14 @@ import { MongoClient } from 'mongodb';
 
 const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/graphnode';
 
+function toNumberFromNeo4j(value: unknown): number {
+  if (typeof value === 'number') return value;
+  if (value && typeof value === 'object' && 'toNumber' in value) {
+    return (value as { toNumber(): number }).toNumber();
+  }
+  return Number(value);
+}
+
 /**
  * @description E2E 환경 여부에 따라 describe를 활성화 또는 스킵합니다.
  */
@@ -274,6 +282,107 @@ describeAddNodeDedup('AddNode Dedup & Ghost Cluster Cleanup E2E', () => {
       expect(snapshotNodes.length).toBe(snapshotOrigIdSet.size);
 
       console.log('[Dedup E2E] ✅ Snapshot API returned no duplicate origIds.');
+    } finally {
+      await neo4jSession.close();
+      await neo4jDriver.close();
+    }
+  });
+
+  it('Scenario C: AddNode 이후 snapshot에 stale subcluster membership이 내려오지 않음을 검증', async () => {
+    console.log('[Dedup E2E] Scenario C: stale subcluster membership check...');
+
+    const neo4jDriver = createNeo4jE2eDriver();
+    const neo4jSession = neo4jDriver.session();
+
+    try {
+      const staleRelRes = await neo4jSession.run(
+        `MATCH (subclusterCluster:MacroCluster {userId: $userId})-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId})-[rel:CONTAINS|REPRESENTS]->(n:MacroNode {userId: $userId})-[:BELONGS_TO]->(nodeCluster:MacroCluster {userId: $userId})
+         WHERE n.deletedAt IS NULL
+           AND subclusterCluster.id <> nodeCluster.id
+         RETURN sc.id AS subclusterId,
+                type(rel) AS relType,
+                n.id AS nodeId,
+                subclusterCluster.id AS subclusterClusterId,
+                nodeCluster.id AS nodeClusterId
+         LIMIT 20`,
+        { userId }
+      );
+
+      const staleRels = staleRelRes.records.map((r) => ({
+        subclusterId: r.get('subclusterId') as string,
+        relType: r.get('relType') as string,
+        nodeId: toNumberFromNeo4j(r.get('nodeId')),
+        subclusterClusterId: r.get('subclusterClusterId') as string,
+        nodeClusterId: r.get('nodeClusterId') as string,
+      }));
+
+      if (staleRels.length > 0) {
+        console.error(
+          `[Dedup E2E] STALE SUBCLUSTER RELATIONSHIPS DETECTED (${staleRels.length}):`,
+          JSON.stringify(staleRels)
+        );
+      }
+      expect(staleRels).toHaveLength(0);
+
+      const snapshotRes = await apiClient.get('/v1/graph/snapshot');
+      expect(snapshotRes.status).toBe(200);
+
+      const snapshotNodes = (snapshotRes.data?.nodes ?? []) as Array<{
+        id: number;
+        clusterId: string;
+      }>;
+      const snapshotSubclusters = (snapshotRes.data?.subclusters ?? []) as Array<{
+        id: string;
+        clusterId: string;
+        nodeIds?: number[];
+        representativeNodeId?: number | null;
+      }>;
+      const nodeClusterById = new Map(snapshotNodes.map((node) => [node.id, node.clusterId]));
+      const mismatches: Array<{
+        subclusterId: string;
+        subclusterClusterId: string;
+        nodeId: number;
+        nodeClusterId: string;
+        membershipType: 'CONTAINS' | 'REPRESENTS';
+      }> = [];
+
+      for (const subcluster of snapshotSubclusters) {
+        for (const nodeId of subcluster.nodeIds ?? []) {
+          const nodeClusterId = nodeClusterById.get(nodeId);
+          if (nodeClusterId && nodeClusterId !== subcluster.clusterId) {
+            mismatches.push({
+              subclusterId: subcluster.id,
+              subclusterClusterId: subcluster.clusterId,
+              nodeId,
+              nodeClusterId,
+              membershipType: 'CONTAINS',
+            });
+          }
+        }
+
+        if (subcluster.representativeNodeId != null) {
+          const nodeClusterId = nodeClusterById.get(subcluster.representativeNodeId);
+          if (nodeClusterId && nodeClusterId !== subcluster.clusterId) {
+            mismatches.push({
+              subclusterId: subcluster.id,
+              subclusterClusterId: subcluster.clusterId,
+              nodeId: subcluster.representativeNodeId,
+              nodeClusterId,
+              membershipType: 'REPRESENTS',
+            });
+          }
+        }
+      }
+
+      if (mismatches.length > 0) {
+        console.error(
+          `[Dedup E2E] SNAPSHOT STALE SUBCLUSTER MEMBERSHIPS DETECTED (${mismatches.length}):`,
+          JSON.stringify(mismatches)
+        );
+      }
+      expect(mismatches).toHaveLength(0);
+
+      console.log('[Dedup E2E] ✅ Snapshot returned no stale subcluster memberships.');
     } finally {
       await neo4jSession.close();
       await neo4jDriver.close();

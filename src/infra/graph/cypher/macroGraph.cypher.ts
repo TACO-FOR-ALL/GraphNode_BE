@@ -163,6 +163,26 @@ export const MACRO_GRAPH_CYPHER = {
         sc.deletedAt   = row.deletedAt
   `,
 
+  clearSubclusterRelationshipsForReplacement: `
+    UNWIND $subclusterIds AS subclusterId
+    MATCH (sc:MacroSubcluster {userId: $userId, id: subclusterId})
+    OPTIONAL MATCH (:MacroGraph {userId: $userId})-[graphRel:HAS_SUBCLUSTER]->(sc)
+    WITH sc, [rel IN collect(graphRel) WHERE rel IS NOT NULL] AS graphRels
+    FOREACH (rel IN graphRels | DELETE rel)
+    WITH sc
+    OPTIONAL MATCH (:MacroCluster {userId: $userId})-[clusterRel:HAS_SUBCLUSTER]->(sc)
+    WITH sc, [rel IN collect(clusterRel) WHERE rel IS NOT NULL] AS clusterRels
+    FOREACH (rel IN clusterRels | DELETE rel)
+    WITH sc
+    OPTIONAL MATCH (sc)-[containsRel:CONTAINS]->(:MacroNode {userId: $userId})
+    WITH sc, [rel IN collect(containsRel) WHERE rel IS NOT NULL] AS containsRels
+    FOREACH (rel IN containsRels | DELETE rel)
+    WITH sc
+    OPTIONAL MATCH (sc)-[representsRel:REPRESENTS]->(:MacroNode {userId: $userId})
+    WITH [rel IN collect(representsRel) WHERE rel IS NOT NULL] AS representsRels
+    FOREACH (rel IN representsRels | DELETE rel)
+  `,
+
   /**
    * @description MacroRelation (reified edge) 목록을 UNWIND 기반 batch upsert 합니다.
    *
@@ -464,6 +484,23 @@ export const MACRO_GRAPH_CYPHER = {
     RETURN count(n) AS duplicateNodeCount, sum(relCount - 1) AS excessRelCount
   `,
 
+  pruneIncompatibleSubclusterMemberships: `
+    MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+    WHERE $hasNodeFilter = false OR n.id IN $nodeIds
+    MATCH (n)-[:BELONGS_TO]->(nodeCluster:MacroCluster {userId: $userId})
+    MATCH (subclusterCluster:MacroCluster {userId: $userId})-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId})-[rel:CONTAINS|REPRESENTS]->(n)
+    WHERE subclusterCluster.id <> nodeCluster.id
+    WITH DISTINCT rel, type(rel) AS relType
+    LIMIT $limit
+    WITH collect({rel: rel, relType: relType}) AS entries
+    WITH [entry IN entries WHERE entry.relType = 'CONTAINS' | entry.rel] AS containsRels,
+         [entry IN entries WHERE entry.relType = 'REPRESENTS' | entry.rel] AS representsRels
+    FOREACH (rel IN containsRels | DELETE rel)
+    FOREACH (rel IN representsRels | DELETE rel)
+    RETURN size(containsRels) AS containsDeleted,
+           size(representsRels) AS representsDeleted
+  `,
+
   /**
    * @description MacroCluster와 소속 MacroSubcluster 사이에 HAS_SUBCLUSTER 관계를 생성합니다.
    *
@@ -498,7 +535,9 @@ export const MACRO_GRAPH_CYPHER = {
   linkSubclusterContainsNodes: `
     UNWIND $rows AS row
     MATCH (sc:MacroSubcluster {userId: $userId, id: row.subclusterId})
+    MATCH (cl:MacroCluster {userId: $userId})-[:HAS_SUBCLUSTER]->(sc)
     MATCH (n:MacroNode         {userId: $userId, id: row.nodeId})
+    MATCH (n)-[:BELONGS_TO]->(cl)
     MERGE (sc)-[:CONTAINS]->(n)
   `,
 
@@ -517,7 +556,9 @@ export const MACRO_GRAPH_CYPHER = {
   linkSubclusterRepresentsNode: `
     UNWIND $rows AS row
     MATCH (sc:MacroSubcluster {userId: $userId, id: row.subclusterId})
+    MATCH (cl:MacroCluster {userId: $userId})-[:HAS_SUBCLUSTER]->(sc)
     MATCH (n:MacroNode         {userId: $userId, id: row.nodeId})
+    MATCH (n)-[:BELONGS_TO]->(cl)
     MERGE (sc)-[:REPRESENTS]->(n)
   `,
 
