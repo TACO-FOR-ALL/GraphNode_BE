@@ -501,6 +501,73 @@ export const MACRO_GRAPH_CYPHER = {
            size(representsRels) AS representsDeleted
   `,
 
+  reconcileSubclusterMemberships: `
+    CALL {
+      MATCH (g:MacroGraph {userId: $userId})-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId})
+      WHERE sc.deletedAt IS NULL
+      OPTIONAL MATCH (parent:MacroCluster {userId: $userId})-[:HAS_SUBCLUSTER]->(sc)
+      OPTIONAL MATCH (sc)-[:CONTAINS]->(contained:MacroNode {userId: $userId})-[:BELONGS_TO]->(parent)
+      WHERE contained.deletedAt IS NULL
+      WITH sc, parent, collect(DISTINCT contained) AS validContainedNodes
+      OPTIONAL MATCH (activeParentNode:MacroNode {userId: $userId})-[:BELONGS_TO]->(parent)
+      WHERE activeParentNode.deletedAt IS NULL
+      WITH sc, validContainedNodes, count(DISTINCT activeParentNode) AS parentActiveNodeCount
+      WHERE size(validContainedNodes) = 0 OR parentActiveNodeCount = 0
+      WITH collect(DISTINCT sc) AS subclustersToDelete
+      CALL {
+        WITH subclustersToDelete
+        UNWIND subclustersToDelete AS subcluster
+        DETACH DELETE subcluster
+        RETURN count(*) AS detachedSubclusters
+      }
+      RETURN size(subclustersToDelete) AS deletedSubclusters
+    }
+    CALL {
+      MATCH (parent:MacroCluster {userId: $userId})-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId})
+      WHERE sc.deletedAt IS NULL
+      MATCH (sc)-[representsRel:REPRESENTS]->(rep:MacroNode {userId: $userId})
+      OPTIONAL MATCH (rep)-[:BELONGS_TO]->(repCluster:MacroCluster {userId: $userId})
+      OPTIONAL MATCH (sc)-[containsRel:CONTAINS]->(rep)
+      WITH parent, representsRel, rep, repCluster, containsRel
+      WHERE rep.deletedAt IS NOT NULL
+         OR repCluster IS NULL
+         OR repCluster.id <> parent.id
+         OR containsRel IS NULL
+      WITH collect(DISTINCT representsRel) AS invalidRepresents
+      FOREACH (rel IN invalidRepresents | DELETE rel)
+      RETURN size(invalidRepresents) AS removedInvalidRepresents
+    }
+    CALL {
+      MATCH (parent:MacroCluster {userId: $userId})-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId})
+      WHERE sc.deletedAt IS NULL
+      MATCH (sc)-[:CONTAINS]->(candidate:MacroNode {userId: $userId})-[:BELONGS_TO]->(parent)
+      WHERE candidate.deletedAt IS NULL
+      WITH sc, candidate
+      ORDER BY toInteger(candidate.id) ASC
+      WITH sc, collect(candidate)[0] AS representativeCandidate
+      OPTIONAL MATCH (sc)-[:REPRESENTS]->(validRep:MacroNode {userId: $userId})-[:BELONGS_TO]->(parent)
+      OPTIONAL MATCH (sc)-[validContainsRel:CONTAINS]->(validRep)
+      WITH sc, representativeCandidate,
+           count(DISTINCT CASE
+             WHEN validRep.deletedAt IS NULL AND validContainsRel IS NOT NULL THEN validRep
+             ELSE null
+           END) AS validRepresentativeCount
+      WHERE validRepresentativeCount = 0
+      WITH collect(DISTINCT {sc: sc, candidate: representativeCandidate}) AS reassignments
+      CALL {
+        WITH reassignments
+        UNWIND reassignments AS reassignment
+        WITH reassignment.sc AS sc, reassignment.candidate AS representativeCandidate
+        MERGE (sc)-[:REPRESENTS]->(representativeCandidate)
+        RETURN count(*) AS mergedRepresentatives
+      }
+      RETURN size(reassignments) AS reassignedRepresentatives
+    }
+    RETURN deletedSubclusters,
+           removedInvalidRepresents,
+           reassignedRepresentatives
+  `,
+
   /**
    * @description MacroCluster와 소속 MacroSubcluster 사이에 HAS_SUBCLUSTER 관계를 생성합니다.
    *

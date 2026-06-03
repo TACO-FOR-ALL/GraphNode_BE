@@ -61,6 +61,7 @@ describe('macroGraph.cypher', () => {
       'removeNodeFromSubcluster',
       'clusterHasNodes',
       'pruneIncompatibleSubclusterMemberships',
+      'reconcileSubclusterMemberships',
     ] as const;
 
     for (const key of requiredKeys) {
@@ -181,6 +182,21 @@ describe('macroGraph.cypher', () => {
       expect(q).toMatch(/DELETE rel/);
       expect(q).toMatch(/containsDeleted/);
       expect(q).toMatch(/representsDeleted/);
+    });
+
+    it('reconcileSubclusterMemberships: invalid subcluster를 hard delete하고 대표를 최소 numeric node id로 재선정한다', () => {
+      const q = MACRO_GRAPH_CYPHER.reconcileSubclusterMemberships;
+
+      expect(q).toMatch(/DETACH DELETE subcluster/);
+      expect(q).toMatch(/size\(validContainedNodes\)\s*=\s*0/);
+      expect(q).toMatch(/parentActiveNodeCount\s*=\s*0/);
+      expect(q).toMatch(/invalidRepresents/);
+      expect(q).toMatch(/containsRel IS NULL/);
+      expect(q).toMatch(/ORDER BY toInteger\(candidate\.id\) ASC/);
+      expect(q).toMatch(/MERGE \(sc\)-\[:REPRESENTS\]->\(representativeCandidate\)/);
+      expect(q).toMatch(/deletedSubclusters/);
+      expect(q).toMatch(/removedInvalidRepresents/);
+      expect(q).toMatch(/reassignedRepresentatives/);
     });
 
     it('clearSubclusterRelationshipsForReplacement: 전달된 subcluster id 범위의 HAS_SUBCLUSTER/CONTAINS/REPRESENTS를 삭제한다', () => {

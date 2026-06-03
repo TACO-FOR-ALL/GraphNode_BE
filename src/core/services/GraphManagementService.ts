@@ -686,6 +686,25 @@ export class GraphManagementService {
     }
   }
 
+  async reconcileSubclusterMemberships(
+    userId: string,
+    options?: RepoOptions
+  ): Promise<{
+    deletedSubclusters: number;
+    reassignedRepresentatives: number;
+    removedInvalidRepresents: number;
+  }> {
+    try {
+      this.assertUser(userId);
+      return await this.repo.reconcileSubclusterMemberships(userId, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.reconcileSubclusterMemberships failed', {
+        cause: String(err),
+      });
+    }
+  }
+
   async deleteSubcluster(
     userId: string,
     subclusterId: string,

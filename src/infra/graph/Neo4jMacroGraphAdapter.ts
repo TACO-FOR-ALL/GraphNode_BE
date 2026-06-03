@@ -9,6 +9,7 @@ import type {
   MacroGraphUpsertResult,
   GraphRagClusterSiblingResult,
   PruneIncompatibleSubclusterMembershipsResult,
+  ReconcileSubclusterMembershipsResult,
 } from '../../core/ports/MacroGraphStore';
 import type {
   GraphClusterDoc,
@@ -2098,6 +2099,31 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
       return {
         containsDeleted: toJsNumber(record.get('containsDeleted')),
         representsDeleted: toJsNumber(record.get('representsDeleted')),
+      };
+    }, options);
+  }
+
+  async reconcileSubclusterMemberships(
+    userId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<ReconcileSubclusterMembershipsResult> {
+    return this.runWrite(async (runner) => {
+      const result = await runner.run(MACRO_GRAPH_CYPHER.reconcileSubclusterMemberships, {
+        userId,
+      });
+      const records = result.records as unknown[];
+      if (records.length === 0) {
+        return {
+          deletedSubclusters: 0,
+          reassignedRepresentatives: 0,
+          removedInvalidRepresents: 0,
+        };
+      }
+      const record = records[0] as { get(key: string): unknown };
+      return {
+        deletedSubclusters: toJsNumber(record.get('deletedSubclusters')),
+        reassignedRepresentatives: toJsNumber(record.get('reassignedRepresentatives')),
+        removedInvalidRepresents: toJsNumber(record.get('removedInvalidRepresents')),
       };
     }, options);
   }

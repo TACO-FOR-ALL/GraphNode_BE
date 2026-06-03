@@ -324,6 +324,64 @@ describeAddNodeDedup('AddNode Dedup & Ghost Cluster Cleanup E2E', () => {
       }
       expect(staleRels).toHaveLength(0);
 
+      const emptySubclusterRes = await neo4jSession.run(
+        `MATCH (g:MacroGraph {userId: $userId})-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId})
+         WHERE sc.deletedAt IS NULL
+         OPTIONAL MATCH (parent:MacroCluster {userId: $userId})-[:HAS_SUBCLUSTER]->(sc)
+         OPTIONAL MATCH (sc)-[:CONTAINS]->(n:MacroNode {userId: $userId})-[:BELONGS_TO]->(parent)
+         WHERE n.deletedAt IS NULL
+         WITH sc, count(DISTINCT n) AS containsCount
+         WHERE containsCount = 0
+         RETURN sc.id AS subclusterId
+         LIMIT 20`,
+        { userId }
+      );
+      const emptySubclusters = emptySubclusterRes.records.map((r) => ({
+        subclusterId: r.get('subclusterId') as string,
+      }));
+      expect(emptySubclusters).toHaveLength(0);
+
+      const missingRepRes = await neo4jSession.run(
+        `MATCH (g:MacroGraph {userId: $userId})-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId})
+         WHERE sc.deletedAt IS NULL
+         OPTIONAL MATCH (sc)-[:REPRESENTS]->(rep:MacroNode {userId: $userId})
+         WHERE rep.deletedAt IS NULL
+         WITH sc, count(DISTINCT rep) AS representativeCount
+         WHERE representativeCount = 0
+         RETURN sc.id AS subclusterId
+         LIMIT 20`,
+        { userId }
+      );
+      const missingRepresentatives = missingRepRes.records.map((r) => ({
+        subclusterId: r.get('subclusterId') as string,
+      }));
+      expect(missingRepresentatives).toHaveLength(0);
+
+      const representsRes = await neo4jSession.run(
+        `MATCH (g:MacroGraph {userId: $userId})-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId})
+         WHERE sc.deletedAt IS NULL
+         MATCH (subclusterCluster:MacroCluster {userId: $userId})-[:HAS_SUBCLUSTER]->(sc)
+         MATCH (sc)-[:REPRESENTS]->(rep:MacroNode {userId: $userId})
+         WHERE rep.deletedAt IS NULL
+         MATCH (rep)-[:BELONGS_TO]->(repCluster:MacroCluster {userId: $userId})
+         RETURN sc.id AS subclusterId,
+                rep.id AS representativeNodeId,
+                subclusterCluster.id AS subclusterClusterId,
+                repCluster.id AS representativeClusterId`,
+        { userId }
+      );
+      const representativeBySubcluster = new Map<
+        string,
+        { representativeNodeId: number; subclusterClusterId: string; representativeClusterId: string }
+      >();
+      for (const r of representsRes.records) {
+        representativeBySubcluster.set(r.get('subclusterId') as string, {
+          representativeNodeId: toNumberFromNeo4j(r.get('representativeNodeId')),
+          subclusterClusterId: r.get('subclusterClusterId') as string,
+          representativeClusterId: r.get('representativeClusterId') as string,
+        });
+      }
+
       const snapshotRes = await apiClient.get('/v1/graph/snapshot');
       expect(snapshotRes.status).toBe(200);
 
@@ -342,35 +400,86 @@ describeAddNodeDedup('AddNode Dedup & Ghost Cluster Cleanup E2E', () => {
         subclusterId: string;
         subclusterClusterId: string;
         nodeId: number;
-        nodeClusterId: string;
+        nodeClusterId: string | null;
         membershipType: 'CONTAINS' | 'REPRESENTS';
+        reason: string;
       }> = [];
 
       for (const subcluster of snapshotSubclusters) {
+        if ((subcluster.nodeIds ?? []).length === 0) {
+          mismatches.push({
+            subclusterId: subcluster.id,
+            subclusterClusterId: subcluster.clusterId,
+            nodeId: -1,
+            nodeClusterId: null,
+            membershipType: 'CONTAINS',
+            reason: 'snapshot subcluster has zero contained nodes',
+          });
+        }
+
         for (const nodeId of subcluster.nodeIds ?? []) {
           const nodeClusterId = nodeClusterById.get(nodeId);
-          if (nodeClusterId && nodeClusterId !== subcluster.clusterId) {
+          if (!nodeClusterId || nodeClusterId !== subcluster.clusterId) {
             mismatches.push({
               subclusterId: subcluster.id,
               subclusterClusterId: subcluster.clusterId,
               nodeId,
-              nodeClusterId,
+              nodeClusterId: nodeClusterId ?? null,
               membershipType: 'CONTAINS',
+              reason: nodeClusterId
+                ? 'contained node belongs to a different cluster'
+                : 'contained node is missing from snapshot nodes',
             });
           }
         }
 
         if (subcluster.representativeNodeId != null) {
           const nodeClusterId = nodeClusterById.get(subcluster.representativeNodeId);
-          if (nodeClusterId && nodeClusterId !== subcluster.clusterId) {
+          const neo4jRepresentative = representativeBySubcluster.get(subcluster.id);
+          if (!nodeClusterId || nodeClusterId !== subcluster.clusterId) {
             mismatches.push({
               subclusterId: subcluster.id,
               subclusterClusterId: subcluster.clusterId,
               nodeId: subcluster.representativeNodeId,
-              nodeClusterId,
+              nodeClusterId: nodeClusterId ?? null,
               membershipType: 'REPRESENTS',
+              reason: nodeClusterId
+                ? 'representative node belongs to a different cluster'
+                : 'representative node is missing from snapshot nodes',
             });
           }
+          if (!neo4jRepresentative) {
+            mismatches.push({
+              subclusterId: subcluster.id,
+              subclusterClusterId: subcluster.clusterId,
+              nodeId: subcluster.representativeNodeId,
+              nodeClusterId: nodeClusterId ?? null,
+              membershipType: 'REPRESENTS',
+              reason: 'Neo4j REPRESENTS relationship is missing',
+            });
+          } else if (
+            neo4jRepresentative.representativeNodeId !== subcluster.representativeNodeId ||
+            neo4jRepresentative.subclusterClusterId !== subcluster.clusterId ||
+            neo4jRepresentative.representativeClusterId !== subcluster.clusterId
+          ) {
+            mismatches.push({
+              subclusterId: subcluster.id,
+              subclusterClusterId: subcluster.clusterId,
+              nodeId: subcluster.representativeNodeId,
+              nodeClusterId: nodeClusterId ?? null,
+              membershipType: 'REPRESENTS',
+              reason: 'snapshot representative does not match Neo4j REPRESENTS relationship',
+            });
+          }
+        } else {
+          mismatches.push({
+            subclusterId: subcluster.id,
+            subclusterClusterId: subcluster.clusterId,
+            nodeId: -1,
+            nodeClusterId: null,
+            membershipType: 'REPRESENTS',
+            reason: 'snapshot representativeNodeId is null or undefined',
+          });
         }
       }
 

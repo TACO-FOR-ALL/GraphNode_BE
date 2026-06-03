@@ -308,6 +308,7 @@ export class AddNodeResultHandler implements JobHandler {
           userId,
           movedNodeIdList
         );
+        const reconcileResult = await graphService.reconcileSubclusterMemberships(userId);
         logger.info(
           {
             taskId,
@@ -315,8 +316,11 @@ export class AddNodeResultHandler implements JobHandler {
             movedNodeIds: movedNodeIdList,
             containsDeleted: pruneResult.containsDeleted,
             representsDeleted: pruneResult.representsDeleted,
+            deletedSubclusters: reconcileResult.deletedSubclusters,
+            removedInvalidRepresents: reconcileResult.removedInvalidRepresents,
+            reassignedRepresentatives: reconcileResult.reassignedRepresentatives,
           },
-          'Pruned stale subcluster memberships after add-node cluster reassignment'
+          'Pruned and reconciled subcluster memberships after add-node cluster reassignment'
         );
       }
 

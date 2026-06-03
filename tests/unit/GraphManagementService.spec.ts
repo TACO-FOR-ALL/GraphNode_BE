@@ -43,6 +43,7 @@ describe('GraphManagementService', () => {
       restoreAllGraphData: jest.fn(),
       deleteNodesByOrigIds: jest.fn(),
       restoreNodesByOrigIds: jest.fn(),
+      reconcileSubclusterMemberships: jest.fn(),
     } as unknown as jest.Mocked<MacroGraphStore>;
 
     service = new GraphManagementService(mockRepo);
@@ -320,6 +321,31 @@ describe('GraphManagementService', () => {
         expect(result).toBeDefined();
         expect(result.overview.total_conversations).toBe(0);
       });
+    });
+  });
+
+  describe('reconcileSubclusterMemberships', () => {
+    it('validates user and delegates to repo', async () => {
+      const result = {
+        deletedSubclusters: 1,
+        reassignedRepresentatives: 2,
+        removedInvalidRepresents: 3,
+      };
+      mockRepo.reconcileSubclusterMemberships.mockResolvedValue(result);
+
+      await expect(service.reconcileSubclusterMemberships('u1')).resolves.toEqual(result);
+      expect(mockRepo.reconcileSubclusterMemberships).toHaveBeenCalledWith('u1', undefined);
+    });
+
+    it('throws ValidationError if userId is missing', async () => {
+      await expect(service.reconcileSubclusterMemberships('')).rejects.toThrow(ValidationError);
+      expect(mockRepo.reconcileSubclusterMemberships).not.toHaveBeenCalled();
+    });
+
+    it('wraps unknown repo errors in UpstreamError', async () => {
+      mockRepo.reconcileSubclusterMemberships.mockRejectedValue(new Error('DB Error'));
+
+      await expect(service.reconcileSubclusterMemberships('u1')).rejects.toThrow(UpstreamError);
     });
   });
 });

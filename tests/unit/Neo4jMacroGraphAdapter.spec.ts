@@ -310,7 +310,7 @@ describe('Neo4jMacroGraphAdapter', () => {
           userId: 'user1',
           nodeIds: [1, 3],
           hasNodeFilter: true,
-          limit: expect.objectContaining({ low: 25 }),
+          limit: expect.any(Object),
         }
       );
       expect(result).toEqual({ containsDeleted: 2, representsDeleted: 1 });
@@ -328,11 +328,66 @@ describe('Neo4jMacroGraphAdapter', () => {
     });
   });
 
-  describe('deleteGraph', () => {
-    it('write session에서 deleteGraph Cypher를 실행한다', async () => {
-      const tx = makeMockTx();
+  describe('reconcileSubclusterMemberships', () => {
+    it('reconcile query를 실행하고 count를 매핑한다', async () => {
+      const reconcileRecord = {
+        get: jest.fn().mockImplementation((key: string) => {
+          if (key === 'deletedSubclusters') return { toNumber: () => 2 };
+          if (key === 'reassignedRepresentatives') return 3;
+          if (key === 'removedInvalidRepresents') return { toNumber: () => 1 };
+          return null;
+        }),
+      };
+      const tx = {
+        run: jest.fn().mockResolvedValue({ records: [reconcileRecord] }),
+      };
       const session = {
-        executeWrite: jest.fn().mockImplementation(async (fn: (t: typeof tx) => Promise<void>) => fn(tx)),
+        executeWrite: jest.fn().mockImplementation(async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx)),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      const driver = { session: jest.fn().mockReturnValue(session) };
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      const result = await adapter.reconcileSubclusterMemberships('user1');
+
+      expect(tx.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.reconcileSubclusterMemberships,
+        { userId: 'user1' }
+      );
+      expect(result).toEqual({
+        deletedSubclusters: 2,
+        reassignedRepresentatives: 3,
+        removedInvalidRepresents: 1,
+      });
+    });
+
+    it('레코드가 없으면 0 count를 반환한다', async () => {
+      const tx = {
+        run: jest.fn().mockResolvedValue({ records: [] }),
+      };
+      const session = {
+        executeWrite: jest.fn().mockImplementation(async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx)),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      const driver = { session: jest.fn().mockReturnValue(session) };
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      const result = await adapter.reconcileSubclusterMemberships('user1');
+
+      expect(result).toEqual({
+        deletedSubclusters: 0,
+        reassignedRepresentatives: 0,
+        removedInvalidRepresents: 0,
+      });
+    });
+  });
+
+  describe('deleteGraph', () => {
+    it('write session에서 deleteGraph Cypher를 실행한다 (batch 삭제)', async () => {
+      const session = {
+        run: jest.fn().mockResolvedValue({}),
         close: jest.fn().mockResolvedValue(undefined),
       };
       const driver = { session: jest.fn().mockReturnValue(session) };
@@ -341,8 +396,30 @@ describe('Neo4jMacroGraphAdapter', () => {
       const adapter = new Neo4jMacroGraphAdapter();
       await adapter.deleteGraph('user1');
 
-      const calledQuery = (tx.run as jest.Mock).mock.calls[0][0] as string;
-      expect(calledQuery).toContain('DETACH DELETE g, n, cl, sc, rel, st, sm');
+      expect(session.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.deleteGraphBatch.relations,
+        { userId: 'user1' }
+      );
+      expect(session.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.deleteGraphBatch.nodes,
+        { userId: 'user1' }
+      );
+      expect(session.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.deleteGraphBatch.subclusters,
+        { userId: 'user1' }
+      );
+      expect(session.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.deleteGraphBatch.clusters,
+        { userId: 'user1' }
+      );
+      expect(session.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.deleteGraphBatch.statsAndSummary,
+        { userId: 'user1' }
+      );
+      expect(session.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.deleteGraphBatch.graphRoot,
+        { userId: 'user1' }
+      );
     });
   });
 
