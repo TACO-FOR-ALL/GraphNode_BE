@@ -167,6 +167,12 @@ infisical run --env=prod -- npm start
 
 ---
 
+## 📝 Daily Dev Logs
+
+- [2026-06-02 AddNode Subcluster Pruning Fix](docs/guides/Daily/20260602-add-node-subcluster-pruning.md)
+
+---
+
 ## ✨ Features
 
 - **지식 그래프 생성**: 비정형 대화 내용을 구조화된 지식 그래프로 변환

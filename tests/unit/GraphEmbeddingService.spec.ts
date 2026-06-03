@@ -46,6 +46,7 @@ describe('GraphEmbeddingService', () => {
       listSubclusters: jest.fn(),
       upsertSubcluster: jest.fn(),
       deleteGraph: jest.fn(),
+      reconcileSubclusterMemberships: jest.fn(),
     } as unknown as jest.Mocked<GraphManagementService>;
 
     mockVectorStore = {
@@ -230,6 +231,23 @@ describe('GraphEmbeddingService', () => {
       expect(mockNoteService.countNotes).toHaveBeenCalledWith('u1');
       expect(result.overview.total_conversations).toBe(7);
       expect(result.overview.total_notes).toBe(3);
+    });
+  });
+
+  describe('reconcileSubclusterMemberships', () => {
+    it('delegates through graph write transaction and returns counts', async () => {
+      const result = {
+        deletedSubclusters: 1,
+        reassignedRepresentatives: 2,
+        removedInvalidRepresents: 3,
+      };
+      mockGraphService.reconcileSubclusterMemberships.mockResolvedValue(result);
+
+      await expect(service.reconcileSubclusterMemberships('u1')).resolves.toEqual(result);
+      expect(mockGraphService.reconcileSubclusterMemberships).toHaveBeenCalledWith(
+        'u1',
+        expect.any(Object)
+      );
     });
   });
 

@@ -21,7 +21,7 @@ export const TEST_USER_ID = 'user-12345';
 /** E2E Macro bundle·Neo4j 검증에 사용하는 mock user_files 정의 */
 export const E2E_MACRO_USER_FILE_SEEDS = [
   {
-    _id: 'uf-e2e-pdf',
+    _id: '01KT1AJS0YPC4C3805641TKH5E',
     displayName: 'e2e-macro-sample.pdf',
     mimeType: 'application/pdf',
     category: 'pdf' as const,
@@ -29,7 +29,7 @@ export const E2E_MACRO_USER_FILE_SEEDS = [
     summary: 'E2E stub PDF summary for macro graph.',
   },
   {
-    _id: 'uf-e2e-docx',
+    _id: '01KT1AKKD3VPE7YGN7QXT46T2E',
     displayName: 'e2e-macro-sample.docx',
     mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     category: 'word' as const,
@@ -37,7 +37,7 @@ export const E2E_MACRO_USER_FILE_SEEDS = [
     summary: 'E2E stub DOCX summary for macro graph.',
   },
   {
-    _id: 'uf-e2e-pptx',
+    _id: '01KT1AM2DS2K07GR2VQ600GZDS',
     displayName: 'e2e-macro-sample.pptx',
     mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     category: 'ppt' as const,
@@ -45,7 +45,7 @@ export const E2E_MACRO_USER_FILE_SEEDS = [
     summary: 'E2E stub PPTX summary for macro graph.',
   },
   {
-    _id: 'uf-e2e-unknown',
+    _id: '01KT1ANK4W9MP5DDHJ7EXX7C2B',
     displayName: 'e2e-macro-unknown.xyz',
     mimeType: 'application/octet-stream',
     category: 'unknown' as const,

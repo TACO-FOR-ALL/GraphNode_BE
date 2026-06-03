@@ -347,6 +347,48 @@ export class GraphEmbeddingService {
     return this.graphManagementService.removeEmptyClusters(userId);
   }
 
+  async pruneIncompatibleSubclusterMemberships(
+    userId: string,
+    nodeIds?: number[],
+    limit?: number
+  ): Promise<{ containsDeleted: number; representsDeleted: number }> {
+    let result = { containsDeleted: 0, representsDeleted: 0 };
+    await this.runGraphWriteTransaction(
+      'GraphEmbeddingService.pruneIncompatibleSubclusterMemberships.transaction',
+      async (options) => {
+        result = await this.graphManagementService.pruneIncompatibleSubclusterMemberships(
+          userId,
+          nodeIds,
+          limit,
+          options
+        );
+      }
+    );
+    return result;
+  }
+
+  async reconcileSubclusterMemberships(userId: string): Promise<{
+    deletedSubclusters: number;
+    reassignedRepresentatives: number;
+    removedInvalidRepresents: number;
+  }> {
+    let result = {
+      deletedSubclusters: 0,
+      reassignedRepresentatives: 0,
+      removedInvalidRepresents: 0,
+    };
+    await this.runGraphWriteTransaction(
+      'GraphEmbeddingService.reconcileSubclusterMemberships.transaction',
+      async (options) => {
+        result = await this.graphManagementService.reconcileSubclusterMemberships(
+          userId,
+          options
+        );
+      }
+    );
+    return result;
+  }
+
   /**
    * 그래프 통계를 저장합니다.
    * @param stats - 저장할 통계 데이터. `userId`는 필수입니다.

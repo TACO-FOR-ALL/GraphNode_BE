@@ -11,7 +11,14 @@ export function augmentGraphOutputWithUserFileNodes(
   graph: AiGraphOutputDto,
   activeUserFiles: UserFileDoc[]
 ): AiGraphOutputDto {
-  const presentOrigIds = new Set(graph.nodes.map((node) => node.orig_id));
+  const presentOrigIds = new Set<string>();
+  for (const node of graph.nodes) {
+    presentOrigIds.add(node.orig_id);
+    const ulidMatch = /[0-9A-Z]{26}/i.exec(node.orig_id);
+    if (ulidMatch) {
+      presentOrigIds.add(ulidMatch[0].toUpperCase());
+    }
+  }
   const missingFiles = activeUserFiles.filter((file) => !presentOrigIds.has(file._id));
   if (missingFiles.length === 0) {
     return graph;

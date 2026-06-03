@@ -265,7 +265,7 @@ describeGraphFlow('End-to-End Graph Flow', () => {
               expect(topLevelMime).toBe(hint.mimeType);
               expect(metadata.macroFileType).toBe(hint.macroFileType);
 
-              if (uf._id === 'uf-e2e-unknown') {
+              if (uf._id === '01KT1ANK4W9MP5DDHJ7EXX7C2B') {
                 expect(metadata.macroFileType).toBe('other');
                 expect(node?.fileType).toBe('other');
               } else {

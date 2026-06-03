@@ -653,13 +653,58 @@ export class GraphManagementService {
     }
   }
   /**
-   * 서브클러스터를 삭제합니다.
-   *
-   * @param userId 사용자 ID
-   * @param subclusterId 서브클러스터 ID
-   * @param permanent 영구 삭제 여부
-   * @param options (선택) 트랜잭션 옵션
+   * Remove CONTAINS/REPRESENTS relationships where a node's current BELONGS_TO
+   * cluster no longer matches the subcluster's parent cluster.
    */
+  async pruneIncompatibleSubclusterMemberships(
+    userId: string,
+    nodeIds?: number[],
+    limit?: number,
+    options?: RepoOptions
+  ): Promise<{ containsDeleted: number; representsDeleted: number }> {
+    try {
+      this.assertUser(userId);
+      if (Array.isArray(nodeIds) && nodeIds.length === 0) {
+        return { containsDeleted: 0, representsDeleted: 0 };
+      }
+      const checkedNodeIds = nodeIds?.map((id) => this.parseId(id));
+      if (limit != null && (!Number.isFinite(limit) || limit < 0)) {
+        throw new ValidationError('limit must be a non-negative number');
+      }
+
+      return await this.repo.pruneIncompatibleSubclusterMemberships(
+        userId,
+        checkedNodeIds,
+        limit,
+        options
+      );
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.pruneIncompatibleSubclusterMemberships failed', {
+        cause: String(err),
+      });
+    }
+  }
+
+  async reconcileSubclusterMemberships(
+    userId: string,
+    options?: RepoOptions
+  ): Promise<{
+    deletedSubclusters: number;
+    reassignedRepresentatives: number;
+    removedInvalidRepresents: number;
+  }> {
+    try {
+      this.assertUser(userId);
+      return await this.repo.reconcileSubclusterMemberships(userId, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.reconcileSubclusterMemberships failed', {
+        cause: String(err),
+      });
+    }
+  }
+
   async deleteSubcluster(
     userId: string,
     subclusterId: string,

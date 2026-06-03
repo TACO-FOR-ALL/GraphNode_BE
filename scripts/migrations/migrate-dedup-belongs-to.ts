@@ -1,194 +1,448 @@
 /**
- * scripts/migrate-dedup-belongs-to.ts
+ * Neo4j MacroGraph cleanup migration.
  *
- * Neo4j MacroNode BELONGS_TO 중복 관계 정리 + Ghost Cluster 삭제 마이그레이션
+ * Order:
+ *  1. deduplicate BELONGS_TO relationships
+ *  2. prune stale CONTAINS/REPRESENTS memberships whose subcluster cluster no longer matches the node cluster
+ *  3. remove empty subclusters and clusters
  *
- * 동작:
- *  1. Neo4j에서 MacroGraph 노드 전체를 조회해 대상 userId 목록을 동적으로 추출
- *  2. 각 사용자에 대해 deduplicateBelongsTo → removeEmptyClusters 순으로 실행
- *  3. --dry-run 플래그 시 실제 DELETE 없이 영향 범위(카운트)만 출력
- *  4. 이미 정리된 DB에서 실행하면 변경 없이 빠르게 종료 (멱등성 보장)
- *
- * 실행 방법:
- *  node dist/scripts/migrate-dedup-belongs-to.js
- *  node dist/scripts/migrate-dedup-belongs-to.js --dry-run
- *  node dist/scripts/migrate-dedup-belongs-to.js --userId=<id>
- *
- * 환경변수 (직접 주입 또는 .env):
- *  NEO4J_URI      - neo4j+s://... 형식
- *  NEO4J_USERNAME
- *  NEO4J_PASSWORD
+ * Usage:
+ *  node dist/scripts/migrations/migrate-dedup-belongs-to.js
+ *  node dist/scripts/migrations/migrate-dedup-belongs-to.js --dry-run
+ *  node dist/scripts/migrations/migrate-dedup-belongs-to.js --userId=<id>
  */
 
-import { initNeo4j, closeNeo4j, getNeo4jDriver } from '../../src/infra/db/neo4j';
+import neo4j from 'neo4j-driver';
+
+import { closeNeo4j, getNeo4jDriver, initNeo4j } from '../../src/infra/db/neo4j';
 import { Neo4jMacroGraphAdapter } from '../../src/infra/graph/Neo4jMacroGraphAdapter';
 
-// ──────────────────────────────────────────────────────────────
-// 인터페이스
-// ──────────────────────────────────────────────────────────────
+const PRUNE_BATCH_LIMIT = 1000;
+
+interface IncompatibleMembershipCount {
+  containsCount: number;
+  representsCount: number;
+}
+
+interface EmptyCleanupCount {
+  subclusterCount: number;
+  clusterCount: number;
+}
 
 interface MigrationResult {
   userId: string;
   success: boolean;
-  /** dry-run 시 삭제 예정 관계 수 */
-  excessRelCount?: number;
-  /** dry-run 시 중복 보유 노드 수 */
   duplicateNodeCount?: number;
-  /** 실제 실행 시 삭제된 ghost cluster 판단을 위한 마커 */
-  cleaned?: boolean;
+  excessBelongsToCount?: number;
+  incompatibleContainsCount?: number;
+  incompatibleRepresentsCount?: number;
+  prunedContainsCount?: number;
+  prunedRepresentsCount?: number;
+  emptySubclusterCount?: number;
+  emptyClusterCount?: number;
+  emptySubclustersDeleted?: number;
+  emptyClustersDeleted?: number;
+  pruneBatches?: number;
   error?: string;
   durationMs: number;
 }
 
-// ──────────────────────────────────────────────────────────────
-// 메인
-// ──────────────────────────────────────────────────────────────
+function toNumber(value: unknown): number {
+  if (value == null) return 0;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'bigint') return Number(value);
+  if (typeof value === 'object' && 'toNumber' in value) {
+    return (value as { toNumber(): number }).toNumber();
+  }
+  return Number(value);
+}
+
+async function listUserIds(): Promise<string[]> {
+  const driver = getNeo4jDriver();
+  const session = driver.session();
+  try {
+    const result = await session.run(
+      'MATCH (g:MacroGraph) WHERE g.userId IS NOT NULL RETURN g.userId AS userId ORDER BY userId'
+    );
+    return result.records.map((record) => String(record.get('userId'))).filter(Boolean);
+  } finally {
+    await session.close();
+  }
+}
+
+async function countIncompatibleSubclusterMemberships(
+  userId: string
+): Promise<IncompatibleMembershipCount> {
+  const driver = getNeo4jDriver();
+  const session = driver.session({ defaultAccessMode: neo4j.session.READ });
+  try {
+    const result = await session.run(
+      `
+        MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+        MATCH (n)-[:BELONGS_TO]->(candidateCluster:MacroCluster {userId: $userId})
+        WITH n, candidateCluster
+        ORDER BY toInteger(split(candidateCluster.id, '_')[1]) DESC
+        WITH n, collect(candidateCluster.id)[0] AS keptClusterId
+        MATCH (subclusterCluster:MacroCluster {userId: $userId})-[:HAS_SUBCLUSTER]->(:MacroSubcluster {userId: $userId})-[rel:CONTAINS|REPRESENTS]->(n)
+        WHERE subclusterCluster.id <> keptClusterId
+        WITH DISTINCT rel, type(rel) AS relType
+        RETURN
+          count(CASE WHEN relType = 'CONTAINS' THEN 1 END) AS containsCount,
+          count(CASE WHEN relType = 'REPRESENTS' THEN 1 END) AS representsCount
+      `,
+      { userId }
+    );
+    const record = result.records[0];
+    return {
+      containsCount: toNumber(record?.get('containsCount')),
+      representsCount: toNumber(record?.get('representsCount')),
+    };
+  } finally {
+    await session.close();
+  }
+}
+
+async function countEmptyCleanupTargets(userId: string): Promise<EmptyCleanupCount> {
+  const driver = getNeo4jDriver();
+  const session = driver.session({ defaultAccessMode: neo4j.session.READ });
+  try {
+    const result = await session.run(
+      `
+        MATCH (g:MacroGraph {userId: $userId})
+        CALL {
+          WITH g
+          MATCH (g)-[:HAS_CLUSTER]->(emptyCluster:MacroCluster {userId: $userId})
+          WHERE NOT (emptyCluster)<-[:BELONGS_TO]-(:MacroNode {userId: $userId})
+          RETURN count(DISTINCT emptyCluster) AS clusterCount
+        }
+        CALL {
+          WITH g
+          MATCH (g)-[:HAS_CLUSTER]->(:MacroCluster {userId: $userId})-[:HAS_SUBCLUSTER]->(emptySubcluster:MacroSubcluster {userId: $userId})
+          WHERE NOT (emptySubcluster)-[:CONTAINS|REPRESENTS]->(:MacroNode {userId: $userId})
+          RETURN count(DISTINCT emptySubcluster) AS subclusterCount
+        }
+        RETURN subclusterCount, clusterCount
+      `,
+      { userId }
+    );
+    const record = result.records[0];
+    return {
+      subclusterCount: toNumber(record?.get('subclusterCount')),
+      clusterCount: toNumber(record?.get('clusterCount')),
+    };
+  } finally {
+    await session.close();
+  }
+}
+
+async function countExpectedEmptyCleanupTargets(userId: string): Promise<EmptyCleanupCount> {
+  const driver = getNeo4jDriver();
+  const session = driver.session({ defaultAccessMode: neo4j.session.READ });
+  try {
+    const result = await session.run(
+      `
+        MATCH (g:MacroGraph {userId: $userId})
+        CALL {
+          WITH g
+          MATCH (g)-[:HAS_CLUSTER]->(cluster:MacroCluster {userId: $userId})
+          WHERE NOT EXISTS {
+            MATCH (g)-[:HAS_NODE]->(n:MacroNode {userId: $userId})-[:BELONGS_TO]->(candidateCluster:MacroCluster {userId: $userId})
+            WITH cluster, n, candidateCluster
+            ORDER BY toInteger(split(candidateCluster.id, '_')[1]) DESC
+            WITH cluster, n, collect(candidateCluster.id)[0] AS keptClusterId
+            WHERE keptClusterId = cluster.id
+            RETURN 1 AS matched
+          }
+          RETURN count(DISTINCT cluster) AS clusterCount
+        }
+        CALL {
+          WITH g
+          MATCH (g)-[:HAS_CLUSTER]->(subclusterCluster:MacroCluster {userId: $userId})-[:HAS_SUBCLUSTER]->(subcluster:MacroSubcluster {userId: $userId})
+          WHERE NOT EXISTS {
+            MATCH (subcluster)-[:CONTAINS|REPRESENTS]->(n:MacroNode {userId: $userId})
+            OPTIONAL MATCH (n)-[:BELONGS_TO]->(candidateCluster:MacroCluster {userId: $userId})
+            WITH subclusterCluster, n, candidateCluster
+            ORDER BY toInteger(split(candidateCluster.id, '_')[1]) DESC
+            WITH subclusterCluster, n, count(candidateCluster) AS belongsToCount, collect(candidateCluster.id)[0] AS keptClusterId
+            WHERE belongsToCount = 0 OR keptClusterId = subclusterCluster.id
+            RETURN 1 AS matched
+          }
+          RETURN count(DISTINCT subcluster) AS subclusterCount
+        }
+        RETURN subclusterCount, clusterCount
+      `,
+      { userId }
+    );
+    const record = result.records[0];
+    return {
+      subclusterCount: toNumber(record?.get('subclusterCount')),
+      clusterCount: toNumber(record?.get('clusterCount')),
+    };
+  } finally {
+    await session.close();
+  }
+}
+
+async function deleteEmptySubclusters(userId: string): Promise<number> {
+  const driver = getNeo4jDriver();
+  const session = driver.session({ defaultAccessMode: neo4j.session.WRITE });
+  try {
+    const result = await session.run(
+      `
+        MATCH (g:MacroGraph {userId: $userId})-[:HAS_CLUSTER]->(:MacroCluster {userId: $userId})-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId})
+        WHERE NOT (sc)-[:CONTAINS|REPRESENTS]->(:MacroNode {userId: $userId})
+        WITH collect(DISTINCT sc) AS subclusters
+        FOREACH (sc IN subclusters | DETACH DELETE sc)
+        RETURN size(subclusters) AS deleted
+      `,
+      { userId }
+    );
+    return toNumber(result.records[0]?.get('deleted'));
+  } finally {
+    await session.close();
+  }
+}
+
+async function runPruneBatchLoop(
+  adapter: Neo4jMacroGraphAdapter,
+  userId: string
+): Promise<{ containsDeleted: number; representsDeleted: number; batches: number }> {
+  let containsDeleted = 0;
+  let representsDeleted = 0;
+  let batches = 0;
+
+  while (true) {
+    const batch = await adapter.pruneIncompatibleSubclusterMemberships(
+      userId,
+      undefined,
+      PRUNE_BATCH_LIMIT
+    );
+    const batchDeleted = batch.containsDeleted + batch.representsDeleted;
+    if (batchDeleted === 0) break;
+
+    containsDeleted += batch.containsDeleted;
+    representsDeleted += batch.representsDeleted;
+    batches += 1;
+  }
+
+  return { containsDeleted, representsDeleted, batches };
+}
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const isDryRun = args.includes('--dry-run');
-  const singleUser = args.find((a) => a.startsWith('--userId='))?.split('=')[1];
+  const singleUser = args.find((arg) => arg.startsWith('--userId='))?.split('=')[1];
 
   console.log('========================================================');
-  console.log('  Neo4j BELONGS_TO Dedup Migration');
+  console.log('  Neo4j MacroGraph Cleanup Migration');
   console.log('========================================================');
-  console.log(`모드: ${isDryRun ? '🔍 DRY RUN (읽기 전용)' : '🚀 실제 마이그레이션'}`);
-  console.log(`Neo4j URI: ${process.env['NEO4J_URI'] ?? '(env 미설정)'}`);
+  console.log(`Mode: ${isDryRun ? 'DRY RUN (read-only)' : 'APPLY'}`);
+  console.log(`Prune batch limit: ${PRUNE_BATCH_LIMIT}`);
+  console.log(`Neo4j URI: ${process.env['NEO4J_URI'] ?? '(env unset)'}`);
   console.log('');
 
-  // Neo4j 연결
   try {
     await initNeo4j();
-    console.log('[Neo4j] 연결 성공');
+    console.log('[Neo4j] connected');
   } catch (err) {
-    console.error('[Neo4j] 연결 실패:', err);
+    console.error('[Neo4j] connection failed:', err);
     process.exit(1);
   }
 
   const adapter = new Neo4jMacroGraphAdapter();
+  const userIds = singleUser ? [singleUser] : await listUserIds();
 
-  // 대상 userId 수집
-  let userIds: string[];
-  if (singleUser) {
-    userIds = [singleUser];
-    console.log(`대상 사용자: 단일 지정 → ${singleUser}`);
-  } else {
-    const driver = getNeo4jDriver();
-    const session = driver.session();
-    try {
-      const result = await session.run('MATCH (g:MacroGraph) RETURN g.userId AS userId');
-      userIds = result.records.map((r: any) => String(r.get('userId') ?? '')).filter(Boolean);
-    } finally {
-      await session.close();
-    }
-    console.log(`대상 사용자: DB 동적 조회 → ${userIds.length}명`);
-  }
+  console.log(
+    singleUser
+      ? `Target users: single user ${singleUser}`
+      : `Target users: discovered ${userIds.length} user(s)`
+  );
 
   if (userIds.length === 0) {
-    console.log('⚠️  대상 사용자 없음. 종료합니다.');
+    console.log('No target users. Exiting.');
     await closeNeo4j();
     return;
   }
 
   console.log('');
 
-  // 사용자별 마이그레이션 실행
   const results: MigrationResult[] = [];
 
   for (const userId of userIds) {
     const startMs = Date.now();
     const shortId = userId.slice(0, 8);
-    console.log(`[${shortId}...] 시작`);
+    console.log(`[${shortId}...] start`);
 
     try {
-      if (isDryRun) {
-        // dry-run: 카운트만 조회
-        const { duplicateNodeCount, excessRelCount } =
-          await adapter.countDuplicateBelongsTo(userId);
+      const { duplicateNodeCount, excessRelCount } =
+        await adapter.countDuplicateBelongsTo(userId);
 
+      if (isDryRun) {
+        const incompatible = await countIncompatibleSubclusterMemberships(userId);
+        const emptyCleanup = await countExpectedEmptyCleanupTargets(userId);
         const durationMs = Date.now() - startMs;
 
-        if (duplicateNodeCount === 0) {
-          console.log(`  ✅ 중복 없음 (${durationMs}ms)`);
-        } else {
-          console.log(
-            `  ⚠️  중복 노드: ${duplicateNodeCount}개, 삭제 예정 관계: ${excessRelCount}개 (${durationMs}ms)`
-          );
-        }
+        console.log(`  duplicate BELONGS_TO nodes: ${duplicateNodeCount}`);
+        console.log(`  duplicate BELONGS_TO rels to delete: ${excessRelCount}`);
+        console.log(
+          `  incompatible memberships to delete: CONTAINS=${incompatible.containsCount}, REPRESENTS=${incompatible.representsCount}`
+        );
+        console.log(
+          `  empty cleanup candidates: subclusters=${emptyCleanup.subclusterCount}, clusters=${emptyCleanup.clusterCount}`
+        );
+        console.log(`  done (${durationMs}ms)`);
 
         results.push({
           userId,
           success: true,
           duplicateNodeCount,
-          excessRelCount,
+          excessBelongsToCount: excessRelCount,
+          incompatibleContainsCount: incompatible.containsCount,
+          incompatibleRepresentsCount: incompatible.representsCount,
+          emptySubclusterCount: emptyCleanup.subclusterCount,
+          emptyClusterCount: emptyCleanup.clusterCount,
           durationMs,
         });
       } else {
-        // 실제 실행
-        // 1단계: 중복 BELONGS_TO 정리
         await adapter.deduplicateBelongsTo(userId);
 
-        // 2단계: Ghost Cluster 정리
+        const pruneResult = await runPruneBatchLoop(adapter, userId);
+
+        const preClusterCleanup = await countEmptyCleanupTargets(userId);
+        const emptySubclustersDeleted = await deleteEmptySubclusters(userId);
         await adapter.removeEmptyClusters(userId);
+        const postClusterCleanup = await countEmptyCleanupTargets(userId);
+        const emptyClustersDeleted = Math.max(
+          0,
+          preClusterCleanup.clusterCount - postClusterCleanup.clusterCount
+        );
 
         const durationMs = Date.now() - startMs;
-        console.log(`  ✅ 완료 (${durationMs}ms)`);
+        console.log(`  duplicate BELONGS_TO rels deleted: ${excessRelCount}`);
+        console.log(
+          `  incompatible memberships deleted: CONTAINS=${pruneResult.containsDeleted}, REPRESENTS=${pruneResult.representsDeleted}, batches=${pruneResult.batches}`
+        );
+        console.log(
+          `  empty cleanup deleted: subclusters=${emptySubclustersDeleted}, clusters=${emptyClustersDeleted}`
+        );
+        console.log(`  done (${durationMs}ms)`);
 
-        results.push({ userId, success: true, cleaned: true, durationMs });
+        results.push({
+          userId,
+          success: true,
+          duplicateNodeCount,
+          excessBelongsToCount: excessRelCount,
+          prunedContainsCount: pruneResult.containsDeleted,
+          prunedRepresentsCount: pruneResult.representsDeleted,
+          emptySubclustersDeleted,
+          emptyClustersDeleted,
+          pruneBatches: pruneResult.batches,
+          durationMs,
+        });
       }
     } catch (err) {
       const durationMs = Date.now() - startMs;
       const errorMessage = err instanceof Error ? err.message : String(err);
-      console.error(`  ❌ 실패: ${errorMessage}`);
+      console.error(`  failed: ${errorMessage}`);
       results.push({ userId, success: false, error: errorMessage, durationMs });
     }
   }
 
-  // ──────────────────────────────────────────────────────────────
-  // 결과 요약
-  // ──────────────────────────────────────────────────────────────
   console.log('');
   console.log('========================================================');
-  console.log('  마이그레이션 결과 요약');
+  console.log('  Migration Summary');
   console.log('========================================================');
 
-  const successes = results.filter((r) => r.success);
-  const failures = results.filter((r) => !r.success);
+  const successes = results.filter((result) => result.success);
+  const failures = results.filter((result) => !result.success);
 
-  console.log(`성공: ${successes.length}명 / 실패: ${failures.length}명`);
+  console.log(`Success: ${successes.length} user(s) / Failure: ${failures.length} user(s)`);
   console.log('');
 
   if (isDryRun) {
-    const totalDuplicateNodes = successes.reduce((s, r) => s + (r.duplicateNodeCount ?? 0), 0);
-    const totalExcessRels = successes.reduce((s, r) => s + (r.excessRelCount ?? 0), 0);
-    console.log(`[DRY RUN 요약]`);
-    console.log(`  전체 중복 노드: ${totalDuplicateNodes}개`);
-    console.log(`  전체 삭제 예정 BELONGS_TO: ${totalExcessRels}개`);
+    const duplicateNodes = successes.reduce((sum, result) => sum + (result.duplicateNodeCount ?? 0), 0);
+    const duplicateBelongsTo = successes.reduce(
+      (sum, result) => sum + (result.excessBelongsToCount ?? 0),
+      0
+    );
+    const incompatibleContains = successes.reduce(
+      (sum, result) => sum + (result.incompatibleContainsCount ?? 0),
+      0
+    );
+    const incompatibleRepresents = successes.reduce(
+      (sum, result) => sum + (result.incompatibleRepresentsCount ?? 0),
+      0
+    );
+    const emptySubclusters = successes.reduce(
+      (sum, result) => sum + (result.emptySubclusterCount ?? 0),
+      0
+    );
+    const emptyClusters = successes.reduce((sum, result) => sum + (result.emptyClusterCount ?? 0), 0);
+
+    console.log('[DRY RUN]');
+    console.log(`  duplicate BELONGS_TO nodes: ${duplicateNodes}`);
+    console.log(`  duplicate BELONGS_TO rels to delete: ${duplicateBelongsTo}`);
+    console.log(
+      `  incompatible CONTAINS/REPRESENTS to delete: CONTAINS=${incompatibleContains}, REPRESENTS=${incompatibleRepresents}, total=${incompatibleContains + incompatibleRepresents}`
+    );
+    console.log(
+      `  empty cleanup candidates: subclusters=${emptySubclusters}, clusters=${emptyClusters}`
+    );
     console.log('');
-    console.log('실제 정리를 실행하려면 --dry-run 플래그를 제거하세요.');
+    console.log('Remove --dry-run to apply the cleanup.');
   } else {
-    console.log('사용자별 상세:');
-    for (const r of results) {
-      const icon = r.success ? '✅' : '❌';
-      const detail = r.success
-        ? `정리 완료 (${r.durationMs}ms)`
-        : `ERROR: ${r.error} (${r.durationMs}ms)`;
-      console.log(`  ${icon} ${r.userId.slice(0, 8)}... → ${detail}`);
+    const duplicateBelongsTo = successes.reduce(
+      (sum, result) => sum + (result.excessBelongsToCount ?? 0),
+      0
+    );
+    const prunedContains = successes.reduce(
+      (sum, result) => sum + (result.prunedContainsCount ?? 0),
+      0
+    );
+    const prunedRepresents = successes.reduce(
+      (sum, result) => sum + (result.prunedRepresentsCount ?? 0),
+      0
+    );
+    const emptySubclustersDeleted = successes.reduce(
+      (sum, result) => sum + (result.emptySubclustersDeleted ?? 0),
+      0
+    );
+    const pruneBatches = successes.reduce((sum, result) => sum + (result.pruneBatches ?? 0), 0);
+
+    console.log('[APPLY]');
+    console.log(`  duplicate BELONGS_TO rels deleted: ${duplicateBelongsTo}`);
+    console.log(
+      `  incompatible CONTAINS/REPRESENTS deleted: CONTAINS=${prunedContains}, REPRESENTS=${prunedRepresents}, total=${prunedContains + prunedRepresents}`
+    );
+    console.log(`  prune batches: ${pruneBatches}`);
+    console.log(`  empty subclusters deleted: ${emptySubclustersDeleted}`);
+    console.log(
+      `  empty clusters deleted: ${successes.reduce(
+        (sum, result) => sum + (result.emptyClustersDeleted ?? 0),
+        0
+      )}`
+    );
+    console.log('');
+    console.log('User details:');
+    for (const result of results) {
+      const marker = result.success ? 'OK' : 'FAIL';
+      const detail = result.success
+        ? `BELONGS_TO=${result.excessBelongsToCount ?? 0}, CONTAINS=${result.prunedContainsCount ?? 0}, REPRESENTS=${result.prunedRepresentsCount ?? 0}, emptySubclusters=${result.emptySubclustersDeleted ?? 0}, ${result.durationMs}ms`
+        : `ERROR: ${result.error} (${result.durationMs}ms)`;
+      console.log(`  ${marker} ${result.userId.slice(0, 8)}... ${detail}`);
     }
   }
 
   if (failures.length > 0) {
     console.log('');
-    console.log('⚠️  실패한 사용자는 아래 명령으로 재시도하세요:');
-    failures.forEach((r) => console.log(`  --userId=${r.userId}`));
+    console.log('Retry failed users with:');
+    failures.forEach((result) => console.log(`  --userId=${result.userId}`));
   }
 
-  // 정리
   await closeNeo4j();
   console.log('');
-  console.log('[완료] Neo4j 연결 종료');
+  console.log('[done] Neo4j connection closed');
 
-  // 실패가 있으면 비-0 exit code로 CI에서 감지 가능
   if (failures.length > 0) {
     process.exit(1);
   }
