@@ -8,6 +8,8 @@ import type {
   MacroGraphUpsertInput,
   MacroGraphUpsertResult,
   GraphRagClusterSiblingResult,
+  PruneIncompatibleSubclusterMembershipsResult,
+  ReconcileSubclusterMembershipsResult,
 } from '../../core/ports/MacroGraphStore';
 import type {
   GraphClusterDoc,
@@ -656,6 +658,11 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
 
       const subclusterRows = subclusterDocs.map(toNeo4jMacroSubcluster);
       await runner.run(MACRO_GRAPH_CYPHER.upsertSubclusters, { rows: subclusterRows });
+
+      await runner.run(MACRO_GRAPH_CYPHER.clearSubclusterRelationshipsForReplacement, {
+        userId,
+        subclusterIds: subclusterDocs.map((sc) => sc.id),
+      });
 
       await runner.run(MACRO_GRAPH_CYPHER.linkSubclustersToGraph, {
         userId,
@@ -1544,9 +1551,31 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
    * @param options 외부 transaction을 포함할 수 있는 adapter 옵션입니다.
    */
   async deleteGraph(userId: string, options?: MacroGraphStoreOptions): Promise<void> {
-    await this.runWrite(async (runner) => {
-      await runner.run(MACRO_GRAPH_CYPHER.deleteGraph, { userId });
-    }, options);
+    const tx = options?.transaction as ManagedTransaction | undefined;
+    
+    // 1. 외부에서 명시적 트랜잭션(tx)이 주입된 경우
+    if (tx && typeof tx.run === 'function') {
+      console.warn(
+        `[Warning] deleteGraph is bypassing the provided transaction. ` +
+        `Graph deletion requires Auto-Commit mode to prevent Transaction OOM.`
+      );
+    }
+
+    // 2. 외부 트랜잭션에 종속되지 않는 새로운 독립 세션 생성 (WRITE 모드)
+    const session = this.getDriver().session({ defaultAccessMode: neo4j.session.WRITE });
+    
+    try {
+      // 3. CALL {} IN TRANSACTIONS 기반의 배치 삭제 실행 (OOM 원천 차단)
+      await session.run(MACRO_GRAPH_CYPHER.deleteGraphBatch.relations, { userId });
+      await session.run(MACRO_GRAPH_CYPHER.deleteGraphBatch.nodes, { userId });
+      await session.run(MACRO_GRAPH_CYPHER.deleteGraphBatch.subclusters, { userId });
+      await session.run(MACRO_GRAPH_CYPHER.deleteGraphBatch.clusters, { userId });
+      await session.run(MACRO_GRAPH_CYPHER.deleteGraphBatch.statsAndSummary, { userId });
+      await session.run(MACRO_GRAPH_CYPHER.deleteGraphBatch.graphRoot, { userId });
+    } finally {
+      // 4. 예외 발생 여부와 상관없이 세션을 즉시 닫아 Connection Pool 누수/고갈 완벽 차단
+      await session.close(); 
+    }
   }
   /**
    * @description Seed origId 목록을 기반으로 Graph RAG 이웃 노드를 탐색합니다. 작성일자: 2026-04-29.
@@ -2037,6 +2066,65 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   async deduplicateBelongsTo(userId: string, options?: MacroGraphStoreOptions): Promise<void> {
     await this.runWrite(async (runner) => {
       await runner.run(MACRO_GRAPH_CYPHER.deduplicateBelongsTo, { userId });
+    }, options);
+  }
+
+  async pruneIncompatibleSubclusterMemberships(
+    userId: string,
+    nodeIds?: number[],
+    limit?: number,
+    options?: MacroGraphStoreOptions
+  ): Promise<PruneIncompatibleSubclusterMembershipsResult> {
+    if (Array.isArray(nodeIds) && nodeIds.length === 0) {
+      return { containsDeleted: 0, representsDeleted: 0 };
+    }
+
+    const boundedLimit =
+      typeof limit === 'number' && Number.isFinite(limit)
+        ? Math.max(0, Math.floor(limit))
+        : 10000;
+
+    return this.runWrite(async (runner) => {
+      const result = await runner.run(MACRO_GRAPH_CYPHER.pruneIncompatibleSubclusterMemberships, {
+        userId,
+        nodeIds: nodeIds ?? [],
+        hasNodeFilter: Array.isArray(nodeIds),
+        limit: neo4j.int(boundedLimit),
+      });
+      const records = result.records as unknown[];
+      if (records.length === 0) {
+        return { containsDeleted: 0, representsDeleted: 0 };
+      }
+      const record = records[0] as { get(key: string): unknown };
+      return {
+        containsDeleted: toJsNumber(record.get('containsDeleted')),
+        representsDeleted: toJsNumber(record.get('representsDeleted')),
+      };
+    }, options);
+  }
+
+  async reconcileSubclusterMemberships(
+    userId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<ReconcileSubclusterMembershipsResult> {
+    return this.runWrite(async (runner) => {
+      const result = await runner.run(MACRO_GRAPH_CYPHER.reconcileSubclusterMemberships, {
+        userId,
+      });
+      const records = result.records as unknown[];
+      if (records.length === 0) {
+        return {
+          deletedSubclusters: 0,
+          reassignedRepresentatives: 0,
+          removedInvalidRepresents: 0,
+        };
+      }
+      const record = records[0] as { get(key: string): unknown };
+      return {
+        deletedSubclusters: toJsNumber(record.get('deletedSubclusters')),
+        reassignedRepresentatives: toJsNumber(record.get('reassignedRepresentatives')),
+        removedInvalidRepresents: toJsNumber(record.get('removedInvalidRepresents')),
+      };
     }, options);
   }
 

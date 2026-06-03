@@ -1,23 +1,30 @@
 # Neo4j Data Migrations
 
-이 디렉토리는 GraphNode 백엔드에서 데이터베이스(주로 Neo4j)의 스키마 변경이나 데이터 정합성 교정을 위해 실행되는 1회성(또는 멱등성을 가진) 마이그레이션 스크립트들을 관리합니다.
+## `migrate-dedup-belongs-to.ts`
 
----
+This migration cleans stale MacroGraph relationships without loading the full graph into Node.js memory.
 
-## 1. BELONGS_TO 중복 데이터 및 고아 클러스터 정리 마이그레이션
-- **파일명**: `migrate-dedup-belongs-to.ts`
-- **배경 상황**:
-  - `AddNodeResultHandler`에서 노드 삽입 시 ID 발급 경합(Race Condition)으로 인해, 동일한 `origId`를 가진 노드가 서로 다른 `clusterId`에 중복 할당되는 버그가 있었습니다.
-  - 이로 인해 Neo4j 상에서 한 노드가 여러 클러스터와 `BELONGS_TO` 관계를 맺고, FE에서 `getSnapshot()` 시 쌍둥이 노드가 반환되는 문제가 발생했습니다.
-  - 또한 클러스터 구성이 바뀌어 비어버린 "고아 클러스터(Ghost Cluster)"가 `size: 0`인 상태로 계속 남아있는 문제도 있었습니다.
-- **스크립트 목적**:
-  - 누적된 오염 데이터를 소급 적용하여 깔끔하게 정리합니다.
-  - 최신 클러스터 배정 결과(`cluster_숫자` 포맷의 가장 큰 숫자)만 남기고 나머지 `BELONGS_TO` 관계를 가지치기(DELETE) 합니다.
-  - 아무 노드와도 연결되지 않은 빈 `MacroCluster` 노드를 `DETACH DELETE`로 청소합니다.
-- **동작 방식**:
-  - DB 전체 사용자를 동적으로 스캔하여 한 명씩 순차 처리합니다.
-  - 멱등성(Idempotence)이 보장되도록 작성되었으며, 서버 기동 시(`entrypoint.sh`)마다 자동으로 한 번씩 실행되도록 파이프라인이 구성되어 있습니다.
-  - 이미 정리된 상태라면 쿼리가 아무것도 수행하지 않고 즉시 종료됩니다.
-- **실행 옵션**:
-  - `--dry-run`: 실제 삭제를 수행하지 않고 삭제 예정인 데이터의 카운트만 집계하여 출력합니다.
-  - `--userId=<UUID>`: 특정 사용자만 지정하여 마이그레이션을 실행합니다.
+Execution order:
+
+1. `deduplicateBelongsTo(userId)`
+2. `pruneIncompatibleSubclusterMemberships(userId, undefined, 1000)` in a batch loop until the deleted count reaches `0`
+3. Empty cleanup:
+   - delete empty `MacroSubcluster` nodes directly with Neo4j Cypher
+   - run `removeEmptyClusters(userId)` for empty `MacroCluster` nodes
+
+Dry-run mode is read-only and reports:
+
+- duplicate `BELONGS_TO` node count
+- duplicate `BELONGS_TO` relationship count that would be deleted
+- incompatible `CONTAINS` / `REPRESENTS` relationship counts that would be deleted
+- empty subcluster and cluster cleanup candidates
+
+Commands:
+
+```bash
+npm run migrate:neo4j:dedup:dry
+npm run migrate:neo4j:dedup
+npm run migrate:neo4j:dedup -- --userId=<id>
+```
+
+The migration discovers users from `MacroGraph.userId` unless `--userId=<id>` is provided. It processes users sequentially and relies on Neo4j-side count/delete queries to avoid materializing graph data in API server memory.
