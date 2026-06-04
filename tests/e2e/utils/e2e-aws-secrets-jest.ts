@@ -43,32 +43,23 @@ export function applyE2ePreferGroqProviderDefaults(): void {
 }
 
 /**
- * @description shell preflight와 동일하게 OpenAI chat completions HTTP 200 여부를 동기 확인합니다.
+ * @description shell preflight와 동일 — GET /v1/models 로 키 인증만 확인합니다.
  * @param apiKey Bearer 토큰.
- * @returns 200이면 true.
+ * @returns 200이면 true, 401/403이면 false, 그 외는 true(키 형태 유지).
  */
 function openAiPreflightSync(apiKey: string): boolean {
-  const model =
-    process.env.MICROSCOPE_LLM_MODEL?.trim() ||
-    process.env.MACRO_LLM_MODEL?.trim() ||
-    'gpt-4o-mini';
-  const payload = JSON.stringify({
-    model,
-    messages: [{ role: 'user', content: 'ping' }],
-    max_tokens: 1,
-  });
   try {
     const httpCode = execSync(
       `curl -sS -o /dev/null -w "%{http_code}" ` +
         `-H "Authorization: Bearer ${apiKey}" ` +
-        `-H "Content-Type: application/json" ` +
-        `-d ${JSON.stringify(payload)} ` +
-        `https://api.openai.com/v1/chat/completions`,
+        `https://api.openai.com/v1/models`,
       { encoding: 'utf8', timeout: 30_000 }
     ).trim();
-    return httpCode === '200';
+    if (httpCode === '200') return true;
+    if (httpCode === '401' || httpCode === '403') return false;
+    return true;
   } catch {
-    return false;
+    return true;
   }
 }
 
@@ -105,7 +96,7 @@ export function loadE2eLlmKeysFromAwsSecrets(): void {
     !openAiPreflightSync(openAi)
   ) {
     // eslint-disable-next-line no-console
-    console.warn('[E2E] Runner OPENAI_API_KEY failed API preflight in Jest — trying AWS Secrets Manager...');
+    console.warn('[E2E] Runner OPENAI_API_KEY auth failed in Jest — trying AWS Secrets Manager...');
     const fromAws = fetchOpenAiKeyFromAws(true);
     if (fromAws) {
       process.env.OPENAI_API_KEY = fromAws;

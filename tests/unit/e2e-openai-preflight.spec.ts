@@ -22,13 +22,17 @@ describe('e2e-openai-preflight', () => {
     expect(isUsableOpenAiKeyShape('sk-proj-valid-looking')).toBe(true);
   });
 
-  it('openAiApiPreflightOk returns true on HTTP 200', async () => {
+  it('openAiApiPreflightOk returns true on GET /v1/models HTTP 200', async () => {
     fetchMock.mockResolvedValue({ status: 200 } as Response);
-    await expect(openAiApiPreflightOk('sk-test', 'gpt-5-mini')).resolves.toBe(true);
+    await expect(openAiApiPreflightOk('sk-test')).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.openai.com/v1/models',
+      expect.objectContaining({ method: 'GET' })
+    );
   });
 
   it('openAiApiPreflightOk returns false on HTTP 401', async () => {
     fetchMock.mockResolvedValue({ status: 401 } as Response);
-    await expect(openAiApiPreflightOk('sk-bad', 'gpt-5-mini')).resolves.toBe(false);
+    await expect(openAiApiPreflightOk('sk-bad')).resolves.toBe(false);
   });
 });

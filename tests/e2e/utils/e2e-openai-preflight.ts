@@ -2,6 +2,8 @@
  * @description E2E OpenAI API 키 사전 검증 (invalid/revoked 키 fail-fast).
  */
 
+const OPENAI_MODELS_URL = 'https://api.openai.com/v1/models';
+
 /**
  * @description placeholder/dummy가 아닌 비어 있지 않은 키 형태인지 확인합니다.
  * @param value 환경변수 값.
@@ -14,32 +16,36 @@ export function isUsableOpenAiKeyShape(value: string | undefined): boolean {
 }
 
 /**
- * @description graphnode-ai compose와 동일한 기본 모델로 OpenAI chat completions ping.
+ * @description OpenAI API 키 인증 여부만 확인합니다 (`GET /v1/models`).
+ * chat/completions + max_tokens 는 모델별로 HTTP 400을 낼 수 있어 키 검증에 부적합합니다.
  * @param apiKey Bearer 토큰.
- * @param model 검증에 사용할 모델 (기본 gpt-5-mini).
- * @returns HTTP 200이면 true.
+ * @param _model 호환용(미사용). 이전 호출부 시그니처 유지.
+ * @returns HTTP 200이면 true, 401/403이면 false.
  */
 export async function openAiApiPreflightOk(
   apiKey: string,
-  model = process.env.MICROSCOPE_LLM_MODEL?.trim() ||
-    process.env.MACRO_LLM_MODEL?.trim() ||
-    'gpt-4o-mini'
+  _model?: string
 ): Promise<boolean> {
+  void _model;
+  const status = await openAiApiPreflightStatus(apiKey);
+  if (status === 200) return true;
+  if (status === 401 || status === 403) return false;
+  return status !== 0;
+}
+
+/**
+ * @description preflight HTTP 상태 코드 (로깅·AWS 폴백 분기용).
+ * @param apiKey Bearer 토큰.
+ * @returns HTTP status. 네트워크 실패 시 0.
+ */
+export async function openAiApiPreflightStatus(apiKey: string): Promise<number> {
   try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'user', content: 'ping' }],
-        max_tokens: 1,
-      }),
+    const res = await fetch(OPENAI_MODELS_URL, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${apiKey}` },
     });
-    return res.status === 200;
+    return res.status;
   } catch {
-    return false;
+    return 0;
   }
 }
