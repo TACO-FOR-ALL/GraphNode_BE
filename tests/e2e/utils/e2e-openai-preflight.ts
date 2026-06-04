@@ -23,7 +23,7 @@ export async function openAiApiPreflightOk(
   apiKey: string,
   model = process.env.MICROSCOPE_LLM_MODEL?.trim() ||
     process.env.MACRO_LLM_MODEL?.trim() ||
-    'gpt-5-mini'
+    'gpt-4o-mini'
 ): Promise<boolean> {
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {

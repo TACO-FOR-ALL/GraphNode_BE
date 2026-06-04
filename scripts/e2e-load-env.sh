@@ -34,6 +34,15 @@ _e2e_is_allowed_key() {
   esac
 }
 
+# CI: workflow secrets가 .env placeholder에 덮이지 않도록 OPENAI_* 파일 로드 스킵
+_e2e_skip_openai_key_from_env_file() {
+  [[ -n "${GITHUB_ACTIONS:-}" ]] || return 1
+  case "$1" in
+    OPENAI_API_KEY | OPEN_API_KEY | OPEN_AI_API_KEY) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # bash/zsh 공통: KEY[[:space:]]*=VALUE (zsh에서 source해도 동작)
 _e2e_export_kv_line() {
   local _line="$1" _key _val
@@ -42,6 +51,7 @@ _e2e_export_kv_line() {
   _key="$(_e2e_trim "$_key")"
   _val="${_line#*=}"
   _val="$(_e2e_unquote_value "$_val")"
+  _e2e_skip_openai_key_from_env_file "$_key" && return 1
   _e2e_is_allowed_key "$_key" || return 1
   case "$_key" in
     *[!A-Za-z0-9_]* | '') return 1 ;;
@@ -192,7 +202,7 @@ _openai_preflight_for_e2e() {
     return 1
   fi
 
-  local _model="${MICROSCOPE_LLM_MODEL:-${MACRO_LLM_MODEL:-gpt-5-mini}}"
+  local _model="${MICROSCOPE_LLM_MODEL:-${MACRO_LLM_MODEL:-gpt-4o-mini}}"
   local _http_code="000"
   _http_code="$(
     curl -sS -o /dev/null -w '%{http_code}' \

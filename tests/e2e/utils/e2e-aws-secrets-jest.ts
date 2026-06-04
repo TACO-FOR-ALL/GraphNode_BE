@@ -42,6 +42,36 @@ export function applyE2ePreferGroqProviderDefaults(): void {
   }
 }
 
+/**
+ * @description shell preflight와 동일하게 OpenAI chat completions HTTP 200 여부를 동기 확인합니다.
+ * @param apiKey Bearer 토큰.
+ * @returns 200이면 true.
+ */
+function openAiPreflightSync(apiKey: string): boolean {
+  const model =
+    process.env.MICROSCOPE_LLM_MODEL?.trim() ||
+    process.env.MACRO_LLM_MODEL?.trim() ||
+    'gpt-4o-mini';
+  const payload = JSON.stringify({
+    model,
+    messages: [{ role: 'user', content: 'ping' }],
+    max_tokens: 1,
+  });
+  try {
+    const httpCode = execSync(
+      `curl -sS -o /dev/null -w "%{http_code}" ` +
+        `-H "Authorization: Bearer ${apiKey}" ` +
+        `-H "Content-Type: application/json" ` +
+        `-d ${JSON.stringify(payload)} ` +
+        `https://api.openai.com/v1/chat/completions`,
+      { encoding: 'utf8', timeout: 30_000 }
+    ).trim();
+    return httpCode === '200';
+  } catch {
+    return false;
+  }
+}
+
 function fetchOpenAiKeyFromAws(force = false): string | undefined {
   try {
     const key = execSync(`npx ts-node scripts/e2e-fetch-openai-key.ts`, {
@@ -63,10 +93,33 @@ function fetchOpenAiKeyFromAws(force = false): string | undefined {
  * @description `.env`에 없거나 placeholder인 LLM 키를 AWS SM에서 조회합니다.
  */
 export function loadE2eLlmKeysFromAwsSecrets(): void {
-  const openAi = process.env.OPENAI_API_KEY?.trim();
+  applyE2eLlmEnvAliases();
+
+  let openAi = resolveOpenAiApiKeyForE2e();
+  const e2eScope = (process.env.E2E_SCOPE || 'bundle').trim().toLowerCase();
+
+  if (
+    e2eScope === 'full' &&
+    !isE2ePreferGroqEnabled() &&
+    openAi &&
+    !openAiPreflightSync(openAi)
+  ) {
+    // eslint-disable-next-line no-console
+    console.warn('[E2E] Runner OPENAI_API_KEY failed API preflight in Jest — trying AWS Secrets Manager...');
+    const fromAws = fetchOpenAiKeyFromAws(true);
+    if (fromAws) {
+      process.env.OPENAI_API_KEY = fromAws;
+      process.env.DEV_OPENAI_API_KEY = fromAws;
+      openAi = fromAws;
+    }
+  }
+
   if (!isUsableKey(openAi)) {
     const fromAws = fetchOpenAiKeyFromAws(false);
-    if (fromAws) process.env.OPENAI_API_KEY = fromAws;
+    if (fromAws) {
+      process.env.OPENAI_API_KEY = fromAws;
+      process.env.DEV_OPENAI_API_KEY = process.env.DEV_OPENAI_API_KEY ?? fromAws;
+    }
   }
 
   if (isE2ePreferGroqEnabled()) {
@@ -86,6 +139,10 @@ export function loadE2eLlmKeysFromAwsSecrets(): void {
   }
 
   applyE2eLlmEnvAliases();
+  if (resolveOpenAiApiKeyForE2e()) {
+    process.env.DEV_OPENAI_API_KEY =
+      process.env.DEV_OPENAI_API_KEY ?? resolveOpenAiApiKeyForE2e();
+  }
   applyE2ePreferGroqProviderDefaults();
   applyE2eGroqTestOnlyPolicy();
 }
