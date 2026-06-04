@@ -611,10 +611,12 @@ export class AgentService {
       Always respond in the same language as the user's message.
       ${microscopeSection}
       ## Macro vs Micro Tool 선택 규칙 (반드시 준수)
-      - 사용자가 "그래프 전체", "전체 구조", "전체 맥락", "모든 노드/엣지", "전체 요약"을 물으면 get_macro_graph_context를 우선 호출하세요.
-      - 사용자가 "특정 키워드/문장/기록"을 찾으면 search_conversations를 사용하세요.
+      - 사용자가 가벼운 "전체 텍스트 요약"이나 "통계"만 물으면 get_graph_summary를 우선 호출하세요.
+      - 사용자가 "그래프 전체 구조를 상세히 보여줘", "모든 노드/엣지 데이터"를 요구하면 get_macro_graph_context를 호출하세요.
+      - 질문과 의미적으로 유사한 과거 문맥/지식을 찾을 땐 search_conversations (Graph RAG)를 사용하세요.
+      - 오직 "노트(Note)" 문서 내에서 특정 텍스트 키워드를 단순 검색할 때만 search_notes를 사용하세요.
       - 사용자가 "A 노드 상세", "원본 링크", "수정일", "어느 클러스터인지"를 물으면 get_graph_node_details를 사용하세요.
-      - 전체 맥락 + 세부 근거가 동시에 필요하면 get_macro_graph_context 와 search_conversations 또는 get_graph_node_details를 함께 호출하세요.
+      - 전체 맥락 + 세부 근거가 동시에 필요하면 get_macro_graph_context 와 search_conversations 또는 get_graph_node_details를 병렬로 함께 호출하세요.
       ## 지식 그래프 구조 이해 (Graph RAG 사용 시 필수 숙지)
       search_conversations 도구는 Graph RAG 방식으로 작동합니다. 이 그래프는 파편화된 노드들을
       연결하기 위해 광범위한 클러스터 정보를 포함하므로, 점수가 높더라도 실제 질문과 무관한

@@ -34,7 +34,7 @@ export class SearchConversationsTool implements IAgentTool {
     function: {
       name: 'search_conversations',
       description: [
-        '사용자의 과거 대화·노트·지식 노드 중에서 특정 키워드/문장과 의미적으로 유사한 파편화된 지식을 검색합니다.',
+        "과거 대화 기록과 노트 데이터를 모두 포함하여, 질문과 '의미적으로 유사한' 문맥적 지식(Graph RAG)을 폭넓게 검색하는 최우선 도구입니다. (단순 문서 텍스트 검색은 search_notes를 활용하세요)",
         "그래프 전체 구조를 통째로 보는 용도가 아니라, '특정 정보 찾기' 목적의 Micro 검색 도구입니다.",
         '벡터 유사도 검색(ChromaDB)과 지식 그래프 확장(Neo4j)을 결합한 Graph RAG 방식으로 작동합니다.',
         '',

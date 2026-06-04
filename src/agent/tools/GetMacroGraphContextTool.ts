@@ -14,7 +14,7 @@ export class GetMacroGraphContextTool implements IAgentTool {
     function: {
       name: 'get_macro_graph_context',
       description:
-        "사용자가 지식 그래프의 '전체 구조', '요약', '전체 맥락', '모든 노드'를 조망하고 싶을 때 호출합니다. 특정 키워드 검색이 아니라 전체 그래프 상태를 한 번에 확인할 때 사용하세요.",
+        "그래프의 '모든 노드와 엣지 구조 데이터'를 통째로 가져와야 할 때만 사용하세요. '전체 그래프를 상세히 분석해 줘', '모든 노드의 연결 관계를 볼래'와 같은 요구에 적합합니다. 단순 요약 텍스트만 필요하다면 get_graph_summary를 사용하여 토큰 낭비를 방지하세요.",
       parameters: {
         type: 'object',
         properties: {
