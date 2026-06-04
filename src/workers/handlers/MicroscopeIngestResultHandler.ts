@@ -12,6 +12,7 @@ import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 import { notifyWorkerFailed } from '../../shared/utils/discord';
 import { parseUserIdFromMicroscopeNodeTaskId } from '../../shared/utils/microscopeTaskId';
 import { ValidationError } from '../../shared/errors/domain';
+import { buildMicroscopeVisualizationFromIngestResult } from '../../shared/utils/microscopeIngestResult';
 
 /**
  * Microscope 문서 분석(Ingest) 결과 처리 핸들러
@@ -41,7 +42,10 @@ export class MicroscopeIngestResultHandler implements JobHandler {
     }
 
     const sourceId = source_id;
-    const standardizedS3Key = payload.standardized_s3_key ?? payload.block_graph_s3_key;
+    const visualization = buildMicroscopeVisualizationFromIngestResult(
+      payloadRecord as Record<string, unknown>
+    );
+    const standardizedS3Key = visualization?.visualizationS3Key;
 
     // Envelope의 taskId를 통해 문서 ID 식별
     const docId = taskId;
@@ -100,7 +104,8 @@ export class MicroscopeIngestResultHandler implements JobHandler {
           status,
           sourceId,
           downloadedGraphData,
-          error
+          error,
+          visualization
         );
 
       // S3 Key 값은 Workspace에서 찾아서 알림용으로 활용합니다.

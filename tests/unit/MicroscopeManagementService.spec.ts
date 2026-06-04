@@ -172,6 +172,8 @@ describe('MicroscopeManagementService', () => {
             group_id: createdWorkspaceId,
             schema_name: schemaName,
             language: 'ko',
+            ingest_mode: 'from_graphnode',
+            block_mode: false,
           }),
         })
       );
@@ -382,6 +384,8 @@ describe('MicroscopeManagementService', () => {
             group_id: groupId,
             schema_name: 'schema-a',
             file_name: 'report.pdf',
+            ingest_mode: 'raw_file',
+            block_mode: false,
           }),
         })
       );

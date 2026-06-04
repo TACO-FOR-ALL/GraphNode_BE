@@ -65,6 +65,21 @@ describe('MicroscopeIngestResultHandler', () => {
       'results/microscope/block_graph.json',
       expect.objectContaining({ bucketType: 'payload' })
     );
+
+    expect(mockMicroscopeService.updateDocumentStatus).toHaveBeenCalledWith(
+      'user-12345',
+      'ws-resolved',
+      'task_microscope_file_user-12345_01KSB1ZRG9WP64HKHWT79EFQH5',
+      'COMPLETED',
+      'src-1',
+      expect.anything(),
+      undefined,
+      expect.objectContaining({
+        outputMode: 'block',
+        visualizationS3Key: 'results/microscope/block_graph.json',
+        blockGraphS3Key: 'results/microscope/block_graph.json',
+      })
+    );
   });
 
   it('resolves workspace id via docId when group_id is omitted in AI payload', async () => {
@@ -93,6 +108,7 @@ describe('MicroscopeIngestResultHandler', () => {
       'task_microscope_node_user-12345_01KSB1ZRG9WP64HKHWT79EFQH5',
       'COMPLETED',
       'src-1',
+      undefined,
       undefined,
       undefined
     );

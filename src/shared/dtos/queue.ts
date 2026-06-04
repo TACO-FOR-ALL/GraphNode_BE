@@ -217,6 +217,10 @@ export interface MicroscopeIngestRawFileQueuePayload extends BaseQueueMessage {
     bucket?: string;
     file_name: string;
     schema_name?: string;
+    /** GraphNode_AI `output_data/microscope/raw_file` 파이프라인 */
+    ingest_mode?: 'raw_file';
+    /** true면 block_graph.json(+ images/), false면 standardized.json */
+    block_mode?: boolean;
   };
 }
 
@@ -233,6 +237,12 @@ export interface MicroscopeIngestFromNodeQueuePayload extends BaseQueueMessage {
     group_id: string;
     /** (옵션) 추출에 사용할 특정 ER 스키마 제약사항 명칭 */
     schema_name?: string;
+    /** 사용자 선호 언어 (from_graphnode 파이프라인) */
+    language?: string;
+    /** GraphNode_AI `output_data/microscope/from_graphnode` 파이프라인 */
+    ingest_mode?: 'from_graphnode';
+    /** true면 block_graph.json(+ images/), false면 standardized.json */
+    block_mode?: boolean;
   };
 }
 
@@ -278,6 +288,8 @@ export interface MicroscopeIngestFromNodeResultQueuePayload extends BaseQueueMes
     standardized_s3_key?: string;
     /** (성공 시) block 모드 S3 그래프 JSON (`block_graph.json`) */
     block_graph_s3_key?: string;
+    /** (성공 시) block 모드 부가 이미지 S3 prefix (`images/`, PPT/DOCX) */
+    images_s3_prefix?: string;
     /** (실패 시) 발생한 치명적 파이프라인 에러 메세지 */
     error?: string;
   };

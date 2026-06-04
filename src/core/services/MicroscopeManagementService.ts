@@ -10,6 +10,7 @@ import {
   MicroscopeGraphNodeDoc,
   MicroscopeGraphEdgeDoc,
   MicroscopeDocumentStatus,
+  MicroscopeDocumentVisualizationMeta,
 } from '../types/persistence/microscope_workspace.persistence';
 import { MicroscopeWorkspaceStore } from '../ports/MicroscopeWorkspaceStore';
 import { GraphNeo4jStore } from '../ports/GraphNeo4jStore';
@@ -148,7 +149,8 @@ export class MicroscopeManagementService {
     userId: string,
     groupId: string,
     files: Array<{ buffer: Buffer; originalname: string; mimetype: string }>,
-    schemaName?: string
+    schemaName?: string,
+    blockMode?: boolean
   ): Promise<MicroscopeWorkspaceMetaDoc> {
     if (!files.length) {
       throw new ValidationError('At least one file is required');
@@ -184,6 +186,8 @@ export class MicroscopeManagementService {
           fileName: file.originalname,
           status: 'PROCESSING',
           nodeType: 'file',
+          ingestMode: 'raw_file',
+          blockModeRequested: blockMode === true,
           createdAt: now,
           updatedAt: now,
         };
@@ -200,6 +204,8 @@ export class MicroscopeManagementService {
             bucket,
             file_name: file.originalname,
             schema_name: schemaName,
+            ingest_mode: 'raw_file',
+            block_mode: blockMode === true,
           },
           timestamp: now,
         };
@@ -309,7 +315,8 @@ export class MicroscopeManagementService {
     userId: string,
     nodeId: string,
     nodeType: 'note' | 'conversation',
-    schemaName?: string
+    schemaName?: string,
+    blockMode?: boolean
   ): Promise<MicroscopeWorkspaceMetaDoc> {
     // 1. 원본 데이터 검증 및 타이틀 추출
     let workspaceTitle = '';
@@ -352,6 +359,8 @@ export class MicroscopeManagementService {
       status: 'PROCESSING',
       nodeId,
       nodeType,
+      ingestMode: 'from_graphnode',
+      blockModeRequested: blockMode === true,
       createdAt: now,
       updatedAt: now,
     };
@@ -378,6 +387,8 @@ export class MicroscopeManagementService {
           group_id: groupId,
           schema_name: schemaName,
           language: preferredLanguage,
+          ingest_mode: 'from_graphnode' as const,
+          block_mode: blockMode === true,
         },
         timestamp: new Date().toISOString(),
       };
@@ -668,7 +679,8 @@ export class MicroscopeManagementService {
     status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED',
     sourceId?: string,
     downloadedGraphData?: AiMicroscopeIngestResultItem[],
-    error?: string
+    error?: string,
+    visualization?: MicroscopeDocumentVisualizationMeta
   ): Promise<MicroscopeWorkspaceMetaDoc> {
     // 1. 워크스페이스 존재 여부 확인
     const workspace = await this.microscopeWorkspaceStore.findById(groupId);
@@ -744,7 +756,8 @@ export class MicroscopeManagementService {
         status,
         sourceId,
         graphPayloadId,
-        error
+        error,
+        visualization
       );
       logger.info(
         { userId, groupId, docId, status },
