@@ -53,7 +53,7 @@ describe('AddNode raw file S3 bundle', () => {
     try {
       const touchFile = E2E_MACRO_USER_FILE_SEEDS[0];
       await db.collection('user_files').updateOne(
-        { _id: touchFile._id },
+        { _id: touchFile._id } as any,
         { $set: { updatedAt: new Date() } }
       );
 

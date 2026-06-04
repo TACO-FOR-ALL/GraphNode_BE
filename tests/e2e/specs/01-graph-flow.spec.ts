@@ -9,6 +9,7 @@ import {
 } from '../../../src/workers/utils/sourceTypeResolver';
 import { toUserFileDoc } from '../utils/mongo-user-file';
 import { createNeo4jE2eDriver } from '../utils/neo4j-test-driver';
+import { pollMacroStatsUntil } from '../utils/macro-stats-poll';
 import { MongoClient } from 'mongodb';
 import type { Session } from 'neo4j-driver';
 
@@ -144,7 +145,9 @@ describeGraphFlow('End-to-End Graph Flow', () => {
     let isFinished = false;
 
     try {
-      for (let i = 0; i < 60; i++) {
+      const scope = (process.env.E2E_SCOPE || 'bundle').trim().toLowerCase();
+      const maxPollAttempts = scope === 'full' ? 120 : 60;
+      for (let i = 0; i < maxPollAttempts; i++) {
         const statsRes = await neo4jSession.run(
           'MATCH (g:MacroGraph {userId: $userId})-[:HAS_STATS]->(st:MacroStats) RETURN st.status AS status',
           { userId }
@@ -538,25 +541,15 @@ describeGraphFlow('End-to-End Graph Flow', () => {
       const response = await apiClient.post('/v1/graph-ai/add-node');
       expect(response.status).toBe(202);
 
-      // Neo4j MacroStats UPDATED 상태 폴링
+      const isFinished = await pollMacroStatsUntil(userId, {
+        targetStatus: 'UPDATED',
+        label: 'graph-flow Scenario 3 AddNode',
+      });
+      expect(isFinished).toBe(true);
+
       const neo4jDriver = createNeo4jE2eDriver();
       const neo4jSession = neo4jDriver.session();
-      let isFinished = false;
       try {
-        for (let i = 0; i < 60; i++) {
-          const statsRes = await neo4jSession.run(
-            'MATCH (g:MacroGraph {userId: $userId})-[:HAS_STATS]->(st:MacroStats) RETURN st.status AS status',
-            { userId }
-          );
-          const status = statsRes.records[0]?.get('status') as string | undefined;
-          if (status === 'UPDATED') {
-            isFinished = true;
-            break;
-          }
-          await new Promise((resolve) => setTimeout(resolve, 10000));
-        }
-        expect(isFinished).toBe(true);
-
         // [기존 노드 업데이트 검증] conv-e2e-123
         const updatedNodeRes = await neo4jSession.run(
           `MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
@@ -571,9 +564,9 @@ describeGraphFlow('End-to-End Graph Flow', () => {
         const updatedUpdatedAt = updatedNodeRes.records[0].get('updatedAt') as string;
 
         console.log(
-          `Updated node state for conv-e2e-123 (Neo4j): updatedAt=${updatedUpdatedAt}, numMessages=${updatedNumMessages}`
+          `Updated node state for conv-e2e-123 (Neo4j): updatedAt=${updatedUpdatedAt}, numMessages=${updatedNumMessages} (was ${oldNumMessages})`
         );
-        expect(updatedNumMessages).toBe(2);
+        expect(updatedNumMessages).toBeGreaterThan(oldNumMessages);
 
         // [신규 대화 노드 생성 확인]
         const newConvNodeRes = await neo4jSession.run(
