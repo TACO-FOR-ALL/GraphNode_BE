@@ -5,7 +5,8 @@
 import { fetchSecretApiKey, isUsableApiKey } from './e2e-aws-secrets';
 
 async function main(): Promise<void> {
-  if (isUsableApiKey(process.env.OPENAI_API_KEY)) {
+  const forceAws = process.env.E2E_FORCE_AWS_OPENAI === '1';
+  if (!forceAws && isUsableApiKey(process.env.OPENAI_API_KEY)) {
     process.stdout.write(process.env.OPENAI_API_KEY!.trim());
     return;
   }

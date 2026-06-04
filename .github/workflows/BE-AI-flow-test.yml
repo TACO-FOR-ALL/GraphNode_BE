@@ -168,6 +168,8 @@ jobs:
           cd be && ./scripts/e2e-test.sh
         env:
           E2E_SCOPE: full
+          # revoked GitHub OPENAI_API_KEY 시 AWS SM(DEV_OPENAI_API_KEY) 폴백 (OIDC credentials)
+          E2E_OPENAI_SECRET_ID: DEV_OPENAI_API_KEY
           MONGODB_URI: mongodb://127.0.0.1:27017/graphnode?directConnection=true
           MONGODB_URL: mongodb://127.0.0.1:27017/graphnode?directConnection=true
           DATABASE_URL: postgresql://app:app@localhost:5432/graphnode

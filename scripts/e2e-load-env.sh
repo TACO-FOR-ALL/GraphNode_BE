@@ -189,10 +189,10 @@ _apply_e2e_groq_test_only_policy() {
 # E2E full 스코프 + OpenAI 경로일 때 API 키 유효성 사전 검사 (Jest/AI 10분 대기 전 fail-fast)
 _openai_preflight_for_e2e() {
   if [[ -z "${OPENAI_API_KEY:-}" || "${OPENAI_API_KEY}" == dummy || "${OPENAI_API_KEY}" == *placeholder* ]]; then
-    return 0
+    return 1
   fi
 
-  local _model="${MACRO_LLM_MODEL:-gpt-4o-mini}"
+  local _model="${MICROSCOPE_LLM_MODEL:-${MACRO_LLM_MODEL:-gpt-5-mini}}"
   local _http_code="000"
   _http_code="$(
     curl -sS -o /dev/null -w '%{http_code}' \
@@ -210,6 +210,46 @@ _openai_preflight_for_e2e() {
   echo "❌ OpenAI API preflight failed (HTTP ${_http_code}). graph-flow/microscope will fail in graphnode-ai." >&2
   echo "   Fix: .env OPENAI_API_KEY를 GitHub Secrets와 동일한 유효 키로 교체 (platform.openai.com/api-keys)." >&2
   return 1
+}
+
+# GitHub secret 등 Runner 키가 revoked(401)일 때 AWS Secrets Manager로 교체
+_load_openai_from_secrets_manager_force() {
+  unset OPENAI_API_KEY DEV_OPENAI_API_KEY
+  local _script_dir _key=""
+  _script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  E2E_FORCE_AWS_OPENAI=1 _key="$(bash "$_script_dir/e2e-fetch-openai-key.sh" 2>/dev/null)" || return 1
+  if [[ -n "$_key" ]]; then
+    export OPENAI_API_KEY="$_key"
+    export DEV_OPENAI_API_KEY="$_key"
+    echo "🔑 OPENAI_API_KEY loaded from AWS Secrets Manager (forced fallback)" >&2
+    return 0
+  fi
+  return 1
+}
+
+# OpenAI 경로: Runner 키 preflight → 실패 시 AWS SM → 재검증
+_resolve_e2e_openai_api_key_with_aws_fallback() {
+  if _is_e2e_prefer_groq && [[ -n "${GROQ_API_KEY:-}" && "${GROQ_API_KEY}" != dummy && "${GROQ_API_KEY}" != *placeholder* ]]; then
+    return 0
+  fi
+
+  if [[ -z "${OPENAI_API_KEY:-}" || "${OPENAI_API_KEY}" == dummy || "${OPENAI_API_KEY}" == *placeholder* ]]; then
+    if ! _load_openai_from_secrets_manager_force; then
+      return 0
+    fi
+    _openai_preflight_for_e2e || return 1
+    return 0
+  fi
+
+  if _openai_preflight_for_e2e; then
+    export DEV_OPENAI_API_KEY="${DEV_OPENAI_API_KEY:-$OPENAI_API_KEY}"
+    return 0
+  fi
+
+  echo "⚠️  Runner OPENAI_API_KEY failed preflight — trying AWS Secrets Manager (DEV_OPENAI_API_KEY)..." >&2
+  _load_openai_from_secrets_manager_force || return 1
+  _openai_preflight_for_e2e || return 1
+  return 0
 }
 
 _apply_e2e_llm_provider_defaults() {

@@ -49,12 +49,12 @@ source scripts/e2e-load-env.sh .env
 
 export E2E_SCOPE="${E2E_SCOPE:-full}"
 
-# OpenAI-only E2E (GitHub Actions 기본): Groq env 제거 + 키 preflight
-if [[ "$E2E_SCOPE" == "full" ]] && [[ "${E2E_PREFER_GROQ:-0}" != "1" ]]; then
-  unset GROQ_API_KEY DEV_GROQ_API_KEY
-  if [[ -n "${OPENAI_API_KEY:-}" && "${OPENAI_API_KEY}" != *placeholder* && "${OPENAI_API_KEY}" != dummy ]]; then
-    _openai_preflight_for_e2e || exit 1
-  fi
+# OpenAI-only E2E: revoked GitHub secret → AWS SM fallback + preflight (invalid 키로 10분 대기 방지)
+if [[ "$E2E_SCOPE" == "full" ]]; then
+  _resolve_e2e_openai_api_key_with_aws_fallback || {
+    echo "❌ E2E full scope requires a valid OpenAI (or Groq with E2E_PREFER_GROQ=1) API key." >&2
+    exit 1
+  }
 fi
 
 # AI Worker가 .env·Runner LLM 키를 받도록 재기동

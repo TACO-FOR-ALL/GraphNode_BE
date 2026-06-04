@@ -14,7 +14,8 @@ _is_usable_key() {
   return 0
 }
 
-if _is_usable_key "${OPENAI_API_KEY:-}"; then
+# E2E_FORCE_AWS_OPENAI=1: Runner/GitHub secret 키가 revoked여도 AWS SM에서 재조회
+if [[ "${E2E_FORCE_AWS_OPENAI:-0}" != "1" ]] && _is_usable_key "${OPENAI_API_KEY:-}"; then
   printf '%s' "${OPENAI_API_KEY}"
   exit 0
 fi
