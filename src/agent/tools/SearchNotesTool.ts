@@ -12,7 +12,7 @@ export class SearchNotesTool implements IAgentTool {
     type: 'function',
     function: {
       name: 'search_notes',
-      description: '사용자의 노트 중에서 특정 키워드가 포함된 노트를 검색합니다.',
+      description: "사용자의 '노트(Note)' 원문에서 특정 키워드가 정확히 포함된 문서를 단순 텍스트 기반으로 검색할 때만 사용하세요. 문맥/의미 기반 검색이 필요하거나 대화 기록까지 포함해야 한다면 search_conversations를 사용하세요.",
       parameters: {
         type: 'object',
         properties: {

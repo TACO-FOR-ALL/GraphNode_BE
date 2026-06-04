@@ -1,15 +1,5 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
-import OpenAI from 'openai';
-
-import { AgentService, AgentServiceDeps } from '../../src/core/services/AgentService';
-import { UserService } from '../../src/core/services/UserService';
-import { NoteService } from '../../src/core/services/NoteService';
-import { ConversationService } from '../../src/core/services/ConversationService';
-import { MessageService } from '../../src/core/services/MessageService';
-import { GraphEmbeddingService } from '../../src/core/services/GraphEmbeddingService';
-import { GraphVectorService } from '../../src/core/services/GraphVectorService';
-import { SearchService } from '../../src/core/services/SearchService';
-import { ICreditService } from '../../src/core/ports/ICreditService';
+import { AgentService } from '../../src/core/services/AgentService';
 
 // Mock OpenAI
 const mockCompletionsCreate = jest.fn() as jest.Mock<any>;
@@ -262,5 +252,80 @@ describe('AgentService', () => {
       answer: '최근 노트 검색 결과입니다.',
       noteContent: null,
     });
+  });
+
+  it('chat 모드에서 Macro Graph Tool 2개가 연속 호출되는 경우, ToolRegistry가 각각 실행되어야 함', async () => {
+    // 1. Classifier Mock (chat 모드 반환)
+    mockCompletionsCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify({ mode: 'chat' }) } }],
+    });
+
+    // 2. First Stream Mock (Tool Call 2개 전달)
+    const mockToolStream = {
+      [Symbol.asyncIterator]: async function* () {
+        yield {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'call_1',
+                    type: 'function',
+                    function: { name: 'get_macro_graph_context', arguments: '{}' },
+                  },
+                  {
+                    index: 1,
+                    id: 'call_2',
+                    type: 'function',
+                    function: { name: 'get_graph_node_details', arguments: '{"nodeId":101}' },
+                  },
+                ],
+              },
+            },
+          ],
+        };
+      },
+    };
+    mockCompletionsCreate.mockResolvedValueOnce(mockToolStream);
+
+    // 3. Second Stream Mock (Tool 결과 수신 후 최종 답변 제공)
+    const mockFinalStream = {
+      [Symbol.asyncIterator]: async function* () {
+        yield { choices: [{ delta: { content: '매크로 그래프 컨텍스트 기반 답변입니다.' } }] };
+      },
+    };
+    mockCompletionsCreate.mockResolvedValueOnce(mockFinalStream);
+
+    const executeSpy = jest
+      .spyOn((agentService as any).toolRegistry, 'execute')
+      .mockResolvedValueOnce(JSON.stringify({ snapshot: { nodes: [] } }))
+      .mockResolvedValueOnce(JSON.stringify({ nodes: [{ nodeId: 101 }] }));
+
+    await agentService.handleChatStream('user_1', { userMessage: '내 그래프 전체 보고, 101 노드도 알려줘' }, sendEvent);
+
+    expect(sendEvent).toHaveBeenCalledWith('status', { phase: 'searching', message: '데이터 검색 중...' });
+
+    expect(executeSpy).toHaveBeenNthCalledWith(
+      1,
+      'get_macro_graph_context',
+      'user_1',
+      {},
+      expect.any(Object),
+      expect.any(Object),
+      expect.any(Object)
+    );
+
+    expect(executeSpy).toHaveBeenNthCalledWith(
+      2,
+      'get_graph_node_details',
+      'user_1',
+      { nodeId: 101 },
+      expect.any(Object),
+      expect.any(Object),
+      expect.any(Object)
+    );
+
+    expect(sendEvent).toHaveBeenCalledWith('chunk', { text: '매크로 그래프 컨텍스트 기반 답변입니다.' });
   });
 });

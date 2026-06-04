@@ -8,6 +8,8 @@ import { SearchConversationsTool } from './tools/SearchConversationsTool';
 import { GetRecentConversationsTool } from './tools/GetRecentConversationsTool';
 import { GetConversationMessagesTool } from './tools/GetConversationMessagesTool';
 import { GetGraphSummaryTool } from './tools/GetGraphSummaryTool';
+import { GetMacroGraphContextTool } from './tools/GetMacroGraphContextTool';
+import { GetGraphNodeDetailsTool } from './tools/GetGraphNodeDetailsTool';
 import { MicroscopeContextTool } from './tools/MicroscopeContextTool';
 import type { ICreditService } from '../core/ports/ICreditService';
 
@@ -38,6 +40,8 @@ export class ToolRegistry {
     this.register(new GetRecentConversationsTool());
     this.register(new GetConversationMessagesTool());
     this.register(new GetGraphSummaryTool());
+    this.register(new GetMacroGraphContextTool());
+    this.register(new GetGraphNodeDetailsTool());
   }
 
   /** 도구 등록
