@@ -1,18 +1,13 @@
 #!/bin/sh
 set -e
 
-# Prisma CLI는 devDependency — npx prisma 단독 실행 시 Prisma 7이 설치되어 schema(P1012) 실패
-PRISMA_VERSION="${PRISMA_VERSION:-5.22.0}"
-
 # Run Prisma DB Push to update schema (if connected)
+# Prisma 5 CLI는 Dockerfile runner에 builder node_modules에서 복사됨
 # --skip-generate: runner 이미지는 builder에서 복사한 Client 사용 (npx generate → @prisma/client resolve 실패)
 echo "Running Prisma DB Push..."
 if [ -n "$DATABASE_URL" ]; then
-  if [ -x ./node_modules/.bin/prisma ]; then
-    ./node_modules/.bin/prisma db push --accept-data-loss --skip-generate
-  else
-    npx --yes "prisma@${PRISMA_VERSION}" db push --accept-data-loss --skip-generate
-  fi
+  # 이미지에 builder Prisma 5 CLI 포함 — npx는 Prisma 7 설치·네트워크 의존
+  ./node_modules/.bin/prisma db push --accept-data-loss --skip-generate
 else
   echo "DATABASE_URL not set, skipping DB push."
 fi
