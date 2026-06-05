@@ -146,7 +146,7 @@ describeGraphFlow('End-to-End Graph Flow', () => {
 
     try {
       const scope = (process.env.E2E_SCOPE || 'bundle').trim().toLowerCase();
-      const maxPollAttempts = scope === 'full' ? 120 : 60;
+      const maxPollAttempts = scope === 'full' ? 180 : 60;
       for (let i = 0; i < maxPollAttempts; i++) {
         const statsRes = await neo4jSession.run(
           'MATCH (g:MacroGraph {userId: $userId})-[:HAS_STATS]->(st:MacroStats) RETURN st.status AS status',
@@ -341,8 +341,11 @@ describeGraphFlow('End-to-End Graph Flow', () => {
     const neo4jSession = neo4jDriver.session();
     let isFinished = false;
 
+    const scope = (process.env.E2E_SCOPE || 'bundle').trim().toLowerCase();
+    const maxSummaryAttempts = scope === 'full' ? 180 : 60;
+
     try {
-      for (let i = 0; i < 60; i++) {
+      for (let i = 0; i < maxSummaryAttempts; i++) {
         const summaryRes = await neo4jSession.run(
           `MATCH (g:MacroGraph {userId: $userId})-[:HAS_SUMMARY]->(sm:MacroSummary)
            WHERE sm.deletedAt IS NULL

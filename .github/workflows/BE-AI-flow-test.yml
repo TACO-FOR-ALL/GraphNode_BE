@@ -61,6 +61,13 @@ jobs:
       # 3. Docker Buildx 설정 (캐싱 기능을 위해 필수)
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          cleanup: true
+
+      # GHA build cache blob corruption 시 재시도 run에서 캐시 초기화
+      - name: Prune Docker build cache on retry
+        if: github.run_attempt > 1
+        run: docker buildx prune -af
 
       # 4. Backend 이미지 빌드 및 캐싱
       - name: Build Backend Image
@@ -68,10 +75,11 @@ jobs:
         with:
           context: be
           push: false
-          load: true # 빌드된 이미지를 로컬 도커 가상 시스템에 로드
+          load: true
           tags: graphnode-be:test
+          no-cache: ${{ github.run_attempt > 1 }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=max,ignore-error=true
 
       # 5. AI Worker 이미지 빌드 및 캐싱
       - name: Build AI Worker Image
@@ -79,10 +87,11 @@ jobs:
         with:
           context: ai-worker
           push: false
-          load: true # 빌드된 이미지를 로컬 도커 가상 시스템에 로드
+          load: true
           tags: graphnode-ai:test
+          no-cache: ${{ github.run_attempt > 1 }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=max,ignore-error=true
 
       # 6. Docker Compose를 통한 통합 테스트 서비스 기동
       - name: Start Database Services First
@@ -108,11 +117,14 @@ jobs:
       - name: Start Application and LocalStack
         run: |
           # 2단계: 백엔드 어플리케이션 및 LocalStack 마저 구동
-          # 윈도우 환경 퍼미션 누락 방지 및 CRLF(\r\n) -> LF(\n) 변환
           sed -i 's/\r$//' be/scripts/localstack-init/ready.sh
           chmod +x be/scripts/localstack-init/ready.sh
-          # be/ 폴더 내부에서 compose 실행
-          docker compose -f be/docker-compose.test.yml up -d
+          if ! docker compose -f be/docker-compose.test.yml up -d; then
+            echo "❌ docker compose up failed — collecting diagnostics"
+            docker compose -f be/docker-compose.test.yml ps -a
+            docker compose -f be/docker-compose.test.yml logs --tail 200
+            exit 1
+          fi
 
       # 7. 모든 서비스가 Healthy 상태가 될 때까지 대기
       - name: Wait for Services to be healthy
@@ -194,13 +206,23 @@ jobs:
           S3_FILE_BUCKET: taco5-graphnode-filedata-chat-and-note-s3
           API_BASE_URL: http://localhost:3000
 
-      # 10. 추가 로그 수집 (실패/캔슬 포함 모든 비정상 종료 대응)
+      # 10. 추가 로그·리소스 진단 (실패/캔슬 포함)
       - name: Collect Logs on Failure
         if: always()
         run: |
           mkdir -p be/e2e-logs
-          docker compose -f be/docker-compose.test.yml logs --tail 500 > be/e2e-logs/docker-compose-all.log
-          docker compose -f be/docker-compose.test.yml ps -a > be/e2e-logs/docker-ps.log
+          {
+            echo "=== Docker Stats ==="
+            docker stats --no-stream 2>/dev/null || true
+            echo "=== Memory ==="
+            free -h 2>/dev/null || true
+            echo "=== Disk ==="
+            df -h 2>/dev/null || true
+            echo "=== Compose PS ==="
+            docker compose -f be/docker-compose.test.yml ps -a 2>/dev/null || true
+          } > be/e2e-logs/host-diagnostics.log
+          docker compose -f be/docker-compose.test.yml logs --tail 500 > be/e2e-logs/docker-compose-all.log 2>/dev/null || true
+          docker compose -f be/docker-compose.test.yml ps -a > be/e2e-logs/docker-ps.log 2>/dev/null || true
           ls -R be/e2e-logs > be/e2e-logs/artifact-inventory.log
           echo "Captured logs for post-mortem analysis."
 

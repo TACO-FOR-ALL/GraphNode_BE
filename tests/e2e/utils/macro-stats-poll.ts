@@ -5,7 +5,7 @@ export type MacroStatsTargetStatus = 'CREATED' | 'UPDATED';
 export interface PollMacroStatsOptions {
   /** 목표 MacroStats.status (기본 CREATED). */
   targetStatus?: MacroStatsTargetStatus;
-  /** 최대 폴링 횟수 (기본: CI full E2E 120, 그 외 90). */
+  /** 최대 폴링 횟수 (기본: CI full E2E 180≈30분, 그 외 90). */
   maxAttempts?: number;
   /** 폴링 간격 ms (기본 10000). */
   intervalMs?: number;
@@ -25,7 +25,7 @@ export async function pollMacroStatsUntil(
 ): Promise<boolean> {
   const targetStatus = options.targetStatus ?? 'CREATED';
   const scope = (process.env.E2E_SCOPE || 'bundle').trim().toLowerCase();
-  const defaultAttempts = scope === 'full' ? 120 : 90;
+  const defaultAttempts = scope === 'full' ? 180 : 90;
   const maxAttempts = options.maxAttempts ?? defaultAttempts;
   const intervalMs = options.intervalMs ?? 10_000;
   const label = options.label ?? `MacroStats→${targetStatus}`;

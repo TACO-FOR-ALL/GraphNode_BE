@@ -2,6 +2,8 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 ENV NODE_ENV=development
+# Prisma generate (builder stage) needs OpenSSL on Alpine
+RUN apk add --no-cache openssl
 COPY package*.json ./
 RUN npm ci
 # Prisma 스키마를 먼저 복사해야 generate가 타입을 생성할 수 있음
@@ -27,8 +29,7 @@ RUN npm ci && npm cache clean --force
 # Prisma Schema 복사
 COPY prisma ./prisma
 
-# Prisma Client 생성 (런타임 전에 미리 생성) 
-# 아 Github Action 설정 못봣어
+# Prisma Client 생성 (런타임 전에 미리 생성)
 RUN npx prisma generate
 
 # 빌드 산출물 복사
