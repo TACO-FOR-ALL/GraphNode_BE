@@ -29,18 +29,19 @@ RUN npm ci --omit=dev && npm cache clean --force
 # Prisma schema (entrypoint db push용)
 COPY prisma ./prisma
 
-# builder에서 Prisma 5 generate 완료분 + CLI 의존성 복사 (runner npx generate / engines 누락 방지)
+# builder에서 Prisma 5 generate 완료분만 복사 (부분 COPY 시 @prisma/engines 누락 → entrypoint 실패)
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-# entrypoint db push용 CLI (devDependency — npm ci --omit=dev 에는 없음)
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
+
+# entrypoint db push: prisma CLI + @prisma/engines 등 전체 의존성을 runner에서 설치
+RUN npm install --no-save --ignore-scripts prisma@5.22.0
 
 # 빌드 산출물 복사
 COPY --from=builder /app/dist ./dist
 
-# Prisma Client·CLI 검증 (CI graphnode-be Exited(1) 조기 발견)
+# Prisma Client·CLI 검증 (CI graphnode-be Exited(1) 조기 발견, GHA cache 무효화)
 RUN node -e "require('@prisma/client'); console.log('Prisma client OK')" && \
+  node -e "require('@prisma/engines'); console.log('Prisma engines OK')" && \
   ./node_modules/.bin/prisma --version
 
 # Entrypoint 스크립트 복사

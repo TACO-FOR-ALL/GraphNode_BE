@@ -2,8 +2,8 @@
 set -e
 
 # Run Prisma DB Push to update schema (if connected)
-# Prisma 5 CLI는 Dockerfile runner에 builder node_modules에서 복사됨
-# --skip-generate: runner 이미지는 builder에서 복사한 Client 사용 (npx generate → @prisma/client resolve 실패)
+# Prisma 5 CLI는 Dockerfile runner에서 npm install prisma@5.22.0 으로 설치됨
+# --skip-generate: builder에서 복사한 generated Client 사용
 echo "Running Prisma DB Push..."
 if [ -n "$DATABASE_URL" ]; then
   # 이미지에 builder Prisma 5 CLI 포함 — npx는 Prisma 7 설치·네트워크 의존
