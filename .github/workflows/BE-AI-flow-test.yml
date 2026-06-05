@@ -3,6 +3,12 @@ name: BE-AI Integrated Flow Test
 on:
   pull_request:
     branches: ['main', 'develop']
+  workflow_dispatch:
+
+# PR 연속 push 시 진행 중 run을 취소하지 않음 (npm ci/E2E 중 "operation was canceled" 방지)
+concurrency:
+  group: be-ai-flow-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
 
 # 권한 설정 (OIDC 인증을 위해 필수)
 permissions:
@@ -12,6 +18,8 @@ permissions:
 jobs:
   test-flow:
     runs-on: ubuntu-latest
+    # E2E+Docker 전체 (기본 6h). 명시해 두어 조기 kill 오해 방지.
+    timeout-minutes: 360
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
@@ -19,6 +27,12 @@ jobs:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
 
     steps:
+      - name: Workflow context
+        run: |
+          echo "run_id=${{ github.run_id }} attempt=${{ github.run_attempt }} ref=${{ github.ref }}"
+          echo "pr=${{ github.event.pull_request.number }} head_sha=${{ github.event.pull_request.head.sha }}"
+          echo "event=${{ github.event_name }}"
+
       # 1. Backend 레포지토리 체크아웃 (be/ 폴더에 저장)
       - name: Checkout Backend
         uses: actions/checkout@v4
@@ -43,7 +57,11 @@ jobs:
 
       # 2-2. Backend 의존성 설치 (Runner 호스트 환경)
       - name: Install Dependencies
-        run: npm ci
+        timeout-minutes: 15
+        run: |
+          echo "Installing npm deps in be/ (lockfile=$(wc -l < package-lock.json) lines)..."
+          npm ci --no-audit --fund=false
+          echo "npm ci completed."
         working-directory: be
 
       # 2-3. AWS 자격 증명 구성 (OIDC를 사용하여 ECR 접근 권한 획득)
