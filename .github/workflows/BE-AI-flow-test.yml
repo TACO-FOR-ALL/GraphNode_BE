@@ -5,10 +5,10 @@ on:
     branches: ['main', 'develop']
   workflow_dispatch:
 
-# PR 연속 push 시 진행 중 run을 취소하지 않음 (npm ci/E2E 중 "operation was canceled" 방지)
+# PR당 1개 run만 실행 — 병렬 Docker 빌드 2개가 디스크/메모리를 쓰며 Build Image에서 멈춤 방지
 concurrency:
   group: be-ai-flow-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 # 권한 설정 (OIDC 인증을 위해 필수)
 permissions:
@@ -79,37 +79,45 @@ jobs:
       # 3. Docker Buildx 설정 (캐싱 기능을 위해 필수)
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          cleanup: true
 
-      # GHA build cache blob corruption 시 재시도 run에서 캐시 초기화
-      - name: Prune Docker build cache on retry
-        if: github.run_attempt > 1
-        run: docker buildx prune -af
+      - name: Prepare Docker disk space
+        run: |
+          docker system df || true
+          docker builder prune -af --filter "until=48h" || true
+          df -h /
 
       # 4. Backend 이미지 빌드 및 캐싱
       - name: Build Backend Image
         uses: docker/build-push-action@v6
+        timeout-minutes: 45
+        env:
+          BUILDKIT_PROGRESS: plain
         with:
           context: be
+          file: be/Dockerfile
           push: false
           load: true
           tags: graphnode-be:test
-          no-cache: ${{ github.run_attempt > 1 }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max,ignore-error=true
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=be-graphnode
+          cache-to: type=gha,scope=be-graphnode,mode=max,ignore-error=true
 
       # 5. AI Worker 이미지 빌드 및 캐싱
       - name: Build AI Worker Image
         uses: docker/build-push-action@v6
+        timeout-minutes: 45
+        env:
+          BUILDKIT_PROGRESS: plain
         with:
           context: ai-worker
           push: false
           load: true
           tags: graphnode-ai:test
-          no-cache: ${{ github.run_attempt > 1 }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max,ignore-error=true
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=ai-graphnode
+          cache-to: type=gha,scope=ai-graphnode,mode=max,ignore-error=true
 
       # 6. Docker Compose를 통한 통합 테스트 서비스 기동
       - name: Start Database Services First

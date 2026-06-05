@@ -16,3 +16,6 @@ z_npm_sdk
 .idea
 coverage
 dist
+e2e-logs
+graph_outputs
+agent-transcripts

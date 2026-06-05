@@ -22,9 +22,9 @@ WORKDIR /app
 # OpenSSL 설치 (Prisma 요구사항)
 RUN apk add --no-cache openssl
 
-# 프로덕션 의존성만 설치
+# 프로덕션 의존성만 설치 (builder에서 이미 devDeps로 빌드 완료)
 COPY package*.json ./
-RUN npm ci && npm cache clean --force
+RUN npm ci --omit=dev && npm cache clean --force
 
 # Prisma Schema 복사
 COPY prisma ./prisma
