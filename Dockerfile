@@ -29,11 +29,18 @@ RUN npm ci --omit=dev && npm cache clean --force
 # Prisma schema (entrypoint db push용)
 COPY prisma ./prisma
 
-# builder에서 Prisma 5로 generate 완료 — runner의 npx prisma는 devDeps 없어 Prisma 7을 받아 P1012 발생
+# builder에서 Prisma 5 generate 완료분 복사 (runner에서 npx generate 시 @prisma/client resolve 실패 방지)
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
+# entrypoint db push용 CLI (devDependency — npm ci --omit=dev 에는 없음)
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
 
 # 빌드 산출물 복사
 COPY --from=builder /app/dist ./dist
+
+# Prisma Client 로드 검증 (CI에서 graphnode-be Exited(1) 조기 발견)
+RUN node -e "require('@prisma/client'); console.log('Prisma client OK')"
 
 # Entrypoint 스크립트 복사
 COPY entrypoint.sh ./

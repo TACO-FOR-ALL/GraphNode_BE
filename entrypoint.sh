@@ -5,17 +5,17 @@ set -e
 PRISMA_VERSION="${PRISMA_VERSION:-5.22.0}"
 
 # Run Prisma DB Push to update schema (if connected)
+# --skip-generate: runner 이미지는 builder에서 복사한 Client 사용 (npx generate → @prisma/client resolve 실패)
 echo "Running Prisma DB Push..."
-# Check if DATABASE_URL is set
 if [ -n "$DATABASE_URL" ]; then
-  npx --yes "prisma@${PRISMA_VERSION}" db push --accept-data-loss
+  if [ -x ./node_modules/.bin/prisma ]; then
+    ./node_modules/.bin/prisma db push --accept-data-loss --skip-generate
+  else
+    npx --yes "prisma@${PRISMA_VERSION}" db push --accept-data-loss --skip-generate
+  fi
 else
   echo "DATABASE_URL not set, skipping DB push."
 fi
-
-# Generate Prisma Client to ensure it matches the current schema
-echo "Regenerating Prisma Client..."
-npx --yes "prisma@${PRISMA_VERSION}" generate
 
 # Run Neo4j BELONGS_TO dedup migration (idempotent, non-fatal)
 # 중복 BELONGS_TO 관계 정리 + Ghost Cluster 삭제
