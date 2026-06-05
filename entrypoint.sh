@@ -1,18 +1,21 @@
 #!/bin/sh
 set -e
 
+# Prisma CLI는 devDependency — npx prisma 단독 실행 시 Prisma 7이 설치되어 schema(P1012) 실패
+PRISMA_VERSION="${PRISMA_VERSION:-5.22.0}"
+
 # Run Prisma DB Push to update schema (if connected)
 echo "Running Prisma DB Push..."
 # Check if DATABASE_URL is set
 if [ -n "$DATABASE_URL" ]; then
-  npx prisma db push --accept-data-loss
+  npx --yes "prisma@${PRISMA_VERSION}" db push --accept-data-loss
 else
   echo "DATABASE_URL not set, skipping DB push."
 fi
 
 # Generate Prisma Client to ensure it matches the current schema
 echo "Regenerating Prisma Client..."
-npx prisma generate
+npx --yes "prisma@${PRISMA_VERSION}" generate
 
 # Run Neo4j BELONGS_TO dedup migration (idempotent, non-fatal)
 # 중복 BELONGS_TO 관계 정리 + Ghost Cluster 삭제

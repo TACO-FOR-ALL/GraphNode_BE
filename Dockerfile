@@ -26,11 +26,11 @@ RUN apk add --no-cache openssl
 COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
-# Prisma Schema 복사
+# Prisma schema (entrypoint db push용)
 COPY prisma ./prisma
 
-# Prisma Client 생성 (런타임 전에 미리 생성)
-RUN npx prisma generate
+# builder에서 Prisma 5로 generate 완료 — runner의 npx prisma는 devDeps 없어 Prisma 7을 받아 P1012 발생
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 # 빌드 산출물 복사
 COPY --from=builder /app/dist ./dist
