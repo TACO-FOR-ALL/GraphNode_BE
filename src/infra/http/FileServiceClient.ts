@@ -2,13 +2,14 @@
  * GraphNode File Service internal API 클라이언트.
  */
 import axios, { AxiosError, type AxiosInstance } from 'axios';
-import FormData from 'form-data';
 
 import type {
   FileServicePort,
   ImportCompleteDto,
+  ImportFinalizeClaimDto,
   ImportJobStatusDto,
   ImportProviderDescriptor,
+  ImportUploadInitDto,
   PresignedFileAccessDto,
 } from '../../core/ports/FileServicePort';
 import { getCorrelationId } from '../../shared/context/requestStore';
@@ -78,20 +79,28 @@ export class FileServiceClient implements FileServicePort {
     return data.providers;
   }
 
-  async createImport(
+  async initImportUpload(
     userId: string,
     provider: string,
-    zipBuffer: Buffer,
-    originalName: string
-  ): Promise<{ jobId: string; status: string }> {
+    originalName: string,
+    sizeBytes: number
+  ): Promise<ImportUploadInitDto> {
     return this.request(async () => {
-      const form = new FormData();
-      form.append('provider', provider);
-      form.append('file', zipBuffer, { filename: originalName || 'export.zip' });
+      const res = await this.client.post<ImportUploadInitDto>(
+        '/internal/imports/init',
+        { provider, originalName, sizeBytes },
+        { headers: this.headers(userId) }
+      );
+      return res.data;
+    });
+  }
+
+  async startImport(userId: string, jobId: string): Promise<{ jobId: string; status: string }> {
+    return this.request(async () => {
       const res = await this.client.post<{ jobId: string; status: string }>(
-        '/internal/imports',
-        form,
-        { headers: { ...this.headers(userId), ...form.getHeaders() } }
+        `/internal/imports/${jobId}/start`,
+        {},
+        { headers: this.headers(userId) }
       );
       return res.data;
     });
@@ -112,6 +121,37 @@ export class FileServiceClient implements FileServicePort {
         headers: this.headers(userId),
       });
       return res.data;
+    });
+  }
+
+  async claimFinalize(userId: string, jobId: string): Promise<ImportFinalizeClaimDto> {
+    return this.request(async () => {
+      const res = await this.client.post<ImportFinalizeClaimDto>(
+        `/internal/imports/${jobId}/finalize/claim`,
+        {},
+        { headers: this.headers(userId) }
+      );
+      return res.data;
+    });
+  }
+
+  async completeFinalize(userId: string, jobId: string, conversationIds: string[]): Promise<void> {
+    await this.request(async () => {
+      await this.client.post(
+        `/internal/imports/${jobId}/finalize/complete`,
+        { conversationIds },
+        { headers: this.headers(userId) }
+      );
+    });
+  }
+
+  async failFinalize(userId: string, jobId: string, error: string): Promise<void> {
+    await this.request(async () => {
+      await this.client.post(
+        `/internal/imports/${jobId}/finalize/fail`,
+        { error },
+        { headers: this.headers(userId) }
+      );
     });
   }
 

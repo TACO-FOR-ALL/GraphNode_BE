@@ -55,6 +55,7 @@ import { RedisEventBusAdapter } from '../infra/redis/RedisEventBusAdapter';
 import { FeedbackRepositoryPrisma } from '../infra/repositories/FeedbackRepositoryPrisma';
 import { FileServiceClient } from '../infra/http/FileServiceClient';
 import { ImportArchiveService } from '../core/services/ImportArchiveService';
+import { ImportFinalizeProcessor } from '../core/services/ImportFinalizeProcessor';
 import type { FileServicePort } from '../core/ports/FileServicePort';
 import { ValidationError } from '../shared/errors/domain';
 /**
@@ -110,6 +111,7 @@ export class Container {
   private graphEditorService: GraphEditorService | null = null;
   private fileServiceClient: FileServicePort | null = null;
   private importArchiveService: ImportArchiveService | null = null;
+  private importFinalizeProcessor: ImportFinalizeProcessor | null = null;
 
   private constructor() {}
   /**
@@ -558,11 +560,28 @@ export class Container {
     return this.fileServiceClient;
   }
 
+  getImportFinalizeProcessor(): ImportFinalizeProcessor {
+    if (!this.importFinalizeProcessor) {
+      const raw = new ImportFinalizeProcessor(
+        this.getFileServiceClient(),
+        this.getAwsS3Adapter(),
+        this.getChatManagementService(),
+        this.getConversationRepository(),
+        this.getMessageRepository()
+      );
+      this.importFinalizeProcessor = createAuditProxy(raw, 'ImportFinalizeProcessor');
+    }
+    return this.importFinalizeProcessor;
+  }
+
   getImportArchiveService(): ImportArchiveService {
     if (!this.importArchiveService) {
       const raw = new ImportArchiveService(
         this.getFileServiceClient(),
-        this.getChatManagementService()
+        this.getChatManagementService(),
+        this.getConversationService(),
+        this.getImportFinalizeProcessor(),
+        this.getAwsSqsAdapter()
       );
       this.importArchiveService = createAuditProxy(raw, 'ImportArchiveService');
     }

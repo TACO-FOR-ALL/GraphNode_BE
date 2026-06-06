@@ -127,6 +127,31 @@ async function ensureIndexes() {
   // notes 컬렉션: listNotes 쿼리 패턴 { ownerUserId, folderId, deletedAt: null } + sort(updatedAt: -1) 커버
   await db.collection('notes').createIndex({ ownerUserId: 1, folderId: 1, deletedAt: 1, updatedAt: -1 });
 
+  // import finalize 멱등성: 동일 job + export conversation key 중복 방지
+  await db.collection('conversations').createIndex(
+    { ownerUserId: 1, importJobId: 1, importSourceConversationId: 1 },
+    {
+      name: 'conversations_import_source_unique',
+      unique: true,
+      partialFilterExpression: {
+        importJobId: { $exists: true },
+        importSourceConversationId: { $exists: true },
+      },
+    }
+  );
+
+  await db.collection('messages').createIndex(
+    { importJobId: 1, importSourceMessageId: 1 },
+    {
+      name: 'messages_import_source_unique',
+      unique: true,
+      partialFilterExpression: {
+        importJobId: { $exists: true },
+        importSourceMessageId: { $exists: true },
+      },
+    }
+  );
+
   // (이전 텍스트 인덱스들은 용량 문제로 제거되었습니다. Atlas Search 등으로 대체 필요)
 
   logger.info({ event: 'db.migrations_checked' }, 'DB indexes ensured');

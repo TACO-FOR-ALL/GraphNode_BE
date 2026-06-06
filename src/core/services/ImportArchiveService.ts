@@ -1,25 +1,44 @@
 /**
  * AI export ZIP import — File Service 연동 + GraphNode 대화 저장.
  */
-import { ulid } from 'ulid';
-
-import type { FileServicePort, ImportCompleteDto } from '../ports/FileServicePort';
+import type {
+  FileServicePort,
+  ImportFinalizeResponse,
+} from '../ports/FileServicePort';
 import type { ChatManagementService } from './ChatManagementService';
+import type { ConversationService } from './ConversationService';
+import type { ImportFinalizeProcessor } from './ImportFinalizeProcessor';
+import type { QueuePort } from '../ports/QueuePort';
 import type { ChatThread } from '../../shared/dtos/ai';
-import { ImportJobNotReadyError } from '../../shared/errors/domain';
+import { loadEnv } from '../../config/env';
+import type { ImportFinalizeQueueMessage } from '../../shared/dtos/importFinalize';
+import { toChatThreadDto } from '../../shared/mappers/ai';
+import { logger } from '../../shared/utils/logger';
 
 export class ImportArchiveService {
   constructor(
     private readonly fileService: FileServicePort,
-    private readonly chatManagementService: ChatManagementService
+    private readonly chatManagementService: ChatManagementService,
+    private readonly conversationService: ConversationService,
+    private readonly finalizeProcessor: ImportFinalizeProcessor,
+    private readonly queue: QueuePort
   ) {}
 
   listProviders(userId: string) {
     return this.fileService.listProviders(userId);
   }
 
-  createImport(userId: string, provider: string, zipBuffer: Buffer, originalName: string) {
-    return this.fileService.createImport(userId, provider, zipBuffer, originalName);
+  initImportUpload(
+    userId: string,
+    provider: string,
+    originalName: string,
+    sizeBytes: number
+  ) {
+    return this.fileService.initImportUpload(userId, provider, originalName, sizeBytes);
+  }
+
+  startImport(userId: string, jobId: string) {
+    return this.fileService.startImport(userId, jobId);
   }
 
   getJob(userId: string, jobId: string) {
@@ -39,37 +58,53 @@ export class ImportArchiveService {
   }
 
   /**
-   * import job 완료 후 File Service 결과를 GraphNode 대화로 일괄 저장합니다.
+   * import job 완료 후 S3 result → Mongo 저장 (비동기 SQS 또는 로컬 동기 fallback).
    */
-  async finalizeImport(userId: string, jobId: string): Promise<{ conversations: ChatThread[] }> {
-    const job = await this.fileService.getJob(userId, jobId);
-    if (job.status !== 'completed') {
-      throw new ImportJobNotReadyError(`Import job ${jobId} is not completed (status=${job.status})`);
+  async finalizeImport(userId: string, jobId: string): Promise<ImportFinalizeResponse> {
+    const claim = await this.fileService.claimFinalize(userId, jobId);
+
+    if (claim.claim === 'already_finalized') {
+      const conversations = await this.loadConversationsByIds(userId, claim.conversationIds ?? []);
+      return { status: 'finalized', jobId, conversations };
     }
 
-    const result = await this.fileService.getResult(userId, jobId);
-    const threads = this.mapToBulkCreateThreads(result);
-    const created = await this.chatManagementService.bulkCreateConversations(userId, threads);
-    return { conversations: created };
+    if (claim.claim === 'in_progress') {
+      return { status: 'finalizing', jobId };
+    }
+
+    const env = loadEnv();
+    const queueUrl = env.SQS_IMPORT_FINALIZE_QUEUE_URL;
+
+    if (queueUrl) {
+      const message: ImportFinalizeQueueMessage = {
+        jobId,
+        userId,
+        resultS3Key: claim.resultS3Key,
+        provider: claim.provider,
+        timestamp: new Date().toISOString(),
+      };
+      await this.queue.sendMessage(queueUrl, message);
+      logger.info({ jobId, userId }, 'Import finalize enqueued');
+      return { status: 'finalizing', jobId };
+    }
+
+    const conversations = await this.finalizeProcessor.process(
+      userId,
+      jobId,
+      claim.resultS3Key,
+      claim.provider
+    );
+    return { status: 'finalized', jobId, conversations };
   }
 
-  private mapToBulkCreateThreads(result: ImportCompleteDto) {
-    return result.conversations.map((conv) => ({
-      id: ulid(),
-      title: conv.title || 'Untitled',
-      messages: conv.messages.map((m) => ({
-        id: ulid(),
-        role: m.role,
-        content: m.content,
-        attachments: m.attachments?.map((a) => ({
-          id: a.id,
-          type: a.type,
-          url: a.url,
-          name: a.name,
-          mimeType: a.mimeType,
-          size: a.size,
-        })),
-      })),
-    }));
+  private async loadConversationsByIds(
+    userId: string,
+    ids: string[]
+  ): Promise<ChatThread[]> {
+    if (ids.length === 0) return [];
+    const docs = await this.conversationService.findDocsByIds(ids, userId);
+    const order = new Map(ids.map((id, i) => [id, i]));
+    docs.sort((a, b) => (order.get(a._id) ?? 0) - (order.get(b._id) ?? 0));
+    return docs.map((doc) => toChatThreadDto(doc, []));
   }
 }

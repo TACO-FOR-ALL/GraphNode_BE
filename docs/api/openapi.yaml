@@ -3016,26 +3016,38 @@ paths:
           description: Provider list
         '401':
           description: Not authenticated
-  /v1/imports:
+  /v1/imports/init:
     post:
-      summary: Upload AI export ZIP (async import job)
+      summary: Init import — presigned PUT URL for ZIP (FE uploads directly to S3)
       requestBody:
         required: true
         content:
-          multipart/form-data:
+          application/json:
             schema:
               type: object
-              required: [provider, file]
+              required: [provider, originalName, sizeBytes]
               properties:
                 provider: { type: string }
-                file: { type: string, format: binary }
+                originalName: { type: string }
+                sizeBytes: { type: integer, minimum: 1 }
       responses:
-        '202':
-          description: Import job queued
-        '400':
-          description: Bad Request
+        '201':
+          description: Upload init (pending_upload)
         '401':
           description: Not authenticated
+  /v1/imports/{jobId}/start:
+    post:
+      summary: Confirm S3 upload and enqueue import worker
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+      responses:
+        '202':
+          description: Job queued
+        '400':
+          description: ZIP not in staging or size mismatch
   /v1/imports/{jobId}:
     get:
       summary: Get import job status

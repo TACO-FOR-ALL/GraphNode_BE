@@ -93,6 +93,9 @@ const EnvSchema = z.object({
   FILE_SERVICE_INTERNAL_API_KEY: z.string().min(1).optional(),
   FILE_SERVICE_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
 
+  /** Import finalize 비동기 worker 큐. 미설정 시 finalize API가 동기 처리 (로컬 dev) */
+  SQS_IMPORT_FINALIZE_QUEUE_URL: z.string().url().optional(),
+
   // JWT 설정
   JWT_SECRET: z.string().min(1, 'JWT_SECRET required'),
   JWT_ACCESS_EXPIRY: z.string().default('1h'),

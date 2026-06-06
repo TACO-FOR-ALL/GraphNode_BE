@@ -1,19 +1,15 @@
 /**
  * AI export import 라우트 (FE 노출, /v1).
+ *
+ * ZIP 업로드: presigned PUT (init → S3 → start). multipart POST /imports 는 제거됨.
  */
 import { Router } from 'express';
-import multer from 'multer';
 
 import { ImportController } from '../controllers/ImportController';
 import { asyncHandler } from '../utils/asyncHandler';
 import { bindSessionUser } from '../middlewares/session';
 import { requireLogin } from '../middlewares/auth';
 import type { ImportArchiveService } from '../../core/services/ImportArchiveService';
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 5_368_709_120 },
-});
 
 export function createImportRouter(deps: { importArchiveService: ImportArchiveService }) {
   const router = Router();
@@ -22,7 +18,8 @@ export function createImportRouter(deps: { importArchiveService: ImportArchiveSe
   router.use(bindSessionUser, requireLogin);
 
   router.get('/import-providers', asyncHandler(controller.listProviders));
-  router.post('/imports', upload.single('file'), asyncHandler(controller.createImport));
+  router.post('/imports/init', asyncHandler(controller.initImportUpload));
+  router.post('/imports/:jobId/start', asyncHandler(controller.startImport));
   router.get('/imports/:jobId', asyncHandler(controller.getJob));
   router.post('/imports/:jobId/finalize', asyncHandler(controller.finalizeImport));
   router.delete('/imports/:jobId', asyncHandler(controller.cancelJob));

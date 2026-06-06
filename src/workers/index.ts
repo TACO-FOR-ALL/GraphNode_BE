@@ -25,6 +25,7 @@ import { GraphGenerationProgressHandler } from './handlers/GraphGenerationProgre
 import { GraphSummaryResultHandler } from './handlers/GraphSummaryResultHandler';
 import { AddNodeResultHandler } from './handlers/AddNodeResultHandler';
 import { MicroscopeIngestResultHandler } from './handlers/MicroscopeIngestResultHandler';
+import { startImportFinalizeQueueConsumer } from './ImportFinalizeQueueConsumer';
 
 async function startWorker() {
   initSentry();
@@ -196,6 +197,8 @@ async function startWorker() {
   app.start();
   logger.info({ queueUrl }, 'Worker is running and polling SQS...');
 
+  const importFinalizeConsumer = startImportFinalizeQueueConsumer(container);
+
   // -------------------------------------------------------------------------------- //
   //  [Health Check 대상 서버 추가]
   //  ECS Task Health Check에서 컨테이너의 생존(Event Loop 블록 방지 등)을 확인하기 위한
@@ -234,6 +237,7 @@ async function startWorker() {
     // app.stop()은 SQS에서 새로운 메시지 가져오는 것(Polling)을 즉시 중단합니다.
     // 단, 이미 가져와서 비동기 처리 중이던 메시지가 있다면 그것이 모두 완료될 때까지 대기(Await)합니다.
     app.stop();
+    importFinalizeConsumer?.stop();
 
     // Health Check 서버 닫기
     healthServer.close(() => {

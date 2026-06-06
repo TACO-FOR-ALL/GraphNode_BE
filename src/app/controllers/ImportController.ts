@@ -5,11 +5,10 @@ import type { Request, Response } from 'express';
 
 import type { ImportArchiveService } from '../../core/services/ImportArchiveService';
 import { getUserIdFromRequest } from '../utils/request';
-import { ValidationError } from '../../shared/errors/domain';
 import {
-  createImportSchema,
   fileAccessQuerySchema,
   importJobIdParamSchema,
+  initImportUploadSchema,
 } from '../../shared/dtos/import.schemas';
 
 export class ImportController {
@@ -21,20 +20,22 @@ export class ImportController {
     res.json({ providers });
   };
 
-  createImport = async (req: Request, res: Response): Promise<void> => {
+  initImportUpload = async (req: Request, res: Response): Promise<void> => {
     const userId = getUserIdFromRequest(req)!;
-    const { provider } = createImportSchema.parse(req.body);
-    const file = req.file;
-    if (!file?.buffer?.length) {
-      throw new ValidationError('ZIP file is required');
-    }
-
-    const result = await this.importArchiveService.createImport(
+    const body = initImportUploadSchema.parse(req.body);
+    const result = await this.importArchiveService.initImportUpload(
       userId,
-      provider,
-      file.buffer,
-      file.originalname || 'export.zip'
+      body.provider,
+      body.originalName,
+      body.sizeBytes
     );
+    res.status(201).json(result);
+  };
+
+  startImport = async (req: Request, res: Response): Promise<void> => {
+    const userId = getUserIdFromRequest(req)!;
+    const { jobId } = importJobIdParamSchema.parse(req.params);
+    const result = await this.importArchiveService.startImport(userId, jobId);
     res.status(202).json(result);
   };
 
@@ -49,7 +50,11 @@ export class ImportController {
     const userId = getUserIdFromRequest(req)!;
     const { jobId } = importJobIdParamSchema.parse(req.params);
     const result = await this.importArchiveService.finalizeImport(userId, jobId);
-    res.status(201).json(result);
+    if (result.status === 'finalizing') {
+      res.status(202).json(result);
+      return;
+    }
+    res.status(200).json(result);
   };
 
   cancelJob = async (req: Request, res: Response): Promise<void> => {
@@ -63,6 +68,7 @@ export class ImportController {
     const userId = getUserIdFromRequest(req)!;
     const fileId = String(req.params.fileId);
     const { disposition } = fileAccessQuerySchema.parse(req.query);
+    // File Service presign → S3 presigned GET URL (FE가 직접 S3 요청)
     const out = await this.importArchiveService.getFileAccessUrl(userId, fileId, { disposition });
     res.json(out);
   };

@@ -1,6 +1,7 @@
 /**
  * File Service (internal MSA) 연동 포트.
  */
+import type { ChatThread } from '../../shared/dtos/ai';
 export interface ImportProviderDescriptor {
   slug: string;
   label: string;
@@ -16,6 +17,10 @@ export interface ImportJobStatusDto {
   error?: { code: string; detail?: string };
   createdAt: string;
   completedAt?: string;
+  finalizeStatus?: 'none' | 'finalizing' | 'finalized' | 'failed';
+  finalizedAt?: string;
+  finalizeConversationIds?: string[];
+  finalizeError?: string;
 }
 
 export interface ImportAttachmentDto {
@@ -57,16 +62,45 @@ export interface PresignedFileAccessDto {
   name: string;
 }
 
+export interface ImportUploadInitDto {
+  jobId: string;
+  status: 'pending_upload';
+  uploadUrl: string;
+  uploadHeaders: Record<string, string>;
+  expiresAt: string;
+  stagingKey: string;
+}
+
+export type ImportFinalizeClaimState = 'claimed' | 'already_finalized' | 'in_progress';
+
+export interface ImportFinalizeClaimDto {
+  claim: ImportFinalizeClaimState;
+  jobId: string;
+  provider: string;
+  resultS3Key: string;
+  conversationIds?: string[];
+}
+
+export interface ImportFinalizeResponse {
+  status: 'finalizing' | 'finalized';
+  jobId: string;
+  conversations?: ChatThread[];
+}
+
 export interface FileServicePort {
   listProviders(userId: string): Promise<ImportProviderDescriptor[]>;
-  createImport(
+  initImportUpload(
     userId: string,
     provider: string,
-    zipBuffer: Buffer,
-    originalName: string
-  ): Promise<{ jobId: string; status: string }>;
+    originalName: string,
+    sizeBytes: number
+  ): Promise<ImportUploadInitDto>;
+  startImport(userId: string, jobId: string): Promise<{ jobId: string; status: string }>;
   getJob(userId: string, jobId: string): Promise<ImportJobStatusDto>;
   getResult(userId: string, jobId: string): Promise<ImportCompleteDto>;
+  claimFinalize(userId: string, jobId: string): Promise<ImportFinalizeClaimDto>;
+  completeFinalize(userId: string, jobId: string, conversationIds: string[]): Promise<void>;
+  failFinalize(userId: string, jobId: string, error: string): Promise<void>;
   cancelJob(userId: string, jobId: string): Promise<void>;
   presignFileAccess(
     userId: string,

@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
-export const createImportSchema = z.object({
+export const initImportUploadSchema = z.object({
   provider: z.string().min(1),
+  originalName: z.string().min(1).default('export.zip'),
+  sizeBytes: z.coerce.number().int().positive(),
 });
 
 export const importJobIdParamSchema = z.object({
