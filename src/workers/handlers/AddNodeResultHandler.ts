@@ -454,6 +454,7 @@ export class AddNodeResultHandler implements JobHandler {
       const stats = await graphService.getStats(userId);
       if (stats) {
         stats.status = 'UPDATED';
+        stats.updatedAt = new Date().toISOString();
         await graphService.saveStats(stats);
       }
 

@@ -32,6 +32,7 @@ export async function pollMacroStatsUntil(
 
   const driver = createNeo4jE2eDriver();
   const session = driver.session();
+  let sawUpdating = false;
 
   try {
     for (let i = 0; i < maxAttempts; i++) {
@@ -45,6 +46,19 @@ export async function pollMacroStatsUntil(
         // eslint-disable-next-line no-console
         console.log(`[E2E Poll] ${label} reached ${targetStatus} (${i * (intervalMs / 1000)}s)`);
         return true;
+      }
+
+      if (status === 'UPDATING') {
+        sawUpdating = true;
+      }
+
+      // AddNode 실패 시 AI worker가 status를 CREATED로 되돌림 — 30분 타임아웃 대신 즉시 실패
+      if (targetStatus === 'UPDATED' && sawUpdating && status === 'CREATED') {
+        // eslint-disable-next-line no-console
+        console.error(
+          `[E2E Poll] ${label} failed: MacroStats reverted to CREATED after UPDATING (AddNode likely FAILED on AI/worker)`
+        );
+        return false;
       }
 
       if (status === 'NOT_CREATED') {

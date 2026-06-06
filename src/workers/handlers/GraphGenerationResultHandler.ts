@@ -339,6 +339,8 @@ export class GraphGenerationResultHandler implements JobHandler {
         const stats = await graphService.getStats(userId);
         if (stats) {
           stats.status = 'CREATED';
+          // AddNode incremental filter (`find*ModifiedSince`) watermark — 없으면 전체 시드가 재전송됨
+          stats.updatedAt = new Date().toISOString();
           await graphService.saveStats(stats);
           logger.info({ taskId, userId }, 'Graph status updated to CREATED');
         }

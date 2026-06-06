@@ -122,6 +122,9 @@ describe('AddNodeResultHandler', () => {
 
     expect(storagePort.downloadJson).toHaveBeenCalledWith(resultS3Key);
     expect(storagePort.downloadJson).toHaveBeenCalledWith(`add-node/${taskId}/batch.json`);
+    expect(graphService.saveStats).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'UPDATED', updatedAt: expect.any(String) })
+    );
   });
 
   it('continues when batch.json is missing (legacy AI result only)', async () => {
