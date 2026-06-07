@@ -34,6 +34,71 @@ jest.mock('../../src/infra/db/mongodb', () => ({
             endSession: jest.fn(),
         }),
     })),
+    initMongo: jest.fn(),
+    disconnectMongo: jest.fn<any>().mockResolvedValue(undefined),
+}));
+
+/** 매크로 생성 시 `listFilesLinkedToActiveNotes`가 실 `getMongo().db()`를 타면 이 스펙에서 502가 난다. 빈 목록 목으로 우회한다. */
+jest.mock('../../src/infra/repositories/FileRepositoryMongo', () => ({
+    FileRepositoryMongo: class {
+        async listFilesLinkedToActiveNotes() {
+            return [];
+        }
+        async listFilesForIncrementalAddNode() {
+            return [];
+        }
+        async softDeleteLinksByNoteId() {
+            return 0;
+        }
+        async insertFile() { throw new Error('unexpected in graphAi spec'); }
+        async getFileById() { return null; }
+        async existsActiveDisplayName() { return false; }
+        async softDeleteFile() { return true; }
+        async hardDeleteFile() { return true; }
+        async updateFileSummary() { return true; }
+        async insertLink() { throw new Error('unexpected in graphAi spec'); }
+        async getLinkById() { return null; }
+        async findActiveLink() { return null; }
+        async listLinksWithFilesByNoteId() { return []; }
+        async softDeleteLink() { return true; }
+        async hardDeleteLink() { return true; }
+    },
+}));
+
+/**
+ * 매크로 생성 시 `UserFileRepositoryMongo`가 `getMongo().db()`를 타면 이 스펙에서 재시도 루프로 타임아웃된다.
+ * `GraphGenerationService`의 `listAllActiveFiles` 호출을 빈 목으로 우회한다.
+ */
+jest.mock('../../src/infra/repositories/UserFileRepositoryMongo', () => ({
+    UserFileRepositoryMongo: class {
+        async insert() {
+            throw new Error('unexpected UserFileRepositoryMongo.insert in graphAi spec');
+        }
+        async getById() {
+            return null;
+        }
+        async listFiles() {
+            return { items: [], nextCursor: null };
+        }
+        async listActiveDisplayNamesInFolder() {
+            return [];
+        }
+        async updateById() {
+            return null;
+        }
+        async softDelete() {
+            return false;
+        }
+        async hardDelete() {
+            return false;
+        }
+        async findModifiedSince() {
+            return [];
+        }
+        async listAllActive() {
+            return [];
+        }
+    },
 }));
 
 jest.mock('../../src/infra/redis/RedisEventBusAdapter', () => ({
@@ -42,6 +107,33 @@ jest.mock('../../src/infra/redis/RedisEventBusAdapter', () => ({
     subscribe() { return Promise.resolve(); }
     unsubscribe() { return Promise.resolve(); }
   }
+}));
+
+jest.mock('../../src/infra/repositories/CreditRepositoryPrisma', () => ({
+  CreditRepositoryPrisma: jest.fn().mockImplementation(() => ({
+    findBalanceByUserId: jest.fn<any>().mockResolvedValue({
+      id: 'bal-1',
+      userId: 'user-12345',
+      balance: 100,
+      holdAmount: 0,
+      planType: 'FREE',
+      cycleStart: new Date(),
+      cycleEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      updatedAt: new Date(),
+    }),
+    createBalance: jest.fn<any>().mockResolvedValue({}),
+    holdBalance: jest.fn<any>().mockResolvedValue({ success: true, availableAfter: 90 }),
+    commitHold: jest.fn<any>().mockResolvedValue(true),
+    rollbackHold: jest.fn<any>().mockResolvedValue(true),
+    deductBalance: jest.fn<any>().mockResolvedValue({ success: true, availableAfter: 90 }),
+    refundBalance: jest.fn<any>().mockResolvedValue(undefined),
+    refillBalance: jest.fn<any>().mockResolvedValue(undefined),
+    findUsersWithExpiredCycle: jest.fn<any>().mockResolvedValue([]),
+    findExpiredHolds: jest.fn<any>().mockResolvedValue([]),
+    findHoldByTaskId: jest.fn<any>().mockResolvedValue(null),
+    createUsageLog: jest.fn<any>().mockResolvedValue(undefined),
+    findUsageLogs: jest.fn<any>().mockResolvedValue({ items: [], total: 0 }),
+  })),
 }));
 
 // GraphAi 테스트는 큐잉만 검증. 알림 전송 시 NotificationService가 Mongo insert를 시도하는데,

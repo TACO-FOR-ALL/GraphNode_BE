@@ -40,11 +40,65 @@ export interface PaymentProvider {
 
   /**
    * 사용자의 과거 결제 내역을 조회합니다.
-   * 
+   *
    * @param userId - 사용자 ID
    * @param limit - 조회할 최대 건수
    * @returns 결제 내역 배열
    * @throws {UpstreamError} PG사 연동 실패 시
    */
   getBillingHistory(userId: string, limit?: number): Promise<any[]>;
+
+  /**
+   * PG사 측에 정기결제 스케줄을 등록하고 외부 구독 ID를 반환합니다.
+   * Portone: schedule API, Toss: billingKey 기반 예약, Stripe: subscription create.
+   *
+   * @param billingKey PG사 발급 빌링키(customer_uid / billingKey / paymentMethodId)
+   * @param planType 구독 플랜 (FREE | PRO | PREMIUM 등)
+   * @param billingCycle 결제 주기 (MONTHLY | YEARLY)
+   * @param startDate 첫 결제 예정일
+   * @returns PG사 구독/스케줄 식별자 (externalSubscriptionId로 저장)
+   * @throws {UpstreamError} PG사 연동 실패 시
+   */
+  registerRecurringSchedule(
+    billingKey: string,
+    planType: string,
+    billingCycle: string,
+    startDate: Date
+  ): Promise<string>;
+
+  /**
+   * Provider-side refund or cancellation request for an already captured payment.
+   * Implementations must use server-side provider APIs only and never accept raw card data.
+   *
+   * @param transactionId Provider payment/transaction identifier.
+   * @param amount Optional partial refund amount in the payment currency minor unit used by GraphNode.
+   * @param reason Operator-visible refund reason.
+   * @returns Provider refund identifier or transaction identifier.
+   */
+  requestRefund(transactionId: string, amount?: number, reason?: string): Promise<string>;
+
+  /**
+   * PG사에서 고객 ID를 생성하거나 기존 ID를 반환합니다 (Stripe 전용).
+   * Portone / Toss는 customer_uid 패턴을 사용하므로 no-op 구현 가능.
+   *
+   * @param userId 내부 사용자 ID
+   * @param email 고객 이메일 (Stripe customer 생성 시 사용)
+   * @returns PG사 고객 ID (externalCustomerId로 저장)
+   * @throws {UpstreamError} PG사 연동 실패 시
+   */
+  createOrGetCustomer(userId: string, email?: string): Promise<string>;
+
+  /**
+   * PG사 Webhook 요청의 서명을 검증합니다.
+   * 각 PG사별 서명 알고리즘이 어댑터에서 구현됩니다.
+   * - Portone: X-IamPort-Signature (HMAC-MD5)
+   * - Toss: HMAC-SHA256 (Authorization 헤더 base64)
+   * - Stripe: Stripe-Signature (HMAC-SHA256 timestamp+payload)
+   *
+   * @param rawBody - 원본 요청 body (Buffer, 서명 검증용 — JSON.parse 금지)
+   * @param headers - 요청 헤더 맵 (소문자 키)
+   * @returns 서명 유효 여부
+   * @throws {UpstreamError} 서명 검증 중 예외 발생 시
+   */
+  verifyWebhookSignature(rawBody: Buffer, headers: Record<string, string>): boolean;
 }

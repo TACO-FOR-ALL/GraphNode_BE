@@ -7,7 +7,7 @@
 import { Neo4jMacroGraphAdapter } from '../../src/infra/graph/Neo4jMacroGraphAdapter';
 import { MACRO_GRAPH_CYPHER } from '../../src/infra/graph/cypher/macroGraph.cypher';
 import type { MacroGraphUpsertInput } from '../../src/core/ports/MacroGraphStore';
-import type { GraphNodeDto, GraphStatsDto } from '../../src/shared/dtos/graph';
+import type { GraphNodeDto, GraphStatsDto, GraphSubclusterDto } from '../../src/shared/dtos/graph';
 
 // neo4j driver mock
 jest.mock('../../src/infra/db/neo4j', () => ({
@@ -43,6 +43,19 @@ const STATS: GraphStatsDto = {
   status: 'CREATED',
   generatedAt: '2026-01-01T00:00:00.000Z',
   metadata: {},
+};
+
+const SUBCLUSTER: GraphSubclusterDto = {
+  id: 'sc1',
+  userId: 'user1',
+  clusterId: 'c1',
+  nodeIds: [1, 2],
+  representativeNodeId: 1,
+  size: 2,
+  density: 0.75,
+  topKeywords: ['topic'],
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
 const UPSERT_INPUT: MacroGraphUpsertInput = {
@@ -195,11 +208,186 @@ describe('Neo4jMacroGraphAdapter', () => {
     });
   });
 
-  describe('deleteGraph', () => {
-    it('write session에서 deleteGraph Cypher를 실행한다', async () => {
-      const tx = makeMockTx();
+  describe('getStatsMetadata', () => {
+    it('MacroStats row만 조회하고 count aggregate는 요구하지 않는다', async () => {
+      const statsProps = {
+        id: 'user1',
+        userId: 'user1',
+        status: 'CREATED',
+        generatedAt: '2026-01-01T00:00:00.000Z',
+        metadataJson: '{}',
+      };
+
+      const statsRecord = {
+        get: jest.fn().mockImplementation((key: string) => {
+          if (key === 'st') return { properties: statsProps };
+          return null;
+        }),
+      };
+
+      const tx = {
+        run: jest.fn().mockResolvedValue({ records: [statsRecord] }),
+      };
       const session = {
-        executeWrite: jest.fn().mockImplementation(async (fn: (t: typeof tx) => Promise<void>) => fn(tx)),
+        executeRead: jest.fn().mockImplementation(async (fn: (t: typeof tx) => Promise<void>) => fn(tx)),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      const driver = { session: jest.fn().mockReturnValue(session) };
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      const result = await adapter.getStatsMetadata('user1');
+
+      expect(tx.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.getStatsMetadata,
+        expect.objectContaining({ userId: 'user1' })
+      );
+      expect(result).not.toBeNull();
+      expect(result!.nodes).toBe(0);
+      expect(result!.edges).toBe(0);
+      expect(result!.clusters).toBe(0);
+      expect(result!.status).toBe('CREATED');
+    });
+  });
+
+  describe('upsertSubclusters', () => {
+    it('기존 subcluster 관계를 clear한 뒤 graph/cluster/node link 쿼리를 재생성한다', async () => {
+      const { driver, tx } = makeMockDriver();
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      await adapter.upsertSubclusters([SUBCLUSTER]);
+
+      const calledQueries: string[] = (tx.run as jest.Mock).mock.calls.map(
+        (c: [string, ...unknown[]]) => c[0]
+      );
+      const indexOfQuery = (target: string) => calledQueries.findIndex((q) => q === target);
+
+      const clearIndex = indexOfQuery(MACRO_GRAPH_CYPHER.clearSubclusterRelationshipsForReplacement);
+      const graphLinkIndex = indexOfQuery(MACRO_GRAPH_CYPHER.linkSubclustersToGraph);
+      const clusterLinkIndex = indexOfQuery(MACRO_GRAPH_CYPHER.linkSubclusterToCluster);
+      const containsIndex = indexOfQuery(MACRO_GRAPH_CYPHER.linkSubclusterContainsNodes);
+      const representsIndex = indexOfQuery(MACRO_GRAPH_CYPHER.linkSubclusterRepresentsNode);
+
+      expect(clearIndex).toBeGreaterThan(-1);
+      expect(graphLinkIndex).toBeGreaterThan(clearIndex);
+      expect(clusterLinkIndex).toBeGreaterThan(clearIndex);
+      expect(containsIndex).toBeGreaterThan(clearIndex);
+      expect(representsIndex).toBeGreaterThan(clearIndex);
+
+      expect(tx.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.clearSubclusterRelationshipsForReplacement,
+        { userId: 'user1', subclusterIds: ['sc1'] }
+      );
+    });
+  });
+
+  describe('pruneIncompatibleSubclusterMemberships', () => {
+    it('nodeIds/limit 파라미터를 넘기고 삭제 count를 매핑한다', async () => {
+      const pruneRecord = {
+        get: jest.fn().mockImplementation((key: string) => {
+          if (key === 'containsDeleted') return { toNumber: () => 2 };
+          if (key === 'representsDeleted') return 1;
+          return null;
+        }),
+      };
+      const tx = {
+        run: jest.fn().mockResolvedValue({ records: [pruneRecord] }),
+      };
+      const session = {
+        executeWrite: jest.fn().mockImplementation(async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx)),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      const driver = { session: jest.fn().mockReturnValue(session) };
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      const result = await adapter.pruneIncompatibleSubclusterMemberships('user1', [1, 3], 25.8);
+
+      expect(tx.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.pruneIncompatibleSubclusterMemberships,
+        {
+          userId: 'user1',
+          nodeIds: [1, 3],
+          hasNodeFilter: true,
+          limit: expect.any(Object),
+        }
+      );
+      expect(result).toEqual({ containsDeleted: 2, representsDeleted: 1 });
+    });
+
+    it('빈 nodeIds가 전달되면 prune 쿼리를 실행하지 않는다', async () => {
+      const { driver, tx } = makeMockDriver();
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      const result = await adapter.pruneIncompatibleSubclusterMemberships('user1', []);
+
+      expect(tx.run).not.toHaveBeenCalled();
+      expect(result).toEqual({ containsDeleted: 0, representsDeleted: 0 });
+    });
+  });
+
+  describe('reconcileSubclusterMemberships', () => {
+    it('reconcile query를 실행하고 count를 매핑한다', async () => {
+      const reconcileRecord = {
+        get: jest.fn().mockImplementation((key: string) => {
+          if (key === 'deletedSubclusters') return { toNumber: () => 2 };
+          if (key === 'reassignedRepresentatives') return 3;
+          if (key === 'removedInvalidRepresents') return { toNumber: () => 1 };
+          return null;
+        }),
+      };
+      const tx = {
+        run: jest.fn().mockResolvedValue({ records: [reconcileRecord] }),
+      };
+      const session = {
+        executeWrite: jest.fn().mockImplementation(async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx)),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      const driver = { session: jest.fn().mockReturnValue(session) };
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      const result = await adapter.reconcileSubclusterMemberships('user1');
+
+      expect(tx.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.reconcileSubclusterMemberships,
+        { userId: 'user1' }
+      );
+      expect(result).toEqual({
+        deletedSubclusters: 2,
+        reassignedRepresentatives: 3,
+        removedInvalidRepresents: 1,
+      });
+    });
+
+    it('레코드가 없으면 0 count를 반환한다', async () => {
+      const tx = {
+        run: jest.fn().mockResolvedValue({ records: [] }),
+      };
+      const session = {
+        executeWrite: jest.fn().mockImplementation(async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx)),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      const driver = { session: jest.fn().mockReturnValue(session) };
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      const result = await adapter.reconcileSubclusterMemberships('user1');
+
+      expect(result).toEqual({
+        deletedSubclusters: 0,
+        reassignedRepresentatives: 0,
+        removedInvalidRepresents: 0,
+      });
+    });
+  });
+
+  describe('deleteGraph', () => {
+    it('write session에서 deleteGraph Cypher를 실행한다 (batch 삭제)', async () => {
+      const session = {
+        run: jest.fn().mockResolvedValue({}),
         close: jest.fn().mockResolvedValue(undefined),
       };
       const driver = { session: jest.fn().mockReturnValue(session) };
@@ -208,8 +396,30 @@ describe('Neo4jMacroGraphAdapter', () => {
       const adapter = new Neo4jMacroGraphAdapter();
       await adapter.deleteGraph('user1');
 
-      const calledQuery = (tx.run as jest.Mock).mock.calls[0][0] as string;
-      expect(calledQuery).toContain('DETACH DELETE g, n, cl, sc, rel, st, sm');
+      expect(session.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.deleteGraphBatch.relations,
+        { userId: 'user1' }
+      );
+      expect(session.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.deleteGraphBatch.nodes,
+        { userId: 'user1' }
+      );
+      expect(session.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.deleteGraphBatch.subclusters,
+        { userId: 'user1' }
+      );
+      expect(session.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.deleteGraphBatch.clusters,
+        { userId: 'user1' }
+      );
+      expect(session.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.deleteGraphBatch.statsAndSummary,
+        { userId: 'user1' }
+      );
+      expect(session.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.deleteGraphBatch.graphRoot,
+        { userId: 'user1' }
+      );
     });
   });
 
@@ -365,6 +575,23 @@ describe('Neo4jMacroGraphAdapter', () => {
 
       expect(session1.close).toHaveBeenCalledTimes(1);
       expect(session2.close).toHaveBeenCalledTimes(1);
+    });
+  });
+  describe('removeEmptyClusters', () => {
+    it('write session에서 cleanupEmptyClusters Cypher를 실행한다', async () => {
+      const tx = makeMockTx();
+      const session = {
+        executeWrite: jest.fn().mockImplementation(async (fn: (t: typeof tx) => Promise<void>) => fn(tx)),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      const driver = { session: jest.fn().mockReturnValue(session) };
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      await adapter.removeEmptyClusters('user1');
+
+      const calledQuery = (tx.run as jest.Mock).mock.calls[0][0] as string;
+      expect(calledQuery).toContain(MACRO_GRAPH_CYPHER.cleanupEmptyClusters);
     });
   });
 });

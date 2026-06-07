@@ -1,0 +1,100 @@
+﻿
+  graphnode-worker-1  | [08:27:16.007] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"G
+raphManagementService","method":"pruneIncompatibleSubclusterMemberships","correlationId":"task_add_node_user-12345_01KT
+3Q2VEK67D7VMTQTS9MDZ29","userId":"user-12345","args":["user-12345",{"type":"array","length":1},null,{"type":"object","k
+eys":[]}]}[39m
+  graphnode-worker-1  | [08:27:16.007] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"G
+raphManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","use
+rId":"user-12345","args":["user-12345"]}[39m
+  graphnode-worker-1  | [08:27:16.007] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","servi
+ce":"GraphManagementService","method":"assertUser","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29
+","userId":"user-12345","durationMs":0,"result":null}[39m
+  graphnode-worker-1  | [08:27:16.007] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"G
+raphManagementService","method":"parseId","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId
+":"user-12345","args":[1]}[39m
+  graphnode-worker-1  | [08:27:16.007] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","servi
+ce":"GraphManagementService","method":"parseId","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","
+userId":"user-12345","durationMs":0,"result":1}[39m
+> graphnode-worker-1  | [08:27:16.012] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service"
+:"GraphManagementService","method":"pruneIncompatibleSubclusterMemberships","correlationId":"task_add_node_user-12345_0
+1KT3Q2VEK67D7VMTQTS9MDZ29","userId":"user-12345","durationMs":5}[39m
+  graphnode-worker-1  |     err: {
+  graphnode-worker-1  |       "type": "UpstreamError",
+  graphnode-worker-1  |       "message": "GraphService.pruneIncompatibleSubclusterMemberships failed",
+  graphnode-worker-1  |       "stack":
+  graphnode-worker-1  |           Error: GraphService.pruneIncompatibleSubclusterMemberships failed
+  graphnode-worker-1  |         "cause": "Neo4jError: LIMIT: Invalid input. '10000.0' is not a valid value. Must be a n
+on-negative integer."
+  graphnode-worker-1  |       },
+  graphnode-worker-1  |       "code": "UPSTREAM_ERROR",
+  graphnode-worker-1  |       "httpStatus": 502
+  graphnode-worker-1  |     }
+> graphnode-worker-1  | [08:27:16.012] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service"
+:"GraphEmbeddingService","method":"runGraphWriteTransaction","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VM
+TQTS9MDZ29","userId":"user-12345","durationMs":5}[39m
+  graphnode-worker-1  |     err: {
+  graphnode-worker-1  |       "type": "UpstreamError",
+  graphnode-worker-1  |       "message": "GraphEmbeddingService.pruneIncompatibleSubclusterMemberships.transaction",
+  graphnode-worker-1  |       "stack":
+  graphnode-worker-1  |           Error: GraphEmbeddingService.pruneIncompatibleSubclusterMemberships.transaction
+  graphnode-worker-1  |         "cause": "Error: GraphService.pruneIncompatibleSubclusterMemberships failed"
+  graphnode-worker-1  |       },
+  graphnode-worker-1  |       "code": "UPSTREAM_ERROR",
+  graphnode-worker-1  |       "httpStatus": 502
+  graphnode-worker-1  |     }
+> graphnode-worker-1  | [08:27:16.012] [31mERROR[39m (1): [36maudit.error[39m [90m{"event":"audit.error","service"
+:"GraphEmbeddingService","method":"pruneIncompatibleSubclusterMemberships","correlationId":"task_add_node_user-12345_01
+KT3Q2VEK67D7VMTQTS9MDZ29","userId":"user-12345","durationMs":5}[39m
+  graphnode-worker-1  |     err: {
+  graphnode-worker-1  |       "type": "UpstreamError",
+  graphnode-worker-1  |       "message": "GraphEmbeddingService.pruneIncompatibleSubclusterMemberships.transaction",
+  graphnode-worker-1  |       "stack":
+  graphnode-worker-1  |           Error: GraphEmbeddingService.pruneIncompatibleSubclusterMemberships.transaction
+  graphnode-worker-1  |         "cause": "Error: GraphService.pruneIncompatibleSubclusterMemberships failed"
+  graphnode-worker-1  |       },
+  graphnode-worker-1  |       "code": "UPSTREAM_ERROR",
+  graphnode-worker-1  |       "httpStatus": 502
+  graphnode-worker-1  |     }
+> graphnode-worker-1  | [08:27:16.012] [31mERROR[39m (1): [36mFailed to process add node result[39m [90m{"taskId":
+"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":"user-12345"}[39m
+  graphnode-worker-1  |     err: {
+  graphnode-worker-1  |       "type": "UpstreamError",
+  graphnode-worker-1  |       "message": "GraphEmbeddingService.pruneIncompatibleSubclusterMemberships.transaction",
+  graphnode-worker-1  |       "stack":
+  graphnode-worker-1  |           Error: GraphEmbeddingService.pruneIncompatibleSubclusterMemberships.transaction
+  graphnode-worker-1  |         "cause": "Error: GraphService.pruneIncompatibleSubclusterMemberships failed"
+  graphnode-worker-1  |       },
+  graphnode-worker-1  |       "code": "UPSTREAM_ERROR",
+  graphnode-worker-1  |       "httpStatus": 502
+  graphnode-worker-1  |     }
+> graphnode-worker-1  | [08:27:16.012] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"N
+otificationService","method":"sendAddConversationFailed","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS
+9MDZ29","userId":"user-12345","args":["user-12345","task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","GraphEmbeddin
+gService.pruneIncompatibleSubclusterMemberships.transaction"]}[39m
+> graphnode-worker-1  | [08:27:16.012] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"N
+otificationService","method":"sendNotification","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","
+userId":"user-12345","args":["user-12345","ADD_CONVERSATION_FAILED",{"type":"object","keys":["taskId","error"]}]}[39m
+> graphnode-worker-1  | [08:27:16.012] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"N
+otificationService","method":"getUserChannel","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","us
+erId":"user-12345","args":["user-12345"]}[39m
+> graphnode-worker-1  | [08:27:16.012] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","servi
+ce":"NotificationService","method":"getUserChannel","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ2
+9","userId":"user-12345","durationMs":0,"result":"notification:user:user-12345"}[39m
+  graphnode-worker-1  | [08:27:16.014] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"R
+edisEventBusAdapter","method":"publish","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","userId":
+"user-12345","args":["notification:user:user-12345",{"type":"object","keys":["id","type","payload","timestamp"]}]}[39m
+  graphnode-worker-1  | [08:27:16.015] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","servi
+ce":"RedisEventBusAdapter","method":"publish","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MDZ29","us
+erId":"user-12345","durationMs":1,"result":null}[39m
+  graphnode-worker-1  | [08:27:16.015] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","servi
+ce":"NotificationService","method":"sendNotification","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9MD
+Z29","userId":"user-12345","durationMs":3,"result":null}[39m
+  graphnode-worker-1  | [08:27:16.015] [32mINFO[39m (1): [36maudit.success[39m [90m{"event":"audit.success","servi
+ce":"NotificationService","method":"sendAddConversationFailed","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7
+VMTQTS9MDZ29","userId":"user-12345","durationMs":3,"result":null}[39m
+  graphnode-worker-1  | [08:27:16.015] [32mINFO[39m (1): [36maudit.call[39m [90m{"event":"audit.call","service":"N
+otificationService","method":"sendFcmPushNotification","correlationId":"task_add_node_user-12345_01KT3Q2VEK67D7VMTQTS9M
+DZ29","userId":"user-12345","args":["user-12345","Graph Update Failed","There was a problem adding conversations to you
+r graph.",{"type":"object","keys":["taskId","status"]}]}[39m
+
+

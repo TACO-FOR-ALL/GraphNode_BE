@@ -152,6 +152,30 @@ async function ensureIndexes() {
     }
   );
 
+  // chat_export_jobs: jobId+userId 복합 조회, 진행 중 job 중복 방지, 만료 정리
+  await db.collection('chat_export_jobs').createIndex(
+    { jobId: 1, userId: 1 },
+    { name: 'chat_export_jobs_job_user' }
+  );
+  await db.collection('chat_export_jobs').createIndex(
+    { userId: 1, exportScope: 1, conversationId: 1, status: 1 },
+    { name: 'chat_export_jobs_active_lookup' }
+  );
+  await db.collection('chat_export_jobs').createIndex(
+    { expiresAt: 1 },
+    {
+      name: 'chat_export_jobs_expires',
+      partialFilterExpression: { status: 'DONE' },
+    }
+  );
+
+  // notion_page_caches 컬렉션: ownerUserId + updatedAt 필터 기반 동기화 및 쿼리를 커버하는 인덱스
+  await db.collection('notion_page_caches').createIndex(
+    { ownerUserId: 1, updatedAt: 1 },
+    { name: 'notion_cache_owner_updated' }
+  );
+
+
   // (이전 텍스트 인덱스들은 용량 문제로 제거되었습니다. Atlas Search 등으로 대체 필요)
 
   logger.info({ event: 'db.migrations_checked' }, 'DB indexes ensured');

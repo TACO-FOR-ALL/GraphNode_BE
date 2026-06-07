@@ -10,7 +10,6 @@ import { container } from '../container';
 export function makeAiRouter(): Router {
   const chatManagementService = container.getChatManagementService();
   const aiInteractionService = container.getAiInteractionService();
-
   // Router(factory)
   return createAiRouter({
     chatManagementService,

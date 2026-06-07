@@ -22,6 +22,11 @@ import {
  */
 // Verified compatibility of authJwt.ts with string IDs
 export async function authJwt(req: Request, res: Response, next: NextFunction) {
+  // 이미 이전 미들웨어에서 인증 처리(예: 다른 라우터의 internalOrSession 등)가 완료된 경우 통과 (멱등성 보장)
+  if (req.userId) {
+    return next();
+  }
+
   try {
     // 1. Access Token 추출
     let accessToken = extractAccessToken(req);

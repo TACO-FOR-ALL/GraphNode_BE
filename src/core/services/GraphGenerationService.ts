@@ -10,11 +10,13 @@ import { HttpClient } from '../../infra/http/httpClient';
 import {
   AiAddNodeBatchRequest,
   AiInputConversation,
+  AiInputFile,
   AiInputMappingNode,
   AiInputNote,
   AiInputSection,
   AiInputSourceNode,
 } from '../../shared/dtos/ai_input';
+import { UserFileService } from './UserFileService';
 import { logger } from '../../shared/utils/logger';
 import { AppError, UpstreamError, GraphNotFoundError } from '../../shared/errors/domain';
 import { ChatMessage } from '../../shared/dtos/ai';
@@ -33,12 +35,15 @@ import { withRetry } from '../../shared/utils/retry';
 import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 import { redis } from '../../infra/redis/client';
 import { GraphClusterDto } from '../../shared/dtos/graph';
+import { ICreditService } from '../ports/ICreditService';
+import { CreditFeature } from '../types/persistence/credit.persistence';
+import type { NotionService } from './NotionService';
 
 /**
  * 모듈: GraphGenerationService
  * 책임:
  * - 지식 그래프 생성 및 요약 작업을 위한 Orchestration을 담당합니다.
- * - 사용자의 대화 데이터 및 노트(Markdown) 데이터를 수집하여 S3에 업로드합니다.
+ * - 사용자의 대화·노트·사용자 파일을 **S3 prefix bundle**(`graph-generation/{taskId}/`)에 적재합니다.
  * - SQS를 통해 AI Worker에게 그래프 생성/요약/추가 노드 작업을 요청합니다.
  * - 작업 상태(CREATING, UPDATING 등)를 관리하고 알림을 전송합니다.
  */
@@ -48,15 +53,20 @@ export class GraphGenerationService {
   private readonly httpClient: HttpClient;
   private readonly jobQueueUrl: string;
   private static readonly GRAPH_GEN_START_TTL_SECONDS = 60 * 60 * 24; // 24시간
+  private static readonly MACRO_DEFAULT_MIN_CLUSTERS = 3;
+  private static readonly MACRO_DEFAULT_MAX_CLUSTERS = 8;
 
   constructor(
     private readonly chatManagementService: ChatManagementService,
     private readonly graphEmbeddingService: GraphEmbeddingService,
     private readonly noteService: NoteService,
+    private readonly userFileService: UserFileService,
     private readonly userService: UserService,
     private readonly queuePort: QueuePort,
     private readonly storagePort: StoragePort,
-    private readonly notificationService: NotificationService
+    private readonly notificationService: NotificationService,
+    private readonly creditService?: ICreditService,
+    private readonly notionService?: NotionService
   ) {
     const env = loadEnv();
     // FIXME TODO : HTTP Client 사용하지 않고 SQS로만 통신하도록 변경 예정
@@ -68,20 +78,37 @@ export class GraphGenerationService {
   }
 
   /**
+   * Macro S3 bundle의 `files/` 세그먼트용: 표시명에서 경로·`..`만 제거하고 확장자는 유지합니다.
+   *
+   * @param displayName 사용자 파일 표시명입니다.
+   * @returns `files/` 아래에 쓸 단일 파일명 조각입니다.
+   */
+  private sanitizeMacroBundleFileSegment(displayName: string): string {
+    const base = displayName.replace(/\\/g, '/').split('/').pop() || 'file';
+    return base.replace(/\.\./g, '_').replace(/[/\\]/g, '_').trim() || 'file';
+  }
+
+  /**
    * SQS 기반 그래프 생성 요청
    * 사용자의 대화 및 노트 데이터를 S3에 업로드하고 작업 요청을 보냅니다.
    *
    * @param userId 사용자 ID
-   * @param options 옵션 (요약 포함 여부 등)
+   * @param options 옵션 (요약 포함 여부, Macro 클러스터 범위 등)
    * @returns 발행된 작업의 Task ID 또는 건너뛴 경우 null
    */
   async requestGraphGenerationViaQueue(
     userId: string,
     options?: {
       includeSummary?: boolean;
+      /** Macro 파이프라인 `minClusters` (기본 3). */
+      macroMinClusters?: number;
+      /** Macro 파이프라인 `maxClusters` (기본 8). */
+      macroMaxClusters?: number;
     }
   ): Promise<string | null> {
     let taskId: string | undefined;
+    let creditHeldTaskId: string | undefined;
+    let messageSent = false;
     try {
       // 0. 데이터 존재 여부 확인
       const convs = await withRetry(
@@ -93,14 +120,42 @@ export class GraphGenerationService {
         { label: 'NoteService.findNotesModifiedSince.check' }
       );
       const activeNotes = notes.filter((n) => !n.deletedAt);
+      const userFiles = await withRetry(
+        async () => await this.userFileService.listAllActiveFiles(userId),
+        { label: 'UserFileService.listAllActiveFiles.check' }
+      );
 
-      if (convs.items.length === 0 && activeNotes.length === 0) {
-        logger.info({ userId }, 'No conversation or note data found. Skipping graph generation.');
+      const notionPages = this.notionService
+        ? await withRetry(
+            async () =>
+              await this.notionService!.findCachedPagesModifiedSince(userId, new Date(0)),
+            { label: 'NotionService.findCachedPagesModifiedSince.check' }
+          )
+        : [];
+
+      if (
+        convs.items.length === 0 &&
+        activeNotes.length === 0 &&
+        userFiles.length === 0 &&
+        notionPages.length === 0
+      ) {
+        logger.info(
+          { userId },
+          'No conversation, note, or user file data found. Skipping graph generation.'
+        );
         return null;
       }
 
       taskId = `task_${userId}_${ulid()}`;
-      const s3Key = `graph-generation/${taskId}/input.json`;
+      /** GraphNode_AI Macro bundle: prefix는 반드시 `/`로 끝남. */
+      const taskPrefix = `graph-generation/${taskId}/`;
+      const inputObjectKey = `${taskPrefix}input.json`;
+      const noteObjectKey = `${taskPrefix}notes.json`;
+      const notionObjectKey = `${taskPrefix}notions.json`;
+
+      // 선제적 크레딧 차감 (Hold)
+      await this.holdCredit(userId, CreditFeature.GRAPH_GENERATION, taskId);
+      creditHeldTaskId = taskId;
 
       // 상태 변경: CREATING
       await withRetry(
@@ -116,39 +171,68 @@ export class GraphGenerationService {
         { label: 'GraphEmbeddingService.saveStats' }
       );
 
-      // 1. 대화 데이터 S3 업로드
+      // 1. 대화 JSON → bundle/input.json
       const dataStream = Readable.from(this.streamUserData(userId));
       await withRetry(
-        async () => await this.storagePort.upload(s3Key, dataStream, 'application/json'),
+        async () => await this.storagePort.upload(inputObjectKey, dataStream, 'application/json'),
         { label: 'Storage.upload.input' }
       );
 
-      // 2. 노트 데이터 S3 업로드
-      const noteS3Key = `graph-generation/${taskId}/notes.json`;
+      // 2. 노트 manifest → bundle/notes.json
       const noteStream = Readable.from(this.streamNotes(userId));
       await withRetry(
-        async () => await this.storagePort.upload(noteS3Key, noteStream, 'application/json'),
+        async () => await this.storagePort.upload(noteObjectKey, noteStream, 'application/json'),
         { label: 'Storage.upload.notes' }
       );
 
-      // 3. 사용자 언어 조회
+      // 2b. Notion 캐시 manifest → bundle/notions.json (연동·캐시된 페이지만)
+      if (this.notionService) {
+        const notionStream = Readable.from(this.streamNotionPages(userId));
+        await withRetry(
+          async () =>
+            await this.storagePort.upload(notionObjectKey, notionStream, 'application/json'),
+          { label: 'Storage.upload.notions' }
+        );
+      }
+
+      // 3. 사용자 라이브러리 원본 바이트 → bundle/files/{id}_{displayName} (확장자 유지)
+      for (const f of userFiles) {
+        const downloaded = await withRetry(
+          async () => await this.storagePort.downloadFile(f.s3Key, { bucketType: 'file' }),
+          { label: 'Storage.downloadFile.userFileForMacroBundle' }
+        );
+        const segment = this.sanitizeMacroBundleFileSegment(f.displayName);
+        const destKey = `${taskPrefix}files/${f._id}_${segment}`;
+        const contentType =
+          f.mimeType?.trim() || downloaded.contentType || 'application/octet-stream';
+        await withRetry(
+          async () => await this.storagePort.upload(destKey, downloaded.buffer, contentType),
+          { label: 'Storage.upload.macroBundleUserFile' }
+        );
+      }
+
+      // 4. 사용자 언어 조회
       const language = await withRetry(
         async () => await this.userService.getPreferredLanguage(userId),
         { label: 'UserService.getPreferredLanguage' }
       );
 
-      // 4. SQS 메시지 전송
+      // 5. SQS 메시지 전송 (prefix bundle: s3Key는 `/`로 끝남, extraS3Keys 생략)
       const messageBody: GraphGenRequestPayload = {
         taskId,
         taskType: TaskType.GRAPH_GENERATION_REQUEST,
         payload: {
           userId,
-          s3Key,
+          s3Key: taskPrefix,
           bucket: process.env.S3_PAYLOAD_BUCKET,
           includeSummary: options?.includeSummary ?? true,
           summaryLanguage: language,
-          language: language,
-          extraS3Keys: [noteS3Key], // 통합된 노트 데이터 S3 키 전달
+          language,
+          inputType: 'auto',
+          minClusters:
+            options?.macroMinClusters ?? GraphGenerationService.MACRO_DEFAULT_MIN_CLUSTERS,
+          maxClusters:
+            options?.macroMaxClusters ?? GraphGenerationService.MACRO_DEFAULT_MAX_CLUSTERS,
         },
         timestamp: new Date().toISOString(),
       };
@@ -156,6 +240,7 @@ export class GraphGenerationService {
       await withRetry(async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
         label: 'QueuePort.sendMessage.GraphGen',
       });
+      messageSent = true;
 
       // PostHog 분석용 시작 이벤트(A) 기록 및 시작 시각 캐싱
       await this.trackGraphGenerationRequested(userId, taskId, messageBody.timestamp);
@@ -165,7 +250,13 @@ export class GraphGenerationService {
 
       return taskId;
     } catch (err) {
+      // queue 전송 실패 시 차감된 크레딧 롤백
+      if (creditHeldTaskId && !messageSent) {
+        await this.rollbackCreditHold(creditHeldTaskId, 'graph generation enqueue failed');
+      }
+
       logger.error({ err, userId }, 'Failed to enqueue graph generation request');
+
       // 실패 알림 전송
       await this.notificationService.sendGraphGenerationRequestFailed(
         userId,
@@ -369,14 +460,44 @@ export class GraphGenerationService {
   }
 
   /**
+   * 크레딧 차감 (Hold)
+   * @param userId 사용자 ID
+   * @param feature 기능
+   * @param taskId 작업 ID
+   */
+  private async holdCredit(userId: string, feature: CreditFeature, taskId: string): Promise<void> {
+    if (!this.creditService) return;
+    await this.creditService.hold(userId, feature, taskId);
+  }
+
+  /**
+   * 크레딧 차감 (Rollback)
+   * @param taskId 작업 ID
+   * @param reason 사유
+   */
+  private async rollbackCreditHold(taskId: string, reason: string): Promise<void> {
+    if (!this.creditService) return;
+
+    try {
+      await this.creditService.rollbackByTaskId(taskId);
+    } catch (err) {
+      logger.error({ err, taskId, reason }, 'Failed to rollback credit hold after queue failure');
+    }
+  }
+
+  /**
    * SQS 기반 노드 추가 요청 (AddNode)
    *
    * @param userId 사용자 ID
    * @returns Task ID 또는 추가할 내용이 없는 경우 null
    */
   async requestAddNodeViaQueue(userId: string): Promise<string | null> {
+    let taskId = 'unknown';
+    let creditHeldTaskId: string | undefined;
+    let messageSent = false;
+
     try {
-      const taskId = `task_add_node_${userId}_${ulid()}`;
+      taskId = `task_add_node_${userId}_${ulid()}`;
       const s3Key = `add-node/${taskId}/batch.json`;
 
       const stats = await withRetry(async () => await this.graphEmbeddingService.getStats(userId), {
@@ -418,10 +539,25 @@ export class GraphGenerationService {
       );
       const updatedNotes = modifiedNotes.filter((note) => !note.deletedAt);
 
-      // 대화도 노트도 변경 없으면 작업 불필요
-      if (updatedConversations.length === 0 && updatedNotes.length === 0) {
+      const modifiedUserFiles = await withRetry(
+        async () =>
+          await this.userFileService.findFilesModifiedSince(userId, new Date(lastGraphUpdatedAt)),
+        { label: 'UserFileService.findFilesModifiedSince' }
+      );
+      const updatedUserFiles = modifiedUserFiles.filter((f) => !f.deletedAt);
+
+      // 대화·노트·사용자 파일 모두 변경 없으면 작업 불필요
+      if (
+        updatedConversations.length === 0 &&
+        updatedNotes.length === 0 &&
+        updatedUserFiles.length === 0
+      ) {
         return null;
       }
+
+      // 선제적 크레딧 차감 (Hold)
+      await this.holdCredit(userId, CreditFeature.ADD_NODE, taskId);
+      creditHeldTaskId = taskId;
 
       // AI 입력 포맷 변환
       const mappedConversations: AiInputConversation[] = updatedConversations.map((conv) => {
@@ -474,6 +610,13 @@ export class GraphGenerationService {
         content: note.content,
       }));
 
+      const mappedFiles: AiInputFile[] = updatedUserFiles.map((f) => ({
+        fileId: f._id,
+        title: f.displayName,
+        s3Key: f.s3Key,
+        mimeType: f.mimeType,
+      }));
+
       // 기존 클러스터 정보 가져오기
       const existingClusters: GraphClusterDto[] =
         await this.graphEmbeddingService.listClusters(userId);
@@ -482,6 +625,7 @@ export class GraphGenerationService {
         existingClusters,
         conversations: mappedConversations,
         notes: mappedNotes,
+        files: mappedFiles.length > 0 ? mappedFiles : undefined,
       };
 
       // S3에 데이터 업로드
@@ -507,21 +651,23 @@ export class GraphGenerationService {
       await withRetry(async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
         label: 'QueuePort.sendMessage.AddNode',
       });
+      messageSent = true;
 
       // 성공 알림 전송
       await this.notificationService.sendAddConversationRequested(userId, taskId);
 
       return taskId;
     } catch (err) {
+      // queue 전송 실패 시 차감된 크레딧 롤백
+      if (creditHeldTaskId && !messageSent) {
+        await this.rollbackCreditHold(creditHeldTaskId, 'add-node enqueue failed');
+      }
+
       logger.error({ err, userId }, 'Failed to queue add node request');
 
       // 실패 알림 전송 (taskId가 try 블록 내부에 정의되어 있으므로 에러 객체에 taskId를 담아두거나 스코프를 조정해야 함)
       // 여기서는 스코프 문제로 'unknown' 처리하거나 상단으로 taskId 정의를 뺌
-      await this.notificationService.sendAddConversationRequestFailed(
-        userId,
-        'unknown',
-        String(err)
-      );
+      await this.notificationService.sendAddConversationRequestFailed(userId, taskId, String(err));
 
       if (err instanceof AppError) throw err;
       throw new UpstreamError('Failed to request add node via queue', { cause: String(err) });
@@ -636,5 +782,63 @@ export class GraphGenerationService {
     }
 
     yield ']}';
+  }
+
+  /**
+   * @description Mongo Notion 캐시를 AI source_nodes 형식으로 스트리밍.
+   * @param userId 사용자 ID.
+   */
+  private async *streamNotionPages(userId: string): AsyncGenerator<string> {
+    yield '{"source_nodes":[';
+    let isFirst = true;
+
+    if (!this.notionService) {
+      yield ']}';
+      return;
+    }
+
+    const pages = await withRetry(
+      async () => await this.notionService!.findCachedPagesModifiedSince(userId, new Date(0)),
+      { label: 'NotionService.findCachedPagesModifiedSince.stream' }
+    );
+
+    for (const page of pages) {
+      const aiNode: AiInputSourceNode = {
+        id: page._id,
+        title: page.title,
+        sections: [
+          {
+            id: `${page._id}-body`,
+            content: page.plainText,
+          },
+        ],
+        source_type: 'notion',
+        create_time: page.createdAt
+          ? Math.floor(new Date(page.createdAt).getTime() / 1000)
+          : 0,
+        update_time: page.updatedAt
+          ? Math.floor(new Date(page.updatedAt).getTime() / 1000)
+          : 0,
+      };
+
+      if (!isFirst) yield ',';
+      yield JSON.stringify(aiNode);
+      isFirst = false;
+    }
+
+    yield ']}';
+  }
+
+  /**
+   * @description Macro bundle `notions.json` 본문을 메모리에 조립 (SQS·크레딧 없음, dev/E2E용).
+   * @param userId 사용자 ID.
+   * @returns `{"source_nodes":[...]}` JSON 문자열.
+   */
+  async collectNotionsBundleJson(userId: string): Promise<string> {
+    const parts: string[] = [];
+    for await (const chunk of this.streamNotionPages(userId)) {
+      parts.push(chunk);
+    }
+    return parts.join('');
   }
 }

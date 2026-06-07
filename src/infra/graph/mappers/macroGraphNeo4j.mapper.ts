@@ -25,14 +25,39 @@ const LEGACY_TO_MACRO_NODE_TYPE: Record<GraphSourceType, MacroNodeType> = {
   chat: 'conversation',
   markdown: 'note',
   notion: 'notion',
+  file: 'file',
 };
 
 const MACRO_TO_LEGACY_SOURCE_TYPE: Record<MacroNodeType, GraphSourceType> = {
   conversation: 'chat',
   note: 'markdown',
   notion: 'notion',
-  file: 'markdown',
+  file: 'file',
 };
+
+const MACRO_FILE_TYPE_VALUES: readonly MacroFileType[] = [
+  'pdf',
+  'word',
+  'powerpoint',
+  'spreadsheet',
+  'text',
+  'image',
+  'audio',
+  'video',
+  'other',
+];
+
+/**
+ * @description 노드 메타의 macroFileType 문자열을 검증해 Neo4j 저장 타입으로 파싱합니다.
+ *
+ * @param val 메타 필드 원본입니다.
+ * @returns 유효한 MacroFileType 또는 undefined입니다.
+ */
+function macroFileTypeFromNodeMetadata(val: unknown): MacroFileType | undefined {
+  return typeof val === 'string' && (MACRO_FILE_TYPE_VALUES as readonly string[]).includes(val)
+    ? (val as MacroFileType)
+    : undefined;
+}
 
 /**
  * @description Neo4j에서 MacroNode와 cluster 관계 context를 함께 조회한 row입니다.
@@ -160,6 +185,23 @@ export function toNeo4jMacroNode(
   fileType?: MacroFileType,
   mimeType?: string
 ): Neo4jMacroNode {
+  let resolvedFileType = fileType;
+  let resolvedMimeType = mimeType;
+
+  if (
+    nodeType === 'file' &&
+    resolvedFileType === undefined &&
+    resolvedMimeType === undefined &&
+    doc.metadata &&
+    typeof doc.metadata === 'object'
+  ) {
+    resolvedFileType = macroFileTypeFromNodeMetadata(doc.metadata['macroFileType']);
+    const mt = doc.metadata['mimeType'];
+    if (typeof mt === 'string' && mt.trim()) {
+      resolvedMimeType = mt.trim();
+    }
+  }
+
   return {
     id: doc.id,
     userId: doc.userId,
@@ -168,8 +210,8 @@ export function toNeo4jMacroNode(
     metadataJson: JSON.stringify(doc.metadata ?? {}),
     origId: doc.origId,
     nodeType,
-    fileType,
-    mimeType,
+    fileType: resolvedFileType,
+    mimeType: resolvedMimeType,
     timestamp: doc.timestamp,
     numMessages: doc.numMessages,
     embedding: doc.embedding,

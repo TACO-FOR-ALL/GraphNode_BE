@@ -22,7 +22,7 @@ export { GRAPH_SOURCE_TYPES, type GraphSourceType } from './graph.source-types';
  * @param clusterName - 노드가 속한 클러스터 이름
  * @param timestamp - 대화 발생 시각(ISO 8601) 또는 null
  * @param numMessages - 노드에 포함된 메시지 턴/섹션 수
- * @param sourceType - 노드의 출처 ('chat' | 'markdown' | 'notion')
+ * @param sourceType - 노드의 출처 ('chat' | 'markdown' | 'notion' | 'file')
  * @param createdAt - 생성 시각(ISO 8601 UTC)
  * @param updatedAt - 갱신 시각(ISO 8601 UTC)
  * @remarks
@@ -261,6 +261,10 @@ export interface GraphSummaryDto {
     total_conversations: number;
     total_notes: number;
     total_notions: number;
+    /** Macro graph 파일 노드 수 (Neo4j 스냅샷·요약 worker가 집계) */
+    total_files?: number;
+    /** 파일 포맷별 개수 (예: pdf, docx, pptx, other) */
+    file_counts_by_extension?: Record<string, number>;
     time_span: string;
     primary_interests: string[];
     conversation_style: string;

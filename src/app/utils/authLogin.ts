@@ -15,7 +15,18 @@ import {
   JWT_REFRESH_EXPIRY_MS,
 } from './jwt';
 import { addSession, toSessionId } from '../../infra/redis/SessionStoreRedis';
+import { container } from '../../bootstrap/container';
+import { logger } from '../../shared/utils/logger';
 
+/**
+ * OAuth provider 콜백에서 전달받은 사용자 정보 DTO.
+ *
+ * @property provider - 소셜 인증 제공자 ('google' | 'kakao' 등)
+ * @property providerUserId - 제공자 고유 사용자 ID
+ * @property email - 사용자 이메일 (제공자가 이메일을 제공하지 않는 경우 null)
+ * @property displayName - 표시 이름 (제공자가 제공하지 않는 경우 null)
+ * @property avatarUrl - 프로필 이미지 URL (제공자가 제공하지 않는 경우 null)
+ */
 export interface ProviderUserInput {
   provider: Provider;
   providerUserId: string;
@@ -24,6 +35,11 @@ export interface ProviderUserInput {
   avatarUrl: string | null;
 }
 
+/**
+ * 로그인 처리 결과 DTO.
+ *
+ * @property userId - 로그인 완료된 사용자의 내부 ID
+ */
 export interface LoginResult {
   userId: string;
 }
@@ -77,6 +93,13 @@ export async function completeLogin(
 
   // Request 객체에 사용자 ID 바인딩 (동일 요청 내 사용 가능하도록)
   bindUserIdToRequest(req, user.id);
+
+  // FREE 구독 보정: 신규 가입 및 미초기화 유저를 위해 idempotent 생성 (로그인 흐름 非차단)
+  setImmediate(() => {
+    container.getSubscriptionService().createFreeSubscription(user.id).catch((err) => {
+      logger.error({ err, userId: user.id }, 'Failed to reconcile FREE subscription on login');
+    });
+  });
 
   // 표시용 보조 쿠키 설정
   setHelperLoginCookies(res, {

@@ -18,7 +18,7 @@ import {
   ResolvedGraphSourceType,
   resolveSourceTypesByOrigIds,
 } from '../utils/sourceTypeResolver';
-import { GraphNodeDto } from '../../shared/dtos/graph';
+import { GraphNodeDto, GraphEdgeDto, GraphClusterDto } from '../../shared/dtos/graph';
 
 interface NormalizedAddNodeItem {
   rawTempId: string;
@@ -57,6 +57,8 @@ export class AddNodeResultHandler implements JobHandler {
     const notiService = container.getNotificationService();
     const conversationService = container.getConversationService();
     const noteService = container.getNoteService();
+    const userFileService = container.getUserFileService();
+    const creditService = container.getCreditService();
 
     // AI 서버에서 실패한 경우
     if (status === 'FAILED' || error) {
@@ -77,10 +79,7 @@ export class AddNodeResultHandler implements JobHandler {
         scope.setTag('failure_source', 'ai_server');
         scope.setTag('correlation_id', taskId);
         scope.setContext('worker_failure', { taskId, userId, errorMsg });
-        return Sentry.captureMessage(
-          `[Worker FAILED] ADD_NODE_RESULT: ${errorMsg}`,
-          'warning'
-        );
+        return Sentry.captureMessage(`[Worker FAILED] ADD_NODE_RESULT: ${errorMsg}`, 'warning');
       });
 
       void notifyWorkerFailed({
@@ -98,6 +97,16 @@ export class AddNodeResultHandler implements JobHandler {
       }
 
       await notiService.sendAddConversationFailed(userId, taskId, errorMsg);
+
+      // 4-1. 선제적 차감된 크레딧 롤백 (Rollback)
+      try {
+        await creditService.rollbackByTaskId(taskId);
+      } catch (creditErr) {
+        logger.error(
+          { err: creditErr, taskId, userId },
+          'Credit rollback failed after add-node failure'
+        );
+      }
       return;
     }
 
@@ -127,6 +136,7 @@ export class AddNodeResultHandler implements JobHandler {
         {
           conversationService,
           noteService,
+          userFileService,
         }
       );
 
@@ -151,9 +161,12 @@ export class AddNodeResultHandler implements JobHandler {
 
       // 5. normalized origId -> Mongo numeric id 맵을 만든다.
       const origIdToDbId: Map<string, number> = this.buildOrigIdToDbIdMap(existingNodes);
+      const existingNodeByOrigId: Map<string, GraphNodeDto> =
+        this.buildExistingNodeByOrigIdMap(existingNodes);
 
       // 6. 이번 배치에서 생성한 AI string id -> Mongo numeric id 맵을 만든다.
       const createdNodeIds: Map<string, number> = new Map();
+      const movedNodeIds: Set<number> = new Set();
 
       // 7. 신규 노드가 필요할 때 사용할 다음 numeric id를 계산한다.
       let nextNodeId = this.calculateNextNodeId(existingNodes);
@@ -163,7 +176,7 @@ export class AddNodeResultHandler implements JobHandler {
       let strippedOrigIdCount = 0;
       let unresolvedEdgeCount = 0;
 
-      const clusterPromises: Promise<void>[] = [];
+      const pendingClusters: GraphClusterDto[] = [];
       const pendingNodes: GraphNodeDto[] = [];
 
       /**
@@ -207,16 +220,14 @@ export class AddNodeResultHandler implements JobHandler {
           result.assignedCluster.isNewCluster &&
           result.assignedCluster.clusterId
         ) {
-          clusterPromises.push(
-            graphService.upsertCluster({
-              id: result.assignedCluster.clusterId,
-              userId,
-              name: result.assignedCluster.name || '',
-              description: result.assignedCluster.reasoning || '',
-              themes: result.assignedCluster.themes || [],
-              size: 1,
-            })
-          );
+          pendingClusters.push({
+            id: result.assignedCluster.clusterId,
+            userId,
+            name: result.assignedCluster.name || '',
+            description: result.assignedCluster.reasoning || '',
+            themes: result.assignedCluster.themes || [],
+            size: 1,
+          });
         }
 
         // 노드 처리
@@ -251,6 +262,17 @@ export class AddNodeResultHandler implements JobHandler {
           // 같은 배치의 edge가 raw AI string id를 참조할 수 있으므로 기록한다.
           createdNodeIds.set(normalizedItem.rawTempId, dbNodeId);
 
+          const existingNode = existingNodeByOrigId.get(normalizedItem.normalizedOrigId);
+          if (existingNode && existingNode.clusterId !== normalizedItem.clusterId) {
+            movedNodeIds.add(dbNodeId);
+          }
+
+          const hint = sourceTypeResult.userFileHintsByOrigId.get(normalizedItem.normalizedOrigId);
+          const metadata =
+            resolvedSourceType === 'file' && hint
+              ? { mimeType: hint.mimeType, macroFileType: hint.macroFileType }
+              : undefined;
+
           pendingNodes.push({
             id: dbNodeId,
             userId,
@@ -261,6 +283,7 @@ export class AddNodeResultHandler implements JobHandler {
             sourceType: resolvedSourceType,
             embedding: [],
             timestamp: normalizedItem.timestamp ?? null,
+            metadata,
           });
           totalNodesAdded += 1;
         }
@@ -268,8 +291,38 @@ export class AddNodeResultHandler implements JobHandler {
 
       // Neo4j는 MacroNode.clusterId 속성을 저장하지 않고 BELONGS_TO 관계를 소속 정보의 source of truth로 사용합니다.
       // 따라서 신규 cluster가 포함된 AddNode 결과에서는 cluster upsert가 먼저 끝나야 node upsert 시 관계 생성 Cypher가 성공합니다.
-      await Promise.all(clusterPromises);
-      await Promise.all(pendingNodes.map((node) => graphService.upsertNode(node)));
+      if (pendingClusters.length > 0) {
+        await graphService.upsertClusters(pendingClusters); // 단일 트랜잭션 배치
+      }
+
+      // 노드 배치 처리: 20개 청크 단위로 순차 실행하여 Neo4j 커넥션 풀 고갈 방지
+      const NODE_CHUNK_SIZE = 20;
+      for (let i = 0; i < pendingNodes.length; i += NODE_CHUNK_SIZE) {
+        const chunk = pendingNodes.slice(i, i + NODE_CHUNK_SIZE);
+        await graphService.upsertNodes(chunk);
+      }
+
+      if (movedNodeIds.size > 0) {
+        const movedNodeIdList = Array.from(movedNodeIds);
+        const pruneResult = await graphService.pruneIncompatibleSubclusterMemberships(
+          userId,
+          movedNodeIdList
+        );
+        const reconcileResult = await graphService.reconcileSubclusterMemberships(userId);
+        logger.info(
+          {
+            taskId,
+            userId,
+            movedNodeIds: movedNodeIdList,
+            containsDeleted: pruneResult.containsDeleted,
+            representsDeleted: pruneResult.representsDeleted,
+            deletedSubclusters: reconcileResult.deletedSubclusters,
+            removedInvalidRepresents: reconcileResult.removedInvalidRepresents,
+            reassignedRepresentatives: reconcileResult.reassignedRepresentatives,
+          },
+          'Pruned and reconciled subcluster memberships after add-node cluster reassignment'
+        );
+      }
 
       // 260411: sourceType resolve 결과 로깅 추가
       logger.info(
@@ -287,6 +340,10 @@ export class AddNodeResultHandler implements JobHandler {
             sourceTypeResult.sourceTypesByOrigId,
             'markdown'
           ),
+          resolvedFileCount: this.countResolvedSourceTypes(
+            sourceTypeResult.sourceTypesByOrigId,
+            'file'
+          ),
         },
         'AddNode normalized origIds and resolved source types before edge persistence'
       );
@@ -296,7 +353,7 @@ export class AddNodeResultHandler implements JobHandler {
        * - edge는 AI 배치 전용 string ID를 가리킬 수 있으므로, node 저장이 끝난 뒤 숫자형 Mongo ID로 해소해야 합니다.
        * - 해소 순서는 "이번 배치에서 생성한 노드 -> 기존 Mongo 노드 -> 숫자형 fallback"입니다.
        */
-      const edgePromises: Promise<string>[] = [];
+      const pendingEdges: GraphEdgeDto[] = [];
       for (const result of batchResult.results || []) {
         for (const edge of result.edges || []) {
           // edge.source를 Mongo numeric id로 해석한다.
@@ -340,21 +397,24 @@ export class AddNodeResultHandler implements JobHandler {
             continue;
           }
 
-          edgePromises.push(
-            graphService.upsertEdge({
-              userId,
-              source: sourceId,
-              target: targetId,
-              weight: edge.weight || 1.0,
-              type: (edge.type || 'hard') as 'hard' | 'insight',
-              intraCluster: edge.intraCluster ?? true,
-            })
-          );
+          pendingEdges.push({
+            userId,
+            source: sourceId,
+            target: targetId,
+            weight: edge.weight || 1.0,
+            type: (edge.type || 'hard') as 'hard' | 'insight',
+            intraCluster: edge.intraCluster ?? true,
+          });
           totalEdgesAdded += 1;
         }
       }
 
-      await Promise.all(edgePromises);
+      // 엣지 배치 처리: 20개 청크 단위로 순차 실행하여 Neo4j 커넥션 풀 고갈 방지
+      const EDGE_CHUNK_SIZE = 20;
+      for (let i = 0; i < pendingEdges.length; i += EDGE_CHUNK_SIZE) {
+        const chunk = pendingEdges.slice(i, i + EDGE_CHUNK_SIZE);
+        await graphService.upsertEdges(chunk);
+      }
 
       // 260411: sourceType resolve 결과 로깅 추가
       logger.info(
@@ -367,6 +427,10 @@ export class AddNodeResultHandler implements JobHandler {
         },
         'AddNode persistence finished with normalized node, edge, and sourceType resolution'
       );
+
+      // 고아 클러스터(Ghost Cluster) 정리
+      // 방금 전 배치에서 노드가 다른 클러스터로 모두 이동해 비어버린 이전 클러스터를 삭제합니다.
+      await graphService.removeEmptyClusters(userId);
 
       //
       // Stat 갱신
@@ -393,6 +457,16 @@ export class AddNodeResultHandler implements JobHandler {
           { taskId, status: 'COMPLETED' }
         ),
       ]);
+
+      // 4-2. 선제적 차감된 크레딧 커밋 (Commit)
+      try {
+        await creditService.commitByTaskId(taskId);
+      } catch (creditErr) {
+        logger.error(
+          { err: creditErr, taskId, userId },
+          'Credit commit failed after add-node success'
+        );
+      }
     } catch (err) {
       logger.error({ err, taskId, userId }, 'Failed to process add node result');
 
@@ -407,7 +481,18 @@ export class AddNodeResultHandler implements JobHandler {
         'There was a problem adding conversations to your graph.',
         { taskId, status: 'FAILED' }
       );
-      throw err;
+
+      // BE 내부 처리 실패 시 선제 차감 크레딧 롤백
+      try {
+        await creditService.rollbackByTaskId(taskId);
+      } catch (creditErr) {
+        logger.error(
+          { err: creditErr, taskId, userId },
+          'Credit rollback failed after add-node BE exception'
+        );
+      }
+
+      throw err; // workers/index.ts 중앙 catch에서 Sentry + Discord 처리
     }
   }
 
@@ -499,6 +584,17 @@ export class AddNodeResultHandler implements JobHandler {
     return origIdToDbId;
   }
 
+  private buildExistingNodeByOrigIdMap(existingNodes: GraphNodeDto[]): Map<string, GraphNodeDto> {
+    const existingNodeByOrigId = new Map<string, GraphNodeDto>();
+
+    for (const node of existingNodes) {
+      const normalizedOrigId = normalizeAiOrigId(node.origId).normalizedOrigId;
+      existingNodeByOrigId.set(normalizedOrigId, node);
+    }
+
+    return existingNodeByOrigId;
+  }
+
   /**
    * 기존 노드 목록을 기반으로 다음 노드 ID를 계산합니다.
    * @param existingNodes 기존 노드 목록
@@ -529,8 +625,8 @@ export class AddNodeResultHandler implements JobHandler {
     node: NormalizedAddNodeItem,
     sourceType: ResolvedGraphSourceType
   ): number {
-    if (sourceType === 'markdown') {
-      return node.numSections ?? 0;
+    if (sourceType === 'markdown' || sourceType === 'file') {
+      return node.numSections ?? (sourceType === 'file' ? 1 : 0);
     }
     return node.numMessages ?? 0;
   }

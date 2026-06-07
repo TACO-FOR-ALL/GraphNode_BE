@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "integration_id": "fixture-integration-math-undergrad",
+  "workspace_id": "pebble-freighter-113",
+  "workspace_name": "pebble-freighter-113 (Notion site)",
+  "synced_at": "2026-05-31T00:00:00.000Z",
+  "tree": {
+    "nodes": [
+      {
+        "id": "389e23b8-ad2a-4639-bf18-0cb7affd05ca",
+        "object_type": "page",
+        "title": "Math undergraduate",
+        "parent_id": null,
+        "parent_type": "workspace",
+        "url": "https://pebble-freighter-113.notion.site/Math-undergraduate-389e23b8ad2a4639bf180cb7affd05ca",
+        "create_time": 1716000000,
+        "update_time": 1717000000,
+        "has_children": false,
+        "archived": false
+      }
+    ]
+  },
+  "source_nodes": [
+    {
+      "id": "389e23b8-ad2a-4639-bf18-0cb7affd05ca",
+      "title": "Math undergraduate",
+      "source_type": "notion",
+      "create_time": 1716000000,
+      "update_time": 1717000000,
+      "sections": [
+        {
+          "id": "389e23b8-ad2a-4639-bf18-0cb7affd05ca#s0",
+          "section_title": "Math undergraduate",
+          "content": "[Placeholder] Notion 페이지 본문은 공개 fetch로 수집되지 않았습니다. BE Notion API sync(GET /v1/pages/{page_id}/markdown) 후 이 필드를 실제 markdown 본문으로 교체하세요.\n\n원본 URL: https://pebble-freighter-113.notion.site/Math-undergraduate-389e23b8ad2a4639bf180cb7affd05ca"
+        }
+      ]
+    }
+  ]
+}

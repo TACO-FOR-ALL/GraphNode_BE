@@ -17,14 +17,18 @@ export { GraphApi } from './endpoints/graph.js';
 export { GraphAiApi } from './endpoints/graphAi.js';
 export { NoteApi } from './endpoints/note.js';
 export { AppleAuthApi } from './endpoints/auth.apple.js';
+export { NotionAuthApi } from './endpoints/auth.notion.js';
 export { SyncApi } from './endpoints/sync.js';
 export { AiApi } from './endpoints/ai.js';
 export { NotificationApi } from './endpoints/notification.js';
 export { FileApi } from './endpoints/file.js';
+export { UserFilesApi } from './endpoints/userFiles.js';
 export { MicroscopeApi } from './endpoints/microscope.js';
 export { FeedbackApi } from './endpoints/feedback.js';
 export { ImportsApi } from './endpoints/imports.js';
 export { GraphEditorApi } from './endpoints/graphEditor.js';
+export { ExportApi } from './endpoints/export.js';
+export { BillingApi } from './endpoints/billing.js';
 export type { BatchOperation } from './endpoints/graphEditor.js';
 
 // Types
@@ -46,6 +50,24 @@ export type {
   SessionDto,
   SessionsResponseDto,
 } from './types/me.js';
+export type {
+  CreditBalanceDto,
+  CreditUsageDto,
+  CreditUsageItemDto,
+  CreditPlanType,
+  CreditFeatureType,
+} from './types/credit.js';
+export type {
+  PgProvider,
+  BillingCycle,
+  BillingPlanType,
+  RegisterPaymentMethodRequest,
+  CreateSubscriptionRequest,
+  ConfirmPaymentRequest,
+  CancelSubscriptionRequest,
+  RequestRefundRequest,
+  BillingStatusResponse,
+} from './types/billing.js';
 export type {
   ConversationDto,
   ConversationCreateDto,
@@ -81,7 +103,27 @@ export type {
   SearchNotesAndAIChatsResponse,
 } from './types/search.js';
 export type { FileAttachment, FileUploadResponse } from './types/file.js';
-export type { MicroscopeDocument, MicroscopeWorkspace, MicroscopeGraphNode, MicroscopeGraphEdge, MicroscopeGraphData } from './types/microscope.js';
+export type {
+  UserFileSummaryStatusDto,
+  UserFileSummaryStructuredDto,
+  UserFileSummaryPreviewResponseDto,
+  UserFileSummaryFullResponseDto,
+  UserFileCategoryDto,
+  UserFileDto,
+  SidebarItemKindDto,
+  SidebarItemDto,
+  SidebarItemsResponseDto,
+  UserFileListResponseDto,
+  UserFilePresignedViewUrlDto,
+  UserFilePatchDto,
+} from './types/userFile.js';
+export type {
+  MicroscopeDocument,
+  MicroscopeWorkspace,
+  MicroscopeGraphNode,
+  MicroscopeGraphEdge,
+  MicroscopeGraphData,
+} from './types/microscope.js';
 export type {
   GraphSourceType,
   GraphNodeDto,
@@ -95,6 +137,7 @@ export type {
   UpdateNodePayload,
   GraphEdgeType,
   GraphStatus,
+  GraphRelationType,
 } from './types/graph.js';
 export { GRAPH_SOURCE_TYPES } from './types/graph.js';
 export type {
@@ -104,14 +147,22 @@ export type {
   AgentChatStreamParams,
   AgentChatStreamOptions,
   AgentChatStreamHandler,
+  StreamStatusEvent,
+  StreamChunkEvent,
+  StreamResultEvent,
+  StreamErrorEvent,
+  StreamEventCallbacks,
 } from './endpoints/agent.js';
-export { openAgentChatStream } from './endpoints/agent.js';
+export { AgentApi } from './endpoints/agent.js';
 export type { AIChatRequestDto, AIChatResponseDto } from './endpoints/ai.js';
+export type {
+  StartChatExportResponseDto,
+  ChatExportStatusResponseDto,
+  ChatExportJobStatus,
+  ChatExportScope,
+} from './types/chatExport.js';
 export { AiStreamEvent } from './types/ai-event.js';
-export {
-  TaskType,
-  NotificationType,
-} from './types/notification.js';
+export { TaskType, NotificationType } from './types/notification.js';
 export type {
   NotificationTypeValue,
   NotificationEvent,
@@ -187,6 +238,8 @@ export type {
   MoveNodeToClusterDto,
   MoveSubclusterToClusterDto,
   AddNodeToSubclusterDto,
+  EditorBatchOperation,
+  BatchEditorRequestDto,
   BatchOperationResult,
   BatchEditorResponseDto,
 } from './types/graphEditor.js';

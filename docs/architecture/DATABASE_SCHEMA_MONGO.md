@@ -50,6 +50,23 @@
 | **attachments** | `Array<Attachment>` | 첨부 파일 정보 (`id`, `type`, `url`, `name`, `mimeType`, `size`) |
 | **metadata** | `Object` | 확장 메타데이터. `toolCalls[]` (GraphNode AI 툴 결과 또는 OpenAI tool 결과), `searchResults[]` (web_search 링크) 포함 (Optional) |
 
+### chat_export_jobs 컬렉션
+
+**소스**: `src/core/types/persistence/chat_export.persistence.ts`
+
+채팅 내역 비동기 내보내기 작업 메타데이터입니다. 결과 JSON은 S3 `chat-files/` prefix 하에 저장됩니다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| **jobId** | `String` | 작업 식별자 (ULID) |
+| **userId** | `String` | 요청 사용자 ID |
+| **conversationId** | `String` | 내보낸 대화 ID |
+| **status** | `String` | `PENDING`, `PROCESSING`, `DONE`, `FAILED` |
+| **fileKey** | `String` | 완료 시 S3 객체 키 (Optional) |
+| **errorMessage** | `String` | 실패 시 메시지 (Optional) |
+| **createdAt** | `Number` (ms) | 생성 시각 |
+| **updatedAt** | `Number` (ms) | 갱신 시각 |
+
 ---
 
 ## B. Notification Domain
@@ -78,6 +95,27 @@
 > **Neo4j 미러링 참고**: MongoDB의 Graph 도큐먼트는 AI 워커 결과 수신 시 MongoDB에 저장되며,  
 > 동시에 `Neo4jMacroGraphAdapter`를 통해 Neo4j에도 Native Graph 구조로 미러링됩니다.  
 > Neo4j 상세는 [`DATABASE_NEO4J.md`](DATABASE_NEO4J.md)를 참조하세요.
+
+### notion_page_caches 컬렉션
+
+Notion Webhook·동기화로 적재되는 페이지 스냅샷. Macro Graph 생성 시 `notions.json` 입력으로 사용.  
+**텍스트 블록만** `plainText`·`blockTree`에 반영하며, Notion 이미지/파일의 S3 미러링은 하지 않습니다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| **_id** | `String` | Notion page ID (UUID) |
+| **ownerUserId** | `String` | GraphNode 사용자 ID |
+| **integrationId** | `String` | `notion_integrations.id` |
+| **notionWorkspaceId** | `String` | Notion workspace_id |
+| **title** | `String` | 페이지 제목 |
+| **blockTree** | `Array` | `NotionBlockTreeNode[]` (부모-자식 트리) |
+| **plainText** | `String` | AI 입력용 평문 |
+| **notionLastEditedAt** | `Date` | Notion `last_edited_time` |
+| **isStale** | `Boolean` | 지연 동기화(Lazy Sync) 마킹 플래그 (웹훅 수신 시 true) |
+| **createdAt** / **updatedAt** | `Date` | 캐시 시각 (`updatedAt` = Graph 증분 기준) |
+| **deletedAt** | `Date` | Soft delete (`page.deleted` 웹훅) |
+
+타입: `src/core/types/persistence/notion_cache.persistence.ts`
 
 ### graph_nodes 컬렉션
 
@@ -146,7 +184,7 @@
 
 ## D. Note Domain
 
-**소스**: `src/core/types/persistence/note.persistence.ts`
+**소스**: `src/core/types/persistence/note.persistence.ts`, `src/core/types/persistence/userFile.persistence.ts`
 
 ### notes 컬렉션
 
@@ -169,6 +207,28 @@
 | **ownerUserId** | `String` | 소유자 ID |
 | **name** | `String` | 폴더명 |
 | **parentId** | `String` | 상위 폴더 ID (null = Root) |
+| **createdAt** | `Date` | 생성 일시 |
+| **updatedAt** | `Date` | 수정 일시 |
+| **deletedAt** | `Date` | 삭제 일시 (Soft Delete, Optional) |
+
+### user_files 컬렉션
+
+사용자 라이브러리에 업로드된 파일 메타데이터 및 AI 구조화 요약을 저장합니다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| **_id** | `String` (ULID) | 파일 고유 ID |
+| **ownerUserId** | `String` | 소유자 ID |
+| **folderId** | `String` \| `null` | 소속 폴더 (`null` = 루트) |
+| **displayName** | `String` | 폴더 내 표시 파일명 |
+| **s3Key** | `String` | S3 객체 키 |
+| **mimeType** | `String` | MIME 타입 |
+| **sizeBytes** | `Number` | 바이트 크기 |
+| **category** | `String` | `fileUploadSpec` 기준 카테고리 |
+| **summary** | `String` | AI 한 줄 요약(1번). `summaryStructured.oneLine`과 동일 (Optional) |
+| **summaryStructured** | `Object` | AI 구조화 요약 `{ oneLine, purpose, keyPoints[], conclusion }` (Optional) |
+| **summaryStatus** | `String` | `pending` \| `processing` \| `completed` \| `failed` |
+| **summaryError** | `String` | 실패 시 사유 (Optional) |
 | **createdAt** | `Date` | 생성 일시 |
 | **updatedAt** | `Date` | 수정 일시 |
 | **deletedAt** | `Date` | 삭제 일시 (Soft Delete, Optional) |

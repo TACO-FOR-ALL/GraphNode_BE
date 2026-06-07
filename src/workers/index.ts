@@ -27,6 +27,7 @@ import { AddNodeResultHandler } from './handlers/AddNodeResultHandler';
 import { MicroscopeIngestResultHandler } from './handlers/MicroscopeIngestResultHandler';
 import { startImportFinalizeQueueConsumer } from './ImportFinalizeQueueConsumer';
 
+import { notifyWorkerException } from '../shared/utils/discord';
 async function startWorker() {
   initSentry();
   const env = loadEnv();
@@ -159,7 +160,19 @@ async function startWorker() {
                   // 500 미만(400번대) 에러는 Sentry로 전송하지 않음
                   if (!(err.httpStatus && err.httpStatus < 500)) {
                     capturedToSentry = true;
-                    Sentry.captureException(err);
+                    // Sentry event ID 확보 → Discord 메시지에 링크 포함
+                    const sentryEventId = Sentry.captureException(err);
+
+                    // BE Worker 내부 처리 실패 Discord 알림 (fire-and-forget)
+                    // AI 서버 FAILED(notifyWorkerFailed)와 구별되는 별도 알림 타입
+                    void notifyWorkerException({
+                      taskType,
+                      taskId,
+                      userId,
+                      errorMessage: err instanceof Error ? err.message : String(err),
+                      errorCode: err.code,
+                      sentryEventId,
+                    }).catch(() => {});
                   }
                   throw err;
                 }

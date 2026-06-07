@@ -30,6 +30,7 @@ describe('GraphEmbeddingService', () => {
       listClusters: jest.fn(),
       saveStats: jest.fn(),
       getStats: jest.fn(),
+      getStatsMetadata: jest.fn(),
       deleteStats: jest.fn(),
       listNodesByCluster: jest.fn(),
       deleteEdgesByNodeIds: jest.fn(),
@@ -45,6 +46,7 @@ describe('GraphEmbeddingService', () => {
       listSubclusters: jest.fn(),
       upsertSubcluster: jest.fn(),
       deleteGraph: jest.fn(),
+      reconcileSubclusterMemberships: jest.fn(),
     } as unknown as jest.Mocked<GraphManagementService>;
 
     mockVectorStore = {
@@ -157,11 +159,11 @@ describe('GraphEmbeddingService', () => {
       mockGraphService.listEdges.mockResolvedValue([]);
       mockGraphService.listClusters.mockResolvedValue([]);
       mockGraphService.listSubclusters.mockResolvedValue([]);
-      mockGraphService.getStats.mockResolvedValue({
+      mockGraphService.getStatsMetadata.mockResolvedValue({
         userId: 'u1',
-        nodes: 3,
+        nodes: 0,
         edges: 0,
-        clusters: 2,
+        clusters: 0,
         status: 'CREATED',
       });
       mockConversationService.findDocsByIds.mockResolvedValue([
@@ -181,7 +183,15 @@ describe('GraphEmbeddingService', () => {
 
       expect(mockConversationService.findDocsByIds).toHaveBeenCalledWith(['conv-1'], 'u1');
       expect(mockNoteService.getNoteDoc).toHaveBeenCalledWith('note-1', 'u1');
+      expect(mockGraphService.getStatsMetadata).toHaveBeenCalledWith('u1');
+      expect(mockGraphService.getStats).not.toHaveBeenCalled();
       expect(snapshot.nodes).toHaveLength(3);
+      expect(snapshot.stats).toMatchObject({
+        nodes: 3,
+        edges: 0,
+        clusters: 0,
+        status: 'CREATED',
+      });
       expect(snapshot.nodes[0]).toMatchObject({
         origId: 'conv-1',
         nodeTitle: 'Conversation Title',
@@ -221,6 +231,23 @@ describe('GraphEmbeddingService', () => {
       expect(mockNoteService.countNotes).toHaveBeenCalledWith('u1');
       expect(result.overview.total_conversations).toBe(7);
       expect(result.overview.total_notes).toBe(3);
+    });
+  });
+
+  describe('reconcileSubclusterMemberships', () => {
+    it('delegates through graph write transaction and returns counts', async () => {
+      const result = {
+        deletedSubclusters: 1,
+        reassignedRepresentatives: 2,
+        removedInvalidRepresents: 3,
+      };
+      mockGraphService.reconcileSubclusterMemberships.mockResolvedValue(result);
+
+      await expect(service.reconcileSubclusterMemberships('u1')).resolves.toEqual(result);
+      expect(mockGraphService.reconcileSubclusterMemberships).toHaveBeenCalledWith(
+        'u1',
+        expect.any(Object)
+      );
     });
   });
 

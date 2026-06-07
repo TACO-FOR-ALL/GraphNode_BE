@@ -562,6 +562,63 @@ export class GraphManagementService {
     }
   }
 
+  /**
+   * 연결된 MacroNode가 없는 빈 MacroCluster(Ghost Cluster)를 삭제합니다.
+   *
+   * @param userId 사용자 ID
+   * @param options (선택) 트랜잭션 옵션
+   */
+  async removeEmptyClusters(userId: string, options?: RepoOptions): Promise<void> {
+    try {
+      this.assertUser(userId);
+      await this.repo.removeEmptyClusters(userId, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.removeEmptyClusters failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * 한 MacroNode에 BELONGS_TO 관계가 복수 개 누적된 경우 중복을 정리합니다.
+   *
+   * clusterId 숫자 파트가 가장 큰 클러스터(가장 최신 AI 결정)를 유지하고
+   * 나머지 BELONGS_TO 관계를 삭제합니다.
+   *
+   * @param userId 사용자 ID
+   * @param options (선택) 트랜잭션 옵션
+   */
+  async deduplicateBelongsTo(userId: string, options?: RepoOptions): Promise<void> {
+    try {
+      this.assertUser(userId);
+      await this.repo.deduplicateBelongsTo(userId, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.deduplicateBelongsTo failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * dry-run 전용 — 중복 BELONGS_TO를 보유한 노드 수와 초과 관계 수를 반환합니다.
+   *
+   * @param userId 사용자 ID
+   * @param options (선택) 트랜잭션 옵션
+   * @returns duplicateNodeCount, excessRelCount
+   */
+  async countDuplicateBelongsTo(
+    userId: string,
+    options?: RepoOptions
+  ): Promise<{ duplicateNodeCount: number; excessRelCount: number }> {
+    try {
+      this.assertUser(userId);
+      return await this.repo.countDuplicateBelongsTo(userId, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.countDuplicateBelongsTo failed', {
+        cause: String(err),
+      });
+    }
+  }
+
   // --- Subclusters ---
   async upsertSubcluster(subcluster: GraphSubclusterDto, options?: RepoOptions): Promise<void> {
     try {
@@ -596,13 +653,58 @@ export class GraphManagementService {
     }
   }
   /**
-   * 서브클러스터를 삭제합니다.
-   *
-   * @param userId 사용자 ID
-   * @param subclusterId 서브클러스터 ID
-   * @param permanent 영구 삭제 여부
-   * @param options (선택) 트랜잭션 옵션
+   * Remove CONTAINS/REPRESENTS relationships where a node's current BELONGS_TO
+   * cluster no longer matches the subcluster's parent cluster.
    */
+  async pruneIncompatibleSubclusterMemberships(
+    userId: string,
+    nodeIds?: number[],
+    limit?: number,
+    options?: RepoOptions
+  ): Promise<{ containsDeleted: number; representsDeleted: number }> {
+    try {
+      this.assertUser(userId);
+      if (Array.isArray(nodeIds) && nodeIds.length === 0) {
+        return { containsDeleted: 0, representsDeleted: 0 };
+      }
+      const checkedNodeIds = nodeIds?.map((id) => this.parseId(id));
+      if (limit != null && (!Number.isFinite(limit) || limit < 0)) {
+        throw new ValidationError('limit must be a non-negative number');
+      }
+
+      return await this.repo.pruneIncompatibleSubclusterMemberships(
+        userId,
+        checkedNodeIds,
+        limit,
+        options
+      );
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.pruneIncompatibleSubclusterMemberships failed', {
+        cause: String(err),
+      });
+    }
+  }
+
+  async reconcileSubclusterMemberships(
+    userId: string,
+    options?: RepoOptions
+  ): Promise<{
+    deletedSubclusters: number;
+    reassignedRepresentatives: number;
+    removedInvalidRepresents: number;
+  }> {
+    try {
+      this.assertUser(userId);
+      return await this.repo.reconcileSubclusterMemberships(userId, options);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.reconcileSubclusterMemberships failed', {
+        cause: String(err),
+      });
+    }
+  }
+
   async deleteSubcluster(
     userId: string,
     subclusterId: string,
@@ -710,6 +812,14 @@ export class GraphManagementService {
    * @param userId 사용자 ID
    * @returns GraphStatsDto 또는 null
    */
+  /**
+   * @deprecated 2026-05-08.
+   * Neo4j macro graph에서는 node/edge/cluster 개수를 MacroStats에 직접 저장하지 않습니다.
+   * 현재 repository의 getStats 구현은 graph 관계를 다시 count하므로, 큰 graph에서 Cypher
+   * optional match 조합으로 query 시간이 폭증할 수 있습니다. snapshot API처럼 목록을 이미
+   * 조회하는 경로에서는 이 메서드를 호출하지 말고 `getStatsMetadata`로 상태 메타데이터만
+   * 읽은 뒤, count는 실제 조회된 nodes/edges/clusters 배열 길이로 계산해야 합니다.
+   */
   async getStats(userId: string): Promise<GraphStatsDto> {
     try {
       this.assertUser(userId);
@@ -726,6 +836,40 @@ export class GraphManagementService {
       throw new UpstreamError('GraphService.getStats failed', { cause: String(err) });
     }
   }
+  /**
+   * Snapshot 전용 graph stats 메타데이터 조회입니다.
+   *
+   * @since 2026-05-08
+   * 이 메서드는 DB에서 실제 node/edge/cluster 개수를 가져오지 않습니다.
+   * Neo4j MacroStats 노드는 count 값을 직접 보관하지 않으므로, 이 메서드는 graph 생성 상태
+   * `status`, `generatedAt`, `updatedAt`, `metadata` 같은 상태 메타데이터만 읽는 역할입니다.
+   * 반환 타입은 기존 내부 DTO 호환을 위해 GraphStatsDto를 유지하지만, nodes/edges/clusters는
+   * 저장된 통계값이 아니므로 snapshot count 산정에 사용하면 안 됩니다.
+   * `GraphEmbeddingService.getSnapshotForUser`는 이 메서드로 status만 얻고, count는 이미 조회한
+   * nodes/edges/clusters 배열 길이로 계산합니다.
+   *
+   * @param userId 사용자 ID
+   * @returns 상태 메타데이터를 포함한 stats DTO. MacroStats가 없으면 NOT_CREATED 기본값을 반환합니다.
+   */
+  async getStatsMetadata(userId: string): Promise<GraphStatsDto> {
+    try {
+      this.assertUser(userId);
+      const stats = this.repo.getStatsMetadata
+        ? await this.repo.getStatsMetadata(userId)
+        : await this.repo.getStats(userId);
+      return stats ?? {
+            userId,
+            nodes: 0,
+            edges: 0,
+            clusters: 0,
+            status: 'NOT_CREATED',
+          };
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.getStatsMetadata failed', { cause: String(err) });
+    }
+  }
+
   /**
    * 그래프 통계 삭제
    *

@@ -171,6 +171,14 @@ services:
       - CLAUDE_API_KEY=dummy
       - HF_API_TOKEN=${HF_API_TOKEN:-dummy}
       - TAVILY_API_KEY=dummy
+      # --- Billing/Payment (Dummy for tests) ---
+      - PORTONE_API_SECRET=dummy_portone_api_secret
+      - PORTONE_WEBHOOK_SECRET=dummy_portone_webhook_secret
+      - STRIPE_SECRET_KEY=sk_test_dummy
+      - STRIPE_WEBHOOK_SECRET=whsec_dummy
+      - STRIPE_PRICE_ID_PRO_MONTHLY=price_dummy_pro_monthly
+      - STRIPE_PRICE_ID_PRO_YEARLY=price_dummy_pro_yearly
+      - STRIPE_PRICE_ID_ENTERPRISE_MONTHLY=price_dummy_enterprise_monthly
     ports:
       - "3000:3000"
     healthcheck:
@@ -251,6 +259,14 @@ services:
       - CLAUDE_API_KEY=dummy
       - HF_API_TOKEN=${HF_API_TOKEN:-dummy}
       - TAVILY_API_KEY=dummy
+      # --- Billing/Payment (Dummy for tests) ---
+      - PORTONE_API_SECRET=dummy_portone_api_secret
+      - PORTONE_WEBHOOK_SECRET=dummy_portone_webhook_secret
+      - STRIPE_SECRET_KEY=sk_test_dummy
+      - STRIPE_WEBHOOK_SECRET=whsec_dummy
+      - STRIPE_PRICE_ID_PRO_MONTHLY=price_dummy_pro_monthly
+      - STRIPE_PRICE_ID_PRO_YEARLY=price_dummy_pro_yearly
+      - STRIPE_PRICE_ID_ENTERPRISE_MONTHLY=price_dummy_enterprise_monthly
 
   graphnode-ai:
     image: graphnode-ai:test # GHA workflow에서 빌드된 이미지 사용
@@ -281,7 +297,14 @@ services:
       - CHROMA_SERVER_HOST=chroma
       - CHROMA_SERVER_PORT=8000
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      # graphnode-ai worker는 provider별 DEV_*_API_KEY를 우선 사용 (없으면 OPENAI_API_KEY 폴백 → Groq 401)
+      - DEV_OPENAI_API_KEY=${DEV_OPENAI_API_KEY:-${OPENAI_API_KEY}}
+      - DEV_GROQ_API_KEY=${DEV_GROQ_API_KEY:-${GROQ_API_KEY:-}}
+      - MACRO_LLM_PROVIDER=${MACRO_LLM_PROVIDER:-openai}
+      - MACRO_LLM_MODEL=${MACRO_LLM_MODEL:-gpt-5-mini}
+      - MICROSCOPE_LLM_PROVIDER=${MICROSCOPE_LLM_PROVIDER:-openai}
+      - MICROSCOPE_LLM_MODEL=${MICROSCOPE_LLM_MODEL:-gpt-5-mini}
       - INTERNAL_SERVICE_TOKEN=ci-test-key
 
     healthcheck:

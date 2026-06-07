@@ -10,7 +10,9 @@ on:
       - '.github/workflows/deploy.yml'
       - 'ecs/**'
       - 'src/**'
+      - 'scripts/migrations/**'
       - 'Dockerfile'
+      - 'entrypoint.sh'
       - 'package*.json'
       - 'prisma/**'
 
@@ -86,6 +88,7 @@ jobs:
           task-definition: ecs/worker-task-definition.json
           container-name: taco5_graphnode_worker_container
           image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+
         # Amazon ECS 서비스에 새 작업 정의 배포 (API)
       - name: Deploy Amazon ECS task definition (API)
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2

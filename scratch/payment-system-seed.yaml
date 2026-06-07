@@ -1,0 +1,64 @@
+goal: >
+  GraphNode 백엔드(Node.js/TypeScript/Express 5/Prisma)의 결제 시스템 인터페이스를
+  환경변수(env)만 주입하면 즉시 동작할 수 있는 수준으로 완성한다.
+  Portone, Toss, Stripe 세 PG사를 지원하며 UserPaymentMethod 테이블(billingKey 저장),
+  구독 생명주기 관리, WebhookProcessingService, 테스트, 문서화를 모두 포함한다.
+
+constraints:
+  - "Node.js 20 / TypeScript 5 / Express 5 / Prisma(PostgreSQL) — 스택 변경 금지"
+  - "단방향 레이어 규칙: app → core(ports only) → infra. 역방향 import 금지"
+  - "모든 public export에 JSDoc 필수"
+  - "new Error() 직접 throw 금지 — shared/errors/domain.ts 클래스만 사용"
+  - "console.* 금지 — logger.withContext() 사용"
+  - "비밀값 코드 하드코딩 금지 — env.ts Zod 스키마로 주입"
+  - "Prisma migrate dev 로컬만 실행"
+  - "컨트롤러 파일 ≤150 LOC, 서비스 파일 ≤300 LOC"
+  - "Toss는 PG 자체 스케줄러 없음 — TossAdapter 스켈레톤 유지"
+
+acceptance_criteria:
+  - "[AC-1] schema.prisma에 UserPaymentMethod 모델 추가(id/userId/pgProvider/billingKey/externalCustomerId?/cardLast4?/isDefault/createdAt, @@index([userId,isDefault]), User 관계). npx prisma migrate dev 성공. npx tsc --noEmit 0 에러."
+  - "[AC-2] core/ports/IUserPaymentMethodRepository.ts 생성(create/findDefaultByUserId/findByUserId/findById). UserPaymentMethodRow, CreateUserPaymentMethodDto 타입을 subscription.persistence.ts에 추가."
+  - "[AC-3] infra/repositories/UserPaymentMethodRepository.ts 생성(implements IUserPaymentMethodRepository). bootstrap/container.ts에 DI 연결."
+  - "[AC-4] SubscriptionService 수정: upgradePlan()에 billingCycle 파라미터 추가(MONTHLY 하드코딩 제거). cancelSubscription()은 status=CANCELED + PG cancelSubscription() 호출만(즉시 FREE 전환 제거)."
+  - "[AC-5] core/services/WebhookProcessingService.ts 생성: PAYMENT_COMPLETED(Subscription ACTIVE + PaymentHistory + creditService.refill), SUBSCRIPTION_RENEWED(currentPeriodEnd 연장 + PaymentHistory), SUBSCRIPTION_CANCELED(EXPIRED + FREE 구독 + refill(FREE)), PAYMENT_FAILED(EXPIRED + FREE + refill(FREE)). 처리 후 WebhookEvent PROCESSED, 예외 시 FAILED."
+  - "[AC-6] WebhookController 수정: 200 반환 직후 setImmediate(()=>webhookProcessingService.process(event)) 패턴. WebhookProcessingService 주입."
+  - "[AC-7] PaymentProvider 포트에 registerRecurringSchedule(billingKey,planType,billingCycle,startDate):Promise<string>와 createOrGetCustomer(userId,email?):Promise<string> 추가. PortoneAdapter/TossAdapter/StripeAdapter 모두 구현(스텁 포함)."
+  - "[AC-8] SubscriptionController 4개 엔드포인트 구현: POST /subscriptions/billing-key(UserPaymentMethod 저장), POST /subscriptions(Subscription PENDING 생성), DELETE /subscriptions(cancelSubscription), GET /subscriptions/me(구독+결제수단 반환). Zod 검증 + next(e) 패턴."
+  - "[AC-9] app/routes/SubscriptionRouter.ts 완성(authMiddleware 포함). server.ts에 /webhooks 및 /subscriptions 라우트 마운트. container.ts에 WebhookProcessingService, UserPaymentMethodRepository DI 추가."
+  - "[AC-10] 테스트 작성 및 통과: SubscriptionService 단위, WebhookProcessingService 단위, PortoneAdapter.verifyWebhookSignature 단위, WebhookController 통합(Testcontainers), SubscriptionRepository 통합(Testcontainers). npm test 0 failures."
+  - "[AC-11] 문서 3종 갱신/생성: docs/architecture/DATABASE_SCHEMA_PG.md(UserPaymentMethod 추가), docs/api/openapi.yaml(4개 엔드포인트+/webhooks/:provider), docs/architecture/PAYMENT_SYSTEM.md(신규: FE→PG→BE 플로우/billingKey 개념/구독 상태머신/취소정책/PAYMENT_FAILED 정책)."
+
+ontology_schema:
+  name: PaymentSystem
+  description: "GraphNode 결제·구독 도메인 모델"
+  fields:
+    - name: UserPaymentMethod
+      type: object
+      description: "PG사별 billingKey 저장. pgProvider+billingKey+externalCustomerId+cardLast4+isDefault"
+    - name: WebhookProcessingService
+      type: service
+      description: "4개 Webhook 이벤트 처리 서비스. setImmediate 비동기."
+    - name: cancelPolicy
+      type: rule
+      description: "취소: status=CANCELED, currentPeriodEnd까지 PRO 유지, SUBSCRIPTION_CANCELED webhook시 FREE"
+    - name: paymentFailedPolicy
+      type: rule
+      description: "PAYMENT_FAILED: 즉시 EXPIRED + FREE 전환"
+
+evaluation_principles:
+  - name: "타입 안전성"
+    description: "npx tsc --noEmit 0 에러. 신규 타입 subscription.persistence.ts 정의."
+  - name: "레이어 격리"
+    description: "app→infra 직접 import 없음. core→infra 없음."
+  - name: "테스트 커버리지"
+    description: "결제 관련 Lines 80% 이상. 핵심 경로 커버."
+  - name: "멱등성 보장"
+    description: "idempotencyKey 중복 200 no-op. createFreeSubscription 중복 안전."
+  - name: "문서 동기화"
+    description: "DATABASE_SCHEMA_PG.md + openapi.yaml + PAYMENT_SYSTEM.md 3종 충족."
+
+metadata:
+  version: "1.0.0"
+  created_at: "2026-05-08"
+  ambiguity_score: 0.12
+  project: "GraphNode/TACO-4"

@@ -29,6 +29,9 @@ export function createMicroscopeRouter(controller: MicroscopeController): Router
   // 노드(Note/Conversation) 기반 워크스페이스 생성 및 Ingest
   router.post('/nodes/ingest', controller.ingestFromNode);
 
+  // 다중 소스(Multi-source) 워크스페이스 생성 및 Ingest
+  router.post('/workspaces/batch-ingest', controller.batchIngest);
+
   // 워크스페이스 삭제
   router.delete('/:groupId', controller.deleteWorkspace);
 

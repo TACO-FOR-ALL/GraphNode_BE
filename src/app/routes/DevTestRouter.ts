@@ -12,13 +12,23 @@
 
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import * as Sentry from '@sentry/node';
+import { v4 as uuidv4 } from 'uuid';
 
 import { notifyHttp500, notifyWorkerFailed } from '../../shared/utils/discord';
 import { UpstreamError, ValidationError, NotFoundError } from '../../shared/errors/domain';
-import { v4 as uuidv4 } from 'uuid';
 import { container } from '../../bootstrap/container';
+import { loadEnv } from '../../config/env';
+import { getMongo } from '../../infra/db/mongodb';
+import type { ConversationDoc } from '../../core/types/persistence/ai.persistence';
 import { ApiKeyModel } from '../../shared/dtos/me';
 import type { ChatStreamRequestBody } from '../../agent/types';
+import { isNotionIntegrationEnabled } from '../../bootstrap/modules/notion.module';
+
+/**
+ * 환경은 **항상 `loadEnv()`(Zod `EnvSchema`)** 로만 접근합니다.
+ * Infisical·ECS 등이 미리 채워 둔 `process.env`를 그 이름으로 두 번 정의하지 않으며,
+ * 런타임 주입 순서 테스트(`resetEnvCacheForTests`)와 맞추려 모듈 상단 고정 스냅샷은 두지 않습니다.
+ */
 
 const router = Router();
 
@@ -40,16 +50,347 @@ router.use((_req: Request, res: Response, next: NextFunction) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.get('/ping', (_req: Request, res: Response) => {
+  const env = loadEnv();
   res.json({
     ok: true,
     env: {
-      NODE_ENV: process.env.NODE_ENV,
-      DISCORD_WEBHOOK_URL_ERRORS: process.env.DISCORD_WEBHOOK_URL_ERRORS ? '✅ set' : '❌ not set',
-      DISCORD_WEBHOOK_URL_GRAPH: process.env.DISCORD_WEBHOOK_URL_GRAPH ? '✅ set' : '❌ not set',
-      SENTRY_ORG_SLUG: process.env.SENTRY_ORG_SLUG ? '✅ set' : '❌ not set',
-      SENTRY_DSN: process.env.SENTRY_DSN ? '✅ set' : '❌ not set',
+      NODE_ENV: env.NODE_ENV,
+      DISCORD_WEBHOOK_URL_ERRORS: env.DISCORD_WEBHOOK_URL_ERRORS?.trim() ? '✅ set' : '❌ not set',
+      DISCORD_WEBHOOK_URL_GRAPH: env.DISCORD_WEBHOOK_URL_GRAPH?.trim() ? '✅ set' : '❌ not set',
+      SENTRY_ORG_SLUG: env.SENTRY_ORG_SLUG?.trim() ? '✅ set' : '❌ not set',
+      SENTRY_DSN: env.SENTRY_DSN?.trim() ? '✅ set' : '❌ not set',
+      CHAT_EXPORT_SMTP_USER: env.CHAT_EXPORT_SMTP_USER?.trim() ? '✅ set' : '❌ not set',
+      CHAT_EXPORT_SMTP_PASS: env.CHAT_EXPORT_SMTP_PASS?.trim() ? '✅ set' : '❌ not set',
     },
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notion 연동 로컬 검증 (OAuth 완료 후 웹훅 없이 페이지 sync 테스트)
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/notion/env', (_req: Request, res: Response) => {
+  const env = loadEnv();
+  res.json({
+    ok: true,
+    enabled: isNotionIntegrationEnabled(),
+    OAUTH_NOTION_CLIENT_ID: env.OAUTH_NOTION_CLIENT_ID?.trim() ? 'set' : 'missing',
+    OAUTH_NOTION_REDIRECT_URI: env.OAUTH_NOTION_REDIRECT_URI ?? null,
+    NOTION_WEBHOOK_VERIFICATION_TOKEN: env.NOTION_WEBHOOK_VERIFICATION_TOKEN?.trim()
+      ? 'set'
+      : 'missing',
+  });
+});
+
+router.get('/notion/integrations/:userId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!isNotionIntegrationEnabled()) {
+      throw new ValidationError('Notion integration env (OAUTH_NOTION_*) is not configured');
+    }
+    const userId = String(req.params.userId ?? '').trim();
+    if (!userId) throw new ValidationError('userId is required');
+    const list = await container.getNotionService().listIntegrations(userId);
+    res.json({
+      ok: true,
+      count: list.length,
+      integrations: list.map((i) => ({
+        id: i.id,
+        notionWorkspaceId: i.notionWorkspaceId,
+        notionWorkspaceName: i.notionWorkspaceName,
+        updatedAt: i.updatedAt,
+      })),
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/notion/sync-page', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!isNotionIntegrationEnabled()) {
+      throw new ValidationError('Notion integration env (OAUTH_NOTION_*) is not configured');
+    }
+    const userId =
+      typeof req.body?.userId === 'string' && req.body.userId.trim()
+        ? req.body.userId.trim()
+        : process.env.MIGRATION_TEST_USER_ID || 'user-12345';
+    const pageId =
+      typeof req.body?.pageId === 'string' && req.body.pageId.trim() ? req.body.pageId.trim() : '';
+    if (!pageId) throw new ValidationError('pageId is required (Notion page UUID from page URL)');
+
+    const notion = container.getNotionService();
+    const integrations = await notion.listIntegrations(userId);
+    if (integrations.length === 0) {
+      throw new NotFoundError(
+        `No NotionIntegration for userId=${userId}. Complete GET /api/auth/notion OAuth first.`
+      );
+    }
+
+    const integration =
+      integrations.find((i) => i.id === req.body?.integrationId) ?? integrations[0];
+    await notion.syncPageToCache(integration, pageId);
+    const cache = await container.getNotionCacheRepository().findByPageId(pageId, userId);
+    if (!cache) throw new NotFoundError('Cache upsert failed');
+
+    res.json({
+      ok: true,
+      pageId,
+      title: cache.title,
+      updatedAt: cache.updatedAt,
+      notionLastEditedAt: cache.notionLastEditedAt,
+      plainTextPreview: cache.plainText.slice(0, 500),
+      blockTreeDepth: cache.blockTree.length,
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get('/notion/cache/:userId/:pageId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = String(req.params.userId ?? '').trim();
+    const pageId = String(req.params.pageId ?? '').trim();
+    if (!userId || !pageId) throw new ValidationError('userId and pageId are required');
+    const cache = await container.getNotionCacheRepository().findByPageId(pageId, userId);
+    if (!cache) throw new NotFoundError('Notion page cache not found');
+    res.json({
+      ok: true,
+      pageId: cache._id,
+      title: cache.title,
+      updatedAt: cache.updatedAt,
+      notionLastEditedAt: cache.notionLastEditedAt,
+      plainTextPreview: cache.plainText.slice(0, 500),
+      blockTreeDepth: cache.blockTree.length,
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/notion/simulate-webhook', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!isNotionIntegrationEnabled()) {
+      throw new ValidationError('Notion integration env (OAUTH_NOTION_*) is not configured');
+    }
+    const workspaceId =
+      typeof req.body?.workspaceId === 'string' ? req.body.workspaceId.trim() : '';
+    const pageId = typeof req.body?.pageId === 'string' ? req.body.pageId.trim() : '';
+    const eventType =
+      typeof req.body?.type === 'string' && req.body.type.trim()
+        ? req.body.type.trim()
+        : 'page.content_updated';
+    if (!workspaceId || !pageId) {
+      throw new ValidationError('workspaceId and pageId are required');
+    }
+    await container.getNotionService().handleWebhookEvent({
+      type: eventType,
+      workspace_id: workspaceId,
+      entity: { id: pageId, type: 'page' },
+    });
+    res.json({ ok: true, workspaceId, pageId, type: eventType });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get(
+  '/notion/notions-bundle/:userId',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = String(req.params.userId ?? '').trim();
+      if (!userId) throw new ValidationError('userId is required');
+      const raw = await container.getGraphGenerationService().collectNotionsBundleJson(userId);
+      const parsed = JSON.parse(raw) as { source_nodes?: unknown[] };
+      res.json({
+        ok: true,
+        userId,
+        sourceNodeCount: Array.isArray(parsed.source_nodes) ? parsed.source_nodes.length : 0,
+        bundle: parsed,
+      });
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /dev/test/chat-export-email-env
+// 채팅보내기 SMTP 관련 env가 주입됐는지 여부만 반환(비밀값 미포함).
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/chat-export-email-env', (_req: Request, res: Response) => {
+  const env = loadEnv();
+  res.json({
+    ok: true,
+    CHAT_EXPORT_SMTP_USER: env.CHAT_EXPORT_SMTP_USER?.trim() ? 'set' : 'missing',
+    CHAT_EXPORT_SMTP_PASS: env.CHAT_EXPORT_SMTP_PASS?.trim() ? 'set' : 'missing',
+    CHAT_EXPORT_EMAIL_FROM: env.CHAT_EXPORT_EMAIL_FROM?.trim() ? 'set' : 'optional_missing',
+    CHAT_EXPORT_SMTP_HOST: env.CHAT_EXPORT_SMTP_HOST,
+    CHAT_EXPORT_SMTP_PORT: env.CHAT_EXPORT_SMTP_PORT,
+    CHAT_EXPORT_SMTP_SECURE: env.CHAT_EXPORT_SMTP_SECURE ?? false,
+    nextSteps: [
+      'Full flow: log in → POST /v1/ai/conversations/{conversationId}/exports → GET /v1/ai/chat-exports/{jobId} until DONE; mail goes to profile email.',
+      'SMTP only: set TEST_LOGIN_SECRET, then POST /dev/test/email/chat-export-smtp-ping with header x-internal-token and body { "to": "your@email" }.',
+    ],
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /dev/test/email/chat-export-smtp-ping
+// nodemailer(SMTP)로 소형 첨부 테스트 메일 1통 발송 — 채팅보내기와 동일 어댑터.
+//
+// Headers: x-internal-token — `loadEnv().TEST_LOGIN_SECRET`과 동일(min 16 chars).
+// Body: { "to": "recipient@example.com" } (required).
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/email/chat-export-smtp-ping', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const env = loadEnv();
+    const expectedSecret = env.TEST_LOGIN_SECRET?.trim();
+    const providedSecret = req.header('x-internal-token')?.trim();
+    if (!expectedSecret || expectedSecret.length < 16) {
+      res.status(403).json({
+        ok: false,
+        message:
+          'Set TEST_LOGIN_SECRET (at least 16 characters) in .env or Infisical before using this endpoint.',
+      });
+      return;
+    }
+    if (!providedSecret || providedSecret !== expectedSecret) {
+      res.status(403).json({
+        ok: false,
+        message: 'Send header x-internal-token with the same value as TEST_LOGIN_SECRET.',
+      });
+      return;
+    }
+
+    if (!env.CHAT_EXPORT_SMTP_USER?.trim() || !env.CHAT_EXPORT_SMTP_PASS?.trim()) {
+      res.status(400).json({
+        ok: false,
+        reason: 'smtp_not_configured',
+        message: 'Set CHAT_EXPORT_SMTP_USER and CHAT_EXPORT_SMTP_PASS (e.g. Gmail app password).',
+      });
+      return;
+    }
+
+    const to = String(req.body?.to ?? '').trim();
+    if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      throw new ValidationError('Body field "to" must be a valid email address.');
+    }
+
+    const email = container.getEmailAdapter();
+    await email.sendEmailWithAttachment({
+      to,
+      subject: '[GraphNode DEV] SMTP ping (chat export path)',
+      text: [
+        'This is a development-only test message.',
+        'If you see this, CHAT_EXPORT_SMTP_* is configured and nodemailer can send mail.',
+        '',
+        'Next: POST /v1/exports/conversations/{conversationId} while logged in (email uses your profile address).',
+      ].join('\n'),
+      attachmentFilename: 'smtp-ping.txt',
+      attachmentContentType: 'text/plain; charset=utf-8',
+      attachmentBuffer: Buffer.from('GraphNode SMTP ping OK\n', 'utf-8'),
+    });
+
+    res.json({
+      ok: true,
+      message: `Test email sent to ${to}. Check inbox and spam folder.`,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /dev/test/chat-export/top-user-smoke
+// 메시지 수 최다 사용자·해당 사용자의 최대 메시지 대화를 서버(DB)에서 집계한 뒤 export 작업을 시작합니다.
+//
+// Headers: x-internal-token — `loadEnv().TEST_LOGIN_SECRET`과 동일(min 16 chars).
+// 스크립트가 Atlas에 직접 붙지 못하는 환경에서, 로컬 `npm run dev` 프로세스가 Mongo에 붙어 있으면 이 경로로 검증합니다.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/chat-export/top-user-smoke', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const env = loadEnv();
+    const expectedSecret = env.TEST_LOGIN_SECRET?.trim();
+    const providedSecret = req.header('x-internal-token')?.trim();
+    if (!expectedSecret || expectedSecret.length < 16) {
+      res.status(403).json({
+        ok: false,
+        message:
+          'Set TEST_LOGIN_SECRET (at least 16 characters) in .env or Infisical before using this endpoint.',
+      });
+      return;
+    }
+    if (!providedSecret || providedSecret !== expectedSecret) {
+      res.status(403).json({
+        ok: false,
+        message: 'Send header x-internal-token with the same value as TEST_LOGIN_SECRET.',
+      });
+      return;
+    }
+
+    const db = getMongo().db();
+
+    interface AggRow {
+      _id: string;
+      messageCount: number;
+    }
+
+    const topUserRows = await db
+      .collection('messages')
+      .aggregate<AggRow>([
+        { $match: { deletedAt: null, ownerUserId: { $type: 'string', $ne: '' } } },
+        { $group: { _id: '$ownerUserId', messageCount: { $sum: 1 } } },
+        { $sort: { messageCount: -1 } },
+        { $limit: 5 },
+      ])
+      .toArray();
+
+    const winner = topUserRows[0];
+    if (!winner?._id) {
+      res.status(404).json({ ok: false, message: '메시지가 있는 사용자가 없습니다.' });
+      return;
+    }
+
+    const convRows = await db
+      .collection('messages')
+      .aggregate<AggRow>([
+        { $match: { deletedAt: null, ownerUserId: winner._id } },
+        { $group: { _id: '$conversationId', messageCount: { $sum: 1 } } },
+        { $sort: { messageCount: -1 } },
+        { $limit: 1 },
+      ])
+      .toArray();
+
+    const topConv = convRows[0];
+    if (!topConv?._id) {
+      res.status(404).json({ ok: false, message: '해당 사용자의 대화가 없습니다.', userId: winner._id });
+      return;
+    }
+
+    const conv = await db
+      .collection<ConversationDoc>('conversations')
+      .findOne({ _id: topConv._id, deletedAt: null }, { projection: { title: 1 } });
+
+    const chatExport = container.getChatExportService();
+    const started = await chatExport.startExport(winner._id, String(topConv._id));
+
+    res.json({
+      ok: true,
+      winner: { userId: winner._id, messageCount: winner.messageCount },
+      top5: topUserRows.map((r) => ({ userId: r._id, messageCount: r.messageCount })),
+      pickedConversation: {
+        conversationId: String(topConv._id),
+        messageCount: topConv.messageCount,
+        title: conv?.title,
+      },
+      startExport: started,
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -91,10 +432,11 @@ router.post('/discord/http500', async (req: Request, res: Response, next: NextFu
       sentryEventId: sentryEventId ? String(sentryEventId) : undefined,
     });
 
+    const env = loadEnv();
     res.json({
       ok: true,
       message: 'notifyHttp500 호출 완료. Discord 채널을 확인하세요.',
-      sentTo: process.env.DISCORD_WEBHOOK_URL_ERRORS
+      sentTo: env.DISCORD_WEBHOOK_URL_ERRORS?.trim()
         ? 'Discord'
         : '(no-op: DISCORD_WEBHOOK_URL_ERRORS 미설정)',
     });
@@ -135,10 +477,11 @@ router.post('/discord/worker-failed', async (req: Request, res: Response, next: 
       sentryEventId: sentryEventId ? String(sentryEventId) : undefined,
     });
 
+    const env = loadEnv();
     res.json({
       ok: true,
       message: 'notifyWorkerFailed 호출 완료. Discord 채널을 확인하세요.',
-      sentTo: process.env.DISCORD_WEBHOOK_URL_GRAPH
+      sentTo: env.DISCORD_WEBHOOK_URL_GRAPH?.trim()
         ? 'Discord'
         : '(no-op: DISCORD_WEBHOOK_URL_GRAPH 미설정)',
     });

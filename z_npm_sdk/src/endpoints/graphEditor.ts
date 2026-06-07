@@ -26,31 +26,14 @@ import type {
   MoveNodeToClusterDto,
   MoveSubclusterToClusterDto,
   AddNodeToSubclusterDto,
+  EditorBatchOperation,
   BatchEditorResponseDto,
 } from '../types/graphEditor.js';
 
 const BASE = '/v1/graph/editor';
 
-/**
- * batch editor API에서 사용할 수 있는 작업 discriminated union입니다.
- */
-export type BatchOperation =
-  | { type: 'createNode'; payload: CreateNodeEditorDto }
-  | { type: 'updateNode'; nodeId: number; payload: UpdateNodeEditorDto }
-  | { type: 'deleteNode'; nodeId: number; permanent?: boolean }
-  | { type: 'createEdge'; payload: CreateEdgeEditorDto }
-  | { type: 'updateEdge'; edgeId: string; payload: UpdateEdgeEditorDto }
-  | { type: 'deleteEdge'; edgeId: string; permanent?: boolean }
-  | { type: 'createCluster'; payload: CreateClusterEditorDto }
-  | { type: 'updateCluster'; clusterId: string; payload: UpdateClusterEditorDto }
-  | { type: 'deleteCluster'; clusterId: string; cascade?: boolean; permanent?: boolean }
-  | { type: 'createSubcluster'; payload: CreateSubclusterEditorDto }
-  | { type: 'updateSubcluster'; subclusterId: string; payload: UpdateSubclusterEditorDto }
-  | { type: 'deleteSubcluster'; subclusterId: string; permanent?: boolean }
-  | { type: 'moveNodeToCluster'; nodeId: number; newClusterId: string }
-  | { type: 'moveSubclusterToCluster'; subclusterId: string; newClusterId: string }
-  | { type: 'addNodeToSubcluster'; subclusterId: string; nodeId: number }
-  | { type: 'removeNodeFromSubcluster'; subclusterId: string; nodeId: number };
+/** batch editor API에서 사용할 수 있는 작업 discriminated union입니다. */
+export type BatchOperation = EditorBatchOperation;
 
 /**
  * Graph Editor API SDK client입니다.
