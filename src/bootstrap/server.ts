@@ -152,15 +152,13 @@ export function createApp() {
   }
   app.use('/v1/me', makeMeRouter());
 
-<<<<<<< HEAD
+  // User files + sidebar (노트 라우터보다 먼저 마운트하여 `/v1/files` 등이 `/v1/notes/:id`에 가려지지 않게 함)
+  app.use('/v1', makeUserFileRouter());
+
   // AI export import (File Service BFF) — 구체적인 /v1/* 라우터 뒤, Note Router 앞
   if (env.FILE_SERVICE_BASE_URL && env.FILE_SERVICE_INTERNAL_API_KEY) {
     app.use('/v1', makeImportRouter());
   }
-=======
-  // User files + sidebar (노트 라우터보다 먼저 마운트하여 `/v1/files` 등이 `/v1/notes/:id`에 가려지지 않게 함)
-  app.use('/v1', makeUserFileRouter());
->>>>>>> 5ab1104c1443632ce490828b28c7230e9b9c8665
 
   // Note Router (가장 넓은 범위이므로 구체적인 v1 하위 라우터 아래에 배치)
   app.use('/v1', makeNoteRouter());
