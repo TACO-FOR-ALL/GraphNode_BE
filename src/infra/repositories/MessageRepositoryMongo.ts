@@ -70,6 +70,18 @@ export class MessageRepositoryMongo implements MessageRepository {
     }
   }
 
+  async findExistingIds(ids: string[]): Promise<Set<string>> {
+    try {
+      if (ids.length === 0) return new Set();
+      const rows = await this.col()
+        .find({ _id: { $in: ids } }, { projection: { _id: 1 } })
+        .toArray();
+      return new Set(rows.map((r) => r._id));
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.findExistingIds', err);
+    }
+  }
+
   /**
    * ID로 메시지를 조회합니다.
    *
