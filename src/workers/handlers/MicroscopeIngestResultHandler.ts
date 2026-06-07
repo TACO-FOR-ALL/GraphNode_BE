@@ -5,9 +5,13 @@ import type { Container } from '../../bootstrap/container';
 import { MicroscopeIngestFromNodeResultQueuePayload } from '../../shared/dtos/queue';
 import { logger } from '../../shared/utils/logger';
 import { NotificationType } from '../notificationType';
-import { AiMicroscopeIngestResultItem } from '../../shared/dtos/ai_graph_output';
 import { MicroscopeWorkspaceMetaDoc } from '../../core/types/persistence/microscope_workspace.persistence';
+import { loadEnv } from '../../config/env';
 import { withRetry } from '../../shared/utils/retry';
+import {
+  isPersistableMicroscopeBundle,
+  parseMicroscopeS3Payload,
+} from '../../shared/utils/parseMicroscopeS3Payload';
 import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 import { notifyWorkerFailed } from '../../shared/utils/discord';
 import { parseUserIdFromMicroscopeNodeTaskId } from '../../shared/utils/microscopeTaskId';
@@ -17,10 +21,13 @@ import { ValidationError } from '../../shared/errors/domain';
  * Microscope 문서 분석(Ingest) 결과 처리 핸들러
  *
  * Flow:
- * 1. AI 서버 워커가 문서 분석(그래프 생성)을 마치고 SQS로 반환한 결과를 수신
- * 2. MicroscopeManagementService를 통해 해당 문서의 진행 상태 갱신 (MongoDB)
- * 3. 개별 파일 처리 완료(성공/실패) 알림을 사용자에게 발송
- * 4. 대상 워크스페이스 내 모든 문서 처리가 완료되었는지 확인하고 합산 통계(개수)와 함께 "전체 종료" 알림 발송
+ * 1. AI 서버 워커가 문서 분석을 마치고 SQS 결과 + S3 ingest_bundle 을 반환
+ * 2. (COMPLETED 시) S3 ingest_bundle 다운로드 → Neo4j persist (MICROSCOPE_NEO4J_WRITE_ON_BE)
+ * 3. MicroscopeManagementService 로 문서 진행 상태 갱신 및 Mongo graph payload 저장
+ * 4. 개별 파일 처리 완료(성공/실패) 알림 발송
+ * 5. 워크스페이스 내 모든 문서 완료 시 종합 알림 발송
+ *
+ * Neo4j 쓰기 정책: AI는 read+Chroma만, graph topology 쓰기는 이 핸들러에서만 수행합니다.
  */
 export class MicroscopeIngestResultHandler implements JobHandler {
   async handle(
@@ -66,32 +73,50 @@ export class MicroscopeIngestResultHandler implements JobHandler {
     const creditService = container.getCreditService();
 
     try {
-      let downloadedGraphData: any = undefined;
+      let downloadedGraphData: ReturnType<typeof parseMicroscopeS3Payload>['graphItems'] | undefined;
+      let ingestBundle: ReturnType<typeof parseMicroscopeS3Payload>['bundle'] = null;
 
-      // 1. S3에서 그래프 데이터 다운로드
+      // 1. S3에서 ingest_bundle 또는 레거시 standardized JSON 다운로드
       if (status === 'COMPLETED' && standardizedS3Key) {
         try {
-          downloadedGraphData = await withRetry(
+          const s3Payload = await withRetry(
             async () =>
-              await storagePort.downloadJson<AiMicroscopeIngestResultItem[]>(standardizedS3Key, {
+              await storagePort.downloadJson<unknown>(standardizedS3Key, {
                 bucketType: 'payload',
               }),
             { label: 'MicroscopeIngestResultHandler.downloadJson.graph' }
           );
+          const parsed = parseMicroscopeS3Payload(s3Payload);
+          ingestBundle = parsed.bundle;
+          downloadedGraphData = parsed.graphItems;
           logger.info(
-            { taskId, standardizedS3Key },
-            'Successfully downloaded standardized graph JSON from S3'
+            { taskId, standardizedS3Key, hasBundle: Boolean(ingestBundle) },
+            'Successfully downloaded microscope ingest JSON from S3'
           );
         } catch (downloadErr) {
           logger.error(
             { err: downloadErr, taskId, standardizedS3Key },
             'Failed to download graph JSON from S3'
           );
-          // S3 다운로드 실패 시 상태를 FAILED로 간주해야 할 수도 있으나 현재는 에러만 로깅
+          throw downloadErr;
         }
       }
 
-      // 1. 서비스 호출을 통한 개별 문서 진행상태 갱신 및 Mongo 페이로드 저장
+      // 2. Neo4j persist (BE write — AI는 read + Chroma만)
+      const env = loadEnv();
+      if (
+        status === 'COMPLETED' &&
+        env.MICROSCOPE_NEO4J_WRITE_ON_BE &&
+        isPersistableMicroscopeBundle(ingestBundle)
+      ) {
+        const neo4jPersistence = container.getMicroscopeNeo4jPersistenceService();
+        await withRetry(
+          async () => await neo4jPersistence.persistIngestBundle(ingestBundle),
+          { label: 'MicroscopeIngestResultHandler.persistNeo4j' }
+        );
+      }
+
+      // 3. 서비스 호출을 통한 개별 문서 진행상태 갱신 및 Mongo 페이로드 저장
       const updatedWorkspace: MicroscopeWorkspaceMetaDoc =
         await microscopeService.updateDocumentStatus(
           userId,

@@ -194,6 +194,12 @@ const EnvSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === 'true'),
+
+  // Microscope ingest 완료 시 BE Worker가 Neo4j에 graph를 저장 (기본 활성, 'false'로 비활성)
+  MICROSCOPE_NEO4J_WRITE_ON_BE: z
+    .string()
+    .optional()
+    .transform((v) => v !== 'false'),
 });
 
 /**

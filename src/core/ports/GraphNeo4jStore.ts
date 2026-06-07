@@ -4,6 +4,10 @@ import {
   GraphClusterDoc,
   GraphStatsDoc,
 } from '../types/persistence/graph.persistence';
+import type {
+  AiMicroscopeIngestBundle,
+  MicroscopeIngestPersistStats,
+} from '../../shared/dtos/ai_graph_output';
 import type { MicroscopeGraphDataDto } from '../../shared/dtos/microscope';
 import {
   MicroscopeEntityNode,
@@ -66,6 +70,15 @@ export interface GraphNeo4jStore {
    * 해당 워크스페이스(group_id)에 속한 모든 Microscope 데이터(노드 및 엣지)를 조회하여 FE 포맷으로 반환합니다.
    */
   getMicroscopeWorkspaceGraph(groupId: string, options?: Neo4jOptions): Promise<MicroscopeGraphDataDto>;
+
+  /**
+   * Microscope ingest_bundle을 단일 write transaction으로 Neo4j에 저장합니다.
+   * AI handler.py MERGE 계약과 동일합니다.
+   */
+  persistMicroscopeIngest(
+    bundle: AiMicroscopeIngestBundle,
+    options?: Neo4jOptions
+  ): Promise<MicroscopeIngestPersistStats>;
 }
 
 

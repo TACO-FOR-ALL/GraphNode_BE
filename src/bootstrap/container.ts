@@ -26,6 +26,7 @@ import { GraphEditorService } from '../core/services/GraphEditorService';
 import { GoogleOAuthService } from '../core/services/GoogleOAuthService';
 import { AppleOAuthService } from '../core/services/AppleOAuthService';
 import { MicroscopeManagementService } from '../core/services/MicroscopeManagementService';
+import { MicroscopeNeo4jPersistenceService } from '../core/services/MicroscopeNeo4jPersistenceService';
 import { createAuditProxy } from '../shared/audit/auditProxy';
 import { loadEnv } from '../config/env';
 // Interfaces
@@ -156,6 +157,7 @@ export class Container {
   private authNotionController: AuthNotionController | null = null;
   private notionWebhookController: NotionWebhookController | null = null;
   private microscopeManagementService: MicroscopeManagementService | null = null;
+  private microscopeNeo4jPersistenceService: MicroscopeNeo4jPersistenceService | null = null;
   private searchService: SearchService | null = null;
   private feedbackService: FeedbackService | null = null;
   private chatExportService: ChatExportService | null = null;
@@ -741,6 +743,21 @@ export class Container {
     }
     return this.microscopeManagementService;
   }
+
+  /**
+   * MicroscopeNeo4jPersistenceService 인스턴스를 반환합니다.
+   */
+  getMicroscopeNeo4jPersistenceService(): MicroscopeNeo4jPersistenceService {
+    if (!this.microscopeNeo4jPersistenceService) {
+      const raw = new MicroscopeNeo4jPersistenceService(this.getGraphNeo4jStore());
+      this.microscopeNeo4jPersistenceService = createAuditProxy(
+        raw,
+        'MicroscopeNeo4jPersistenceService'
+      );
+    }
+    return this.microscopeNeo4jPersistenceService;
+  }
+
   /**
    * SearchService 인스턴스를 반환합니다.
    */

@@ -11,7 +11,16 @@ import type {
   MicroscopeGraphDataDto, 
  
 } from '../../shared/dtos/microscope';
+import type {
+  AiMicroscopeIngestBundle,
+  MicroscopeIngestPersistStats,
+} from '../../shared/dtos/ai_graph_output';
 import { UpstreamError } from '../../shared/errors/domain';
+import {
+  buildMicroscopeIngestPlan,
+  newMicroscopeNeo4jUuid,
+} from '../../shared/utils/buildMicroscopeIngestPlan';
+import { MICROSCOPE_INGEST_CYPHER } from './cypher/microscopeIngest.cypher';
 
 export class Neo4jGraphAdapter implements GraphNeo4jStore {
   private getDriver(): Driver {
@@ -450,6 +459,84 @@ export class Neo4jGraphAdapter implements GraphNeo4jStore {
     // });
 
     return { nodes: [], edges: [] };
+  }
+
+  /**
+   * Microscope ingest_bundle을 단일 write transaction으로 Neo4j에 저장합니다.
+   *
+   * 저장 순서 (AI store_standardized_data Neo4j 분기와 동일):
+   * Chunk → Entity → EXTRACTED_FROM → REL
+   *
+   * @param bundle AI worker 가 S3 ingest_bundle.json 으로 업로드한 페이로드
+   * @returns 저장된 노드·관계 건수 요약
+   */
+  async persistMicroscopeIngest(
+    bundle: AiMicroscopeIngestBundle,
+    _options?: Neo4jOptions
+  ): Promise<MicroscopeIngestPersistStats> {
+    const plan = buildMicroscopeIngestPlan(bundle);
+    const driver = this.getDriver();
+    const session = driver.session();
+
+    try {
+      await session.executeWrite(async (tx) => {
+        for (const chunk of plan.chunks) {
+          await tx.run(MICROSCOPE_INGEST_CYPHER.mergeChunk, {
+            uuid: chunk.uuid,
+            text: chunk.text,
+            source_id: plan.sourceId,
+            user_id: plan.userId,
+            group_id: plan.groupId,
+            chunk_index: chunk.chunk_index,
+          });
+        }
+
+        for (const entity of plan.entities) {
+          await tx.run(MICROSCOPE_INGEST_CYPHER.mergeEntity, {
+            name: entity.name,
+            user_id: plan.userId,
+            group_id: plan.groupId,
+            uuid: newMicroscopeNeo4jUuid(),
+            types: entity.types,
+            description: entity.description,
+            source_id: plan.sourceId,
+          });
+        }
+
+        for (const link of plan.chunkEntityLinks) {
+          await tx.run(MICROSCOPE_INGEST_CYPHER.linkEntityToChunk, {
+            name: link.entityName,
+            user_id: plan.userId,
+            group_id: plan.groupId,
+            uuid: link.chunkUuid,
+          });
+        }
+
+        for (const edge of plan.edges) {
+          await tx.run(MICROSCOPE_INGEST_CYPHER.mergeRelEdge, {
+            start: edge.start,
+            target: edge.target,
+            etype: edge.type,
+            user_id: plan.userId,
+            group_id: plan.groupId,
+            uuid: newMicroscopeNeo4jUuid(),
+            weight: edge.weight,
+            source_id: plan.sourceId,
+          });
+        }
+      });
+
+      return {
+        chunks_written: plan.chunks.length,
+        entities_written: plan.entities.length,
+        edges_written: plan.edges.length,
+        chunk_entity_links: plan.chunkEntityLinks.length,
+      };
+    } catch (e) {
+      throw new UpstreamError('Neo4j persistMicroscopeIngest failed', { cause: e as Error });
+    } finally {
+      await session.close();
+    }
   }
 }
 
