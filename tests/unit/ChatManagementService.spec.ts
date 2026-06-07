@@ -197,6 +197,10 @@ class InMemoryConvRepo implements ConversationRepository {
     }
     return count;
   }
+
+  async findExistingIds(ids: string[]): Promise<Set<string>> {
+    return new Set(ids.filter((id) => this.data.has(id)));
+  }
 }
 
 class InMemoryMsgRepo implements MessageRepository {
@@ -382,6 +386,19 @@ class InMemoryMsgRepo implements MessageRepository {
       if (last) result.push(last);
     }
     return result;
+  }
+
+  async findExistingIds(ids: string[]): Promise<Set<string>> {
+    const existing = new Set<string>();
+    for (const id of ids) {
+      for (const msgs of this.msgs.values()) {
+        if (msgs.some((m) => m._id === id)) {
+          existing.add(id);
+          break;
+        }
+      }
+    }
+    return existing;
   }
 }
 

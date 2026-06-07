@@ -79,11 +79,6 @@ export function createApp() {
   // AI 라우터(조립된 Router 장착)
   app.use('/v1/ai', makeAiRouter());
 
-  // AI export import (File Service 프록시)
-  if (env.FILE_SERVICE_BASE_URL && env.FILE_SERVICE_INTERNAL_API_KEY) {
-    app.use('/v1', makeImportRouter());
-  }
-
   // Graph Router(조립된 Router 장착)
   app.use('/v1/graph', makeGraphRouter());
 
@@ -128,6 +123,11 @@ export function createApp() {
   app.use('/auth/google', authGoogleRouter);
   app.use('/auth/apple', authAppleRouter);
   app.use('/v1/me', makeMeRouter());
+
+  // AI export import (File Service BFF) — 구체적인 /v1/* 라우터 뒤, Note Router 앞
+  if (env.FILE_SERVICE_BASE_URL && env.FILE_SERVICE_INTERNAL_API_KEY) {
+    app.use('/v1', makeImportRouter());
+  }
 
   // Note Router (가장 넓은 범위이므로 구체적인 v1 하위 라우터 아래에 배치)
   app.use('/v1', makeNoteRouter());
