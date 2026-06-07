@@ -30,6 +30,9 @@ import { NotificationService } from './NotificationService';
 import { UserService } from './UserService';
 import { AiMicroscopeIngestResultItem } from '../../shared/dtos/ai_graph_output';
 import { withRetry } from '../../shared/utils/retry';
+import { parseUserIdFromMicroscopeNodeTaskId } from '../../shared/utils/microscopeTaskId';
+import { ICreditService } from '../ports/ICreditService';
+import { CreditFeature } from '../types/persistence/credit.persistence';
 
 /**
  * Microscope 기능(지식 그래프 분석, RAG 파이프라인)의 전반적인 메타데이터 관리와 작업 요청을 조율하는 서비스 객체.
@@ -61,7 +64,8 @@ export class MicroscopeManagementService {
     private readonly conversationRepo: ConversationRepository,
     private readonly noteRepo: NoteRepository,
     private readonly notificationService: NotificationService,
-    private readonly userService: UserService
+    private readonly userService: UserService,
+    private readonly creditService?: ICreditService
   ) {
     // SQS Request URL for AI tasks (Microscope 워커 요청 큐)
     this.jobQueueUrl = process.env.SQS_REQUEST_QUEUE_URL || 'TO_BE_CONFIGURED';
@@ -255,7 +259,14 @@ export class MicroscopeManagementService {
       updatedAt: now,
     };
 
+    let creditHeld = false;
+    let messageSent = false;
+
     try {
+      // 3-1. 선제적 크레딧 차감 (Hold)
+      await this.holdCredit(userId, CreditFeature.MICROSCOPE_INGEST, docId);
+      creditHeld = true;
+
       // 4. MongoDB 상태 트리거 등록
       await this.microscopeWorkspaceStore.addDocument(groupId, newDocument);
 
@@ -277,6 +288,7 @@ export class MicroscopeManagementService {
       await withRetry(async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
         label: 'QueuePort.sendMessage',
       });
+      messageSent = true;
 
       // 성공 알림 전송
       await this.notificationService.sendMicroscopeIngestRequested(userId, docId);
@@ -289,6 +301,11 @@ export class MicroscopeManagementService {
 
       return workspace;
     } catch (err) {
+      // 3-2. 선제적 차감된 크레딧 롤백 (Rollback)
+      if (creditHeld && !messageSent) {
+        await this.rollbackCreditHold(docId, 'microscope ingest enqueue failed');
+      }
+
       logger.error(
         { err, userId, groupId, nodeId },
         'Failed to process node for Microscope workspace, createWorkspaceAndMicroscopeIngestFromNode'
@@ -301,7 +318,202 @@ export class MicroscopeManagementService {
         String(err)
       );
 
+      if (err instanceof AppError) throw err;
       throw new UpstreamError(`Failed to process node ${nodeId}`, { cause: String(err) });
+    }
+  }
+
+  /**
+   * 다중 소스(Multi-source)를 하나의 워크스페이스에 묶어 Microscope Ingest 파이프라인을 시작합니다.
+   * 각 source마다 동일 group_id로 SQS 메시지를 발행하며, 개별 SQS 전송 실패 시
+   * 해당 document만 FAILED로 기록하고 나머지는 계속 진행합니다(부분 성공 허용).
+   * 크레딧은 워크스페이스 단위로 flat 1회 Hold합니다.
+   *
+   * @param userId 유저 고유 ID
+   * @param sources Ingest할 소스 배열. 각 항목은 nodeId와 nodeType을 포함합니다.
+   * @param schemaName (선택) 엔티티 추출 스키마 명칭
+   * @returns 생성된 워크스페이스의 메타데이터 전체
+   * @throws {ValidationError} sources 배열이 비어있을 때
+   * @throws {UpstreamError} 워크스페이스 생성 또는 크레딧 Hold 실패 시
+   * @example
+   * const ws = await service.createMultiSourceWorkspace('user_1', [
+   *   { nodeId: 'note_abc', nodeType: 'note' },
+   *   { nodeId: 'conv_xyz', nodeType: 'conversation' },
+   * ]);
+   */
+  async createMultiSourceWorkspace(
+    userId: string,
+    sources: Array<{ nodeId: string; nodeType: 'note' | 'conversation' }>,
+    schemaName?: string
+  ): Promise<MicroscopeWorkspaceMetaDoc> {
+    if (!sources || sources.length === 0) {
+      throw new ValidationError('sources must contain at least one item');
+    }
+
+    // 1. 워크스페이스 이름 — 첫 번째 소스 제목 기반, 실패 시 기본값
+    let workspaceName = `Multi-source Workspace (${sources.length})`;
+    const firstSource = sources[0];
+    try {
+      if (firstSource.nodeType === 'note') {
+        const note = await this.noteRepo.getNote(firstSource.nodeId, userId);
+        if (note) workspaceName = note.title || workspaceName;
+      } else if (firstSource.nodeType === 'conversation') {
+        const conv = await this.conversationRepo.findById(firstSource.nodeId, userId);
+        if (conv) workspaceName = conv.title || workspaceName;
+      }
+    } catch (err) {
+      logger.warn(
+        { err, userId, nodeId: firstSource.nodeId },
+        'Failed to fetch first source title, using default workspace name'
+      );
+    }
+
+    // 2. 사용자 선호 언어
+    let preferredLanguage = 'ko';
+    try {
+      const userProfile = await this.userService.getUserProfile(userId);
+      preferredLanguage = userProfile.preferredLanguage ?? 'ko';
+    } catch (err) {
+      logger.warn({ err, userId }, 'Failed to fetch user preferredLanguage, defaulting to "ko"');
+    }
+
+    // 3. 워크스페이스 생성 (하나의 groupId = AI layer group_id)
+    const workspace = await this.createWorkspace(userId, workspaceName);
+    const groupId = workspace._id;
+
+    // 4. 크레딧 Hold — 워크스페이스 단위 flat 1회 (BM 변경 시 ICreditService 구현체만 교체)
+    const workspaceCreditTaskId = `task_microscope_ws_${userId}_${ulid()}`;
+    let creditHeld = false;
+    let anyMessageSent = false;
+
+    try {
+      await this.holdCredit(userId, CreditFeature.MICROSCOPE_INGEST, workspaceCreditTaskId);
+      creditHeld = true;
+    } catch (err) {
+      logger.error({ err, userId, groupId }, 'Failed to hold credit for multi-source workspace');
+      throw err instanceof AppError
+        ? err
+        : new UpstreamError('Failed to hold credit', { cause: String(err) });
+    }
+
+    // 5. 각 소스별 문서 등록 및 SQS 발행 (부분 실패 허용)
+    // FIXME(2026_05_17) : 이거 AI 서버로 어떻게 보낼 지 정의해야 함, 이렇게 여러 개의 Message로 나뉘어 보내선 안됨.
+    const now = new Date().toISOString();
+
+    for (const source of sources) {
+      const docId = `task_microscope_node_${userId}_${ulid()}`;
+      const doc: MicroscopeDocumentMetaDoc = {
+        id: docId,
+        s3Key: '',
+        fileName: `${source.nodeId}.md`,
+        status: 'PROCESSING',
+        nodeId: source.nodeId,
+        nodeType: source.nodeType,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      try {
+        await this.microscopeWorkspaceStore.addDocument(groupId, doc);
+      } catch (err) {
+        logger.error(
+          { err, userId, groupId, docId, nodeId: source.nodeId },
+          'Failed to register document, skipping source'
+        );
+        continue;
+      }
+
+      // FIXME(2026_05_17) : AI Worker로 보내는 Multi Source용 taskType, payload 구조 정의 후 그에 맞게 수정해야 함
+      // try {
+      //   const messageBody = {
+      //     taskId: docId,
+      //     taskType: TaskType.MICROSCOPE_INGEST_FROM_NODE_REQUEST,
+      //     payload: {
+      //       user_id: userId,
+      //       node_id: source.nodeId,
+      //       node_type: source.nodeType,
+      //       group_id: groupId,
+      //       schema_name: schemaName,
+      //       language: preferredLanguage,
+      //     },
+      //     timestamp: new Date().toISOString(),
+      //   };
+
+      //   await withRetry(
+      //     async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody),
+      //     { label: `QueuePort.sendMessage:multi:${docId}` }
+      //   );
+      //   anyMessageSent = true;
+      //   logger.info(
+      //     { userId, groupId, docId, nodeId: source.nodeId },
+      //     'Enqueued multi-source Microscope Ingest task'
+      //   );
+      // } catch (err) {
+      //   logger.error(
+      //     { err, userId, groupId, docId, nodeId: source.nodeId },
+      //     'SQS send failed for source, marking FAILED'
+      //   );
+      //   try {
+      //     await this.microscopeWorkspaceStore.updateDocumentStatus(
+      //       groupId,
+      //       docId,
+      //       'FAILED',
+      //       undefined,
+      //       undefined,
+      //       String(err)
+      //     );
+      //   } catch (updateErr) {
+      //     logger.error(
+      //       { updateErr, groupId, docId },
+      //       'Failed to mark document as FAILED after SQS error'
+      //     );
+      //   }
+      // }
+    }
+
+    // 6. 모든 SQS 전송 실패 시 크레딧 롤백
+    // if (creditHeld && !anyMessageSent) {
+    //   await this.rollbackCreditHold(
+    //     workspaceCreditTaskId,
+    //     'all multi-source ingest SQS sends failed'
+    //   );
+    // }
+
+    await this.notificationService.sendMicroscopeIngestRequested(userId, workspaceCreditTaskId);
+
+    const updatedWorkspace = await this.microscopeWorkspaceStore.findById(groupId);
+    logger.info(
+      { userId, groupId, sourceCount: sources.length, anyMessageSent },
+      'Multi-source Microscope workspace created'
+    );
+    return updatedWorkspace ?? workspace;
+  }
+
+  /**
+   * 크레딧 차감 (Hold)
+   * @param userId 사용자 ID
+   * @param feature 기능
+   * @param taskId 작업 ID
+   * @returns
+   */
+  private async holdCredit(userId: string, feature: CreditFeature, taskId: string): Promise<void> {
+    if (!this.creditService) return;
+    await this.creditService.hold(userId, feature, taskId);
+  }
+
+  /**
+   * 크레딧 차감 롤백 (Rollback)
+   * @param taskId 작업 ID
+   * @param reason 사유
+   * @returns
+   */
+  private async rollbackCreditHold(taskId: string, reason: string): Promise<void> {
+    if (!this.creditService) return;
+
+    try {
+      await this.creditService.rollbackByTaskId(taskId);
+    } catch (err) {
+      logger.error({ err, taskId, reason }, 'Failed to rollback credit hold after queue failure');
     }
   }
 
@@ -323,6 +535,35 @@ export class MicroscopeManagementService {
    * - 동작 원리: `updateOne({ _id: groupId, 'documents.id': docId }, { $set: { 'documents.$.status': status } })`와 같은 쿼리가 실행되어
    *   해당 docId를 가진 특정 배열 내역(원소) 1개만을 정확하게 업데이트합니다. 다른 파일들의 진행 상황은 유지(Atomic update)됩니다.
    */
+  /**
+   * @description Microscope ingest 결과 payload에서 워크스페이스 ID(group_id)를 해석합니다.
+   * @param userId 요청 사용자 ID입니다.
+   * @param docId SQS taskId와 동일한 문서 작업 ID입니다.
+   * @param groupIdFromPayload AI가 반환한 group_id(또는 workspace_id)입니다. 없으면 Mongo 조회합니다.
+   * @returns Mongo 워크스페이스 `_id`입니다.
+   * @throws {NotFoundError} NOT_FOUND — payload·DB 모두에서 워크스페이스를 찾지 못한 경우
+   */
+  async resolveGroupIdForIngestResult(
+    userId: string | undefined,
+    docId: string,
+    groupIdFromPayload?: string
+  ): Promise<string> {
+    if (groupIdFromPayload?.trim()) {
+      return groupIdFromPayload.trim();
+    }
+
+    const resolvedUserId = userId?.trim() || parseUserIdFromMicroscopeNodeTaskId(docId);
+    const workspace = await this.microscopeWorkspaceStore.findWorkspaceByDocumentId(
+      resolvedUserId || undefined,
+      docId
+    );
+    if (!workspace) {
+      throw new NotFoundError(`Workspace for document ${docId} not found`);
+    }
+
+    return workspace._id;
+  }
+
   async updateDocumentStatus(
     userId: string,
     groupId: string,
@@ -457,8 +698,10 @@ export class MicroscopeManagementService {
     userId: string,
     nodeId: string
   ): Promise<MicroscopeWorkspaceMetaDoc> {
-    const workspace =
-      await this.microscopeWorkspaceStore.findWorkspaceByMostRecentDocumentNodeId(userId, nodeId);
+    const workspace = await this.microscopeWorkspaceStore.findWorkspaceByMostRecentDocumentNodeId(
+      userId,
+      nodeId
+    );
 
     if (!workspace) {
       throw new NotFoundError(`No microscope workspace found for node ${nodeId}`);

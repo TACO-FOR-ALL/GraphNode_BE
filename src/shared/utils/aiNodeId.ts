@@ -15,6 +15,16 @@
 const AI_SOURCE_PREFIX_PATTERN = /^src\d+_(.+)$/;
 
 /**
+ * Macro S3 bundle `files/{userFileId}_{displayName}` 입력에서 AI가 붙이는 파일 타입 prefix입니다.
+ * 예: `docx_uf-e2e-docx_e2e-macro-sample` → `uf-e2e-docx`
+ */
+const MACRO_BUNDLE_FILE_TYPE_PREFIX_PATTERN =
+  /^(?:pdf|docx?|pptx?|word|powerpoint|other|unknown|[a-z]{2,16})_(.+)$/i;
+
+/** Mongo `user_files._id` 형태(예: `uf-e2e-docx` 또는 `01KT1AJS0YPC4C3805641TKH5E`)를 bundle 조각에서 추출합니다. */
+const USER_FILE_ORIG_ID_IN_BUNDLE_PATTERN = /^(uf-[a-z0-9]+(?:-[a-z0-9]+)*|[0-9a-z]{26})(?:_|$)/i;
+
+/**
  * AI가 반환한 원본 ID를 정규화한 결과를 담는 구조체입니다.
  *
  * 문제 상황:
@@ -35,11 +45,28 @@ const AI_SOURCE_PREFIX_PATTERN = /^src\d+_(.+)$/;
  *   - 예: `conv-e2e-123`
  * @property strippedSourcePrefix `src<number>_` prefix 제거가 실제로 발생했는지 여부
  *   - `true`이면 AI merge 단계의 임시 namespace가 제거되었음을 의미합니다.
+ * @property strippedMacroBundleFilePrefix Macro bundle 파일 노드의 타입/표시명 suffix 제거 여부
  */
 export interface NormalizedAiOrigId {
   rawOrigId: string;
   normalizedOrigId: string;
   strippedSourcePrefix: boolean;
+  strippedMacroBundleFilePrefix?: boolean;
+}
+
+/**
+ * @description Macro bundle 파일 노드 origId에서 `user_files._id`를 추출합니다.
+ * @param candidate `src*` 제거 후 문자열.
+ * @returns `uf-...` user file id. 해당 없으면 null.
+ */
+function extractMacroBundleUserFileOrigId(candidate: string): string | null {
+  let remainder = candidate;
+  const typeMatch = MACRO_BUNDLE_FILE_TYPE_PREFIX_PATTERN.exec(candidate);
+  if (typeMatch) {
+    remainder = typeMatch[1];
+  }
+  const userFileMatch = USER_FILE_ORIG_ID_IN_BUNDLE_PATTERN.exec(remainder);
+  return userFileMatch ? userFileMatch[1] : null;
 }
 
 /**
@@ -77,19 +104,29 @@ export interface NormalizedAiOrigId {
  * @returns raw 값, normalized 값, prefix 제거 여부를 함께 담은 정규화 결과 객체
  */
 export function normalizeAiOrigId(rawOrigId: string): NormalizedAiOrigId {
-  const match = AI_SOURCE_PREFIX_PATTERN.exec(rawOrigId);
-  if (!match) {
+  let normalizedOrigId = rawOrigId;
+  let strippedSourcePrefix = false;
+
+  const srcMatch = AI_SOURCE_PREFIX_PATTERN.exec(rawOrigId);
+  if (srcMatch) {
+    normalizedOrigId = srcMatch[1];
+    strippedSourcePrefix = true;
+  }
+
+  const userFileOrigId = extractMacroBundleUserFileOrigId(normalizedOrigId);
+  if (userFileOrigId) {
     return {
       rawOrigId,
-      normalizedOrigId: rawOrigId,
-      strippedSourcePrefix: false,
+      normalizedOrigId: userFileOrigId,
+      strippedSourcePrefix,
+      strippedMacroBundleFilePrefix: userFileOrigId !== normalizedOrigId,
     };
   }
 
   return {
     rawOrigId,
-    normalizedOrigId: match[1],
-    strippedSourcePrefix: true,
+    normalizedOrigId,
+    strippedSourcePrefix,
   };
 }
 

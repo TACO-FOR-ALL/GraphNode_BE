@@ -24,11 +24,21 @@ export interface GraphNodeDto {
   userId: string;
   origId: string;
   nodeTitle?: string;
+  /** 노드 표시 이름 (editor API에서 생성된 노드의 경우 설정됨) */
+  label?: string;
+  /** 노드 요약 설명 */
+  summary?: string;
+  /** 임의 메타데이터 */
+  metadata?: Record<string, unknown>;
   clusterId: string;
   clusterName: string;
   timestamp: string | null;
   numMessages: number;
   sourceType?: GraphSourceType;
+  /** 임베딩 벡터 (AI 분석 결과, 선택) */
+  embedding?: number[];
+  /** 키워드 목록 (AI 분석 결과, 선택) */
+  keywords?: Array<{ term: string; score: number }>;
   createdAt?: string;
   updatedAt?: string;
   deletedAt?: string;
@@ -39,6 +49,12 @@ export interface GraphNodeDto {
  * @public
  */
 export type GraphEdgeType = 'hard' | 'insight';
+
+/**
+ * 사용자가 지정할 수 있는 macro graph 관계 타입.
+ * Neo4j editor API에서 자유롭게 지정하는 관계 타입이며 UPPER_SNAKE_CASE로 저장됩니다.
+ */
+export type GraphRelationType = string;
 
 /**
  * 그래프 백엔드 처리 상태.
@@ -90,6 +106,10 @@ export interface GraphEdgeDto {
 export interface GraphClusterDto {
   id: string;
   userId: string;
+  /** 클러스터 표시 이름 (name의 별칭, editor API에서 사용) */
+  label?: string;
+  /** 클러스터 요약 설명 */
+  summary?: string;
   name: string;
   description: string;
   size: number;
@@ -127,7 +147,7 @@ export interface GraphStatsDto {
  */
 export interface GraphSubclusterDto {
   id: string;
-  userId: string;
+  userId?: string;
   clusterId: string;
   nodeIds: number[];
   representativeNodeId: number;

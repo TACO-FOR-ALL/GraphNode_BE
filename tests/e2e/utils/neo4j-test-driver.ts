@@ -13,8 +13,8 @@ import type { Driver } from 'neo4j-driver';
  */
 export function createNeo4jE2eDriver(): Driver {
   // CI/E2E docker-compose의 실제 Neo4j password 기본값과 일치시켜 로컬 fallback 인증 실패를 방지합니다.
-  const uri = process.env.NEO4J_URI || 'neo4j://localhost:7687';
-  const user = process.env.NEO4J_USER || 'neo4j';
+  const uri = process.env.NEO4J_URI || 'bolt://127.0.0.1:7687';
+  const user = process.env.NEO4J_USER || process.env.NEO4J_USERNAME || 'neo4j';
   const password = process.env.NEO4J_PASSWORD || 'neo4j-password';
 
   return neo4j.driver(uri, neo4j.auth.basic(user, password));

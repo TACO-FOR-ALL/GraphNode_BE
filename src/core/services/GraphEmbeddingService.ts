@@ -123,6 +123,20 @@ export class GraphEmbeddingService {
   }
 
   /**
+   * 여러 그래프 노드를 일괄적으로 생성하거나 갱신합니다. (Batch Upsert)
+   *
+   * 단일 Neo4j write transaction 안에서 UNWIND 방식으로 처리되므로,
+   * 모든 노드를 낙관적 병렬로 보내는 것보다 훨씬 저련한 커넥션을 사용합니다.
+   *
+   * @param nodes - 저장할 노드 DTO 배열
+   * @returns Promise<void>
+   * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
+   */
+  upsertNodes(nodes: GraphNodeDto[]) {
+    return this.graphManagementService.upsertNodes(nodes);
+  }
+
+  /**
    * 기존 그래프 노드의 일부 속성을 갱신합니다.
    *
    * @param userId - 작업을 요청한 사용자 ID
@@ -203,6 +217,20 @@ export class GraphEmbeddingService {
   }
 
   /**
+   * 여러 그래프 엣지를 일괄적으로 생성하거나 갱신합니다. (Batch Upsert)
+   *
+   * 단일 Neo4j write transaction 안에서 UNWIND 방식으로 처리되므로,
+   * 모든 엣지를 낙관적 병렬로 보내는 것보다 훨씬 저렴한 커넥션을 사용합니다.
+   *
+   * @param edges - 저장할 엣지 DTO 배열
+   * @returns Promise<void>
+   * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
+   */
+  upsertEdges(edges: GraphEdgeDto[]) {
+    return this.graphManagementService.upsertEdges(edges);
+  }
+
+  /**
    * 특정 엣지를 ID로 삭제합니다.
    * @param userId - 작업을 요청한 사용자 ID
    * @param edgeId - 삭제할 엣지의 ID
@@ -255,6 +283,19 @@ export class GraphEmbeddingService {
   }
 
   /**
+   * 여러 그래프 클러스터를 일괄적으로 생성하거나 갱신합니다. (Batch Upsert)
+   *
+   * AddNodeResultHandler에서 신규 클러스터를 일괄 저장할 때 사용합니다.
+   *
+   * @param clusters - 저장할 클러스터 DTO 배열
+   * @returns Promise<void>
+   * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
+   */
+  upsertClusters(clusters: GraphClusterDto[]) {
+    return this.graphManagementService.upsertClusters(clusters);
+  }
+
+  /**
    * 특정 클러스터를 삭제합니다.
    * @param userId - 작업을 요청한 사용자 ID
    * @param id - 삭제할 클러스터의 ID
@@ -295,6 +336,57 @@ export class GraphEmbeddingService {
    */
   listClusters(userId: string) {
     return this.graphManagementService.listClusters(userId);
+  }
+
+  /**
+   * 연결된 MacroNode가 없는 빈 MacroCluster(Ghost Cluster)를 삭제합니다.
+   *
+   * @param userId 사용자 ID
+   */
+  removeEmptyClusters(userId: string) {
+    return this.graphManagementService.removeEmptyClusters(userId);
+  }
+
+  async pruneIncompatibleSubclusterMemberships(
+    userId: string,
+    nodeIds?: number[],
+    limit?: number
+  ): Promise<{ containsDeleted: number; representsDeleted: number }> {
+    let result = { containsDeleted: 0, representsDeleted: 0 };
+    await this.runGraphWriteTransaction(
+      'GraphEmbeddingService.pruneIncompatibleSubclusterMemberships.transaction',
+      async (options) => {
+        result = await this.graphManagementService.pruneIncompatibleSubclusterMemberships(
+          userId,
+          nodeIds,
+          limit,
+          options
+        );
+      }
+    );
+    return result;
+  }
+
+  async reconcileSubclusterMemberships(userId: string): Promise<{
+    deletedSubclusters: number;
+    reassignedRepresentatives: number;
+    removedInvalidRepresents: number;
+  }> {
+    let result = {
+      deletedSubclusters: 0,
+      reassignedRepresentatives: 0,
+      removedInvalidRepresents: 0,
+    };
+    await this.runGraphWriteTransaction(
+      'GraphEmbeddingService.reconcileSubclusterMemberships.transaction',
+      async (options) => {
+        result = await this.graphManagementService.reconcileSubclusterMemberships(
+          userId,
+          options
+        );
+      }
+    );
+    return result;
   }
 
   /**
@@ -383,7 +475,7 @@ export class GraphEmbeddingService {
       this.graphManagementService.listEdges(userId),
       this.graphManagementService.listClusters(userId),
       this.graphManagementService.listSubclusters(userId),
-      this.graphManagementService.getStats(userId),
+      this.graphManagementService.getStatsMetadata(userId),
     ]);
     const enrichedNodes = await this.attachNodeTitles(userId, nodes);
 
@@ -399,7 +491,7 @@ export class GraphEmbeddingService {
         };
       }),
       stats: stats
-        ? { nodes: stats.nodes, edges: stats.edges, clusters: stats.clusters, status: stats.status }
+        ? { nodes: nodes.length, edges: edges.length, clusters: clusters.length, status: stats.status }
         : { nodes: 0, edges: 0, clusters: 0, status: 'NOT_CREATED' },
     };
   }

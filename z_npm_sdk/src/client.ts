@@ -8,15 +8,20 @@ import { GraphApi } from './endpoints/graph.js';
 import { GraphAiApi } from './endpoints/graphAi.js';
 import { NoteApi } from './endpoints/note.js';
 import { AppleAuthApi } from './endpoints/auth.apple.js';
+import { NotionAuthApi } from './endpoints/auth.notion.js';
 import { SyncApi } from './endpoints/sync.js';
 import { AiApi } from './endpoints/ai.js';
 import { NotificationApi } from './endpoints/notification.js';
 import { FileApi } from './endpoints/file.js';
+import { UserFilesApi } from './endpoints/userFiles.js';
 import { MicroscopeApi } from './endpoints/microscope.js';
 import { SearchApi } from './endpoints/search.js';
 import { FeedbackApi } from './endpoints/feedback.js';
 import { GraphEditorApi } from './endpoints/graphEditor.js';
 import { ImportsApi } from './endpoints/imports.js';
+import { ExportApi } from './endpoints/export.js';
+import { BillingApi } from './endpoints/billing.js';
+import { AgentApi } from './endpoints/agent.js';
 
 /**
  * GraphNode 클라이언트 옵션
@@ -41,10 +46,12 @@ export interface GraphNodeClientOptions extends Omit<BuilderOptions, 'baseUrl' |
  * @property graphAi 그래프 AI 생성 API
  * @property note 노트/폴더 관리 API
  * @property appleAuth 애플 인증 API
+ * @property notionAuth 노션 연동 및 프록시 API
  * @property sync 데이터 동기화 API
  * @property ai AI 채팅 API
  * @property notification SSE 알림 API
- * @property file 파일 업로드/다운로드 API
+ * @property file AI 채팅용 파일 업로드 API (`/api/v1/ai/files`)
+ * @property userFiles 사용자 라이브러리 파일 API (`/v1/files`, `/v1/sidebar-items`, Presigned 뷰 URL 등)
  * @property microscope 마이크로스코프 API
  */
 export class GraphNodeClient {
@@ -56,15 +63,21 @@ export class GraphNodeClient {
   readonly graphAi: GraphAiApi;
   readonly note: NoteApi;
   readonly appleAuth: AppleAuthApi;
+  readonly notionAuth: NotionAuthApi;
   readonly sync: SyncApi;
   readonly ai: AiApi;
   readonly notification: NotificationApi;
   readonly file: FileApi;
+  readonly userFiles: UserFilesApi;
   readonly microscope: MicroscopeApi;
   readonly search: SearchApi;
   readonly feedback: FeedbackApi;
   readonly graphEditor: GraphEditorApi;
   readonly imports: ImportsApi;
+  readonly export: ExportApi;
+  readonly billing: BillingApi;
+  /** AI 에이전트 채팅 스트림 API */
+  readonly agent: AgentApi;
 
   /**
    * HTTP 요청 빌더 인스턴스.
@@ -128,15 +141,20 @@ export class GraphNodeClient {
     this.graphAi = new GraphAiApi(this.rb);
     this.note = new NoteApi(this.rb);
     this.appleAuth = new AppleAuthApi(getGraphNodeBaseUrl());
+    this.notionAuth = new NotionAuthApi(this.rb);
     this.sync = new SyncApi(this.rb);
     this.ai = new AiApi(this.rb);
     this.notification = new NotificationApi(this.rb); 
     this.file = new FileApi(this.rb);
+    this.userFiles = new UserFilesApi(this.rb);
     this.microscope = new MicroscopeApi(this.rb);
     this.search = new SearchApi(this.rb);
     this.feedback = new FeedbackApi(this.rb);
     this.graphEditor = new GraphEditorApi(this.rb);
     this.imports = new ImportsApi(this.rb);
+    this.export = new ExportApi(this.rb);
+    this.billing = new BillingApi(this.rb);
+    this.agent = new AgentApi(this.rb);
   }
 
   /**

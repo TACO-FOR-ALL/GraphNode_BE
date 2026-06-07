@@ -104,6 +104,17 @@ export interface MacroGraphUpsertResult {
   summary: boolean;
 }
 
+export interface PruneIncompatibleSubclusterMembershipsResult {
+  containsDeleted: number;
+  representsDeleted: number;
+}
+
+export interface ReconcileSubclusterMembershipsResult {
+  deletedSubclusters: number;
+  reassignedRepresentatives: number;
+  removedInvalidRepresents: number;
+}
+
 /**
  * @description Macro Graph를 Neo4j Native Graph 구조로 저장하고 조회하기 위한 Port입니다.
  *
@@ -219,6 +230,18 @@ export interface MacroGraphStore {
     subclusters: GraphSubclusterDto[],
     options?: MacroGraphStoreOptions
   ): Promise<void>;
+
+  pruneIncompatibleSubclusterMemberships(
+    userId: string,
+    nodeIds?: number[],
+    limit?: number,
+    options?: MacroGraphStoreOptions
+  ): Promise<PruneIncompatibleSubclusterMembershipsResult>;
+
+  reconcileSubclusterMemberships(
+    userId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<ReconcileSubclusterMembershipsResult>;
 
   /**
    * @description 사용자 graph stats를 독립적으로 저장합니다. (Incremental Write)
@@ -368,7 +391,34 @@ export interface MacroGraphStore {
    * @param options transaction 등 adapter 전용 옵션입니다.
    * @returns stats 문서입니다. 없으면 `null`입니다.
    */
+  /**
+   * @deprecated 2026-05-08.
+   * Neo4j macro graph에서는 node/edge/cluster 개수를 MacroStats 노드에 직접 저장하지 않습니다.
+   * 이 메서드의 Neo4j 구현은 MacroNode, MacroRelation, MacroCluster를 다시 count하므로,
+   * graph 크기가 커진 사용자에서는 optional match 조합으로 중간 row 수가 폭증할 수 있습니다.
+   * snapshot처럼 목록을 이미 조회하는 경로에서는 `getStatsMetadata`로 상태 메타데이터만 읽고,
+   * count는 실제 조회된 배열 길이로 계산해야 합니다.
+   */
   getStats(userId: string, options?: MacroGraphStoreOptions): Promise<GraphStatsDto | null>;
+
+  /**
+   * @description 저장된 MacroStats 노드만 조회합니다.
+   *
+   * Snapshot 조회처럼 node/edge/cluster 목록을 이미 별도로 가져온 경로에서는
+   * count 재집계 없이 status/generatedAt 같은 상태 메타데이터만 필요합니다.
+   */
+  /**
+   * @since 2026-05-08
+   * 저장된 MacroStats 노드에서 상태 메타데이터만 조회합니다.
+   * 이 메서드는 count 재집계를 수행하지 않습니다. Neo4j의 MacroStats 노드는 현재
+   * node/edge/cluster 개수를 직접 보관하지 않으므로, 반환 DTO의 count 필드는 저장값으로
+   * 간주하면 안 됩니다. snapshot API처럼 목록을 이미 조회한 경로에서 status/generatedAt
+   * 같은 상태 메타데이터만 얻기 위한 경량 조회 용도입니다.
+   */
+  getStatsMetadata?(
+    userId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<GraphStatsDto | null>;
   /**
    * @description 사용자 graph summary를 조회합니다.
    *
@@ -782,6 +832,39 @@ export interface MacroGraphStore {
     clusterId: string,
     options?: MacroGraphStoreOptions
   ): Promise<boolean>;
+
+  /**
+   * @description 연결된 MacroNode가 없는 빈 MacroCluster(Ghost Cluster)를 삭제합니다.
+   *
+   * @param userId 삭제 대상 사용자 ID
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  removeEmptyClusters(userId: string, options?: MacroGraphStoreOptions): Promise<void>;
+
+  /**
+   * @description 한 MacroNode에 BELONGS_TO 관계가 복수 개 누적된 경우 중복을 정리합니다.
+   *
+   * clusterId의 숫자 파트가 가장 큰 클러스터(가장 최신 AI 결정)를 유지하고
+   * 나머지 BELONGS_TO 관계를 모두 삭제합니다.
+   *
+   * @param userId 사용자 ID
+   * @param options transaction 등 adapter 전용 옵션
+   */
+  deduplicateBelongsTo(userId: string, options?: MacroGraphStoreOptions): Promise<void>;
+
+  /**
+   * @description dry-run 전용 — 중복 BELONGS_TO를 보유한 노드 수와 초과 관계 수를 반환합니다.
+   *
+   * 실제 DELETE 없이 `deduplicateBelongsTo` 실행 시 영향 범위만 미리 확인합니다.
+   *
+   * @param userId 사용자 ID
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns duplicateNodeCount (중복 보유 노드 수), excessRelCount (삭제될 관계 수)
+   */
+  countDuplicateBelongsTo(
+    userId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<{ duplicateNodeCount: number; excessRelCount: number }>;
 }
 /**
  * @description Graph RAG 클러스터 시블링 탐색 결과 단일 항목입니다.

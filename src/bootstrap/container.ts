@@ -2,6 +2,7 @@ import { ConversationRepositoryMongo } from '../infra/repositories/ConversationR
 import { MessageRepositoryMongo } from '../infra/repositories/MessageRepositoryMongo';
 import { UserRepositoryMySQL } from '../infra/repositories/UserRepositoryMySQL';
 import { NoteRepositoryMongo } from '../infra/repositories/NoteRepositoryMongo';
+import { UserFileRepositoryMongo } from '../infra/repositories/UserFileRepositoryMongo';
 import { DailyUsageRepositoryPrisma } from '../infra/repositories/DailyUsageRepositoryPrisma';
 import { GraphVectorService } from '../core/services/GraphVectorService';
 import { ConversationService } from '../core/services/ConversationService';
@@ -10,6 +11,7 @@ import { ChatManagementService } from '../core/services/ChatManagementService';
 import { UserService } from '../core/services/UserService';
 import { DailyUsageService } from '../core/services/DailyUsageService';
 import { NoteService } from '../core/services/NoteService';
+import { UserFileService } from '../core/services/UserFileService';
 import { GraphManagementService } from '../core/services/GraphManagementService';
 import { GraphEmbeddingService } from '../core/services/GraphEmbeddingService';
 import { GraphGenerationService } from '../core/services/GraphGenerationService';
@@ -19,6 +21,7 @@ import { AiInteractionService } from '../core/services/AiInteractionService';
 import { AgentService } from '../core/services/AgentService';
 import { SearchService } from '../core/services/SearchService';
 import { FeedbackService } from '../core/services/FeedbackService';
+import { ChatExportService } from '../core/services/ChatExportService';
 import { GraphEditorService } from '../core/services/GraphEditorService';
 import { GoogleOAuthService } from '../core/services/GoogleOAuthService';
 import { AppleOAuthService } from '../core/services/AppleOAuthService';
@@ -39,6 +42,7 @@ import { Neo4jMacroGraphAdapter } from '../infra/graph/Neo4jMacroGraphAdapter';
 import { ChromaVectorAdapter } from '../infra/vector/ChromaVectorAdapter';
 // import { QdrantClientAdapter } from '../infra/repositories/QdrantClientAdapter'; // Removed
 import { NoteRepository } from '../core/ports/NoteRepository';
+import { UserFileRepository } from '../core/ports/UserFileRepository';
 // Ports
 import { GraphNeo4jStore } from '../core/ports/GraphNeo4jStore';
 import { MacroGraphStore } from '../core/ports/MacroGraphStore';
@@ -46,11 +50,14 @@ import { VectorStore } from '../core/ports/VectorStore';
 import { QueuePort } from '../core/ports/QueuePort';
 import { StoragePort } from '../core/ports/StoragePort';
 import { EventBusPort } from '../core/ports/EventBusPort';
+import { EmailPort } from '../core/ports/EmailPort';
 import { NotificationRepository } from '../core/ports/NotificationRepository';
+import { ChatExportRepository } from '../core/ports/ChatExportRepository';
 import { FeedbackRepository } from '../core/ports/FeedbackRepository';
 // Infra Adapters
-import { AwsSqsAdapter } from '../infra/aws/AwsSqsAdapter';
 import { AwsS3Adapter } from '../infra/aws/AwsS3Adapter';
+import { AwsSqsAdapter } from '../infra/aws/AwsSqsAdapter';
+import { SmtpEmailAdapter } from '../infra/email/SmtpEmailAdapter';
 import { RedisEventBusAdapter } from '../infra/redis/RedisEventBusAdapter';
 import { FeedbackRepositoryPrisma } from '../infra/repositories/FeedbackRepositoryPrisma';
 import { FileServiceClient } from '../infra/http/FileServiceClient';
@@ -58,6 +65,35 @@ import { ImportArchiveService } from '../core/services/ImportArchiveService';
 import { ImportFinalizeProcessor } from '../core/services/ImportFinalizeProcessor';
 import type { FileServicePort } from '../core/ports/FileServicePort';
 import { ValidationError } from '../shared/errors/domain';
+import { ChatExportRepositoryMongo } from '../infra/repositories/ChatExportRepositoryMongo';
+
+import { CreditRepositoryPrisma } from '../infra/repositories/CreditRepositoryPrisma';
+import { ICreditRepository } from '../core/ports/ICreditRepository';
+import { CreditService } from '../core/services/CreditService';
+import { SubscriptionRepository } from '../infra/repositories/SubscriptionRepository';
+import { PaymentHistoryRepository } from '../infra/repositories/PaymentHistoryRepository';
+import { WebhookEventRepository } from '../infra/repositories/WebhookEventRepository';
+import { UserPaymentMethodRepository } from '../infra/repositories/UserPaymentMethodRepository';
+import { PortoneAdapter } from '../infra/payment/PortoneAdapter';
+import { TossAdapter } from '../infra/payment/TossAdapter';
+import { StripeAdapter } from '../infra/payment/StripeAdapter';
+import { SubscriptionService } from '../core/services/SubscriptionService';
+import { WebhookProcessingService } from '../core/services/WebhookProcessingService';
+import { WebhookController } from '../app/controllers/WebhookController';
+import { SubscriptionController } from '../app/controllers/SubscriptionController';
+import { NotionService } from '../core/services/NotionService';
+import { NotionApiClient } from '../infra/notion/NotionApiClient';
+import { NotionIntegrationRepositoryPrisma } from '../infra/repositories/NotionIntegrationRepositoryPrisma';
+import { NotionCacheRepositoryMongo } from '../infra/repositories/NotionCacheRepositoryMongo';
+import { AuthNotionController } from '../app/controllers/AuthNotion';
+import { NotionWebhookController } from '../app/controllers/NotionWebhookController';
+import type { NotionIntegrationRepository } from '../core/ports/NotionIntegrationRepository';
+import type { NotionCacheRepository } from '../core/ports/NotionCacheRepository';
+import { BillingConfig } from '../config/billing.config';
+import type { ISubscriptionRepository } from '../core/ports/ISubscriptionRepository';
+import type { IPaymentHistoryRepository } from '../core/ports/IPaymentHistoryRepository';
+import type { IWebhookEventRepository } from '../core/ports/IWebhookEventRepository';
+import type { IUserPaymentMethodRepository } from '../core/ports/IUserPaymentMethodRepository';
 /**
  * 애플리케이션의 의존성 주입(Dependency Injection)을 관리하는 싱글톤 컨테이너입니다.
  *
@@ -76,6 +112,7 @@ export class Container {
   private userRepo: UserRepository | null = null;
   private dailyUsageRepo: DailyUsageRepository | null = null;
   private noteRepo: NoteRepository | null = null;
+  private userFileRepo: UserFileRepository | null = null;
   private macroGraphStore: MacroGraphStore | null = null;
   private neo4jStore: GraphNeo4jStore | null = null;
   private vectorStore: VectorStore | null = null;
@@ -83,10 +120,17 @@ export class Container {
   private microscopeWorkspaceRepo: MicroscopeWorkspaceStore | null = null;
   private notificationRepo: NotificationRepository | null = null;
   private feedbackRepo: FeedbackRepository | null = null;
+  private chatExportRepo: ChatExportRepository | null = null;
+  private creditRepo: ICreditRepository | null = null;
+  private subscriptionRepo: ISubscriptionRepository | null = null;
+  private paymentHistoryRepo: IPaymentHistoryRepository | null = null;
+  private webhookEventRepo: IWebhookEventRepository | null = null;
+  private userPaymentMethodRepo: IUserPaymentMethodRepository | null = null;
 
   // Infra Adapters
   private queueAdapter: QueuePort | null = null;
   private storageAdapter: StoragePort | null = null;
+  private emailAdapter: EmailPort | null = null;
   private eventBusAdapter: EventBusPort | null = null;
 
   // Services
@@ -96,6 +140,7 @@ export class Container {
   private userService: UserService | null = null;
   private dailyUsageService: DailyUsageService | null = null;
   private noteService: NoteService | null = null;
+  private userFileService: UserFileService | null = null;
   private graphManagementService: GraphManagementService | null = null;
   private graphEmbeddingService: GraphEmbeddingService | null = null;
   private graphGenerationService: GraphGenerationService | null = null;
@@ -105,13 +150,25 @@ export class Container {
   private agentService: AgentService | null = null;
   private googleOAuthService: GoogleOAuthService | null = null;
   private appleOAuthService: AppleOAuthService | null = null;
+  private notionIntegrationRepo: NotionIntegrationRepository | null = null;
+  private notionCacheRepo: NotionCacheRepository | null = null;
+  private notionService: NotionService | null = null;
+  private authNotionController: AuthNotionController | null = null;
+  private notionWebhookController: NotionWebhookController | null = null;
   private microscopeManagementService: MicroscopeManagementService | null = null;
   private searchService: SearchService | null = null;
   private feedbackService: FeedbackService | null = null;
+  private chatExportService: ChatExportService | null = null;
   private graphEditorService: GraphEditorService | null = null;
   private fileServiceClient: FileServicePort | null = null;
   private importArchiveService: ImportArchiveService | null = null;
   private importFinalizeProcessor: ImportFinalizeProcessor | null = null;
+  private creditService: CreditService | null = null;
+  private subscriptionService: SubscriptionService | null = null;
+  private webhookProcessingService: WebhookProcessingService | null = null;
+  private webhookController: WebhookController | null = null;
+  private subscriptionController: SubscriptionController | null = null;
+  private billingConfig: BillingConfig | null = null;
 
   private constructor() {}
   /**
@@ -186,6 +243,18 @@ export class Container {
     return this.storageAdapter;
   }
   /**
+   * SmtpEmailAdapter 인스턴스를 반환합니다.
+   * @remarks `CHAT_EXPORT_SMTP_USER` / `CHAT_EXPORT_SMTP_PASS` 미설정 시 발송은 건너뜁니다.
+   */
+  getEmailAdapter(): EmailPort {
+    if (!this.emailAdapter) {
+      const raw = new SmtpEmailAdapter();
+      this.emailAdapter = createAuditProxy(raw, 'SmtpEmailAdapter');
+    }
+    return this.emailAdapter;
+  }
+
+  /**
    * RedisEventBusAdapter 인스턴스를 반환합니다.
    * @returns RedisEventBusAdapter 인스턴스
    */
@@ -250,6 +319,16 @@ export class Container {
   }
 
   /**
+   * UserFileRepository(Mongo, `user_files`) 인스턴스를 반환합니다.
+   */
+  getUserFileRepository(): UserFileRepository {
+    if (!this.userFileRepo) {
+      this.userFileRepo = new UserFileRepositoryMongo();
+    }
+    return this.userFileRepo;
+  }
+
+  /**
    * MacroGraphStore 인스턴스를 반환합니다.
    * @returns MacroGraphStore 인스턴스
    */
@@ -280,6 +359,53 @@ export class Container {
       this.feedbackRepo = new FeedbackRepositoryPrisma();
     }
     return this.feedbackRepo;
+  }
+
+  getChatExportRepository(): ChatExportRepository {
+    if (!this.chatExportRepo) {
+      this.chatExportRepo = new ChatExportRepositoryMongo();
+    }
+    return this.chatExportRepo;
+  }
+
+  // --- Services ---
+  getCreditRepository(): ICreditRepository {
+    if (!this.creditRepo) {
+      this.creditRepo = new CreditRepositoryPrisma();
+    }
+    return this.creditRepo;
+  }
+
+  getSubscriptionRepository(): ISubscriptionRepository {
+    if (!this.subscriptionRepo) {
+      this.subscriptionRepo = new SubscriptionRepository();
+    }
+    return this.subscriptionRepo;
+  }
+
+  getPaymentHistoryRepository(): IPaymentHistoryRepository {
+    if (!this.paymentHistoryRepo) {
+      this.paymentHistoryRepo = new PaymentHistoryRepository();
+    }
+    return this.paymentHistoryRepo;
+  }
+
+  getWebhookEventRepository(): IWebhookEventRepository {
+    if (!this.webhookEventRepo) {
+      this.webhookEventRepo = new WebhookEventRepository();
+    }
+    return this.webhookEventRepo;
+  }
+
+  /**
+   * UserPaymentMethodRepository 인스턴스를 반환합니다.
+   * @returns IUserPaymentMethodRepository 인스턴스
+   */
+  getUserPaymentMethodRepository(): IUserPaymentMethodRepository {
+    if (!this.userPaymentMethodRepo) {
+      this.userPaymentMethodRepo = new UserPaymentMethodRepository();
+    }
+    return this.userPaymentMethodRepo;
   }
 
   // --- Services ---
@@ -348,6 +474,24 @@ export class Container {
     }
     return this.noteService;
   }
+
+  /**
+   * UserFileService 인스턴스를 반환합니다.
+   * 업로드·백그라운드 요약·사이드바 병합 및 그래프 연동을 담당합니다.
+   */
+  getUserFileService(): UserFileService {
+    if (!this.userFileService) {
+      const raw = new UserFileService(
+        this.getUserFileRepository(),
+        this.getNoteRepository(),
+        this.getAwsS3Adapter(),
+        this.getGraphManagementService(),
+        this.getAiInteractionService()
+      );
+      this.userFileService = createAuditProxy(raw, 'UserFileService');
+    }
+    return this.userFileService;
+  }
   /**
    * GraphManagementService 인스턴스를 반환합니다.
    */
@@ -379,14 +523,23 @@ export class Container {
    */
   getGraphGenerationService(): GraphGenerationService {
     if (!this.graphGenerationService) {
+      const env = loadEnv();
+      const notionEnabled = Boolean(
+        env.OAUTH_NOTION_CLIENT_ID &&
+          env.OAUTH_NOTION_CLIENT_SECRET &&
+          env.OAUTH_NOTION_REDIRECT_URI
+      );
       const raw = new GraphGenerationService(
         this.getChatManagementService(),
         this.getGraphEmbeddingService(),
         this.getNoteService(),
+        this.getUserFileService(),
         this.getUserService(),
         this.getAwsSqsAdapter(),
         this.getAwsS3Adapter(),
-        this.getNotificationService()
+        this.getNotificationService(),
+        this.getCreditService(),
+        notionEnabled ? this.getNotionService() : undefined
       );
       this.graphGenerationService = createAuditProxy(raw, 'GraphGenerationService');
     }
@@ -435,6 +588,8 @@ export class Container {
           graphEmbeddingService: this.getGraphEmbeddingService(),
           graphVectorService: this.getGraphVectorService(),
           searchService: this.getSearchService(),
+          creditService: this.getCreditService(),
+          microscopeWorkspaceStore: this.getMicroscopeWorkspaceStore(),
         }
       );
       this.agentService = createAuditProxy(raw, 'AgentService');
@@ -449,12 +604,28 @@ export class Container {
       const raw = new AiInteractionService(
         this.getChatManagementService(),
         this.getUserService(),
-        this.getAwsS3Adapter()
+        this.getAwsS3Adapter(),
+        this.getCreditService()
       );
       this.aiInteractionService = createAuditProxy(raw, 'AiInteractionService');
     }
     return this.aiInteractionService;
   }
+
+  getChatExportService(): ChatExportService {
+    if (!this.chatExportService) {
+      const raw = new ChatExportService(
+        this.getChatManagementService(),
+        this.getUserService(),
+        this.getChatExportRepository(),
+        this.getAwsS3Adapter(),
+        this.getEmailAdapter()
+      );
+      this.chatExportService = createAuditProxy(raw, 'ChatExportService');
+    }
+    return this.chatExportService;
+  }
+
   /**
    * GoogleOAuthService 인스턴스를 반환합니다.
    */
@@ -487,6 +658,69 @@ export class Container {
     }
     return this.appleOAuthService;
   }
+
+  getNotionIntegrationRepository(): NotionIntegrationRepository {
+    if (!this.notionIntegrationRepo) {
+      this.notionIntegrationRepo = new NotionIntegrationRepositoryPrisma();
+    }
+    return this.notionIntegrationRepo;
+  }
+
+  getNotionCacheRepository(): NotionCacheRepository {
+    if (!this.notionCacheRepo) {
+      this.notionCacheRepo = new NotionCacheRepositoryMongo();
+    }
+    return this.notionCacheRepo;
+  }
+
+  getNotionService(): NotionService {
+    if (!this.notionService) {
+      const env = loadEnv();
+      if (
+        !env.OAUTH_NOTION_CLIENT_ID ||
+        !env.OAUTH_NOTION_CLIENT_SECRET ||
+        !env.OAUTH_NOTION_REDIRECT_URI
+      ) {
+        throw new Error('Notion integration is not configured (OAUTH_NOTION_* env missing)');
+      }
+      const client = new NotionApiClient({
+        clientId: env.OAUTH_NOTION_CLIENT_ID,
+        clientSecret: env.OAUTH_NOTION_CLIENT_SECRET,
+        redirectUri: env.OAUTH_NOTION_REDIRECT_URI,
+      });
+      const raw = new NotionService(
+        client,
+        this.getNotionIntegrationRepository(),
+        this.getNotionCacheRepository(),
+        env.NOTION_WEBHOOK_VERIFICATION_TOKEN
+      );
+      this.notionService = createAuditProxy(raw, 'NotionService');
+    }
+    return this.notionService;
+  }
+
+  getAuthNotionController(): AuthNotionController {
+    if (!this.authNotionController) {
+      this.authNotionController = new AuthNotionController(this.getNotionService());
+    }
+    return this.authNotionController;
+  }
+
+  getNotionWebhookController(): NotionWebhookController {
+    if (!this.notionWebhookController) {
+      this.notionWebhookController = new NotionWebhookController(this.getNotionService());
+    }
+    return this.notionWebhookController;
+  }
+
+  getNotionApiController(): import('../app/controllers/NotionApiController').NotionApiController {
+    if (!(this as any)._notionApiController) {
+      const { NotionApiController } = require('../app/controllers/NotionApiController');
+      (this as any)._notionApiController = new NotionApiController(this.getNotionService());
+    }
+    return (this as any)._notionApiController;
+  }
+
   /**
    * MicroscopeManagementService 인스턴스를 반환합니다.
    */
@@ -500,7 +734,8 @@ export class Container {
         this.getConversationRepository(),
         this.getNoteRepository(),
         this.getNotificationService(),
-        this.getUserService()
+        this.getUserService(),
+        this.getCreditService()
       );
       this.microscopeManagementService = createAuditProxy(raw, 'MicroscopeManagementService');
     }
@@ -529,6 +764,144 @@ export class Container {
       this.feedbackService = createAuditProxy(raw, 'FeedbackService');
     }
     return this.feedbackService;
+  }
+
+  getCreditService(): CreditService {
+    if (!this.creditService) {
+      const raw = new CreditService(this.getCreditRepository());
+      this.creditService = createAuditProxy(raw, 'CreditService');
+    }
+    return this.creditService;
+  }
+
+  getBillingConfig(): BillingConfig {
+    if (!this.billingConfig) {
+      this.billingConfig = new BillingConfig();
+    }
+    return this.billingConfig;
+  }
+
+  /**
+   * SubscriptionService 인스턴스를 반환합니다.
+   * pgAdapters를 주입하여 cancelSubscription 시 PG 스케줄러 해지가 가능합니다.
+   * @returns SubscriptionService 인스턴스
+   */
+  getSubscriptionService(): SubscriptionService {
+    if (!this.subscriptionService) {
+      const env = loadEnv();
+      const pgAdapters: Record<string, import('../core/ports/PaymentProvider').PaymentProvider> = {
+        portone: new PortoneAdapter({
+          apiSecret:     env.PORTONE_API_SECRET,
+          webhookSecret: env.PORTONE_WEBHOOK_SECRET,
+          storeId:       env.PORTONE_STORE_ID,
+        }),
+        toss:    new TossAdapter(env.TOSS_SECRET_KEY ?? ''),
+        stripe:  new StripeAdapter({
+          secretKey:     env.STRIPE_SECRET_KEY,
+          webhookSecret: env.STRIPE_WEBHOOK_SECRET,
+          priceIds: {
+            PRO_MONTHLY:        env.STRIPE_PRICE_ID_PRO_MONTHLY,
+            PRO_YEARLY:         env.STRIPE_PRICE_ID_PRO_YEARLY,
+            ENTERPRISE_MONTHLY: env.STRIPE_PRICE_ID_ENTERPRISE_MONTHLY,
+            ENTERPRISE_YEARLY:  env.STRIPE_PRICE_ID_ENTERPRISE_YEARLY,
+          },
+        }),
+      };
+      this.subscriptionService = new SubscriptionService(
+        this.getSubscriptionRepository(),
+        this.getCreditService(),
+        this.getBillingConfig(),
+        pgAdapters
+      );
+    }
+    return this.subscriptionService;
+  }
+
+  /**
+   * WebhookProcessingService 인스턴스를 반환합니다.
+   * @returns WebhookProcessingService 인스턴스
+   */
+  getWebhookProcessingService(): WebhookProcessingService {
+    if (!this.webhookProcessingService) {
+      this.webhookProcessingService = new WebhookProcessingService(
+        this.getSubscriptionRepository(),
+        this.getPaymentHistoryRepository(),
+        this.getWebhookEventRepository(),
+        this.getCreditService(),
+        this.getBillingConfig()
+      );
+    }
+    return this.webhookProcessingService;
+  }
+
+  /**
+   * WebhookController 인스턴스를 반환합니다.
+   * PG 어댑터는 환경변수에서 시크릿을 읽어 초기화합니다.
+   * @returns WebhookController 인스턴스
+   */
+  getWebhookController(): WebhookController {
+    if (!this.webhookController) {
+      const env = loadEnv();
+      const adapters: Record<string, import('../core/ports/PaymentProvider').PaymentProvider> = {
+        portone: new PortoneAdapter({
+          apiSecret:     env.PORTONE_API_SECRET,
+          webhookSecret: env.PORTONE_WEBHOOK_SECRET,
+          storeId:       env.PORTONE_STORE_ID,
+        }),
+        toss:    new TossAdapter(env.TOSS_SECRET_KEY ?? ''),
+        stripe:  new StripeAdapter({
+          secretKey:     env.STRIPE_SECRET_KEY,
+          webhookSecret: env.STRIPE_WEBHOOK_SECRET,
+          priceIds: {
+            PRO_MONTHLY:        env.STRIPE_PRICE_ID_PRO_MONTHLY,
+            PRO_YEARLY:         env.STRIPE_PRICE_ID_PRO_YEARLY,
+            ENTERPRISE_MONTHLY: env.STRIPE_PRICE_ID_ENTERPRISE_MONTHLY,
+            ENTERPRISE_YEARLY:  env.STRIPE_PRICE_ID_ENTERPRISE_YEARLY,
+          },
+        }),
+      };
+      this.webhookController = new WebhookController(
+        this.getWebhookEventRepository(),
+        adapters,
+        this.getWebhookProcessingService()
+      );
+    }
+    return this.webhookController;
+  }
+
+  /**
+   * SubscriptionController 인스턴스를 반환합니다.
+   * @returns SubscriptionController 인스턴스
+   */
+  getSubscriptionController(): SubscriptionController {
+    if (!this.subscriptionController) {
+      const env = loadEnv();
+      const pgAdapters: Record<string, import('../core/ports/PaymentProvider').PaymentProvider> = {
+        portone: new PortoneAdapter({
+          apiSecret:     env.PORTONE_API_SECRET,
+          webhookSecret: env.PORTONE_WEBHOOK_SECRET,
+          storeId:       env.PORTONE_STORE_ID,
+        }),
+        toss:    new TossAdapter(env.TOSS_SECRET_KEY ?? ''),
+        stripe:  new StripeAdapter({
+          secretKey:     env.STRIPE_SECRET_KEY,
+          webhookSecret: env.STRIPE_WEBHOOK_SECRET,
+          priceIds: {
+            PRO_MONTHLY:        env.STRIPE_PRICE_ID_PRO_MONTHLY,
+            PRO_YEARLY:         env.STRIPE_PRICE_ID_PRO_YEARLY,
+            ENTERPRISE_MONTHLY: env.STRIPE_PRICE_ID_ENTERPRISE_MONTHLY,
+            ENTERPRISE_YEARLY:  env.STRIPE_PRICE_ID_ENTERPRISE_YEARLY,
+          },
+        }),
+      };
+      this.subscriptionController = new SubscriptionController(
+        this.getSubscriptionService(),
+        this.getSubscriptionRepository(),
+        this.getUserPaymentMethodRepository(),
+        pgAdapters
+      );
+    }
+    return this.subscriptionController;
   }
 
   /**

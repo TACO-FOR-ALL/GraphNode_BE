@@ -29,6 +29,7 @@ describe('GraphManagementService', () => {
       listClusters: jest.fn(),
       saveStats: jest.fn(),
       getStats: jest.fn(),
+      getStatsMetadata: jest.fn(),
       deleteStats: jest.fn(),
       upsertGraphSummary: jest.fn(),
       getGraphSummary: jest.fn(),
@@ -42,6 +43,7 @@ describe('GraphManagementService', () => {
       restoreAllGraphData: jest.fn(),
       deleteNodesByOrigIds: jest.fn(),
       restoreNodesByOrigIds: jest.fn(),
+      reconcileSubclusterMemberships: jest.fn(),
     } as unknown as jest.Mocked<MacroGraphStore>;
 
     service = new GraphManagementService(mockRepo);
@@ -260,6 +262,25 @@ describe('GraphManagementService', () => {
           expect(res?.nodes).toBe(10);
       });
 
+      it('getStatsMetadata calls repo lightweight path', async () => {
+          const getStatsMetadataMock = mockRepo.getStatsMetadata as jest.MockedFunction<
+            NonNullable<MacroGraphStore['getStatsMetadata']>
+          >;
+          getStatsMetadataMock.mockResolvedValue({ userId: 'u1', nodes: 0, edges: 0, clusters: 0, status: 'CREATED', generatedAt: new Date().toISOString(), metadata: {} });
+          const res = await service.getStatsMetadata('u1');
+          expect(mockRepo.getStatsMetadata).toHaveBeenCalledWith('u1');
+          expect(mockRepo.getStats).not.toHaveBeenCalled();
+          expect(res?.status).toBe('CREATED');
+      });
+
+      it('getStatsMetadata falls back to getStats when repo has no lightweight path', async () => {
+          delete (mockRepo as Partial<MacroGraphStore>).getStatsMetadata;
+          mockRepo.getStats.mockResolvedValue({ userId: 'u1', nodes: 10, edges: 5, clusters: 2, status: 'CREATED', generatedAt: new Date().toISOString(), metadata: {} });
+          const res = await service.getStatsMetadata('u1');
+          expect(mockRepo.getStats).toHaveBeenCalledWith('u1');
+          expect(res?.nodes).toBe(10);
+      });
+
       it('deleteStats calls repo', async () => {
           await service.deleteStats('u1');
           expect(mockRepo.deleteStats).toHaveBeenCalledWith('u1', undefined, undefined);
@@ -300,6 +321,31 @@ describe('GraphManagementService', () => {
         expect(result).toBeDefined();
         expect(result.overview.total_conversations).toBe(0);
       });
+    });
+  });
+
+  describe('reconcileSubclusterMemberships', () => {
+    it('validates user and delegates to repo', async () => {
+      const result = {
+        deletedSubclusters: 1,
+        reassignedRepresentatives: 2,
+        removedInvalidRepresents: 3,
+      };
+      mockRepo.reconcileSubclusterMemberships.mockResolvedValue(result);
+
+      await expect(service.reconcileSubclusterMemberships('u1')).resolves.toEqual(result);
+      expect(mockRepo.reconcileSubclusterMemberships).toHaveBeenCalledWith('u1', undefined);
+    });
+
+    it('throws ValidationError if userId is missing', async () => {
+      await expect(service.reconcileSubclusterMemberships('')).rejects.toThrow(ValidationError);
+      expect(mockRepo.reconcileSubclusterMemberships).not.toHaveBeenCalled();
+    });
+
+    it('wraps unknown repo errors in UpstreamError', async () => {
+      mockRepo.reconcileSubclusterMemberships.mockRejectedValue(new Error('DB Error'));
+
+      await expect(service.reconcileSubclusterMemberships('u1')).rejects.toThrow(UpstreamError);
     });
   });
 });

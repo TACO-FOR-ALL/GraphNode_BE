@@ -38,20 +38,28 @@ export interface BaseQueueMessage {
  * - taskType: 메시지 타입 식별자
  * - payload: 실제 요청 데이터
  *  - userId: 요청한 사용자 ID
- * - s3Key: 입력 데이터가 담긴 S3 키
+ * - s3Key: Macro bundle prefix(`graph-generation/{taskId}/`, 끝 `/` 필수) 또는 legacy 단일 객체 키
  * - bucket: 버킷명 (옵션)
  */
 export interface GraphGenRequestPayload extends BaseQueueMessage {
   taskType: TaskType.GRAPH_GENERATION_REQUEST;
   payload: {
     userId: string;
-    s3Key: string; // 입력 데이터가 담긴 S3 키
+    /**
+     * Bundle: `graph-generation/{taskId}/` — 반드시 `/`로 끝남.
+     * Legacy: `graph-generation/{taskId}/input.json` 등 단일 객체 키.
+     */
+    s3Key: string;
     bucket?: string; // 버킷명 (옵션)
+    chatId?: string;
     includeSummary?: boolean; // 요약 파이프라인 동시 실행 여부
     summaryLanguage?: string; // 요약 언어
-    language? : string // Cluster 이름 언어(사용자 선호 언어)
-    inputType?: string; // 'chat' 
-    extraS3Keys?: string[]; // 추가 소스(마크다운 등)의 s3 키 배열
+    language?: string; // Cluster 이름 언어(사용자 선호 언어)
+    inputType?: string;
+    minClusters?: number;
+    maxClusters?: number;
+    /** Legacy: primary 외 추가 키. Bundle에서는 생략. */
+    extraS3Keys?: string[];
   };
 }
 
@@ -227,10 +235,16 @@ export interface MicroscopeIngestFromNodeQueuePayload extends BaseQueueMessage {
 export interface MicroscopeIngestFromNodeResultQueuePayload extends BaseQueueMessage {
   taskType: TaskType.MICROSCOPE_INGEST_FROM_NODE_RESULT;
   payload: {
-    /** Python 런타임 호환을 위한 snake_case 유저 식별자 */
-    user_id: string; 
-    /** 작업이 진행된 워크스페이스의 식별자 */
-    group_id: string;
+    /**
+     * Python 런타임 호환을 위한 snake_case 유저 식별자.
+     * 일부 AI 빌드는 생략할 수 있으며, Worker가 taskId에서 userId를 파싱합니다.
+     */
+    user_id?: string;
+    /**
+     * 작업이 진행된 워크스페이스의 식별자.
+     * 일부 AI 빌드는 생략할 수 있으며, 이 경우 Worker가 taskId로 Mongo 워크스페이스를 조회합니다.
+     */
+    group_id?: string;
     /** 작업 최종 상태 (성공 또는 실패) */
     status: 'COMPLETED' | 'FAILED';
     /** (성공 시) 새로 파싱되어 Neo4j에 기록된 문서 청크들의 최상위 소스 노드 uuid */

@@ -12,10 +12,14 @@ import { container } from '../container';
  * @returns Express 라우터
  */
 export function makeMeRouter(): Router {
-  const userService = container.getUserService();
+  const userService   = container.getUserService();
+  const creditService = container.getCreditService();
+  const subscriptionService = container.getSubscriptionService();
 
   // Router (factory)
   return createMeRouter({
     userService,
+    creditService,
+    subscriptionService,
   });
 }

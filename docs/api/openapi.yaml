@@ -6,10 +6,265 @@ info:
     Backend API for GraphNode. Errors follow RFC 9457 Problem Details.
 jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 tags:
+  - name: User Library
+    description: 사용자 라이브러리 파일 업로드·조회·AI 요약 등 `/v1/files` 계열 엔드포인트.
   - name: Graph Editor
     description: Direct macro graph editing endpoints for nodes, edges, clusters, subclusters, and best-effort batch operations.
 paths:
+  /v1/agent/chat/stream:
+    post:
+      summary: AI 에이전트 스트리밍 채팅
+      description: >-
+        사용자 메시지를 기반으로 일반 대화, 요약, 노트 생성을 자동 분류하여 실시간 스트리밍으로 결과를 반환합니다.
+        Accept 헤더가 `text/event-stream`일 때 SSE 연결을 맺고 `status`, `chunk`, `result`, `error` 이벤트를 발송합니다.
+      tags: [Agent]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userMessage]
+              properties:
+                userMessage:
+                  type: string
+                  description: 사용자 입력 메시지
+                contextText:
+                  type: string
+                  description: 추가 맥락 텍스트
+                modeHint:
+                  type: string
+                  enum: [summary, note, auto]
+                  description: 모드 제안 (분류기 참고용)
+                microscopeGroupId:
+                  type: string
+                  description: Microscope 워크스페이스 ID (RAG 우선 모드 시 사용)
+      responses:
+        '200':
+          description: SSE 스트림 연결 성공
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '400':
+          description: Bad Request — userMessage가 비어 있거나 형식 오류
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '401':
+          description: Unauthorized — 인증되지 않은 요청
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '403':
+          description: Forbidden — 모델 API 키가 설정되지 않음
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '429':
+          description: Too Many Requests — 사용 한도 초과
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '502':
+          description: Bad Gateway — AI 공급자 오류 또는 DB 오류
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+
+  /v1/me:
+    get:
+      summary: 현재 로그인 사용자 정보 조회
+      description: >-
+        현재 세션의 사용자 프로필 및 크레딧 잔액(JIT 갱신 후)을 반환합니다.
+        `credit` 필드는 항상 포함됩니다.
+      tags: [Me]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [userId]
+                properties:
+                  userId:
+                    type: string
+                    description: 사용자 ID
+                  profile:
+                    type: object
+                    description: 사용자 프로필 정보
+                  credit:
+                    type: object
+                    description: 크레딧 잔액 정보 (JIT 갱신 후)
+                    required: [balance, holdAmount, availableBalance, planType, cycleStart, cycleEnd]
+                    properties:
+                      balance:
+                        type: number
+                      holdAmount:
+                        type: number
+                      availableBalance:
+                        type: number
+                      planType:
+                        type: string
+                        enum: [FREE, PRO, ENTERPRISE]
+                      cycleStart:
+                        type: string
+                        format: date-time
+                      cycleEnd:
+                        type: string
+                        format: date-time
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '502':
+          description: Bad Gateway
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+
+  /v1/me/credits:
+    get:
+      summary: 크레딧 잔액 상세 조회
+      description: >-
+        현재 사용자의 크레딧 잔액을 조회합니다.
+        구독 주기가 만료된 경우 JIT(Just-In-Time) 갱신이 자동으로 실행됩니다.
+      tags: [Me]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [balance, holdAmount, availableBalance, planType, cycleStart, cycleEnd]
+                properties:
+                  balance:
+                    type: number
+                    description: 현재 보유 크레딧 (총량)
+                  holdAmount:
+                    type: number
+                    description: 에스크로 중인 크레딧 (비동기 작업 진행 중)
+                  availableBalance:
+                    type: number
+                    description: 실제 사용 가능한 크레딧 (balance - holdAmount)
+                  planType:
+                    type: string
+                    enum: [FREE, PRO, ENTERPRISE]
+                    description: 구독 플랜
+                  cycleStart:
+                    type: string
+                    format: date-time
+                    description: 현재 청구 주기 시작 일시
+                  cycleEnd:
+                    type: string
+                    format: date-time
+                    description: 현재 청구 주기 종료 일시
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '503':
+          description: Service Unavailable — 크레딧 서비스 미초기화
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+
+  /v1/me/credits/usage:
+    get:
+      summary: 크레딧 사용 내역 조회
+      description: >-
+        현재 사용자의 크레딧 사용 내역을 최신순으로 페이지네이션 조회합니다.
+      tags: [Me]
+      parameters:
+        - name: limit
+          in: query
+          description: 한 번에 가져올 항목 수 (기본 20, 최대 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          description: 건너뛸 항목 수 (기본 0)
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, feature, creditUsed, status, taskId, createdAt]
+                      properties:
+                        id:
+                          type: string
+                          description: UsageLog ID
+                        feature:
+                          type: string
+                          enum: [AI_CHAT, GRAPH_GENERATION, ADD_NODE, MICROSCOPE_INGEST]
+                          description: 사용된 기능
+                        creditUsed:
+                          type: number
+                          description: 사용한 크레딧 수
+                        status:
+                          type: string
+                          enum: [SUCCESS, FAILED]
+                          description: 결과 상태
+                        taskId:
+                          type: string
+                          nullable: true
+                          description: 비동기 작업 ID (동기 작업이면 null)
+                        createdAt:
+                          type: string
+                          format: date-time
+                          description: 사용 일시
+                  total:
+                    type: integer
+                    description: 전체 항목 수
+        '400':
+          description: Bad Request — limit/offset 파라미터 유효성 오류
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '503':
+          description: Service Unavailable — 크레딧 서비스 미초기화
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+
   /v1/search:
+
     get:
       summary: Integrated keyword search across notes and AI chats
       tags: [Search]
@@ -338,6 +593,174 @@ paths:
             application/problem+json:
               schema:
                 $ref: '../schemas/problem.json'
+  /api/notion/pages:
+    get:
+      summary: Get accessible Notion root pages
+      description: Returns a list of Notion pages/databases the user has granted access to.
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                required: [results]
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '429':
+          description: Too Many Requests
+  /api/notion/blocks/{blockId}/children:
+    get:
+      summary: Get Notion block children
+      description: Fetches paginated children blocks of a given Notion block or page.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: blockId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: cursor
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                  next_cursor:
+                    type: string
+                    nullable: true
+                  has_more:
+                    type: boolean
+                required: [results, has_more]
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '429':
+          description: Too Many Requests
+  /api/auth/notion:
+    get:
+      summary: Start Notion workspace link (OAuth)
+      description: |
+        Returns Notion Public Integration authorize URL for the logged-in user.
+        Requires session cookie (JWT). Use `?redirect=true` for HTTP 302 instead of JSON.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: redirect
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Authorization URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+                required: [url]
+        '302':
+          description: Redirect to Notion consent screen
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+  /api/auth/notion/callback:
+    get:
+      summary: Notion OAuth callback
+      description: |
+        Exchanges authorization code for workspace access token and stores NotionIntegration (1 user : N workspaces).
+        Default response is HTML that `postMessage`s `{ type: "notion-link-success", integrationId, notionWorkspaceId, notionWorkspaceName }` to `window.opener` (same pattern as Google OAuth popup).
+        Use query `format=json` only for debugging.
+      parameters:
+        - in: query
+          name: code
+          schema:
+            type: string
+        - in: query
+          name: state
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: error
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Integration stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  integrationId:
+                    type: string
+                  notionWorkspaceId:
+                    type: string
+                  notionWorkspaceName:
+                    type: string
+                    nullable: true
+                required: [ok, integrationId, notionWorkspaceId]
+        '400':
+          description: Validation failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+  /api/webhooks/notion:
+    post:
+      summary: Notion integration webhook
+      description: |
+        Receives Notion subscription verification (`verification_token`) and page events.
+        Verifies `X-Notion-Signature` (HMAC-SHA256) when `NOTION_WEBHOOK_VERIFICATION_TOKEN` is set.
+        On `page.content_updated` etc., fetches page blocks and upserts Mongo `notion_page_caches`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Accepted (or verification echo)
+        '400':
+          description: Validation failed (Invalid JSON body)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '401':
+          description: Invalid signature
   /auth/google/start:
     get:
       summary: Start Google OAuth (redirects)
@@ -472,27 +895,6 @@ paths:
           description: Bad Request (missing token)
         '401':
           description: Not authenticated
-  /v1/me:
-    get:
-      summary: Check login status
-      description: Returns current user if session cookie (server session) exists.
-      responses:
-        '200':
-          description: Authenticated
-          content:
-            application/json:
-              schema:
-                $ref: ../schemas/me-response.json
-              example:
-                $ref: './examples/me-get-200.json'
-        '401':
-          description: Not authenticated
-          content:
-            application/problem+json:
-              schema:
-                $ref: ../schemas/problem.json
-              example:
-                $ref: './examples/me-get-401.json'
   /v1/me/sessions:
     get:
       summary: List active sessions
@@ -959,6 +1361,45 @@ paths:
             application/problem+json:
               schema:
                 $ref: ../schemas/problem.json
+  /v1/ai/conversations/{conversationId}/exports:
+    post:
+      summary: Request asynchronous chat transcript export
+      description: >-
+        Creates a background job that serializes the conversation and messages to JSON, uploads to storage,
+        and best-effort emails the export JSON to the authenticated user's profile email when SMTP is configured
+        (`CHAT_EXPORT_SMTP_USER`, `CHAT_EXPORT_SMTP_PASS`; optional `CHAT_EXPORT_EMAIL_FROM` for the From header).
+        Poll `GET /v1/ai/chat-exports/{jobId}` then download via `GET /v1/ai/chat-exports/{jobId}/download` when status is DONE.
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string }
+      responses:
+        '202':
+          description: Accepted — export job queued
+          content:
+            application/json:
+              schema: { $ref: ../schemas/chat-export-start-response.json }
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '404':
+          description: Not Found — conversation does not exist or not owned by user
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '502':
+          description: Bad Gateway
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
   /v1/ai/conversations/{conversationId}/messages:
     post:
       summary: Create message
@@ -1321,6 +1762,62 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }
+  /v1/ai/chat-exports/{jobId}:
+    get:
+      summary: Get chat export job status
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Export job status
+          content:
+            application/json:
+              schema: { $ref: ../schemas/chat-export-status-response.json }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '404':
+          description: Job not found
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+  /v1/ai/chat-exports/{jobId}/download:
+    get:
+      summary: Download completed chat export JSON
+      description: Available only when job status is DONE. Returns JSON as a downloadable attachment.
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: JSON export file
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '404':
+          description: Job not found
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '409':
+          description: Conflict — export not ready yet
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
   /v1/ai/files:
     post:
       summary: Upload files
@@ -3509,39 +4006,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: ../schemas/problem.json
-  /v1/agent/chat/stream:
-    post:
-      summary: Stream agent chat
-      description: Interactive chat with the AI agent, supporting multiple modes (chat, summary, note). Returns a Server-Sent Events (SSE) stream.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [userMessage]
-              properties:
-                userMessage: { type: string }
-                contextText: { type: string }
-                modeHint: { type: string, enum: [chat, summary, note, auto] }
-      responses:
-        '200':
-          description: SSE stream established
-          content:
-            text/event-stream:
-              schema:
-                type: string
-                example: |
-                  event: status
-                  data: {"phase":"analyzing","message":"..."}
 
-                  event: chunk
-                  data: {"text":"Hello"}
-        '401':
-          description: Not authenticated
-          content:
-            application/problem+json:
-              schema: { $ref: '../schemas/problem.json' }
   /v1/graph-ai/generate:
     post:
       summary: Generate graph from text (Async)
@@ -3989,6 +4454,91 @@ paths:
                   status: { type: string }
         '401':
           description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+
+  /v1/files/{id}/summary/preview:
+    get:
+      summary: 라이브러리 파일 AI 요약 미리보기 (한 줄)
+      description: >-
+        업로드된 사용자 파일의 구조화 요약 중 1번(한 줄 요약)만 반환합니다.
+        `summaryStatus`가 `completed`일 때 `oneLine`이 채워질 수 있습니다.
+      tags: [User Library]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 파일 ID (ULID)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [summaryStatus, oneLine]
+                properties:
+                  summaryStatus:
+                    type: string
+                    enum: [pending, processing, completed, failed]
+                  summaryError:
+                    type: ['string', 'null']
+                  oneLine:
+                    type: ['string', 'null']
+                    description: 한 줄 요약 (미완료 시 null)
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '404':
+          description: 파일 없음
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+
+  /v1/files/{id}/summary/full:
+    get:
+      summary: 라이브러리 파일 AI 구조화 요약 전체
+      description: >-
+        1~4번 전체(한 줄·목적·핵심 포인트·결론)를 반환합니다. `summaryStatus`가 `completed`가 아니면
+        본문 필드는 null 또는 빈 배열일 수 있습니다.
+      tags: [User Library]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 파일 ID (ULID)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [summaryStatus, oneLine, purpose, keyPoints, conclusion]
+                properties:
+                  summaryStatus:
+                    type: string
+                    enum: [pending, processing, completed, failed]
+                  summaryError:
+                    type: ['string', 'null']
+                  oneLine: { type: ['string', 'null'] }
+                  purpose: { type: ['string', 'null'] }
+                  keyPoints:
+                    type: array
+                    items: { type: string }
+                  conclusion: { type: ['string', 'null'] }
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema: { $ref: '../schemas/problem.json' }
+        '404':
+          description: 파일 없음
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }

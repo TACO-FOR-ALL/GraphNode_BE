@@ -10,6 +10,8 @@ import type {
   OnboardingResponseDto,
   UpdateOnboardingRequestDto,
 } from '../types/me.js';
+import type { CreditBalanceDto, CreditUsageDto } from '../types/credit.js';
+
 
 /**
  * Me API (User Profile & Settings)
@@ -265,4 +267,56 @@ export class MeApi {
   //   // 요청사항에 따라 'cn'으로 명시합니다.
   //   return this.updatePreferredLanguage('cn');
   // }
+
+  // ── Credit ────────────────────────────────────────────────────────────────
+
+  /**
+   * 현재 크레딧 잔액을 조회합니다.
+   *
+   * 내부적으로 JIT(Just-In-Time) 갱신 로직이 실행되어,
+   * 구독 주기가 만료된 경우 자동으로 크레딧이 충전됩니다.
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 조회 성공
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `503 Service Unavailable`: 크레딧 서비스 이용 불가
+   *
+   * @returns 크레딧 잔액 정보
+   * @example
+   * ```ts
+   * const { data } = await client.me.getCredits();
+   * // { balance: 1000, holdAmount: 50, availableBalance: 950, planType: 'FREE', ... }
+   * ```
+   */
+  getCredits(): Promise<HttpResponse<CreditBalanceDto>> {
+    return this.rb.path('/v1/me/credits').get<CreditBalanceDto>();
+  }
+
+  /**
+   * 크레딧 사용 내역을 최신순으로 페이지네이션 조회합니다.
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 조회 성공
+   * - `400 Bad Request`: limit/offset 파라미터 유효성 오류
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   *
+   * @param params.limit  한 번에 가져올 항목 수 (기본 20, 최대 100)
+   * @param params.offset 건너뛸 항목 수 (기본 0)
+   * @returns 사용 내역 목록 및 전체 항목 수
+   * @example
+   * ```ts
+   * const { data } = await client.me.getCreditUsage({ limit: 10, offset: 0 });
+   * // { items: [...], total: 42 }
+   *
+   * // 사용 내역이 없는 경우 빈 배열 반환:
+   * // { items: [], total: 0 }
+   * ```
+   */
+  getCreditUsage(params: { limit?: number; offset?: number } = {}): Promise<HttpResponse<CreditUsageDto>> {
+    const query = new URLSearchParams();
+    if (params.limit  !== undefined) query.set('limit',  String(params.limit));
+    if (params.offset !== undefined) query.set('offset', String(params.offset));
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return this.rb.path(`/v1/me/credits/usage${qs}`).get<CreditUsageDto>();
+  }
 }
