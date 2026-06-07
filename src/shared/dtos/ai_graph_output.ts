@@ -337,3 +337,31 @@ export interface AiMicroscopeIngestResultItem {
     confidence?: number;
   }[];
 }
+
+/**
+ * AI ingest_bundle.json S3 페이로드 — BE Worker Neo4j persist용 계약.
+ * standardized_graphs(기존) + chunk UUID·텍스트 메타를 함께 전달합니다.
+ */
+export interface AiMicroscopeIngestChunkRecord {
+  uuid: string;
+  chunk_index: number;
+  text: string;
+}
+
+export interface AiMicroscopeIngestBundle {
+  standardized_graphs: AiMicroscopeIngestResultItem[];
+  source_id: string;
+  source_name: string;
+  user_id: string;
+  group_id: string;
+  chunk_id_map: Record<string, string>;
+  chunks: AiMicroscopeIngestChunkRecord[];
+}
+
+/** BE Neo4j persist 결과 통계 (AI ingest_stats.neo4j 필드와 대응) */
+export interface MicroscopeIngestPersistStats {
+  chunks_written: number;
+  entities_written: number;
+  edges_written: number;
+  chunk_entity_links: number;
+}
