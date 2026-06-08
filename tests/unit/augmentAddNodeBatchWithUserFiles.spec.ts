@@ -1,8 +1,17 @@
 import { describe, it, expect } from '@jest/globals';
+
 import { augmentAddNodeBatchWithUserFiles } from '../../src/workers/utils/augmentAddNodeBatchWithUserFiles';
 import type { AiAddNodeBatchResult } from '../../src/shared/dtos/ai_graph_output';
+import type { AiAddNodeExistingCluster } from '../../src/shared/dtos/ai_input';
 
 describe('augmentAddNodeBatchWithUserFiles', () => {
+  const leanCluster: AiAddNodeExistingCluster = {
+    id: 'c1',
+    name: 'Cluster',
+    description: '',
+    size: 1,
+    themes: [],
+  };
   const baseBatch: AiAddNodeBatchResult = {
     userId: 'user-1',
     processedCount: 1,
@@ -34,7 +43,7 @@ describe('augmentAddNodeBatchWithUserFiles', () => {
   it('adds synthetic file result when AI omitted a requested user file', () => {
     const out = augmentAddNodeBatchWithUserFiles(baseBatch, {
       userId: 'user-1',
-      existingClusters: [{ id: 'c1', userId: 'user-1', name: 'Cluster', description: '', size: 1, themes: [] }],
+      existingClusters: [leanCluster],
       files: [
         {
           fileId: 'uf-pdf',

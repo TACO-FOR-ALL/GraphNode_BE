@@ -531,6 +531,15 @@ describe('GraphGenerationService', () => {
       ]);
       expect(batchPayload.existingClusters[0]).not.toHaveProperty('userId');
       expect(batchPayload.existingClusters[0]).not.toHaveProperty('label');
+
+      expect(mockQueuePort.sendMessage).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            s3Key: expect.stringMatching(/add-node\/task_add_node_[^/]+\/batch\.json$/),
+          }),
+        })
+      );
     });
   });
 });

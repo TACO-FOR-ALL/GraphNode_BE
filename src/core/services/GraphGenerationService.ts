@@ -21,6 +21,7 @@ import { UserFileService } from './UserFileService';
 import { logger } from '../../shared/utils/logger';
 import { resolveGraphStatsWatermarkMs } from '../../shared/utils/graphStatsWatermark';
 import { mapGraphClustersForAiAddNode } from '../../shared/utils/mapGraphClustersForAiAddNode';
+import { resolveAddNodeQueueS3Key } from '../../shared/utils/addNodeQueueS3Key';
 import { AppError, UpstreamError, GraphNotFoundError } from '../../shared/errors/domain';
 import { ChatMessage } from '../../shared/dtos/ai';
 import { mapSnapshotToAiInput } from '../../shared/mappers/graph_ai_input.mapper';
@@ -624,12 +625,17 @@ export class GraphGenerationService {
       await this.graphEmbeddingService.saveStats(stats);
 
       // SQS 메시지 생성
+      const addNodeS3Key = resolveAddNodeQueueS3Key(
+        taskPrefix,
+        batchObjectKey,
+        updatedUserFiles.length > 0
+      );
       const messageBody: AddNodeRequestPayload = {
         taskId,
         taskType: TaskType.ADD_NODE_REQUEST,
         payload: {
           userId,
-          s3Key: taskPrefix,
+          s3Key: addNodeS3Key,
           bucket: process.env.S3_PAYLOAD_BUCKET,
         },
         timestamp: new Date().toISOString(),

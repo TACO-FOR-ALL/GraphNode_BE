@@ -158,7 +158,7 @@ export interface GraphSummaryResultPayload extends BaseQueueMessage {
  * - payload: 실제 요청 데이터
  *  - userId: 요청한 사용자 ID
  *  - conversationId: 추가할 대화 ID
- *  - s3Key: AddNode raw file bundle prefix (`add-node/{taskId}/`, `/` 종료) 또는 legacy `batch.json` 단일 키
+ *  - s3Key: `add-node/{taskId}/batch.json` (대화·노트만) 또는 raw file bundle prefix `add-node/{taskId}/`
  *  - bucket: 버킷명 (옵션)
  */
 export interface AddNodeRequestPayload extends BaseQueueMessage {
