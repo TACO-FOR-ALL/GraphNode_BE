@@ -160,6 +160,7 @@ export interface GraphSummaryResultPayload extends BaseQueueMessage {
  *  - conversationId: 추가할 대화 ID
  *  - s3Key: `add-node/{taskId}/batch.json` (대화·노트만) 또는 raw file bundle prefix `add-node/{taskId}/`
  *  - bucket: 버킷명 (옵션)
+ *  - inputType: `"auto"` — GraphNode_AI main worker가 prefix·단일 JSON 자동 판별
  */
 export interface AddNodeRequestPayload extends BaseQueueMessage {
   taskType: TaskType.ADD_NODE_REQUEST;
@@ -168,6 +169,7 @@ export interface AddNodeRequestPayload extends BaseQueueMessage {
     /** Bundle: `add-node/{taskId}/` — `batch.json` + `files/{fileId}_{displayName}` */
     s3Key: string;
     bucket?: string;
+    inputType?: string;
   };
 }
 

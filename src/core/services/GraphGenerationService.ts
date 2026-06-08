@@ -644,6 +644,7 @@ export class GraphGenerationService {
           userId,
           s3Key: addNodeS3Key,
           bucket: process.env.S3_PAYLOAD_BUCKET,
+          inputType: 'auto',
         },
         timestamp: new Date().toISOString(),
       };

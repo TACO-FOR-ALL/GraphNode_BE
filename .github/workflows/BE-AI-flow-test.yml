@@ -40,23 +40,13 @@ jobs:
           path: be
 
       # 2. AI Worker 레포지토리 체크아웃 (ai-worker/ 폴더에 저장)
-      # BE PR 브랜치명과 동일한 GraphNode_AI 브랜치가 없으면 main 사용 (동명 브랜치 강제 checkout 방지)
+      # Contract C: AddNode raw file bundle + batch.json 단일 키 모두 GraphNode_AI main 기준.
+      # BE PR 브랜치명과 AI 브랜치를 맞추지 않고 항상 main을 사용합니다.
       - name: Resolve GraphNode_AI ref
         id: ai-ref
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          CANDIDATE="main"
-          if [ "${{ github.event_name }}" = "pull_request" ] && [ -n "${{ github.head_ref }}" ]; then
-            CANDIDATE="${{ github.head_ref }}"
-          fi
-          if git ls-remote --heads "https://x-access-token:${GH_TOKEN}@github.com/TACO-FOR-ALL/GraphNode_AI.git" "refs/heads/${CANDIDATE}" | grep -q .; then
-            echo "Using GraphNode_AI ref: ${CANDIDATE}"
-            echo "ref=${CANDIDATE}" >> "$GITHUB_OUTPUT"
-          else
-            echo "GraphNode_AI has no branch '${CANDIDATE}' — falling back to main"
-            echo "ref=main" >> "$GITHUB_OUTPUT"
-          fi
+          echo "Using GraphNode_AI ref: main (unified AddNode/Macro contract)"
+          echo "ref=main" >> "$GITHUB_OUTPUT"
 
       - name: Checkout AI Worker
         uses: actions/checkout@v4
