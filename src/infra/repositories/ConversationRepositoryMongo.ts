@@ -423,18 +423,6 @@ export class ConversationRepositoryMongo implements ConversationRepository {
     }
   }
 
-  async findExistingIds(ids: string[]): Promise<Set<string>> {
-    try {
-      if (ids.length === 0) return new Set();
-      const rows = await this.col()
-        .find({ _id: { $in: ids } }, { projection: { _id: 1 } })
-        .toArray();
-      return new Set(rows.map((r) => r._id));
-    } catch (err: unknown) {
-      this.handleError('ConversationRepositoryMongo.findExistingIds', err);
-    }
-  }
-
   /**
    * 대화 제목에서 키워드로 검색합니다 (case-insensitive 부분 일치).
    *

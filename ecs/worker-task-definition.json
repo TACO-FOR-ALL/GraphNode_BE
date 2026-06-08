@@ -168,14 +168,6 @@
         {
           "name": "TAVILY_API_KEY",
           "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:TAVILY_API_KEY::"
-        },
-        {
-          "name": "FILE_SERVICE_BASE_URL",
-          "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:FILE_SERVICE_BASE_URL::"
-        },
-        {
-          "name": "FILE_SERVICE_INTERNAL_API_KEY",
-          "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:FILE_SERVICE_INTERNAL_API_KEY::"
         }
       ],
       "essential": true,

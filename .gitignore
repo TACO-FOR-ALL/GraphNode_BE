@@ -2,7 +2,6 @@ node_modules/
 dist/
 coverage/
 .env
-cookies.txt
 agent.test.ts
 /src/generated/prisma
 /src/$RVNS6MQ/
