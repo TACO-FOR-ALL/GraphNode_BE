@@ -25,7 +25,6 @@ export { FileApi } from './endpoints/file.js';
 export { UserFilesApi } from './endpoints/userFiles.js';
 export { MicroscopeApi } from './endpoints/microscope.js';
 export { FeedbackApi } from './endpoints/feedback.js';
-export { ImportsApi } from './endpoints/imports.js';
 export { GraphEditorApi } from './endpoints/graphEditor.js';
 export { ExportApi } from './endpoints/export.js';
 export { BillingApi } from './endpoints/billing.js';
@@ -214,14 +213,6 @@ export type {
   CreateFeedbackResponseDto,
   FeedbackDto,
 } from './types/feedback.js';
-export type {
-  ImportProviderDescriptor,
-  ImportJobStatusDto,
-  ImportUploadInitDto,
-  PresignedFileAccessDto,
-  ImportFinalizeResponse,
-  ImportAttachment,
-} from './types/import.js';
 export type {
   CreateNodeEditorDto,
   UpdateNodeEditorDto,

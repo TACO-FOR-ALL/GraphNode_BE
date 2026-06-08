@@ -26,18 +26,7 @@ export const createConversationSchema = z.object({
         id: z.string().min(1).optional(), // 서버 생성 지원
         role: z.enum(['user', 'assistant', 'system']), // 허용된 역할만 가능
         content: z.string().min(1, '메시지 내용은 필수입니다'),
-        attachments: z
-          .array(
-            z.object({
-              id: z.string().min(1),
-              type: z.enum(['image', 'file']),
-              url: z.string().min(1),
-              name: z.string(),
-              mimeType: z.string(),
-              size: z.number().nonnegative(),
-            })
-          )
-          .optional(),
+        // ts 제거, createdAt/updatedAt은 서버에서 처리
       })
     )
     .optional(),
