@@ -3,6 +3,7 @@ import { describe, it, expect } from '@jest/globals';
 import {
   parseGraphStatsTimestampMs,
   resolveGraphStatsWatermarkMs,
+  resolveAddNodeWatermarkMs,
 } from '../../src/shared/utils/graphStatsWatermark';
 
 describe('graphStatsWatermark', () => {
@@ -35,5 +36,20 @@ describe('graphStatsWatermark', () => {
     const iso = '2026-06-01T12:00:00.000Z';
     const neo4jLike = { toString: () => iso };
     expect(parseGraphStatsTimestampMs(neo4jLike)).toBe(new Date(iso).getTime());
+  });
+
+  it('resolveAddNodeWatermarkMs falls back to request time when graph exists without timestamps', () => {
+    const nowMs = 1_700_000_000_000;
+    const result = resolveAddNodeWatermarkMs(
+      { status: 'CREATED', nodes: 6, updatedAt: undefined, generatedAt: undefined },
+      nowMs
+    );
+    expect(result).toEqual({ watermarkMs: nowMs, usedRequestTimeFallback: true });
+  });
+
+  it('resolveAddNodeWatermarkMs returns 0 when no graph and no timestamps', () => {
+    expect(
+      resolveAddNodeWatermarkMs({ status: 'NOT_CREATED', nodes: 0 }, 1_700_000_000_000)
+    ).toEqual({ watermarkMs: 0, usedRequestTimeFallback: false });
   });
 });

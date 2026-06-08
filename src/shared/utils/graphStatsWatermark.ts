@@ -62,3 +62,37 @@ export function resolveGraphStatsWatermarkMs(
   }
   return 0;
 }
+
+export interface ResolveAddNodeWatermarkResult {
+  /** AddNode `find*ModifiedSince` 기준 epoch ms. */
+  watermarkMs: number;
+  /** MacroStats에 타임스탬프가 없어 요청 시각을 사용했는지 여부. */
+  usedRequestTimeFallback: boolean;
+}
+
+/**
+ * @description AddNode용 watermark를 반환합니다. stats 타임스탬프가 없고 그래프가 이미 존재하면 요청 시각을 사용해 전체 시드 재전송을 방지합니다.
+ * @param stats MacroStats DTO (`status`, `nodes` 포함).
+ * @param nowMs 폴백용 epoch ms (테스트 주입 가능).
+ * @returns watermark ms 및 폴백 사용 여부.
+ */
+export function resolveAddNodeWatermarkMs(
+  stats: Pick<GraphStatsDto, 'updatedAt' | 'generatedAt' | 'status' | 'nodes'>,
+  nowMs: number = Date.now()
+): ResolveAddNodeWatermarkResult {
+  const fromStats = resolveGraphStatsWatermarkMs(stats);
+  if (fromStats > 0) {
+    return { watermarkMs: fromStats, usedRequestTimeFallback: false };
+  }
+
+  const hasExistingGraph =
+    (stats.status === 'CREATED' || stats.status === 'UPDATED') &&
+    typeof stats.nodes === 'number' &&
+    stats.nodes > 0;
+
+  if (hasExistingGraph) {
+    return { watermarkMs: nowMs, usedRequestTimeFallback: true };
+  }
+
+  return { watermarkMs: 0, usedRequestTimeFallback: false };
+}

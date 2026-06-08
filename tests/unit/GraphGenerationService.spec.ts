@@ -410,6 +410,31 @@ describe('GraphGenerationService', () => {
       );
     });
 
+    it('uses request-time fallback when watermark missing on existing graph', async () => {
+      const fixedNow = 1_700_000_000_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNow);
+
+      mockGraphEmbSvc.getStats.mockResolvedValue({
+        userId,
+        nodes: 6,
+        edges: 0,
+        clusters: 2,
+        status: 'CREATED',
+      });
+      mockChatSvc.listConversations.mockResolvedValue({ items: [], nextCursor: null });
+      mockNoteSvc.findNotesModifiedSince.mockResolvedValue([]);
+      mockUserFileSvc.findFilesModifiedSince.mockResolvedValue([]);
+
+      await service.requestAddNodeViaQueue(userId);
+
+      expect(mockUserFileSvc.findFilesModifiedSince).toHaveBeenCalledWith(
+        userId,
+        new Date(fixedNow)
+      );
+
+      nowSpy.mockRestore();
+    });
+
     it('uploads add-node prefix bundle with batch.json and files/ for modified user_files', async () => {
       const past = new Date('2020-01-01').toISOString();
       mockGraphEmbSvc.getStats.mockResolvedValue({

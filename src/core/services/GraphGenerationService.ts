@@ -19,7 +19,7 @@ import {
 } from '../../shared/dtos/ai_input';
 import { UserFileService } from './UserFileService';
 import { logger } from '../../shared/utils/logger';
-import { resolveGraphStatsWatermarkMs } from '../../shared/utils/graphStatsWatermark';
+import { resolveAddNodeWatermarkMs } from '../../shared/utils/graphStatsWatermark';
 import { mapGraphClustersForAiAddNode } from '../../shared/utils/mapGraphClustersForAiAddNode';
 import { resolveAddNodeQueueS3Key } from '../../shared/utils/addNodeQueueS3Key';
 import { AppError, UpstreamError, GraphNotFoundError } from '../../shared/errors/domain';
@@ -488,7 +488,14 @@ export class GraphGenerationService {
         throw new GraphNotFoundError('Graph statistics not found. Please generate graph first.');
       }
 
-      const lastGraphUpdatedAt = resolveGraphStatsWatermarkMs(stats);
+      const { watermarkMs: lastGraphUpdatedAt, usedRequestTimeFallback } =
+        resolveAddNodeWatermarkMs(stats);
+      if (usedRequestTimeFallback) {
+        logger.warn(
+          { userId, statsStatus: stats.status, nodeCount: stats.nodes },
+          'AddNode watermark missing on existing graph; using request time to avoid full-graph resync'
+        );
+      }
 
       // 변경된 대화 수집
       const listResult = await withRetry(

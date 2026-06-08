@@ -129,10 +129,13 @@ collect_logs() {
 
     {
       echo "=== ADD_NODE / Graph generation failures (worker) ==="
-      grep -iE 'addnode|ADD_NODE|graph generation|GraphGeneration|status=.FAILED' e2e-logs/worker.log 2>/dev/null | tail -80 || true
+      grep -iE 'addnode|ADD_NODE|AddNode task failed|graph generation|GraphGeneration|status=.FAILED' e2e-logs/worker.log 2>/dev/null | tail -120 || true
       echo ""
       echo "=== ADD_NODE / LLM failures (graphnode-ai) ==="
-      grep -iE 'add_node|ADD_NODE|Error processing|AuthenticationError|FAILED' e2e-logs/ai.log 2>/dev/null | tail -80 || true
+      grep -iE 'add_node|ADD_NODE|Error processing|AuthenticationError|validation error|FAILED' e2e-logs/ai.log 2>/dev/null | tail -120 || true
+      echo ""
+      echo "=== Recent S3 AddNode keys (LocalStack) ==="
+      docker exec graphnode-test-localstack awslocal s3 ls s3://taco5-graphnode-graphdata-s3/add-node/ --recursive 2>/dev/null | tail -30 || true
     } > e2e-logs/failure-summary.log
 
     echo "📑 Logs saved in e2e-logs/ directory."
