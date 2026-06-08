@@ -127,6 +127,31 @@ async function ensureIndexes() {
   // notes 컬렉션: listNotes 쿼리 패턴 { ownerUserId, folderId, deletedAt: null } + sort(updatedAt: -1) 커버
   await db.collection('notes').createIndex({ ownerUserId: 1, folderId: 1, deletedAt: 1, updatedAt: -1 });
 
+  // import finalize 멱등성: 동일 job + export conversation key 중복 방지
+  await db.collection('conversations').createIndex(
+    { ownerUserId: 1, importJobId: 1, importSourceConversationId: 1 },
+    {
+      name: 'conversations_import_source_unique',
+      unique: true,
+      partialFilterExpression: {
+        importJobId: { $exists: true },
+        importSourceConversationId: { $exists: true },
+      },
+    }
+  );
+
+  await db.collection('messages').createIndex(
+    { importJobId: 1, importSourceMessageId: 1 },
+    {
+      name: 'messages_import_source_unique',
+      unique: true,
+      partialFilterExpression: {
+        importJobId: { $exists: true },
+        importSourceMessageId: { $exists: true },
+      },
+    }
+  );
+
   // chat_export_jobs: jobId+userId 복합 조회, 진행 중 job 중복 방지, 만료 정리
   await db.collection('chat_export_jobs').createIndex(
     { jobId: 1, userId: 1 },

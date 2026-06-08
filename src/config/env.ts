@@ -94,6 +94,13 @@ const EnvSchema = z.object({
   S3_PAYLOAD_BUCKET: z.string().min(1, 'S3_PAYLOAD_BUCKET required'),
   S3_FILE_BUCKET: z.string().min(1, 'S3_FILE_BUCKET required'),
 
+  /** File Service MSA (VPC internal). 미설정 시 import API 비활성 */
+  FILE_SERVICE_BASE_URL: z.string().url().optional(),
+  FILE_SERVICE_INTERNAL_API_KEY: z.string().min(1).optional(),
+  FILE_SERVICE_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
+
+  /** Import finalize 비동기 worker 큐. 미설정 시 finalize API가 동기 처리 (로컬 dev) */
+  SQS_IMPORT_FINALIZE_QUEUE_URL: z.string().url().optional(),
   // 채팅 내보내기 알림 — SMTP(nodemailer) 직접 발송. USER/PASS 미설정 시 메일만 건너뜁니다.
   CHAT_EXPORT_EMAIL_FROM: z.email().optional(),
   CHAT_EXPORT_SMTP_HOST: z.string().min(1).default('smtp.gmail.com'),

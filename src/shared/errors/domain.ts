@@ -77,6 +77,12 @@ export class ConflictError extends AppError {
   httpStatus = 409;
 }
 
+/** File import job이 아직 완료되지 않았을 때 (409) */
+export class ImportJobNotReadyError extends AppError {
+  code = 'IMPORT_JOB_NOT_READY';
+  httpStatus = 409;
+}
+
 /**
  * 요청 제한 초과 (429 Too Many Requests)
  * - 서비스 자체 정책(일일 한도 등)으로 요청이 차단된 경우에 사용합니다.

@@ -46,6 +46,10 @@ export interface ConversationDoc {
   lastResponseId?: string;   // OpenAI Responses API Context ID
   /** Sliding Window 누적 요약 — 윈도우 밖으로 밀려난 메시지들의 압축 요약본 */
   summary?: string;
+  /** AI export import 출처 job ID (멱등성·추적용) */
+  importJobId?: string;
+  /** export provider 쪽 conversation ID */
+  importSourceConversationId?: string;
 }
 
 /**
@@ -70,6 +74,10 @@ export interface MessageDoc {
   updatedAt: number;
   deletedAt?: number | null;
   attachments?: Attachment[];
+  /** AI export import 출처 job ID */
+  importJobId?: string;
+  /** export provider 쪽 message ID */
+  importSourceMessageId?: string;
   /**
    * 확장된 메타데이터 저장소 (OpenAI Code Interpreter 로그, 검색 인용 정보 등)
    */

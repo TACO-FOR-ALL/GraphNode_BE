@@ -11,7 +11,7 @@ export class GetGraphSummaryTool implements IAgentTool {
     type: 'function',
     function: {
       name: 'get_graph_summary',
-      description: '사용자의 지식 그래프 전체에 대한 통계 및 요약 정보를 가져옵니다. (노드 수, 엣지 수, 핵심 클러스터 등)',
+      description: "사용자 지식 그래프의 가벼운 '통계(노드/엣지 수)'와 '핵심 요약 텍스트'만 빠르게 보고 싶을 때 호출합니다. 구체적인 개별 노드나 엣지 데이터는 반환하지 않으므로, 토큰을 절약하면서 전체 흐름만 파악할 때 유용합니다.",
       parameters: {
         type: 'object',
         properties: {},

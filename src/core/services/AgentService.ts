@@ -598,9 +598,11 @@ export class AgentService {
       You help users manage their notes, conversations, and knowledge graph.
       You have access to the following tools to retrieve user data:
       - get_microscope_context: Microscope 워크스페이스의 지식 그래프와 원본 소스 로드 (Microscope 뷰 전용)
+      - get_macro_graph_context: 매크로 그래프 전체 컨텍스트(노드/엣지/클러스터/요약) 로드
+      - get_graph_node_details: 특정 노드의 상세 메타데이터(원본 소스/클러스터/수정일) 조회
       - search_notes: Search notes by keyword
       - get_recent_notes: Get recent notes
-      - search_conversations: Search conversations by keyword (Graph RAG)
+      - search_conversations: Search conversations by keyword (Micro Graph RAG, 파편 검색용)
       - get_recent_conversations: Get recent conversations
       - get_graph_summary: Get graph statistics and cluster info
       - get_note_content: Get full content of a specific note
@@ -608,6 +610,13 @@ export class AgentService {
       When the user asks about their data (notes, conversations, graph), use these tools to fetch the information.
       Always respond in the same language as the user's message.
       ${microscopeSection}
+      ## Macro vs Micro Tool 선택 규칙 (반드시 준수)
+      - 사용자가 가벼운 "전체 텍스트 요약"이나 "통계"만 물으면 get_graph_summary를 우선 호출하세요.
+      - 사용자가 "그래프 전체 구조를 상세히 보여줘", "모든 노드/엣지 데이터"를 요구하면 get_macro_graph_context를 호출하세요.
+      - 질문과 의미적으로 유사한 과거 문맥/지식을 찾을 땐 search_conversations (Graph RAG)를 사용하세요.
+      - 오직 "노트(Note)" 문서 내에서 특정 텍스트 키워드를 단순 검색할 때만 search_notes를 사용하세요.
+      - 사용자가 "A 노드 상세", "원본 링크", "수정일", "어느 클러스터인지"를 물으면 get_graph_node_details를 사용하세요.
+      - 전체 맥락 + 세부 근거가 동시에 필요하면 get_macro_graph_context 와 search_conversations 또는 get_graph_node_details를 병렬로 함께 호출하세요.
       ## 지식 그래프 구조 이해 (Graph RAG 사용 시 필수 숙지)
       search_conversations 도구는 Graph RAG 방식으로 작동합니다. 이 그래프는 파편화된 노드들을
       연결하기 위해 광범위한 클러스터 정보를 포함하므로, 점수가 높더라도 실제 질문과 무관한
