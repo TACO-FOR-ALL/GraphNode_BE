@@ -40,23 +40,30 @@ jobs:
           path: be
 
       # 2. AI Worker 레포지토리 체크아웃 (ai-worker/ 폴더에 저장)
-      - name: Checkout AI Worker (PR head ref)
-        id: checkout-ai-head
-        continue-on-error: true
-        uses: actions/checkout@v4
-        with:
-          repository: TACO-FOR-ALL/GraphNode_AI
-          path: ai-worker
-          ref: ${{ github.event_name == 'pull_request' && github.head_ref || 'main' }}
-          token: ${{ secrets.GH_PAT }}
+      # BE PR 브랜치명과 동일한 GraphNode_AI 브랜치가 없으면 main 사용 (동명 브랜치 강제 checkout 방지)
+      - name: Resolve GraphNode_AI ref
+        id: ai-ref
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          CANDIDATE="main"
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ -n "${{ github.head_ref }}" ]; then
+            CANDIDATE="${{ github.head_ref }}"
+          fi
+          if git ls-remote --heads "https://x-access-token:${GH_TOKEN}@github.com/TACO-FOR-ALL/GraphNode_AI.git" "refs/heads/${CANDIDATE}" | grep -q .; then
+            echo "Using GraphNode_AI ref: ${CANDIDATE}"
+            echo "ref=${CANDIDATE}" >> "$GITHUB_OUTPUT"
+          else
+            echo "GraphNode_AI has no branch '${CANDIDATE}' — falling back to main"
+            echo "ref=main" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Checkout AI Worker (fallback main)
-        if: steps.checkout-ai-head.outcome == 'failure'
+      - name: Checkout AI Worker
         uses: actions/checkout@v4
         with:
           repository: TACO-FOR-ALL/GraphNode_AI
           path: ai-worker
-          ref: main
+          ref: ${{ steps.ai-ref.outputs.ref }}
           token: ${{ secrets.GH_PAT }}
 
       # 2-1. Node.js 설정 및 의존성 캐싱 (E2E 테스트 실행용)
@@ -128,9 +135,8 @@ jobs:
           tags: graphnode-ai:test
           provenance: false
           sbom: false
-          # PR head ref마다 캐시 scope 분리 — 구버전 AI 이미지가 AddNode prefix bundle을 놓치는 문제 방지
-          cache-from: type=gha,scope=ai-graphnode-${{ github.event_name == 'pull_request' && github.head_ref || 'main' }}
-          cache-to: type=gha,scope=ai-graphnode-${{ github.event_name == 'pull_request' && github.head_ref || 'main' }},mode=max,ignore-error=true
+          cache-from: type=gha,scope=ai-graphnode-${{ steps.ai-ref.outputs.ref }}
+          cache-to: type=gha,scope=ai-graphnode-${{ steps.ai-ref.outputs.ref }},mode=max,ignore-error=true
 
       # 6. Docker Compose를 통한 통합 테스트 서비스 기동
       - name: Start Database Services First
