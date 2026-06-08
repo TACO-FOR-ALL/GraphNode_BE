@@ -123,6 +123,7 @@ collect_logs() {
     
     mkdir -p e2e-logs
     docker compose -f $DOCKER_COMPOSE_FILE logs graphnode-be > e2e-logs/be.log
+    docker compose -f $DOCKER_COMPOSE_FILE logs graphnode-be --tail 300 2>/dev/null | grep -iE 'AddNode batch queued|addNodeS3Key|watermark' > e2e-logs/be-addnode.log || true
     docker compose -f $DOCKER_COMPOSE_FILE logs graphnode-ai > e2e-logs/ai.log
     docker compose -f $DOCKER_COMPOSE_FILE logs graphnode-worker > e2e-logs/worker.log
     docker compose -f $DOCKER_COMPOSE_FILE logs localstack > e2e-logs/localstack.log
@@ -136,6 +137,9 @@ collect_logs() {
       echo ""
       echo "=== Recent S3 AddNode keys (LocalStack) ==="
       docker exec graphnode-test-localstack awslocal s3 ls s3://taco5-graphnode-graphdata-s3/add-node/ --recursive 2>/dev/null | tail -30 || true
+      echo ""
+      echo "=== BE AddNode queue diagnostics ==="
+      cat e2e-logs/be-addnode.log 2>/dev/null | tail -20 || true
     } > e2e-logs/failure-summary.log
 
     echo "📑 Logs saved in e2e-logs/ directory."

@@ -56,14 +56,29 @@ export async function pollMacroStatsUntil(
       if (targetStatus === 'UPDATED' && sawUpdating && status === 'CREATED') {
         const detailRes = await session.run(
           `MATCH (g:MacroGraph {userId: $userId})-[:HAS_STATS]->(st:MacroStats)
-           RETURN st.updatedAt AS updatedAt, st.generatedAt AS generatedAt`,
+           RETURN st.updatedAt AS updatedAt, st.generatedAt AS generatedAt, st.metadataJson AS metadataJson`,
           { userId }
         );
         const updatedAt = detailRes.records[0]?.get('updatedAt');
         const generatedAt = detailRes.records[0]?.get('generatedAt');
+        const metadataRaw = detailRes.records[0]?.get('metadataJson') as string | undefined;
+        let lastAddNodeError = 'none';
+        if (metadataRaw) {
+          try {
+            const meta = JSON.parse(metadataRaw) as {
+              lastAddNodeFailure?: { error?: string; taskId?: string };
+            };
+            if (meta.lastAddNodeFailure?.error) {
+              lastAddNodeError = meta.lastAddNodeFailure.error;
+            }
+          } catch {
+            lastAddNodeError = 'metadata parse failed';
+          }
+        }
         // eslint-disable-next-line no-console
         console.error(
           `[E2E Poll] ${label} failed: MacroStats reverted to CREATED after UPDATING (AddNode FAILED on AI/worker). ` +
+            `lastAddNodeError=${lastAddNodeError}. ` +
             `Check e2e-logs/failure-summary.log (worker: "AddNode task failed", ai: add_node errors). ` +
             `MacroStats updatedAt=${String(updatedAt ?? 'none')} generatedAt=${String(generatedAt ?? 'none')}`
         );

@@ -95,6 +95,14 @@ export class AddNodeResultHandler implements JobHandler {
       const stats = await graphService.getStats(userId);
       if (stats) {
         stats.status = 'CREATED';
+        stats.metadata = {
+          ...(stats.metadata ?? {}),
+          lastAddNodeFailure: {
+            taskId,
+            error: errorMsg,
+            at: new Date().toISOString(),
+          },
+        };
         await graphService.saveStats(stats);
       }
 

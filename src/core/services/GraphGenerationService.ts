@@ -648,6 +648,20 @@ export class GraphGenerationService {
         timestamp: new Date().toISOString(),
       };
 
+      logger.info(
+        {
+          taskId,
+          userId,
+          addNodeS3Key,
+          conversationCount: mappedConversations.length,
+          noteCount: mappedNotes.length,
+          userFileCount: updatedUserFiles.length,
+          watermarkMs: lastGraphUpdatedAt,
+          usedRequestTimeFallback,
+        },
+        'AddNode batch queued to SQS'
+      );
+
       await withRetry(async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
         label: 'QueuePort.sendMessage.AddNode',
       });

@@ -41,7 +41,7 @@ describe('graphStatsWatermark', () => {
   it('resolveAddNodeWatermarkMs falls back to request time when graph exists without timestamps', () => {
     const nowMs = 1_700_000_000_000;
     const result = resolveAddNodeWatermarkMs(
-      { status: 'CREATED', nodes: 6, updatedAt: undefined, generatedAt: undefined },
+      { status: 'CREATED', nodes: 0, updatedAt: undefined, generatedAt: undefined },
       nowMs
     );
     expect(result).toEqual({ watermarkMs: nowMs, usedRequestTimeFallback: true });

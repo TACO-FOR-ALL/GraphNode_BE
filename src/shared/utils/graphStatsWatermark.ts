@@ -85,12 +85,8 @@ export function resolveAddNodeWatermarkMs(
     return { watermarkMs: fromStats, usedRequestTimeFallback: false };
   }
 
-  const hasExistingGraph =
-    (stats.status === 'CREATED' || stats.status === 'UPDATED') &&
-    typeof stats.nodes === 'number' &&
-    stats.nodes > 0;
-
-  if (hasExistingGraph) {
+  // status만으로 판단 — getStats의 nodes 집계가 0으로 나와도 CREATED 그래프는 전체 재전송하면 안 됨
+  if (stats.status === 'CREATED' || stats.status === 'UPDATED') {
     return { watermarkMs: nowMs, usedRequestTimeFallback: true };
   }
 
