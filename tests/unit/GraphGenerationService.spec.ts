@@ -461,6 +461,76 @@ describe('GraphGenerationService', () => {
           }),
         })
       );
+
+      const batchUploadCall = mockStoragePort.upload.mock.calls.find((call) =>
+        String(call[0]).endsWith('batch.json')
+      );
+      expect(batchUploadCall).toBeTruthy();
+      const batchPayload = JSON.parse(batchUploadCall![1] as string);
+      expect(batchPayload.existingClusters).toEqual([]);
+    });
+
+    it('serializes lean existingClusters in add-node batch.json', async () => {
+      const past = new Date('2020-01-01').toISOString();
+      mockGraphEmbSvc.getStats.mockResolvedValue({
+        userId,
+        nodes: 1,
+        edges: 0,
+        clusters: 1,
+        updatedAt: past,
+        status: 'CREATED',
+      });
+      mockGraphEmbSvc.listClusters.mockResolvedValue([
+        {
+          id: 'cluster-1',
+          userId,
+          name: 'AI',
+          description: 'cluster desc',
+          size: 2,
+          themes: ['t1', 't2'],
+          label: 'should-not-serialize',
+        },
+      ]);
+      mockChatSvc.listConversations.mockResolvedValue({
+        items: [
+          {
+            id: 'conv-new',
+            title: 'New conv',
+            updatedAt: new Date().toISOString(),
+            messages: [
+              {
+                id: 'm1',
+                role: 'user',
+                content: 'hello',
+                createdAt: new Date().toISOString(),
+              },
+            ],
+          },
+        ],
+        nextCursor: null,
+      });
+      mockNoteSvc.findNotesModifiedSince.mockResolvedValue([]);
+      mockUserFileSvc.findFilesModifiedSince.mockResolvedValue([]);
+      mockQueuePort.sendMessage.mockResolvedValue(undefined);
+      mockGraphEmbSvc.saveStats.mockResolvedValue(undefined);
+
+      await service.requestAddNodeViaQueue(userId);
+
+      const batchUploadCall = mockStoragePort.upload.mock.calls.find((call) =>
+        String(call[0]).endsWith('batch.json')
+      );
+      const batchPayload = JSON.parse(batchUploadCall![1] as string);
+      expect(batchPayload.existingClusters).toEqual([
+        {
+          id: 'cluster-1',
+          name: 'AI',
+          description: 'cluster desc',
+          size: 2,
+          themes: ['t1', 't2'],
+        },
+      ]);
+      expect(batchPayload.existingClusters[0]).not.toHaveProperty('userId');
+      expect(batchPayload.existingClusters[0]).not.toHaveProperty('label');
     });
   });
 });

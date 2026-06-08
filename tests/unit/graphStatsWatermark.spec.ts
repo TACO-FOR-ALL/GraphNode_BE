@@ -30,4 +30,10 @@ describe('graphStatsWatermark', () => {
     const generatedAt = '2026-06-01T00:00:00.000Z';
     expect(resolveGraphStatsWatermarkMs({ generatedAt })).toBe(new Date(generatedAt).getTime());
   });
+
+  it('parseGraphStatsTimestampMs handles Neo4j-like temporal toString values', () => {
+    const iso = '2026-06-01T12:00:00.000Z';
+    const neo4jLike = { toString: () => iso };
+    expect(parseGraphStatsTimestampMs(neo4jLike)).toBe(new Date(iso).getTime());
+  });
 });

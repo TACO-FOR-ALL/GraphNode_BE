@@ -118,9 +118,18 @@ export interface AiInputFile {
   mimeType: string;
 }
 
+/** AddNode batch.json의 lean existingClusters 항목. */
+export interface AiAddNodeExistingCluster {
+  id: string;
+  name: string;
+  description: string;
+  size: number;
+  themes: string[];
+}
+
 export interface AiAddNodeBatchRequest {
   userId: string;
-  existingClusters: any[];
+  existingClusters: AiAddNodeExistingCluster[];
   conversations: AiInputConversation[];
   notes: AiInputNote[];
   files?: AiInputFile[];

@@ -127,6 +127,38 @@ describe('AddNodeResultHandler', () => {
     );
   });
 
+  it('treats COMPLETED with non-empty error field as success (not AI failure)', async () => {
+    const batchResult: AiAddNodeBatchResult = {
+      userId,
+      processedCount: 0,
+      results: [],
+    };
+
+    storagePort.downloadJson.mockImplementation(async (key: string) => {
+      if (key === resultS3Key) return batchResult;
+      if (key === `add-node/${taskId}/batch.json`) throw new Error('NoSuchKey');
+      throw new Error(`unexpected key: ${key}`);
+    });
+
+    const message: AddNodeResultPayload = {
+      taskId,
+      taskType: 'ADD_NODE_RESULT' as any,
+      timestamp: new Date().toISOString(),
+      payload: {
+        userId,
+        status: 'COMPLETED',
+        resultS3Key,
+        error: 'partial skip warning from AI',
+      },
+    };
+
+    await handler.handle(message, mockContainer);
+
+    expect(graphService.saveStats).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'UPDATED' })
+    );
+  });
+
   it('continues when batch.json is missing (legacy AI result only)', async () => {
     const batchResult: AiAddNodeBatchResult = {
       userId,

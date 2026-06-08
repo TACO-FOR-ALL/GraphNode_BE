@@ -38,6 +38,7 @@ import {
   toGraphSubclusterDoc,
   toGraphSubclusterDto,
 } from '../../shared/mappers/graph';
+import { normalizeGraphStatsTemporalToIso } from '../../shared/utils/graphStatsWatermark';
 import { MACRO_GRAPH_CYPHER } from './cypher/macroGraph.cypher';
 import {
   fromNeo4jMacroCluster,
@@ -1079,8 +1080,8 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
           id: String(stProps['id'] ?? userId),
           userId: String(stProps['userId'] ?? userId),
           status: stProps['status'] as GraphStatsDoc['status'],
-          generatedAt: String(stProps['generatedAt'] ?? ''),
-          updatedAt: stProps['updatedAt'] as string | undefined,
+          generatedAt: normalizeGraphStatsTemporalToIso(stProps['generatedAt']) ?? '',
+          updatedAt: normalizeGraphStatsTemporalToIso(stProps['updatedAt']),
           metadataJson: String(stProps['metadataJson'] ?? '{}'),
         },
         nodes: toJsNumber(record.get('nodes')),
@@ -1127,8 +1128,8 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
           id: String(stProps['id'] ?? userId),
           userId: String(stProps['userId'] ?? userId),
           status: stProps['status'] as GraphStatsDoc['status'],
-          generatedAt: String(stProps['generatedAt'] ?? ''),
-          updatedAt: stProps['updatedAt'] as string | undefined,
+          generatedAt: normalizeGraphStatsTemporalToIso(stProps['generatedAt']) ?? '',
+          updatedAt: normalizeGraphStatsTemporalToIso(stProps['updatedAt']),
           metadataJson: String(stProps['metadataJson'] ?? '{}'),
         },
         nodes: 0,

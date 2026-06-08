@@ -20,6 +20,7 @@ import {
 import { UserFileService } from './UserFileService';
 import { logger } from '../../shared/utils/logger';
 import { resolveGraphStatsWatermarkMs } from '../../shared/utils/graphStatsWatermark';
+import { mapGraphClustersForAiAddNode } from '../../shared/utils/mapGraphClustersForAiAddNode';
 import { AppError, UpstreamError, GraphNotFoundError } from '../../shared/errors/domain';
 import { ChatMessage } from '../../shared/dtos/ai';
 import { mapSnapshotToAiInput } from '../../shared/mappers/graph_ai_input.mapper';
@@ -36,7 +37,6 @@ import { loadEnv } from '../../config/env';
 import { withRetry } from '../../shared/utils/retry';
 import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 import { redis } from '../../infra/redis/client';
-import { GraphClusterDto } from '../../shared/dtos/graph';
 import { ICreditService } from '../ports/ICreditService';
 import { CreditFeature } from '../types/persistence/credit.persistence';
 import type { NotionService } from './NotionService';
@@ -597,9 +597,10 @@ export class GraphGenerationService {
         mimeType: f.mimeType,
       }));
 
-      // 기존 클러스터 정보 가져오기
-      const existingClusters: GraphClusterDto[] =
-        await this.graphEmbeddingService.listClusters(userId);
+      // 기존 클러스터 정보 가져오기 (AI 계약용 lean 필드만 전송)
+      const existingClusters = mapGraphClustersForAiAddNode(
+        await this.graphEmbeddingService.listClusters(userId)
+      );
       const batchPayload: AiAddNodeBatchRequest = {
         userId,
         existingClusters,

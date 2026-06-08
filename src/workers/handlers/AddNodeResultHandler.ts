@@ -62,8 +62,8 @@ export class AddNodeResultHandler implements JobHandler {
     const userFileService = container.getUserFileService();
     const creditService = container.getCreditService();
 
-    // AI 서버에서 실패한 경우
-    if (status === 'FAILED' || error) {
+    // AI 서버에서 실패한 경우 (COMPLETED + optional error 필드는 성공 경로로 처리)
+    if (status === 'FAILED') {
       const errorMsg = error || 'Unknown AI error';
       logger.error({ taskId, userId, error: errorMsg }, 'AddNode task failed from AI Server');
 
