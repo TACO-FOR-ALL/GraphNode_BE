@@ -163,14 +163,7 @@ export class ChatManagementService {
    */
   async bulkCreateConversations(
     ownerUserId: string,
-    threads: {
-      id: string;
-      title?: string | null;
-      importJobId?: string;
-      importSourceConversationId?: string;
-      _skipConversationInsert?: boolean;
-      messages?: (Partial<ChatMessage> & { importSourceMessageId?: string })[];
-    }[]
+    threads: { id: string; title?: string | null; messages?: Partial<ChatMessage>[] }[]
   ): Promise<ChatThread[]> {
     // TODO: [Refactor] 현재는 생성된 모든 대화 객체를 반환하고 있어 대용량(100MB+) 처리 시 OOM 위험이 있음.
     // 추후 생성된 리소스의 ID 배열만 반환하도록 변경 필요.
@@ -232,20 +225,17 @@ export class ChatManagementService {
                     createdAt: now,
                     updatedAt: now,
                     deletedAt: null,
-                    source: thread.importJobId ? 'import' : undefined,
-                    importJobId: thread.importJobId,
-                    importSourceConversationId: thread.importSourceConversationId,
                   };
-
-                  if (!thread._skipConversationInsert) {
-                    convDocs.push(convDoc);
-                  }
+                  convDocs.push(convDoc);
 
                   // Message Docs — DB 저장용. 응답 DTO에는 포함하지 않음 (Lazy Loading)
                   if (thread.messages && thread.messages.length > 0) {
+                    // Conversation 와 연결된 Message들에 대한 루프 처리
                     for (const m of thread.messages) {
+                      // 메세지 내용이 없는 경우 continue
                       if (!m.content || m.content.trim().length === 0) continue;
 
+                      // MessageDoc 구축
                       allMsgDocs.push({
                         _id: m.id?.trim() ? m.id : ulid(),
                         ownerUserId,
@@ -255,13 +245,11 @@ export class ChatManagementService {
                         createdAt: now,
                         updatedAt: now,
                         deletedAt: null,
-                        attachments: m.attachments,
-                        importJobId: thread.importJobId,
-                        importSourceMessageId: m.importSourceMessageId,
                       });
                     }
                   }
 
+                  // listConversations와 동일하게 messages: [] 로 반환
                   pendingDtos.push(toChatThreadDto(convDoc, []));
                 }
 
