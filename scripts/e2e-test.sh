@@ -126,7 +126,15 @@ collect_logs() {
     docker compose -f $DOCKER_COMPOSE_FILE logs graphnode-ai > e2e-logs/ai.log
     docker compose -f $DOCKER_COMPOSE_FILE logs graphnode-worker > e2e-logs/worker.log
     docker compose -f $DOCKER_COMPOSE_FILE logs localstack > e2e-logs/localstack.log
-    
+
+    {
+      echo "=== ADD_NODE / Graph generation failures (worker) ==="
+      grep -iE 'addnode|ADD_NODE|graph generation|GraphGeneration|status=.FAILED' e2e-logs/worker.log 2>/dev/null | tail -80 || true
+      echo ""
+      echo "=== ADD_NODE / LLM failures (graphnode-ai) ==="
+      grep -iE 'add_node|ADD_NODE|Error processing|AuthenticationError|FAILED' e2e-logs/ai.log 2>/dev/null | tail -80 || true
+    } > e2e-logs/failure-summary.log
+
     echo "📑 Logs saved in e2e-logs/ directory."
 }
 

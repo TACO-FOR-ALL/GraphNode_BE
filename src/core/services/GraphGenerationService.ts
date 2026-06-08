@@ -19,6 +19,7 @@ import {
 } from '../../shared/dtos/ai_input';
 import { UserFileService } from './UserFileService';
 import { logger } from '../../shared/utils/logger';
+import { resolveGraphStatsWatermarkMs } from '../../shared/utils/graphStatsWatermark';
 import { AppError, UpstreamError, GraphNotFoundError } from '../../shared/errors/domain';
 import { ChatMessage } from '../../shared/dtos/ai';
 import { mapSnapshotToAiInput } from '../../shared/mappers/graph_ai_input.mapper';
@@ -486,7 +487,7 @@ export class GraphGenerationService {
         throw new GraphNotFoundError('Graph statistics not found. Please generate graph first.');
       }
 
-      const lastGraphUpdatedAt = stats.updatedAt ? new Date(stats.updatedAt).getTime() : 0;
+      const lastGraphUpdatedAt = resolveGraphStatsWatermarkMs(stats);
 
       // 변경된 대화 수집
       const listResult = await withRetry(

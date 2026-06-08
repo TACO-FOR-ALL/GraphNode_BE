@@ -388,6 +388,28 @@ describe('GraphGenerationService', () => {
       expect(mockQueuePort.sendMessage).not.toHaveBeenCalled();
     });
 
+    it('uses generatedAt as watermark when updatedAt is absent', async () => {
+      const past = new Date('2020-01-01').toISOString();
+      mockGraphEmbSvc.getStats.mockResolvedValue({
+        userId,
+        nodes: 6,
+        edges: 0,
+        clusters: 2,
+        generatedAt: past,
+        status: 'CREATED',
+      });
+      mockChatSvc.listConversations.mockResolvedValue({ items: [], nextCursor: null });
+      mockNoteSvc.findNotesModifiedSince.mockResolvedValue([]);
+      mockUserFileSvc.findFilesModifiedSince.mockResolvedValue([]);
+
+      const result = await service.requestAddNodeViaQueue(userId);
+      expect(result).toBeNull();
+      expect(mockUserFileSvc.findFilesModifiedSince).toHaveBeenCalledWith(
+        userId,
+        new Date(past)
+      );
+    });
+
     it('uploads add-node prefix bundle with batch.json and files/ for modified user_files', async () => {
       const past = new Date('2020-01-01').toISOString();
       mockGraphEmbSvc.getStats.mockResolvedValue({
