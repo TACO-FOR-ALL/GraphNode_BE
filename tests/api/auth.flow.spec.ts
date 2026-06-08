@@ -201,14 +201,16 @@ describe('Auth Flow Integration', () => {
   it('Step 4: Token Rotation (Expired Access Token)', async () => {
     await completeGoogleLogin(agent);
 
-    // authJwt: access 검증 1회(만료) → refresh 검증 1회(성공) 순서
-    mockVerifyToken
-      .mockImplementationOnce(() => {
+    // Access Token(sessionId 포함)만 만료 처리, Refresh Token 검증은 실제 jwt 사용
+    mockVerifyToken.mockImplementation((token: string) => {
+      const decoded = actualJwtUtils.decodeToken(token);
+      if (decoded?.sessionId) {
         const err = new Error('jwt expired');
         (err as any).name = 'TokenExpiredError';
         throw err;
-      })
-      .mockImplementation((token: string) => actualJwtUtils.verifyToken(token));
+      }
+      return actualJwtUtils.verifyToken(token);
+    });
 
     const res = await agent.get('/v1/me');
 
