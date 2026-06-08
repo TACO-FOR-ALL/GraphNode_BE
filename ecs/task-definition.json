@@ -180,6 +180,8 @@
         {
           "name": "FILE_SERVICE_INTERNAL_API_KEY",
           "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:FILE_SERVICE_INTERNAL_API_KEY::"
+        },
+        {
           "name": "CHAT_EXPORT_SMTP_USER",
           "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:571721033550:secret:taco5/graphnode/mvp-CGYmQi:CHAT_EXPORT_SMTP_USER::"
         },
