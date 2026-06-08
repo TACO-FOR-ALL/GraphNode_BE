@@ -35,8 +35,10 @@ export class NotionAuthApi {
    * // Output: "https://api.notion.com/v1/oauth/authorize?client_id=..."
    */
   async getAuthUrl(redirect: boolean = false): Promise<HttpResponse<{ url: string }>> {
-    const qs = redirect ? '?redirect=true' : '';
-    return this.requestBuilder.get<{ url: string }>(`/api/auth/notion${qs}`);
+    return this.requestBuilder
+      .path('/api/auth/notion')
+      .query(redirect ? { redirect: true } : undefined)
+      .get<{ url: string }>();
   }
 
   /**
@@ -56,7 +58,7 @@ export class NotionAuthApi {
    * // Output: [{ id: '...', object: 'page', properties: {...} }, ...]
    */
   async getRootPages(): Promise<HttpResponse<{ results: any[] }>> {
-    return this.requestBuilder.get<{ results: any[] }>('/api/notion/pages');
+    return this.requestBuilder.path('/api/notion/pages').get<{ results: any[] }>();
   }
 
   /**
@@ -84,7 +86,9 @@ export class NotionAuthApi {
    * }
    */
   async getBlockChildren(blockId: string, cursor?: string): Promise<HttpResponse<{ results: any[], next_cursor: string | null, has_more: boolean }>> {
-    const qs = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
-    return this.requestBuilder.get<{ results: any[], next_cursor: string | null, has_more: boolean }>(`/api/notion/blocks/${blockId}/children${qs}`);
+    return this.requestBuilder
+      .path(`/api/notion/blocks/${blockId}/children`)
+      .query(cursor ? { cursor } : undefined)
+      .get<{ results: any[]; next_cursor: string | null; has_more: boolean }>();
   }
 }
