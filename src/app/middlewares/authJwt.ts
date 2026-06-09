@@ -56,7 +56,6 @@ export async function authJwt(req: Request, res: Response, next: NextFunction) {
     }
 
     // 3. Refresh Token 확인 및 갱신
-    console.log('[DEBUG] authJwt signedCookies:', req.signedCookies);
     const refreshToken = req.signedCookies['refresh_token'];
     if (!refreshToken) {
       throw new AuthError('Authentication required');

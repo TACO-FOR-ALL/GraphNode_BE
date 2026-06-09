@@ -401,6 +401,11 @@ paths:
                 schemaName:
                   type: string
                   description: Optional custom entity extraction schema name
+                blockMode:
+                  type: boolean
+                  description: >-
+                    When true, AI uses block mode (`block_graph.json` + optional `images/`).
+                    When false or omitted, non-block mode (`standardized.json`).
       responses:
         '201':
           description: Created — workspace created and ingest pipeline started
@@ -553,6 +558,11 @@ paths:
               properties:
                 schemaName:
                   type: string
+                blockMode:
+                  type: boolean
+                  description: >-
+                    When true, AI uses block mode (`block_graph.json` + optional `images/`).
+                    When false or omitted, non-block mode (`standardized.json`).
                 files:
                   type: array
                   items:

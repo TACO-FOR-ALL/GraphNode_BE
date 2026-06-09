@@ -1,6 +1,11 @@
 import type { ClientSession } from 'mongodb';
 
-import { MicroscopeWorkspaceMetaDoc, MicroscopeDocumentMetaDoc, MicroscopeGraphPayloadDoc } from '../types/persistence/microscope_workspace.persistence';
+import {
+  MicroscopeWorkspaceMetaDoc,
+  MicroscopeDocumentMetaDoc,
+  MicroscopeGraphPayloadDoc,
+  MicroscopeDocumentVisualizationMeta,
+} from '../types/persistence/microscope_workspace.persistence';
 
 /**
  * Microscope 워크스페이스 메타데이터 관리를 위한 DB Port.
@@ -81,6 +86,7 @@ export interface MicroscopeWorkspaceStore {
     sourceId?: string,
     graphPayloadId?: string,
     error?: string,
+    visualization?: MicroscopeDocumentVisualizationMeta,
     session?: ClientSession
   ): Promise<void>;
 

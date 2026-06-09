@@ -34,6 +34,15 @@ _e2e_is_allowed_key() {
   esac
 }
 
+# CI: workflow secrets가 .env placeholder에 덮이지 않도록 OPENAI_* 파일 로드 스킵
+_e2e_skip_openai_key_from_env_file() {
+  [[ -n "${GITHUB_ACTIONS:-}" ]] || return 1
+  case "$1" in
+    OPENAI_API_KEY | OPEN_API_KEY | OPEN_AI_API_KEY) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # bash/zsh 공통: KEY[[:space:]]*=VALUE (zsh에서 source해도 동작)
 _e2e_export_kv_line() {
   local _line="$1" _key _val
@@ -42,6 +51,7 @@ _e2e_export_kv_line() {
   _key="$(_e2e_trim "$_key")"
   _val="${_line#*=}"
   _val="$(_e2e_unquote_value "$_val")"
+  _e2e_skip_openai_key_from_env_file "$_key" && return 1
   _e2e_is_allowed_key "$_key" || return 1
   case "$_key" in
     *[!A-Za-z0-9_]* | '') return 1 ;;
@@ -186,30 +196,83 @@ _apply_e2e_groq_test_only_policy() {
   unset GROQ_API_KEY DEV_GROQ_API_KEY
 }
 
-# E2E full 스코프 + OpenAI 경로일 때 API 키 유효성 사전 검사 (Jest/AI 10분 대기 전 fail-fast)
+# E2E full 스코프 + OpenAI API 키 인증 검사 (GET /v1/models — 401만 키 무효)
 _openai_preflight_for_e2e() {
   if [[ -z "${OPENAI_API_KEY:-}" || "${OPENAI_API_KEY}" == dummy || "${OPENAI_API_KEY}" == *placeholder* ]]; then
-    return 0
+    return 1
   fi
 
-  local _model="${MACRO_LLM_MODEL:-gpt-4o-mini}"
   local _http_code="000"
   _http_code="$(
     curl -sS -o /dev/null -w '%{http_code}' \
       -H "Authorization: Bearer ${OPENAI_API_KEY}" \
-      -H 'Content-Type: application/json' \
-      -d "{\"model\":\"${_model}\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":1}" \
-      https://api.openai.com/v1/chat/completions 2>/dev/null || echo "000"
+      https://api.openai.com/v1/models 2>/dev/null || echo "000"
   )"
 
   if [[ "$_http_code" == "200" ]]; then
-    echo "✅ OpenAI API preflight OK (model=${_model})" >&2
+    echo "✅ OpenAI API key preflight OK (GET /v1/models)" >&2
     return 0
   fi
 
-  echo "❌ OpenAI API preflight failed (HTTP ${_http_code}). graph-flow/microscope will fail in graphnode-ai." >&2
-  echo "   Fix: .env OPENAI_API_KEY를 GitHub Secrets와 동일한 유효 키로 교체 (platform.openai.com/api-keys)." >&2
+  if [[ "$_http_code" == "401" || "$_http_code" == "403" ]]; then
+    echo "❌ OpenAI API key rejected (HTTP ${_http_code}). Update GitHub secret OPENAI_API_KEY or AWS SM DEV_OPENAI_API_KEY." >&2
+    return 1
+  fi
+
+  echo "⚠️  OpenAI models preflight HTTP ${_http_code} — key shape OK, continuing E2E (chat 400 ≠ invalid key)." >&2
+  return 0
+}
+
+# GitHub secret 등 Runner 키가 revoked(401)일 때 AWS Secrets Manager로 교체
+_load_openai_from_secrets_manager_force() {
+  unset OPENAI_API_KEY DEV_OPENAI_API_KEY
+  local _script_dir _key=""
+  _script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  E2E_FORCE_AWS_OPENAI=1 _key="$(bash "$_script_dir/e2e-fetch-openai-key.sh" 2>/dev/null)" || return 1
+  if [[ -n "$_key" ]]; then
+    export OPENAI_API_KEY="$_key"
+    export DEV_OPENAI_API_KEY="$_key"
+    echo "🔑 OPENAI_API_KEY loaded from AWS Secrets Manager (forced fallback)" >&2
+    return 0
+  fi
   return 1
+}
+
+# OpenAI 경로: Runner 키 preflight → 실패 시 AWS SM → 재검증
+_resolve_e2e_openai_api_key_with_aws_fallback() {
+  if _is_e2e_prefer_groq && [[ -n "${GROQ_API_KEY:-}" && "${GROQ_API_KEY}" != dummy && "${GROQ_API_KEY}" != *placeholder* ]]; then
+    return 0
+  fi
+
+  if [[ -z "${OPENAI_API_KEY:-}" || "${OPENAI_API_KEY}" == dummy || "${OPENAI_API_KEY}" == *placeholder* ]]; then
+    if ! _load_openai_from_secrets_manager_force; then
+      return 0
+    fi
+    _openai_preflight_for_e2e || return 1
+    return 0
+  fi
+
+  if _openai_preflight_for_e2e; then
+    export DEV_OPENAI_API_KEY="${DEV_OPENAI_API_KEY:-$OPENAI_API_KEY}"
+    return 0
+  fi
+
+  local _preflight_code="000"
+  _preflight_code="$(
+    curl -sS -o /dev/null -w '%{http_code}' \
+      -H "Authorization: Bearer ${OPENAI_API_KEY}" \
+      https://api.openai.com/v1/models 2>/dev/null || echo "000"
+  )"
+  if [[ "$_preflight_code" != "401" && "$_preflight_code" != "403" ]]; then
+    export DEV_OPENAI_API_KEY="${DEV_OPENAI_API_KEY:-$OPENAI_API_KEY}"
+    echo "ℹ️  Runner OPENAI_API_KEY kept (preflight HTTP ${_preflight_code}, not auth failure)." >&2
+    return 0
+  fi
+
+  echo "⚠️  Runner OPENAI_API_KEY auth failed (HTTP ${_preflight_code}) — trying AWS Secrets Manager (DEV_OPENAI_API_KEY)..." >&2
+  _load_openai_from_secrets_manager_force || return 1
+  _openai_preflight_for_e2e || return 1
+  return 0
 }
 
 _apply_e2e_llm_provider_defaults() {

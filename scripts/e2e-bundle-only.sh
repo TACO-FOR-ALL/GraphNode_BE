@@ -55,9 +55,12 @@ export API_BASE_URL="${API_BASE_URL:-http://localhost:3000}"
 echo "==> Seeding test data"
 npx ts-node -r dotenv/config tests/e2e/utils/db-seed.ts
 
-echo "==> Running macro-s3-bundle E2E only"
+echo "==> Running Macro + AddNode S3 bundle E2E (no LLM)"
 export E2E_SCOPE=bundle
 NODE_OPTIONS="${NODE_OPTIONS:---experimental-vm-modules}" \
-  npx jest --config "$E2E_CONFIG" tests/e2e/specs/macro-s3-bundle.spec.ts --runInBand --forceExit
+  npx jest --config "$E2E_CONFIG" \
+    tests/e2e/specs/macro-s3-bundle.spec.ts \
+    tests/e2e/specs/add-node-raw-file-bundle.spec.ts \
+    --runInBand --forceExit
 
-echo "Done. S3 prefix bundle E2E passed (no LLM API key required)."
+echo "Done. S3 prefix bundle E2E passed (Macro generate + AddNode raw file, no LLM API key required)."

@@ -1,4 +1,5 @@
 import { Readable } from 'stream';
+import { copyUserFilesToMacroBundlePrefix } from '../../shared/utils/macroBundleFiles';
 import { ulid } from 'ulid';
 
 import { ChatManagementService } from './ChatManagementService';
@@ -18,6 +19,9 @@ import {
 } from '../../shared/dtos/ai_input';
 import { UserFileService } from './UserFileService';
 import { logger } from '../../shared/utils/logger';
+import { resolveAddNodeWatermarkMs } from '../../shared/utils/graphStatsWatermark';
+import { mapGraphClustersForAiAddNode } from '../../shared/utils/mapGraphClustersForAiAddNode';
+import { resolveAddNodeQueueS3Key } from '../../shared/utils/addNodeQueueS3Key';
 import { AppError, UpstreamError, GraphNotFoundError } from '../../shared/errors/domain';
 import { ChatMessage } from '../../shared/dtos/ai';
 import { mapSnapshotToAiInput } from '../../shared/mappers/graph_ai_input.mapper';
@@ -34,7 +38,6 @@ import { loadEnv } from '../../config/env';
 import { withRetry } from '../../shared/utils/retry';
 import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 import { redis } from '../../infra/redis/client';
-import { GraphClusterDto } from '../../shared/dtos/graph';
 import { ICreditService } from '../ports/ICreditService';
 import { CreditFeature } from '../types/persistence/credit.persistence';
 import type { NotionService } from './NotionService';
@@ -75,17 +78,6 @@ export class GraphGenerationService {
       timeout: 300000,
     });
     this.jobQueueUrl = process.env.SQS_REQUEST_QUEUE_URL || 'TO_BE_CONFIGURED';
-  }
-
-  /**
-   * Macro S3 bundle의 `files/` 세그먼트용: 표시명에서 경로·`..`만 제거하고 확장자는 유지합니다.
-   *
-   * @param displayName 사용자 파일 표시명입니다.
-   * @returns `files/` 아래에 쓸 단일 파일명 조각입니다.
-   */
-  private sanitizeMacroBundleFileSegment(displayName: string): string {
-    const base = displayName.replace(/\\/g, '/').split('/').pop() || 'file';
-    return base.replace(/\.\./g, '_').replace(/[/\\]/g, '_').trim() || 'file';
   }
 
   /**
@@ -196,20 +188,7 @@ export class GraphGenerationService {
       }
 
       // 3. 사용자 라이브러리 원본 바이트 → bundle/files/{id}_{displayName} (확장자 유지)
-      for (const f of userFiles) {
-        const downloaded = await withRetry(
-          async () => await this.storagePort.downloadFile(f.s3Key, { bucketType: 'file' }),
-          { label: 'Storage.downloadFile.userFileForMacroBundle' }
-        );
-        const segment = this.sanitizeMacroBundleFileSegment(f.displayName);
-        const destKey = `${taskPrefix}files/${f._id}_${segment}`;
-        const contentType =
-          f.mimeType?.trim() || downloaded.contentType || 'application/octet-stream';
-        await withRetry(
-          async () => await this.storagePort.upload(destKey, downloaded.buffer, contentType),
-          { label: 'Storage.upload.macroBundleUserFile' }
-        );
-      }
+      await copyUserFilesToMacroBundlePrefix(this.storagePort, taskPrefix, userFiles);
 
       // 4. 사용자 언어 조회
       const language = await withRetry(
@@ -498,7 +477,9 @@ export class GraphGenerationService {
 
     try {
       taskId = `task_add_node_${userId}_${ulid()}`;
-      const s3Key = `add-node/${taskId}/batch.json`;
+      /** GraphNode_AI AddNode raw file bundle: prefix는 반드시 `/`로 끝남. */
+      const taskPrefix = `add-node/${taskId}/`;
+      const batchObjectKey = `${taskPrefix}batch.json`;
 
       const stats = await withRetry(async () => await this.graphEmbeddingService.getStats(userId), {
         label: 'GraphEmbeddingService.getStats',
@@ -507,7 +488,14 @@ export class GraphGenerationService {
         throw new GraphNotFoundError('Graph statistics not found. Please generate graph first.');
       }
 
-      const lastGraphUpdatedAt = stats.updatedAt ? new Date(stats.updatedAt).getTime() : 0;
+      const { watermarkMs: lastGraphUpdatedAt, usedRequestTimeFallback } =
+        resolveAddNodeWatermarkMs(stats);
+      if (usedRequestTimeFallback) {
+        logger.warn(
+          { userId, statsStatus: stats.status, nodeCount: stats.nodes },
+          'AddNode watermark missing on existing graph; using request time to avoid full-graph resync'
+        );
+      }
 
       // 변경된 대화 수집
       const listResult = await withRetry(
@@ -617,9 +605,10 @@ export class GraphGenerationService {
         mimeType: f.mimeType,
       }));
 
-      // 기존 클러스터 정보 가져오기
-      const existingClusters: GraphClusterDto[] =
-        await this.graphEmbeddingService.listClusters(userId);
+      // 기존 클러스터 정보 가져오기 (AI 계약용 lean 필드만 전송)
+      const existingClusters = mapGraphClustersForAiAddNode(
+        await this.graphEmbeddingService.listClusters(userId)
+      );
       const batchPayload: AiAddNodeBatchRequest = {
         userId,
         existingClusters,
@@ -628,25 +617,57 @@ export class GraphGenerationService {
         files: mappedFiles.length > 0 ? mappedFiles : undefined,
       };
 
-      // S3에 데이터 업로드
+      // S3 bundle: batch.json + files/* (raw file bytes)
       const payloadJson: string = JSON.stringify(batchPayload);
-      await this.storagePort.upload(s3Key, payloadJson, 'application/json');
+      await withRetry(
+        async () => await this.storagePort.upload(batchObjectKey, payloadJson, 'application/json'),
+        { label: 'Storage.upload.addNodeBatch' }
+      );
+      if (updatedUserFiles.length > 0) {
+        await copyUserFilesToMacroBundlePrefix(this.storagePort, taskPrefix, updatedUserFiles);
+      }
+
+      const language = await withRetry(
+        async () => await this.userService.getPreferredLanguage(userId),
+        { label: 'UserService.getPreferredLanguage.addNode' }
+      );
 
       // 그래프 상태 업데이트
       stats.status = 'UPDATING';
       await this.graphEmbeddingService.saveStats(stats);
 
       // SQS 메시지 생성
+      const addNodeS3Key = resolveAddNodeQueueS3Key(
+        taskPrefix,
+        batchObjectKey,
+        updatedUserFiles.length > 0
+      );
       const messageBody: AddNodeRequestPayload = {
         taskId,
         taskType: TaskType.ADD_NODE_REQUEST,
         payload: {
           userId,
-          s3Key,
+          s3Key: addNodeS3Key,
           bucket: process.env.S3_PAYLOAD_BUCKET,
+          inputType: 'auto',
+          language,
         },
         timestamp: new Date().toISOString(),
       };
+
+      logger.info(
+        {
+          taskId,
+          userId,
+          addNodeS3Key,
+          conversationCount: mappedConversations.length,
+          noteCount: mappedNotes.length,
+          userFileCount: updatedUserFiles.length,
+          watermarkMs: lastGraphUpdatedAt,
+          usedRequestTimeFallback,
+        },
+        'AddNode batch queued to SQS'
+      );
 
       await withRetry(async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
         label: 'QueuePort.sendMessage.AddNode',

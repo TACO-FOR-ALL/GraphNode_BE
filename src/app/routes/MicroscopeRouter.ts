@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { MicroscopeController } from '../controllers/MicroscopeController';
 import { internalOrSession } from '../middlewares/internal';
+import { asyncHandler } from '../utils/asyncHandler';
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -31,6 +32,13 @@ export function createMicroscopeRouter(controller: MicroscopeController): Router
 
   // 다중 소스(Multi-source) 워크스페이스 생성 및 Ingest
   router.post('/workspaces/batch-ingest', controller.batchIngest);
+
+  // Raw file 업로드 기반 Ingest (GraphNode_AI `microscope/raw_file` 파이프라인)
+  router.post(
+    '/:groupId/documents',
+    upload.array('files'),
+    asyncHandler(controller.ingestDocuments.bind(controller))
+  );
 
   // 워크스페이스 삭제
   router.delete('/:groupId', controller.deleteWorkspace);

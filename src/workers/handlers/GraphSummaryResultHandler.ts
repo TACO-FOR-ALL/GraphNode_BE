@@ -11,6 +11,7 @@ import { GraphSummaryDoc } from '../../core/types/persistence/graph.persistence'
 import { withRetry } from '../../shared/utils/retry';
 import { countSourceTypesFromNodeList } from '../utils/countSourceTypes';
 import { GraphNodeDto } from '../../shared/dtos/graph';
+import { GRAPH_GENERATION_MUTABLE_STATUSES } from '../utils/macroStatsTransition';
 
 export class GraphSummaryResultHandler implements JobHandler {
   async handle(message: QueueMessage, container: Container): Promise<void> {
@@ -108,13 +109,19 @@ export class GraphSummaryResultHandler implements JobHandler {
 
         await graphService.upsertGraphSummary(userId, summaryDoc);
 
-        // 2.5. 상태 변경: CREATED (생성 중이었다면 완료로 변경)
-        const stats = await graphService.getStats(userId);
-        if (stats && stats.status === 'CREATING') {
-          stats.status = 'CREATED';
-          stats.updatedAt = new Date().toISOString();
-          await graphService.saveStats(stats);
-        }
+        // 2.5. 상태 변경: CREATED (생성 중이었다면 완료로 변경; AddNode UPDATING 덮어쓰기 방지)
+        const stats = await graphService.getStatsMetadata(userId);
+        const syncAt = new Date().toISOString();
+        await graphService.saveStatsIfStatusIn(
+          {
+            ...stats,
+            userId,
+            status: 'CREATED',
+            updatedAt: syncAt,
+            generatedAt: stats.generatedAt || syncAt,
+          },
+          GRAPH_GENERATION_MUTABLE_STATUSES
+        );
 
         logger.info({ taskId, userId }, 'Graph summary persisted to DB');
 

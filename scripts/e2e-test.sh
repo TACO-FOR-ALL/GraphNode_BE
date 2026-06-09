@@ -55,12 +55,12 @@ source scripts/e2e-load-env.sh .env
 
 export E2E_SCOPE="${E2E_SCOPE:-full}"
 
-# OpenAI-only E2E (GitHub Actions 기본): Groq env 제거 + 키 preflight
-if [[ "$E2E_SCOPE" == "full" ]] && [[ "${E2E_PREFER_GROQ:-0}" != "1" ]]; then
-  unset GROQ_API_KEY DEV_GROQ_API_KEY
-  if [[ -n "${OPENAI_API_KEY:-}" && "${OPENAI_API_KEY}" != *placeholder* && "${OPENAI_API_KEY}" != dummy ]]; then
-    _openai_preflight_for_e2e || exit 1
-  fi
+# OpenAI-only E2E: revoked GitHub secret → AWS SM fallback + preflight (invalid 키로 10분 대기 방지)
+if [[ "$E2E_SCOPE" == "full" ]]; then
+  _resolve_e2e_openai_api_key_with_aws_fallback || {
+    echo "❌ E2E full scope requires a valid OpenAI (or Groq with E2E_PREFER_GROQ=1) API key." >&2
+    exit 1
+  }
 fi
 
 # AI Worker가 .env·Runner LLM 키를 받도록 재기동
@@ -129,10 +129,25 @@ collect_logs() {
     
     mkdir -p e2e-logs
     docker compose -f $DOCKER_COMPOSE_FILE logs graphnode-be > e2e-logs/be.log
+    docker compose -f $DOCKER_COMPOSE_FILE logs graphnode-be --tail 300 2>/dev/null | grep -iE 'AddNode batch queued|addNodeS3Key|watermark' > e2e-logs/be-addnode.log || true
     docker compose -f $DOCKER_COMPOSE_FILE logs graphnode-ai > e2e-logs/ai.log
     docker compose -f $DOCKER_COMPOSE_FILE logs graphnode-worker > e2e-logs/worker.log
     docker compose -f $DOCKER_COMPOSE_FILE logs localstack > e2e-logs/localstack.log
-    
+
+    {
+      echo "=== ADD_NODE / Graph generation failures (worker) ==="
+      grep -iE 'addnode|ADD_NODE|AddNode task failed|Skipping graph status CREATED|graph generation|GraphGeneration|status=.FAILED' e2e-logs/worker.log 2>/dev/null | tail -120 || true
+      echo ""
+      echo "=== ADD_NODE / LLM failures (graphnode-ai) ==="
+      grep -iE 'add_node|ADD_NODE|Error processing|AuthenticationError|validation error|FAILED' e2e-logs/ai.log 2>/dev/null | tail -120 || true
+      echo ""
+      echo "=== Recent S3 AddNode keys (LocalStack) ==="
+      docker exec graphnode-test-localstack awslocal s3 ls s3://taco5-graphnode-graphdata-s3/add-node/ --recursive 2>/dev/null | tail -30 || true
+      echo ""
+      echo "=== BE AddNode queue diagnostics ==="
+      cat e2e-logs/be-addnode.log 2>/dev/null | tail -20 || true
+    } > e2e-logs/failure-summary.log
+
     echo "📑 Logs saved in e2e-logs/ directory."
 }
 
