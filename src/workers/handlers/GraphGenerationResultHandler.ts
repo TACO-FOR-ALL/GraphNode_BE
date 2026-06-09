@@ -7,7 +7,7 @@ import type { Container } from '../../bootstrap/container';
 import { GraphGenResultPayload } from '../../shared/dtos/queue';
 import { logger } from '../../shared/utils/logger';
 import { mapAiOutputToSnapshot } from '../../shared/mappers/ai_graph_output.mapper';
-import { GraphSnapshotDto, PersistGraphPayloadDto } from '../../shared/dtos/graph';
+import { GraphSnapshotDto, PersistGraphPayloadDto, type GraphStatsDto } from '../../shared/dtos/graph';
 import {
   AiGraphNodeOutput,
   AiGraphOutputDto,
@@ -20,10 +20,7 @@ import { withRetry } from '../../shared/utils/retry';
 import { redis } from '../../infra/redis/client';
 import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 import { notifyWorkerFailed } from '../../shared/utils/discord';
-import {
-  canApplyGraphGenerationFailureStats,
-  canApplyGraphGenerationSuccessStats,
-} from '../utils/macroStatsTransition';
+import { GRAPH_GENERATION_MUTABLE_STATUSES } from '../utils/macroStatsTransition';
 import { normalizeAiOrigId } from '../../shared/utils/aiNodeId';
 import {
   aiRawSourceTypeFromMacroFileHint,
@@ -110,11 +107,12 @@ export class GraphGenerationResultHandler implements JobHandler {
           sentryEventId,
         }).catch(() => {});
 
-        const stats = await graphService.getStats(userId);
-        if (stats && canApplyGraphGenerationFailureStats(stats.status)) {
-          stats.status = 'NOT_CREATED';
-          await graphService.saveStats(stats);
-        } else if (stats) {
+        const stats = await graphService.getStatsMetadata(userId);
+        const applied = await graphService.saveStatsIfStatusIn(
+          { ...stats, userId, status: 'NOT_CREATED' },
+          GRAPH_GENERATION_MUTABLE_STATUSES
+        );
+        if (!applied) {
           logger.warn(
             { taskId, userId, currentStatus: stats.status },
             'Skipping graph generation failure status reset; graph is not in CREATING phase'
@@ -344,19 +342,23 @@ export class GraphGenerationResultHandler implements JobHandler {
           summary_themes: summaryJson?.overview?.primary_interests || [],
         });
 
-        // 11. graph status를 CREATED로 업데이트한다 (CREATING→CREATED만; AddNode UPDATING 덮어쓰기 방지).
-        const stats = await graphService.getStats(userId);
-        if (stats && canApplyGraphGenerationSuccessStats(stats.status)) {
-          stats.status = 'CREATED';
-          // AddNode incremental filter (`find*ModifiedSince`) watermark — 없으면 전체 시드가 재전송됨
-          const syncAt = new Date().toISOString();
-          stats.updatedAt = syncAt;
-          if (!stats.generatedAt) {
-            stats.generatedAt = syncAt;
-          }
-          await graphService.saveStats(stats);
+        // 11. graph status를 CREATED로 업데이트한다 (compare-and-set; AddNode UPDATING 덮어쓰기 방지).
+        const stats = await graphService.getStatsMetadata(userId);
+        const syncAt = new Date().toISOString();
+        const statsPatch: GraphStatsDto = {
+          ...stats,
+          userId,
+          status: 'CREATED',
+          updatedAt: syncAt,
+          generatedAt: stats.generatedAt || syncAt,
+        };
+        const applied = await graphService.saveStatsIfStatusIn(
+          statsPatch,
+          GRAPH_GENERATION_MUTABLE_STATUSES
+        );
+        if (applied) {
           logger.info({ taskId, userId }, 'Graph status updated to CREATED');
-        } else if (stats) {
+        } else {
           logger.warn(
             { taskId, userId, currentStatus: stats.status },
             'Skipping graph status CREATED update; graph is not in CREATING phase (possible stale GRAPH_GENERATION_RESULT during AddNode)'
@@ -396,11 +398,11 @@ export class GraphGenerationResultHandler implements JobHandler {
       logger.error({ err, taskId, userId }, 'Error processing graph generation result');
 
       try {
-        const stats = await graphService.getStats(userId);
-        if (stats) {
-          stats.status = 'NOT_CREATED';
-          await graphService.saveStats(stats);
-        }
+        const stats = await graphService.getStatsMetadata(userId);
+        await graphService.saveStatsIfStatusIn(
+          { ...stats, userId, status: 'NOT_CREATED' },
+          GRAPH_GENERATION_MUTABLE_STATUSES
+        );
 
         await notiService.sendGraphGenerationFailed(userId, taskId, errorMsg);
         await notiService.sendFcmPushNotification(

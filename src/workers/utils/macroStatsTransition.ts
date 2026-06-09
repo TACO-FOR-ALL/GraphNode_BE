@@ -1,5 +1,8 @@
 import type { GraphStatus } from '../../shared/dtos/graph';
 
+/** @description Graph generation 성공·실패 handler가 stats를 덮어써도 되는 현재 status 목록. */
+export const GRAPH_GENERATION_MUTABLE_STATUSES: GraphStatus[] = ['CREATING', 'NOT_CREATED'];
+
 /**
  * @description Graph generation 성공 시 MacroStats를 `CREATED`로 전이해도 되는지 판별합니다.
  * @param status 현재 MacroStats.status.

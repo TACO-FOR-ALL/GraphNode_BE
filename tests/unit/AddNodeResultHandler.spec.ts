@@ -26,6 +26,12 @@ jest.mock('../../src/workers/utils/sourceTypeResolver', () => ({
   })),
 }));
 
+import { resolveSourceTypesByOrigIds } from '../../src/workers/utils/sourceTypeResolver';
+
+const mockResolveSourceTypesByOrigIds = resolveSourceTypesByOrigIds as jest.MockedFunction<
+  typeof resolveSourceTypesByOrigIds
+>;
+
 describe('AddNodeResultHandler', () => {
   const userId = 'user-1';
   const taskId = 'task_add_node_user-1_01TEST';
@@ -37,6 +43,15 @@ describe('AddNodeResultHandler', () => {
   let graphService: any;
 
   beforeEach(() => {
+    mockResolveSourceTypesByOrigIds.mockReset();
+    mockResolveSourceTypesByOrigIds.mockResolvedValue({
+      sourceTypesByOrigId: new Map([['uf-1', 'file']]),
+      userFileHintsByOrigId: new Map([
+        ['uf-1', { mimeType: 'application/pdf', macroFileType: 'pdf' }],
+      ]),
+      unresolvedOrigIds: [],
+    } as Awaited<ReturnType<typeof resolveSourceTypesByOrigIds>>);
+
     handler = new AddNodeResultHandler();
 
     storagePort = {
@@ -78,6 +93,9 @@ describe('AddNodeResultHandler', () => {
       getCreditService: jest.fn(() => ({
         commitByTaskId: jest.fn(async () => undefined),
         rollbackByTaskId: jest.fn(async () => undefined),
+      })),
+      getMessageService: jest.fn(() => ({
+        findDocsByConversationIds: jest.fn(async () => []),
       })),
     };
   });
@@ -180,6 +198,80 @@ describe('AddNodeResultHandler', () => {
         }),
       })
     );
+  });
+
+  it('merges chat numMessages with Mongo message count and existing graph node', async () => {
+    const batchResult: AiAddNodeBatchResult = {
+      userId,
+      processedCount: 1,
+      results: [
+        {
+          conversationId: 'conv-e2e-123',
+          nodes: [
+            {
+              id: 'tmp-chat',
+              userId,
+              origId: 'conv-e2e-123',
+              clusterId: 'c1',
+              clusterName: 'C1',
+              numMessages: 2,
+            } as any,
+          ],
+          edges: [],
+        } as any,
+      ],
+    };
+
+    graphService.listNodesAll.mockResolvedValue([
+      {
+        id: 11,
+        userId,
+        origId: 'conv-e2e-123',
+        clusterId: 'c0',
+        clusterName: 'Old',
+        numMessages: 2,
+        sourceType: 'chat',
+        embedding: [],
+        timestamp: null,
+      },
+    ]);
+
+    mockResolveSourceTypesByOrigIds.mockResolvedValueOnce({
+      sourceTypesByOrigId: new Map([['conv-e2e-123', 'chat']]),
+      userFileHintsByOrigId: new Map(),
+      unresolvedOrigIds: [],
+    } as Awaited<ReturnType<typeof resolveSourceTypesByOrigIds>>);
+
+    mockContainer.getMessageService.mockReturnValue({
+      findDocsByConversationIds: jest.fn(async () => [
+        { conversationId: 'conv-e2e-123', deletedAt: null },
+        { conversationId: 'conv-e2e-123', deletedAt: null },
+        { conversationId: 'conv-e2e-123', deletedAt: null },
+        { conversationId: 'conv-e2e-123', deletedAt: null },
+      ]),
+    });
+
+    storagePort.downloadJson.mockImplementation(async (key: string) => {
+      if (key === resultS3Key) return batchResult;
+      if (key === `add-node/${taskId}/batch.json`) throw new Error('NoSuchKey');
+      throw new Error(`unexpected key: ${key}`);
+    });
+
+    const message: AddNodeResultPayload = {
+      taskId,
+      taskType: 'ADD_NODE_RESULT' as any,
+      timestamp: new Date().toISOString(),
+      payload: { userId, status: 'COMPLETED', resultS3Key },
+    };
+
+    await handler.handle(message, mockContainer);
+
+    expect(graphService.upsertNodes).toHaveBeenCalledWith([
+      expect.objectContaining({
+        origId: 'conv-e2e-123',
+        numMessages: 4,
+      }),
+    ]);
   });
 
   it('continues when batch.json is missing (legacy AI result only)', async () => {

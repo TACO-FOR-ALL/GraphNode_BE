@@ -764,6 +764,35 @@ export class GraphManagementService {
   }
 
   /**
+   * @description MacroStats를 현재 status가 허용 목록에 있을 때만 갱신합니다.
+   * @param stats 저장할 stats DTO.
+   * @param allowedStatuses 갱신을 허용할 현재 status 목록.
+   * @param options transaction 등 저장 옵션.
+   * @returns 실제로 갱신되었으면 true.
+   */
+  async saveStatsIfStatusIn(
+    stats: GraphStatsDto,
+    allowedStatuses: GraphStatsDto['status'][],
+    options?: RepoOptions
+  ): Promise<boolean> {
+    try {
+      this.assertUser(stats.userId);
+      if (this.repo.saveStatsIfStatusIn) {
+        return await this.repo.saveStatsIfStatusIn(stats, allowedStatuses, options);
+      }
+      const current = await this.getStatsMetadata(stats.userId);
+      if (!allowedStatuses.includes(current.status)) {
+        return false;
+      }
+      await this.repo.saveStats(stats, options);
+      return true;
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphService.saveStatsIfStatusIn failed', { cause: String(err) });
+    }
+  }
+
+  /**
    * 그래프 스냅샷 전체를 bulkWrite 기반으로 일괄 반영합니다.
    *
    * @param payload 사용자 ID와 스냅샷 DTO를 포함한 저장 페이로드

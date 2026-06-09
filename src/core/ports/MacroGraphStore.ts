@@ -251,6 +251,18 @@ export interface MacroGraphStore {
    */
   saveStats(stats: GraphStatsDto, options?: MacroGraphStoreOptions): Promise<void>;
   /**
+   * @description MacroStats를 현재 status가 허용 목록에 있을 때만 갱신합니다 (compare-and-set).
+   * @param stats 저장할 stats DTO.
+   * @param allowedStatuses 갱신을 허용할 현재 status 목록.
+   * @param options transaction 등 adapter 옵션.
+   * @returns 실제로 갱신되었으면 true.
+   */
+  saveStatsIfStatusIn?(
+    stats: GraphStatsDto,
+    allowedStatuses: GraphStatsDto['status'][],
+    options?: MacroGraphStoreOptions
+  ): Promise<boolean>;
+  /**
    * @description 사용자 graph summary를 독립적으로 upsert 합니다. (Incremental Write)
    *
    * @param userId 사용자 ID입니다.

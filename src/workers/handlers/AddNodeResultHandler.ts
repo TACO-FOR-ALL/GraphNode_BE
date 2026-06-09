@@ -21,6 +21,7 @@ import {
   resolveSourceTypesByOrigIds,
 } from '../utils/sourceTypeResolver';
 import { GraphNodeDto, GraphEdgeDto, GraphClusterDto } from '../../shared/dtos/graph';
+import type { MessageService } from '../../core/services/MessageService';
 
 interface NormalizedAddNodeItem {
   rawTempId: string;
@@ -60,6 +61,7 @@ export class AddNodeResultHandler implements JobHandler {
     const conversationService = container.getConversationService();
     const noteService = container.getNoteService();
     const userFileService = container.getUserFileService();
+    const messageService = container.getMessageService();
     const creditService = container.getCreditService();
 
     // AI 서버에서 실패한 경우 (COMPLETED + optional error 필드는 성공 경로로 처리)
@@ -188,6 +190,15 @@ export class AddNodeResultHandler implements JobHandler {
       const existingNodeByOrigId: Map<string, GraphNodeDto> =
         this.buildExistingNodeByOrigIdMap(existingNodes);
 
+      const chatOrigIds = this.collectOrigIdsBySourceType(
+        sourceTypeResult.sourceTypesByOrigId,
+        'chat'
+      );
+      const messageCountByOrigId = await this.buildMessageCountByConversationId(
+        messageService,
+        chatOrigIds
+      );
+
       // 6. 이번 배치에서 생성한 AI string id -> Mongo numeric id 맵을 만든다.
       const createdNodeIds: Map<string, number> = new Map();
       const movedNodeIds: Set<number> = new Set();
@@ -304,7 +315,12 @@ export class AddNodeResultHandler implements JobHandler {
             origId: normalizedItem.normalizedOrigId,
             clusterId: normalizedItem.clusterId,
             clusterName: normalizedItem.clusterName || '',
-            numMessages: this.resolveNumMessages(normalizedItem, resolvedSourceType),
+            numMessages: this.resolveNumMessages(
+              normalizedItem,
+              resolvedSourceType,
+              existingNode,
+              messageCountByOrigId.get(normalizedItem.normalizedOrigId)
+            ),
             sourceType: resolvedSourceType,
             embedding: [],
             timestamp: normalizedItem.timestamp ?? null,
@@ -642,19 +658,74 @@ export class AddNodeResultHandler implements JobHandler {
   }
 
   /**
-   * sourceType에 따라 numMessages를 resolve합니다.
-   * @param node 정규화된 노드 아이템
-   * @param sourceType sourceType
-   * @returns numMessages
+   * @description sourceType별 numMessages를 resolve하고, 기존 노드·Mongo 실측과 병합합니다.
+   * @param node 정규화된 노드 아이템.
+   * @param sourceType sourceType.
+   * @param existingNode 동일 origId의 기존 graph 노드 (없으면 undefined).
+   * @param mongoMessageCount MongoDB 대화 메시지 수 (chat 전용, 없으면 undefined).
+   * @returns Neo4j에 저장할 numMessages.
    */
   private resolveNumMessages(
     node: NormalizedAddNodeItem,
-    sourceType: ResolvedGraphSourceType
+    sourceType: ResolvedGraphSourceType,
+    existingNode?: GraphNodeDto,
+    mongoMessageCount?: number
   ): number {
+    const existingCount = existingNode?.numMessages ?? 0;
+
     if (sourceType === 'markdown' || sourceType === 'file') {
-      return node.numSections ?? (sourceType === 'file' ? 1 : 0);
+      const fromAi = node.numSections ?? (sourceType === 'file' ? 1 : 0);
+      return Math.max(existingCount, fromAi);
     }
-    return node.numMessages ?? 0;
+
+    const fromAi = node.numMessages ?? 0;
+    const fromMongo = mongoMessageCount ?? 0;
+    return Math.max(existingCount, fromAi, fromMongo);
+  }
+
+  /**
+   * @description sourceType 맵에서 특정 타입의 origId 목록을 수집합니다.
+   * @param sourceTypesByOrigId origId별 sourceType 맵.
+   * @param expectedType 수집할 sourceType.
+   * @returns origId 배열.
+   */
+  private collectOrigIdsBySourceType(
+    sourceTypesByOrigId: Map<string, ResolvedGraphSourceType>,
+    expectedType: ResolvedGraphSourceType
+  ): string[] {
+    const origIds: string[] = [];
+    for (const [origId, sourceType] of sourceTypesByOrigId.entries()) {
+      if (sourceType === expectedType) {
+        origIds.push(origId);
+      }
+    }
+    return origIds;
+  }
+
+  /**
+   * @description 대화 origId별 MongoDB 메시지 수를 집계합니다.
+   * @param messageService MessageService 인스턴스.
+   * @param conversationIds 대화 ID 목록.
+   * @returns conversationId → 활성 메시지 수 맵.
+   */
+  private async buildMessageCountByConversationId(
+    messageService: MessageService,
+    conversationIds: string[]
+  ): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
+    if (conversationIds.length === 0) {
+      return counts;
+    }
+
+    const messages = await messageService.findDocsByConversationIds(conversationIds);
+    for (const message of messages) {
+      if (message.deletedAt != null) {
+        continue;
+      }
+      const conversationId = message.conversationId;
+      counts.set(conversationId, (counts.get(conversationId) ?? 0) + 1);
+    }
+    return counts;
   }
 
   /**

@@ -721,6 +721,41 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
       await runner.run(MACRO_GRAPH_CYPHER.linkStatsToGraph, { userId });
     }, options);
   }
+
+  /**
+   * @description MacroStats를 현재 status가 허용 목록에 있을 때만 갱신합니다.
+   * @param stats 저장할 stats DTO.
+   * @param allowedStatuses 갱신을 허용할 현재 status 목록.
+   * @param options transaction 등 adapter 옵션.
+   * @returns Neo4j에서 실제로 갱신되었으면 true.
+   */
+  async saveStatsIfStatusIn(
+    stats: GraphStatsDto,
+    allowedStatuses: GraphStatsDto['status'][],
+    options?: MacroGraphStoreOptions
+  ): Promise<boolean> {
+    const { userId } = stats;
+    const statsNeo4j = toNeo4jMacroStats(toGraphStatsDoc(stats));
+
+    let applied = false;
+    await this.runWrite(async (runner) => {
+      await this.ensureGraphRoot(userId, runner);
+      const result = await runner.run(MACRO_GRAPH_CYPHER.updateStatsIfStatusIn, {
+        userId,
+        allowedStatuses,
+        id: statsNeo4j.id,
+        status: statsNeo4j.status,
+        generatedAt: statsNeo4j.generatedAt,
+        updatedAt: statsNeo4j.updatedAt ?? null,
+        metadataJson: statsNeo4j.metadataJson,
+      });
+      applied = result.records.length > 0;
+      if (applied) {
+        await runner.run(MACRO_GRAPH_CYPHER.linkStatsToGraph, { userId });
+      }
+    }, options);
+    return applied;
+  }
   /**
    * @description 사용자 graph summary를 독립적으로 upsert 합니다. (Incremental Write)
    *
