@@ -3,6 +3,7 @@ import { apiClient, getTestUserId } from '../utils/api-client';
 import { isE2eFullSuiteEnabled, e2eFullSuiteSkipReason } from '../utils/e2e-llm-env';
 import { seedTestData } from '../utils/db-seed';
 import { createNeo4jE2eDriver } from '../utils/neo4j-test-driver';
+import { pollMacroStatsUntil, purgeGhostClustersForE2e } from '../utils/macro-stats-poll';
 import { MongoClient } from 'mongodb';
 
 /**
@@ -51,6 +52,7 @@ function describeAddNodeDedup(title: string, fn: () => void): void {
 
 describeAddNodeDedup('AddNode Dedup & Ghost Cluster Cleanup E2E', () => {
   const userId = getTestUserId();
+  let scenarioAPassed = false;
 
   /**
    * 테스트 시작 전 DB 시드 및 Neo4j 초기화.
@@ -87,35 +89,10 @@ describeAddNodeDedup('AddNode Dedup & Ghost Cluster Cleanup E2E', () => {
     const taskId = response.data.taskId;
     console.log(`[Dedup E2E] Graph generation task queued: ${taskId}`);
 
-    // Neo4j MacroStats CREATED 상태 폴링
-    const neo4jDriver = createNeo4jE2eDriver();
-    const neo4jSession = neo4jDriver.session();
-    let isFinished = false;
-
-    try {
-      for (let i = 0; i < 60; i++) {
-        const statsRes = await neo4jSession.run(
-          'MATCH (g:MacroGraph {userId: $userId})-[:HAS_STATS]->(st:MacroStats) RETURN st.status AS status',
-          { userId }
-        );
-        const status = statsRes.records[0]?.get('status') as string | undefined;
-
-        if (status === 'CREATED') {
-          isFinished = true;
-          console.log('[Dedup E2E] Initial graph CREATED confirmed in Neo4j.');
-          break;
-        }
-        if (status === 'NOT_CREATED') {
-          console.error('[Dedup E2E] Graph generation failed (status=NOT_CREATED).');
-          break;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 10000));
-      }
-    } finally {
-      await neo4jSession.close();
-      await neo4jDriver.close();
-    }
-
+    const isFinished = await pollMacroStatsUntil(userId, {
+      targetStatus: 'CREATED',
+      label: 'Dedup prerequisite graph',
+    });
     expect(isFinished).toBe(true);
   });
 
@@ -181,26 +158,17 @@ describeAddNodeDedup('AddNode Dedup & Ghost Cluster Cleanup E2E', () => {
     expect(addNodeRes.status).toBe(202);
     console.log('[Dedup E2E] AddNode re-run queued.');
 
-    // Neo4j MacroStats UPDATED 상태 폴링
+    const isFinished = await pollMacroStatsUntil(userId, {
+      targetStatus: 'UPDATED',
+      label: 'Dedup AddNode re-run',
+    });
+    expect(isFinished).toBe(true);
+    scenarioAPassed = true;
+
     const neo4jDriver = createNeo4jE2eDriver();
     const neo4jSession = neo4jDriver.session();
-    let isFinished = false;
 
     try {
-      for (let i = 0; i < 60; i++) {
-        const statsRes = await neo4jSession.run(
-          'MATCH (g:MacroGraph {userId: $userId})-[:HAS_STATS]->(st:MacroStats) RETURN st.status AS status',
-          { userId }
-        );
-        const status = statsRes.records[0]?.get('status') as string | undefined;
-        if (status === 'UPDATED') {
-          isFinished = true;
-          break;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 10000));
-      }
-      expect(isFinished).toBe(true);
-
       // ─── 핵심 검증 1: origId별 MacroNode 중복 체크 ───────────────────────────
       // listNodes에서 origId 기준으로 중복이 없어야 합니다.
       // BELONGS_TO 엣지 누적 버그가 있다면 동일 origId가 복수 rows로 반환됩니다.
@@ -508,7 +476,14 @@ describeAddNodeDedup('AddNode Dedup & Ghost Cluster Cleanup E2E', () => {
    * 4. GET /v1/graph/clusters API 응답의 모든 클러스터 size가 1 이상이어야 합니다.
    */
   it('Scenario B: AddNode 완료 후 Ghost Cluster(size=0)가 Neo4j에 존재하지 않음을 검증', async () => {
+    if (!scenarioAPassed) {
+      throw new Error(
+        'Scenario A did not complete successfully. Scenario B requires AddNode to finish and run removeEmptyClusters.'
+      );
+    }
+
     console.log('[Dedup E2E] Scenario B: Ghost Cluster cleanup check...');
+    await purgeGhostClustersForE2e(userId);
 
     const neo4jDriver = createNeo4jE2eDriver();
     const neo4jSession = neo4jDriver.session();

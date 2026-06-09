@@ -19,7 +19,16 @@ describe('GraphSummaryResultHandler', () => {
       upsertGraphSummary: jest.fn(),
       listNodes: jest.fn(async () => []),
       getStats: jest.fn(),
+      getStatsMetadata: jest.fn(async () => ({
+        userId: 'user_1',
+        nodes: 0,
+        edges: 0,
+        clusters: 0,
+        status: 'CREATING',
+        generatedAt: '2023-01-01T00:00:00Z',
+      })),
       saveStats: jest.fn(),
+      saveStatsIfStatusIn: jest.fn(async () => true),
     };
     mockNotiService = {
       sendNotification: jest.fn(),
@@ -67,6 +76,15 @@ describe('GraphSummaryResultHandler', () => {
         }),
         generatedAt: '2023-01-02T00:00:00Z',
       })
+    );
+    expect(mockGraphService.saveStatsIfStatusIn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user_1',
+        status: 'CREATED',
+        generatedAt: '2023-01-01T00:00:00Z',
+        updatedAt: expect.any(String),
+      }),
+      ['CREATING', 'NOT_CREATED']
     );
     expect(mockNotiService.sendFcmPushNotification).toHaveBeenCalledWith('user_1', 'Graph Ready', 'Your graph is ready', expect.objectContaining({ taskId: 'task_1', status: 'COMPLETED' }));
   });

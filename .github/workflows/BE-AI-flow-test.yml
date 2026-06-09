@@ -3,6 +3,12 @@ name: BE-AI Integrated Flow Test
 on:
   pull_request:
     branches: ['main', 'develop']
+  workflow_dispatch:
+
+# PR당 1개 run만 실행 — 병렬 Docker 빌드 2개가 디스크/메모리를 쓰며 Build Image에서 멈춤 방지
+concurrency:
+  group: be-ai-flow-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 # 권한 설정 (OIDC 인증을 위해 필수)
 permissions:
@@ -12,6 +18,8 @@ permissions:
 jobs:
   test-flow:
     runs-on: ubuntu-latest
+    # E2E+Docker 전체 (기본 6h). 명시해 두어 조기 kill 오해 방지.
+    timeout-minutes: 360
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
@@ -19,6 +27,12 @@ jobs:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
 
     steps:
+      - name: Workflow context
+        run: |
+          echo "run_id=${{ github.run_id }} attempt=${{ github.run_attempt }} ref=${{ github.ref }}"
+          echo "pr=${{ github.event.pull_request.number }} head_sha=${{ github.event.pull_request.head.sha }}"
+          echo "event=${{ github.event_name }}"
+
       # 1. Backend 레포지토리 체크아웃 (be/ 폴더에 저장)
       - name: Checkout Backend
         uses: actions/checkout@v4
@@ -26,11 +40,20 @@ jobs:
           path: be
 
       # 2. AI Worker 레포지토리 체크아웃 (ai-worker/ 폴더에 저장)
+      # Contract C: AddNode raw file bundle + batch.json 단일 키 모두 GraphNode_AI main 기준.
+      # BE PR 브랜치명과 AI 브랜치를 맞추지 않고 항상 main을 사용합니다.
+      - name: Resolve GraphNode_AI ref
+        id: ai-ref
+        run: |
+          echo "Using GraphNode_AI ref: main (unified AddNode/Macro contract)"
+          echo "ref=main" >> "$GITHUB_OUTPUT"
+
       - name: Checkout AI Worker
         uses: actions/checkout@v4
         with:
           repository: TACO-FOR-ALL/GraphNode_AI
           path: ai-worker
+          ref: ${{ steps.ai-ref.outputs.ref }}
           token: ${{ secrets.GH_PAT }}
 
       # 2-1. Node.js 설정 및 의존성 캐싱 (E2E 테스트 실행용)
@@ -43,7 +66,11 @@ jobs:
 
       # 2-2. Backend 의존성 설치 (Runner 호스트 환경)
       - name: Install Dependencies
-        run: npm ci
+        timeout-minutes: 15
+        run: |
+          echo "Installing npm deps in be/ (lockfile=$(wc -l < package-lock.json) lines)..."
+          npm ci --no-audit --fund=false
+          echo "npm ci completed."
         working-directory: be
 
       # 2-3. AWS 자격 증명 구성 (OIDC를 사용하여 ECR 접근 권한 획득)
@@ -62,27 +89,44 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Prepare Docker disk space
+        run: |
+          docker system df || true
+          docker builder prune -af --filter "until=48h" || true
+          df -h /
+
       # 4. Backend 이미지 빌드 및 캐싱
       - name: Build Backend Image
         uses: docker/build-push-action@v6
+        timeout-minutes: 45
+        env:
+          BUILDKIT_PROGRESS: plain
         with:
           context: be
+          file: be/Dockerfile
           push: false
-          load: true # 빌드된 이미지를 로컬 도커 가상 시스템에 로드
+          load: true
           tags: graphnode-be:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=be-graphnode
+          cache-to: type=gha,scope=be-graphnode,mode=max,ignore-error=true
 
       # 5. AI Worker 이미지 빌드 및 캐싱
       - name: Build AI Worker Image
         uses: docker/build-push-action@v6
+        timeout-minutes: 45
+        env:
+          BUILDKIT_PROGRESS: plain
         with:
           context: ai-worker
           push: false
-          load: true # 빌드된 이미지를 로컬 도커 가상 시스템에 로드
+          load: true
           tags: graphnode-ai:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=ai-graphnode-${{ steps.ai-ref.outputs.ref }}
+          cache-to: type=gha,scope=ai-graphnode-${{ steps.ai-ref.outputs.ref }},mode=max,ignore-error=true
 
       # 6. Docker Compose를 통한 통합 테스트 서비스 기동
       - name: Start Database Services First
@@ -95,14 +139,27 @@ jobs:
           docker exec graphnode-test-mongo mongosh --eval "rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongo:27017'}]})" || true
           sleep 5
 
+      # compose 기동 전 OpenAI 키 resolve (GitHub secret → preflight 실패 시 AWS SM DEV_OPENAI_API_KEY)
+      - name: Resolve E2E LLM keys
+        working-directory: be
+        run: |
+          chmod +x scripts/e2e-resolve-llm-keys-for-ci.sh
+          ./scripts/e2e-resolve-llm-keys-for-ci.sh
+        env:
+          E2E_SCOPE: full
+          E2E_OPENAI_SECRET_ID: DEV_OPENAI_API_KEY
+
       - name: Start Application and LocalStack
         run: |
           # 2단계: 백엔드 어플리케이션 및 LocalStack 마저 구동
-          # 윈도우 환경 퍼미션 누락 방지 및 CRLF(\r\n) -> LF(\n) 변환
           sed -i 's/\r$//' be/scripts/localstack-init/ready.sh
           chmod +x be/scripts/localstack-init/ready.sh
-          # be/ 폴더 내부에서 compose 실행
-          docker compose -f be/docker-compose.test.yml up -d
+          if ! docker compose -f be/docker-compose.test.yml up -d; then
+            echo "❌ docker compose up failed — collecting diagnostics"
+            docker compose -f be/docker-compose.test.yml ps -a
+            docker compose -f be/docker-compose.test.yml logs --tail 200
+            exit 1
+          fi
 
       # 7. 모든 서비스가 Healthy 상태가 될 때까지 대기
       - name: Wait for Services to be healthy
@@ -168,6 +225,9 @@ jobs:
           cd be && ./scripts/e2e-test.sh
         env:
           E2E_SCOPE: full
+          E2E_OPENAI_SECRET_ID: DEV_OPENAI_API_KEY
+          MACRO_LLM_MODEL: gpt-4o-mini
+          MICROSCOPE_LLM_MODEL: gpt-4o-mini
           MONGODB_URI: mongodb://127.0.0.1:27017/graphnode?directConnection=true
           MONGODB_URL: mongodb://127.0.0.1:27017/graphnode?directConnection=true
           DATABASE_URL: postgresql://app:app@localhost:5432/graphnode
@@ -181,13 +241,23 @@ jobs:
           S3_FILE_BUCKET: taco5-graphnode-filedata-chat-and-note-s3
           API_BASE_URL: http://localhost:3000
 
-      # 10. 추가 로그 수집 (실패/캔슬 포함 모든 비정상 종료 대응)
+      # 10. 추가 로그·리소스 진단 (실패/캔슬 포함)
       - name: Collect Logs on Failure
         if: always()
         run: |
           mkdir -p be/e2e-logs
-          docker compose -f be/docker-compose.test.yml logs --tail 500 > be/e2e-logs/docker-compose-all.log
-          docker compose -f be/docker-compose.test.yml ps -a > be/e2e-logs/docker-ps.log
+          {
+            echo "=== Docker Stats ==="
+            docker stats --no-stream 2>/dev/null || true
+            echo "=== Memory ==="
+            free -h 2>/dev/null || true
+            echo "=== Disk ==="
+            df -h 2>/dev/null || true
+            echo "=== Compose PS ==="
+            docker compose -f be/docker-compose.test.yml ps -a 2>/dev/null || true
+          } > be/e2e-logs/host-diagnostics.log
+          docker compose -f be/docker-compose.test.yml logs --tail 500 > be/e2e-logs/docker-compose-all.log 2>/dev/null || true
+          docker compose -f be/docker-compose.test.yml ps -a > be/e2e-logs/docker-ps.log 2>/dev/null || true
           ls -R be/e2e-logs > be/e2e-logs/artifact-inventory.log
           echo "Captured logs for post-mortem analysis."
 

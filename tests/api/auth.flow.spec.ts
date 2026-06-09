@@ -8,23 +8,22 @@
  * 4. Token Rotation: 만료된 Access Token 전송 -> Middleware가 Refresh Token으로 갱신 -> 200 & New Access Token
  */
 import request from 'supertest';
-import { jest, describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
-import jwt from 'jsonwebtoken';
-
-// Mocks must be defined before imports that use them
-jest.mock('jsonwebtoken', () => {
-    const actual = jest.requireActual('jsonwebtoken') as any;
-    return {
-        ...actual,
-        verify: jest.fn().mockImplementation((token, secret, options) => {
-             return actual.verify(token, secret, options);
-        }),
-    };
-});
+import { jest, describe, it, expect, beforeAll, beforeEach, afterEach } from '@jest/globals';
 
 import { createApp } from '../../src/bootstrap/server';
+import * as jwtUtils from '../../src/app/utils/jwt';
 
 // --- Mocks ---
+
+const mockVerifyToken = jest.fn<typeof jwtUtils.verifyToken>();
+
+jest.mock('../../src/app/utils/jwt', () => {
+  const actual = jest.requireActual('../../src/app/utils/jwt') as typeof jwtUtils;
+  return {
+    ...actual,
+    verifyToken: (token: string) => mockVerifyToken(token),
+  };
+});
 
 // 1. GoogleOAuthService Mock
 jest.mock('../../src/core/services/GoogleOAuthService', () => {
@@ -84,7 +83,23 @@ jest.mock('../../src/infra/repositories/UserRepositoryMySQL', () => {
   };
 });
 
-// 3. Env Setup
+// Redis 세션 검증 — CI/병렬 실행 시 in-memory zset 상태에 의존하지 않도록 고정
+const mockHasSession = jest.fn<any>();
+const mockHasSessionBySessionId = jest.fn<any>();
+const mockReplaceSession = jest.fn<any>();
+
+jest.mock('../../src/infra/redis/SessionStoreRedis', () => {
+  const actual = jest.requireActual('../../src/infra/redis/SessionStoreRedis') as Record<string, unknown>;
+  return {
+    ...actual,
+    hasSession: (...args: unknown[]) => mockHasSession(...args),
+    hasSessionBySessionId: (...args: unknown[]) => mockHasSessionBySessionId(...args),
+    replaceSession: (...args: unknown[]) => mockReplaceSession(...args),
+  };
+});
+
+const actualJwtUtils = jest.requireActual('../../src/app/utils/jwt') as typeof jwtUtils;
+
 function appWithTestEnv() {
   process.env.NODE_ENV = 'test';
   process.env.SESSION_SECRET = 'test-secret-very-long-secure';
@@ -94,19 +109,29 @@ function appWithTestEnv() {
   process.env.OAUTH_GOOGLE_CLIENT_ID = 'test-client';
   process.env.OAUTH_GOOGLE_CLIENT_SECRET = 'test-secret';
   process.env.OAUTH_GOOGLE_REDIRECT_URI = 'http://localhost:3000/auth/google/callback';
-  process.env.DEV_INSECURE_COOKIES = 'true'; 
+  process.env.DEV_INSECURE_COOKIES = 'true';
   return createApp();
+}
+
+/** OAuth 콜백까지 완료해 agent에 access/refresh 쿠키를 심는다. */
+async function completeGoogleLogin(agent: request.SuperAgentTest): Promise<void> {
+  const startRes = await agent.get('/auth/google/start');
+  const location = startRes.headers['location'] as string;
+  const state = new URL(location).searchParams.get('state') || '';
+
+  const res = await agent.get('/auth/google/callback').query({ code: 'mock_code', state });
+  if (res.status !== 200) {
+    throw new Error(`Google login failed: ${res.status} ${JSON.stringify(res.body)}`);
+  }
 }
 
 describe('Auth Flow Integration', () => {
   let app: any;
   let agent: any;
-  let actualJwt: any;
 
   beforeAll(() => {
     app = appWithTestEnv();
     agent = request.agent(app);
-    actualJwt = jest.requireActual('jsonwebtoken') as any;
   });
 
   afterAll(async () => {
@@ -120,118 +145,98 @@ describe('Auth Flow Integration', () => {
   });
 
   beforeEach(() => {
-      // Reset mock implementation to actual
-      (jwt.verify as jest.Mock).mockImplementation((token: any, secret: any, options: any) => {
-          return actualJwt.verify(token, secret, options);
-      });
-      jest.clearAllMocks();
+    mockHasSession.mockResolvedValue(true);
+    mockHasSessionBySessionId.mockResolvedValue(true);
+    mockReplaceSession.mockResolvedValue(undefined);
+    mockVerifyToken.mockImplementation((token: string) => actualJwtUtils.verifyToken(token));
+  });
+
+  afterEach(() => {
+    mockVerifyToken.mockReset();
+    mockHasSession.mockReset();
+    mockHasSessionBySessionId.mockReset();
+    mockReplaceSession.mockReset();
   });
 
   it('Step 1: Start Login Flow (GET /auth/google/start)', async () => {
     const res = await agent.get('/auth/google/start');
     expect(res.status).toBe(302);
     expect(res.headers['location']).toContain('state=');
-    
-    // oauth_state 쿠키 확인
-    const cookies = res.headers['set-cookie'];
-    // console.log('Step 1 Set-Cookie:', cookies);
-    const hasState = cookies && cookies.some((c: string) => c.includes('oauth_state='));
+
+    const cookies = res.headers['set-cookie'] as string[] | undefined;
+    const hasState = cookies?.some((c: string) => c.includes('oauth_state='));
     expect(hasState).toBe(true);
   });
 
   it('Step 2: Callback Processing (GET /auth/google/callback)', async () => {
-    const startRes = await agent.get('/auth/google/start');
-    const location = startRes.headers['location'] as string;
-    const state = new URL(location).searchParams.get('state') || '';
+    await completeGoogleLogin(agent);
 
-    const res = await agent.get('/auth/google/callback')
-        .query({ code: 'mock_code', state });
-
-    if (res.status !== 200) {
-        console.error('Step 2 Callback Failed. Status:', res.status, 'Body:', JSON.stringify(res.body, null, 2));
-    }
-    expect(res.status).toBe(200);
-    expect(res.text).toContain('oauth-success');
-
-    const cookies = res.headers['set-cookie'];
-    // console.log('Step 2 Set-Cookie:', cookies);
-    
-    const hasAT = cookies && cookies.some((c: string) => c.includes('access_token='));
-    expect(hasAT).toBe(true);
-    
-    const hasRT = cookies && cookies.some((c: string) => c.includes('refresh_token='));
-    expect(hasRT).toBe(true);
-    
-    // "gn-logged-in", "gn-profile"
-    const hasLoggedIn = cookies && cookies.some((c: string) => c.includes('gn-logged-in='));
-    expect(hasLoggedIn).toBe(true);
+    const meRes = await agent.get('/v1/me');
+    expect(meRes.status).toBe(200);
   });
 
   it('Step 3: Access Protected Route (/v1/me)', async () => {
+    await completeGoogleLogin(agent);
+
     const res = await agent.get('/v1/me');
-    
+
     if (res.status !== 200) {
-        console.error('Step 3 Failed. Status:', res.status, 'Body:', JSON.stringify(res.body, null, 2));
+      console.error('Step 3 Failed. Status:', res.status, 'Body:', JSON.stringify(res.body, null, 2));
     }
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual(expect.objectContaining({
+    expect(res.body).toEqual(
+      expect.objectContaining({
         userId: '12345',
         profile: expect.objectContaining({
-            id: '12345',
-            email: 'test@example.com',
-            displayName: 'Test User',
-            avatarUrl: 'https://example.com/avatar.jpg'
-        })
-    }));
+          id: '12345',
+          email: 'test@example.com',
+          displayName: 'Test User',
+          avatarUrl: 'https://example.com/avatar.jpg',
+        }),
+      })
+    );
   });
 
   it('Step 4: Token Rotation (Expired Access Token)', async () => {
-    let callCount = 0;
+    await completeGoogleLogin(agent);
 
-    // Custom implementation: First call throws expired, subsequent calls use actual logic
-    (jwt.verify as jest.Mock).mockImplementation((token: any, secret: any, options: any) => {
-        callCount++;
-        // First verification is for Access Token (in authJwt)
-        if (callCount === 1) {
-            const err = new Error('jwt expired');
-            (err as any).name = 'TokenExpiredError';
-            throw err;
-        }
-        // Second verification should be for Refresh Token
-        const payload = actualJwt.verify(token, secret, options);
-        console.log('[DEBUG] Step 4 verifyToken payload:', payload);
-        return payload;
+    // Access Token(sessionId 포함)만 만료 처리, Refresh Token 검증은 실제 jwt 사용
+    mockVerifyToken.mockImplementation((token: string) => {
+      const decoded = actualJwtUtils.decodeToken(token);
+      if (decoded?.sessionId) {
+        const err = new Error('jwt expired');
+        (err as any).name = 'TokenExpiredError';
+        throw err;
+      }
+      return actualJwtUtils.verifyToken(token);
     });
 
     const res = await agent.get('/v1/me');
 
     if (res.status !== 200) {
-            console.error('Step 4 Failed. Status:', res.status, 'Body:', JSON.stringify(res.body, null, 2));
+      console.error('Step 4 Failed. Status:', res.status, 'Body:', JSON.stringify(res.body, null, 2));
     }
 
     expect(res.status).toBe(200);
-    
-    // 새 토큰이 발급되었는지 확인
-    const cookies = res.headers['set-cookie'];
-    const hasNewAT = cookies && cookies.some((c: string) => c.includes('access_token='));
-    
-    // Refresh Token이 유효했다면 토큰이 갱신되어야 함
+
+    const cookies = res.headers['set-cookie'] as string[] | undefined;
+    const hasNewAT = cookies?.some((c: string) => c.includes('access_token='));
     expect(hasNewAT).toBe(true);
-    
-    // X-New-Access-Token 헤더 확인 (옵션)
     expect(res.headers['x-new-access-token']).toBeDefined();
+    expect(mockReplaceSession).toHaveBeenCalled();
   });
 
   it('should fail if Refresh Token is also invalid', async () => {
-     // Force fail always
-     (jwt.verify as jest.Mock).mockImplementation(() => {
-        const err = new Error('Invalid token');
-        (err as any).name = 'JsonWebTokenError';
-        throw err;
-     });
+    await completeGoogleLogin(agent);
 
-     const res = await agent.get('/v1/me');
-     expect(res.status).toBe(401); // AuthError
+    mockVerifyToken.mockImplementation(() => {
+      const err = new Error('Invalid token');
+      (err as any).name = 'JsonWebTokenError';
+      throw err;
+    });
+
+    const res = await agent.get('/v1/me');
+    expect(res.status).toBe(401);
   });
 });

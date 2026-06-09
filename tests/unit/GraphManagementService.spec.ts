@@ -28,6 +28,11 @@ describe('GraphManagementService', () => {
       findCluster: jest.fn(),
       listClusters: jest.fn(),
       saveStats: jest.fn(),
+      saveStatsIfStatusIn: jest.fn(async () => true),
+      upsertClusters: jest.fn(),
+      upsertNodes: jest.fn(),
+      upsertEdges: jest.fn(),
+      upsertSubclusters: jest.fn(),
       getStats: jest.fn(),
       getStatsMetadata: jest.fn(),
       deleteStats: jest.fn(),
@@ -321,6 +326,60 @@ describe('GraphManagementService', () => {
         expect(result).toBeDefined();
         expect(result.overview.total_conversations).toBe(0);
       });
+    });
+  });
+
+  describe('persistSnapshotBulk', () => {
+    it('uses compare-and-set when snapshot stats status is CREATED', async () => {
+      await service.persistSnapshotBulk({
+        userId: 'user-1',
+        snapshot: {
+          nodes: [],
+          edges: [],
+          clusters: [],
+          subclusters: [],
+          stats: {
+            nodes: 1,
+            edges: 0,
+            clusters: 1,
+            status: 'CREATED',
+            generatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        },
+      });
+
+      expect(mockRepo.saveStatsIfStatusIn).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user-1', status: 'CREATED' }),
+        ['CREATING', 'NOT_CREATED'],
+        undefined
+      );
+      expect(mockRepo.saveStats).not.toHaveBeenCalled();
+    });
+
+    it('writes stats unconditionally when snapshot stats status is not CREATED', async () => {
+      const stats: GraphStatsDto = {
+        userId: 'user-1',
+        nodes: 2,
+        edges: 1,
+        clusters: 1,
+        status: 'UPDATED',
+        generatedAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-02T00:00:00.000Z',
+      };
+
+      await service.persistSnapshotBulk({
+        userId: 'user-1',
+        snapshot: {
+          nodes: [],
+          edges: [],
+          clusters: [],
+          subclusters: [],
+          stats,
+        },
+      });
+
+      expect(mockRepo.saveStats).toHaveBeenCalledWith(stats, undefined);
+      expect(mockRepo.saveStatsIfStatusIn).not.toHaveBeenCalled();
     });
   });
 

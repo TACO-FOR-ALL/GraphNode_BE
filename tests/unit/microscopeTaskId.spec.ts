@@ -10,6 +10,14 @@ describe('parseUserIdFromMicroscopeNodeTaskId', () => {
     ).toBe('user-12345');
   });
 
+  it('extracts userId from task_microscope_file_{userId}_{ulid}', () => {
+    expect(
+      parseUserIdFromMicroscopeNodeTaskId(
+        'task_microscope_file_user-12345_01KSB1ZRG9WP64HKHWT79EFQH5'
+      )
+    ).toBe('user-12345');
+  });
+
   it('returns undefined for unrelated task ids', () => {
     expect(parseUserIdFromMicroscopeNodeTaskId('task_user-12345_01KSB1ZRG9WP64HKHWT79EFQH5')).toBe(
       undefined

@@ -59,6 +59,40 @@ export interface MacroGraphBundleAssertionInput {
  * @param input taskId 및 기대 user file 목록.
  * @throws bundle 키 누락·prefix 형식 불일치 시 Error.
  */
+export interface AddNodeBundleAssertionInput {
+  /** `requestAddNodeViaQueue` taskId */
+  taskId: string;
+  userFiles: MacroBundleUserFileExpectation[];
+}
+
+/**
+ * @description AddNode raw file bundle(`add-node/{taskId}/`) S3 업로드를 검증합니다.
+ * @param input taskId 및 기대 user file 목록입니다.
+ */
+export async function assertAddNodeBundleUploaded(input: AddNodeBundleAssertionInput): Promise<void> {
+  const prefix = `add-node/${input.taskId}/`;
+  const keys = await listS3KeysUnderPrefix(prefix);
+
+  if (keys.length === 0) {
+    throw new Error(
+      `AddNode bundle not found under s3://${getE2ePayloadBucket()}/${prefix} (is LocalStack reachable?)`
+    );
+  }
+
+  const required = [
+    `${prefix}batch.json`,
+    ...input.userFiles.map((f) => `${prefix}files/${f.id}_${f.displayName}`),
+  ];
+
+  for (const key of required) {
+    if (!keys.includes(key)) {
+      throw new Error(
+        `Missing AddNode S3 bundle object: ${key}. Found keys: ${JSON.stringify(keys.sort())}`
+      );
+    }
+  }
+}
+
 export async function assertMacroGraphBundleUploaded(
   input: MacroGraphBundleAssertionInput
 ): Promise<void> {

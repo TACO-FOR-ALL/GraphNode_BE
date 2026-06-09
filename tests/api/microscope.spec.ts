@@ -126,6 +126,24 @@ jest.mock('../../src/core/services/MicroscopeManagementService', () => ({
             nodes: [{ id: 1, label: 'Latest Node' }],
             edges: [],
         }),
+        ingestRawDocumentsToWorkspace: jest.fn<any>().mockResolvedValue({
+            _id: 'ws-1',
+            userId: 'user-12345',
+            groupId: 'group-1',
+            documents: [
+                {
+                    id: 'doc-file-1',
+                    s3Key: 'microscope-ingest/user-12345/doc-file-1/report.pdf',
+                    fileName: 'report.pdf',
+                    status: 'PROCESSING',
+                    nodeType: 'file',
+                    createdAt: '2026-04-09T10:00:00Z',
+                    updatedAt: '2026-04-09T10:00:00Z',
+                },
+            ],
+            createdAt: '2026-04-09T10:00:00Z',
+            updatedAt: '2026-04-09T10:00:00Z',
+        }),
         deleteWorkspace: jest.fn<any>().mockResolvedValue(undefined),
     })),
 }));
@@ -261,6 +279,27 @@ describe('Microscope API Integration Tests', () => {
             expect(res.body).toHaveProperty('nodes');
             expect(res.body).toHaveProperty('edges');
             expect(res.body.nodes.length).toBeGreaterThan(0);
+        });
+    });
+
+    // --- POST /v1/microscope/:groupId/documents ---
+    describe('POST /v1/microscope/:groupId/documents', () => {
+        it('should accept multipart upload and return 202', async () => {
+            const res = await request(app)
+                .post('/v1/microscope/group-1/documents')
+                .set('Authorization', `Bearer ${accessToken}`)
+                .attach('files', Buffer.from('%PDF-1.4'), {
+                    filename: 'report.pdf',
+                    contentType: 'application/pdf',
+                })
+                .field('schemaName', 'schema-a');
+
+            expect(res.status).toBe(202);
+            expect(res.body).toHaveProperty('message');
+            expect(res.body).toHaveProperty('workspace');
+            expect(res.body.workspace).toHaveProperty('documents');
+            expect(Array.isArray(res.body.workspace.documents)).toBe(true);
+            expect(res.body.workspace.documents[0].fileName).toBe('report.pdf');
         });
     });
 
