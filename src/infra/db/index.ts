@@ -3,6 +3,7 @@ import { loadEnv } from '../../config/env';
 import prisma from './prisma';
 import { initRedis } from '../redis/client';
 import { initChroma } from './chroma';
+import { logger } from '../../shared/utils/logger';
 
 import { initNeo4j } from './neo4j';
 
@@ -23,9 +24,13 @@ export async function initDatabases() {
   // 3. Redis Connection (Publisher & Subscriber)
   await initRedis(env.REDIS_URL);
 
-  // 4. ChromaDB Connection
-  // FIXME TODO : ChromaDB 연결 추가 필요
-  await initChroma();
+  // 4. ChromaDB Connection (dummy/test-key 는 로컬 E2E 에서 skip)
+  const chromaKey = env.CHROMA_API_KEY?.trim();
+  if (chromaKey && chromaKey !== 'dummy' && chromaKey !== 'test-key') {
+    await initChroma();
+  } else {
+    logger.warn('Skipping ChromaDB init (CHROMA_API_KEY not configured for cloud)');
+  }
 
   // 5. Neo4j connection
   await initNeo4j();

@@ -42,7 +42,13 @@ _wait_for_compose_service_healthy() {
 echo "🔍 Checking service health..."
 docker compose -f $DOCKER_COMPOSE_FILE ps
 
-chmod +x scripts/localstack-init/ready.sh 2>/dev/null || true
+chmod +x scripts/localstack-init/ready.sh scripts/ensure-localstack-resources.sh scripts/ensure-file-service-db.sh 2>/dev/null || true
+sed -i 's/\r$//' scripts/ensure-localstack-resources.sh scripts/ensure-file-service-db.sh 2>/dev/null || true
+
+_wait_for_compose_service_healthy postgres 30 2 || exit 1
+bash scripts/ensure-file-service-db.sh
+_wait_for_compose_service_healthy localstack 60 5 || exit 1
+bash scripts/ensure-localstack-resources.sh
 
 # shellcheck disable=SC1091
 source scripts/e2e-load-env.sh .env
@@ -158,11 +164,14 @@ JEST_ARGS=(--config "$E2E_CONFIG" --runInBand --forceExit)
 if [[ "$E2E_SCOPE" == "bundle" ]]; then
   echo "ℹ️  Bundle-only: macro-s3-bundle.spec.ts (no LLM pipeline)."
   JEST_ARGS+=(tests/e2e/specs/macro-s3-bundle.spec.ts)
+elif [[ "$E2E_SCOPE" == "import" ]]; then
+  echo "ℹ️  Import E2E: tests/e2e/specs/import-* (File Service + sync finalize)."
+  JEST_ARGS+=(tests/e2e/specs/import-)
 elif [[ "$E2E_SCOPE" == "full" ]]; then
   echo "ℹ️  Full integrated E2E: all specs under tests/e2e/specs/ (OpenAI 기본; E2E_PREFER_GROQ=1 시 Groq)."
   JEST_ARGS+=(tests/e2e/specs/)
 else
-  echo "❌ Unknown E2E_SCOPE=${E2E_SCOPE} (use bundle or full)"
+  echo "❌ Unknown E2E_SCOPE=${E2E_SCOPE} (use bundle, import, or full)"
   exit 1
 fi
 # AWS SDK v3 + Jest VM: flexible-checksums dynamic import (--experimental-vm-modules)

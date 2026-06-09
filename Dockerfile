@@ -39,6 +39,7 @@ RUN npm install --no-save --ignore-scripts prisma@5.22.0
 # 빌드 산출물 복사
 COPY --from=builder /app/dist ./dist
 
+# Entrypoint 스크립트 복사 (Windows CRLF → Linux LF 정규화)
 # Prisma Client·CLI 검증 (CI graphnode-be Exited(1) 조기 발견, GHA cache 무효화)
 RUN node -e "require('@prisma/client'); console.log('Prisma client OK')" && \
   node -e "require('@prisma/engines'); console.log('Prisma engines OK')" && \
@@ -46,7 +47,7 @@ RUN node -e "require('@prisma/client'); console.log('Prisma client OK')" && \
 
 # Entrypoint 스크립트 복사
 COPY entrypoint.sh ./
-RUN chmod +x entrypoint.sh
+RUN sed -i 's/\r$//' entrypoint.sh && chmod +x entrypoint.sh
 
 # node 사용자에게 /app 디렉토리 소유권 부여
 RUN chown -R node:node /app

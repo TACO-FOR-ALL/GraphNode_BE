@@ -10,7 +10,10 @@ import { assertMacroGraphBundleUploaded } from '../utils/localstack-s3';
  * Infisical/프로덕션 DB가 아닌 docker-compose.test.yml + LocalStack 환경에서
  * `POST /v1/graph-ai/generate` 직후 S3 `graph-generation/{taskId}/` 구조를 검증합니다.
  */
-describe('Macro S3 prefix bundle (BE upload)', () => {
+const e2eScope = (process.env.E2E_SCOPE || 'bundle').trim().toLowerCase();
+const describeBundle = e2eScope === 'import' ? describe.skip : describe;
+
+describeBundle('Macro S3 prefix bundle (BE upload)', () => {
   beforeAll(async () => {
     await seedTestData();
   });

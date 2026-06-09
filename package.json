@@ -23,6 +23,8 @@
     "e2e:test:bundle": "E2E_SCOPE=bundle bash scripts/e2e-test.sh",
     "e2e:local": "bash scripts/local-e2e.sh",
     "e2e:bundle": "bash scripts/e2e-bundle-only.sh",
+    "e2e:import": "bash scripts/e2e-import-only.sh",
+    "e2e:import:rebuild": "bash scripts/e2e-import-rebuild.sh",
     "test:users": "tsx tests/scripts/test-users-crud.ts",
     "chat-export:smoke": "tsx tests/scripts/chat-export-smoke.ts",
     "chat-export:top-user-smoke": "tsx tests/scripts/chat-export-top-user-smoke.ts",

@@ -10,7 +10,8 @@ import { Upload } from '@aws-sdk/lib-storage';
 import { StoragePort } from '../../core/ports/StoragePort';
 import { loadEnv } from '../../config/env';
 import { logger } from '../../shared/utils/logger';
-import { UpstreamError } from '../../shared/errors/domain';
+import { UpstreamError, NotFoundError } from '../../shared/errors/domain';
+import { isS3NotFoundError, s3MissingObjectMessage } from '../../shared/utils/s3Error';
 
 
 /**
@@ -161,6 +162,9 @@ export class AwsS3Adapter implements StoragePort {
         contentLength: response.ContentLength,
       };
     } catch (error) {
+      if (isS3NotFoundError(error)) {
+        throw new NotFoundError(s3MissingObjectMessage(key), { key, bucket });
+      }
       logger.error({ err: error, key, bucket }, 'Failed to download file from S3');
       throw new UpstreamError('Failed to download file from S3', { originalError: error });
     }

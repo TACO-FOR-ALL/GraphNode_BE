@@ -255,11 +255,20 @@ export class RequestBuilder {
       }
 
       if (!res.ok) {
+        const problemDetail =
+          payload &&
+          typeof payload === 'object' &&
+          typeof (payload as { detail?: unknown }).detail === 'string'
+            ? String((payload as { detail: string }).detail)
+            : undefined;
+
         return {
           isSuccess: false,
           error: {
             statusCode: res.status,
-            message: `HTTP ${res.status}: ${res.statusText}`,
+            message:
+              problemDetail?.trim() ||
+              `HTTP ${res.status}${res.statusText ? `: ${res.statusText}` : ''}`,
             body: payload,
           },
         };

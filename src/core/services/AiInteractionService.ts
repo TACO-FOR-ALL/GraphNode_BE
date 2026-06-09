@@ -853,10 +853,7 @@ export class AiInteractionService {
     sizeBytes: number;
   }): Promise<UserLibraryFileSummaryResult> {
     try {
-      const downloaded = await withRetry(
-        async () => this.storageAdapter.downloadFile(input.s3Key),
-        { label: 'summarizeUserLibraryFile.downloadFile' }
-      );
+      const downloaded = await this.storageAdapter.downloadFile(input.s3Key);
 
       const processed = await documentProcessor.process(
         downloaded.buffer,
@@ -939,6 +936,13 @@ export class AiInteractionService {
       const structured = parsed.data;
       return { ok: true, data: { summary: structured.oneLine, structured } };
     } catch (err: unknown) {
+      if (err instanceof NotFoundError) {
+        logger.warn(
+          { userId: input.userId, s3Key: input.s3Key },
+          'summarizeUserLibraryFile: S3 object missing'
+        );
+        return { ok: false, error: err.message };
+      }
       logger.error({ err, userId: input.userId }, 'summarizeUserLibraryFile failed');
       const msg = err instanceof Error ? err.message : String(err);
       return { ok: false, error: msg };
