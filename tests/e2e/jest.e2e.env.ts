@@ -7,6 +7,11 @@ import { loadE2eKeysFromEnvFile } from './utils/e2e-env-file';
 import { applyE2eGroqTestOnlyPolicy, applyE2eLlmEnvAliases } from './utils/e2e-llm-env';
 import { loadE2eLlmKeysFromAwsSecrets } from './utils/e2e-aws-secrets-jest';
 
+// import E2E는 argv 경로로 scope 고정 (WSL→Windows npx env 유실 방지)
+if (/tests[/\\]e2e[/\\]specs[/\\]import-/i.test(process.argv.join(' '))) {
+  process.env.E2E_SCOPE = 'import';
+}
+
 const repoRoot = path.resolve(__dirname, '../..');
 config({ path: path.join(repoRoot, '.env') });
 loadE2eKeysFromEnvFile(path.join(repoRoot, '.env'));

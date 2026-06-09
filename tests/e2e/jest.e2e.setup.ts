@@ -13,7 +13,10 @@ const e2eScope = (process.env.E2E_SCOPE || 'bundle').trim().toLowerCase();
 const openAiResolved = Boolean(resolveOpenAiApiKeyForE2e());
 const groqResolved = isE2eGroqLlmEnabled();
 
-if (e2eScope !== 'full') {
+if (e2eScope === 'import') {
+  // eslint-disable-next-line no-console
+  console.warn('[E2E] E2E_SCOPE=import — import-* specs only (File Service + sync finalize).');
+} else if (e2eScope !== 'full') {
   // eslint-disable-next-line no-console
   console.warn(`[E2E] E2E_SCOPE=${e2eScope} — graph-flow & microscope skipped; macro-s3-bundle runs.`);
 } else if (!isE2eFullSuiteEnabled()) {

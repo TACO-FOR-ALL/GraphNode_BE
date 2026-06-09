@@ -83,6 +83,19 @@ export class ImportJobNotReadyError extends AppError {
   httpStatus = 409;
 }
 
+/** File Service import 일일/동시 job 쿼터 초과 (429) */
+export class ImportQuotaExceededError extends AppError {
+  code = 'IMPORT_QUOTA_EXCEEDED';
+  httpStatus = 429;
+  retryable = true;
+}
+
+/** ZIP/archive 파싱·추출 실패 (400) */
+export class InvalidArchiveError extends AppError {
+  code = 'INVALID_ARCHIVE';
+  httpStatus = 400;
+}
+
 /**
  * 요청 제한 초과 (429 Too Many Requests)
  * - 서비스 자체 정책(일일 한도 등)으로 요청이 차단된 경우에 사용합니다.

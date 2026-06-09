@@ -7,8 +7,7 @@ import { Router } from 'express';
 
 import { ImportController } from '../controllers/ImportController';
 import { asyncHandler } from '../utils/asyncHandler';
-import { bindSessionUser } from '../middlewares/session';
-import { requireLogin } from '../middlewares/auth';
+import { internalOrSession } from '../middlewares/internal';
 import type { ImportArchiveService } from '../../core/services/ImportArchiveService';
 
 export function createImportRouter(deps: { importArchiveService: ImportArchiveService }) {
@@ -16,7 +15,7 @@ export function createImportRouter(deps: { importArchiveService: ImportArchiveSe
   const controller = new ImportController(deps.importArchiveService);
 
   // /v1 에 마운트되므로 router.use(requireLogin) 금지 — 다른 /v1/* 라우트까지 401 발생
-  const withAuth = [bindSessionUser, requireLogin];
+  const withAuth = [internalOrSession];
 
   router.get('/import-providers', ...withAuth, asyncHandler(controller.listProviders));
   router.post('/imports/init', ...withAuth, asyncHandler(controller.initImportUpload));

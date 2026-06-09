@@ -23,6 +23,21 @@ export const apiClient = axios.create({
 });
 
 /**
+ * E2E용 API 클라이언트 — userId 지정 가능 (타 사용자 격리 테스트).
+ */
+export function createApiClient(userId: string = TEST_USER_ID) {
+  return axios.create({
+    baseURL: BASE_URL,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-internal-token': INTERNAL_TOKEN,
+      'x-user-id': userId,
+    },
+    validateStatus: () => true,
+  });
+}
+
+/**
  * 테스트에 사용되는 고정 유저 ID를 반환합니다.
  */
 export const getTestUserId = () => TEST_USER_ID;

@@ -33,6 +33,14 @@ jobs:
           path: ai-worker
           token: ${{ secrets.GH_PAT }}
 
+      # 2-0. File Service 레포지토리 체크아웃 (file-service/ 폴더에 저장)
+      - name: Checkout File Service
+        uses: actions/checkout@v4
+        with:
+          repository: TACO-FOR-ALL/GraphNode_BE_File_Service
+          path: file-service
+          token: ${{ secrets.GH_PAT }}
+
       # 2-1. Node.js 설정 및 의존성 캐싱 (E2E 테스트 실행용)
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -81,6 +89,17 @@ jobs:
           push: false
           load: true # 빌드된 이미지를 로컬 도커 가상 시스템에 로드
           tags: graphnode-ai:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 5-1. File Service 이미지 빌드 및 캐싱
+      - name: Build File Service Image
+        uses: docker/build-push-action@v6
+        with:
+          context: file-service
+          push: false
+          load: true
+          tags: graphnode-file-service:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -150,6 +169,9 @@ jobs:
           for i in {1..30}; do
             docker exec graphnode-test-localstack awslocal sqs get-queue-url \
               --queue-name taco-graphnode-request-graph-sqs \
+              --region ap-northeast-2 2>/dev/null && \
+            docker exec graphnode-test-localstack awslocal sqs get-queue-url \
+              --queue-name taco-graphnode-import-sqs \
               --region ap-northeast-2 2>/dev/null && \
             echo "✅ SQS queues are ready!" && exit 0
             echo "⏳ SQS queues not ready yet... (Attempt $i/30)"

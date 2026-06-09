@@ -1,6 +1,7 @@
 import { MongoClient } from 'mongodb';
 import { PrismaClient } from '@prisma/client';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { execSync } from 'child_process';
 
 import { buildStorageKey, STORAGE_BUCKETS } from '../../../src/config/storageConfig';
 import { applyE2eHostEnvForSeed } from './e2e-env';
@@ -56,6 +57,19 @@ export const E2E_MACRO_USER_FILE_SEEDS = [
 
 const prisma = new PrismaClient();
 
+/** File Service import_jobs — 이전 E2E 실행 잔여 active job이 quota(429)를 유발하지 않도록 정리 */
+function cleanupFileServiceImportJobs(): void {
+  try {
+    execSync(
+      `docker exec graphnode-test-postgres psql -U app -d graphnode_file_service -c "DELETE FROM import_jobs WHERE user_id IN ('${TEST_USER_ID}', 'user-other-e2e');"`,
+      { stdio: 'ignore' }
+    );
+    console.log('[E2E Seed] Cleared File Service import_jobs for test users.');
+  } catch {
+    console.warn('[E2E Seed] File Service import_jobs cleanup skipped (postgres container unavailable).');
+  }
+}
+
 /**
  * @description LocalStack S3에 user_files 원본 바이트를 업로드합니다.
  * @param s3Key `user-files/{userId}/{physicalName}` 형식 키.
@@ -94,6 +108,8 @@ async function uploadUserFileToS3(s3Key: string, body: Buffer, contentType: stri
  */
 export async function seedTestData() {
   console.log('--- Starting DB Seeding ---');
+
+  cleanupFileServiceImportJobs();
 
   await prisma.user.upsert({
     where: { id: TEST_USER_ID },

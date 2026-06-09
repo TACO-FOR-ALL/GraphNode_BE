@@ -7,10 +7,9 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { bindSessionUser } from '../middlewares/session';
 import { requireLogin } from '../middlewares/auth';
 
-/** 메모리 업로드 한도(바이트). 초과 시 multer가 413 계열로 거절한다. */
+/** 메모리 업로드 — 단일 파일 크기 상한 없음(인프라/메모리 한도는 별도). */
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 80 * 1024 * 1024 },
 });
 
 /**

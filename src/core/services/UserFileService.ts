@@ -379,10 +379,18 @@ export class UserFileService {
     fileId: string
   ): Promise<{ buffer: Buffer; contentType: string; displayName: string }> {
     const doc = await this.getFileDocForOwner(userId, fileId);
-    const downloaded = await withRetry(
-      async () => this.storagePort.downloadFile(doc.s3Key, { bucketType: 'file' }),
-      { label: 'UserFileService.readFileBytes' }
-    );
+    let downloaded;
+    try {
+      downloaded = await this.storagePort.downloadFile(doc.s3Key, { bucketType: 'file' });
+    } catch (err: unknown) {
+      if (err instanceof NotFoundError) {
+        throw new NotFoundError(
+          `파일 원본을 찾을 수 없습니다: ${doc.displayName}`,
+          { fileId, s3Key: doc.s3Key }
+        );
+      }
+      throw err;
+    }
     return {
       buffer: downloaded.buffer,
       contentType: doc.mimeType || downloaded.contentType || 'application/octet-stream',

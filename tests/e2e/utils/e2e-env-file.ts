@@ -8,7 +8,6 @@ const E2E_ENV_KEYS = new Set([
   'OPEN_API_KEY',
   'OPEN_AI_API_KEY',
   'GROQ_API_KEY',
-  'E2E_SCOPE',
   'E2E_LLM_ENABLED',
   'E2E_FORCE_REBUILD',
   'E2E_PREFER_GROQ',
@@ -57,6 +56,7 @@ export function loadE2eKeysFromEnvFile(envFilePath: string): void {
 
     const key = match[1];
     if (!E2E_ENV_KEYS.has(key)) continue;
+    if (process.env[key] !== undefined && process.env[key] !== '') continue;
 
     process.env[key] = unquoteEnvValue(match[2]);
   }
