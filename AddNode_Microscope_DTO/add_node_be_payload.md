@@ -15,7 +15,8 @@
     "userId": "user_123",
     "s3Key": "add-node/task_add_node_user_123_01HXXX/",
     "bucket": "taco5-graphnode-graphdata-s3",
-    "inputType": "auto"
+    "inputType": "auto",
+    "language": "ko"
   }
 }
 ```
@@ -31,7 +32,8 @@
     "userId": "user_123",
     "s3Key": "add-node/task_add_node_user_123_01HXXX/batch.json",
     "bucket": "taco5-graphnode-graphdata-s3",
-    "inputType": "auto"
+    "inputType": "auto",
+    "language": "ko"
   }
 }
 ```

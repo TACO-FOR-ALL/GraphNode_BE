@@ -130,7 +130,7 @@ collect_logs() {
 
     {
       echo "=== ADD_NODE / Graph generation failures (worker) ==="
-      grep -iE 'addnode|ADD_NODE|AddNode task failed|graph generation|GraphGeneration|status=.FAILED' e2e-logs/worker.log 2>/dev/null | tail -120 || true
+      grep -iE 'addnode|ADD_NODE|AddNode task failed|Skipping graph status CREATED|graph generation|GraphGeneration|status=.FAILED' e2e-logs/worker.log 2>/dev/null | tail -120 || true
       echo ""
       echo "=== ADD_NODE / LLM failures (graphnode-ai) ==="
       grep -iE 'add_node|ADD_NODE|Error processing|AuthenticationError|validation error|FAILED' e2e-logs/ai.log 2>/dev/null | tail -120 || true

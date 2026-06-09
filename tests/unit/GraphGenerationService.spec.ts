@@ -484,6 +484,7 @@ describe('GraphGenerationService', () => {
           payload: expect.objectContaining({
             s3Key: expect.stringMatching(/add-node\/task_add_node_[^/]+\/$/),
             inputType: 'auto',
+            language: 'ko',
           }),
         })
       );
@@ -564,6 +565,7 @@ describe('GraphGenerationService', () => {
           payload: expect.objectContaining({
             s3Key: expect.stringMatching(/add-node\/task_add_node_[^/]+\/batch\.json$/),
             inputType: 'auto',
+            language: 'ko',
           }),
         })
       );

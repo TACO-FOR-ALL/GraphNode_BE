@@ -52,33 +52,62 @@ export async function pollMacroStatsUntil(
         sawUpdating = true;
       }
 
-      // AddNode 실패 시 AI worker가 status를 CREATED로 되돌림 — 30분 타임아웃 대신 즉시 실패
+      // AddNode 실패 시 status가 CREATED로 되돌아감 — 30분 타임아웃 대신 즉시 실패
       if (targetStatus === 'UPDATED' && sawUpdating && status === 'CREATED') {
-        const detailRes = await session.run(
-          `MATCH (g:MacroGraph {userId: $userId})-[:HAS_STATS]->(st:MacroStats)
-           RETURN st.updatedAt AS updatedAt, st.generatedAt AS generatedAt, st.metadataJson AS metadataJson`,
-          { userId }
-        );
-        const updatedAt = detailRes.records[0]?.get('updatedAt');
-        const generatedAt = detailRes.records[0]?.get('generatedAt');
-        const metadataRaw = detailRes.records[0]?.get('metadataJson') as string | undefined;
-        let lastAddNodeError = 'none';
-        if (metadataRaw) {
+        const readFailureMeta = async (): Promise<{
+          lastAddNodeError: string;
+          failureTaskId?: string;
+        }> => {
+          const detailRes = await session.run(
+            `MATCH (g:MacroGraph {userId: $userId})-[:HAS_STATS]->(st:MacroStats)
+             RETURN st.updatedAt AS updatedAt, st.generatedAt AS generatedAt, st.metadataJson AS metadataJson`,
+            { userId }
+          );
+          const metadataRaw = detailRes.records[0]?.get('metadataJson') as string | undefined;
+          if (!metadataRaw) {
+            return { lastAddNodeError: 'none' };
+          }
           try {
             const meta = JSON.parse(metadataRaw) as {
               lastAddNodeFailure?: { error?: string; taskId?: string };
             };
-            if (meta.lastAddNodeFailure?.error) {
-              lastAddNodeError = meta.lastAddNodeFailure.error;
+            const failure = meta.lastAddNodeFailure;
+            if (failure?.error) {
+              return {
+                lastAddNodeError: failure.error,
+                failureTaskId: failure.taskId,
+              };
             }
+            return { lastAddNodeError: 'none' };
           } catch {
-            lastAddNodeError = 'metadata parse failed';
+            return { lastAddNodeError: 'metadata parse failed' };
           }
+        };
+
+        let failureMeta = await readFailureMeta();
+        if (failureMeta.lastAddNodeError === 'none') {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          failureMeta = await readFailureMeta();
         }
+
+        const detailRes = await session.run(
+          `MATCH (g:MacroGraph {userId: $userId})-[:HAS_STATS]->(st:MacroStats)
+           RETURN st.updatedAt AS updatedAt, st.generatedAt AS generatedAt`,
+          { userId }
+        );
+        const updatedAt = detailRes.records[0]?.get('updatedAt');
+        const generatedAt = detailRes.records[0]?.get('generatedAt');
+
+        const staleGraphGenHint =
+          failureMeta.lastAddNodeError === 'none'
+            ? ' (no lastAddNodeFailure — likely stale GRAPH_GENERATION_RESULT overwrote UPDATING, or worker has not persisted AI failure yet)'
+            : '';
+
         // eslint-disable-next-line no-console
         console.error(
-          `[E2E Poll] ${label} failed: MacroStats reverted to CREATED after UPDATING (AddNode FAILED on AI/worker). ` +
-            `lastAddNodeError=${lastAddNodeError}. ` +
+          `[E2E Poll] ${label} failed: MacroStats reverted to CREATED after UPDATING.${staleGraphGenHint} ` +
+            `lastAddNodeError=${failureMeta.lastAddNodeError}` +
+            `${failureMeta.failureTaskId ? ` taskId=${failureMeta.failureTaskId}` : ''}. ` +
             `Check e2e-logs/failure-summary.log (worker: "AddNode task failed", ai: add_node errors). ` +
             `MacroStats updatedAt=${String(updatedAt ?? 'none')} generatedAt=${String(generatedAt ?? 'none')}`
         );

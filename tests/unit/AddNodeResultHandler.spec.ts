@@ -159,6 +159,29 @@ describe('AddNodeResultHandler', () => {
     );
   });
 
+  it('persists lastAddNodeFailure metadata when AI returns FAILED', async () => {
+    const message: AddNodeResultPayload = {
+      taskId,
+      taskType: 'ADD_NODE_RESULT' as any,
+      timestamp: new Date().toISOString(),
+      payload: { userId, status: 'FAILED', error: 'S3 download failed' },
+    };
+
+    await handler.handle(message, mockContainer);
+
+    expect(graphService.saveStats).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'CREATED',
+        metadata: expect.objectContaining({
+          lastAddNodeFailure: expect.objectContaining({
+            taskId,
+            error: 'S3 download failed',
+          }),
+        }),
+      })
+    );
+  });
+
   it('continues when batch.json is missing (legacy AI result only)', async () => {
     const batchResult: AiAddNodeBatchResult = {
       userId,

@@ -20,6 +20,10 @@ import { withRetry } from '../../shared/utils/retry';
 import { redis } from '../../infra/redis/client';
 import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 import { notifyWorkerFailed } from '../../shared/utils/discord';
+import {
+  canApplyGraphGenerationFailureStats,
+  canApplyGraphGenerationSuccessStats,
+} from '../utils/macroStatsTransition';
 import { normalizeAiOrigId } from '../../shared/utils/aiNodeId';
 import {
   aiRawSourceTypeFromMacroFileHint,
@@ -107,9 +111,14 @@ export class GraphGenerationResultHandler implements JobHandler {
         }).catch(() => {});
 
         const stats = await graphService.getStats(userId);
-        if (stats) {
+        if (stats && canApplyGraphGenerationFailureStats(stats.status)) {
           stats.status = 'NOT_CREATED';
           await graphService.saveStats(stats);
+        } else if (stats) {
+          logger.warn(
+            { taskId, userId, currentStatus: stats.status },
+            'Skipping graph generation failure status reset; graph is not in CREATING phase'
+          );
         }
 
         // 실패 알림 전송
@@ -335,9 +344,9 @@ export class GraphGenerationResultHandler implements JobHandler {
           summary_themes: summaryJson?.overview?.primary_interests || [],
         });
 
-        // 11. graph status를 CREATED로 업데이트한다.
+        // 11. graph status를 CREATED로 업데이트한다 (CREATING→CREATED만; AddNode UPDATING 덮어쓰기 방지).
         const stats = await graphService.getStats(userId);
-        if (stats) {
+        if (stats && canApplyGraphGenerationSuccessStats(stats.status)) {
           stats.status = 'CREATED';
           // AddNode incremental filter (`find*ModifiedSince`) watermark — 없으면 전체 시드가 재전송됨
           const syncAt = new Date().toISOString();
@@ -347,6 +356,11 @@ export class GraphGenerationResultHandler implements JobHandler {
           }
           await graphService.saveStats(stats);
           logger.info({ taskId, userId }, 'Graph status updated to CREATED');
+        } else if (stats) {
+          logger.warn(
+            { taskId, userId, currentStatus: stats.status },
+            'Skipping graph status CREATED update; graph is not in CREATING phase (possible stale GRAPH_GENERATION_RESULT during AddNode)'
+          );
         }
 
         // 12. graph generation completed 이벤트를 발생시킨다.

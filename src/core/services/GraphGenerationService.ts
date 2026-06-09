@@ -627,6 +627,11 @@ export class GraphGenerationService {
         await copyUserFilesToMacroBundlePrefix(this.storagePort, taskPrefix, updatedUserFiles);
       }
 
+      const language = await withRetry(
+        async () => await this.userService.getPreferredLanguage(userId),
+        { label: 'UserService.getPreferredLanguage.addNode' }
+      );
+
       // 그래프 상태 업데이트
       stats.status = 'UPDATING';
       await this.graphEmbeddingService.saveStats(stats);
@@ -645,6 +650,7 @@ export class GraphGenerationService {
           s3Key: addNodeS3Key,
           bucket: process.env.S3_PAYLOAD_BUCKET,
           inputType: 'auto',
+          language,
         },
         timestamp: new Date().toISOString(),
       };
