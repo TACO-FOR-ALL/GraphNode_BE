@@ -13,6 +13,10 @@ import { MessageRepository } from '../../core/ports/MessageRepository';
 import { getMongo } from '../db/mongodb';
 import type { MessageDoc } from '../../core/types/persistence/ai.persistence';
 import { UpstreamError } from '../../shared/errors/domain';
+import {
+  isTransientMongoTransactionError,
+  summarizeMongoError,
+} from '../../shared/utils/mongoError';
 
 /**
  * MessageRepositoryMongo 클래스
@@ -66,7 +70,23 @@ export class MessageRepositoryMongo implements MessageRepository {
       await this.col().insertMany(docs, { session });
       return docs;
     } catch (err: unknown) {
-      this.handleError('MessageRepositoryMongo.createMany', err);
+      this.handleError('MessageRepositoryMongo.createMany', err, {
+        collection: 'messages',
+        operation: 'insertMany',
+        docCount: docs.length,
+      });
+    }
+  }
+
+  async findExistingIds(ids: string[]): Promise<Set<string>> {
+    try {
+      if (ids.length === 0) return new Set();
+      const rows = await this.col()
+        .find({ _id: { $in: ids } }, { projection: { _id: 1 } })
+        .toArray();
+      return new Set(rows.map((r) => r._id));
+    } catch (err: unknown) {
+      this.handleError('MessageRepositoryMongo.findExistingIds', err);
     }
   }
 
@@ -446,14 +466,17 @@ export class MessageRepositoryMongo implements MessageRepository {
     }
   }
 
-  private handleError(methodName: string, err: unknown): never {
-    if (
-      err instanceof Error &&
-      ((err as any).hasErrorLabel?.('TransientTransactionError') ||
-        (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
-    ) {
+  private handleError(
+    methodName: string,
+    err: unknown,
+    context?: Record<string, unknown>
+  ): never {
+    if (isTransientMongoTransactionError(err)) {
       throw err;
     }
-    throw new UpstreamError(`${methodName} failed`, { cause: String(err) });
+    throw new UpstreamError(`${methodName} failed`, {
+      ...summarizeMongoError(err),
+      ...context,
+    });
   }
 }

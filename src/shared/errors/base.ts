@@ -51,6 +51,18 @@ export abstract class AppError extends Error {
 export function unknownToAppError(err: unknown): AppError {
   const e = err as any;
 
+  // 0. Express body-parser 용량 초과 (entity.too_large) → 400 ValidationError
+  if (e?.type === 'entity.too_large') {
+    const { ValidationError } = require('./domain');
+    const limit = typeof e.limit === 'number' ? e.limit : undefined;
+    const length = typeof e.length === 'number' ? e.length : undefined;
+    return new ValidationError('Request body too large', {
+      field: 'contentLength',
+      ...(limit !== undefined && { limitBytes: limit }),
+      ...(length !== undefined && { actualBytes: length }),
+    });
+  }
+
   // 1. Zod 유효성 검사 에러 처리
   // ZodError는 자동으로 400 ValidationError로 변환합니다.
   if (e && (e.name === 'ZodError' || Array.isArray(e?.issues))) {

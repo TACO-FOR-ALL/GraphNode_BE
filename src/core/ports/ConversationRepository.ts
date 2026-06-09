@@ -180,6 +180,11 @@ export interface ConversationRepository {
   findByIds(ids: string[], ownerUserId: string): Promise<ConversationDoc[]>;
 
   /**
+   * ID 목록 중 DB에 이미 존재하는 _id 집합 (import finalize 멱등 재시도용).
+   */
+  findExistingIds(ids: string[]): Promise<Set<string>>;
+
+  /**
    * 특정 사용자의 모든 대화 ID만 조회합니다 (메모리 최적화용 Projection).
    *
    * @description `{ _id: 1 }` Projection을 사용하여 전체 문서 대신 ID 배열만 반환합니다.

@@ -155,6 +155,10 @@ class InMemoryConvRepo implements ConversationRepository {
     }
     return count;
   }
+
+  async findExistingIds(ids: string[]): Promise<Set<string>> {
+    return new Set(ids.filter((id) => this.data.has(id)));
+  }
 }
 
 describe('ConversationService', () => {

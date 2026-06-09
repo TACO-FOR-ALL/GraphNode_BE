@@ -1,9 +1,11 @@
 /**
- * 첨부파일 DTO
+ * 첨부파일 DTO (AI 채팅 / import 공통 shape, url 의미는 출처별로 다름)
  * @public
- * @property id 파일 고유 ID (UUID)
+ * @property id 파일 고유 ID
  * @property type 파일 종류 ('image' | 'file')
- * @property url S3 오브젝트 키 — `client.ai.downloadFile(url)`로 실제 Blob 다운로드
+ * @property url
+ *   - **AI 채팅 첨부**: S3 오브젝트 키 — `client.ai.downloadFile(url)` 로 Blob 다운로드
+ *   - **Import 첨부**: fileId(ULID) — `client.imports.getFileAccessUrl(url)` 로 presigned URL 발급
  * @property name 파일명
  * @property mimeType MIME 타입 (예: 'image/png')
  * @property size 파일 크기(bytes). 서버가 0으로 설정한 경우 다운로드 후 Blob.size 확인
