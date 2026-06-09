@@ -83,6 +83,65 @@ async function uploadUserFileToS3(s3Key: string, body: Buffer, contentType: stri
 }
 
 /**
+ * @description Mongo replica set PRIMARY 선출을 짧게 대기합니다 (CI rs.initiate 직후 write 실패 방지).
+ * @param client 연결된 MongoClient.
+ * @param maxAttempts 최대 시도 횟수.
+ */
+async function waitForMongoPrimary(client: MongoClient, maxAttempts = 30): Promise<void> {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const status = await client.db().admin().command({ replSetGetStatus: 1 });
+      const members = (status as { members?: Array<{ stateStr?: string }> }).members ?? [];
+      if (members.some((m) => m.stateStr === 'PRIMARY')) {
+        return;
+      }
+    } catch {
+      // replica set 아직 초기화 중
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  console.warn('[E2E Seed] Mongo PRIMARY not confirmed after wait; proceeding anyway');
+}
+
+/**
+ * @description 단일 user_file 시드 레코드를 S3 업로드 후 Mongo에 삽입합니다.
+ * @param db MongoDB database handle.
+ * @param fileSeed E2E_MACRO_USER_FILE_SEEDS 항목.
+ * @param nowTimestamp 시드 기준 epoch ms.
+ */
+async function seedUserFileRecord(
+  db: ReturnType<MongoClient['db']>,
+  fileSeed: (typeof E2E_MACRO_USER_FILE_SEEDS)[number],
+  nowTimestamp: number
+): Promise<void> {
+  const ext = fileSeed.displayName.includes('.') ? fileSeed.displayName.split('.').pop() : 'bin';
+  const physicalName = `${fileSeed._id}.${ext}`;
+  const userFileS3Key = buildStorageKey(STORAGE_BUCKETS.USER_FILES, `${TEST_USER_ID}/${physicalName}`);
+
+  try {
+    await uploadUserFileToS3(userFileS3Key, fileSeed.bytes, fileSeed.mimeType);
+  } catch (err) {
+    console.warn(`[E2E Seed] S3 upload failed for ${fileSeed._id} (non-fatal):`, err);
+  }
+
+  await db.collection('user_files').insertOne({
+    _id: fileSeed._id,
+    ownerUserId: TEST_USER_ID,
+    folderId: null,
+    displayName: fileSeed.displayName,
+    s3Key: userFileS3Key,
+    mimeType: fileSeed.mimeType,
+    sizeBytes: fileSeed.bytes.length,
+    category: fileSeed.category,
+    summaryStatus: 'completed',
+    summary: fileSeed.summary,
+    createdAt: new Date(nowTimestamp),
+    updatedAt: new Date(nowTimestamp),
+    deletedAt: null,
+  } as any);
+}
+
+/**
  * 통합 테스트(E2E)를 위한 기초 데이터를 DB에 주입하는 유틸리티 메서드
  *
  * 책임:
@@ -91,8 +150,10 @@ async function uploadUserFileToS3(s3Key: string, body: Buffer, contentType: stri
  *
  * 목적:
  * - 그래프 생성 및 Macro S3 bundle 로직이 작동하기 위해 반드시 존재해야 하는 원본 데이터를 강제 주입합니다.
+ *
+ * 주의: Jest `--runInBand`에서 여러 spec이 연속 호출하므로 `prisma.$disconnect()`는 CLI 실행 시에만 수행합니다.
  */
-export async function seedTestData() {
+export async function seedTestData(): Promise<void> {
   console.log('--- Starting DB Seeding ---');
 
   await prisma.user.upsert({
@@ -112,18 +173,21 @@ export async function seedTestData() {
   const mongoClient = new MongoClient(MONGO_URI);
   try {
     await mongoClient.connect();
+    await waitForMongoPrimary(mongoClient);
     const db = mongoClient.db();
 
-    await db.collection('conversations').deleteMany({ ownerUserId: TEST_USER_ID });
-    await db.collection('messages').deleteMany({ ownerUserId: TEST_USER_ID });
-    await db.collection('notes').deleteMany({ ownerUserId: TEST_USER_ID });
-    await db.collection('graph_nodes').deleteMany({ userId: TEST_USER_ID });
-    await db.collection('graph_edges').deleteMany({ userId: TEST_USER_ID });
-    await db.collection('graph_clusters').deleteMany({ userId: TEST_USER_ID });
-    await db.collection('graph_subclusters').deleteMany({ userId: TEST_USER_ID });
-    await db.collection('graph_stats').deleteMany({ userId: TEST_USER_ID });
-    await db.collection('graph_summaries').deleteMany({ userId: TEST_USER_ID });
-    await db.collection('user_files').deleteMany({ ownerUserId: TEST_USER_ID });
+    await Promise.all([
+      db.collection('conversations').deleteMany({ ownerUserId: TEST_USER_ID }),
+      db.collection('messages').deleteMany({ ownerUserId: TEST_USER_ID }),
+      db.collection('notes').deleteMany({ ownerUserId: TEST_USER_ID }),
+      db.collection('graph_nodes').deleteMany({ userId: TEST_USER_ID }),
+      db.collection('graph_edges').deleteMany({ userId: TEST_USER_ID }),
+      db.collection('graph_clusters').deleteMany({ userId: TEST_USER_ID }),
+      db.collection('graph_subclusters').deleteMany({ userId: TEST_USER_ID }),
+      db.collection('graph_stats').deleteMany({ userId: TEST_USER_ID }),
+      db.collection('graph_summaries').deleteMany({ userId: TEST_USER_ID }),
+      db.collection('user_files').deleteMany({ ownerUserId: TEST_USER_ID }),
+    ]);
 
     const convId = 'conv-e2e-123';
     const nowTimestamp = Date.now();
@@ -168,52 +232,25 @@ export async function seedTestData() {
       updatedAt: new Date(),
     } as any);
 
-    for (const fileSeed of E2E_MACRO_USER_FILE_SEEDS) {
-      const ext = fileSeed.displayName.includes('.')
-        ? fileSeed.displayName.split('.').pop()
-        : 'bin';
-      const physicalName = `${fileSeed._id}.${ext}`;
-      const userFileS3Key = buildStorageKey(
-        STORAGE_BUCKETS.USER_FILES,
-        `${TEST_USER_ID}/${physicalName}`
-      );
-
-      try {
-        await uploadUserFileToS3(userFileS3Key, fileSeed.bytes, fileSeed.mimeType);
-      } catch (err) {
-        console.warn(`[E2E Seed] S3 upload failed for ${fileSeed._id} (non-fatal):`, err);
-      }
-
-      await db.collection('user_files').insertOne({
-        _id: fileSeed._id,
-        ownerUserId: TEST_USER_ID,
-        folderId: null,
-        displayName: fileSeed.displayName,
-        s3Key: userFileS3Key,
-        mimeType: fileSeed.mimeType,
-        sizeBytes: fileSeed.bytes.length,
-        category: fileSeed.category,
-        summaryStatus: 'completed',
-        summary: fileSeed.summary,
-        createdAt: new Date(nowTimestamp),
-        updatedAt: new Date(nowTimestamp),
-        deletedAt: null,
-      } as any);
-    }
+    await Promise.all(
+      E2E_MACRO_USER_FILE_SEEDS.map((fileSeed) => seedUserFileRecord(db, fileSeed, nowTimestamp))
+    );
 
     console.log(
       `MongoDB data seeded (${E2E_MACRO_USER_FILE_SEEDS.length} user_files: pdf, docx, pptx, unknown.xyz).`
     );
   } finally {
     await mongoClient.close();
-    await prisma.$disconnect();
   }
+
   console.log('--- DB Seeding Completed ---');
 }
 
 if (require.main === module) {
-  seedTestData().catch((err) => {
-    console.error('Seeding failed:', err);
-    process.exit(1);
-  });
+  seedTestData()
+    .catch((err) => {
+      console.error('Seeding failed:', err);
+      process.exit(1);
+    })
+    .finally(() => prisma.$disconnect());
 }
