@@ -35,9 +35,6 @@ export interface MessageRepository {
    */
   createMany(docs: MessageDoc[], session?: ClientSession): Promise<MessageDoc[]>;
 
-  /** ID 목록 중 DB에 이미 존재하는 _id 집합 (import finalize 멱등 재시도용). */
-  findExistingIds(ids: string[]): Promise<Set<string>>;
-
   /**
    * 메시지 ID로 조회합니다.
    */

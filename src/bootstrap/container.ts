@@ -60,11 +60,6 @@ import { AwsSqsAdapter } from '../infra/aws/AwsSqsAdapter';
 import { SmtpEmailAdapter } from '../infra/email/SmtpEmailAdapter';
 import { RedisEventBusAdapter } from '../infra/redis/RedisEventBusAdapter';
 import { FeedbackRepositoryPrisma } from '../infra/repositories/FeedbackRepositoryPrisma';
-import { FileServiceClient } from '../infra/http/FileServiceClient';
-import { ImportArchiveService } from '../core/services/ImportArchiveService';
-import { ImportFinalizeProcessor } from '../core/services/ImportFinalizeProcessor';
-import type { FileServicePort } from '../core/ports/FileServicePort';
-import { ValidationError } from '../shared/errors/domain';
 import { ChatExportRepositoryMongo } from '../infra/repositories/ChatExportRepositoryMongo';
 
 import { CreditRepositoryPrisma } from '../infra/repositories/CreditRepositoryPrisma';
@@ -160,9 +155,6 @@ export class Container {
   private feedbackService: FeedbackService | null = null;
   private chatExportService: ChatExportService | null = null;
   private graphEditorService: GraphEditorService | null = null;
-  private fileServiceClient: FileServicePort | null = null;
-  private importArchiveService: ImportArchiveService | null = null;
-  private importFinalizeProcessor: ImportFinalizeProcessor | null = null;
   private creditService: CreditService | null = null;
   private subscriptionService: SubscriptionService | null = null;
   private webhookProcessingService: WebhookProcessingService | null = null;
@@ -914,51 +906,6 @@ export class Container {
       this.graphEditorService = createAuditProxy(raw, 'GraphEditorService');
     }
     return this.graphEditorService;
-  }
-
-  getFileServiceClient(): FileServicePort {
-    if (!this.fileServiceClient) {
-      const env = loadEnv();
-      if (!env.FILE_SERVICE_BASE_URL || !env.FILE_SERVICE_INTERNAL_API_KEY) {
-        throw new ValidationError(
-          'FILE_SERVICE_BASE_URL and FILE_SERVICE_INTERNAL_API_KEY are required for import APIs'
-        );
-      }
-      this.fileServiceClient = new FileServiceClient({
-        baseURL: env.FILE_SERVICE_BASE_URL,
-        apiKey: env.FILE_SERVICE_INTERNAL_API_KEY,
-        timeoutMs: env.FILE_SERVICE_TIMEOUT_MS,
-      });
-    }
-    return this.fileServiceClient;
-  }
-
-  getImportFinalizeProcessor(): ImportFinalizeProcessor {
-    if (!this.importFinalizeProcessor) {
-      const raw = new ImportFinalizeProcessor(
-        this.getFileServiceClient(),
-        this.getAwsS3Adapter(),
-        this.getChatManagementService(),
-        this.getConversationRepository(),
-        this.getMessageRepository()
-      );
-      this.importFinalizeProcessor = createAuditProxy(raw, 'ImportFinalizeProcessor');
-    }
-    return this.importFinalizeProcessor;
-  }
-
-  getImportArchiveService(): ImportArchiveService {
-    if (!this.importArchiveService) {
-      const raw = new ImportArchiveService(
-        this.getFileServiceClient(),
-        this.getChatManagementService(),
-        this.getConversationService(),
-        this.getImportFinalizeProcessor(),
-        this.getAwsSqsAdapter()
-      );
-      this.importArchiveService = createAuditProxy(raw, 'ImportArchiveService');
-    }
-    return this.importArchiveService;
   }
 }
 

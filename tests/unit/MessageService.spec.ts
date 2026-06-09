@@ -200,19 +200,6 @@ class InMemoryMsgRepo implements MessageRepository {
     }
     return result;
   }
-
-  async findExistingIds(ids: string[]): Promise<Set<string>> {
-    const existing = new Set<string>();
-    for (const id of ids) {
-      for (const msgs of this.msgs.values()) {
-        if (msgs.some((m) => m._id === id)) {
-          existing.add(id);
-          break;
-        }
-      }
-    }
-    return existing;
-  }
 }
 
 describe('MessageService', () => {
