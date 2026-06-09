@@ -122,6 +122,17 @@ const EnvSchema = z.object({
   /** 상태 API downloadUrl 절대 경로 조립용(미설정 시 Request Host 사용) */
   PUBLIC_API_BASE_URL: z.string().default(`https://taco4graphnode.online`),
 
+  /** POST /v1/ai/conversations/bulk — 대화 개수 상한 */
+  BULK_MAX_CONVERSATIONS: z.coerce.number().int().positive().default(500),
+  /** POST /v1/ai/conversations/bulk — 메시지 총합 상한 */
+  BULK_MAX_MESSAGES: z.coerce.number().int().positive().default(50_000),
+  /** POST /v1/ai/conversations/bulk — Content-Length 상한(바이트). express.json(100mb)보다 먼저 400 반환 */
+  BULK_MAX_CONTENT_LENGTH_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(50 * 1024 * 1024),
+
   /**
    * 사용자 라이브러리 파일 뷰어용 Presigned GET URL 만료 시간(초).
    * 짧을수록 유출 시 피해가 작고, 길면 큰 파일 미리보기 시 재발급이 덜합니다. (AWS 최대 604800)

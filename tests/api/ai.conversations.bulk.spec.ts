@@ -199,6 +199,27 @@ describe('POST /v1/ai/conversations/bulk', () => {
     await agent.post('/v1/ai/conversations/bulk').send(invalidRequest).expect(400);
   });
 
+  it('should return 400 when conversation count exceeds configured limit', async () => {
+    const { resetEnvCacheForTests } = require('../../src/config/env');
+    process.env.BULK_MAX_CONVERSATIONS = '1';
+    resetEnvCacheForTests();
+
+    const bulkRequest = {
+      conversations: [
+        { id: 'conv-over-1', title: 'One' },
+        { id: 'conv-over-2', title: 'Two' },
+      ],
+    };
+
+    const res = await agent.post('/v1/ai/conversations/bulk').send(bulkRequest);
+    expect(res.status).toBe(400);
+    expect(res.body.detail).toContain('conversation count');
+    expect(res.body.errors?.field).toBe('conversationCount');
+
+    delete process.env.BULK_MAX_CONVERSATIONS;
+    resetEnvCacheForTests();
+  });
+
   afterAll(async () => {
     const { closeDatabases } = require('../../src/infra/db');
     await closeDatabases();

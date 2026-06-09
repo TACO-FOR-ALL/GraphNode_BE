@@ -21,6 +21,10 @@ import { ConversationRepository } from '../../core/ports/ConversationRepository'
 import { getMongo } from '../db/mongodb';
 import type { ConversationDoc } from '../../core/types/persistence/ai.persistence';
 import { NotFoundError, UpstreamError } from '../../shared/errors/domain';
+import {
+  isTransientMongoTransactionError,
+  summarizeMongoError,
+} from '../../shared/utils/mongoError';
 
 /**
  * ConversationRepositoryMongo 클래스
@@ -78,7 +82,11 @@ export class ConversationRepositoryMongo implements ConversationRepository {
       await this.col().insertMany(docs, { session });
       return docs;
     } catch (err: unknown) {
-      this.handleError('ConversationRepositoryMongo.createMany', err);
+      this.handleError('ConversationRepositoryMongo.createMany', err, {
+        collection: 'conversations',
+        operation: 'insertMany',
+        docCount: docs.length,
+      });
     }
   }
 
@@ -459,14 +467,17 @@ export class ConversationRepositoryMongo implements ConversationRepository {
    * @param methodName 호출한 메서드 이름
    * @param err 에러 객체
    */
-  private handleError(methodName: string, err: unknown): never {
-    if (
-      err instanceof Error &&
-      ((err as any).hasErrorLabel?.('TransientTransactionError') ||
-        (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
-    ) {
+  private handleError(
+    methodName: string,
+    err: unknown,
+    context?: Record<string, unknown>
+  ): never {
+    if (isTransientMongoTransactionError(err)) {
       throw err;
     }
-    throw new UpstreamError(`${methodName} failed`, { cause: String(err) });
+    throw new UpstreamError(`${methodName} failed`, {
+      ...summarizeMongoError(err),
+      ...context,
+    });
   }
 }

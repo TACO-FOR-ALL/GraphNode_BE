@@ -9,6 +9,8 @@ import type { StoragePort } from '../ports/StoragePort';
 import type { ChatThread } from '../../shared/dtos/ai';
 import { importConversationId, importMessageId } from '../../shared/utils/importIds';
 import { logger } from '../../shared/utils/logger';
+import { AppError } from '../../shared/errors/base';
+import { formatImportFailureDetail, summarizeMongoError } from '../../shared/utils/mongoError';
 
 export class ImportFinalizeProcessor {
   constructor(
@@ -25,24 +27,48 @@ export class ImportFinalizeProcessor {
     resultS3Key: string,
     _provider: string
   ): Promise<ChatThread[]> {
+    let conversationCount = 0;
+    let messageCount = 0;
+
     try {
       const result = await this.storage.downloadJson<ImportCompleteDto>(resultS3Key, {
         bucketType: 'file',
       });
       const threads = this.mapToBulkCreateThreads(jobId, result);
+      conversationCount = threads.length;
+      messageCount = threads.reduce((n, t) => n + (t.messages?.length ?? 0), 0);
       const prepared = await this.prepareIdempotentThreads(threads);
       const created = await this.chatManagementService.bulkCreateConversations(userId, prepared);
       const conversationIds = threads.map((t) => t.id);
       await this.fileService.completeFinalize(userId, jobId, conversationIds);
       logger.info(
-        { jobId, userId, conversations: conversationIds.length },
+        { jobId, userId, conversations: conversationIds.length, messageCount },
         'Import finalize completed'
       );
       return created;
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      logger.error({ err, jobId, userId }, 'Import finalize failed');
-      await this.fileService.failFinalize(userId, jobId, message).catch(() => {});
+      const failureDetail = formatImportFailureDetail(err, {
+        stage: 'import_finalize',
+        jobId,
+        userId,
+        resultS3Key,
+        conversationCount,
+        messageCount,
+        appErrorCode: err instanceof AppError ? err.code : undefined,
+      });
+
+      logger.error(
+        {
+          err,
+          jobId,
+          userId,
+          conversationCount,
+          messageCount,
+          ...summarizeMongoError(err),
+        },
+        'Import finalize failed'
+      );
+      await this.fileService.failFinalize(userId, jobId, failureDetail).catch(() => {});
       throw err;
     }
   }

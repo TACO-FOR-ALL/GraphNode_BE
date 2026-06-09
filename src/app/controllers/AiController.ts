@@ -28,6 +28,8 @@ import { AiInteractionService } from '../../core/services/AiInteractionService';
 import { ChatThread, ChatMessage, AIChatResponseDto } from '../../shared/dtos/ai';
 import { AIchatType } from '../../shared/ai-providers/AIchatType';
 import { ValidationError } from '../../shared/errors/domain';
+import { assertBulkImportWithinLimits } from '../../shared/utils/bulkImportLimits';
+import { logger } from '../../shared/utils/logger';
 import { AiStreamEvent } from '../../shared/ai-providers/AiStreamEvent';
 import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 
@@ -260,10 +262,24 @@ export class AiController {
   async bulkCreateConversations(req: Request, res: Response) {
     // 1. 요청 Body 검증 및 파싱 (Zod 스키마 사용)
     const body = _bulkCreateConversationsSchema.parse(req.body);
+    assertBulkImportWithinLimits(body, req.headers['content-length']);
     const conversations = body.conversations;
 
     // 2. 사용자 ID 추출
     const ownerUserId: string = getUserIdFromRequest(req)!;
+
+    const messageCount = conversations.reduce(
+      (acc, c) => acc + (c.messages?.length ?? 0),
+      0
+    );
+    logger
+      .child({ correlationId: (req as { id?: string }).id, userId: ownerUserId })
+      .info({
+        msg: 'bulkCreateConversations.request',
+        conversationCount: conversations.length,
+        messageCount,
+        contentLength: req.headers['content-length'],
+      });
 
     // 3. 서비스 호출 (대량 생성 로직 위임)
     const createdConversations: ChatThread[] =
