@@ -18,6 +18,7 @@ import { MicroscopeApi } from './endpoints/microscope.js';
 import { SearchApi } from './endpoints/search.js';
 import { FeedbackApi } from './endpoints/feedback.js';
 import { GraphEditorApi } from './endpoints/graphEditor.js';
+import { ImportsApi } from './endpoints/imports.js';
 import { ExportApi } from './endpoints/export.js';
 import { BillingApi } from './endpoints/billing.js';
 import { AgentApi } from './endpoints/agent.js';
@@ -72,6 +73,7 @@ export class GraphNodeClient {
   readonly search: SearchApi;
   readonly feedback: FeedbackApi;
   readonly graphEditor: GraphEditorApi;
+  readonly imports: ImportsApi;
   readonly export: ExportApi;
   readonly billing: BillingApi;
   /** AI 에이전트 채팅 스트림 API */
@@ -149,6 +151,7 @@ export class GraphNodeClient {
     this.search = new SearchApi(this.rb);
     this.feedback = new FeedbackApi(this.rb);
     this.graphEditor = new GraphEditorApi(this.rb);
+    this.imports = new ImportsApi(this.rb);
     this.export = new ExportApi(this.rb);
     this.billing = new BillingApi(this.rb);
     this.agent = new AgentApi(this.rb);

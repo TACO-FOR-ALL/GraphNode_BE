@@ -94,6 +94,13 @@ const EnvSchema = z.object({
   S3_PAYLOAD_BUCKET: z.string().min(1, 'S3_PAYLOAD_BUCKET required'),
   S3_FILE_BUCKET: z.string().min(1, 'S3_FILE_BUCKET required'),
 
+  /** File Service MSA (VPC internal). 미설정 시 import API 비활성 */
+  FILE_SERVICE_BASE_URL: z.string().url().optional(),
+  FILE_SERVICE_INTERNAL_API_KEY: z.string().min(1).optional(),
+  FILE_SERVICE_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
+
+  /** Import finalize 비동기 worker 큐. 미설정 시 finalize API가 동기 처리 (로컬 dev) */
+  SQS_IMPORT_FINALIZE_QUEUE_URL: z.string().url().optional(),
   // 채팅 내보내기 알림 — SMTP(nodemailer) 직접 발송. USER/PASS 미설정 시 메일만 건너뜁니다.
   CHAT_EXPORT_EMAIL_FROM: z.email().optional(),
   CHAT_EXPORT_SMTP_HOST: z.string().min(1).default('smtp.gmail.com'),
@@ -114,6 +121,17 @@ const EnvSchema = z.object({
   CHAT_EXPORT_RETENTION_DAYS: z.coerce.number().int().positive().default(3),
   /** 상태 API downloadUrl 절대 경로 조립용(미설정 시 Request Host 사용) */
   PUBLIC_API_BASE_URL: z.string().default(`https://taco4graphnode.online`),
+
+  /** POST /v1/ai/conversations/bulk — 대화 개수 상한 */
+  BULK_MAX_CONVERSATIONS: z.coerce.number().int().positive().default(500),
+  /** POST /v1/ai/conversations/bulk — 메시지 총합 상한 */
+  BULK_MAX_MESSAGES: z.coerce.number().int().positive().default(50_000),
+  /** POST /v1/ai/conversations/bulk — Content-Length 상한(바이트). express.json(100mb)보다 먼저 400 반환 */
+  BULK_MAX_CONTENT_LENGTH_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(50 * 1024 * 1024),
 
   /**
    * 사용자 라이브러리 파일 뷰어용 Presigned GET URL 만료 시간(초).

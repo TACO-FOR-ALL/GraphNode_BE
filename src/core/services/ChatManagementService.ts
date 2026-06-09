@@ -11,6 +11,24 @@ import { toChatThreadDto, toChatMessageDto } from '../../shared/mappers/ai';
 import { AppError } from '../../shared/errors/base';
 import { UpstreamError, ValidationError, NotFoundError } from '../../shared/errors/domain';
 import { withRetry } from '../../shared/utils/retry';
+import { logger } from '../../shared/utils/logger';
+import { summarizeMongoError } from '../../shared/utils/mongoError';
+
+const BULK_CONVERSATION_CHUNK_SIZE = 20;
+const BULK_MESSAGE_INSERT_BATCH_SIZE = 500;
+
+function bulkErrorDetails(err: unknown): Record<string, unknown> {
+  if (err instanceof AppError && err.details) {
+    return err.details;
+  }
+  return summarizeMongoError(err);
+}
+
+function countBulkMessages(
+  threads: { messages?: { content?: string }[] }[]
+): number {
+  return threads.reduce((sum, t) => sum + (t.messages?.length ?? 0), 0);
+}
 
 /**
  * 모듈: ChatManagementService (채팅 통합 서비스)
@@ -163,19 +181,46 @@ export class ChatManagementService {
    */
   async bulkCreateConversations(
     ownerUserId: string,
-    threads: { id: string; title?: string | null; messages?: Partial<ChatMessage>[] }[]
+    threads: {
+      id: string;
+      title?: string | null;
+      importJobId?: string;
+      importSourceConversationId?: string;
+      _skipConversationInsert?: boolean;
+      messages?: (Partial<ChatMessage> & { importSourceMessageId?: string })[];
+    }[]
   ): Promise<ChatThread[]> {
     // TODO: [Refactor] 현재는 생성된 모든 대화 객체를 반환하고 있어 대용량(100MB+) 처리 시 OOM 위험이 있음.
     // 추후 생성된 리소스의 ID 배열만 반환하도록 변경 필요.
     const client: MongoClient = getMongo();
-    const CHUNK_SIZE = 20; // 한 번의 트랜잭션에서 처리할 대화 개수
-    const results: ChatThread[] = [];
+    const totalMessages = countBulkMessages(threads);
+    const totalChunks = Math.ceil(threads.length / BULK_CONVERSATION_CHUNK_SIZE);
 
-    const chunkErrors: Array<{ chunkIndex: number; error: unknown }> = [];
+    logger.info(
+      {
+        ownerUserId,
+        conversationCount: threads.length,
+        messageCount: totalMessages,
+        chunkCount: totalChunks,
+      },
+      'bulkCreateConversations started'
+    );
+
+    const results: ChatThread[] = [];
+    const chunkErrors: Array<{
+      chunkIndex: number;
+      error: unknown;
+      conversationCount: number;
+      messageCount: number;
+    }> = [];
 
     // 세션은 청크마다 생성/해제: 오래 열린 세션이 ServerSession pool을 점유하는 것을 방지
-    for (let chunkIndex = 0; chunkIndex < Math.ceil(threads.length / CHUNK_SIZE); chunkIndex++) {
-      const chunk = threads.slice(chunkIndex * CHUNK_SIZE, (chunkIndex + 1) * CHUNK_SIZE);
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+      const chunk = threads.slice(
+        chunkIndex * BULK_CONVERSATION_CHUNK_SIZE,
+        (chunkIndex + 1) * BULK_CONVERSATION_CHUNK_SIZE
+      );
+      const chunkMessageCount = countBulkMessages(chunk);
 
       // now를 withRetry 콜백 외부에서 고정 — TX 재시도 시 타임스탬프 불일치 방지
       const now = Date.now();
@@ -225,17 +270,20 @@ export class ChatManagementService {
                     createdAt: now,
                     updatedAt: now,
                     deletedAt: null,
+                    source: thread.importJobId ? 'import' : undefined,
+                    importJobId: thread.importJobId,
+                    importSourceConversationId: thread.importSourceConversationId,
                   };
-                  convDocs.push(convDoc);
+
+                  if (!thread._skipConversationInsert) {
+                    convDocs.push(convDoc);
+                  }
 
                   // Message Docs — DB 저장용. 응답 DTO에는 포함하지 않음 (Lazy Loading)
                   if (thread.messages && thread.messages.length > 0) {
-                    // Conversation 와 연결된 Message들에 대한 루프 처리
                     for (const m of thread.messages) {
-                      // 메세지 내용이 없는 경우 continue
                       if (!m.content || m.content.trim().length === 0) continue;
 
-                      // MessageDoc 구축
                       allMsgDocs.push({
                         _id: m.id?.trim() ? m.id : ulid(),
                         ownerUserId,
@@ -245,11 +293,13 @@ export class ChatManagementService {
                         createdAt: now,
                         updatedAt: now,
                         deletedAt: null,
+                        attachments: m.attachments,
+                        importJobId: thread.importJobId,
+                        importSourceMessageId: m.importSourceMessageId,
                       });
                     }
                   }
 
-                  // listConversations와 동일하게 messages: [] 로 반환
                   pendingDtos.push(toChatThreadDto(convDoc, []));
                 }
 
@@ -258,7 +308,14 @@ export class ChatManagementService {
                   await this.conversationService.createDocs(convDocs, session);
                 }
                 if (allMsgDocs.length > 0) {
-                  await this.messageService.createDocs(allMsgDocs, session);
+                  for (
+                    let i = 0;
+                    i < allMsgDocs.length;
+                    i += BULK_MESSAGE_INSERT_BATCH_SIZE
+                  ) {
+                    const batch = allMsgDocs.slice(i, i + BULK_MESSAGE_INSERT_BATCH_SIZE);
+                    await this.messageService.createDocs(batch, session);
+                  }
                 }
 
                 dtos = pendingDtos;
@@ -290,17 +347,74 @@ export class ChatManagementService {
         // 정상적으로 저장된 것들 저장
         results.push(...chunkDtos);
       } catch (err: unknown) {
-        // 청크 실패: 이 청크는 건너뛰고 나머지 청크 계속 처리 (Fault-tolerance)
-        chunkErrors.push({ chunkIndex, error: err });
+        logger.warn(
+          {
+            ownerUserId,
+            chunkIndex,
+            conversationCount: chunk.length,
+            messageCount: chunkMessageCount,
+            ...bulkErrorDetails(err),
+          },
+          'bulkCreateConversations chunk failed'
+        );
+        chunkErrors.push({
+          chunkIndex,
+          error: err,
+          conversationCount: chunk.length,
+          messageCount: chunkMessageCount,
+        });
       }
     }
 
     // 모든 청크가 실패한 경우에만 에러 throw (부분 성공은 허용)
     if (chunkErrors.length > 0 && results.length === 0) {
-      if (chunkErrors[0].error instanceof AppError) throw chunkErrors[0].error;
+      const first = chunkErrors[0];
+      const chunkFailureSummaries = chunkErrors.map((c) => ({
+        chunkIndex: c.chunkIndex,
+        conversationCount: c.conversationCount,
+        messageCount: c.messageCount,
+        ...bulkErrorDetails(c.error),
+      }));
+
+      if (first.error instanceof AppError) {
+        first.error.details = {
+          ...(first.error.details ?? {}),
+          failedChunks: chunkErrors.length,
+          totalChunks,
+          totalConversations: threads.length,
+          totalMessages,
+          chunkFailures: chunkFailureSummaries,
+        };
+        throw first.error;
+      }
+
       throw new UpstreamError('ChatService.bulkCreateConversations failed: all chunks failed', {
-        cause: String(chunkErrors[0].error),
+        failedChunks: chunkErrors.length,
+        totalChunks,
+        totalConversations: threads.length,
+        totalMessages,
+        chunkFailures: chunkFailureSummaries,
+        ...bulkErrorDetails(first.error),
       });
+    }
+
+    if (chunkErrors.length > 0) {
+      logger.warn(
+        {
+          ownerUserId,
+          createdConversations: results.length,
+          requestedConversations: threads.length,
+          failedChunks: chunkErrors.length,
+          totalChunks,
+          chunkFailures: chunkErrors.map((c) => ({
+            chunkIndex: c.chunkIndex,
+            conversationCount: c.conversationCount,
+            messageCount: c.messageCount,
+            ...bulkErrorDetails(c.error),
+          })),
+        },
+        'bulkCreateConversations partial success'
+      );
     }
 
     return results;

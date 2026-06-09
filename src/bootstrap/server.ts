@@ -37,6 +37,7 @@ import { makeFeedbackRouter } from './modules/feedback.module';
 import { makeExportRouter } from './modules/export.module';
 import { makeGraphEditorRouter } from './modules/graphEditor.module';
 import { makeFileProxyRouter } from './modules/fileProxy.module';
+import { makeImportRouter } from './modules/import.module';
 import { makeWebhookRouter, makeSubscriptionRouter } from './modules/billing.module';
 import { makeAuthNotionRouter, makeNotionWebhookRouter, makeNotionApiRouter } from './modules/notion.module';
 import { STORAGE_BUCKETS } from '../config/storageConfig';
@@ -153,6 +154,11 @@ export function createApp() {
 
   // User files + sidebar (노트 라우터보다 먼저 마운트하여 `/v1/files` 등이 `/v1/notes/:id`에 가려지지 않게 함)
   app.use('/v1', makeUserFileRouter());
+
+  // AI export import (File Service BFF) — 구체적인 /v1/* 라우터 뒤, Note Router 앞
+  if (env.FILE_SERVICE_BASE_URL && env.FILE_SERVICE_INTERNAL_API_KEY) {
+    app.use('/v1', makeImportRouter());
+  }
 
   // Note Router (가장 넓은 범위이므로 구체적인 v1 하위 라우터 아래에 배치)
   app.use('/v1', makeNoteRouter());
