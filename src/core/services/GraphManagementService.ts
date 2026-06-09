@@ -18,8 +18,10 @@ import {
 import {
   GraphSummaryDoc,
 } from '../types/persistence/graph.persistence';
-
 type RepoOptions = MacroGraphStoreOptions;
+
+/** Graph generation persist 경로에서 stats CREATED 전이를 허용하는 현재 status. */
+const GRAPH_GENERATION_MUTABLE_STATUSES: GraphStatsDto['status'][] = ['CREATING', 'NOT_CREATED'];
 
 /**
  * 모듈: GraphManagementService (그래프 서비스)
@@ -829,7 +831,15 @@ export class GraphManagementService {
       await this.upsertNodes(nodes, options);
       await this.upsertEdges(edges, options);
       await this.upsertSubclusters(subclusters, options);
-      await this.saveStats({ ...snapshot.stats, userId }, options);
+
+      const statsPayload: GraphStatsDto = { ...snapshot.stats, userId };
+      // Graph generation persistSnapshot은 handler 완료 전에도 CREATED를 쓰므로,
+      // AddNode UPDATING/UPDATED를 덮어쓰지 않도록 compare-and-set을 사용합니다.
+      if (statsPayload.status === 'CREATED') {
+        await this.saveStatsIfStatusIn(statsPayload, GRAPH_GENERATION_MUTABLE_STATUSES, options);
+      } else {
+        await this.saveStats(statsPayload, options);
+      }
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.persistSnapshotBulk failed', { cause: String(err) });
