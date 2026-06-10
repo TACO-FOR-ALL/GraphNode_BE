@@ -1,5 +1,10 @@
 import { UpstreamError, NotFoundError } from '../../shared/errors/domain';
-import { MicroscopeWorkspaceMetaDoc, MicroscopeDocumentMetaDoc, MicroscopeGraphPayloadDoc } from '../../core/types/persistence/microscope_workspace.persistence';
+import {
+  MicroscopeWorkspaceMetaDoc,
+  MicroscopeDocumentMetaDoc,
+  MicroscopeGraphPayloadDoc,
+  MicroscopeDocumentVisualizationMeta,
+} from '../../core/types/persistence/microscope_workspace.persistence';
 import { MicroscopeWorkspaceStore } from '../../core/ports/MicroscopeWorkspaceStore';
 import { getMongo } from '../db/mongodb';
 import { Db, ClientSession } from 'mongodb'; // Import Db type
@@ -246,6 +251,7 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
     sourceId?: string,
     graphPayloadId?: string,
     error?: string,
+    visualization?: MicroscopeDocumentVisualizationMeta,
     session?: ClientSession
   ): Promise<void> {
     try {
@@ -263,6 +269,21 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
       }
       if (error) {
         updateFields['documents.$.error'] = error;
+      }
+      if (visualization?.outputMode) {
+        updateFields['documents.$.outputMode'] = visualization.outputMode;
+      }
+      if (visualization?.visualizationS3Key) {
+        updateFields['documents.$.visualizationS3Key'] = visualization.visualizationS3Key;
+      }
+      if (visualization?.standardizedS3Key) {
+        updateFields['documents.$.standardizedS3Key'] = visualization.standardizedS3Key;
+      }
+      if (visualization?.blockGraphS3Key) {
+        updateFields['documents.$.blockGraphS3Key'] = visualization.blockGraphS3Key;
+      }
+      if (visualization?.imagesS3Prefix) {
+        updateFields['documents.$.imagesS3Prefix'] = visualization.imagesS3Prefix;
       }
 
       const result = await this.microscope_workspaces_collection().updateOne(

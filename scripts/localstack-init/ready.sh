@@ -18,6 +18,7 @@ awslocal s3 mb s3://taco5-graphnode-filedata-chat-and-note-s3 --region ap-northe
 # 2. SQS Queues
 awslocal sqs create-queue --queue-name taco-graphnode-request-graph-sqs --region ap-northeast-2
 awslocal sqs create-queue --queue-name taco-graphnode-response-graph-sqs --region ap-northeast-2
+awslocal sqs create-queue --queue-name taco-graphnode-import-sqs --region ap-northeast-2
 
 echo "----------- LocalStack Resources Created -----------" | tee -a /tmp/localstack_init.log
 awslocal s3 ls --region ap-northeast-2 | tee -a /tmp/localstack_init.log

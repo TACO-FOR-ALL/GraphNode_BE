@@ -28,13 +28,13 @@
 - **`file`** (필수): 업로드할 파일 (`File` 객체 등)
 - **`folderId`** (선택): 저장할 폴더 ID. 생략하거나 `null`이면 루트에 저장됩니다.
 - 파일명 중복 시 서버가 자동으로 `이름(1).ext` 형태로 조정합니다.
-- 허용 확장자: `.pdf`, `.docx`, `.ppt`, `.pptx` (MVP 기준) / 최대 파일 크기: **80MB**
+- 허용 확장자: `.pdf`, `.docx`, `.ppt`, `.pptx` (MVP 기준)
 - 업로드 후 백그라운드에서 AI 요약 자동 실행 (`summaryStatus: 'pending'` → `'completed'`)
 
 | 상태 코드 | 의미 |
 | :--- | :--- |
 | `201 Created` | 업로드 성공 |
-| `400 Bad Request` | 허용되지 않는 확장자, 파일 없음, 파일 크기(80MB) 초과 |
+| `400 Bad Request` | 허용되지 않는 확장자, 파일 없음 |
 | `401 Unauthorized` | 인증되지 않은 요청 (세션 만료) |
 | `404 Not Found` | 지정한 `folderId`가 존재하지 않거나 소유권 없음 |
 | `502 Bad Gateway` | 업스트림 S3 오류 (재시도 가능) |

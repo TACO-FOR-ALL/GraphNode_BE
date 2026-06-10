@@ -17,8 +17,10 @@ export enum TaskType {
   GRAPH_SUMMARY_RESULT = 'GRAPH_SUMMARY_RESULT', // AI -> Worker (Summary result)
   ADD_NODE_REQUEST = 'ADD_NODE_REQUEST', // API -> AI (single conversation)
   ADD_NODE_RESULT = 'ADD_NODE_RESULT', // AI -> Worker (AddNode result)
-  MICROSCOPE_INGEST_FROM_NODE_REQUEST = 'MICROSCOPE_INGEST_FROM_NODE_REQUEST', // API -> AI (Microscope document ingest)
+  MICROSCOPE_INGEST_FROM_NODE_REQUEST = 'MICROSCOPE_INGEST_FROM_NODE_REQUEST', // API -> AI (Microscope from graph node)
+  MICROSCOPE_INGEST_REQUEST = 'MICROSCOPE_INGEST_REQUEST', // API -> AI (Microscope raw file upload)
   MICROSCOPE_INGEST_FROM_NODE_RESULT = 'MICROSCOPE_INGEST_FROM_NODE_RESULT', // AI -> Worker (Microscope ingest result)
+  MICROSCOPE_INGEST_RESULT = 'MICROSCOPE_INGEST_RESULT', // AI -> Worker (Microscope raw file result, alias)
 }
 
 // 공통 메시지 베이스
@@ -156,15 +158,20 @@ export interface GraphSummaryResultPayload extends BaseQueueMessage {
  * - payload: 실제 요청 데이터
  *  - userId: 요청한 사용자 ID
  *  - conversationId: 추가할 대화 ID
- *  - s3Key: 입력 데이터가 담긴 S3 키
+ *  - s3Key: `add-node/{taskId}/batch.json` (대화·노트만) 또는 raw file bundle prefix `add-node/{taskId}/`
  *  - bucket: 버킷명 (옵션)
+ *  - inputType: `"auto"` — GraphNode_AI main worker가 prefix·단일 JSON 자동 판별
+ *  - language: 사용자 선호 언어 (graph generation과 동일)
  */
 export interface AddNodeRequestPayload extends BaseQueueMessage {
   taskType: TaskType.ADD_NODE_REQUEST;
   payload: {
     userId: string;
+    /** Bundle: `add-node/{taskId}/` — `batch.json` + `files/{fileId}_{displayName}` */
     s3Key: string;
     bucket?: string;
+    inputType?: string;
+    language?: string;
   };
 }
 
@@ -201,6 +208,26 @@ export interface AddNodeResultPayload extends BaseQueueMessage {
  *  - group_id: 문서를 묶는 작업 공간의 식별자. Mongo의 Workspace _id와 동일합니다.
  *  - schema_name: (옵션) 추출에 사용할 특정 ER 스키마 제약사항 명칭
  */
+/**
+ * Microscope raw file 업로드 분석 요청 (API -> AI).
+ * `output_data/microscope/raw_file` 파이프라인과 연동됩니다.
+ */
+export interface MicroscopeIngestRawFileQueuePayload extends BaseQueueMessage {
+  taskType: TaskType.MICROSCOPE_INGEST_REQUEST;
+  payload: {
+    user_id: string;
+    group_id: string;
+    s3_key: string;
+    bucket?: string;
+    file_name: string;
+    schema_name?: string;
+    /** GraphNode_AI `output_data/microscope/raw_file` 파이프라인 */
+    ingest_mode?: 'raw_file';
+    /** true면 block_graph.json(+ images/), false면 standardized.json */
+    block_mode?: boolean;
+  };
+}
+
 export interface MicroscopeIngestFromNodeQueuePayload extends BaseQueueMessage {
   taskType: TaskType.MICROSCOPE_INGEST_FROM_NODE_REQUEST;
   payload: {
@@ -214,6 +241,12 @@ export interface MicroscopeIngestFromNodeQueuePayload extends BaseQueueMessage {
     group_id: string;
     /** (옵션) 추출에 사용할 특정 ER 스키마 제약사항 명칭 */
     schema_name?: string;
+    /** 사용자 선호 언어 (from_graphnode 파이프라인) */
+    language?: string;
+    /** GraphNode_AI `output_data/microscope/from_graphnode` 파이프라인 */
+    ingest_mode?: 'from_graphnode';
+    /** true면 block_graph.json(+ images/), false면 standardized.json */
+    block_mode?: boolean;
   };
 }
 
@@ -255,8 +288,12 @@ export interface MicroscopeIngestFromNodeResultQueuePayload extends BaseQueueMes
     schema_name?: string;
     /** (선택 사항) AI 파이프라인 처리에 소요된 상세 통계 객체 (토큰, 메타데이터 등) */
     ingest_stats?: any;
-    /** (성공 시) S3에 저장된 표준 JSON 파일 키 */
+    /** (성공 시) non-block 모드 S3 그래프 JSON (`standardized.json`) */
     standardized_s3_key?: string;
+    /** (성공 시) block 모드 S3 그래프 JSON (`block_graph.json`) */
+    block_graph_s3_key?: string;
+    /** (성공 시) block 모드 부가 이미지 S3 prefix (`images/`, PPT/DOCX) */
+    images_s3_prefix?: string;
     /** (실패 시) 발생한 치명적 파이프라인 에러 메세지 */
     error?: string;
   };
@@ -272,5 +309,6 @@ export type QueueMessage =
   | AddNodeRequestPayload
   | AddNodeResultPayload
   | MicroscopeIngestFromNodeQueuePayload
+  | MicroscopeIngestRawFileQueuePayload
   | MicroscopeIngestFromNodeResultQueuePayload;
 

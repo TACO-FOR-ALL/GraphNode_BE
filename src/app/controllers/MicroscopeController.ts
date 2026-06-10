@@ -4,6 +4,20 @@ import { MicroscopeManagementService } from '../../core/services/MicroscopeManag
 import { MicroscopeWorkspaceMetaDoc } from '../../core/types/persistence/microscope_workspace.persistence';
 import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 
+function parseBlockModeFromBody(body: unknown): boolean | undefined {
+  if (!body || typeof body !== 'object') {
+    return undefined;
+  }
+  const value = (body as { blockMode?: unknown }).blockMode;
+  if (value === true || value === 'true') {
+    return true;
+  }
+  if (value === false || value === 'false') {
+    return false;
+  }
+  return undefined;
+}
+
 export class MicroscopeController {
   constructor(private microscopeService: MicroscopeManagementService) {}
 
@@ -13,6 +27,7 @@ export class MicroscopeController {
   ingestFromNode = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { nodeId, nodeType, schemaName } = req.body;
+      const blockMode = parseBlockModeFromBody(req.body);
 
       if (!nodeId || !nodeType) {
         return res.status(400).json({
@@ -29,13 +44,16 @@ export class MicroscopeController {
           getUserIdFromRequest(req)!,
           nodeId,
           nodeType,
-          schemaName
+          schemaName,
+          blockMode
         );
 
       captureEvent(getUserIdFromRequest(req)!, POSTHOG_EVENT.MICROSCOPE_INGEST_REQUESTED, {
         node_id: nodeId,
         node_type: nodeType,
         schema_name: schemaName,
+        ingest_mode: 'from_graphnode',
+        block_mode: blockMode === true,
       });
       res.status(201).json(workspace);
     } catch (err) {
@@ -191,6 +209,45 @@ export class MicroscopeController {
   /**
    * 워크스페이스 삭제
    */
+  /**
+   * 기존 워크스페이스에 raw file(PDF/DOCX/PPTX 등)을 업로드하고 Microscope ingest를 요청합니다.
+   */
+  ingestDocuments = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { groupId } = req.params;
+      const schemaName = typeof req.body?.schemaName === 'string' ? req.body.schemaName : undefined;
+      const blockMode = parseBlockModeFromBody(req.body);
+      const uploaded = (req.files as Express.Multer.File[] | undefined) ?? [];
+      const userId = getUserIdFromRequest(req)!;
+
+      const workspace = await this.microscopeService.ingestRawDocumentsToWorkspace(
+        userId,
+        groupId,
+        uploaded.map((f) => ({
+          buffer: f.buffer,
+          originalname: f.originalname,
+          mimetype: f.mimetype,
+        })),
+        schemaName,
+        blockMode
+      );
+
+      captureEvent(userId, POSTHOG_EVENT.MICROSCOPE_INGEST_REQUESTED, {
+        group_id: groupId,
+        file_count: uploaded.length,
+        ingest_mode: 'raw_file',
+        block_mode: blockMode === true,
+      });
+
+      res.status(202).json({
+        message: 'Microscope raw file ingest queued',
+        workspace,
+      });
+    } catch (err) {
+      next(err);
+    }
+  };
+
   deleteWorkspace = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { groupId } = req.params;

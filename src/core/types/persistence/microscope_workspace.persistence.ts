@@ -7,6 +7,21 @@
 
 export type MicroscopeDocumentStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
 
+/** GraphNode_AI microscope 파이프라인: from_graphnode | raw_file */
+export type MicroscopeIngestMode = 'from_graphnode' | 'raw_file';
+
+/** AI 출력 모드: block → block_graph.json, non_block → standardized.json */
+export type MicroscopeOutputMode = 'block' | 'non_block';
+
+/** Microscope ingest 완료 시 S3 시각화 키 스냅샷. */
+export interface MicroscopeDocumentVisualizationMeta {
+  outputMode?: MicroscopeOutputMode;
+  visualizationS3Key?: string;
+  standardizedS3Key?: string;
+  blockGraphS3Key?: string;
+  imagesS3Prefix?: string;
+}
+
 /**
  * 개별 업로드 문서의 메타데이터 및 상태
  * @property id 내부 고유 식별자 (ULID) - 
@@ -38,6 +53,20 @@ export interface MicroscopeDocumentMetaDoc {
   sourceId?: string;
   /** AI 워커 처리가 성공하면 부여되는 고유 그래프 페이로드 식별자입니다. */
   graphPayloadId?: string;
+  /** 요청 ingest 파이프라인 (GraphNode_AI `microscope/from_graphnode` | `raw_file`). */
+  ingestMode?: MicroscopeIngestMode;
+  /** 요청 시 block 모드 사용 여부 (AI가 block_graph vs standardized 출력 선택). */
+  blockModeRequested?: boolean;
+  /** 완료 시 AI 출력 모드. */
+  outputMode?: MicroscopeOutputMode;
+  /** FE 시각화용 대표 S3 키 (standardized.json 또는 block_graph.json). */
+  visualizationS3Key?: string;
+  /** non-block 모드 결과 S3 키 (`standardized.json`). */
+  standardizedS3Key?: string;
+  /** block 모드 결과 S3 키 (`block_graph.json`). */
+  blockGraphS3Key?: string;
+  /** PPT/DOCX 등 block 모드 부가 이미지 prefix (`images/`). */
+  imagesS3Prefix?: string;
   /** 실패 시의 에러 원인입니다. */
   error?: string;
   /** 등록 일시입니다. */

@@ -398,6 +398,26 @@ export class GraphEmbeddingService {
   saveStats(stats: GraphStatsDto) {
     return this.graphManagementService.saveStats(stats);
   }
+
+  /**
+   * @description MacroStats를 현재 status가 허용 목록에 있을 때만 갱신합니다.
+   * @param stats 저장할 stats DTO.
+   * @param allowedStatuses 갱신을 허용할 현재 status 목록.
+   * @returns 실제로 갱신되었으면 true.
+   */
+  saveStatsIfStatusIn(stats: GraphStatsDto, allowedStatuses: GraphStatsDto['status'][]) {
+    return this.graphManagementService.saveStatsIfStatusIn(stats, allowedStatuses);
+  }
+
+  /**
+   * @description MacroStats 상태 메타데이터만 조회합니다 (count 집계 없음).
+   * @param userId 사용자 ID.
+   * @returns stats 메타데이터 DTO.
+   */
+  getStatsMetadata(userId: string) {
+    return this.graphManagementService.getStatsMetadata(userId);
+  }
+
   /**
    * 특정 사용자의 그래프 통계를 조회합니다.
    * @param userId - 작업을 요청한 사용자 ID

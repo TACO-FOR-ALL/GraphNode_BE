@@ -40,7 +40,6 @@ export class UserFilesApi {
    *
    * 파일명 중복 시 서버가 자동으로 `이름(1).ext` 형태로 조정합니다.
    * 허용 확장자: `.pdf`, `.docx`, `.ppt`, `.pptx` (MVP 기준).
-   * 최대 파일 크기: **80MB**.
    * 업로드 완료 후 백그라운드에서 AI 요약이 자동 실행됩니다 (`summaryStatus: 'pending'` → `'completed'`).
    *
    * @param file 업로드할 파일 객체 (`File` 또는 `Blob`)
@@ -49,7 +48,7 @@ export class UserFilesApi {
    *
    * **응답 상태 코드:**
    * - `201 Created`: 업로드 성공
-   * - `400 Bad Request`: 허용되지 않은 확장자, 파일 없음, 파일 크기 초과 (80MB)
+   * - `400 Bad Request`: 허용되지 않은 확장자, 파일 없음
    * - `401 Unauthorized`: 인증되지 않은 요청 (세션 만료)
    * - `404 Not Found`: 지정한 `folderId`가 존재하지 않거나 소유권 없음
    * - `502 Bad Gateway`: 업스트림 S3 오류 (재시도 가능)

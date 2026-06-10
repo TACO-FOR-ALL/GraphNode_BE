@@ -10,13 +10,15 @@ import {
   MicroscopeGraphNodeDoc,
   MicroscopeGraphEdgeDoc,
   MicroscopeDocumentStatus,
+  MicroscopeDocumentVisualizationMeta,
 } from '../types/persistence/microscope_workspace.persistence';
 import { MicroscopeWorkspaceStore } from '../ports/MicroscopeWorkspaceStore';
 import { GraphNeo4jStore } from '../ports/GraphNeo4jStore';
 import { QueuePort } from '../ports/QueuePort';
 import { StoragePort } from '../ports/StoragePort';
 import { MicroscopeGraphDataDto } from '../../shared/dtos/microscope';
-import { TaskType } from '../../shared/dtos/queue';
+import { TaskType, type MicroscopeIngestRawFileQueuePayload } from '../../shared/dtos/queue';
+import { sanitizeMacroBundleFileSegment } from '../../shared/utils/macroBundleFiles';
 import {
   UpstreamError,
   NotFoundError,
@@ -133,6 +135,107 @@ export class MicroscopeManagementService {
   }
 
   /**
+   * @description 기존 워크스페이스에 raw file을 업로드하고 Microscope ingest(raw_file) 파이프라인을 큐에 등록합니다.
+   * @param userId 요청 사용자 ID입니다.
+   * @param groupId 대상 워크스페이스 ID입니다.
+   * @param files multer가 수신한 파일 버퍼 목록입니다.
+   * @param schemaName 온톨로지 스키마 이름(선택)입니다.
+   * @returns 문서 메타가 추가된 워크스페이스입니다.
+   * @throws {ValidationError} 파일이 없을 때
+   * @throws {NotFoundError} 워크스페이스가 없을 때
+   * @throws {ForbiddenError} 소유권이 없을 때
+   */
+  async ingestRawDocumentsToWorkspace(
+    userId: string,
+    groupId: string,
+    files: Array<{ buffer: Buffer; originalname: string; mimetype: string }>,
+    schemaName?: string,
+    blockMode?: boolean
+  ): Promise<MicroscopeWorkspaceMetaDoc> {
+    if (!files.length) {
+      throw new ValidationError('At least one file is required');
+    }
+
+    const workspace = await this.getWorkspaceActivity(userId, groupId);
+    const bucket = process.env.S3_PAYLOAD_BUCKET || 'graph-node-payloads';
+    const now = new Date().toISOString();
+
+    for (const file of files) {
+      const docId = `task_microscope_file_${userId}_${ulid()}`;
+      const safeName = sanitizeMacroBundleFileSegment(file.originalname);
+      const s3Key = `microscope-ingest/${userId}/${docId}/${safeName}`;
+
+      let creditHeld = false;
+      let messageSent = false;
+
+      try {
+        await this.holdCredit(userId, CreditFeature.MICROSCOPE_INGEST, docId);
+        creditHeld = true;
+
+        await withRetry(
+          async () =>
+            await this.storagePort.upload(s3Key, file.buffer, file.mimetype || 'application/octet-stream', {
+              bucketType: 'payload',
+            }),
+          { label: 'Storage.upload.microscopeRawFile' }
+        );
+
+        const newDocument: MicroscopeDocumentMetaDoc = {
+          id: docId,
+          s3Key,
+          fileName: file.originalname,
+          status: 'PROCESSING',
+          nodeType: 'file',
+          ingestMode: 'raw_file',
+          blockModeRequested: blockMode === true,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        await this.microscopeWorkspaceStore.addDocument(groupId, newDocument);
+
+        const messageBody: MicroscopeIngestRawFileQueuePayload = {
+          taskId: docId,
+          taskType: TaskType.MICROSCOPE_INGEST_REQUEST,
+          payload: {
+            user_id: userId,
+            group_id: groupId,
+            s3_key: s3Key,
+            bucket,
+            file_name: file.originalname,
+            schema_name: schemaName,
+            ingest_mode: 'raw_file',
+            block_mode: blockMode === true,
+          },
+          timestamp: now,
+        };
+
+        await withRetry(async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
+          label: 'QueuePort.sendMessage.microscopeRawFile',
+        });
+        messageSent = true;
+
+        workspace.documents.push(newDocument);
+        await this.notificationService.sendMicroscopeIngestRequested(userId, docId);
+      } catch (err) {
+        if (creditHeld && !messageSent) {
+          await this.rollbackCreditHold(docId, 'microscope raw file enqueue failed');
+        }
+        logger.error({ err, userId, groupId, fileName: file.originalname }, 'Failed to ingest raw file');
+        if (err instanceof AppError) throw err;
+        throw new UpstreamError('Failed to enqueue microscope raw file ingest', { cause: String(err) });
+      }
+    }
+
+    logger.info(
+      { userId, groupId, fileCount: files.length },
+      'Enqueued Microscope raw file ingest tasks via SQS'
+    );
+
+    return workspace;
+  }
+
+  /**
    * 워크스페이스 삭제.
    * 연관된 모든 Neo4j 지식 그래프 데이터(Entity, Chunk, Edge 등)를 Detach Delete 한 뒤, 메타데이터(Mongo)도 파기합니다.
    *
@@ -212,7 +315,8 @@ export class MicroscopeManagementService {
     userId: string,
     nodeId: string,
     nodeType: 'note' | 'conversation',
-    schemaName?: string
+    schemaName?: string,
+    blockMode?: boolean
   ): Promise<MicroscopeWorkspaceMetaDoc> {
     // 1. 원본 데이터 검증 및 타이틀 추출
     let workspaceTitle = '';
@@ -255,6 +359,8 @@ export class MicroscopeManagementService {
       status: 'PROCESSING',
       nodeId,
       nodeType,
+      ingestMode: 'from_graphnode',
+      blockModeRequested: blockMode === true,
       createdAt: now,
       updatedAt: now,
     };
@@ -281,6 +387,8 @@ export class MicroscopeManagementService {
           group_id: groupId,
           schema_name: schemaName,
           language: preferredLanguage,
+          ingest_mode: 'from_graphnode' as const,
+          block_mode: blockMode === true,
         },
         timestamp: new Date().toISOString(),
       };
@@ -571,7 +679,8 @@ export class MicroscopeManagementService {
     status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED',
     sourceId?: string,
     downloadedGraphData?: AiMicroscopeIngestResultItem[],
-    error?: string
+    error?: string,
+    visualization?: MicroscopeDocumentVisualizationMeta
   ): Promise<MicroscopeWorkspaceMetaDoc> {
     // 1. 워크스페이스 존재 여부 확인
     const workspace = await this.microscopeWorkspaceStore.findById(groupId);
@@ -647,7 +756,8 @@ export class MicroscopeManagementService {
         status,
         sourceId,
         graphPayloadId,
-        error
+        error,
+        visualization
       );
       logger.info(
         { userId, groupId, docId, status },

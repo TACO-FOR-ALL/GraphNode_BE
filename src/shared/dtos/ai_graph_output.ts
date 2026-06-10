@@ -236,6 +236,8 @@ export interface AiAddNodeResultItem {
   conversationId?: string;
   /** 노트 결과일 때만 존재 */
   noteId?: string;
+  /** 사용자 라이브러리 파일(user_files) 결과일 때만 존재 */
+  fileId?: string;
   nodes: AiAddNodeNodeOutput[];
   edges: AiAddNodeEdgeOutput[];
   /** 대화 전용 디버그 정보 */
@@ -265,6 +267,17 @@ export function isConversationResultItem(
   result: AiAddNodeResultItem
 ): result is AiAddNodeResultItem & { conversationId: string } {
   return typeof result.conversationId === 'string';
+}
+
+/**
+ * result 항목이 user_files 결과인지 판별하는 타입 가드.
+ * @param result - 판별 대상 result item
+ * @returns `fileId` 필드가 존재하면 true
+ */
+export function isFileResultItem(
+  result: AiAddNodeResultItem
+): result is AiAddNodeResultItem & { fileId: string } {
+  return typeof result.fileId === 'string';
 }
 
 /**

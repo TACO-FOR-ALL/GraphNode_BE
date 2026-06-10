@@ -14,7 +14,8 @@ import type {
 } from '../../core/ports/FileServicePort';
 import { getCorrelationId } from '../../shared/context/requestStore';
 import { logger } from '../../shared/utils/logger';
-import { UpstreamError, UpstreamTimeout } from '../../shared/errors/domain';
+import { UpstreamTimeout } from '../../shared/errors/domain';
+import { mapFileServiceError } from './mapFileServiceError';
 
 export interface FileServiceClientConfig {
   baseURL: string;
@@ -54,17 +55,17 @@ export class FileServiceClient implements FileServicePort {
       if (ax.code === 'ECONNABORTED' || ax.code === 'ETIMEDOUT') {
         throw new UpstreamTimeout('File Service timeout', { service: 'FileService' });
       }
-      const status = ax.response?.status;
-      const detail =
-        (ax.response?.data as { detail?: string })?.detail ??
-        (ax.response?.data as { message?: string })?.message ??
-        ax.message;
-      logger.error({ status, detail, service: 'FileService' }, 'File Service request failed');
-      throw new UpstreamError('File Service error', {
-        service: 'FileService',
-        status,
-        detail,
-      });
+      const mapped = mapFileServiceError(ax);
+      logger.error(
+        {
+          status: ax.response?.status,
+          code: mapped.code,
+          detail: mapped.message,
+          service: 'FileService',
+        },
+        'File Service request failed'
+      );
+      throw mapped;
     }
   }
 

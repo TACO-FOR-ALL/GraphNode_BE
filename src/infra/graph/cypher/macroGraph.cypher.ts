@@ -251,6 +251,22 @@ export const MACRO_GRAPH_CYPHER = {
   `,
 
   /**
+   * @description MacroStats를 현재 status가 허용 목록에 있을 때만 갱신합니다 (compare-and-set).
+   *
+   * Graph generation 결과 handler가 AddNode `UPDATING`을 덮어쓰지 않도록 합니다.
+   */
+  updateStatsIfStatusIn: `
+    MATCH (g:MacroGraph {userId: $userId})-[:HAS_STATS]->(st:MacroStats)
+    WHERE st.status IN $allowedStatuses
+    SET st.id           = $id,
+        st.status       = $status,
+        st.generatedAt  = $generatedAt,
+        st.updatedAt    = $updatedAt,
+        st.metadataJson = $metadataJson
+    RETURN st.status AS status
+  `,
+
+  /**
    * @description MacroSummary 노드를 upsert 합니다.
    *
    * overview count와 cluster size는 조회 시 관계 집계로 복원합니다.

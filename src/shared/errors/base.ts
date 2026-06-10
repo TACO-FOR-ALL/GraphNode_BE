@@ -101,6 +101,12 @@ export function unknownToAppError(err: unknown): AppError {
         return new NotFoundError(message, e.details);
       case 'CONFLICT':
         return new ConflictError(message, e.details);
+      case 'IMPORT_JOB_NOT_READY':
+        return new (require('./domain').ImportJobNotReadyError)(message, e.details);
+      case 'IMPORT_QUOTA_EXCEEDED':
+        return new (require('./domain').ImportQuotaExceededError)(message, e.details);
+      case 'INVALID_ARCHIVE':
+        return new (require('./domain').InvalidArchiveError)(message, e.details);
       case 'RATE_LIMITED':
         return new RateLimitError(message, e.details);
       case 'UPSTREAM_ERROR':
