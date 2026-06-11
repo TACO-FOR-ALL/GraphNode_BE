@@ -41,16 +41,23 @@ export class MicroscopeIngestResultHandler implements JobHandler {
       throw new ValidationError('user_id is required in microscope ingest result payload');
     }
 
+    // taskId 접미사 파싱: _block / _nonblock 구분
+    const isBlockMode = taskId.endsWith('_block');
+    const isNonBlockMode = taskId.endsWith('_nonblock');
+    const isDualMode = isBlockMode || isNonBlockMode;
+    const baseDocId = isBlockMode
+      ? taskId.slice(0, -'_block'.length)
+      : isNonBlockMode
+        ? taskId.slice(0, -'_nonblock'.length)
+        : taskId;
+
     const sourceId = source_id;
     const visualization = buildMicroscopeVisualizationFromIngestResult(
       payloadRecord as Record<string, unknown>
     );
-    const standardizedS3Key = visualization?.visualizationS3Key;
+    const standardizedS3Key = visualization?.standardizedS3Key ?? visualization?.visualizationS3Key;
+    const blockGraphS3Key = visualization?.blockGraphS3Key;
 
-    // Envelope의 taskId를 통해 문서 ID 식별
-    const docId = taskId;
-
-    // 의존성 획득
     const microscopeService = container.getMicroscopeManagementService();
 
     const groupIdFromPayload =
@@ -58,58 +65,83 @@ export class MicroscopeIngestResultHandler implements JobHandler {
       (typeof payloadRecord.workspace_id === 'string' ? payloadRecord.workspace_id : undefined) ??
       (typeof payloadRecord.workspaceId === 'string' ? payloadRecord.workspaceId : undefined);
 
+    // base docId로 워크스페이스 조회 (접미사 없는 원본 id)
     const groupId = await microscopeService.resolveGroupIdForIngestResult(
       userId,
-      docId,
+      baseDocId,
       groupIdFromPayload
     );
 
-    logger.info({ taskId, userId, groupId, status }, 'Handling Microscope ingest result');
+    logger.info({ taskId, baseDocId, userId, groupId, status, isBlockMode, isNonBlockMode }, 'Handling Microscope ingest result');
     const notiService = container.getNotificationService();
     const storagePort = container.getAwsS3Adapter();
     const creditService = container.getCreditService();
 
     try {
       let downloadedGraphData: any = undefined;
+      let downloadedBlockGraphData: Record<string, unknown> | undefined;
 
-      // 1. S3에서 그래프 데이터 다운로드
-      if (status === 'COMPLETED' && standardizedS3Key) {
-        try {
-          downloadedGraphData = await withRetry(
-            async () =>
-              await storagePort.downloadJson<AiMicroscopeIngestResultItem[]>(standardizedS3Key, {
-                bucketType: 'payload',
-              }),
-            { label: 'MicroscopeIngestResultHandler.downloadJson.graph' }
-          );
-          logger.info(
-            { taskId, standardizedS3Key },
-            'Successfully downloaded standardized graph JSON from S3'
-          );
-        } catch (downloadErr) {
-          logger.error(
-            { err: downloadErr, taskId, standardizedS3Key },
-            'Failed to download graph JSON from S3'
-          );
-          // S3 다운로드 실패 시 상태를 FAILED로 간주해야 할 수도 있으나 현재는 에러만 로깅
+      if (status === 'COMPLETED') {
+        if (isBlockMode && blockGraphS3Key) {
+          // block 결과: block_graph.json 다운로드
+          try {
+            downloadedBlockGraphData = await withRetry(
+              async () =>
+                await storagePort.downloadJson<Record<string, unknown>>(blockGraphS3Key, {
+                  bucketType: 'payload',
+                }),
+              { label: 'MicroscopeIngestResultHandler.downloadJson.blockGraph' }
+            );
+            logger.info({ taskId, blockGraphS3Key }, 'Downloaded block_graph JSON from S3');
+          } catch (downloadErr) {
+            logger.error({ err: downloadErr, taskId, blockGraphS3Key }, 'Failed to download block_graph JSON from S3');
+          }
+        } else if (!isBlockMode && standardizedS3Key) {
+          // non-block 결과: standardized.json 다운로드
+          try {
+            downloadedGraphData = await withRetry(
+              async () =>
+                await storagePort.downloadJson<AiMicroscopeIngestResultItem[]>(standardizedS3Key, {
+                  bucketType: 'payload',
+                }),
+              { label: 'MicroscopeIngestResultHandler.downloadJson.graph' }
+            );
+            logger.info({ taskId, standardizedS3Key }, 'Downloaded standardized graph JSON from S3');
+          } catch (downloadErr) {
+            logger.error({ err: downloadErr, taskId, standardizedS3Key }, 'Failed to download graph JSON from S3');
+          }
         }
       }
 
-      // 1. 서비스 호출을 통한 개별 문서 진행상태 갱신 및 Mongo 페이로드 저장
-      const updatedWorkspace: MicroscopeWorkspaceMetaDoc =
-        await microscopeService.updateDocumentStatus(
+      // 서비스 호출: block/nonBlock 별 분기
+      let updatedWorkspace: MicroscopeWorkspaceMetaDoc;
+
+      if (isBlockMode) {
+        updatedWorkspace = await microscopeService.updateBlockViewDocumentStatus(
           userId,
           groupId,
-          docId,
+          baseDocId,
+          status,
+          downloadedBlockGraphData,
+          error,
+          visualization
+        );
+      } else {
+        updatedWorkspace = await microscopeService.updateDocumentStatus(
+          userId,
+          groupId,
+          baseDocId,
           status,
           sourceId,
           downloadedGraphData,
           error,
-          visualization
+          visualization,
+          isDualMode
         );
+      }
 
       // S3 Key 값은 Workspace에서 찾아서 알림용으로 활용합니다.
-      const targetDoc = updatedWorkspace.documents.find((d) => d.id === docId);
+      const targetDoc = updatedWorkspace.documents.find((d) => d.id === baseDocId);
       const s3Key = targetDoc?.s3Key || 'unknown_s3_key';
 
       // 2. 단일 파일 처리 완료(혹은 실패) Noti 발송
@@ -195,7 +227,8 @@ export class MicroscopeIngestResultHandler implements JobHandler {
         }
       }
 
-      // 3. 워크스페이스 내에 남은 PENDING/PROCESSING 문서가 있는지 검사하여 최종 종합 Noti 판별
+      // 3. 워크스페이스 내 모든 문서 전체 status 기반 완료 여부 확인
+      // 듀얼 SQS 모드: doc.status = COMPLETED 는 block + nonBlock 양쪽 완료 시만 설정됨
       const totalDocs = updatedWorkspace.documents.length;
       let completedCount = 0;
       let failedCount = 0;
@@ -207,7 +240,7 @@ export class MicroscopeIngestResultHandler implements JobHandler {
         else pendingCount++;
       }
 
-      // 대기 중인 문서가 하나도 없다면, 모든 작업이 완료된 것임!
+      // 대기 중인 문서가 하나도 없다면, 모든 작업이 완료된 것임
       if (pendingCount === 0) {
         logger.info(
           { userId, groupId, totalDocs, completedCount, failedCount },
@@ -231,7 +264,7 @@ export class MicroscopeIngestResultHandler implements JobHandler {
       }
     } catch (err) {
       logger.error(
-        { err, taskId, userId, groupId, docId },
+        { err, taskId, baseDocId, userId, groupId },
         'Exception during Microscope Result Handling'
       );
       // 핸들링 도중 발생한 에러 기록 시 SQS 큐가 재전송(nack)하도록 throw 유지 결정 가능

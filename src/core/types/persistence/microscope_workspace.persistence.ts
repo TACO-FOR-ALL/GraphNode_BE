@@ -67,6 +67,12 @@ export interface MicroscopeDocumentMetaDoc {
   blockGraphS3Key?: string;
   /** PPT/DOCX 등 block 모드 부가 이미지 prefix (`images/`). */
   imagesS3Prefix?: string;
+  /** block 파이프라인 처리 상태입니다. 듀얼 SQS 모드에서만 기록됩니다. */
+  blockStatus?: MicroscopeDocumentStatus;
+  /** non-block 파이프라인 처리 상태입니다. 듀얼 SQS 모드에서만 기록됩니다. */
+  nonBlockStatus?: MicroscopeDocumentStatus;
+  /** block 파이프라인 결과 MongoDB 페이로드 ID입니다. */
+  blockGraphPayloadId?: string;
   /** 실패 시의 에러 원인입니다. */
   error?: string;
   /** 등록 일시입니다. */
@@ -149,4 +155,73 @@ export interface MicroscopeGraphEdgeDoc {
   source_chunk_id?:  number | null;
   evidence: string;
   confidence: number;
+}
+
+/** block_graph.json 의 블록 간 엣지 타입 */
+export type MicroscopeBlockEdgeType =
+  | 'PREREQUISITE_OF'
+  | 'FOLLOWS'
+  | 'ELABORATES'
+  | 'CONTRASTS'
+  | 'PARALLEL';
+
+/**
+ * AI Block 뷰의 블록 간 엣지 구조 (inter-block DAG edge)
+ */
+export interface MicroscopeBlockEdgeDoc {
+  source: string;
+  target: string;
+  type: MicroscopeBlockEdgeType;
+  description?: string;
+  confidence?: number;
+}
+
+/**
+ * AI Block 뷰의 단일 블록 (rawText 제외 메타데이터)
+ */
+export interface MicroscopeBlockItemDoc {
+  block_id: string;
+  title: string;
+  summary?: string;
+  key_concepts: string[];
+  order_index: number;
+  turn_range?: [number, number] | null;
+  micro_graph: {
+    nodes: MicroscopeGraphNodeDoc[];
+    edges: MicroscopeGraphEdgeDoc[];
+  };
+}
+
+/**
+ * AI가 생성한 Block Graph 구조 (rawText 미포함)
+ * microscope_block_graph_payloads 컬렉션에 저장됩니다.
+ */
+export interface MicroscopeBlockGraphPayloadDoc {
+  _id: string;
+  groupId: string;
+  /** document의 base taskId (_block 접미사 제거 후) */
+  taskId: string;
+  userId: string;
+  blockGraph: {
+    blocks: MicroscopeBlockItemDoc[];
+    edges: MicroscopeBlockEdgeDoc[];
+    paths: string[][];
+    ordering_rationale?: string;
+  };
+  createdAt: string;
+}
+
+/**
+ * 각 블록의 원문(rawText)을 별도 컬렉션에 저장합니다 (16MB 제한 분산 목적).
+ * microscope_block_rawtext_payloads 컬렉션에 저장됩니다.
+ * rawTexts 총 크기가 10MB를 초과하면 저장하지 않으며, FE는 blockGraphS3Key 통해 lazy load 합니다.
+ */
+export interface MicroscopeBlockRawTextPayloadDoc {
+  _id: string;
+  groupId: string;
+  /** document의 base taskId */
+  taskId: string;
+  userId: string;
+  rawTexts: Array<{ blockId: string; rawText: string }>;
+  createdAt: string;
 }
