@@ -78,7 +78,8 @@ describe('MicroscopeIngestResultHandler', () => {
         outputMode: 'block',
         visualizationS3Key: 'results/microscope/block_graph.json',
         blockGraphS3Key: 'results/microscope/block_graph.json',
-      })
+      }),
+      false
     );
   });
 
@@ -110,7 +111,8 @@ describe('MicroscopeIngestResultHandler', () => {
       'src-1',
       undefined,
       undefined,
-      undefined
+      undefined,
+      false
     );
   });
 });
