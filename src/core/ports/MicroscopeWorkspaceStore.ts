@@ -5,6 +5,9 @@ import {
   MicroscopeDocumentMetaDoc,
   MicroscopeGraphPayloadDoc,
   MicroscopeDocumentVisualizationMeta,
+  MicroscopeDocumentStatus,
+  MicroscopeBlockGraphPayloadDoc,
+  MicroscopeBlockRawTextPayloadDoc,
 } from '../types/persistence/microscope_workspace.persistence';
 
 /**
@@ -104,7 +107,52 @@ export interface MicroscopeWorkspaceStore {
 
   /**
    * 워크스페이스 삭제 시 연관된 모든 페이로드 데이터를 Cascade 삭제합니다.
-   * @param groupId 
+   * @param groupId
    */
   deleteGraphPayloadsByGroupId(groupId: string, session?: ClientSession): Promise<void>;
+
+  /**
+   * AI Block 뷰 그래프 페이로드를 별도 컬렉션에 저장합니다.
+   * @param doc Block 그래프 페이로드 (rawText 미포함)
+   */
+  saveBlockGraphPayload(doc: MicroscopeBlockGraphPayloadDoc, session?: ClientSession): Promise<void>;
+
+  /**
+   * 각 블록의 원문(rawText)을 별도 컬렉션에 저장합니다.
+   * @param doc rawTexts 페이로드
+   */
+  saveBlockRawTextPayload(doc: MicroscopeBlockRawTextPayloadDoc, session?: ClientSession): Promise<void>;
+
+  /**
+   * taskId(base docId)로 Block 그래프 페이로드를 조회합니다.
+   * @param taskId base docId (_block 접미사 제거 후)
+   */
+  findBlockGraphPayloadByTaskId(taskId: string, session?: ClientSession): Promise<MicroscopeBlockGraphPayloadDoc | null>;
+
+  /**
+   * taskId(base docId)로 Block rawText 페이로드를 조회합니다.
+   * @param taskId base docId
+   */
+  findBlockRawTextPayloadByTaskId(taskId: string, session?: ClientSession): Promise<MicroscopeBlockRawTextPayloadDoc | null>;
+
+  /**
+   * 문서의 blockStatus 또는 nonBlockStatus 및 관련 서브 필드를 원자적으로 갱신합니다.
+   * 듀얼 SQS 처리 흐름에서 개별 파이프라인 완료 상태를 추적하기 위해 사용됩니다.
+   * @param groupId 워크스페이스 ID
+   * @param docId 갱신 대상 문서 ID
+   * @param updates 갱신할 서브 상태 필드
+   */
+  updateDocumentSubStatus(
+    groupId: string,
+    docId: string,
+    updates: {
+      blockStatus?: MicroscopeDocumentStatus;
+      nonBlockStatus?: MicroscopeDocumentStatus;
+      status?: MicroscopeDocumentStatus;
+      blockGraphPayloadId?: string;
+      blockGraphS3Key?: string;
+      error?: string;
+    },
+    session?: ClientSession
+  ): Promise<void>;
 }

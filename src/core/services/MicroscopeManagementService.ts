@@ -11,12 +11,16 @@ import {
   MicroscopeGraphEdgeDoc,
   MicroscopeDocumentStatus,
   MicroscopeDocumentVisualizationMeta,
+  MicroscopeBlockGraphPayloadDoc,
+  MicroscopeBlockRawTextPayloadDoc,
+  MicroscopeBlockItemDoc,
+  MicroscopeBlockEdgeDoc,
 } from '../types/persistence/microscope_workspace.persistence';
 import { MicroscopeWorkspaceStore } from '../ports/MicroscopeWorkspaceStore';
 import { GraphNeo4jStore } from '../ports/GraphNeo4jStore';
 import { QueuePort } from '../ports/QueuePort';
 import { StoragePort } from '../ports/StoragePort';
-import { MicroscopeGraphDataDto } from '../../shared/dtos/microscope';
+import { MicroscopeGraphDataDto, MicroscopeBlockGraphDto, MicroscopeBlockItemDto } from '../../shared/dtos/microscope';
 import { TaskType, type MicroscopeIngestRawFileQueuePayload } from '../../shared/dtos/queue';
 import { sanitizeMacroBundleFileSegment } from '../../shared/utils/macroBundleFiles';
 import {
@@ -187,32 +191,48 @@ export class MicroscopeManagementService {
           status: 'PROCESSING',
           nodeType: 'file',
           ingestMode: 'raw_file',
-          blockModeRequested: blockMode === true,
+          blockModeRequested: true,
+          blockStatus: 'PROCESSING',
+          nonBlockStatus: 'PROCESSING',
           createdAt: now,
           updatedAt: now,
         };
 
         await this.microscopeWorkspaceStore.addDocument(groupId, newDocument);
 
-        const messageBody: MicroscopeIngestRawFileQueuePayload = {
-          taskId: docId,
-          taskType: TaskType.MICROSCOPE_INGEST_REQUEST,
-          payload: {
-            user_id: userId,
-            group_id: groupId,
-            s3_key: s3Key,
-            bucket,
-            file_name: file.originalname,
-            schema_name: schemaName,
-            ingest_mode: 'raw_file',
-            block_mode: blockMode === true,
-          },
-          timestamp: now,
+        const basePayload = {
+          user_id: userId,
+          group_id: groupId,
+          s3_key: s3Key,
+          bucket,
+          file_name: file.originalname,
+          schema_name: schemaName,
+          ingest_mode: 'raw_file' as const,
         };
 
-        await withRetry(async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
-          label: 'QueuePort.sendMessage.microscopeRawFile',
-        });
+        // block 요청
+        await withRetry(
+          async () =>
+            await this.queuePort.sendMessage(this.jobQueueUrl, {
+              taskId: `${docId}_block`,
+              taskType: TaskType.MICROSCOPE_INGEST_REQUEST,
+              payload: { ...basePayload, block_mode: true, generate_micro_graphs: true },
+              timestamp: now,
+            } as MicroscopeIngestRawFileQueuePayload),
+          { label: 'QueuePort.sendMessage.microscopeRawFile.block' }
+        );
+
+        // non-block 요청
+        await withRetry(
+          async () =>
+            await this.queuePort.sendMessage(this.jobQueueUrl, {
+              taskId: `${docId}_nonblock`,
+              taskType: TaskType.MICROSCOPE_INGEST_REQUEST,
+              payload: { ...basePayload, block_mode: false },
+              timestamp: now,
+            } as MicroscopeIngestRawFileQueuePayload),
+          { label: 'QueuePort.sendMessage.microscopeRawFile.nonblock' }
+        );
         messageSent = true;
 
         workspace.documents.push(newDocument);
@@ -360,7 +380,9 @@ export class MicroscopeManagementService {
       nodeId,
       nodeType,
       ingestMode: 'from_graphnode',
-      blockModeRequested: blockMode === true,
+      blockModeRequested: true,
+      blockStatus: 'PROCESSING',
+      nonBlockStatus: 'PROCESSING',
       createdAt: now,
       updatedAt: now,
     };
@@ -376,26 +398,40 @@ export class MicroscopeManagementService {
       // 4. MongoDB 상태 트리거 등록
       await this.microscopeWorkspaceStore.addDocument(groupId, newDocument);
 
-      // 5. AI 서버 처리를 위한 SQS 큐 발송 (MICROSCOPE_INGEST_FROM_NODE_REQUEST)
-      const messageBody = {
-        taskId: docId,
-        taskType: TaskType.MICROSCOPE_INGEST_FROM_NODE_REQUEST,
-        payload: {
-          user_id: userId,
-          node_id: nodeId,
-          node_type: nodeType,
-          group_id: groupId,
-          schema_name: schemaName,
-          language: preferredLanguage,
-          ingest_mode: 'from_graphnode' as const,
-          block_mode: blockMode === true,
-        },
-        timestamp: new Date().toISOString(),
+      const basePayload = {
+        user_id: userId,
+        node_id: nodeId,
+        node_type: nodeType,
+        group_id: groupId,
+        schema_name: schemaName,
+        language: preferredLanguage,
+        ingest_mode: 'from_graphnode' as const,
       };
+      const timestamp = new Date().toISOString();
 
-      await withRetry(async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
-        label: 'QueuePort.sendMessage',
-      });
+      // 5a. SQS block 요청 (block_mode=true, generateMicroGraphs=true)
+      await withRetry(
+        async () =>
+          await this.queuePort.sendMessage(this.jobQueueUrl, {
+            taskId: `${docId}_block`,
+            taskType: TaskType.MICROSCOPE_INGEST_FROM_NODE_REQUEST,
+            payload: { ...basePayload, block_mode: true, generate_micro_graphs: true },
+            timestamp,
+          }),
+        { label: 'QueuePort.sendMessage.block' }
+      );
+
+      // 5b. SQS non-block 요청 (block_mode=false)
+      await withRetry(
+        async () =>
+          await this.queuePort.sendMessage(this.jobQueueUrl, {
+            taskId: `${docId}_nonblock`,
+            taskType: TaskType.MICROSCOPE_INGEST_FROM_NODE_REQUEST,
+            payload: { ...basePayload, block_mode: false },
+            timestamp,
+          }),
+        { label: 'QueuePort.sendMessage.nonblock' }
+      );
       messageSent = true;
 
       // 성공 알림 전송
@@ -517,6 +553,9 @@ export class MicroscopeManagementService {
         status: 'PROCESSING',
         nodeId: source.nodeId,
         nodeType: source.nodeType,
+        blockModeRequested: true,
+        blockStatus: 'PROCESSING',
+        nonBlockStatus: 'PROCESSING',
         createdAt: now,
         updatedAt: now,
       };
@@ -531,61 +570,75 @@ export class MicroscopeManagementService {
         continue;
       }
 
-      // FIXME(2026_05_17) : AI Worker로 보내는 Multi Source용 taskType, payload 구조 정의 후 그에 맞게 수정해야 함
-      // try {
-      //   const messageBody = {
-      //     taskId: docId,
-      //     taskType: TaskType.MICROSCOPE_INGEST_FROM_NODE_REQUEST,
-      //     payload: {
-      //       user_id: userId,
-      //       node_id: source.nodeId,
-      //       node_type: source.nodeType,
-      //       group_id: groupId,
-      //       schema_name: schemaName,
-      //       language: preferredLanguage,
-      //     },
-      //     timestamp: new Date().toISOString(),
-      //   };
+      try {
+        const basePayload = {
+          user_id: userId,
+          node_id: source.nodeId,
+          node_type: source.nodeType,
+          group_id: groupId,
+          schema_name: schemaName,
+          language: preferredLanguage,
+          ingest_mode: 'from_graphnode' as const,
+        };
+        const timestamp = new Date().toISOString();
 
-      //   await withRetry(
-      //     async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody),
-      //     { label: `QueuePort.sendMessage:multi:${docId}` }
-      //   );
-      //   anyMessageSent = true;
-      //   logger.info(
-      //     { userId, groupId, docId, nodeId: source.nodeId },
-      //     'Enqueued multi-source Microscope Ingest task'
-      //   );
-      // } catch (err) {
-      //   logger.error(
-      //     { err, userId, groupId, docId, nodeId: source.nodeId },
-      //     'SQS send failed for source, marking FAILED'
-      //   );
-      //   try {
-      //     await this.microscopeWorkspaceStore.updateDocumentStatus(
-      //       groupId,
-      //       docId,
-      //       'FAILED',
-      //       undefined,
-      //       undefined,
-      //       String(err)
-      //     );
-      //   } catch (updateErr) {
-      //     logger.error(
-      //       { updateErr, groupId, docId },
-      //       'Failed to mark document as FAILED after SQS error'
-      //     );
-      //   }
-      // }
+        await withRetry(
+          async () =>
+            await this.queuePort.sendMessage(this.jobQueueUrl, {
+              taskId: `${docId}_block`,
+              taskType: TaskType.MICROSCOPE_INGEST_FROM_NODE_REQUEST,
+              payload: { ...basePayload, block_mode: true, generate_micro_graphs: true },
+              timestamp,
+            }),
+          { label: `QueuePort.sendMessage:multi:block:${docId}` }
+        );
+
+        await withRetry(
+          async () =>
+            await this.queuePort.sendMessage(this.jobQueueUrl, {
+              taskId: `${docId}_nonblock`,
+              taskType: TaskType.MICROSCOPE_INGEST_FROM_NODE_REQUEST,
+              payload: { ...basePayload, block_mode: false },
+              timestamp,
+            }),
+          { label: `QueuePort.sendMessage:multi:nonblock:${docId}` }
+        );
+
+        anyMessageSent = true;
+        logger.info(
+          { userId, groupId, docId, nodeId: source.nodeId },
+          'Enqueued dual SQS for multi-source Microscope Ingest'
+        );
+      } catch (err) {
+        logger.error(
+          { err, userId, groupId, docId, nodeId: source.nodeId },
+          'SQS send failed for source, marking FAILED'
+        );
+        try {
+          await this.microscopeWorkspaceStore.updateDocumentStatus(
+            groupId,
+            docId,
+            'FAILED',
+            undefined,
+            undefined,
+            String(err)
+          );
+        } catch (updateErr) {
+          logger.error(
+            { updateErr, groupId, docId },
+            'Failed to mark document as FAILED after SQS error'
+          );
+        }
+      }
     }
 
     // 6. 모든 SQS 전송 실패 시 크레딧 롤백
-    // if (creditHeld && !anyMessageSent) {
-    //   await this.rollbackCreditHold(
-    //     workspaceCreditTaskId,
-    //     'all multi-source ingest SQS sends failed'
-    //   );
-    // }
+    if (creditHeld && !anyMessageSent) {
+      await this.rollbackCreditHold(
+        workspaceCreditTaskId,
+        'all multi-source ingest SQS sends failed'
+      );
+    }
 
     await this.notificationService.sendMicroscopeIngestRequested(userId, workspaceCreditTaskId);
 
@@ -680,7 +733,8 @@ export class MicroscopeManagementService {
     sourceId?: string,
     downloadedGraphData?: AiMicroscopeIngestResultItem[],
     error?: string,
-    visualization?: MicroscopeDocumentVisualizationMeta
+    visualization?: MicroscopeDocumentVisualizationMeta,
+    isDualMode = false
   ): Promise<MicroscopeWorkspaceMetaDoc> {
     // 1. 워크스페이스 존재 여부 확인
     const workspace = await this.microscopeWorkspaceStore.findById(groupId);
@@ -695,7 +749,7 @@ export class MicroscopeManagementService {
     try {
       let graphPayloadId: string | undefined = undefined;
 
-      // 3. 그래프 데이터 저장
+      // 3. non-block 그래프 데이터 저장
       if (downloadedGraphData && status === 'COMPLETED') {
         graphPayloadId = `ply_microscope_${ulid()}`;
 
@@ -729,42 +783,55 @@ export class MicroscopeManagementService {
           });
         }
 
-        const graphData = {
-          nodes: allNodes,
-          edges: allEdges,
-        };
-
         await this.microscopeWorkspaceStore.saveGraphPayload({
           _id: graphPayloadId,
           groupId,
           taskId: docId,
           userId,
-          graphData,
-          // createdAt은 repository layer가 항상 설정합니다.
+          graphData: { nodes: allNodes, edges: allEdges },
           createdAt: '',
         });
-        logger.info(
-          { userId, groupId, docId, graphPayloadId },
-          'Saved Microscope graph payload to MongoDB'
+        logger.info({ userId, groupId, docId, graphPayloadId }, 'Saved Microscope graph payload to MongoDB');
+      }
+
+      // 4. 듀얼 SQS 모드: nonBlockStatus 갱신 후 전체 상태 계산
+      if (isDualMode) {
+        const freshWorkspace = await this.microscopeWorkspaceStore.findById(groupId);
+        const doc = freshWorkspace?.documents.find((d) => d.id === docId);
+        const currentBlockStatus = doc?.blockStatus ?? 'PROCESSING';
+        const overallStatus = this.computeOverallStatus(currentBlockStatus, status);
+
+        await this.microscopeWorkspaceStore.updateDocumentSubStatus(groupId, docId, {
+          nonBlockStatus: status,
+          status: overallStatus,
+          error: error,
+        });
+
+        // 기존 필드도 함께 업데이트 (sourceId, graphPayloadId, visualization)
+        await this.microscopeWorkspaceStore.updateDocumentStatus(
+          groupId,
+          docId,
+          overallStatus,
+          sourceId,
+          graphPayloadId,
+          error,
+          visualization
+        );
+      } else {
+        // 레거시(단일 SQS) 모드: 전체 status 직접 업데이트
+        await this.microscopeWorkspaceStore.updateDocumentStatus(
+          groupId,
+          docId,
+          status,
+          sourceId,
+          graphPayloadId,
+          error,
+          visualization
         );
       }
 
-      // 4. 문서 상태 업데이트
-      await this.microscopeWorkspaceStore.updateDocumentStatus(
-        groupId,
-        docId,
-        status,
-        sourceId,
-        graphPayloadId,
-        error,
-        visualization
-      );
-      logger.info(
-        { userId, groupId, docId, status },
-        `Microscope document status updated to ${status}`
-      );
+      logger.info({ userId, groupId, docId, status, isDualMode }, `Microscope nonBlock status updated`);
 
-      // 5. 업데이트 후 최신 상태 반환 (Handler에서 전체 문서 중 마지막인지 여부 파악 용도)
       const updatedWorkspace = await this.microscopeWorkspaceStore.findById(groupId);
       return updatedWorkspace as MicroscopeWorkspaceMetaDoc;
     } catch (err: unknown) {
@@ -776,12 +843,178 @@ export class MicroscopeManagementService {
         throw err;
       }
       if (err instanceof NotFoundError) throw err;
-      logger.error(
-        { err, userId, groupId, docId },
-        'Failed to update document status, updateDocumentStatus'
-      );
+      logger.error({ err, userId, groupId, docId }, 'Failed to update document status');
       throw new UpstreamError('Failed to update document status', { cause: String(err) });
     }
+  }
+
+  /**
+   * @description Block 뷰 결과 처리: blockStatus 갱신 및 block_graph.json 데이터 저장.
+   * @param userId 요청 사용자 ID
+   * @param groupId 워크스페이스 ID
+   * @param docId base 문서 ID (_block 접미사 제거 후)
+   * @param status AI 처리 결과 상태
+   * @param blockGraphJson block_graph.json 파싱 결과 (optional)
+   * @param error 실패 시 에러 메시지 (optional)
+   * @param visualization S3 키 스냅샷 (optional)
+   * @returns 갱신된 워크스페이스 메타데이터
+   * @throws {NotFoundError} 워크스페이스 또는 문서가 없을 때
+   * @throws {ForbiddenError} 소유권 불일치 시
+   * @throws {UpstreamError} DB 저장 실패 시
+   */
+  async updateBlockViewDocumentStatus(
+    userId: string,
+    groupId: string,
+    docId: string,
+    status: MicroscopeDocumentStatus,
+    blockGraphJson?: Record<string, unknown>,
+    error?: string,
+    visualization?: MicroscopeDocumentVisualizationMeta
+  ): Promise<MicroscopeWorkspaceMetaDoc> {
+    const workspace = await this.microscopeWorkspaceStore.findById(groupId);
+    if (!workspace) throw new NotFoundError(`Workspace ${groupId} not found`);
+    if (workspace.userId !== userId)
+      throw new ForbiddenError('You do not have permission to modify this workspace');
+
+    try {
+      let blockGraphPayloadId: string | undefined;
+
+      if (status === 'COMPLETED' && blockGraphJson) {
+        blockGraphPayloadId = await this.saveBlockGraphData(userId, groupId, docId, blockGraphJson);
+      }
+
+      // blockStatus 갱신 후 전체 상태 계산
+      const freshWorkspace = await this.microscopeWorkspaceStore.findById(groupId);
+      const doc = freshWorkspace?.documents.find((d) => d.id === docId);
+      const currentNonBlockStatus = doc?.nonBlockStatus ?? 'PROCESSING';
+      const overallStatus = this.computeOverallStatus(status, currentNonBlockStatus);
+
+      await this.microscopeWorkspaceStore.updateDocumentSubStatus(groupId, docId, {
+        blockStatus: status,
+        status: overallStatus,
+        blockGraphPayloadId,
+        blockGraphS3Key: visualization?.blockGraphS3Key,
+        error: error,
+      });
+
+      logger.info(
+        { userId, groupId, docId, blockStatus: status, overallStatus, blockGraphPayloadId },
+        'Block view document status updated'
+      );
+
+      const updatedWorkspace = await this.microscopeWorkspaceStore.findById(groupId);
+      return updatedWorkspace as MicroscopeWorkspaceMetaDoc;
+    } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        ((err as any).hasErrorLabel?.('TransientTransactionError') ||
+          (err as any).hasErrorLabel?.('UnknownTransactionCommitResult'))
+      ) {
+        throw err;
+      }
+      if (err instanceof NotFoundError) throw err;
+      logger.error({ err, userId, groupId, docId }, 'Failed to update block view document status');
+      throw new UpstreamError('Failed to update block view document status', { cause: String(err) });
+    }
+  }
+
+  /**
+   * @description block_graph.json 원시 데이터를 파싱하여 두 컬렉션(블록 그래프 + rawText)에 저장합니다.
+   * rawTexts 총 크기가 10MB를 초과하면 MongoDB 저장을 건너뜁니다 (S3 lazy load로 대체).
+   * @returns 저장된 block graph payload ID
+   */
+  private async saveBlockGraphData(
+    userId: string,
+    groupId: string,
+    docId: string,
+    blockGraphJson: Record<string, unknown>
+  ): Promise<string> {
+    const rawBlockGraph = (blockGraphJson as any)?.block_graph ?? blockGraphJson;
+    const rawBlocks: any[] = rawBlockGraph?.blocks ?? [];
+    const blockEdges: MicroscopeBlockEdgeDoc[] = rawBlockGraph?.edges ?? [];
+    const paths: string[][] = rawBlockGraph?.paths ?? [];
+    const orderingRationale: string | undefined = rawBlockGraph?.ordering_rationale;
+
+    const blocks: MicroscopeBlockItemDoc[] = rawBlocks.map((b: any) => ({
+      block_id: b.block_id ?? b.id ?? `blk_${ulid()}`,
+      title: b.title ?? '',
+      summary: b.summary,
+      key_concepts: b.key_concepts ?? [],
+      order_index: b.order_index ?? 0,
+      turn_range: b.turn_range ?? null,
+      micro_graph: {
+        nodes: (b.micro_graph?.nodes ?? []).map((n: any) => ({
+          id: n.id ?? `node_${ulid()}`,
+          name: n.name ?? '',
+          type: n.type ?? '',
+          description: n.description ?? '',
+          source_chunk_id: n.source_chunk_id ?? null,
+        })) as MicroscopeGraphNodeDoc[],
+        edges: (b.micro_graph?.edges ?? []).map((e: any) => ({
+          id: e.id ?? `edge_${ulid()}`,
+          start: e.start ?? e.source ?? '',
+          target: e.target ?? '',
+          type: e.type ?? '',
+          description: e.description ?? '',
+          source_chunk_id: e.source_chunk_id ?? null,
+          evidence: e.evidence ?? '',
+          confidence: e.confidence ?? 0,
+        })) as MicroscopeGraphEdgeDoc[],
+      },
+    }));
+
+    const blockGraphPayloadId = `ply_block_${ulid()}`;
+    await this.microscopeWorkspaceStore.saveBlockGraphPayload({
+      _id: blockGraphPayloadId,
+      groupId,
+      taskId: docId,
+      userId,
+      blockGraph: { blocks, edges: blockEdges, paths, ordering_rationale: orderingRationale },
+      createdAt: '',
+    });
+
+    // rawText 저장 (10MB 임계치 초과 시 스킵)
+    const rawTexts = rawBlocks
+      .filter((b: any) => typeof b.raw_text === 'string' && b.raw_text.length > 0)
+      .map((b: any) => ({
+        blockId: b.block_id ?? b.id ?? '',
+        rawText: b.raw_text as string,
+      }));
+
+    const estimatedByteSize = rawTexts.reduce((acc, r) => acc + Buffer.byteLength(r.rawText, 'utf8'), 0);
+    const TEN_MB = 10 * 1024 * 1024;
+
+    if (rawTexts.length > 0 && estimatedByteSize <= TEN_MB) {
+      await this.microscopeWorkspaceStore.saveBlockRawTextPayload({
+        _id: `ply_rawtext_${ulid()}`,
+        groupId,
+        taskId: docId,
+        userId,
+        rawTexts,
+        createdAt: '',
+      });
+      logger.info({ groupId, docId, rawTextCount: rawTexts.length }, 'Saved block rawTexts to MongoDB');
+    } else if (estimatedByteSize > TEN_MB) {
+      logger.warn(
+        { groupId, docId, estimatedByteSize },
+        'Block rawTexts exceed 10MB threshold — skipping MongoDB storage, FE should use blockGraphS3Key'
+      );
+    }
+
+    return blockGraphPayloadId;
+  }
+
+  /**
+   * @description 두 파이프라인(block/nonBlock) 상태를 기반으로 전체 문서 상태를 계산합니다.
+   * 둘 다 COMPLETED → COMPLETED, 어느 하나라도 FAILED → FAILED, 그 외 → PROCESSING
+   */
+  private computeOverallStatus(
+    blockStatus: MicroscopeDocumentStatus,
+    nonBlockStatus: MicroscopeDocumentStatus
+  ): MicroscopeDocumentStatus {
+    if (blockStatus === 'COMPLETED' && nonBlockStatus === 'COMPLETED') return 'COMPLETED';
+    if (blockStatus === 'FAILED' || nonBlockStatus === 'FAILED') return 'FAILED';
+    return 'PROCESSING';
   }
 
   /**
@@ -874,6 +1107,7 @@ export class MicroscopeManagementService {
 
   /**
    * 워크스페이스 메타데이터를 기반으로 내부의 모든 그래프 페이로드를 읽어와 하나의 DTO로 병합합니다.
+   * Block 뷰 데이터가 있으면 `blockView` 필드에 포함합니다.
    * @private
    */
   private async aggregateGraphFromWorkspace(
@@ -882,54 +1116,76 @@ export class MicroscopeManagementService {
   ): Promise<MicroscopeGraphDataDto[]> {
     const workspaceId = workspace._id;
     try {
-      // 1. COMPLETED 상태이고 graphPayloadId가 있는 문서들 확인
-      const payloadIds: string[] = workspace.documents
-        .filter((doc) => doc.status === 'COMPLETED' && doc.graphPayloadId)
+      const completedDocs = workspace.documents.filter((doc) => doc.status === 'COMPLETED');
+
+      // 1. non-block 그래프 페이로드 로드
+      const payloadIds: string[] = completedDocs
+        .filter((doc) => doc.graphPayloadId)
         .map((doc) => doc.graphPayloadId as string);
 
-      if (payloadIds.length === 0) {
-        return [{ nodes: [], edges: [] }];
-      }
-
-      // 2. Mongo DB Payload 컬렉션에서 데이터 로드
-      const microscopeGraphs: MicroscopeGraphPayloadDoc[] =
-        await this.microscopeWorkspaceStore.findGraphPayloadsByIds(payloadIds);
-
-      // 3. 하나의 통일된 Graph Data(MicroscopeGraphDataDto)로 병합
       const mergedNodes: MicroscopeGraphNodeDoc[] = [];
       const mergedEdges: MicroscopeGraphEdgeDoc[] = [];
 
-      for (const payload of microscopeGraphs) {
-        if (!payload.graphData) continue;
+      if (payloadIds.length > 0) {
+        const microscopeGraphs = await this.microscopeWorkspaceStore.findGraphPayloadsByIds(payloadIds);
 
-        const items = Array.isArray(payload.graphData) ? payload.graphData : [payload.graphData];
-
-        for (const item of items) {
-          if (item.nodes && Array.isArray(item.nodes)) {
-            for (const node of item.nodes) {
-              mergedNodes.push(node as MicroscopeGraphNodeDoc);
+        for (const payload of microscopeGraphs) {
+          if (!payload.graphData) continue;
+          const items = Array.isArray(payload.graphData) ? payload.graphData : [payload.graphData];
+          for (const item of items) {
+            if (item.nodes && Array.isArray(item.nodes)) {
+              mergedNodes.push(...(item.nodes as MicroscopeGraphNodeDoc[]));
             }
-          }
-
-          if (item.edges && Array.isArray(item.edges)) {
-            for (const edge of item.edges) {
-              mergedEdges.push(edge as MicroscopeGraphEdgeDoc);
+            if (item.edges && Array.isArray(item.edges)) {
+              mergedEdges.push(...(item.edges as MicroscopeGraphEdgeDoc[]));
             }
           }
         }
       }
 
+      // 2. Block 뷰 페이로드 로드 (blockGraphPayloadId 또는 taskId로 조회)
+      let blockView: MicroscopeBlockGraphDto | undefined;
+
+      const blockDoc = completedDocs.find((doc) => doc.blockGraphPayloadId);
+      if (blockDoc) {
+        const blockPayload = await this.microscopeWorkspaceStore.findBlockGraphPayloadByTaskId(
+          blockDoc.id
+        );
+
+        if (blockPayload) {
+          // rawTexts merge (선택적)
+          const rawTextPayload = await this.microscopeWorkspaceStore.findBlockRawTextPayloadByTaskId(
+            blockDoc.id
+          );
+          const rawTextMap = new Map<string, string>();
+          if (rawTextPayload) {
+            for (const rt of rawTextPayload.rawTexts) {
+              rawTextMap.set(rt.blockId, rt.rawText);
+            }
+          }
+
+          const blocksWithRawText: MicroscopeBlockItemDto[] = blockPayload.blockGraph.blocks.map(
+            (b) => ({
+              ...b,
+              raw_text: rawTextMap.get(b.block_id),
+            })
+          );
+
+          blockView = {
+            blocks: blocksWithRawText,
+            edges: blockPayload.blockGraph.edges,
+            paths: blockPayload.blockGraph.paths,
+            ordering_rationale: blockPayload.blockGraph.ordering_rationale,
+          };
+        }
+      }
+
       logger.info(
-        { userId, workspaceId, totalFiles: payloadIds.length },
+        { userId, workspaceId, nonBlockPayloads: payloadIds.length, hasBlockView: !!blockView },
         'Successfully aggregated workspace graph data from Mongo'
       );
 
-      return [
-        {
-          nodes: mergedNodes,
-          edges: mergedEdges,
-        },
-      ];
+      return [{ nodes: mergedNodes, edges: mergedEdges, blockView }];
     } catch (err: unknown) {
       if (
         err instanceof Error &&
@@ -938,13 +1194,8 @@ export class MicroscopeManagementService {
       ) {
         throw err;
       }
-      logger.error(
-        { err, userId, workspaceId },
-        'Failed to fetch and aggregate workspace graph data from Mongo'
-      );
-      throw new UpstreamError('Failed to fetch workspace graph data from Mongo', {
-        cause: String(err),
-      });
+      logger.error({ err, userId, workspaceId }, 'Failed to fetch and aggregate workspace graph data from Mongo');
+      throw new UpstreamError('Failed to fetch workspace graph data from Mongo', { cause: String(err) });
     }
   }
 }
