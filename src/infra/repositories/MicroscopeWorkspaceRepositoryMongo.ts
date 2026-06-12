@@ -4,6 +4,9 @@ import {
   MicroscopeDocumentMetaDoc,
   MicroscopeGraphPayloadDoc,
   MicroscopeDocumentVisualizationMeta,
+  MicroscopeDocumentStatus,
+  MicroscopeBlockGraphPayloadDoc,
+  MicroscopeBlockRawTextPayloadDoc,
 } from '../../core/types/persistence/microscope_workspace.persistence';
 import { MicroscopeWorkspaceStore } from '../../core/ports/MicroscopeWorkspaceStore';
 import { getMongo } from '../db/mongodb';
@@ -43,6 +46,14 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
    */
   private microscope_graph_payloads_collection() {
     return this.db().collection<MicroscopeGraphPayloadDoc>('microscope_graph_payloads');
+  }
+
+  private microscope_block_graph_payloads_collection() {
+    return this.db().collection<MicroscopeBlockGraphPayloadDoc>('microscope_block_graph_payloads');
+  }
+
+  private microscope_block_rawtext_payloads_collection() {
+    return this.db().collection<MicroscopeBlockRawTextPayloadDoc>('microscope_block_rawtext_payloads');
   }
 
   /**
@@ -340,6 +351,100 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
       await this.microscope_graph_payloads_collection().deleteMany({ groupId } as any, { session });
     } catch (err: unknown) {
       this.handleError('MicroscopeWorkspaceRepositoryMongo.deleteGraphPayloadsByGroupId', err);
+    }
+  }
+
+  /**
+   * @description AI Block 뷰 그래프 페이로드를 microscope_block_graph_payloads 컬렉션에 저장합니다.
+   */
+  async saveBlockGraphPayload(doc: MicroscopeBlockGraphPayloadDoc, session?: ClientSession): Promise<void> {
+    try {
+      doc.createdAt = new Date().toISOString();
+      await this.microscope_block_graph_payloads_collection().insertOne(doc as any, { session });
+    } catch (err: unknown) {
+      this.handleError('MicroscopeWorkspaceRepositoryMongo.saveBlockGraphPayload', err);
+    }
+  }
+
+  /**
+   * @description 각 블록의 rawText를 microscope_block_rawtext_payloads 컬렉션에 저장합니다.
+   */
+  async saveBlockRawTextPayload(doc: MicroscopeBlockRawTextPayloadDoc, session?: ClientSession): Promise<void> {
+    try {
+      doc.createdAt = new Date().toISOString();
+      await this.microscope_block_rawtext_payloads_collection().insertOne(doc as any, { session });
+    } catch (err: unknown) {
+      this.handleError('MicroscopeWorkspaceRepositoryMongo.saveBlockRawTextPayload', err);
+    }
+  }
+
+  /**
+   * @description taskId(base docId)로 Block 그래프 페이로드를 조회합니다.
+   */
+  async findBlockGraphPayloadByTaskId(taskId: string, session?: ClientSession): Promise<MicroscopeBlockGraphPayloadDoc | null> {
+    try {
+      const doc = await this.microscope_block_graph_payloads_collection()
+        .findOne({ taskId } as any, { session });
+      return doc ? (doc as unknown as MicroscopeBlockGraphPayloadDoc) : null;
+    } catch (err: unknown) {
+      this.handleError('MicroscopeWorkspaceRepositoryMongo.findBlockGraphPayloadByTaskId', err);
+    }
+  }
+
+  /**
+   * @description taskId(base docId)로 Block rawText 페이로드를 조회합니다.
+   */
+  async findBlockRawTextPayloadByTaskId(taskId: string, session?: ClientSession): Promise<MicroscopeBlockRawTextPayloadDoc | null> {
+    try {
+      const doc = await this.microscope_block_rawtext_payloads_collection()
+        .findOne({ taskId } as any, { session });
+      return doc ? (doc as unknown as MicroscopeBlockRawTextPayloadDoc) : null;
+    } catch (err: unknown) {
+      this.handleError('MicroscopeWorkspaceRepositoryMongo.findBlockRawTextPayloadByTaskId', err);
+    }
+  }
+
+  /**
+   * @description 문서의 blockStatus / nonBlockStatus 및 관련 서브 필드를 원자적으로 갱신합니다.
+   */
+  async updateDocumentSubStatus(
+    groupId: string,
+    docId: string,
+    updates: {
+      blockStatus?: MicroscopeDocumentStatus;
+      nonBlockStatus?: MicroscopeDocumentStatus;
+      status?: MicroscopeDocumentStatus;
+      blockGraphPayloadId?: string;
+      blockGraphS3Key?: string;
+      error?: string;
+    },
+    session?: ClientSession
+  ): Promise<void> {
+    try {
+      const setFields: any = {
+        'documents.$.updatedAt': new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      if (updates.blockStatus !== undefined) setFields['documents.$.blockStatus'] = updates.blockStatus;
+      if (updates.nonBlockStatus !== undefined) setFields['documents.$.nonBlockStatus'] = updates.nonBlockStatus;
+      if (updates.status !== undefined) setFields['documents.$.status'] = updates.status;
+      if (updates.blockGraphPayloadId) setFields['documents.$.blockGraphPayloadId'] = updates.blockGraphPayloadId;
+      if (updates.blockGraphS3Key) setFields['documents.$.blockGraphS3Key'] = updates.blockGraphS3Key;
+      if (updates.error) setFields['documents.$.error'] = updates.error;
+
+      const result = await this.microscope_workspaces_collection().updateOne(
+        { _id: groupId, 'documents.id': docId } as any,
+        { $set: setFields },
+        { session }
+      );
+
+      if (result.matchedCount === 0) {
+        throw new NotFoundError(`Microscope document not found for groupId=${groupId} docId=${docId}`);
+      }
+    } catch (err: unknown) {
+      if (err instanceof NotFoundError) throw err;
+      this.handleError('MicroscopeWorkspaceRepositoryMongo.updateDocumentSubStatus', err);
     }
   }
 

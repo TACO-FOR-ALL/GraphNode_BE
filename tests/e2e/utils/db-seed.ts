@@ -238,15 +238,53 @@ export async function seedTestData(): Promise<void> {
       },
     ] as any);
 
-    await db.collection('notes').insertOne({
-      _id: 'note-e2e-123',
-      ownerUserId: TEST_USER_ID,
-      title: 'E2E Test Note',
-      content: 'This note discusses the relationship between LLMs and Graph structures.',
-      deletedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    } as any);
+    await db.collection('notes').insertMany([
+      {
+        _id: 'note-e2e-123',
+        ownerUserId: TEST_USER_ID,
+        title: 'E2E Test Note',
+        content: 'This note discusses the relationship between LLMs and Graph structures.',
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        _id: 'note-e2e-block-123',
+        ownerUserId: TEST_USER_ID,
+        title: 'E2E Block Mode Note',
+        content: 'This note is used for dual SQS block/nonBlock sub-status tracking tests.',
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        _id: 'note-e2e-blockview-456',
+        ownerUserId: TEST_USER_ID,
+        title: 'E2E Block View Note',
+        content: 'This note is used for block view graph API verification after dual pipeline completion.',
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        _id: 'note-e2e-latestgraph-789',
+        ownerUserId: TEST_USER_ID,
+        title: 'E2E Latest Graph Note',
+        content: 'This note is used for getLatestGraphByNodeId blockView verification.',
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        _id: 'note-e2e-partial-fail-001',
+        ownerUserId: TEST_USER_ID,
+        title: 'E2E Partial Fail Note',
+        content: 'This note is used for testing partial failure convergence.',
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ] as any);
 
     await Promise.all(
       E2E_MACRO_USER_FILE_SEEDS.map((fileSeed) => seedUserFileRecord(db, fileSeed, nowTimestamp))
