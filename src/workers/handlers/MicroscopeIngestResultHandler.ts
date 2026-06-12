@@ -82,33 +82,75 @@ export class MicroscopeIngestResultHandler implements JobHandler {
       let downloadedBlockGraphData: Record<string, unknown> | undefined;
 
       if (status === 'COMPLETED') {
-        if (isBlockMode && blockGraphS3Key) {
+        if (isBlockMode) {
           // block 결과: block_graph.json 다운로드
-          try {
-            downloadedBlockGraphData = await withRetry(
-              async () =>
-                await storagePort.downloadJson<Record<string, unknown>>(blockGraphS3Key, {
-                  bucketType: 'payload',
-                }),
-              { label: 'MicroscopeIngestResultHandler.downloadJson.blockGraph' }
+          // Fallback: AI 워커가 block_graph_s3_key 대신 standardized_s3_key 필드에 블록 경로를 담아 보낼 수 있음
+          const effectiveBlockGraphS3Key = blockGraphS3Key ?? standardizedS3Key;
+          if (!blockGraphS3Key && standardizedS3Key) {
+            logger.warn(
+              { taskId, fallbackKey: standardizedS3Key },
+              'block mode: block_graph_s3_key absent — falling back to standardized_s3_key for block graph download'
             );
-            logger.info({ taskId, blockGraphS3Key }, 'Downloaded block_graph JSON from S3');
-          } catch (downloadErr) {
-            logger.error({ err: downloadErr, taskId, blockGraphS3Key }, 'Failed to download block_graph JSON from S3');
           }
-        } else if (!isBlockMode && standardizedS3Key) {
-          // non-block 결과: standardized.json 다운로드
-          try {
-            downloadedGraphData = await withRetry(
-              async () =>
-                await storagePort.downloadJson<AiMicroscopeIngestResultItem[]>(standardizedS3Key, {
-                  bucketType: 'payload',
-                }),
-              { label: 'MicroscopeIngestResultHandler.downloadJson.graph' }
+          if (effectiveBlockGraphS3Key) {
+            try {
+              downloadedBlockGraphData = await withRetry(
+                async () =>
+                  await storagePort.downloadJson<Record<string, unknown>>(effectiveBlockGraphS3Key, {
+                    bucketType: 'payload',
+                  }),
+                { label: 'MicroscopeIngestResultHandler.downloadJson.blockGraph' }
+              );
+              logger.info({ taskId, effectiveBlockGraphS3Key }, 'Downloaded block_graph JSON from S3');
+            } catch (downloadErr) {
+              logger.error(
+                { err: downloadErr, taskId, effectiveBlockGraphS3Key },
+                'Failed to download block_graph JSON from S3'
+              );
+            }
+          }
+        } else if (isNonBlockMode) {
+          // nonblock 결과: standardized.json 다운로드
+          // Fallback: AI 워커가 standardized_s3_key 대신 block_graph_s3_key 필드에 경로를 담을 수 있음
+          const effectiveNonBlockS3Key = standardizedS3Key ?? blockGraphS3Key;
+          if (!standardizedS3Key && blockGraphS3Key) {
+            logger.warn(
+              { taskId, fallbackKey: blockGraphS3Key },
+              'nonblock mode: standardized_s3_key absent — falling back to block_graph_s3_key for graph download'
             );
-            logger.info({ taskId, standardizedS3Key }, 'Downloaded standardized graph JSON from S3');
-          } catch (downloadErr) {
-            logger.error({ err: downloadErr, taskId, standardizedS3Key }, 'Failed to download graph JSON from S3');
+          }
+          if (effectiveNonBlockS3Key) {
+            try {
+              downloadedGraphData = await withRetry(
+                async () =>
+                  await storagePort.downloadJson<AiMicroscopeIngestResultItem[]>(effectiveNonBlockS3Key, {
+                    bucketType: 'payload',
+                  }),
+                { label: 'MicroscopeIngestResultHandler.downloadJson.graph' }
+              );
+              logger.info({ taskId, effectiveNonBlockS3Key }, 'Downloaded standardized graph JSON from S3');
+            } catch (downloadErr) {
+              logger.error(
+                { err: downloadErr, taskId, effectiveNonBlockS3Key },
+                'Failed to download graph JSON from S3'
+              );
+            }
+          }
+        } else {
+          // 레거시 태스크 (_block/_nonblock 접미사 없음): 기존 동작 완전 유지
+          if (standardizedS3Key) {
+            try {
+              downloadedGraphData = await withRetry(
+                async () =>
+                  await storagePort.downloadJson<AiMicroscopeIngestResultItem[]>(standardizedS3Key, {
+                    bucketType: 'payload',
+                  }),
+                { label: 'MicroscopeIngestResultHandler.downloadJson.graph' }
+              );
+              logger.info({ taskId, standardizedS3Key }, 'Downloaded standardized graph JSON from S3');
+            } catch (downloadErr) {
+              logger.error({ err: downloadErr, taskId, standardizedS3Key }, 'Failed to download graph JSON from S3');
+            }
           }
         }
       }
