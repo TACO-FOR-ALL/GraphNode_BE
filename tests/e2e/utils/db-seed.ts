@@ -275,6 +275,15 @@ export async function seedTestData(): Promise<void> {
         createdAt: new Date(),
         updatedAt: new Date(),
       },
+      {
+        _id: 'note-e2e-partial-fail-001',
+        ownerUserId: TEST_USER_ID,
+        title: 'E2E Partial Fail Note',
+        content: 'This note is used for testing partial failure convergence.',
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
     ] as any);
 
     await Promise.all(
