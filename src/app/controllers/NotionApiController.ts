@@ -28,6 +28,31 @@ export class NotionApiController {
   }
 
   /**
+   * @description GET /notion-api/pages/:pageId
+   * MongoDB 캐시에서 단일 Notion 페이지를 조회합니다.
+   * FE가 그래프 노드 클릭 시 notion 원본 페이지 데이터로 연결할 때 사용합니다.
+   * @param req.params.pageId Notion page UUID
+   */
+  async getPageById(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = (req as any).user?.id;
+      if (!userId) {
+        throw new ValidationError('User ID missing from request');
+      }
+
+      const { pageId } = req.params;
+      if (!pageId) {
+        throw new ValidationError('pageId is required');
+      }
+
+      const page = await this.notionService.getCachedPageById(userId, pageId);
+      res.status(200).json(page);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
    * @description GET /api/notion/blocks/:blockId/children
    * 특정 페이지나 블록의 하위 자식 블록들을 페이지네이션하여 조회합니다.
    */

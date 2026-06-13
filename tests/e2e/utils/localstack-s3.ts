@@ -52,6 +52,8 @@ export interface MacroGraphBundleAssertionInput {
   taskId: string;
   /** bundle `files/`에 복사될 사용자 파일 목록 */
   userFiles: MacroBundleUserFileExpectation[];
+  /** true이면 `notions.json` 존재 여부를 검증합니다. notion_page_caches 시딩 시 사용. */
+  notionEnabled?: boolean;
 }
 
 /**
@@ -108,6 +110,7 @@ export async function assertMacroGraphBundleUploaded(
   const required = [
     `${prefix}input.json`,
     `${prefix}notes.json`,
+    ...(input.notionEnabled ? [`${prefix}notions.json`] : []),
     ...input.userFiles.map((f) => `${prefix}files/${f.id}_${f.displayName}`),
   ];
 

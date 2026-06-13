@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from '@jest/globals';
 
 import { apiClient } from '../utils/api-client';
-import { E2E_MACRO_USER_FILE_SEEDS, seedTestData } from '../utils/db-seed';
+import { E2E_MACRO_USER_FILE_SEEDS, E2E_NOTION_PAGE_SEEDS, seedTestData } from '../utils/db-seed';
 import { assertMacroGraphBundleUploaded } from '../utils/localstack-s3';
 
 /**
@@ -32,6 +32,23 @@ describeBundle('Macro S3 prefix bundle (BE upload)', () => {
         id: f._id,
         displayName: f.displayName,
       })),
+    });
+  });
+
+  // AC-12: notion 페이지 캐시 시딩 후 notions.json 존재 검증
+  it('(AC-12) includes notions.json in bundle when notion_page_caches are seeded', async () => {
+    const response = await apiClient.post('/v1/graph-ai/generate', { includeSummary: false });
+    expect(response.status).toBe(202);
+
+    const taskId = response.data.taskId as string;
+
+    await assertMacroGraphBundleUploaded({
+      taskId,
+      userFiles: E2E_MACRO_USER_FILE_SEEDS.map((f) => ({
+        id: f._id,
+        displayName: f.displayName,
+      })),
+      notionEnabled: E2E_NOTION_PAGE_SEEDS.length > 0,
     });
   });
 });
