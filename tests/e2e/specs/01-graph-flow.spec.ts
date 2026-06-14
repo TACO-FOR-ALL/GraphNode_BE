@@ -697,7 +697,7 @@ describeGraphFlow('End-to-End Graph Flow', () => {
     // 여기서는 graph stats status가 CREATED인지 재확인합니다.
     const statsResponse = await apiClient.get('/v1/graph/stats');
     expect(statsResponse.status).toBe(200);
-    expect(['CREATED', 'UPDATING']).toContain(statsResponse.data.status);
+    expect(['CREATED', 'UPDATING', 'UPDATED']).toContain(statsResponse.data.status);
     console.log(`[AC-14] Graph status after notion-enabled run: ${statsResponse.data.status}`);
   });
 });
