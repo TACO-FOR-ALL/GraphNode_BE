@@ -125,14 +125,19 @@ describeGraphFlow('End-to-End Graph Flow', () => {
           .find({ ownerUserId: userId, deletedAt: null })
           .toArray()
       ).map(toUserFileDoc);
+      const notionPages = await db
+        .collection('notion_page_caches')
+        .find({ ownerUserId: userId, deletedAt: null })
+        .toArray();
       expectedOrigIds = [
         ...conversations.map((c) => c._id.toString()),
         ...notes.map((n) => n._id.toString()),
         ...userFiles.map((f) => f._id),
+        ...notionPages.map((p) => p._id.toString()),
       ];
       expectedCount = expectedOrigIds.length;
       console.log(
-        `Expected nodes: ${expectedCount} (Conversations: ${conversations.length}, Notes: ${notes.length}, UserFiles: ${userFiles.length})`
+        `Expected nodes: ${expectedCount} (Conversations: ${conversations.length}, Notes: ${notes.length}, UserFiles: ${userFiles.length}, NotionPages: ${notionPages.length})`
       );
       console.log(`Expected origIds: ${JSON.stringify([...expectedOrigIds].sort())}`);
     } finally {
@@ -231,6 +236,7 @@ describeGraphFlow('End-to-End Graph Flow', () => {
           try {
             const conversations = await db2.collection('conversations').find({ ownerUserId: userId }).toArray();
             const notes = await db2.collection('notes').find({ ownerUserId: userId, deletedAt: null }).toArray();
+            const notionPages = await db2.collection('notion_page_caches').find({ ownerUserId: userId, deletedAt: null }).toArray();
             seededUserFiles = (
               await db2
                 .collection('user_files')
@@ -275,6 +281,10 @@ describeGraphFlow('End-to-End Graph Flow', () => {
                 expect(typeof metadata.ai_raw_source_type).toBe('string');
                 expect((metadata.ai_raw_source_type as string).length).toBeGreaterThan(0);
               }
+            }
+            for (const p of notionPages) {
+              const node = nodes.find((n) => n.origId === p._id.toString());
+              expect(node?.nodeType).toBe('notion');
             }
           } finally {
             await mongoClient2.close();
