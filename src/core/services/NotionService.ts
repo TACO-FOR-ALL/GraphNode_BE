@@ -3,12 +3,12 @@ import { v4 as uuidv4 } from 'uuid';
 
 import type { NotionIntegrationRepository } from '../ports/NotionIntegrationRepository';
 import type { NotionCacheRepository } from '../ports/NotionCacheRepository';
-import type { NotionBlockTreeNode } from '../types/persistence/notion_cache.persistence';
+import type { NotionBlockTreeNode, NotionPageCacheDoc } from '../types/persistence/notion_cache.persistence';
 import type { NotionIntegrationRecord } from '../types/persistence/notion_integration.persistence';
 import { NotionApiClient } from '../../infra/notion/NotionApiClient';
 import type { NotionBlock, NotionPage, NotionWebhookEvent } from '../../infra/notion/notionApiTypes';
 import { NotionBlockParser } from './notion/NotionBlockParser';
-import { ValidationError } from '../../shared/errors/domain';
+import { NotFoundError, ValidationError } from '../../shared/errors/domain';
 import { logger } from '../../shared/utils/logger';
 
 const PAGE_SYNC_EVENT_TYPES = new Set([
@@ -256,6 +256,22 @@ export class NotionService {
    */
   async findCachedPagesModifiedSince(ownerUserId: string, since: Date) {
     return this.cacheRepo.findPagesModifiedSince(ownerUserId, since);
+  }
+
+  /**
+   * @description MongoDB notion_page_caches에서 단일 페이지를 조회합니다.
+   * FE가 그래프 노드 클릭 시 notion 원본 페이지 데이터를 가져올 때 사용합니다.
+   * @param userId 사용자 ID
+   * @param pageId Notion page UUID (_id 필드와 동일)
+   * @returns 캐시된 Notion 페이지 문서
+   * @throws {NotFoundError} 해당 userId·pageId 조합의 캐시 문서가 없을 때
+   */
+  async getCachedPageById(userId: string, pageId: string): Promise<NotionPageCacheDoc> {
+    const doc = await this.cacheRepo.findByPageId(pageId, userId);
+    if (!doc) {
+      throw new NotFoundError(`Notion page not found in cache: pageId=${pageId}`);
+    }
+    return doc;
   }
 
   /**

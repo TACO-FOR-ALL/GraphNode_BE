@@ -8,6 +8,7 @@ export function createNotionApiRouter(controller: NotionApiController): Router {
   const router = Router();
 
   router.get('/pages', controller.getRootPages.bind(controller));
+  router.get('/pages/:pageId', controller.getPageById.bind(controller));
   router.get('/blocks/:blockId/children', controller.getBlockChildren.bind(controller));
 
   return router;

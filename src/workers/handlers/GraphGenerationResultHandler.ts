@@ -217,14 +217,20 @@ export class GraphGenerationResultHandler implements JobHandler {
         };
 
         // 2. 정규화된 origId 목록으로 실제 DB sourceType을 판별한다.
+        const notionCacheRepo = container.getNotionCacheRepository();
         const sourceTypeResult: BatchResolvedSourceTypeResult = await resolveSourceTypesByOrigIds(
           this.collectGraphOrigIds(augmentedGraphOutputResult.normalizedAiGraphOutput),
           userId,
-          { conversationService, noteService, userFileService }
+          { conversationService, noteService, userFileService, notionCacheRepo }
         );
 
-        // 3. sourceType을 끝내 판별하지 못한 origId가 있으면 저장하지 않는다.
-        this.throwIfSourceTypeUnresolved(taskId, userId, sourceTypeResult.unresolvedOrigIds);
+        // 3. sourceType을 끝내 판별하지 못한 origId가 있으면 warn 후 해당 노드만 skip한다.
+        //    (notion 캐시 미존재 등 일시적 미판별 시 전체 그래프 실패 방지)
+        const skippedOrigIds = this.warnAndCollectUnresolved(taskId, userId, sourceTypeResult.unresolvedOrigIds);
+        augmentedGraphOutputResult.normalizedAiGraphOutput = this.removeSkippedNodes(
+          augmentedGraphOutputResult.normalizedAiGraphOutput,
+          skippedOrigIds
+        );
 
         // 4. graph JSON의 각 node에 DB 기준 sourceType을 덮어쓴다.
         const sourceTypeResolvedGraphOutput: AiGraphOutputDto =
@@ -559,32 +565,60 @@ export class GraphGenerationResultHandler implements JobHandler {
   }
 
   /**
-   * sourceType이 해결되지 않은 경우 에러를 발생시킵니다.
+   * @description sourceType을 판별하지 못한 origId를 warn 로그 후 skip 대상으로 반환합니다.
+   * 기존에 `throwIfSourceTypeUnresolved`가 전체 그래프 실패를 유발했으나,
+   * notion 캐시 미존재 등 일시적 미판별 케이스를 위해 warn+skip으로 완화합니다.
+   *
    * @param taskId 태스크 ID
    * @param userId 사용자 ID
-   * @param unresolvedOrigIds 해결되지 않은 orig_id 배열
+   * @param unresolvedOrigIds 판별되지 않은 orig_id 배열
+   * @returns skip 처리할 normalizedOrigId 집합
    */
-  private throwIfSourceTypeUnresolved(
+  private warnAndCollectUnresolved(
     taskId: string,
     userId: string,
     unresolvedOrigIds: string[]
-  ): void {
+  ): Set<string> {
     if (unresolvedOrigIds.length === 0) {
-      return;
+      return new Set();
     }
 
-    logger.error(
-      {
-        taskId,
-        userId,
-        unresolvedOrigIds,
-      },
-      'Failed to resolve sourceType for graph-generation nodes from DB'
+    logger.warn(
+      { taskId, userId, unresolvedOrigIds },
+      'Could not resolve sourceType for some graph-generation nodes — skipping affected nodes'
     );
 
-    throw new Error(
-      `Unable to resolve sourceType for graph-generation origIds: ${unresolvedOrigIds.join(', ')}`
+    return new Set(unresolvedOrigIds);
+  }
+
+  /**
+   * @description skip 대상 origId를 가진 노드와 연결된 엣지를 그래프에서 제거합니다.
+   * @param aiGraphOutput 정규화된 AI 그래프 출력
+   * @param skippedOrigIds skip 처리할 normalizedOrigId 집합
+   * @returns 해당 노드·엣지가 제거된 그래프 출력
+   */
+  private removeSkippedNodes(
+    aiGraphOutput: AiGraphOutputDto,
+    skippedOrigIds: Set<string>
+  ): AiGraphOutputDto {
+    if (skippedOrigIds.size === 0) {
+      return aiGraphOutput;
+    }
+
+    const skippedNodeIds = new Set<number>();
+    const filteredNodes = aiGraphOutput.nodes.filter((node) => {
+      if (skippedOrigIds.has(node.orig_id)) {
+        skippedNodeIds.add(node.id);
+        return false;
+      }
+      return true;
+    });
+
+    const filteredEdges = aiGraphOutput.edges.filter(
+      (edge) => !skippedNodeIds.has(edge.source) && !skippedNodeIds.has(edge.target)
     );
+
+    return { ...aiGraphOutput, nodes: filteredNodes, edges: filteredEdges };
   }
 
   /**
@@ -605,9 +639,12 @@ export class GraphGenerationResultHandler implements JobHandler {
     for (const node of aiGraphOutput.nodes) {
       const resolvedSourceType = sourceTypesByOrigId.get(node.orig_id);
       if (!resolvedSourceType) {
-        throw new Error(
-          `Missing resolved sourceType for graph-generation node origId=${node.orig_id}`
+        // removeSkippedNodes 이후에도 미판별 노드가 진입하면 방어적으로 skip합니다.
+        logger.warn(
+          { origId: node.orig_id },
+          'Skipping node with unresolved sourceType in applyResolvedSourceTypes'
         );
+        continue;
       }
 
       const hint = userFileHintsByOrigId.get(node.orig_id);
@@ -748,6 +785,10 @@ export class GraphGenerationResultHandler implements JobHandler {
         resolvedFileCount: this.countResolvedSourceTypes(
           sourceTypeResult.sourceTypesByOrigId,
           'file'
+        ),
+        resolvedNotionCount: this.countResolvedSourceTypes(
+          sourceTypeResult.sourceTypesByOrigId,
+          'notion'
         ),
         sampleNodeIds,
       },

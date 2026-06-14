@@ -101,7 +101,8 @@ export interface AiGraphEdgeOutput {
   source: number;
   target: number;
   weight: number;
-  type: 'hard' | 'insight';
+  /** AI가 반환하는 엣지 관계 유형. 'semantic'은 notion 노드 통합 이후 추가된 유형입니다. */
+  type: 'hard' | 'insight' | 'semantic';
   is_intra_cluster: boolean;
   confidence?: string | number;
 }
@@ -121,6 +122,8 @@ export interface AiGraphSubclusterOutput {
   size: number;
   density: number;
   top_keywords: string[];
+  /** 서브클러스터의 인간 가독형 이름. AI가 notion 통합 시 추가한 옵셔널 필드입니다. */
+  name?: string;
 }
 
 export interface AiGraphOutputDto {
