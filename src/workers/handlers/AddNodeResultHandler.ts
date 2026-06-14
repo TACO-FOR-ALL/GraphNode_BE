@@ -156,6 +156,8 @@ export class AddNodeResultHandler implements JobHandler {
 
       // sourceType resolve
       // 3. 실제 DB를 조회해 origId별 sourceType을 판별한다.
+      // AddNode는 아직 notion을 지원하지 않으므로 notionCacheRepo는 항상 null 반환 stub 사용.
+      const notionCacheRepo = container.getNotionCacheRepository();
       const sourceTypeResult: BatchResolvedSourceTypeResult = await resolveSourceTypesByOrigIds(
         normalizedOrigIds,
         userId,
@@ -163,6 +165,7 @@ export class AddNodeResultHandler implements JobHandler {
           conversationService,
           noteService,
           userFileService,
+          notionCacheRepo,
         }
       );
 
