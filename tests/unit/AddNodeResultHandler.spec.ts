@@ -90,6 +90,7 @@ describe('AddNodeResultHandler', () => {
       getConversationService: jest.fn(() => ({ findDocById: jest.fn(async () => null) })),
       getNoteService: jest.fn(() => ({ getNoteDoc: jest.fn(async () => null) })),
       getUserFileService: jest.fn(() => ({ getActiveUserFileById: jest.fn(async () => ({ _id: 'uf-1' })) })),
+      getNotionCacheRepository: jest.fn(() => ({ findByPageId: jest.fn(async () => null) })),
       getCreditService: jest.fn(() => ({
         commitByTaskId: jest.fn(async () => undefined),
         rollbackByTaskId: jest.fn(async () => undefined),

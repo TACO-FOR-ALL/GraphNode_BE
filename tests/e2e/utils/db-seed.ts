@@ -19,6 +19,41 @@ applyE2eHostEnvForSeed();
 const MONGO_URI = process.env.MONGODB_URI!;
 export const TEST_USER_ID = 'user-12345';
 
+/** E2E notion_page_caches 시딩용 타입. NotionPageCacheDoc의 E2E 경량 버전입니다. */
+export interface E2eNotionPageSeed {
+  _id: string;
+  ownerUserId: string;
+  integrationId: string;
+  notionWorkspaceId: string;
+  title: string;
+  blockTree: unknown[];
+  plainText: string;
+  notionLastEditedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  isStale: boolean;
+}
+
+/**
+ * E2E Macro Graph notion 경로 검증에 사용하는 fake notion_page_caches 시드.
+ * _id는 AI output_data의 notion orig_id(src1_<UUID> → <UUID>) 와 일치해야 합니다.
+ */
+export const E2E_NOTION_PAGE_SEEDS: E2eNotionPageSeed[] = [
+  {
+    _id: '2076ca0e-0c92-8028-a83d-c50624d1c76f',
+    ownerUserId: TEST_USER_ID,
+    integrationId: 'test-integration-id',
+    notionWorkspaceId: 'test-workspace-id',
+    title: 'E2E Test Notion Page — 복소해석학',
+    blockTree: [],
+    plainText: 'This is a test Notion page for E2E macro graph generation with notion source.',
+    notionLastEditedAt: new Date(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    isStale: false,
+  },
+];
+
 /** E2E Macro bundle·Neo4j 검증에 사용하는 mock user_files 정의 */
 export const E2E_MACRO_USER_FILE_SEEDS = [
   {
@@ -203,6 +238,7 @@ export async function seedTestData(): Promise<void> {
       db.collection('graph_stats').deleteMany({ userId: TEST_USER_ID }),
       db.collection('graph_summaries').deleteMany({ userId: TEST_USER_ID }),
       db.collection('user_files').deleteMany({ ownerUserId: TEST_USER_ID }),
+      db.collection('notion_page_caches').deleteMany({ ownerUserId: TEST_USER_ID }),
     ]);
 
     const convId = 'conv-e2e-123';
@@ -289,6 +325,11 @@ export async function seedTestData(): Promise<void> {
     await Promise.all(
       E2E_MACRO_USER_FILE_SEEDS.map((fileSeed) => seedUserFileRecord(db, fileSeed, nowTimestamp))
     );
+
+    if (E2E_NOTION_PAGE_SEEDS.length > 0) {
+      await db.collection('notion_page_caches').insertMany(E2E_NOTION_PAGE_SEEDS as any[]);
+      console.log(`[E2E Seed] notion_page_caches seeded (${E2E_NOTION_PAGE_SEEDS.length} pages).`);
+    }
 
     console.log(
       `MongoDB data seeded (${E2E_MACRO_USER_FILE_SEEDS.length} user_files: pdf, docx, pptx, unknown.xyz).`

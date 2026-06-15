@@ -22,6 +22,16 @@ awslocal_in_container sqs create-queue --queue-name taco-graphnode-request-graph
 awslocal_in_container sqs create-queue --queue-name taco-graphnode-response-graph-sqs --region "$REGION" >/dev/null
 awslocal_in_container sqs create-queue --queue-name taco-graphnode-import-sqs --region "$REGION" >/dev/null
 
+IMPORT_BUCKET=taco5-graphnode-filedata-chat-and-note-s3
+CORS_FILE="$(cd "$(dirname "$0")" && pwd)/localstack-init/s3-import-cors.json"
+if [[ -f "$CORS_FILE" ]]; then
+  echo "==> Applying S3 CORS on s3://$IMPORT_BUCKET (FE presigned PUT)"
+  docker cp "$CORS_FILE" "$CONTAINER:/tmp/s3-import-cors.json"
+  awslocal_in_container s3api put-bucket-cors \
+    --bucket "$IMPORT_BUCKET" \
+    --cors-configuration "file:///tmp/s3-import-cors.json"
+fi
+
 echo "==> LocalStack resources ready"
 awslocal_in_container s3 ls --region "$REGION"
 awslocal_in_container sqs list-queues --region "$REGION"
