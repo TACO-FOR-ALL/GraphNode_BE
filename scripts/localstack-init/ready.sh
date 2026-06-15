@@ -15,6 +15,27 @@ echo "----------- Initializing LocalStack Resources -----------" | tee /tmp/loca
 awslocal s3 mb s3://taco5-graphnode-graphdata-s3 --region ap-northeast-2
 awslocal s3 mb s3://taco5-graphnode-filedata-chat-and-note-s3 --region ap-northeast-2
 
+# 1b. S3 CORS — browser PUT from Vite dev server (localhost:5173)
+cat > /tmp/s3-import-cors.json <<'EOF'
+{
+  "CORSRules": [
+    {
+      "AllowedHeaders": ["*"],
+      "AllowedMethods": ["PUT", "GET", "HEAD"],
+      "AllowedOrigins": [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173"
+      ],
+      "ExposeHeaders": ["ETag"],
+      "MaxAgeSeconds": 3000
+    }
+  ]
+}
+EOF
+awslocal s3api put-bucket-cors \
+  --bucket taco5-graphnode-filedata-chat-and-note-s3 \
+  --cors-configuration file:///tmp/s3-import-cors.json
+
 # 2. SQS Queues
 awslocal sqs create-queue --queue-name taco-graphnode-request-graph-sqs --region ap-northeast-2
 awslocal sqs create-queue --queue-name taco-graphnode-response-graph-sqs --region ap-northeast-2
