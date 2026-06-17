@@ -153,6 +153,7 @@ export class GraphEditorService {
         sourceType: dto.sourceType,
         timestamp: dto.timestamp ?? null,
         numMessages: dto.numMessages ?? 0,
+        nodeTitle: dto.nodeTitle,
         createdAt: now,
         updatedAt: now,
       };
@@ -198,6 +199,7 @@ export class GraphEditorService {
         ...(dto.sourceType !== undefined ? { sourceType: dto.sourceType } : {}),
         ...(dto.timestamp !== undefined ? { timestamp: dto.timestamp } : {}),
         ...(dto.numMessages !== undefined ? { numMessages: dto.numMessages } : {}),
+        ...(dto.nodeTitle !== undefined ? { nodeTitle: dto.nodeTitle } : {}),
         updatedAt: now,
       };
 
@@ -282,7 +284,7 @@ export class GraphEditorService {
         userId,
         source: dto.source,
         target: dto.target,
-        weight: dto.weight ?? 0.5,
+        weight: 1.0, // PM 임시 정책: 사용자 생성 Edge는 항상 1.0 고정 (dto.weight 무시)
         type: 'insight',
         relationType: normalizedRelationType,
         relation: dto.relation,
