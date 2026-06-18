@@ -332,7 +332,7 @@ export interface Neo4jMacroStatsNode {
  */
 export type Neo4jMacroSummaryOverview = Omit<
   OverviewSection,
-  'total_source_nodes' | 'total_conversations' | 'total_notes' | 'total_notions'
+  'total_source_nodes' | 'total_conversations' | 'total_notes' | 'total_notions' | 'total_files'
 >;
 
 /**

@@ -1221,12 +1221,14 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
       let totalConversations = 0;
       let totalNotes = 0;
       let totalNotions = 0;
+      let totalFiles = 0;
       if (countsRecords.length > 0) {
         const cr = countsRecords[0] as { get(key: string): unknown };
         totalSourceNodes = toJsNumber(cr.get('totalSourceNodes'));
         totalConversations = toJsNumber(cr.get('totalConversations'));
         totalNotes = toJsNumber(cr.get('totalNotes'));
         totalNotions = toJsNumber(cr.get('totalNotions'));
+        totalFiles = toJsNumber(cr.get('totalFiles'));
       }
 
       const clusterSizesResult = await runner.run(MACRO_GRAPH_CYPHER.getSummaryClusterSizes, {
@@ -1245,6 +1247,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
         totalConversations,
         totalNotes,
         totalNotions,
+        totalFiles,
         clusterSizes,
       };
 

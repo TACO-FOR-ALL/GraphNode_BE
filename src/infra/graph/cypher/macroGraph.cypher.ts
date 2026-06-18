@@ -918,7 +918,8 @@ export const MACRO_GRAPH_CYPHER = {
     RETURN count(DISTINCT n)                                                            AS totalSourceNodes,
            sum(CASE WHEN n.nodeType = 'conversation' THEN 1 ELSE 0 END)                AS totalConversations,
            sum(CASE WHEN n.nodeType = 'note'         THEN 1 ELSE 0 END)                AS totalNotes,
-           sum(CASE WHEN n.nodeType = 'notion'       THEN 1 ELSE 0 END)                AS totalNotions
+           sum(CASE WHEN n.nodeType = 'notion'       THEN 1 ELSE 0 END)                AS totalNotions,
+           sum(CASE WHEN n.nodeType = 'file'         THEN 1 ELSE 0 END)                AS totalFiles
   `,
 
   /**

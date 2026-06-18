@@ -625,24 +625,13 @@ export class GraphEmbeddingService {
   /**
    * 그래프 요약/인사이트 조회 (Delegation)
    *
+   * Neo4j 집계 결과를 단일 진실 소스로 사용합니다.
+   * nodeType별 count(conversations, notes, notions, files)는 getSummaryNodeCounts Cypher로 집계됩니다.
+   *
    * @param userId 사용자 Id
    */
   async getGraphSummary(userId: string) {
-    const summary = await this.graphManagementService.getGraphSummary(userId);
-
-    const [conversationCount, noteCount] = await Promise.all([
-      this.conversationService?.countConversations(userId) ?? Promise.resolve(0),
-      this.noteService?.countNotes(userId) ?? Promise.resolve(0),
-    ]);
-
-    return {
-      ...summary,
-      overview: {
-        ...summary.overview,
-        total_conversations: conversationCount,
-        total_notes: noteCount,
-      },
-    };
+    return this.graphManagementService.getGraphSummary(userId);
   }
   /**
    * 그래프 요약/인사이트 삭제 (Delegation)

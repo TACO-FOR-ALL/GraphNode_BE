@@ -214,23 +214,25 @@ describe('GraphEmbeddingService', () => {
       expect(mockGraphService.upsertGraphSummary).toHaveBeenCalledWith('u1', summary);
     });
 
-    it('getGraphSummary merges live counts into summary overview', async () => {
-      mockGraphService.getGraphSummary.mockResolvedValue({
+    it('getGraphSummary delegates to graphManagementService without calling MongoDB services', async () => {
+      const neo4jSummary: any = {
         overview: {
-          total_conversations: 0,
-          total_notes: 0,
+          total_conversations: 5,
+          total_notes: 3,
+          total_notions: 1,
+          total_files: 2,
         },
-      } as any);
-      mockConversationService.countConversations.mockResolvedValue(7 as never);
-      mockNoteService.countNotes.mockResolvedValue(3 as never);
+      };
+      mockGraphService.getGraphSummary.mockResolvedValue(neo4jSummary);
 
       const result = await service.getGraphSummary('u1');
 
       expect(mockGraphService.getGraphSummary).toHaveBeenCalledWith('u1');
-      expect(mockConversationService.countConversations).toHaveBeenCalledWith('u1');
-      expect(mockNoteService.countNotes).toHaveBeenCalledWith('u1');
-      expect(result.overview.total_conversations).toBe(7);
+      expect(mockConversationService.countConversations).not.toHaveBeenCalled();
+      expect(mockNoteService.countNotes).not.toHaveBeenCalled();
+      expect(result.overview.total_conversations).toBe(5);
       expect(result.overview.total_notes).toBe(3);
+      expect(result.overview.total_files).toBe(2);
     });
   });
 

@@ -62,6 +62,7 @@ describe('macroGraph.cypher', () => {
       'clusterHasNodes',
       'pruneIncompatibleSubclusterMemberships',
       'reconcileSubclusterMemberships',
+      'getSummaryNodeCounts',
     ] as const;
 
     for (const key of requiredKeys) {
@@ -109,6 +110,12 @@ describe('macroGraph.cypher', () => {
       const q = MACRO_GRAPH_CYPHER.upsertRelations;
       expect(q).not.toMatch(/\.source\s*=/);
       expect(q).not.toMatch(/\.target\s*=/);
+    });
+
+    it('getSummaryNodeCounts: totalFiles 컬럼을 포함한다', () => {
+      const q = MACRO_GRAPH_CYPHER.getSummaryNodeCounts;
+      expect(q).toMatch(/totalFiles/);
+      expect(q).toMatch(/nodeType\s*=\s*'file'/);
     });
 
     it('getStats: nodes/edges/clusters를 property가 아닌 count 집계로 조회한다', () => {

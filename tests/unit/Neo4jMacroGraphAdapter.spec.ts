@@ -423,6 +423,66 @@ describe('Neo4jMacroGraphAdapter', () => {
     });
   });
 
+  describe('getGraphSummary', () => {
+    it('getSummaryNodeCounts에서 totalFiles를 포함한 aggregateContext를 구성하고 hydrate한다', async () => {
+      const overviewJson = JSON.stringify({
+        time_span: '2026-01',
+        primary_interests: [],
+        conversation_style: 'analytical',
+        most_active_period: 'morning',
+        summary_text: 'Test summary',
+      });
+
+      const summaryRecord = {
+        get: jest.fn().mockImplementation((key: string) => {
+          if (key === 'sm') return { properties: { id: 'user1', userId: 'user1', overviewJson, clustersJson: '[]', patternsJson: '[]', connectionsJson: '[]', recommendationsJson: '[]', generatedAt: '2026-01-01T00:00:00.000Z', detailLevel: 'standard' } };
+          return null;
+        }),
+      };
+      const countsRecord = {
+        get: jest.fn().mockImplementation((key: string) => {
+          if (key === 'totalSourceNodes') return { toNumber: () => 10 };
+          if (key === 'totalConversations') return { toNumber: () => 4 };
+          if (key === 'totalNotes') return { toNumber: () => 3 };
+          if (key === 'totalNotions') return { toNumber: () => 1 };
+          if (key === 'totalFiles') return { toNumber: () => 2 };
+          return null;
+        }),
+      };
+      const clusterSizesRecord = {
+        get: jest.fn().mockImplementation((key: string) => {
+          if (key === 'clusterId') return 'c1';
+          if (key === 'size') return { toNumber: () => 5 };
+          return null;
+        }),
+      };
+
+      const tx = {
+        run: jest.fn().mockImplementation((query: string) => {
+          if (query.includes('HAS_SUMMARY')) return Promise.resolve({ records: [summaryRecord] });
+          if (query.includes('totalSourceNodes')) return Promise.resolve({ records: [countsRecord] });
+          if (query.includes('HAS_CLUSTER') && query.includes('clusterId')) return Promise.resolve({ records: [clusterSizesRecord] });
+          return Promise.resolve({ records: [] });
+        }),
+      };
+      const session = {
+        executeRead: jest.fn().mockImplementation(async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx)),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      const driver = { session: jest.fn().mockReturnValue(session) };
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      const result = await adapter.getGraphSummary('user1');
+
+      expect(result).not.toBeNull();
+      expect(result!.overview.total_conversations).toBe(4);
+      expect(result!.overview.total_notes).toBe(3);
+      expect(result!.overview.total_notions).toBe(1);
+      expect(result!.overview.total_files).toBe(2);
+    });
+  });
+
   describe('deleteGraphSummary', () => {
     it('write session에서 deleteGraphSummary Cypher를 실행한다', async () => {
       const tx = makeMockTx();

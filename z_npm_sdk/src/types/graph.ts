@@ -227,6 +227,8 @@ export interface GraphSummaryDto {
     total_conversations: number;
     total_notes: number;
     total_notions: number;
+    /** Macro graph 파일 노드 수 (Neo4j 집계) */
+    total_files?: number;
     time_span: string;
     primary_interests: string[];
     conversation_style: string;
