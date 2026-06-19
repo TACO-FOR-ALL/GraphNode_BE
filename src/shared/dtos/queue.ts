@@ -170,6 +170,7 @@ export interface AddNodeRequestPayload extends BaseQueueMessage {
   taskType: TaskType.ADD_NODE_REQUEST;
   payload: {
     userId: string;
+    macroId?: string;
     /** Bundle: `add-node/{taskId}/` — `batch.json` + `files/{fileId}_{displayName}` */
     s3Key: string;
     bucket?: string;

@@ -160,9 +160,10 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     return userId;
   }
 
-  private requireMacroId(options?: MacroGraphStoreOptions): string {
-    if (!options?.macroId) throw new Error('macroId required in MacroGraphStoreOptions');
-    return options.macroId;
+  private requireMacroId(options?: MacroGraphStoreOptions, userId?: string): string {
+    const macroId = options?.macroId ?? userId;
+    if (!macroId) throw new Error('macroId required in MacroGraphStoreOptions');
+    return macroId;
   }
 
   /**
@@ -228,7 +229,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
    * @returns Neo4j read query에 전달할 공통 파라미터입니다.
    */
   private readParams(userId: string, options?: MacroGraphStoreOptions): Record<string, unknown> {
-    return { userId, macroId: this.requireMacroId(options), includeDeleted: options?.includeDeleted ?? false };
+    return { userId, macroId: options?.macroId ?? userId, includeDeleted: options?.includeDeleted ?? false };
   }
 
   /**
@@ -479,7 +480,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   async upsertNodes(nodes: GraphNodeDto[], options?: MacroGraphStoreOptions): Promise<void> {
     if (nodes.length === 0) return;
     const userId = this.requireUserId(nodes[0].userId);
-    const macroId = this.requireMacroId(options);
+    const macroId = this.requireMacroId(options, userId);
     const nodeDocs = nodes.map(toGraphNodeDoc);
 
     await this.runWrite(async (runner) => {
@@ -569,7 +570,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   async upsertEdges(edges: GraphEdgeDto[], options?: MacroGraphStoreOptions): Promise<void> {
     if (edges.length === 0) return;
     const userId = this.requireUserId(edges[0].userId);
-    const macroId = this.requireMacroId(options);
+    const macroId = this.requireMacroId(options, userId);
     const edgeDocs = edges.map(toGraphEdgeDoc);
 
     await this.runWrite(async (runner) => {
@@ -629,7 +630,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   ): Promise<void> {
     if (clusters.length === 0) return;
     const userId = this.requireUserId(clusters[0].userId);
-    const macroId = this.requireMacroId(options);
+    const macroId = this.requireMacroId(options, userId);
     const clusterDocs = clusters.map(toGraphClusterDoc);
 
     await this.runWrite(async (runner) => {
@@ -671,7 +672,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   ): Promise<void> {
     if (subclusters.length === 0) return;
     const userId = this.requireUserId(subclusters[0].userId);
-    const macroId = this.requireMacroId(options);
+    const macroId = this.requireMacroId(options, userId);
     const subclusterDocs = subclusters.map((subcluster) =>
       toGraphSubclusterDoc({ ...subcluster, userId: subcluster.userId ?? userId })
     );
@@ -728,7 +729,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   }
   async saveStats(stats: GraphStatsDto, options?: MacroGraphStoreOptions): Promise<void> {
     const { userId } = stats;
-    const macroId = this.requireMacroId(options);
+    const macroId = this.requireMacroId(options, userId);
     const statsNeo4j = toNeo4jMacroStats(toGraphStatsDoc(stats));
 
     await this.runWrite(async (runner) => {
@@ -759,7 +760,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     options?: MacroGraphStoreOptions
   ): Promise<boolean> {
     const { userId } = stats;
-    const macroId = this.requireMacroId(options);
+    const macroId = this.requireMacroId(options, userId);
     const statsNeo4j = toNeo4jMacroStats(toGraphStatsDoc(stats));
 
     let applied = false;
@@ -793,7 +794,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     summary: GraphSummaryDoc,
     options?: MacroGraphStoreOptions
   ): Promise<void> {
-    const macroId = this.requireMacroId(options);
+    const macroId = this.requireMacroId(options, userId);
     const summaryNeo4j = toNeo4jMacroSummary(summary);
 
     await this.runWrite(async (runner) => {
@@ -885,7 +886,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     id: number,
     options?: MacroGraphStoreOptions
   ): Promise<GraphNodeDto | null> {
-    const macroId = this.requireMacroId(options);
+    const macroId = this.requireMacroId(options, userId);
     return this.runRead(async (runner) => {
       const result = await runner.run(MACRO_GRAPH_CYPHER.findNode, {
         ...this.readParams(userId, options),
@@ -912,7 +913,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     options?: MacroGraphStoreOptions
   ): Promise<GraphNodeDto[]> {
     if (origIds.length === 0) return [];
-    const macroId = this.requireMacroId(options);
+    const macroId = this.requireMacroId(options, userId);
 
     return this.runRead(async (runner) => {
       const result = await runner.run(MACRO_GRAPH_CYPHER.findNodesByOrigIds, {
@@ -935,7 +936,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   }
 
   async listNodes(userId: string, options?: MacroGraphStoreOptions): Promise<GraphNodeDto[]> {
-    const macroId = this.requireMacroId(options);
+    const macroId = this.requireMacroId(options, userId);
     return this.runRead(async (runner) => {
       const result = await runner.run(
         MACRO_GRAPH_CYPHER.listNodes,
@@ -961,7 +962,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     clusterId: string,
     options?: MacroGraphStoreOptions
   ): Promise<GraphNodeDto[]> {
-    const macroId = this.requireMacroId(options);
+    const macroId = this.requireMacroId(options, userId);
     return this.runRead(async (runner) => {
       const result = await runner.run(MACRO_GRAPH_CYPHER.listNodesByCluster, {
         ...this.readParams(userId, options),
@@ -1609,7 +1610,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     _permanent = true,
     options?: MacroGraphStoreOptions
   ): Promise<void> {
-    const macroId = this.requireMacroId(options);
+    const macroId = this.requireMacroId(options, userId);
     await this.runWrite(async (runner) => {
       await runner.run(MACRO_GRAPH_CYPHER.deleteStats, { userId, macroId });
     }, options);
@@ -1624,7 +1625,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
    * @param options 외부 transaction을 포함할 수 있는 adapter 옵션입니다.
    */
   async deleteGraph(userId: string, options?: MacroGraphStoreOptions): Promise<void> {
-    const macroId = this.requireMacroId(options);
+    const macroId = this.requireMacroId(options, userId);
     const tx = options?.transaction as ManagedTransaction | undefined;
 
     // 1. 외부에서 명시적 트랜잭션(tx)이 주입된 경우
@@ -1671,7 +1672,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     options?: MacroGraphStoreOptions
   ): Promise<GraphRagNeighborResult[]> {
     if (seedOrigIds.length === 0) return [];
-    const macroId = this.requireMacroId(options);
+    const macroId = this.requireMacroId(options, userId);
 
     const params = { userId, macroId, seedOrigIds, limit: neo4j.int(limit) };
     const buildResults = (
@@ -1758,7 +1759,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     _permanent?: boolean,
     options?: MacroGraphStoreOptions
   ): Promise<void> {
-    const macroId = this.requireMacroId(options);
+    const macroId = this.requireMacroId(options, userId);
     await this.runWrite(async (runner) => {
       await runner.run(MACRO_GRAPH_CYPHER.deleteGraphSummary, { userId, macroId });
     }, options);
@@ -1784,7 +1785,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     options?: MacroGraphStoreOptions
   ): Promise<GraphRagClusterSiblingResult[]> {
     if (seedOrigIds.length === 0) return [];
-    const macroId = this.requireMacroId(options);
+    const macroId = this.requireMacroId(options, userId);
 
     const params = { userId, macroId, seedOrigIds, excludeOrigIds, limit: neo4j.int(limit) };
 
@@ -2126,7 +2127,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
    * @param options transaction 등 adapter 전용 옵션
    */
   async removeEmptyClusters(userId: string, options?: MacroGraphStoreOptions): Promise<void> {
-    const macroId = this.requireMacroId(options);
+    const macroId = this.requireMacroId(options, userId);
     await this.runWrite(async (runner) => {
       await runner.run(MACRO_GRAPH_CYPHER.cleanupEmptyClusters, { userId, macroId });
     }, options);
@@ -2142,7 +2143,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
    * @param options transaction 등 adapter 전용 옵션
    */
   async deduplicateBelongsTo(userId: string, options?: MacroGraphStoreOptions): Promise<void> {
-    const macroId = this.requireMacroId(options);
+    const macroId = this.requireMacroId(options, userId);
     await this.runWrite(async (runner) => {
       await runner.run(MACRO_GRAPH_CYPHER.deduplicateBelongsTo, { userId, macroId });
     }, options);
@@ -2163,7 +2164,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
         ? Math.max(0, Math.floor(limit))
         : 10000;
 
-    const macroId = this.requireMacroId(options);
+    const macroId = this.requireMacroId(options, userId);
     return this.runWrite(async (runner) => {
       const result = await runner.run(MACRO_GRAPH_CYPHER.pruneIncompatibleSubclusterMemberships, {
         userId,
@@ -2188,7 +2189,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     userId: string,
     options?: MacroGraphStoreOptions
   ): Promise<ReconcileSubclusterMembershipsResult> {
-    const macroId = this.requireMacroId(options);
+    const macroId = this.requireMacroId(options, userId);
     return this.runWrite(async (runner) => {
       const result = await runner.run(MACRO_GRAPH_CYPHER.reconcileSubclusterMemberships, {
         userId,
@@ -2222,7 +2223,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     userId: string,
     options?: MacroGraphStoreOptions
   ): Promise<{ duplicateNodeCount: number; excessRelCount: number }> {
-    const macroId = this.requireMacroId(options);
+    const macroId = this.requireMacroId(options, userId);
     return this.runRead(async (runner) => {
       const result = await runner.run(MACRO_GRAPH_CYPHER.countDuplicateBelongsTo, { userId, macroId });
       const records = result.records as unknown[];
@@ -2251,10 +2252,16 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     options?: MacroGraphStoreOptions
   ): Promise<void> {
     const now = new Date().toISOString();
-    // CALL {} IN TRANSACTIONS은 auto-commit session이 필요하므로 독립 세션 사용
+    const params = { userId, sourceMacroId, newMacroId, now };
+    // CALL {} IN TRANSACTIONS은 auto-commit session이 필요하므로 독립 세션 사용.
+    // MERGE(write) + CALL IN TRANSACTIONS는 동일 statement에서 지원 안 됨 → 5개 session.run()으로 분리.
     const session = this.getDriver().session({ defaultAccessMode: neo4j.session.WRITE });
     try {
-      await session.run(MACRO_GRAPH_CYPHER.cloneMacroGraph, { userId, sourceMacroId, newMacroId, now });
+      await session.run(MACRO_GRAPH_CYPHER.cloneMacroGraphRoot, params);
+      await session.run(MACRO_GRAPH_CYPHER.cloneMacroGraphNodes, params);
+      await session.run(MACRO_GRAPH_CYPHER.cloneMacroGraphClusters, params);
+      await session.run(MACRO_GRAPH_CYPHER.cloneMacroGraphRelations, params);
+      await session.run(MACRO_GRAPH_CYPHER.cloneMacroGraphSubclusters, params);
     } finally {
       await session.close();
     }

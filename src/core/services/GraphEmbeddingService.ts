@@ -601,10 +601,10 @@ export class GraphEmbeddingService {
    *
    * @param userId
    */
-  async deleteGraph(userId: string, permanent?: boolean) {
+  async deleteGraph(userId: string, permanent?: boolean, macroId?: string) {
     await this.runGraphWriteTransaction(
       'GraphEmbeddingService.deleteGraph.transaction',
-      (options) => this.graphManagementService.deleteGraph(userId, permanent, options)
+      (options) => this.graphManagementService.deleteGraph(userId, permanent, { ...options, macroId })
     );
   }
 
@@ -632,8 +632,8 @@ export class GraphEmbeddingService {
    *
    * @param userId 사용자 Id
    */
-  async getGraphSummary(userId: string) {
-    return this.graphManagementService.getGraphSummary(userId);
+  async getGraphSummary(userId: string, macroId?: string) {
+    return this.graphManagementService.getGraphSummary(userId, { macroId });
   }
   /**
    * 그래프 요약/인사이트 삭제 (Delegation)
@@ -641,8 +641,8 @@ export class GraphEmbeddingService {
    * @param userId 사용자 Id
    * @param permanent 영구 삭제 여부
    */
-  async deleteGraphSummary(userId: string, permanent?: boolean) {
-    return this.graphManagementService.deleteGraphSummary(userId, permanent);
+  async deleteGraphSummary(userId: string, permanent?: boolean, macroId?: string) {
+    return this.graphManagementService.deleteGraphSummary(userId, permanent, { macroId });
   }
   /**
    * 그래프 요약/인사이트 복원 (Delegation)

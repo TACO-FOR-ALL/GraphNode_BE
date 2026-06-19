@@ -255,7 +255,13 @@ export class GraphGenerationResultHandler implements JobHandler {
         );
 
         // 7. sourceType까지 보정된 graph output을 최종 snapshot DTO로 변환한다.
-        const macroId = ulid();
+        // Redis에 캐시된 요청 시점의 macroId를 사용해 stats와 snapshot이 동일 macroId 아래 저장되도록 보장.
+        let macroId: string;
+        try {
+          macroId = (await redis.get(`macro_graph:macroId:${taskId}`)) ?? userId;
+        } catch {
+          macroId = userId;
+        }
         const snapshot: GraphSnapshotDto = mapAiOutputToSnapshot(
           sourceTypeResolvedGraphOutput,
           userId,
@@ -376,7 +382,7 @@ export class GraphGenerationResultHandler implements JobHandler {
 
         // 12. graph generation completed 이벤트를 발생시킨다.
         await Promise.allSettled([
-          notiService.sendGraphGenerationCompleted(userId, taskId),
+          notiService.sendGraphGenerationCompleted(userId, taskId, macroId),
           notiService.sendFcmPushNotification(
             userId,
             'Graph Ready',

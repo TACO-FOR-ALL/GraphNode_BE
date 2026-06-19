@@ -96,6 +96,8 @@ export class GraphGenerationService {
       macroMinClusters?: number;
       /** Macro 파이프라인 `maxClusters` (기본 8). */
       macroMaxClusters?: number;
+      /** 대상 MacroView ID. 미제공 시 userId로 폴백 (레거시 호환). */
+      macroId?: string;
     }
   ): Promise<string | null> {
     let taskId: string | undefined;
@@ -223,6 +225,18 @@ export class GraphGenerationService {
 
       // PostHog 분석용 시작 이벤트(A) 기록 및 시작 시각 캐싱
       await this.trackGraphGenerationRequested(userId, taskId, messageBody.timestamp);
+
+      // 대상 macroId를 Redis에 캐시: 핸들러가 동일 macroId 아래 결과를 저장하도록 보장
+      try {
+        await redis.set(
+          `macro_graph:macroId:${taskId}`,
+          options?.macroId ?? userId,
+          'EX',
+          GraphGenerationService.GRAPH_GEN_START_TTL_SECONDS
+        );
+      } catch (err) {
+        logger.warn({ err, userId, taskId }, 'Failed to cache macroId for graph generation task');
+      }
 
       // 성공 알림 전송
       await this.notificationService.sendGraphGenerationRequested(userId, taskId);
@@ -406,35 +420,35 @@ export class GraphGenerationService {
   /**
    * 요약 조회
    */
-  async getGraphSummary(userId: string) {
-    return this.graphEmbeddingService.getGraphSummary(userId);
+  async getGraphSummary(userId: string, macroId?: string) {
+    return this.graphEmbeddingService.getGraphSummary(userId, macroId);
   }
 
   /**
    * 요약 삭제
    */
-  async deleteGraphSummary(userId: string, permanent?: boolean) {
-    return this.graphEmbeddingService.deleteGraphSummary(userId, true);
+  async deleteGraphSummary(userId: string, permanent?: boolean, macroId?: string) {
+    return this.graphEmbeddingService.deleteGraphSummary(userId, true, macroId);
   }
 
   /**
    * 요약 복원 (미지원)
    */
-  async restoreGraphSummary(_userId: string) {
+  async restoreGraphSummary(_userId: string, _macroId?: string) {
     throw new UpstreamError('Restore is not supported in hard-delete only mode');
   }
 
   /**
    * 그래프 삭제
    */
-  async deleteGraph(userId: string, _permanent?: boolean) {
-    return this.graphEmbeddingService.deleteGraph(userId, true);
+  async deleteGraph(userId: string, _permanent?: boolean, macroId?: string) {
+    return this.graphEmbeddingService.deleteGraph(userId, true, macroId);
   }
 
   /**
    * 그래프 복원 (미지원)
    */
-  async restoreGraph(userId: string) {
+  async restoreGraph(userId: string, _macroId?: string) {
     throw new UpstreamError('Restore is not supported in hard-delete only mode');
   }
 
@@ -470,7 +484,7 @@ export class GraphGenerationService {
    * @param userId 사용자 ID
    * @returns Task ID 또는 추가할 내용이 없는 경우 null
    */
-  async requestAddNodeViaQueue(userId: string): Promise<string | null> {
+  async requestAddNodeViaQueue(userId: string, macroId?: string): Promise<string | null> {
     let taskId = 'unknown';
     let creditHeldTaskId: string | undefined;
     let messageSent = false;
@@ -647,6 +661,7 @@ export class GraphGenerationService {
         taskType: TaskType.ADD_NODE_REQUEST,
         payload: {
           userId,
+          macroId: macroId ?? userId,
           s3Key: addNodeS3Key,
           bucket: process.env.S3_PAYLOAD_BUCKET,
           inputType: 'auto',

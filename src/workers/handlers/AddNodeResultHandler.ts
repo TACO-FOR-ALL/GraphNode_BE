@@ -497,7 +497,7 @@ export class AddNodeResultHandler implements JobHandler {
 
       // 완료 알림
       await Promise.allSettled([
-        notiService.sendAddConversationCompleted(userId, taskId, totalNodesAdded, totalEdgesAdded),
+        notiService.sendAddConversationCompleted(userId, taskId, totalNodesAdded, totalEdgesAdded, macroId),
         notiService.sendFcmPushNotification(
           userId,
           'Graph Updated',

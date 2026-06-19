@@ -1871,12 +1871,16 @@ export const MACRO_GRAPH_CYPHER = {
    * @param newMacroId 복제 대상 매크로 뷰 ID
    * @param now 복제 시각 ISO 문자열
    */
-  cloneMacroGraph: `
+  cloneMacroGraphRoot: `
     MATCH (src:MacroGraph {userId: $userId, macroId: $sourceMacroId})
     MERGE (dst:MacroGraph {userId: $userId, macroId: $newMacroId})
     ON CREATE SET dst.createdAt = $now, dst.updatedAt = $now
     ON MATCH  SET dst.updatedAt = $now
-    WITH src, dst
+  `,
+
+  cloneMacroGraphNodes: `
+    MATCH (src:MacroGraph {userId: $userId, macroId: $sourceMacroId})
+    MATCH (dst:MacroGraph {userId: $userId, macroId: $newMacroId})
     CALL {
       WITH src, dst
       MATCH (src)-[:HAS_NODE]->(n:MacroNode {userId: $userId})
@@ -1885,7 +1889,11 @@ export const MACRO_GRAPH_CYPHER = {
       SET newNode = n, newNode.macroId = $newMacroId
       MERGE (dst)-[:HAS_NODE]->(newNode)
     } IN TRANSACTIONS OF 500 ROWS
-    WITH src, dst
+  `,
+
+  cloneMacroGraphClusters: `
+    MATCH (src:MacroGraph {userId: $userId, macroId: $sourceMacroId})
+    MATCH (dst:MacroGraph {userId: $userId, macroId: $newMacroId})
     CALL {
       WITH src, dst
       MATCH (src)-[:HAS_CLUSTER]->(c:MacroCluster {userId: $userId})
@@ -1894,7 +1902,11 @@ export const MACRO_GRAPH_CYPHER = {
       SET newCluster = c, newCluster.macroId = $newMacroId
       MERGE (dst)-[:HAS_CLUSTER]->(newCluster)
     } IN TRANSACTIONS OF 500 ROWS
-    WITH src, dst
+  `,
+
+  cloneMacroGraphRelations: `
+    MATCH (src:MacroGraph {userId: $userId, macroId: $sourceMacroId})
+    MATCH (dst:MacroGraph {userId: $userId, macroId: $newMacroId})
     CALL {
       WITH src, dst
       MATCH (src)-[:HAS_RELATION]->(r:MacroRelation {userId: $userId})
@@ -1903,7 +1915,11 @@ export const MACRO_GRAPH_CYPHER = {
       SET newRel = r, newRel.macroId = $newMacroId
       MERGE (dst)-[:HAS_RELATION]->(newRel)
     } IN TRANSACTIONS OF 500 ROWS
-    WITH src, dst
+  `,
+
+  cloneMacroGraphSubclusters: `
+    MATCH (src:MacroGraph {userId: $userId, macroId: $sourceMacroId})
+    MATCH (dst:MacroGraph {userId: $userId, macroId: $newMacroId})
     CALL {
       WITH src, dst
       MATCH (src)-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId})

@@ -299,8 +299,8 @@ export class NotificationService {
    * @param userId 사용자 ID
    * @param taskId 작업 ID
    */
-  async sendGraphGenerationCompleted(userId: string, taskId: string): Promise<void> {
-    await this.sendNotification(userId, NotificationType.GRAPH_GENERATION_COMPLETED, { taskId });
+  async sendGraphGenerationCompleted(userId: string, taskId: string, macroId?: string): Promise<void> {
+    await this.sendNotification(userId, NotificationType.GRAPH_GENERATION_COMPLETED, { taskId, macroId });
   }
 
   /**
@@ -429,12 +429,14 @@ export class NotificationService {
     userId: string,
     taskId: string,
     nodeCount: number,
-    edgeCount: number
+    edgeCount: number,
+    macroId?: string
   ): Promise<void> {
     await this.sendNotification(userId, NotificationType.ADD_CONVERSATION_COMPLETED, {
       taskId,
       nodeCount,
       edgeCount,
+      macroId,
     });
   }
 

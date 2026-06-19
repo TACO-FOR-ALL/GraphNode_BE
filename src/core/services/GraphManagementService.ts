@@ -984,10 +984,10 @@ export class GraphManagementService {
    * - DB 저장 필드(total_source_nodes, generatedAt)를 FE 기대 필드(total_conversations, generated_at)로 변환
    * - 변환 로직은 `graph_summary.mapper.ts`의 `toGraphSummaryDto`에 위임
    */
-  async getGraphSummary(userId: string): Promise<GraphSummaryDto> {
+  async getGraphSummary(userId: string, options?: RepoOptions): Promise<GraphSummaryDto> {
     try {
       this.assertUser(userId);
-      const doc: GraphSummaryDoc | null = await this.repo.getGraphSummary(userId);
+      const doc: GraphSummaryDoc | null = await this.repo.getGraphSummary(userId, options);
       if (!doc) {
         return createEmptyGraphSummaryDto();
       }

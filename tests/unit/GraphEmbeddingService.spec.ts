@@ -228,7 +228,7 @@ describe('GraphEmbeddingService', () => {
 
       const result = await service.getGraphSummary('u1');
 
-      expect(mockGraphService.getGraphSummary).toHaveBeenCalledWith('u1');
+      expect(mockGraphService.getGraphSummary).toHaveBeenCalledWith('u1', { macroId: undefined });
       expect(mockConversationService.countConversations).not.toHaveBeenCalled();
       expect(mockNoteService.countNotes).not.toHaveBeenCalled();
       expect(result.overview.total_conversations).toBe(5);

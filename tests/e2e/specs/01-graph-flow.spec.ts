@@ -164,10 +164,11 @@ describeGraphFlow('End-to-End Graph Flow', () => {
       const scope = (process.env.E2E_SCOPE || 'bundle').trim().toLowerCase();
       const maxPollAttempts = scope === 'full' ? 180 : 60;
       for (let i = 0; i < maxPollAttempts; i++) {
+        // Scenario 1: generate without macroId → legacy fallback macroId = userId
         const statsRes = await neo4jSession.run(
           `MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_STATS]->(st:MacroStats)
            RETURN st.status AS status`,
-          { userId, macroId }
+          { userId, macroId: userId }
         );
         const status = statsRes.records[0]?.get('status') as string | undefined;
 
@@ -186,7 +187,7 @@ describeGraphFlow('End-to-End Graph Flow', () => {
                     n.fileType AS fileType,
                     n.numMessages AS numMessages, n.updatedAt AS updatedAt,
                     coalesce(c.id, '') AS clusterId`,
-            { userId, macroId }
+            { userId, macroId: userId }
           );
 
           const nodes = nodesRes.records.map((r) => ({

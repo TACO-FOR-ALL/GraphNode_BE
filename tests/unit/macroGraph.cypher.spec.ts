@@ -63,7 +63,11 @@ describe('macroGraph.cypher', () => {
       'pruneIncompatibleSubclusterMemberships',
       'reconcileSubclusterMemberships',
       'getSummaryNodeCounts',
-      'cloneMacroGraph',
+      'cloneMacroGraphRoot',
+      'cloneMacroGraphNodes',
+      'cloneMacroGraphClusters',
+      'cloneMacroGraphRelations',
+      'cloneMacroGraphSubclusters',
     ] as const;
 
     for (const key of requiredKeys) {
@@ -116,21 +120,24 @@ describe('macroGraph.cypher', () => {
       expect(q).toMatch(/MacroGraph \{userId: \$userId, macroId: \$macroId\}/);
     });
 
-    it('cloneMacroGraph 쿼리가 존재한다', () => {
-      expect(MACRO_GRAPH_CYPHER).toHaveProperty('cloneMacroGraph');
-      expect(typeof MACRO_GRAPH_CYPHER.cloneMacroGraph).toBe('string');
-      expect(MACRO_GRAPH_CYPHER.cloneMacroGraph.trim().length).toBeGreaterThan(0);
+    it('cloneMacroGraph 쿼리가 존재한다 (5개 분리 상수)', () => {
+      expect(MACRO_GRAPH_CYPHER).toHaveProperty('cloneMacroGraphRoot');
+      expect(MACRO_GRAPH_CYPHER).toHaveProperty('cloneMacroGraphNodes');
+      expect(MACRO_GRAPH_CYPHER).toHaveProperty('cloneMacroGraphClusters');
+      expect(MACRO_GRAPH_CYPHER).toHaveProperty('cloneMacroGraphRelations');
+      expect(MACRO_GRAPH_CYPHER).toHaveProperty('cloneMacroGraphSubclusters');
+      expect(MACRO_GRAPH_CYPHER.cloneMacroGraphRoot.trim().length).toBeGreaterThan(0);
     });
 
     it('cloneMacroGraph: src/dst MacroGraph를 {userId, macroId}로 구분한다', () => {
-      const q = MACRO_GRAPH_CYPHER.cloneMacroGraph;
-      expect(q).toMatch(/MacroGraph \{userId: \$userId, macroId: \$sourceMacroId\}/);
-      expect(q).toMatch(/MacroGraph \{userId: \$userId, macroId: \$newMacroId\}/);
+      const qRoot = MACRO_GRAPH_CYPHER.cloneMacroGraphRoot;
+      expect(qRoot).toMatch(/MacroGraph \{userId: \$userId, macroId: \$sourceMacroId\}/);
+      expect(qRoot).toMatch(/MacroGraph \{userId: \$userId, macroId: \$newMacroId\}/);
     });
 
     it('cloneMacroGraph: CALL {} IN TRANSACTIONS 배치 복제를 사용한다', () => {
-      const q = MACRO_GRAPH_CYPHER.cloneMacroGraph;
-      expect(q).toMatch(/IN TRANSACTIONS OF \d+ ROWS/);
+      const qNodes = MACRO_GRAPH_CYPHER.cloneMacroGraphNodes;
+      expect(qNodes).toMatch(/IN TRANSACTIONS OF \d+ ROWS/);
     });
 
     it('MacroGraph {userId: $userId}만 단독으로 쓰는 쿼리가 없다 (listMacroViews 제외)', () => {
@@ -192,9 +199,12 @@ describe('macroGraph.cypher', () => {
     });
 
     it('cloneMacroGraph: 하위 엔티티를 newMacroId로 독립 복제한다', () => {
-      const q = MACRO_GRAPH_CYPHER.cloneMacroGraph;
-      expect(q).toMatch(/MERGE \(newNode:MacroNode \{userId: \$userId, macroId: \$newMacroId, id: n\.id\}\)/);
-      expect(q).toMatch(/MERGE \(newCluster:MacroCluster \{userId: \$userId, macroId: \$newMacroId, id: c\.id\}\)/);
+      expect(MACRO_GRAPH_CYPHER.cloneMacroGraphNodes).toMatch(
+        /MERGE \(newNode:MacroNode \{userId: \$userId, macroId: \$newMacroId, id: n\.id\}\)/
+      );
+      expect(MACRO_GRAPH_CYPHER.cloneMacroGraphClusters).toMatch(
+        /MERGE \(newCluster:MacroCluster \{userId: \$userId, macroId: \$newMacroId, id: c\.id\}\)/
+      );
     });
   });
 
