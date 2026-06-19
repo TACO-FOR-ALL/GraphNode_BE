@@ -860,10 +860,10 @@ export class GraphManagementService {
    * 조회하는 경로에서는 이 메서드를 호출하지 말고 `getStatsMetadata`로 상태 메타데이터만
    * 읽은 뒤, count는 실제 조회된 nodes/edges/clusters 배열 길이로 계산해야 합니다.
    */
-  async getStats(userId: string): Promise<GraphStatsDto> {
+  async getStats(userId: string, options?: RepoOptions): Promise<GraphStatsDto> {
     try {
       this.assertUser(userId);
-      const stats = await this.repo.getStats(userId);
+      const stats = await this.repo.getStats(userId, options);
       return stats ?? {
             userId,
             nodes: 0,

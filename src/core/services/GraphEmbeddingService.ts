@@ -55,10 +55,11 @@ export class GraphEmbeddingService {
    */
   private async runGraphWriteTransaction(
     label: string,
-    work: (options: RepoOptions) => Promise<void>
+    work: (options: RepoOptions) => Promise<void>,
+    options?: RepoOptions
   ): Promise<void> {
     try {
-      await work({});
+      await work(options ?? {});
     } catch (err: unknown) {
       throw new UpstreamError(label, { cause: String(err) });
     }
@@ -145,8 +146,10 @@ export class GraphEmbeddingService {
    * @returns Promise<void>
    * @throws {NotFoundError | UpstreamError} - 노드가 없거나 DB 오류 발생 시
    */
-  updateNode(userId: string, id: number, patch: Partial<GraphNodeDto>) {
-    return this.graphManagementService.updateNode(userId, id, patch);
+  updateNode(userId: string, id: number, patch: Partial<GraphNodeDto>, options?: RepoOptions) {
+    return options
+      ? this.graphManagementService.updateNode(userId, id, patch, options)
+      : this.graphManagementService.updateNode(userId, id, patch);
   }
 
   /**
@@ -160,18 +163,21 @@ export class GraphEmbeddingService {
    * @throws {UpstreamError} - DB 오류 발생 시
    * @see removeNodeCascade - 노드와 연결된 모든 엣지를 함께 삭제하려면 이 메서드를 사용하세요.
    */
-  async deleteNode(userId: string, id: number, permanent?: boolean) {
-    await this.runGraphWriteTransaction('GraphEmbeddingService.deleteNode.transaction', (options) =>
-      this.graphManagementService.deleteNode(userId, id, permanent, options)
+  async deleteNode(userId: string, id: number, permanent?: boolean, options?: RepoOptions) {
+    await this.runGraphWriteTransaction(
+      'GraphEmbeddingService.deleteNode.transaction',
+      (txOptions) => this.graphManagementService.deleteNode(userId, id, permanent, txOptions),
+      options
     );
   }
   /**
    * 노드 복구합니다.
    */
-  async restoreNode(userId: string, id: number) {
+  async restoreNode(userId: string, id: number, options?: RepoOptions) {
     await this.runGraphWriteTransaction(
       'GraphEmbeddingService.restoreNode.transaction',
-      (options) => this.graphManagementService.restoreNode(userId, id, options)
+      (txOptions) => this.graphManagementService.restoreNode(userId, id, txOptions),
+      options
     );
   }
   /**
@@ -181,8 +187,10 @@ export class GraphEmbeddingService {
    * @returns 조회된 노드 객체. 없으면 `null`을 반환합니다.
    * @throws {UpstreamError} - DB 오류 발생 시
    */
-  findNode(userId: string, id: number) {
-    return this.graphManagementService.findNode(userId, id);
+  findNode(userId: string, id: number, options?: RepoOptions) {
+    return options
+      ? this.graphManagementService.findNode(userId, id, options)
+      : this.graphManagementService.findNode(userId, id);
   }
   /**
    * 특정 사용자의 모든 노드 목록을 조회합니다.
@@ -190,8 +198,10 @@ export class GraphEmbeddingService {
    * @returns 노드 객체 배열
    * @throws {UpstreamError} - DB 오류 발생 시
    */
-  listNodes(userId: string) {
-    return this.graphManagementService.listNodes(userId);
+  listNodes(userId: string, options?: RepoOptions) {
+    return options
+      ? this.graphManagementService.listNodes(userId, options)
+      : this.graphManagementService.listNodes(userId);
   }
   /**
    * 특정 사용자의 모든 노드 목록(soft delete 되어서 휴지통에 잇는 것 까지)을 조회합니다.
@@ -203,8 +213,10 @@ export class GraphEmbeddingService {
     return this.graphManagementService.listNodesAll(userId);
   }
 
-  listNodesByCluster(userId: string, clusterId: string) {
-    return this.graphManagementService.listNodesByCluster(userId, clusterId);
+  listNodesByCluster(userId: string, clusterId: string, options?: RepoOptions) {
+    return options
+      ? this.graphManagementService.listNodesByCluster(userId, clusterId, options)
+      : this.graphManagementService.listNodesByCluster(userId, clusterId);
   }
   /**
    * 그래프 엣지를 생성하거나 갱신합니다.
@@ -237,12 +249,16 @@ export class GraphEmbeddingService {
    * @returns Promise<void>
    * @throws {UpstreamError} - DB 오류 발생 시
    */
-  deleteEdge(userId: string, edgeId: string, permanent?: boolean) {
-    return this.graphManagementService.deleteEdge(userId, edgeId, permanent);
+  deleteEdge(userId: string, edgeId: string, permanent?: boolean, options?: RepoOptions) {
+    return options
+      ? this.graphManagementService.deleteEdge(userId, edgeId, permanent, options)
+      : this.graphManagementService.deleteEdge(userId, edgeId, permanent);
   }
 
-  restoreEdge(userId: string, edgeId: string) {
-    return this.graphManagementService.restoreEdge(userId, edgeId);
+  restoreEdge(userId: string, edgeId: string, options?: RepoOptions) {
+    return options
+      ? this.graphManagementService.restoreEdge(userId, edgeId, options)
+      : this.graphManagementService.restoreEdge(userId, edgeId);
   }
 
   /**
@@ -262,8 +278,10 @@ export class GraphEmbeddingService {
    * @returns 엣지 객체 배열
    * @throws {UpstreamError} - DB 오류 발생 시
    */
-  listEdges(userId: string) {
-    return this.graphManagementService.listEdges(userId);
+  listEdges(userId: string, options?: RepoOptions) {
+    return options
+      ? this.graphManagementService.listEdges(userId, options)
+      : this.graphManagementService.listEdges(userId);
   }
 
   /**
@@ -303,19 +321,21 @@ export class GraphEmbeddingService {
    * @throws {UpstreamError} - DB 오류 발생 시
    * @see removeClusterCascade - 클러스터와 속한 모든 노드/엣지를 삭제하려면 이 메서드를 사용하세요.
    */
-  async deleteCluster(userId: string, id: string, permanent?: boolean): Promise<void> {
+  async deleteCluster(userId: string, id: string, permanent?: boolean, options?: RepoOptions): Promise<void> {
     await this.runGraphWriteTransaction(
       'GraphEmbeddingService.deleteCluster.transaction',
-      (options) => this.graphManagementService.deleteCluster(userId, id, permanent, options)
+      (txOptions) => this.graphManagementService.deleteCluster(userId, id, permanent, txOptions),
+      options
     );
   }
   /**
    * 클러스터 복구
    */
-  async restoreCluster(userId: string, id: string): Promise<void> {
+  async restoreCluster(userId: string, id: string, options?: RepoOptions): Promise<void> {
     await this.runGraphWriteTransaction(
       'GraphEmbeddingService.restoreCluster.transaction',
-      (options) => this.graphManagementService.restoreCluster(userId, id, options)
+      (txOptions) => this.graphManagementService.restoreCluster(userId, id, txOptions),
+      options
     );
   }
   /**
@@ -325,8 +345,10 @@ export class GraphEmbeddingService {
    * @returns 조회된 클러스터 객체. 없으면 `null`을 반환합니다.
    * @throws {UpstreamError} - DB 오류 발생 시
    */
-  findCluster(userId: string, id: string) {
-    return this.graphManagementService.findCluster(userId, id);
+  findCluster(userId: string, id: string, options?: RepoOptions) {
+    return options
+      ? this.graphManagementService.findCluster(userId, id, options)
+      : this.graphManagementService.findCluster(userId, id);
   }
   /**
    * 특정 사용자의 모든 클러스터 목록을 조회합니다.
@@ -334,8 +356,10 @@ export class GraphEmbeddingService {
    * @returns 클러스터 객체 배열
    * @throws {UpstreamError} - DB 오류 발생 시
    */
-  listClusters(userId: string) {
-    return this.graphManagementService.listClusters(userId);
+  listClusters(userId: string, options?: RepoOptions) {
+    return options
+      ? this.graphManagementService.listClusters(userId, options)
+      : this.graphManagementService.listClusters(userId);
   }
 
   /**
@@ -424,8 +448,10 @@ export class GraphEmbeddingService {
    * @returns 조회된 통계 객체. 없으면 `null`을 반환합니다.
    * @throws {UpstreamError} - DB 오류 발생 시
    */
-  getStats(userId: string) {
-    return this.graphManagementService.getStats(userId);
+  getStats(userId: string, options?: RepoOptions) {
+    return options
+      ? this.graphManagementService.getStats(userId, options)
+      : this.graphManagementService.getStats(userId);
   }
 
   /**

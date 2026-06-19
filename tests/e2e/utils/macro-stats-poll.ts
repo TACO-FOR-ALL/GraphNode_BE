@@ -3,6 +3,8 @@ import { createNeo4jE2eDriver } from './neo4j-test-driver';
 export type MacroStatsTargetStatus = 'CREATED' | 'UPDATED';
 
 export interface PollMacroStatsOptions {
+  /** 조회할 매크로 뷰 ID. 생략하면 레거시 그래프(macroId = userId)를 조회합니다. */
+  macroId?: string;
   /** 목표 MacroStats.status (기본 CREATED). */
   targetStatus?: MacroStatsTargetStatus;
   /** 최대 폴링 횟수 (기본: CI full E2E 180≈30분, 그 외 90). */
@@ -29,6 +31,7 @@ export async function pollMacroStatsUntil(
   const maxAttempts = options.maxAttempts ?? defaultAttempts;
   const intervalMs = options.intervalMs ?? 10_000;
   const label = options.label ?? `MacroStats→${targetStatus}`;
+  const macroId = options.macroId ?? userId;
 
   const driver = createNeo4jE2eDriver();
   const session = driver.session();
@@ -37,8 +40,8 @@ export async function pollMacroStatsUntil(
   try {
     for (let i = 0; i < maxAttempts; i++) {
       const statsRes = await session.run(
-        'MATCH (g:MacroGraph {userId: $userId})-[:HAS_STATS]->(st:MacroStats) RETURN st.status AS status',
-        { userId }
+        'MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_STATS]->(st:MacroStats) RETURN st.status AS status',
+        { userId, macroId }
       );
       const status = statsRes.records[0]?.get('status') as string | undefined;
 
@@ -59,9 +62,9 @@ export async function pollMacroStatsUntil(
           failureTaskId?: string;
         }> => {
           const detailRes = await session.run(
-            `MATCH (g:MacroGraph {userId: $userId})-[:HAS_STATS]->(st:MacroStats)
+            `MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_STATS]->(st:MacroStats)
              RETURN st.updatedAt AS updatedAt, st.generatedAt AS generatedAt, st.metadataJson AS metadataJson`,
-            { userId }
+            { userId, macroId }
           );
           const metadataRaw = detailRes.records[0]?.get('metadataJson') as string | undefined;
           if (!metadataRaw) {
@@ -91,9 +94,9 @@ export async function pollMacroStatsUntil(
         }
 
         const detailRes = await session.run(
-          `MATCH (g:MacroGraph {userId: $userId})-[:HAS_STATS]->(st:MacroStats)
+          `MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_STATS]->(st:MacroStats)
            RETURN st.updatedAt AS updatedAt, st.generatedAt AS generatedAt`,
-          { userId }
+          { userId, macroId }
         );
         const updatedAt = detailRes.records[0]?.get('updatedAt');
         const generatedAt = detailRes.records[0]?.get('generatedAt');

@@ -11,6 +11,7 @@
 import { Request, Response, NextFunction } from 'express';
 
 import { GraphEditorService } from '../../core/services/GraphEditorService';
+import type { MacroGraphStoreOptions } from '../../core/ports/MacroGraphStore';
 import {
   createNodeEditorSchema,
   updateNodeEditorSchema,
@@ -34,6 +35,12 @@ import { getUserIdFromRequest } from '../utils/request';
 export class GraphEditorController {
   constructor(private readonly editorService: GraphEditorService) {}
 
+  private resolveMacroOptions(req: Request, userId: string): MacroGraphStoreOptions {
+    const queryMacroId = typeof req.query.macroId === 'string' ? req.query.macroId : undefined;
+    const bodyMacroId = typeof req.body?.macroId === 'string' ? req.body.macroId : undefined;
+    return { macroId: queryMacroId ?? bodyMacroId ?? userId };
+  }
+
   // ── Node ──────────────────────────────────────────────
 
   /**
@@ -43,8 +50,9 @@ export class GraphEditorController {
   async createNode(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = getUserIdFromRequest(req);
+      const options = this.resolveMacroOptions(req, userId);
       const dto = createNodeEditorSchema.parse(req.body);
-      const result = await this.editorService.createNode(userId, dto);
+      const result = await this.editorService.createNode(userId, dto, options);
       res.status(201).json(result);
     } catch (e) {
       next(e);
@@ -58,9 +66,10 @@ export class GraphEditorController {
   async updateNode(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = getUserIdFromRequest(req);
+      const options = this.resolveMacroOptions(req, userId);
       const nodeId = parseInt(req.params.nodeId, 10);
       const dto = updateNodeEditorSchema.parse(req.body);
-      await this.editorService.updateNode(userId, nodeId, dto);
+      await this.editorService.updateNode(userId, nodeId, dto, options);
       res.status(204).send();
     } catch (e) {
       next(e);
@@ -75,9 +84,10 @@ export class GraphEditorController {
   async deleteNode(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = getUserIdFromRequest(req);
+      const options = this.resolveMacroOptions(req, userId);
       const nodeId = parseInt(req.params.nodeId, 10);
       const permanent = req.query.permanent === 'true';
-      await this.editorService.deleteNode(userId, nodeId, permanent);
+      await this.editorService.deleteNode(userId, nodeId, permanent, options);
       res.status(204).send();
     } catch (e) {
       next(e);
@@ -93,8 +103,9 @@ export class GraphEditorController {
   async createEdge(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = getUserIdFromRequest(req);
+      const options = this.resolveMacroOptions(req, userId);
       const dto = createEdgeEditorSchema.parse(req.body);
-      const result = await this.editorService.createEdge(userId, dto);
+      const result = await this.editorService.createEdge(userId, dto, options);
       res.status(201).json(result);
     } catch (e) {
       next(e);
@@ -108,9 +119,10 @@ export class GraphEditorController {
   async updateEdge(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = getUserIdFromRequest(req);
+      const options = this.resolveMacroOptions(req, userId);
       const { edgeId } = req.params;
       const dto = updateEdgeEditorSchema.parse(req.body);
-      await this.editorService.updateEdge(userId, edgeId, dto);
+      await this.editorService.updateEdge(userId, edgeId, dto, options);
       res.status(204).send();
     } catch (e) {
       next(e);
@@ -125,9 +137,10 @@ export class GraphEditorController {
   async deleteEdge(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = getUserIdFromRequest(req);
+      const options = this.resolveMacroOptions(req, userId);
       const { edgeId } = req.params;
       const permanent = req.query.permanent === 'true';
-      await this.editorService.deleteEdge(userId, edgeId, permanent);
+      await this.editorService.deleteEdge(userId, edgeId, permanent, options);
       res.status(204).send();
     } catch (e) {
       next(e);
@@ -143,8 +156,9 @@ export class GraphEditorController {
   async createCluster(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = getUserIdFromRequest(req);
+      const options = this.resolveMacroOptions(req, userId);
       const dto = createClusterEditorSchema.parse(req.body);
-      const result = await this.editorService.createCluster(userId, dto);
+      const result = await this.editorService.createCluster(userId, dto, options);
       res.status(201).json(result);
     } catch (e) {
       next(e);
@@ -158,9 +172,10 @@ export class GraphEditorController {
   async updateCluster(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = getUserIdFromRequest(req);
+      const options = this.resolveMacroOptions(req, userId);
       const { clusterId } = req.params;
       const dto = updateClusterEditorSchema.parse(req.body);
-      await this.editorService.updateCluster(userId, clusterId, dto);
+      await this.editorService.updateCluster(userId, clusterId, dto, options);
       res.status(204).send();
     } catch (e) {
       next(e);
@@ -175,10 +190,11 @@ export class GraphEditorController {
   async deleteCluster(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = getUserIdFromRequest(req);
+      const options = this.resolveMacroOptions(req, userId);
       const { clusterId } = req.params;
       const cascade = req.query.cascade === 'true';
       const permanent = req.query.permanent === 'true';
-      await this.editorService.deleteCluster(userId, clusterId, cascade, permanent);
+      await this.editorService.deleteCluster(userId, clusterId, cascade, permanent, options);
       res.status(204).send();
     } catch (e) {
       next(e);
@@ -194,8 +210,9 @@ export class GraphEditorController {
   async createSubcluster(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = getUserIdFromRequest(req);
+      const options = this.resolveMacroOptions(req, userId);
       const dto = createSubclusterEditorSchema.parse(req.body);
-      const result = await this.editorService.createSubcluster(userId, dto);
+      const result = await this.editorService.createSubcluster(userId, dto, options);
       res.status(201).json(result);
     } catch (e) {
       next(e);
@@ -209,9 +226,10 @@ export class GraphEditorController {
   async updateSubcluster(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = getUserIdFromRequest(req);
+      const options = this.resolveMacroOptions(req, userId);
       const { subclusterId } = req.params;
       const dto = updateSubclusterEditorSchema.parse(req.body);
-      await this.editorService.updateSubcluster(userId, subclusterId, dto);
+      await this.editorService.updateSubcluster(userId, subclusterId, dto, options);
       res.status(204).send();
     } catch (e) {
       next(e);
@@ -226,9 +244,10 @@ export class GraphEditorController {
   async deleteSubcluster(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = getUserIdFromRequest(req);
+      const options = this.resolveMacroOptions(req, userId);
       const { subclusterId } = req.params;
       const permanent = req.query.permanent === 'true';
-      await this.editorService.deleteSubcluster(userId, subclusterId, permanent);
+      await this.editorService.deleteSubcluster(userId, subclusterId, permanent, options);
       res.status(204).send();
     } catch (e) {
       next(e);
@@ -244,9 +263,10 @@ export class GraphEditorController {
   async moveNodeToCluster(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = getUserIdFromRequest(req);
+      const options = this.resolveMacroOptions(req, userId);
       const nodeId = parseInt(req.params.nodeId, 10);
       const dto = moveNodeToClusterSchema.parse(req.body);
-      await this.editorService.moveNodeToCluster(userId, nodeId, dto);
+      await this.editorService.moveNodeToCluster(userId, nodeId, dto, options);
       res.status(204).send();
     } catch (e) {
       next(e);
@@ -260,9 +280,10 @@ export class GraphEditorController {
   async moveSubclusterToCluster(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = getUserIdFromRequest(req);
+      const options = this.resolveMacroOptions(req, userId);
       const { subclusterId } = req.params;
       const dto = moveSubclusterToClusterSchema.parse(req.body);
-      await this.editorService.moveSubclusterToCluster(userId, subclusterId, dto);
+      await this.editorService.moveSubclusterToCluster(userId, subclusterId, dto, options);
       res.status(204).send();
     } catch (e) {
       next(e);
@@ -276,9 +297,10 @@ export class GraphEditorController {
   async addNodeToSubcluster(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = getUserIdFromRequest(req);
+      const options = this.resolveMacroOptions(req, userId);
       const { subclusterId } = req.params;
       const dto = addNodeToSubclusterSchema.parse(req.body);
-      await this.editorService.addNodeToSubcluster(userId, subclusterId, dto);
+      await this.editorService.addNodeToSubcluster(userId, subclusterId, dto, options);
       res.status(204).send();
     } catch (e) {
       next(e);
@@ -292,9 +314,10 @@ export class GraphEditorController {
   async removeNodeFromSubcluster(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = getUserIdFromRequest(req);
+      const options = this.resolveMacroOptions(req, userId);
       const { subclusterId } = req.params;
       const nodeId = parseInt(req.params.nodeId, 10);
-      await this.editorService.removeNodeFromSubcluster(userId, subclusterId, nodeId);
+      await this.editorService.removeNodeFromSubcluster(userId, subclusterId, nodeId, options);
       res.status(204).send();
     } catch (e) {
       next(e);
@@ -310,7 +333,8 @@ export class GraphEditorController {
   async executeBatch(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = getUserIdFromRequest(req);
-      const dto = batchEditorRequestSchema.parse(req.body);
+      const options = this.resolveMacroOptions(req, userId);
+      const dto = batchEditorRequestSchema.parse({ ...req.body, macroId: req.body?.macroId ?? options.macroId });
       const result = await this.editorService.executeBatch(userId, dto);
       res.status(200).json(result);
     } catch (e) {

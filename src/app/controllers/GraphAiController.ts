@@ -47,18 +47,7 @@ export class GraphAiController {
    */
   summarizeGraph = async (req: Request, res: Response) => {
     const userId = getUserIdFromRequest(req);
-    const macroId = req.body?.macroId as string | undefined;
-
-    if (!macroId) {
-      res.status(400).json({
-        type: 'https://graphnode.dev/problems/validation-failed',
-        title: 'Bad Request',
-        status: 400,
-        detail: 'macroId is required',
-        instance: req.originalUrl,
-      });
-      return;
-    }
+    const macroId = (req.body?.macroId ?? (req.query?.macroId as string | undefined)) ?? userId;
 
     // 그래프 요약 프로세스 시작 (SQS 요청)
     const taskId = await this.graphGenerationService.requestGraphSummary(userId!, macroId);

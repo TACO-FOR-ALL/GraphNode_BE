@@ -2,7 +2,6 @@ import { describe, it, expect, beforeAll } from '@jest/globals';
 import { apiClient, getTestUserId } from '../utils/api-client';
 import { isE2eFullSuiteEnabled, e2eFullSuiteSkipReason } from '../utils/e2e-llm-env';
 import { E2E_MACRO_USER_FILE_SEEDS, seedTestData } from '../utils/db-seed';
-import { assertMacroGraphBundleUploaded } from '../utils/localstack-s3';
 import {
   buildUserFileResolvedHint,
   macroFileTypeFromUserFileDoc,
@@ -93,26 +92,17 @@ describeGraphFlow('End-to-End Graph Flow', () => {
     macroId = mvRes.data.view.macroId as string;
     expect(macroId).toBeTruthy();
     console.log(`[beforeAll] MacroView created: macroId=${macroId}`);
+
+    const isCreated = await pollMacroStatsUntil(userId, {
+      macroId,
+      targetStatus: 'CREATED',
+      label: 'graph-flow MacroView auto generation',
+    });
+    expect(isCreated).toBe(true);
   });
 
   it('Scenario 1: Full Graph Generation Flow', async () => {
     console.log('--- Starting Scenario 1: Graph Generation ---');
-
-    const response = await apiClient.post('/v1/graph-ai/generate', { includeSummary: true });
-    expect(response.status).toBe(202);
-    expect(response.data.status).toBe('queued');
-
-    const taskId = response.data.taskId;
-    console.log(`Task Enqueued: ${taskId}`);
-
-    await assertMacroGraphBundleUploaded({
-      taskId,
-      userFiles: E2E_MACRO_USER_FILE_SEEDS.map((f) => ({
-        id: f._id,
-        displayName: f.displayName,
-      })),
-    });
-    console.log('Macro S3 prefix bundle verified on LocalStack.');
 
     // MongoDB에서 conversations/notes/user_files 원본 ID 목록 수집 (원본은 MongoDB에 저장됨)
     const mongoClient = new MongoClient(MONGO_URI);
@@ -164,11 +154,11 @@ describeGraphFlow('End-to-End Graph Flow', () => {
       const scope = (process.env.E2E_SCOPE || 'bundle').trim().toLowerCase();
       const maxPollAttempts = scope === 'full' ? 180 : 60;
       for (let i = 0; i < maxPollAttempts; i++) {
-        // Scenario 1: generate without macroId → legacy fallback macroId = userId
+        // Scenario 1: MacroView auto generation stores data under the created macroId.
         const statsRes = await neo4jSession.run(
           `MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_STATS]->(st:MacroStats)
            RETURN st.status AS status`,
-          { userId, macroId: userId }
+          { userId, macroId }
         );
         const status = statsRes.records[0]?.get('status') as string | undefined;
 
@@ -187,7 +177,7 @@ describeGraphFlow('End-to-End Graph Flow', () => {
                     n.fileType AS fileType,
                     n.numMessages AS numMessages, n.updatedAt AS updatedAt,
                     coalesce(c.id, '') AS clusterId`,
-            { userId, macroId: userId }
+            { userId, macroId }
           );
 
           const nodes = nodesRes.records.map((r) => ({
@@ -303,7 +293,7 @@ describeGraphFlow('End-to-End Graph Flow', () => {
             await mongoClient2.close();
           }
 
-          const statsApiRes = await apiClient.get('/v1/graph/stats');
+          const statsApiRes = await apiClient.get(`/v1/graph/stats?macroId=${macroId}`);
           expect(statsApiRes.status).toBe(200);
           expect(statsApiRes.data?.status).toBe('CREATED');
 
@@ -395,7 +385,7 @@ describeGraphFlow('End-to-End Graph Flow', () => {
 
     // overviewJson은 Neo4j 저장 시 count 필드를 제거하고 조회 시 동적으로 집계합니다.
     // 따라서 count 검증은 API 응답(hydrated summary)을 통해 수행합니다.
-    const summaryApiRes = await apiClient.get('/v1/graph-ai/summary');
+    const summaryApiRes = await apiClient.get(`/v1/graph-ai/summary?macroId=${macroId}`);
     expect(summaryApiRes.status).toBe(200);
     const overview = summaryApiRes.data?.overview;
     expect(overview).toBeTruthy();
@@ -566,10 +556,11 @@ describeGraphFlow('End-to-End Graph Flow', () => {
       } as any);
 
       // AddNode API 호출
-      const response = await apiClient.post('/v1/graph-ai/add-node');
+      const response = await apiClient.post('/v1/graph-ai/add-node', { macroId });
       expect(response.status).toBe(202);
 
       const isFinished = await pollMacroStatsUntil(userId, {
+        macroId,
         targetStatus: 'UPDATED',
         label: 'graph-flow Scenario 3 AddNode',
       });
@@ -663,13 +654,14 @@ describeGraphFlow('End-to-End Graph Flow', () => {
       console.log(`Target node for deletion: id=${targetNodeId} (origId: ${targetOrigId})`);
 
       // 2. API를 통한 노드 소프트 삭제
-      const response = await apiClient.delete(`/v1/graph/nodes/${targetNodeId}`);
+      const response = await apiClient.delete(`/v1/graph/nodes/${targetNodeId}?macroId=${macroId}`);
       expect(response.status).toBe(204);
 
       // 3. Neo4j 검증 (deletedAt이 설정되었는지)
       const neo4jRes = await neo4jSession.run(
-        'MATCH (n:MacroNode {userId: $userId, id: $id}) RETURN n.deletedAt AS deletedAt',
-        { userId, id: targetNodeId }
+        `MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_NODE]->(n:MacroNode {userId: $userId, id: $id})
+         RETURN n.deletedAt AS deletedAt`,
+        { userId, macroId, id: targetNodeId }
       );
       expect(neo4jRes.records.length).toBe(1);
       const neo4jDeletedAt = neo4jRes.records[0].get('deletedAt');
@@ -805,8 +797,9 @@ describeGraphFlow('End-to-End Graph Flow', () => {
       // ResultHandler에서 notion으로 판별된 노드가 Neo4j에 저장됩니다.
       // AC-13: MATCH (n:MacroNode {userId, sourceType:'notion'}) RETURN count(n) > 0
       const result = await neo4jSession.run(
-        'MATCH (n:MacroNode {userId: $userId, sourceType: $sourceType}) RETURN count(n) AS cnt',
-        { userId, sourceType: 'notion' }
+        `MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_NODE]->(n:MacroNode {userId: $userId, sourceType: $sourceType})
+         RETURN count(n) AS cnt`,
+        { userId, macroId, sourceType: 'notion' }
       );
       const cnt = result.records[0]?.get('cnt')?.toNumber?.() ?? 0;
       console.log(`[AC-13] Neo4j MacroNode sourceType=notion count: ${cnt}`);
@@ -829,7 +822,7 @@ describeGraphFlow('End-to-End Graph Flow', () => {
     // (seedTestData()는 notion_page_caches를 포함하여 시딩하며, 그래프가 CREATED 상태면
     //  notion 캐시 미존재 시에도 나머지 노드로 정상 생성됨을 Scenario 1에서 이미 검증함)
     // 여기서는 graph stats status가 CREATED인지 재확인합니다.
-    const statsResponse = await apiClient.get('/v1/graph/stats');
+    const statsResponse = await apiClient.get(`/v1/graph/stats?macroId=${macroId}`);
     expect(statsResponse.status).toBe(200);
     expect(['CREATED', 'UPDATING', 'UPDATED']).toContain(statsResponse.data.status);
     console.log(`[AC-14] Graph status after notion-enabled run: ${statsResponse.data.status}`);
