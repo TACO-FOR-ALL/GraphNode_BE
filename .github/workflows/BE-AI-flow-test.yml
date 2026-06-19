@@ -93,6 +93,18 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      # 2-5. 여유 디스크 공간 확보 (약 20~30GB 확보)
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
       # 3. Docker Buildx 설정 (캐싱 기능을 위해 필수)
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
