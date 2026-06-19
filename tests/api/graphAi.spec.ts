@@ -258,7 +258,7 @@ describe('GraphAi API Integration Tests', () => {
     };
 
     beforeAll(async () => {
-        (Neo4jMacroGraphAdapter as jest.Mock).mockImplementation(() => mockGraphRepo);
+        (Neo4jMacroGraphAdapter as unknown as jest.Mock).mockImplementation(() => mockGraphRepo);
         (ConversationRepositoryMongo as jest.Mock).mockImplementation(() => mockConvRepo);
         (MessageRepositoryMongo as jest.Mock).mockImplementation(() => mockMsgRepo);
         (NoteRepositoryMongo as jest.Mock).mockImplementation(() => mockNoteRepo);

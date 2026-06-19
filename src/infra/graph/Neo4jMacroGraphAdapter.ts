@@ -264,22 +264,22 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
       await runner.run(MACRO_GRAPH_CYPHER.upsertGraphRoot, { userId, macroId, now, title: null, description: null });
 
       if (nodeDocs.length > 0) {
-        const nodeRows = nodeDocs.map((doc) => toNeo4jMacroNode(doc));
+        const nodeRows = nodeDocs.map((doc) => ({ ...toNeo4jMacroNode(doc), macroId }));
         await runner.run(MACRO_GRAPH_CYPHER.upsertNodes, { rows: nodeRows });
       }
 
       if (clusterDocs.length > 0) {
-        const clusterRows = clusterDocs.map(toNeo4jMacroCluster);
+        const clusterRows = clusterDocs.map((c) => ({ ...toNeo4jMacroCluster(c), macroId }));
         await runner.run(MACRO_GRAPH_CYPHER.upsertClusters, { rows: clusterRows });
       }
 
       if (subclusterDocs.length > 0) {
-        const subclusterRows = subclusterDocs.map(toNeo4jMacroSubcluster);
+        const subclusterRows = subclusterDocs.map((sc) => ({ ...toNeo4jMacroSubcluster(sc), macroId }));
         await runner.run(MACRO_GRAPH_CYPHER.upsertSubclusters, { rows: subclusterRows });
       }
 
       if (edgeDocs.length > 0) {
-        const relationRows = edgeDocs.map(toNeo4jMacroRelation);
+        const relationRows = edgeDocs.map((e) => ({ ...toNeo4jMacroRelation(e), macroId }));
         await runner.run(MACRO_GRAPH_CYPHER.upsertRelations, { rows: relationRows });
       }
 
@@ -287,6 +287,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
       const statsNeo4j = toNeo4jMacroStats(statsDoc);
       await runner.run(MACRO_GRAPH_CYPHER.upsertStats, {
         userId,
+        macroId,
         id: statsNeo4j.id,
         status: statsNeo4j.status,
         generatedAt: statsNeo4j.generatedAt,
@@ -298,6 +299,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
         const summaryNeo4j = toNeo4jMacroSummary(summary);
         await runner.run(MACRO_GRAPH_CYPHER.upsertSummary, {
           userId,
+          macroId,
           id: summaryNeo4j.id,
           overviewJson: summaryNeo4j.overviewJson,
           clustersJson: summaryNeo4j.clustersJson,
@@ -341,7 +343,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
 
       const belongsToRows = nodeDocs
         .filter((n) => n.clusterId)
-        .map((n) => ({ nodeId: n.id, clusterId: n.clusterId }));
+        .map((n) => ({ nodeId: n.id, clusterId: n.clusterId, macroId }));
       if (belongsToRows.length > 0) {
         await runner.run(MACRO_GRAPH_CYPHER.linkNodeBelongsToCluster, {
           userId,
@@ -351,7 +353,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
 
       const subclusterToClusterRows = subclusterDocs
         .filter((sc) => sc.clusterId)
-        .map((sc) => ({ clusterId: sc.clusterId, subclusterId: sc.id }));
+        .map((sc) => ({ clusterId: sc.clusterId, subclusterId: sc.id, macroId }));
       if (subclusterToClusterRows.length > 0) {
         await runner.run(MACRO_GRAPH_CYPHER.linkSubclusterToCluster, {
           userId,
@@ -359,10 +361,10 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
         });
       }
 
-      const containsRows: { subclusterId: string; nodeId: number }[] = [];
+      const containsRows: { subclusterId: string; nodeId: number; macroId: string }[] = [];
       for (const sc of subclusterDocs) {
         for (const nid of sc.nodeIds) {
-          containsRows.push({ subclusterId: sc.id, nodeId: nid });
+          containsRows.push({ subclusterId: sc.id, nodeId: nid, macroId });
         }
       }
       if (containsRows.length > 0) {
@@ -374,7 +376,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
 
       const representsRows = subclusterDocs
         .filter((sc) => sc.representativeNodeId != null)
-        .map((sc) => ({ subclusterId: sc.id, nodeId: sc.representativeNodeId }));
+        .map((sc) => ({ subclusterId: sc.id, nodeId: sc.representativeNodeId, macroId }));
       if (representsRows.length > 0) {
         await runner.run(MACRO_GRAPH_CYPHER.linkSubclusterRepresentsNode, {
           userId,
@@ -386,6 +388,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
         edgeId: e.id,
         source: e.source,
         target: e.target,
+        macroId,
       }));
       if (endpointRows.length > 0) {
         await runner.run(MACRO_GRAPH_CYPHER.linkRelationEndpoints, {
@@ -399,6 +402,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
         edgeId: e.id,
         source: e.source,
         target: e.target,
+        macroId,
         weight: e.weight,
         type: e.type,
         relationType: e.relationType,
@@ -481,7 +485,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     await this.runWrite(async (runner) => {
       await this.ensureGraphRoot(userId, macroId, runner);
 
-      const rows = nodeDocs.map((doc) => toNeo4jMacroNode(doc));
+      const rows = nodeDocs.map((doc) => ({ ...toNeo4jMacroNode(doc), macroId }));
       await runner.run(MACRO_GRAPH_CYPHER.upsertNodes, { rows });
 
       await runner.run(MACRO_GRAPH_CYPHER.linkNodesToGraph, {
@@ -491,7 +495,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
 
       const belongsToRows = nodeDocs
         .filter((n) => n.clusterId)
-        .map((n) => ({ nodeId: n.id, clusterId: n.clusterId }));
+        .map((n) => ({ nodeId: n.id, clusterId: n.clusterId, macroId }));
       if (belongsToRows.length > 0) {
         await runner.run(MACRO_GRAPH_CYPHER.linkNodeBelongsToCluster, {
           userId,
@@ -571,7 +575,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     await this.runWrite(async (runner) => {
       await this.ensureGraphRoot(userId, macroId, runner);
 
-      const relationRows = edgeDocs.map(toNeo4jMacroRelation);
+      const relationRows = edgeDocs.map((e) => ({ ...toNeo4jMacroRelation(e), macroId }));
       await runner.run(MACRO_GRAPH_CYPHER.upsertRelations, { rows: relationRows });
 
       await runner.run(MACRO_GRAPH_CYPHER.linkRelationsToGraph, {
@@ -579,13 +583,14 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
         rows: edgeDocs.map((e) => ({ id: e.id })),
       });
 
-      const endpointRows = edgeDocs.map((e) => ({ edgeId: e.id, source: e.source, target: e.target }));
+      const endpointRows = edgeDocs.map((e) => ({ edgeId: e.id, source: e.source, target: e.target, macroId }));
       await runner.run(MACRO_GRAPH_CYPHER.linkRelationEndpoints, { userId, rows: endpointRows });
 
       const macroRelatedRows = edgeDocs.map((e) => ({
         edgeId: e.id,
         source: e.source,
         target: e.target,
+        macroId,
         weight: e.weight,
         type: e.type,
         relationType: e.relationType,
@@ -630,7 +635,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     await this.runWrite(async (runner) => {
       await this.ensureGraphRoot(userId, macroId, runner);
 
-      const clusterRows = clusterDocs.map(toNeo4jMacroCluster);
+      const clusterRows = clusterDocs.map((c) => ({ ...toNeo4jMacroCluster(c), macroId }));
       await runner.run(MACRO_GRAPH_CYPHER.upsertClusters, { rows: clusterRows });
 
       await runner.run(MACRO_GRAPH_CYPHER.linkClustersToGraph, {
@@ -674,7 +679,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
     await this.runWrite(async (runner) => {
       await this.ensureGraphRoot(userId, macroId, runner);
 
-      const subclusterRows = subclusterDocs.map(toNeo4jMacroSubcluster);
+      const subclusterRows = subclusterDocs.map((sc) => ({ ...toNeo4jMacroSubcluster(sc), macroId }));
       await runner.run(MACRO_GRAPH_CYPHER.upsertSubclusters, { rows: subclusterRows });
 
       await runner.run(MACRO_GRAPH_CYPHER.clearSubclusterRelationshipsForReplacement, {
@@ -689,7 +694,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
 
       const clusterLinks = subclusterDocs
         .filter((sc) => sc.clusterId)
-        .map((sc) => ({ clusterId: sc.clusterId, subclusterId: sc.id }));
+        .map((sc) => ({ clusterId: sc.clusterId, subclusterId: sc.id, macroId }));
       if (clusterLinks.length > 0) {
         await runner.run(MACRO_GRAPH_CYPHER.linkSubclusterToCluster, {
           userId,
@@ -697,10 +702,10 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
         });
       }
 
-      const containsRows: { subclusterId: string; nodeId: number }[] = [];
+      const containsRows: { subclusterId: string; nodeId: number; macroId: string }[] = [];
       for (const sc of subclusterDocs) {
         for (const nid of sc.nodeIds) {
-          containsRows.push({ subclusterId: sc.id, nodeId: nid });
+          containsRows.push({ subclusterId: sc.id, nodeId: nid, macroId });
         }
       }
       if (containsRows.length > 0) {
@@ -712,7 +717,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
 
       const representsRows = subclusterDocs
         .filter((sc) => sc.representativeNodeId != null)
-        .map((sc) => ({ subclusterId: sc.id, nodeId: sc.representativeNodeId }));
+        .map((sc) => ({ subclusterId: sc.id, nodeId: sc.representativeNodeId, macroId }));
       if (representsRows.length > 0) {
         await runner.run(MACRO_GRAPH_CYPHER.linkSubclusterRepresentsNode, {
           userId,
@@ -730,6 +735,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
       await this.ensureGraphRoot(userId, macroId, runner);
       await runner.run(MACRO_GRAPH_CYPHER.upsertStats, {
         userId,
+        macroId,
         id: statsNeo4j.id,
         status: statsNeo4j.status,
         generatedAt: statsNeo4j.generatedAt,

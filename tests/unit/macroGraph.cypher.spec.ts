@@ -133,15 +133,68 @@ describe('macroGraph.cypher', () => {
       expect(q).toMatch(/IN TRANSACTIONS OF \d+ ROWS/);
     });
 
-    it('MacroGraph {userId: $userId}만 단독으로 쓰는 쿼리가 없다 (모두 macroId 포함)', () => {
+    it('MacroGraph {userId: $userId}만 단독으로 쓰는 쿼리가 없다 (listMacroViews 제외)', () => {
       const allCyphers = [
-        ...Object.values(MACRO_GRAPH_CYPHER).flatMap((v) =>
-          typeof v === 'string' ? [v] : Object.values(v as Record<string, string>)
-        ),
+        ...Object.entries(MACRO_GRAPH_CYPHER)
+          .filter(([key]) => key !== 'listMacroViews')
+          .flatMap(([, v]) =>
+            typeof v === 'string' ? [v] : Object.values(v as Record<string, string>)
+          ),
       ].join('\n');
       // {userId: $userId}만 있고 macroId가 없는 MacroGraph 매칭 패턴은 없어야 한다
       const matches = allCyphers.match(/MacroGraph\s*\{userId:\s*\$userId\s*\}/g);
       expect(matches ?? []).toHaveLength(0);
+    });
+
+    it('MACRO_GRAPH_SCHEMA_CYPHER에 MacroNode (userId, macroId, id) 복합 unique 제약이 있다', () => {
+      const joined = MACRO_GRAPH_SCHEMA_CYPHER.join('\n');
+      expect(joined).toMatch(/FOR \(n:MacroNode\) REQUIRE \(n\.userId, n\.macroId, n\.id\) IS UNIQUE/);
+    });
+
+    it('MACRO_GRAPH_SCHEMA_CYPHER에 MacroCluster (userId, macroId, id) 복합 unique 제약이 있다', () => {
+      const joined = MACRO_GRAPH_SCHEMA_CYPHER.join('\n');
+      expect(joined).toMatch(/FOR \(c:MacroCluster\) REQUIRE \(c\.userId, c\.macroId, c\.id\) IS UNIQUE/);
+    });
+
+    it('MACRO_GRAPH_SCHEMA_CYPHER에 MacroSubcluster (userId, macroId, id) 복합 unique 제약이 있다', () => {
+      const joined = MACRO_GRAPH_SCHEMA_CYPHER.join('\n');
+      expect(joined).toMatch(/FOR \(sc:MacroSubcluster\) REQUIRE \(sc\.userId, sc\.macroId, sc\.id\) IS UNIQUE/);
+    });
+
+    it('MACRO_GRAPH_SCHEMA_CYPHER에 MacroRelation (userId, macroId, id) 복합 unique 제약이 있다', () => {
+      const joined = MACRO_GRAPH_SCHEMA_CYPHER.join('\n');
+      expect(joined).toMatch(/FOR \(r:MacroRelation\) REQUIRE \(r\.userId, r\.macroId, r\.id\) IS UNIQUE/);
+    });
+
+    it('MACRO_GRAPH_SCHEMA_CYPHER에 MacroStats (userId, macroId) 복합 unique 제약이 있다', () => {
+      const joined = MACRO_GRAPH_SCHEMA_CYPHER.join('\n');
+      expect(joined).toMatch(/FOR \(st:MacroStats\) REQUIRE \(st\.userId, st\.macroId\) IS UNIQUE/);
+    });
+
+    it('MACRO_GRAPH_SCHEMA_CYPHER에 MacroSummary (userId, macroId) 복합 unique 제약이 있다', () => {
+      const joined = MACRO_GRAPH_SCHEMA_CYPHER.join('\n');
+      expect(joined).toMatch(/FOR \(sm:MacroSummary\) REQUIRE \(sm\.userId, sm\.macroId\) IS UNIQUE/);
+    });
+
+    it('upsertNodes: macroId를 MERGE 키에 포함한다', () => {
+      const q = MACRO_GRAPH_CYPHER.upsertNodes;
+      expect(q).toMatch(/MERGE \(n:MacroNode \{userId: row\.userId, macroId: row\.macroId, id: row\.id\}\)/);
+    });
+
+    it('upsertStats: macroId를 MERGE 키에 포함한다', () => {
+      const q = MACRO_GRAPH_CYPHER.upsertStats;
+      expect(q).toMatch(/MERGE \(st:MacroStats \{userId: \$userId, macroId: \$macroId\}\)/);
+    });
+
+    it('upsertSummary: macroId를 MERGE 키에 포함한다', () => {
+      const q = MACRO_GRAPH_CYPHER.upsertSummary;
+      expect(q).toMatch(/MERGE \(sm:MacroSummary \{userId: \$userId, macroId: \$macroId\}\)/);
+    });
+
+    it('cloneMacroGraph: 하위 엔티티를 newMacroId로 독립 복제한다', () => {
+      const q = MACRO_GRAPH_CYPHER.cloneMacroGraph;
+      expect(q).toMatch(/MERGE \(newNode:MacroNode \{userId: \$userId, macroId: \$newMacroId, id: n\.id\}\)/);
+      expect(q).toMatch(/MERGE \(newCluster:MacroCluster \{userId: \$userId, macroId: \$newMacroId, id: c\.id\}\)/);
     });
   });
 
@@ -281,7 +334,7 @@ describe('macroGraph.cypher', () => {
       const q = MACRO_GRAPH_CYPHER.clearSubclusterRelationshipsForReplacement;
 
       expect(q).toMatch(/UNWIND \$subclusterIds AS subclusterId/);
-      expect(q).toMatch(/MacroSubcluster \{userId: \$userId, id: subclusterId\}/);
+      expect(q).toMatch(/MacroSubcluster \{userId: \$userId, macroId: \$macroId, id: subclusterId\}/);
       expect(q).toMatch(/HAS_SUBCLUSTER/);
       expect(q).toMatch(/CONTAINS/);
       expect(q).toMatch(/REPRESENTS/);

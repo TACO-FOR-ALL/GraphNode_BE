@@ -1,6 +1,6 @@
 # Neo4j — Macro Graph 아키텍처 & Graph RAG
 
-> 마지막 갱신: 2026-04-29
+> 마지막 갱신: 2026-06-19
 
 GraphNode의 Neo4j는 **Macro Graph**를 Native Graph 구조로 저장하고, **Graph RAG(Retrieval-Augmented Generation)** 파이프라인에서 의미 기반 이웃 탐색에 사용됩니다.
 
@@ -29,15 +29,17 @@ GraphNode의 Neo4j는 **Macro Graph**를 Native Graph 구조로 저장하고, **
 
 ### 2.1 노드 레이블 (Node Labels)
 
-| 레이블 | 역할 | 주요 속성 |
-|---|---|---|
-| `MacroGraph` | 사용자별 매크로 뷰 루트 (1:N — `(userId, macroId)` 복합 키) | `userId`, `macroId`, `title?`, `description?`, `scopeJson?`(`{ mode, filters?, intent? }`), `createdAt`, `updatedAt`, `deletedAt`(Unix ms) |
-| `MacroNode` | 지식 노드 (대화/노트 원본 1개에 대응) | `id`(정수), `userId`, `origId`, `nodeType`, `timestamp`, `numMessages`, `embedding`(384d), `deletedAt` |
-| `MacroCluster` | 군집(Topic) 노드 | `id`, `userId`, `name`, `description`, `themes[]`, `deletedAt` |
-| `MacroSubcluster` | 서브 군집 노드 | `id`, `userId`, `topKeywords[]`, `density`, `deletedAt` |
-| `MacroRelation` | 엣지 메타데이터 노드 | `id`, `userId`, `weight`, `type`(hard\|insight), `intraCluster`, `deletedAt` |
-| `MacroStats` | 그래프 통계 메타 노드 | `id`, `userId`, `status`, `generatedAt`, `metadataJson` |
-| `MacroSummary` | AI 요약 노드 | `id`, `userId`, `overviewJson`, `clustersJson`, `patternsJson`, `connectionsJson`, `recommendationsJson`, `generatedAt`, `detailLevel`, `deletedAt` |
+| 레이블 | 역할 | 고유 키 | 주요 속성 |
+|---|---|---|---|
+| `MacroGraph` | 사용자별 매크로 뷰 루트 (1:N) | `(userId, macroId)` | `userId`, `macroId`, `title?`, `description?`, `scopeJson?`, `createdAt`, `updatedAt`, `deletedAt` |
+| `MacroNode` | 지식 노드 (대화/노트 원본 1개에 대응) | `(userId, macroId, id)` | `userId`, `macroId`, `id`(정수), `origId`, `nodeType`, `timestamp`, `numMessages`, `embedding`(384d), `deletedAt` |
+| `MacroCluster` | 군집(Topic) 노드 | `(userId, macroId, id)` | `userId`, `macroId`, `id`, `name`, `description`, `themes[]`, `deletedAt` |
+| `MacroSubcluster` | 서브 군집 노드 | `(userId, macroId, id)` | `userId`, `macroId`, `id`, `topKeywords[]`, `density`, `deletedAt` |
+| `MacroRelation` | 엣지 메타데이터 노드 | `(userId, macroId, id)` | `userId`, `macroId`, `id`, `weight`, `type`(hard\|insight), `intraCluster`, `deletedAt` |
+| `MacroStats` | 그래프 통계 메타 노드 | `(userId, macroId)` | `userId`, `macroId`, `id`, `status`, `generatedAt`, `metadataJson` |
+| `MacroSummary` | AI 요약 노드 | `(userId, macroId)` | `userId`, `macroId`, `id`, `overviewJson`, `clustersJson`, `patternsJson`, `connectionsJson`, `recommendationsJson`, `generatedAt`, `detailLevel`, `deletedAt` |
+
+> **1:N 격리**: 모든 하위 엔티티(MacroNode/Cluster/Subcluster/Relation/Stats/Summary)는 `macroId`를 포함한 복합 키로 유일하게 식별됩니다. 서로 다른 Macro View는 같은 entity ID를 공유할 수 없으며, Clone 시 `newMacroId`로 독립 복제됩니다. 기존 데이터는 `macroId = userId`로 backfill됩니다.
 
 ### 2.2 관계 타입 (Relationship Types)
 

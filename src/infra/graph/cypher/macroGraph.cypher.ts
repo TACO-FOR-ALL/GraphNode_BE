@@ -11,18 +11,42 @@ export const MACRO_GRAPH_SCHEMA_CYPHER = [
   'DROP CONSTRAINT macro_graph_user_unique IF EXISTS',
   /** [제약조건] (userId, macroId) 복합 unique 제약을 생성합니다. */
   'CREATE CONSTRAINT macro_graph_composite_unique IF NOT EXISTS FOR (g:MacroGraph) REQUIRE (g.userId, g.macroId) IS UNIQUE',
-  /** [제약조건] 사용자별 graph node id를 유일하게 유지합니다. */
-  'CREATE CONSTRAINT macro_node_identity_unique IF NOT EXISTS FOR (n:MacroNode) REQUIRE (n.userId, n.id) IS UNIQUE',
-  /** [제약조건] 사용자별 cluster id를 유일하게 유지합니다. */
-  'CREATE CONSTRAINT macro_cluster_identity_unique IF NOT EXISTS FOR (c:MacroCluster) REQUIRE (c.userId, c.id) IS UNIQUE',
-  /** [제약조건] 사용자별 subcluster id를 유일하게 유지합니다. */
-  'CREATE CONSTRAINT macro_subcluster_identity_unique IF NOT EXISTS FOR (sc:MacroSubcluster) REQUIRE (sc.userId, sc.id) IS UNIQUE',
-  /** [제약조건] 사용자별 relation id를 유일하게 유지합니다. */
-  'CREATE CONSTRAINT macro_relation_identity_unique IF NOT EXISTS FOR (r:MacroRelation) REQUIRE (r.userId, r.id) IS UNIQUE',
-  /** [제약조건] 사용자별 stats 노드를 하나로 제한합니다. */
-  'CREATE CONSTRAINT macro_stats_user_unique IF NOT EXISTS FOR (st:MacroStats) REQUIRE st.userId IS UNIQUE',
-  /** [제약조건] 사용자별 summary 노드를 하나로 제한합니다. */
-  'CREATE CONSTRAINT macro_summary_user_unique IF NOT EXISTS FOR (sm:MacroSummary) REQUIRE sm.userId IS UNIQUE',
+  /** [마이그레이션] 기존 MacroNode에 macroId가 없으면 userId로 초기화합니다. */
+  'MATCH (n:MacroNode) WHERE n.macroId IS NULL SET n.macroId = n.userId',
+  /** [제약조건] 기존 사용자 단독 unique 제약을 제거합니다. */
+  'DROP CONSTRAINT macro_node_identity_unique IF EXISTS',
+  /** [제약조건] (userId, macroId, id) 복합 unique 제약을 생성합니다. */
+  'CREATE CONSTRAINT macro_node_identity_unique IF NOT EXISTS FOR (n:MacroNode) REQUIRE (n.userId, n.macroId, n.id) IS UNIQUE',
+  /** [마이그레이션] 기존 MacroCluster에 macroId가 없으면 userId로 초기화합니다. */
+  'MATCH (c:MacroCluster) WHERE c.macroId IS NULL SET c.macroId = c.userId',
+  /** [제약조건] 기존 사용자 단독 unique 제약을 제거합니다. */
+  'DROP CONSTRAINT macro_cluster_identity_unique IF EXISTS',
+  /** [제약조건] (userId, macroId, id) 복합 unique 제약을 생성합니다. */
+  'CREATE CONSTRAINT macro_cluster_identity_unique IF NOT EXISTS FOR (c:MacroCluster) REQUIRE (c.userId, c.macroId, c.id) IS UNIQUE',
+  /** [마이그레이션] 기존 MacroSubcluster에 macroId가 없으면 userId로 초기화합니다. */
+  'MATCH (sc:MacroSubcluster) WHERE sc.macroId IS NULL SET sc.macroId = sc.userId',
+  /** [제약조건] 기존 사용자 단독 unique 제약을 제거합니다. */
+  'DROP CONSTRAINT macro_subcluster_identity_unique IF EXISTS',
+  /** [제약조건] (userId, macroId, id) 복합 unique 제약을 생성합니다. */
+  'CREATE CONSTRAINT macro_subcluster_identity_unique IF NOT EXISTS FOR (sc:MacroSubcluster) REQUIRE (sc.userId, sc.macroId, sc.id) IS UNIQUE',
+  /** [마이그레이션] 기존 MacroRelation에 macroId가 없으면 userId로 초기화합니다. */
+  'MATCH (r:MacroRelation) WHERE r.macroId IS NULL SET r.macroId = r.userId',
+  /** [제약조건] 기존 사용자 단독 unique 제약을 제거합니다. */
+  'DROP CONSTRAINT macro_relation_identity_unique IF EXISTS',
+  /** [제약조건] (userId, macroId, id) 복합 unique 제약을 생성합니다. */
+  'CREATE CONSTRAINT macro_relation_identity_unique IF NOT EXISTS FOR (r:MacroRelation) REQUIRE (r.userId, r.macroId, r.id) IS UNIQUE',
+  /** [마이그레이션] 기존 MacroStats에 macroId가 없으면 userId로 초기화합니다. */
+  'MATCH (st:MacroStats) WHERE st.macroId IS NULL SET st.macroId = st.userId',
+  /** [제약조건] 기존 사용자 단독 unique 제약을 제거합니다. */
+  'DROP CONSTRAINT macro_stats_user_unique IF EXISTS',
+  /** [제약조건] (userId, macroId) 복합 unique 제약을 생성합니다. */
+  'CREATE CONSTRAINT macro_stats_user_unique IF NOT EXISTS FOR (st:MacroStats) REQUIRE (st.userId, st.macroId) IS UNIQUE',
+  /** [마이그레이션] 기존 MacroSummary에 macroId가 없으면 userId로 초기화합니다. */
+  'MATCH (sm:MacroSummary) WHERE sm.macroId IS NULL SET sm.macroId = sm.userId',
+  /** [제약조건] 기존 사용자 단독 unique 제약을 제거합니다. */
+  'DROP CONSTRAINT macro_summary_user_unique IF EXISTS',
+  /** [제약조건] (userId, macroId) 복합 unique 제약을 생성합니다. */
+  'CREATE CONSTRAINT macro_summary_user_unique IF NOT EXISTS FOR (sm:MacroSummary) REQUIRE (sm.userId, sm.macroId) IS UNIQUE',
   /** [인덱스] 원천 데이터 ID로 MacroNode를 빠르게 찾기 위한 인덱스입니다. */
   'CREATE INDEX macro_node_orig IF NOT EXISTS FOR (n:MacroNode) ON (n.userId, n.origId)',
   /** [인덱스] source type별 graph 조회와 집계를 위한 인덱스입니다. */
@@ -91,8 +115,9 @@ export const MACRO_GRAPH_CYPHER = {
    */
   upsertNodes: `
     UNWIND $rows AS row
-    MERGE (n:MacroNode {userId: row.userId, id: row.id})
-    SET n.label        = row.label,
+    MERGE (n:MacroNode {userId: row.userId, macroId: row.macroId, id: row.id})
+    SET n.macroId      = row.macroId,
+        n.label        = row.label,
         n.summary      = row.summary,
         n.metadataJson = row.metadataJson,
         n.origId       = row.origId,
@@ -130,8 +155,9 @@ export const MACRO_GRAPH_CYPHER = {
    */
   upsertClusters: `
     UNWIND $rows AS row
-    MERGE (c:MacroCluster {userId: row.userId, id: row.id})
-    SET c.name        = row.name,
+    MERGE (c:MacroCluster {userId: row.userId, macroId: row.macroId, id: row.id})
+    SET c.macroId     = row.macroId,
+        c.name        = row.name,
         c.description = row.description,
         c.themes      = row.themes,
         c.createdAt   = row.createdAt,
@@ -162,8 +188,9 @@ export const MACRO_GRAPH_CYPHER = {
    */
   upsertSubclusters: `
     UNWIND $rows AS row
-    MERGE (sc:MacroSubcluster {userId: row.userId, id: row.id})
-    SET sc.topKeywords = row.topKeywords,
+    MERGE (sc:MacroSubcluster {userId: row.userId, macroId: row.macroId, id: row.id})
+    SET sc.macroId     = row.macroId,
+        sc.topKeywords = row.topKeywords,
         sc.density     = row.density,
         sc.createdAt   = row.createdAt,
         sc.updatedAt   = row.updatedAt,
@@ -172,7 +199,7 @@ export const MACRO_GRAPH_CYPHER = {
 
   clearSubclusterRelationshipsForReplacement: `
     UNWIND $subclusterIds AS subclusterId
-    MATCH (sc:MacroSubcluster {userId: $userId, id: subclusterId})
+    MATCH (sc:MacroSubcluster {userId: $userId, macroId: $macroId, id: subclusterId})
     OPTIONAL MATCH (:MacroGraph {userId: $userId, macroId: $macroId})-[graphRel:HAS_SUBCLUSTER]->(sc)
     WITH sc, [rel IN collect(graphRel) WHERE rel IS NOT NULL] AS graphRels
     FOREACH (rel IN graphRels | DELETE rel)
@@ -214,8 +241,9 @@ export const MACRO_GRAPH_CYPHER = {
    */
   upsertRelations: `
     UNWIND $rows AS row
-    MERGE (r:MacroRelation {userId: row.userId, id: row.id})
-    SET r.weight       = row.weight,
+    MERGE (r:MacroRelation {userId: row.userId, macroId: row.macroId, id: row.id})
+    SET r.macroId      = row.macroId,
+        r.weight       = row.weight,
         r.type         = row.type,
         r.relationType = row.relationType,
         r.relation     = row.relation,
@@ -249,8 +277,9 @@ export const MACRO_GRAPH_CYPHER = {
    * // }
    */
   upsertStats: `
-    MERGE (st:MacroStats {userId: $userId})
-    SET st.id           = $id,
+    MERGE (st:MacroStats {userId: $userId, macroId: $macroId})
+    SET st.macroId      = $macroId,
+        st.id           = $id,
         st.status       = $status,
         st.generatedAt  = $generatedAt,
         st.updatedAt    = $updatedAt,
@@ -304,8 +333,9 @@ export const MACRO_GRAPH_CYPHER = {
    * // }
    */
   upsertSummary: `
-    MERGE (sm:MacroSummary {userId: $userId})
-    SET sm.id                   = $id,
+    MERGE (sm:MacroSummary {userId: $userId, macroId: $macroId})
+    SET sm.macroId              = $macroId,
+        sm.id                   = $id,
         sm.overviewJson         = $overviewJson,
         sm.clustersJson         = $clustersJson,
         sm.patternsJson         = $patternsJson,
@@ -404,7 +434,7 @@ export const MACRO_GRAPH_CYPHER = {
    */
   linkStatsToGraph: `
     MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})
-    MATCH (st:MacroStats {userId: $userId})
+    MATCH (st:MacroStats {userId: $userId, macroId: $macroId})
     MERGE (g)-[:HAS_STATS]->(st)
   `,
 
@@ -420,7 +450,7 @@ export const MACRO_GRAPH_CYPHER = {
    */
   linkSummaryToGraph: `
     MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})
-    MATCH (sm:MacroSummary {userId: $userId})
+    MATCH (sm:MacroSummary {userId: $userId, macroId: $macroId})
     MERGE (g)-[:HAS_SUMMARY]->(sm)
   `,
 
@@ -438,11 +468,11 @@ export const MACRO_GRAPH_CYPHER = {
    */
   linkNodeBelongsToCluster: `
     UNWIND $rows AS row
-    MATCH (n:MacroNode {userId: $userId, id: row.nodeId})
+    MATCH (n:MacroNode {userId: $userId, macroId: row.macroId, id: row.nodeId})
     OPTIONAL MATCH (n)-[r:BELONGS_TO]->()
     DELETE r
     WITH n, row
-    MATCH (c:MacroCluster {userId: $userId, id: row.clusterId})
+    MATCH (c:MacroCluster {userId: $userId, macroId: row.macroId, id: row.clusterId})
     MERGE (n)-[:BELONGS_TO]->(c)
   `,
 
@@ -605,8 +635,8 @@ export const MACRO_GRAPH_CYPHER = {
    */
   linkSubclusterToCluster: `
     UNWIND $rows AS row
-    MATCH (cl:MacroCluster    {userId: $userId, id: row.clusterId})
-    MATCH (sc:MacroSubcluster {userId: $userId, id: row.subclusterId})
+    MATCH (cl:MacroCluster    {userId: $userId, macroId: row.macroId, id: row.clusterId})
+    MATCH (sc:MacroSubcluster {userId: $userId, macroId: row.macroId, id: row.subclusterId})
     MERGE (cl)-[:HAS_SUBCLUSTER]->(sc)
   `,
 
@@ -624,9 +654,9 @@ export const MACRO_GRAPH_CYPHER = {
    */
   linkSubclusterContainsNodes: `
     UNWIND $rows AS row
-    MATCH (sc:MacroSubcluster {userId: $userId, id: row.subclusterId})
+    MATCH (sc:MacroSubcluster {userId: $userId, macroId: row.macroId, id: row.subclusterId})
     MATCH (cl:MacroCluster {userId: $userId})-[:HAS_SUBCLUSTER]->(sc)
-    MATCH (n:MacroNode         {userId: $userId, id: row.nodeId})
+    MATCH (n:MacroNode {userId: $userId, macroId: row.macroId, id: row.nodeId})
     MATCH (n)-[:BELONGS_TO]->(cl)
     MERGE (sc)-[:CONTAINS]->(n)
   `,
@@ -645,9 +675,9 @@ export const MACRO_GRAPH_CYPHER = {
    */
   linkSubclusterRepresentsNode: `
     UNWIND $rows AS row
-    MATCH (sc:MacroSubcluster {userId: $userId, id: row.subclusterId})
+    MATCH (sc:MacroSubcluster {userId: $userId, macroId: row.macroId, id: row.subclusterId})
     MATCH (cl:MacroCluster {userId: $userId})-[:HAS_SUBCLUSTER]->(sc)
-    MATCH (n:MacroNode         {userId: $userId, id: row.nodeId})
+    MATCH (n:MacroNode {userId: $userId, macroId: row.macroId, id: row.nodeId})
     MATCH (n)-[:BELONGS_TO]->(cl)
     MERGE (sc)-[:REPRESENTS]->(n)
   `,
@@ -666,9 +696,9 @@ export const MACRO_GRAPH_CYPHER = {
    */
   linkRelationEndpoints: `
     UNWIND $rows AS row
-    MATCH (rel:MacroRelation {userId: $userId, id: row.edgeId})
-    MATCH (src:MacroNode     {userId: $userId, id: row.source})
-    MATCH (tgt:MacroNode     {userId: $userId, id: row.target})
+    MATCH (rel:MacroRelation {userId: $userId, macroId: row.macroId, id: row.edgeId})
+    MATCH (src:MacroNode     {userId: $userId, macroId: row.macroId, id: row.source})
+    MATCH (tgt:MacroNode     {userId: $userId, macroId: row.macroId, id: row.target})
     MERGE (rel)-[:RELATES_SOURCE]->(src)
     MERGE (rel)-[:RELATES_TARGET]->(tgt)
   `,
@@ -687,8 +717,8 @@ export const MACRO_GRAPH_CYPHER = {
    */
   linkMaterializedMacroRelated: `
     UNWIND $rows AS row
-    MATCH (src:MacroNode {userId: $userId, id: row.source})
-    MATCH (tgt:MacroNode {userId: $userId, id: row.target})
+    MATCH (src:MacroNode {userId: $userId, macroId: row.macroId, id: row.source})
+    MATCH (tgt:MacroNode {userId: $userId, macroId: row.macroId, id: row.target})
     MERGE (src)-[r:MACRO_RELATED {id: row.edgeId, userId: $userId}]->(tgt)
     SET r.weight       = row.weight,
         r.type         = row.type,
@@ -1851,8 +1881,8 @@ export const MACRO_GRAPH_CYPHER = {
       WITH src, dst
       MATCH (src)-[:HAS_NODE]->(n:MacroNode {userId: $userId})
       WHERE n.deletedAt IS NULL
-      MERGE (newNode:MacroNode {userId: $userId, id: n.id})
-      SET newNode = n
+      MERGE (newNode:MacroNode {userId: $userId, macroId: $newMacroId, id: n.id})
+      SET newNode = n, newNode.macroId = $newMacroId
       MERGE (dst)-[:HAS_NODE]->(newNode)
     } IN TRANSACTIONS OF 500 ROWS
     WITH src, dst
@@ -1860,8 +1890,8 @@ export const MACRO_GRAPH_CYPHER = {
       WITH src, dst
       MATCH (src)-[:HAS_CLUSTER]->(c:MacroCluster {userId: $userId})
       WHERE c.deletedAt IS NULL
-      MERGE (newCluster:MacroCluster {userId: $userId, id: c.id})
-      SET newCluster = c
+      MERGE (newCluster:MacroCluster {userId: $userId, macroId: $newMacroId, id: c.id})
+      SET newCluster = c, newCluster.macroId = $newMacroId
       MERGE (dst)-[:HAS_CLUSTER]->(newCluster)
     } IN TRANSACTIONS OF 500 ROWS
     WITH src, dst
@@ -1869,8 +1899,8 @@ export const MACRO_GRAPH_CYPHER = {
       WITH src, dst
       MATCH (src)-[:HAS_RELATION]->(r:MacroRelation {userId: $userId})
       WHERE r.deletedAt IS NULL
-      MERGE (newRel:MacroRelation {userId: $userId, id: r.id})
-      SET newRel = r
+      MERGE (newRel:MacroRelation {userId: $userId, macroId: $newMacroId, id: r.id})
+      SET newRel = r, newRel.macroId = $newMacroId
       MERGE (dst)-[:HAS_RELATION]->(newRel)
     } IN TRANSACTIONS OF 500 ROWS
     WITH src, dst
@@ -1878,8 +1908,8 @@ export const MACRO_GRAPH_CYPHER = {
       WITH src, dst
       MATCH (src)-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId})
       WHERE sc.deletedAt IS NULL
-      MERGE (newSc:MacroSubcluster {userId: $userId, id: sc.id})
-      SET newSc = sc
+      MERGE (newSc:MacroSubcluster {userId: $userId, macroId: $newMacroId, id: sc.id})
+      SET newSc = sc, newSc.macroId = $newMacroId
       MERGE (dst)-[:HAS_SUBCLUSTER]->(newSc)
     } IN TRANSACTIONS OF 500 ROWS
   `,
