@@ -421,8 +421,9 @@ describe('Graph API Integration Tests', () => {
 
         const res = await request(app)
             .get('/v1/graph/snapshot')
+            .query({ macroId: 'test-macro' })
             .set('Authorization', `Bearer ${accessToken}`);
-        
+
         expect(res.status).toBe(200);
         expect(res.body.nodes).toHaveLength(1);
         expect(res.body.edges).toHaveLength(1);
@@ -432,7 +433,8 @@ describe('Graph API Integration Tests', () => {
 
     it('should save snapshot', async () => {
         const snapshot: any = {
-            nodes: [{ id: 1, userId, origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, timestamp: null }],
+            macroId: 'test-macro',
+            nodes: [{ id: 1, userId, macroId: 'test-macro', origId: 'o1', clusterId: 'c1', clusterName: 'C1', numMessages: 1, timestamp: null }],
             edges: [{ id: 'e1', userId, source: 1, target: 2, weight: 1, type: 'hard', intraCluster: true }],
             clusters: [{ id: 'c1', userId, name: 'C1', description: 'D', size: 1, themes: [] }],
             subclusters: [],
@@ -443,7 +445,7 @@ describe('Graph API Integration Tests', () => {
         await request(app)
             .post('/v1/graph/snapshot')
             .set('Authorization', `Bearer ${accessToken}`)
-            .send({ snapshot })
+            .send({ macroId: 'test-macro', snapshot })
             .expect(204);
         
         expect(nodesStore.size).toBe(1);

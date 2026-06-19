@@ -25,6 +25,7 @@ jest.mock('../../src/shared/utils/logger', () => ({
 const NODE: GraphNodeDto = {
   id: 1,
   userId: 'user1',
+  macroId: 'macro1',
   origId: 'orig1',
   clusterId: 'c1',
   clusterName: 'Cluster 1',
@@ -60,6 +61,7 @@ const SUBCLUSTER: GraphSubclusterDto = {
 
 const UPSERT_INPUT: MacroGraphUpsertInput = {
   userId: 'user1',
+  macroId: 'macro1',
   nodes: [NODE],
   edges: [],
   clusters: [],
@@ -182,7 +184,7 @@ describe('Neo4jMacroGraphAdapter', () => {
       (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
 
       const adapter = new Neo4jMacroGraphAdapter();
-      const result = await adapter.getStats('user1');
+      const result = await adapter.getStats('user1', { macroId: 'macro1' });
 
       expect(result).not.toBeNull();
       expect(result!.nodes).toBe(3);   // aggregate에서 복원
@@ -203,7 +205,7 @@ describe('Neo4jMacroGraphAdapter', () => {
       (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
 
       const adapter = new Neo4jMacroGraphAdapter();
-      const result = await adapter.getStats('user1');
+      const result = await adapter.getStats('user1', { macroId: 'macro1' });
       expect(result).toBeNull();
     });
   });
@@ -236,7 +238,7 @@ describe('Neo4jMacroGraphAdapter', () => {
       (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
 
       const adapter = new Neo4jMacroGraphAdapter();
-      const result = await adapter.getStatsMetadata('user1');
+      const result = await adapter.getStatsMetadata('user1', { macroId: 'macro1' });
 
       expect(tx.run).toHaveBeenCalledWith(
         MACRO_GRAPH_CYPHER.getStatsMetadata,
@@ -256,7 +258,7 @@ describe('Neo4jMacroGraphAdapter', () => {
       (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
 
       const adapter = new Neo4jMacroGraphAdapter();
-      await adapter.upsertSubclusters([SUBCLUSTER]);
+      await adapter.upsertSubclusters([SUBCLUSTER], { macroId: 'macro1' });
 
       const calledQueries: string[] = (tx.run as jest.Mock).mock.calls.map(
         (c: [string, ...unknown[]]) => c[0]
@@ -277,7 +279,7 @@ describe('Neo4jMacroGraphAdapter', () => {
 
       expect(tx.run).toHaveBeenCalledWith(
         MACRO_GRAPH_CYPHER.clearSubclusterRelationshipsForReplacement,
-        { userId: 'user1', subclusterIds: ['sc1'] }
+        { userId: 'user1', macroId: 'macro1', subclusterIds: ['sc1'] }
       );
     });
   });
@@ -302,12 +304,13 @@ describe('Neo4jMacroGraphAdapter', () => {
       (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
 
       const adapter = new Neo4jMacroGraphAdapter();
-      const result = await adapter.pruneIncompatibleSubclusterMemberships('user1', [1, 3], 25.8);
+      const result = await adapter.pruneIncompatibleSubclusterMemberships('user1', [1, 3], 25.8, { macroId: 'macro1' });
 
       expect(tx.run).toHaveBeenCalledWith(
         MACRO_GRAPH_CYPHER.pruneIncompatibleSubclusterMemberships,
         {
           userId: 'user1',
+          macroId: 'macro1',
           nodeIds: [1, 3],
           hasNodeFilter: true,
           limit: expect.any(Object),
@@ -349,11 +352,11 @@ describe('Neo4jMacroGraphAdapter', () => {
       (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
 
       const adapter = new Neo4jMacroGraphAdapter();
-      const result = await adapter.reconcileSubclusterMemberships('user1');
+      const result = await adapter.reconcileSubclusterMemberships('user1', { macroId: 'macro1' });
 
       expect(tx.run).toHaveBeenCalledWith(
         MACRO_GRAPH_CYPHER.reconcileSubclusterMemberships,
-        { userId: 'user1' }
+        { userId: 'user1', macroId: 'macro1' }
       );
       expect(result).toEqual({
         deletedSubclusters: 2,
@@ -374,7 +377,7 @@ describe('Neo4jMacroGraphAdapter', () => {
       (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
 
       const adapter = new Neo4jMacroGraphAdapter();
-      const result = await adapter.reconcileSubclusterMemberships('user1');
+      const result = await adapter.reconcileSubclusterMemberships('user1', { macroId: 'macro1' });
 
       expect(result).toEqual({
         deletedSubclusters: 0,
@@ -394,31 +397,31 @@ describe('Neo4jMacroGraphAdapter', () => {
       (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
 
       const adapter = new Neo4jMacroGraphAdapter();
-      await adapter.deleteGraph('user1');
+      await adapter.deleteGraph('user1', { macroId: 'macro1' });
 
       expect(session.run).toHaveBeenCalledWith(
         MACRO_GRAPH_CYPHER.deleteGraphBatch.relations,
-        { userId: 'user1' }
+        { userId: 'user1', macroId: 'macro1' }
       );
       expect(session.run).toHaveBeenCalledWith(
         MACRO_GRAPH_CYPHER.deleteGraphBatch.nodes,
-        { userId: 'user1' }
+        { userId: 'user1', macroId: 'macro1' }
       );
       expect(session.run).toHaveBeenCalledWith(
         MACRO_GRAPH_CYPHER.deleteGraphBatch.subclusters,
-        { userId: 'user1' }
+        { userId: 'user1', macroId: 'macro1' }
       );
       expect(session.run).toHaveBeenCalledWith(
         MACRO_GRAPH_CYPHER.deleteGraphBatch.clusters,
-        { userId: 'user1' }
+        { userId: 'user1', macroId: 'macro1' }
       );
       expect(session.run).toHaveBeenCalledWith(
         MACRO_GRAPH_CYPHER.deleteGraphBatch.statsAndSummary,
-        { userId: 'user1' }
+        { userId: 'user1', macroId: 'macro1' }
       );
       expect(session.run).toHaveBeenCalledWith(
         MACRO_GRAPH_CYPHER.deleteGraphBatch.graphRoot,
-        { userId: 'user1' }
+        { userId: 'user1', macroId: 'macro1' }
       );
     });
   });
@@ -473,7 +476,7 @@ describe('Neo4jMacroGraphAdapter', () => {
       (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
 
       const adapter = new Neo4jMacroGraphAdapter();
-      const result = await adapter.getGraphSummary('user1');
+      const result = await adapter.getGraphSummary('user1', { macroId: 'macro1' });
 
       expect(result).not.toBeNull();
       expect(result!.overview.total_conversations).toBe(4);
@@ -494,7 +497,7 @@ describe('Neo4jMacroGraphAdapter', () => {
       (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
 
       const adapter = new Neo4jMacroGraphAdapter();
-      await adapter.deleteGraphSummary('user1');
+      await adapter.deleteGraphSummary('user1', undefined, { macroId: 'macro1' });
 
       const calledQuery = (tx.run as jest.Mock).mock.calls[0][0] as string;
       expect(calledQuery).toContain('DETACH DELETE sm');
@@ -558,7 +561,7 @@ describe('Neo4jMacroGraphAdapter', () => {
       (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
 
       const adapter = new Neo4jMacroGraphAdapter();
-      const results = await adapter.searchGraphRagNeighbors('user1', ['seed-1'], 20);
+      const results = await adapter.searchGraphRagNeighbors('user1', ['seed-1'], 20, { macroId: 'macro1' });
 
       // 세션 2개가 각각 생성되어야 합니다.
       expect(driver.session).toHaveBeenCalledTimes(2);
@@ -605,7 +608,7 @@ describe('Neo4jMacroGraphAdapter', () => {
       (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
 
       const adapter = new Neo4jMacroGraphAdapter();
-      const results = await adapter.searchGraphRagNeighbors('user1', ['seed-1'], 20);
+      const results = await adapter.searchGraphRagNeighbors('user1', ['seed-1'], 20, { macroId: 'macro1' });
 
       expect(results).toHaveLength(1);
       expect(results[0].origId).toBe(sharedOrigId);
@@ -630,7 +633,7 @@ describe('Neo4jMacroGraphAdapter', () => {
 
       const adapter = new Neo4jMacroGraphAdapter();
       await expect(
-        adapter.searchGraphRagNeighbors('user1', ['seed-1'], 20)
+        adapter.searchGraphRagNeighbors('user1', ['seed-1'], 20, { macroId: 'macro1' })
       ).rejects.toThrow('Neo4j connection failed');
 
       expect(session1.close).toHaveBeenCalledTimes(1);
@@ -648,7 +651,7 @@ describe('Neo4jMacroGraphAdapter', () => {
       (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
 
       const adapter = new Neo4jMacroGraphAdapter();
-      await adapter.removeEmptyClusters('user1');
+      await adapter.removeEmptyClusters('user1', { macroId: 'macro1' });
 
       const calledQuery = (tx.run as jest.Mock).mock.calls[0][0] as string;
       expect(calledQuery).toContain(MACRO_GRAPH_CYPHER.cleanupEmptyClusters);

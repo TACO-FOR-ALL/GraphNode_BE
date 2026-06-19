@@ -14,16 +14,25 @@ export class GetGraphSummaryTool implements IAgentTool {
       description: "사용자 지식 그래프의 가벼운 '통계(노드/엣지 수)'와 '핵심 요약 텍스트'만 빠르게 보고 싶을 때 호출합니다. 구체적인 개별 노드나 엣지 데이터는 반환하지 않으므로, 토큰을 절약하면서 전체 흐름만 파악할 때 유용합니다.",
       parameters: {
         type: 'object',
-        properties: {},
+        properties: {
+          macroId: {
+            type: 'string',
+            description:
+              '조회할 매크로 뷰 ID. 시스템 프롬프트의 Active Macro View ID를 전달하세요. 미지정 시 전체 통계만 반환합니다.',
+          },
+        },
       },
     },
   };
 
-  async execute(userId: string, _args: any, deps: AgentServiceDeps, openai: OpenAI): Promise<string> {
+  async execute(userId: string, args: { macroId?: string }, deps: AgentServiceDeps, openai: OpenAI): Promise<string> {
     const { graphEmbeddingService } = deps;
-    // Graph 정보 조회
+    const macroId = typeof args?.macroId === 'string' ? args.macroId : undefined;
+
     const stats = await graphEmbeddingService.getStats(userId);
-    const snapshot = await graphEmbeddingService.getSnapshotForUser(userId);
+    const snapshot = macroId
+      ? await graphEmbeddingService.getSnapshotForUser(userId, macroId)
+      : null;
 
     // FIXED(강현일) : SubCluster 등의 추가된 정보들도 돌려주게 변경
     return JSON.stringify({

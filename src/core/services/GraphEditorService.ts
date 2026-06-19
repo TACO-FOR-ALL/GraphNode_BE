@@ -138,12 +138,15 @@ export class GraphEditorService {
       const cluster = await this.repo.findCluster(userId, dto.clusterId, options);
       if (!cluster) throw new NotFoundError(`Cluster '${dto.clusterId}' not found`);
 
+      const macroId = options?.macroId;
+      if (!macroId) throw new ValidationError('macroId is required in options');
       const nodeId = await this.repo.getNextNodeId(userId, options);
       const now = new Date().toISOString();
 
       const node: GraphNodeDto = {
         id: nodeId,
         userId,
+        macroId,
         origId: `editor:${userId}:${nodeId}`,
         clusterId: dto.clusterId,
         clusterName: cluster.name,
@@ -825,6 +828,7 @@ export class GraphEditorService {
       }
 
       const results: BatchOperationResult[] = [];
+      const batchOptions: MacroGraphStoreOptions = { macroId: dto.macroId };
 
       // 각 operation을 순서대로 실행합니다.
       // Neo4j managed transaction 내에서 실행하려면 adapter 레벨의 executeWrite를 사용해야 하지만,
@@ -835,7 +839,7 @@ export class GraphEditorService {
       for (let i = 0; i < dto.operations.length; i++) {
         const op = dto.operations[i];
         try {
-          const data = await this.executeOperation(userId, op);
+          const data = await this.executeOperation(userId, op, batchOptions);
           results.push({ operationIndex: i, success: true, data });
         } catch (opErr: unknown) {
           const message = opErr instanceof Error ? opErr.message : String(opErr);
@@ -866,9 +870,9 @@ export class GraphEditorService {
    * @param op 실행할 operation
    * @returns operation 결과 데이터 (create 계열만 반환)
    */
-  private async executeOperation(userId: string, op: EditorBatchOperation): Promise<unknown> {
+  private async executeOperation(userId: string, op: EditorBatchOperation, options?: MacroGraphStoreOptions): Promise<unknown> {
     switch (op.type) {
-      case 'createNode': return this.createNode(userId, op.payload);
+      case 'createNode': return this.createNode(userId, op.payload, options);
       case 'updateNode': return this.updateNode(userId, op.nodeId, op.payload);
       case 'deleteNode': return this.deleteNode(userId, op.nodeId, op.permanent);
       case 'createEdge': return this.createEdge(userId, op.payload);

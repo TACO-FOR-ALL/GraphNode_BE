@@ -31,7 +31,7 @@ GraphNode의 Neo4j는 **Macro Graph**를 Native Graph 구조로 저장하고, **
 
 | 레이블 | 역할 | 주요 속성 |
 |---|---|---|
-| `MacroGraph` | 사용자별 그래프 루트 (1:1) | `userId`, `createdAt`, `updatedAt` |
+| `MacroGraph` | 사용자별 매크로 뷰 루트 (1:N — `(userId, macroId)` 복합 키) | `userId`, `macroId`, `title?`, `description?`, `scopeJson?`(`{ mode, filters?, intent? }`), `createdAt`, `updatedAt`, `deletedAt`(Unix ms) |
 | `MacroNode` | 지식 노드 (대화/노트 원본 1개에 대응) | `id`(정수), `userId`, `origId`, `nodeType`, `timestamp`, `numMessages`, `embedding`(384d), `deletedAt` |
 | `MacroCluster` | 군집(Topic) 노드 | `id`, `userId`, `name`, `description`, `themes[]`, `deletedAt` |
 | `MacroSubcluster` | 서브 군집 노드 | `id`, `userId`, `topKeywords[]`, `density`, `deletedAt` |
@@ -69,7 +69,7 @@ MacroNode  ──MACRO_RELATED─────► MacroNode   (materialized, Grap
 
 ```mermaid
 graph LR
-    MG["MacroGraph\n(userId)"]
+    MG["MacroGraph\n(userId, macroId)"]
 
     MN["MacroNode\n(id, origId, nodeType,\nembedding[384])"]
     MC["MacroCluster\n(id, name, themes)"]

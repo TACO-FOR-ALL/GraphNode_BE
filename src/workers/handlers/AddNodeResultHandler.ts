@@ -50,7 +50,7 @@ interface NormalizedAddNodeItem {
 export class AddNodeResultHandler implements JobHandler {
   async handle(message: AddNodeResultPayload, container: Container): Promise<void> {
     const { payload, taskId } = message;
-    const { userId, status, resultS3Key, error } = payload;
+    const { userId, macroId, status, resultS3Key, error } = payload;
 
     logger.info({ taskId, userId, status }, 'Handling AddNode result');
 
@@ -315,6 +315,7 @@ export class AddNodeResultHandler implements JobHandler {
           pendingNodes.push({
             id: dbNodeId,
             userId,
+            macroId: macroId ?? userId,
             origId: normalizedItem.normalizedOrigId,
             clusterId: normalizedItem.clusterId,
             clusterName: normalizedItem.clusterName || '',
@@ -335,15 +336,17 @@ export class AddNodeResultHandler implements JobHandler {
 
       // Neo4j는 MacroNode.clusterId 속성을 저장하지 않고 BELONGS_TO 관계를 소속 정보의 source of truth로 사용합니다.
       // 따라서 신규 cluster가 포함된 AddNode 결과에서는 cluster upsert가 먼저 끝나야 node upsert 시 관계 생성 Cypher가 성공합니다.
+      const macroOptions = macroId ? { macroId } : undefined;
+
       if (pendingClusters.length > 0) {
-        await graphService.upsertClusters(pendingClusters); // 단일 트랜잭션 배치
+        await graphService.upsertClusters(pendingClusters, macroOptions); // 단일 트랜잭션 배치
       }
 
       // 노드 배치 처리: 20개 청크 단위로 순차 실행하여 Neo4j 커넥션 풀 고갈 방지
       const NODE_CHUNK_SIZE = 20;
       for (let i = 0; i < pendingNodes.length; i += NODE_CHUNK_SIZE) {
         const chunk = pendingNodes.slice(i, i + NODE_CHUNK_SIZE);
-        await graphService.upsertNodes(chunk);
+        await graphService.upsertNodes(chunk, macroOptions);
       }
 
       if (movedNodeIds.size > 0) {

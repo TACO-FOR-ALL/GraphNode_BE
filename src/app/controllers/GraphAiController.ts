@@ -45,9 +45,21 @@ export class GraphAiController {
    */
   summarizeGraph = async (req: Request, res: Response) => {
     const userId = getUserIdFromRequest(req);
+    const macroId = req.body?.macroId as string | undefined;
+
+    if (!macroId) {
+      res.status(400).json({
+        type: 'https://graphnode.dev/problems/validation-failed',
+        title: 'Bad Request',
+        status: 400,
+        detail: 'macroId is required',
+        instance: req.originalUrl,
+      });
+      return;
+    }
 
     // 그래프 요약 프로세스 시작 (SQS 요청)
-    const taskId = await this.graphGenerationService.requestGraphSummary(userId!);
+    const taskId = await this.graphGenerationService.requestGraphSummary(userId!, macroId);
 
     res.status(202).json({
       message: 'Graph summary generation queued',

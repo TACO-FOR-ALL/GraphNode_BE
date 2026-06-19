@@ -353,6 +353,8 @@ export type EditorBatchOperation =
  * - 첫 번째 실패 operation에서 실행이 중단됩니다(이미 완료된 작업은 롤백되지 않음).
  */
 export interface BatchEditorRequestDto {
+  /** 소속 매크로 뷰 ID. createNode 등 macroId가 필요한 operation에 사용됩니다. */
+  macroId: string;
   /** 순서대로 실행할 편집 작업 목록 (최소 1개, 최대 100개). */
   operations: EditorBatchOperation[];
 }

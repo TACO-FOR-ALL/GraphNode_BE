@@ -392,7 +392,8 @@ describe('GraphAi API Integration Tests', () => {
             // Service throws if nodes linked to stats are missing or similar
             const res = await request(app)
                 .post('/v1/graph-ai/summary')
-                .set('Authorization', `Bearer ${accessToken}`);
+                .set('Authorization', `Bearer ${accessToken}`)
+                .send({ macroId: 'test-macro' });
             expect(res.status).toBe(404);
         });
 
@@ -403,7 +404,8 @@ describe('GraphAi API Integration Tests', () => {
 
             const res = await request(app)
                 .post('/v1/graph-ai/summary')
-                .set('Authorization', `Bearer ${accessToken}`);
+                .set('Authorization', `Bearer ${accessToken}`)
+                .send({ macroId: 'test-macro' });
             if (res.status !== 202) console.error('RES BODY SUMMARY:', res.body);
             expect(res.status).toBe(202);
 

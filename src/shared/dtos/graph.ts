@@ -35,6 +35,8 @@ export interface GraphNodeDto {
   id: number;
   /** 서버 내부 사용자 식별자 */
   userId: string;
+  /** 소속 매크로 뷰 ID */
+  macroId: string;
 
   // New fields
   label?: string;
@@ -219,6 +221,8 @@ export interface GraphSubclusterDto {
  * - 외부 AI 모듈이 전달하는 페이로드 구조와 일치한다.
  */
 export interface GraphSnapshotDto {
+  /** 소속 매크로 뷰 ID */
+  macroId: string;
   /** 그래프 노드 목록 */
   nodes: GraphNodeDto[];
   /** 그래프 엣지 목록 */
@@ -240,6 +244,8 @@ export interface GraphSnapshotDto {
 export interface PersistGraphPayloadDto {
   /** 서버 내부 사용자 식별자 */
   userId: string;
+  /** 소속 매크로 뷰 ID */
+  macroId: string;
   /** 그래프 전체 스냅샷 */
   snapshot: GraphSnapshotDto;
 }

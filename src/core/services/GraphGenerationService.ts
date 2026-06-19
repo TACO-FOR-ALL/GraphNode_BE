@@ -347,11 +347,11 @@ export class GraphGenerationService {
    * @param userId 사용자 ID
    * @returns 발행된 작업의 Task ID
    */
-  async requestGraphSummary(userId: string): Promise<string> {
+  async requestGraphSummary(userId: string, macroId: string): Promise<string> {
     try {
       const taskId = `summary_${userId}_${ulid()}`;
       const snapshot = await withRetry(
-        async () => await this.graphEmbeddingService.getSnapshotForUser(userId),
+        async () => await this.graphEmbeddingService.getSnapshotForUser(userId, macroId),
         { label: 'GraphEmbeddingService.getSnapshotForUser' }
       );
       if (!snapshot || snapshot.nodes.length === 0) {

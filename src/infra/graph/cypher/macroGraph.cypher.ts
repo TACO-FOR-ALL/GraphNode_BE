@@ -5,8 +5,12 @@
  * 기본 constraint와 조회 index만 준비하는 것입니다.
  */
 export const MACRO_GRAPH_SCHEMA_CYPHER = [
-  /** [제약조건] 사용자별 Macro Graph 루트 노드를 하나로 제한합니다. */
-  'CREATE CONSTRAINT macro_graph_user_unique IF NOT EXISTS FOR (g:MacroGraph) REQUIRE g.userId IS UNIQUE',
+  /** [마이그레이션] 기존 MacroGraph 노드에 macroId가 없으면 userId로 초기화합니다. */
+  'MATCH (g:MacroGraph) WHERE g.macroId IS NULL SET g.macroId = g.userId',
+  /** [제약조건] 기존 userId 단독 unique 제약을 제거합니다. */
+  'DROP CONSTRAINT macro_graph_user_unique IF EXISTS',
+  /** [제약조건] (userId, macroId) 복합 unique 제약을 생성합니다. */
+  'CREATE CONSTRAINT macro_graph_composite_unique IF NOT EXISTS FOR (g:MacroGraph) REQUIRE (g.userId, g.macroId) IS UNIQUE',
   /** [제약조건] 사용자별 graph node id를 유일하게 유지합니다. */
   'CREATE CONSTRAINT macro_node_identity_unique IF NOT EXISTS FOR (n:MacroNode) REQUIRE (n.userId, n.id) IS UNIQUE',
   /** [제약조건] 사용자별 cluster id를 유일하게 유지합니다. */
@@ -49,11 +53,14 @@ export const MACRO_GRAPH_CYPHER = {
    * @description 사용자 Macro Graph 루트 노드를 생성하거나 updatedAt을 갱신합니다.
    *
    * @param userId 대상 사용자 ID
+   * @param macroId 매크로 뷰 ID
    * @param now 현재 ISO 시각
+   * @param title 매크로 뷰 제목 (optional)
+   * @param description 매크로 뷰 설명 (optional)
    */
   upsertGraphRoot: `
-    MERGE (g:MacroGraph {userId: $userId})
-    ON CREATE SET g.createdAt = $now, g.updatedAt = $now
+    MERGE (g:MacroGraph {userId: $userId, macroId: $macroId})
+    ON CREATE SET g.title = $title, g.description = $description, g.createdAt = $now, g.updatedAt = $now
     ON MATCH  SET g.updatedAt = $now
   `,
 
@@ -166,7 +173,7 @@ export const MACRO_GRAPH_CYPHER = {
   clearSubclusterRelationshipsForReplacement: `
     UNWIND $subclusterIds AS subclusterId
     MATCH (sc:MacroSubcluster {userId: $userId, id: subclusterId})
-    OPTIONAL MATCH (:MacroGraph {userId: $userId})-[graphRel:HAS_SUBCLUSTER]->(sc)
+    OPTIONAL MATCH (:MacroGraph {userId: $userId, macroId: $macroId})-[graphRel:HAS_SUBCLUSTER]->(sc)
     WITH sc, [rel IN collect(graphRel) WHERE rel IS NOT NULL] AS graphRels
     FOREACH (rel IN graphRels | DELETE rel)
     WITH sc
@@ -256,7 +263,7 @@ export const MACRO_GRAPH_CYPHER = {
    * Graph generation 결과 handler가 AddNode `UPDATING`을 덮어쓰지 않도록 합니다.
    */
   updateStatsIfStatusIn: `
-    MATCH (g:MacroGraph {userId: $userId})-[:HAS_STATS]->(st:MacroStats)
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_STATS]->(st:MacroStats)
     WHERE st.status IN $allowedStatuses
     SET st.id           = $id,
         st.status       = $status,
@@ -323,7 +330,7 @@ export const MACRO_GRAPH_CYPHER = {
    */
   linkNodesToGraph: `
     UNWIND $rows AS row
-    MATCH (g:MacroGraph {userId: $userId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})
     MATCH (n:MacroNode {userId: $userId, id: row.id})
     MERGE (g)-[:HAS_NODE]->(n)
   `,
@@ -342,7 +349,7 @@ export const MACRO_GRAPH_CYPHER = {
    */
   linkClustersToGraph: `
     UNWIND $rows AS row
-    MATCH (g:MacroGraph {userId: $userId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})
     MATCH (c:MacroCluster {userId: $userId, id: row.id})
     MERGE (g)-[:HAS_CLUSTER]->(c)
   `,
@@ -361,7 +368,7 @@ export const MACRO_GRAPH_CYPHER = {
    */
   linkSubclustersToGraph: `
     UNWIND $rows AS row
-    MATCH (g:MacroGraph {userId: $userId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})
     MATCH (sc:MacroSubcluster {userId: $userId, id: row.id})
     MERGE (g)-[:HAS_SUBCLUSTER]->(sc)
   `,
@@ -380,7 +387,7 @@ export const MACRO_GRAPH_CYPHER = {
    */
   linkRelationsToGraph: `
     UNWIND $rows AS row
-    MATCH (g:MacroGraph {userId: $userId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})
     MATCH (r:MacroRelation {userId: $userId, id: row.id})
     MERGE (g)-[:HAS_RELATION]->(r)
   `,
@@ -396,7 +403,7 @@ export const MACRO_GRAPH_CYPHER = {
    * // }
    */
   linkStatsToGraph: `
-    MATCH (g:MacroGraph {userId: $userId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})
     MATCH (st:MacroStats {userId: $userId})
     MERGE (g)-[:HAS_STATS]->(st)
   `,
@@ -412,7 +419,7 @@ export const MACRO_GRAPH_CYPHER = {
    * // }
    */
   linkSummaryToGraph: `
-    MATCH (g:MacroGraph {userId: $userId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})
     MATCH (sm:MacroSummary {userId: $userId})
     MERGE (g)-[:HAS_SUMMARY]->(sm)
   `,
@@ -450,7 +457,7 @@ export const MACRO_GRAPH_CYPHER = {
    * // }
    */
   cleanupEmptyClusters: `
-    MATCH (g:MacroGraph {userId: $userId})-[:HAS_CLUSTER]->(c:MacroCluster {userId: $userId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_CLUSTER]->(c:MacroCluster {userId: $userId})
     WHERE NOT (c)<-[:BELONGS_TO]-()
     DETACH DELETE c
   `,
@@ -468,7 +475,7 @@ export const MACRO_GRAPH_CYPHER = {
    * // { userId: '...' }
    */
   deduplicateBelongsTo: `
-    MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
     WITH n
     MATCH (n)-[r:BELONGS_TO]->(c:MacroCluster)
     WITH n, r, c, toInteger(split(c.id, '_')[1]) AS clusterNum
@@ -492,7 +499,7 @@ export const MACRO_GRAPH_CYPHER = {
    * // { userId: '...' }
    */
   countDuplicateBelongsTo: `
-    MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
     WITH n
     MATCH (n)-[r:BELONGS_TO]->(c:MacroCluster)
     WITH n, count(r) AS relCount
@@ -501,7 +508,7 @@ export const MACRO_GRAPH_CYPHER = {
   `,
 
   pruneIncompatibleSubclusterMemberships: `
-    MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
     WHERE $hasNodeFilter = false OR n.id IN $nodeIds
     MATCH (n)-[:BELONGS_TO]->(nodeCluster:MacroCluster {userId: $userId})
     MATCH (subclusterCluster:MacroCluster {userId: $userId})-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId})-[rel:CONTAINS|REPRESENTS]->(n)
@@ -519,7 +526,7 @@ export const MACRO_GRAPH_CYPHER = {
 
   reconcileSubclusterMemberships: `
     CALL {
-      MATCH (g:MacroGraph {userId: $userId})-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId})
+      MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId})
       WHERE sc.deletedAt IS NULL
       OPTIONAL MATCH (parent:MacroCluster {userId: $userId})-[:HAS_SUBCLUSTER]->(sc)
       OPTIONAL MATCH (sc)-[:CONTAINS]->(contained:MacroNode {userId: $userId})-[:BELONGS_TO]->(parent)
@@ -703,7 +710,7 @@ export const MACRO_GRAPH_CYPHER = {
    * // }
    */
   listNodes: `
-    MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
     WHERE $includeDeleted OR n.deletedAt IS NULL
     OPTIONAL MATCH (n)-[:BELONGS_TO]->(c:MacroCluster {userId: $userId})
     RETURN n, coalesce(c.id, '') AS clusterId, coalesce(c.name, '') AS clusterName
@@ -722,7 +729,7 @@ export const MACRO_GRAPH_CYPHER = {
    * // }
    */
   findNode: `
-    MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode {userId: $userId, id: $id})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_NODE]->(n:MacroNode {userId: $userId, id: $id})
     WHERE $includeDeleted OR n.deletedAt IS NULL
     OPTIONAL MATCH (n)-[:BELONGS_TO]->(c:MacroCluster {userId: $userId})
     RETURN n, coalesce(c.id, '') AS clusterId, coalesce(c.name, '') AS clusterName
@@ -741,7 +748,7 @@ export const MACRO_GRAPH_CYPHER = {
    * // }
    */
   findNodesByOrigIds: `
-    MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
     WHERE n.origId IN $origIds AND ($includeDeleted OR n.deletedAt IS NULL)
     OPTIONAL MATCH (n)-[:BELONGS_TO]->(c:MacroCluster {userId: $userId})
     RETURN n, coalesce(c.id, '') AS clusterId, coalesce(c.name, '') AS clusterName
@@ -778,7 +785,7 @@ export const MACRO_GRAPH_CYPHER = {
    * // }
    */
   listEdges: `
-    MATCH (g:MacroGraph {userId: $userId})-[:HAS_RELATION]->(rel:MacroRelation {userId: $userId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_RELATION]->(rel:MacroRelation {userId: $userId})
     WHERE $includeDeleted OR rel.deletedAt IS NULL
     MATCH (rel)-[:RELATES_SOURCE]->(src:MacroNode)
     MATCH (rel)-[:RELATES_TARGET]->(tgt:MacroNode)
@@ -798,7 +805,7 @@ export const MACRO_GRAPH_CYPHER = {
    * // }
    */
   findCluster: `
-    MATCH (g:MacroGraph {userId: $userId})-[:HAS_CLUSTER]->(c:MacroCluster {userId: $userId, id: $clusterId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_CLUSTER]->(c:MacroCluster {userId: $userId, id: $clusterId})
     WHERE $includeDeleted OR c.deletedAt IS NULL
     OPTIONAL MATCH (n:MacroNode {userId: $userId})-[:BELONGS_TO]->(c)
     WHERE $includeDeleted OR n.deletedAt IS NULL
@@ -816,7 +823,7 @@ export const MACRO_GRAPH_CYPHER = {
    * // }
    */
   listClusters: `
-    MATCH (g:MacroGraph {userId: $userId})-[:HAS_CLUSTER]->(c:MacroCluster {userId: $userId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_CLUSTER]->(c:MacroCluster {userId: $userId})
     WHERE $includeDeleted OR c.deletedAt IS NULL
     OPTIONAL MATCH (n:MacroNode {userId: $userId})-[:BELONGS_TO]->(c)
     WHERE $includeDeleted OR n.deletedAt IS NULL
@@ -836,7 +843,7 @@ export const MACRO_GRAPH_CYPHER = {
    * // }
    */
   listSubclusters: `
-    MATCH (g:MacroGraph {userId: $userId})-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId})
     WHERE $includeDeleted OR sc.deletedAt IS NULL
     OPTIONAL MATCH (cl:MacroCluster {userId: $userId})-[:HAS_SUBCLUSTER]->(sc)
     OPTIONAL MATCH (sc)-[:CONTAINS]->(n:MacroNode {userId: $userId})
@@ -863,7 +870,7 @@ export const MACRO_GRAPH_CYPHER = {
    * // }
    */
   getStats: `
-    MATCH (g:MacroGraph {userId: $userId})-[:HAS_STATS]->(st:MacroStats)
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_STATS]->(st:MacroStats)
     OPTIONAL MATCH (g)-[:HAS_NODE]->(n:MacroNode {userId: $userId})
     WHERE $includeDeleted OR n.deletedAt IS NULL
     OPTIONAL MATCH (g)-[:HAS_RELATION]->(r:MacroRelation {userId: $userId})
@@ -882,7 +889,7 @@ export const MACRO_GRAPH_CYPHER = {
    * 같은 메타데이터 용도로만 사용해야 합니다. snapshot count는 이미 조회한 목록 길이로 계산합니다.
    */
   getStatsMetadata: `
-    MATCH (g:MacroGraph {userId: $userId})-[:HAS_STATS]->(st:MacroStats)
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_STATS]->(st:MacroStats)
     RETURN st
   `,
 
@@ -897,7 +904,7 @@ export const MACRO_GRAPH_CYPHER = {
    * // }
    */
   getGraphSummary: `
-    MATCH (g:MacroGraph {userId: $userId})-[:HAS_SUMMARY]->(sm:MacroSummary)
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_SUMMARY]->(sm:MacroSummary)
     WHERE $includeDeleted OR sm.deletedAt IS NULL
     RETURN sm
   `,
@@ -913,7 +920,7 @@ export const MACRO_GRAPH_CYPHER = {
    * // }
    */
   getSummaryNodeCounts: `
-    MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
     WHERE $includeDeleted OR n.deletedAt IS NULL
     RETURN count(DISTINCT n)                                                            AS totalSourceNodes,
            sum(CASE WHEN n.nodeType = 'conversation' THEN 1 ELSE 0 END)                AS totalConversations,
@@ -933,7 +940,7 @@ export const MACRO_GRAPH_CYPHER = {
    * // }
    */
   getSummaryClusterSizes: `
-    MATCH (g:MacroGraph {userId: $userId})-[:HAS_CLUSTER]->(cl:MacroCluster {userId: $userId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_CLUSTER]->(cl:MacroCluster {userId: $userId})
     WHERE $includeDeleted OR cl.deletedAt IS NULL
     OPTIONAL MATCH (n:MacroNode {userId: $userId})-[:BELONGS_TO]->(cl)
     WHERE $includeDeleted OR n.deletedAt IS NULL
@@ -1276,7 +1283,7 @@ export const MACRO_GRAPH_CYPHER = {
    * // }
    */
   deleteStats: `
-    MATCH (:MacroGraph {userId: $userId})-[:HAS_STATS]->(st:MacroStats)
+    MATCH (:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_STATS]->(st:MacroStats)
     DETACH DELETE st
   `,
 
@@ -1291,7 +1298,7 @@ export const MACRO_GRAPH_CYPHER = {
    * // }
    */
   deleteGraph: `
-    MATCH (g:MacroGraph {userId: $userId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})
     OPTIONAL MATCH (g)-[:HAS_NODE]->(n:MacroNode)
     OPTIONAL MATCH (g)-[:HAS_CLUSTER]->(cl:MacroCluster)
     OPTIONAL MATCH (g)-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster)
@@ -1317,35 +1324,35 @@ export const MACRO_GRAPH_CYPHER = {
    */
   deleteGraphBatch: {
     relations: `
-      MATCH (g:MacroGraph {userId: $userId})-[:HAS_RELATION]->(rel:MacroRelation)
+      MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_RELATION]->(rel:MacroRelation)
       CALL { WITH rel DETACH DELETE rel } IN TRANSACTIONS OF 1000 ROWS
     `,
     nodes: `
-      MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode)
+      MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_NODE]->(n:MacroNode)
       CALL { WITH n DETACH DELETE n } IN TRANSACTIONS OF 1000 ROWS
     `,
     subclusters: `
-      MATCH (g:MacroGraph {userId: $userId})-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster)
+      MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster)
       CALL { WITH sc DETACH DELETE sc } IN TRANSACTIONS OF 1000 ROWS
     `,
     clusters: `
-      MATCH (g:MacroGraph {userId: $userId})-[:HAS_CLUSTER]->(cl:MacroCluster)
+      MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_CLUSTER]->(cl:MacroCluster)
       CALL { WITH cl DETACH DELETE cl } IN TRANSACTIONS OF 1000 ROWS
     `,
     statsAndSummary: `
-      MATCH (g:MacroGraph {userId: $userId})
+      MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})
       OPTIONAL MATCH (g)-[:HAS_STATS]->(st:MacroStats)
       OPTIONAL MATCH (g)-[:HAS_SUMMARY]->(sm:MacroSummary)
       DETACH DELETE st, sm
     `,
     graphRoot: `
-      MATCH (g:MacroGraph {userId: $userId})
+      MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})
       DETACH DELETE g
     `
   },
 
   deleteGraphSummary: `
-    MATCH (:MacroGraph {userId: $userId})-[:HAS_SUMMARY]->(sm:MacroSummary)
+    MATCH (:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_SUMMARY]->(sm:MacroSummary)
     DETACH DELETE sm
   `,
 
@@ -1362,7 +1369,7 @@ export const MACRO_GRAPH_CYPHER = {
    * // }
    */
   purgeUserData: `
-    MATCH (g:MacroGraph {userId: $userId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})
     OPTIONAL MATCH (g)-[:HAS_NODE]->(n:MacroNode)
     OPTIONAL MATCH (g)-[:HAS_CLUSTER]->(cl:MacroCluster)
     OPTIONAL MATCH (g)-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster)
@@ -1659,7 +1666,7 @@ export const MACRO_GRAPH_CYPHER = {
    * @param includeDeleted soft delete된 edge 포함 여부
    */
   findEdgeById: `
-    MATCH (g:MacroGraph {userId: $userId})-[:HAS_RELATION]->(rel:MacroRelation {userId: $userId, id: $edgeId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_RELATION]->(rel:MacroRelation {userId: $userId, id: $edgeId})
     WHERE $includeDeleted OR rel.deletedAt IS NULL
     MATCH (rel)-[:RELATES_SOURCE]->(src:MacroNode)
     MATCH (rel)-[:RELATES_TARGET]->(tgt:MacroNode)
@@ -1674,7 +1681,7 @@ export const MACRO_GRAPH_CYPHER = {
    * @param includeDeleted soft delete된 subcluster 포함 여부
    */
   findSubclusterById: `
-    MATCH (g:MacroGraph {userId: $userId})-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId, id: $subclusterId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId, id: $subclusterId})
     WHERE $includeDeleted OR sc.deletedAt IS NULL
     OPTIONAL MATCH (cl:MacroCluster {userId: $userId})-[:HAS_SUBCLUSTER]->(sc)
     OPTIONAL MATCH (sc)-[:CONTAINS]->(n:MacroNode {userId: $userId})
@@ -1821,5 +1828,59 @@ export const MACRO_GRAPH_CYPHER = {
     MATCH (n:MacroNode {userId: $userId})-[:BELONGS_TO]->(c:MacroCluster {userId: $userId, id: $clusterId})
     WHERE n.deletedAt IS NULL
     RETURN count(n) > 0 AS hasNodes
+  `,
+
+  /**
+   * @description 원본 매크로 뷰의 노드·관계·클러스터·서브클러스터를 새 macroId로 물리 복제합니다.
+   *
+   * CALL { ... } IN TRANSACTIONS OF 500 ROWS 배치 처리로 대용량 그래프에서도 OOM 없이 동작합니다.
+   * 원본 MacroGraph 루트 메타데이터(title, description, scopeJson)는 복사하지 않습니다 — 호출자가 별도로 upsertGraphRoot를 호출해야 합니다.
+   *
+   * @param userId 소유 사용자 ID
+   * @param sourceMacroId 원본 매크로 뷰 ID
+   * @param newMacroId 복제 대상 매크로 뷰 ID
+   * @param now 복제 시각 ISO 문자열
+   */
+  cloneMacroGraph: `
+    MATCH (src:MacroGraph {userId: $userId, macroId: $sourceMacroId})
+    MERGE (dst:MacroGraph {userId: $userId, macroId: $newMacroId})
+    ON CREATE SET dst.createdAt = $now, dst.updatedAt = $now
+    ON MATCH  SET dst.updatedAt = $now
+    WITH src, dst
+    CALL {
+      WITH src, dst
+      MATCH (src)-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+      WHERE n.deletedAt IS NULL
+      MERGE (newNode:MacroNode {userId: $userId, id: n.id})
+      SET newNode = n
+      MERGE (dst)-[:HAS_NODE]->(newNode)
+    } IN TRANSACTIONS OF 500 ROWS
+    WITH src, dst
+    CALL {
+      WITH src, dst
+      MATCH (src)-[:HAS_CLUSTER]->(c:MacroCluster {userId: $userId})
+      WHERE c.deletedAt IS NULL
+      MERGE (newCluster:MacroCluster {userId: $userId, id: c.id})
+      SET newCluster = c
+      MERGE (dst)-[:HAS_CLUSTER]->(newCluster)
+    } IN TRANSACTIONS OF 500 ROWS
+    WITH src, dst
+    CALL {
+      WITH src, dst
+      MATCH (src)-[:HAS_RELATION]->(r:MacroRelation {userId: $userId})
+      WHERE r.deletedAt IS NULL
+      MERGE (newRel:MacroRelation {userId: $userId, id: r.id})
+      SET newRel = r
+      MERGE (dst)-[:HAS_RELATION]->(newRel)
+    } IN TRANSACTIONS OF 500 ROWS
+    WITH src, dst
+    CALL {
+      WITH src, dst
+      MATCH (src)-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId})
+      WHERE sc.deletedAt IS NULL
+      MERGE (newSc:MacroSubcluster {userId: $userId, id: sc.id})
+      SET newSc = sc
+      MERGE (dst)-[:HAS_SUBCLUSTER]->(newSc)
+    } IN TRANSACTIONS OF 500 ROWS
   `,
 } as const;

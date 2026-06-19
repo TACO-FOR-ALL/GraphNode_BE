@@ -355,9 +355,18 @@ export class GraphController {
    */
   async getSnapshot(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
+    const macroId = req.query.macroId as string | undefined;
+    if (!macroId) {
+      return res.status(400).json({
+        type: 'https://graphnode.dev/problems/validation-failed',
+        title: 'Bad Request',
+        status: 400,
+        detail: 'macroId query parameter is required',
+        instance: req.originalUrl,
+      });
+    }
 
-    // 서비스 호출 (스냅샷 조회)
-    const snapshot : GraphSnapshotDto = await this.graphEmbeddingService.getSnapshotForUser(userId);
+    const snapshot: GraphSnapshotDto = await this.graphEmbeddingService.getSnapshotForUser(userId, macroId);
 
     res.status(200).json(snapshot);
   }
@@ -376,12 +385,13 @@ export class GraphController {
     // 1. 요청 데이터 검증 (Zod)
     const payloadToValidate = {
       userId,
+      macroId: req.body.macroId,
       snapshot: req.body.snapshot,
     };
-    const { snapshot } = persistGraphPayloadSchema.parse(payloadToValidate);
+    const { macroId, snapshot } = persistGraphPayloadSchema.parse(payloadToValidate);
 
     // 2. 서비스 호출 (스냅샷 저장)
-    await this.graphEmbeddingService.persistSnapshot({ userId, snapshot });
+    await this.graphEmbeddingService.persistSnapshot({ userId, macroId, snapshot });
 
     res.status(204).send();
   }

@@ -41,6 +41,7 @@ describe('SearchService.graphRagSearch()', () => {
       node: {
         id: 1,
         userId,
+        macroId: 'macro-test',
         origId: 'conv-a',
         nodeTitle: 'Seed A from vector',
         clusterId: 'cluster-ai',
@@ -55,6 +56,7 @@ describe('SearchService.graphRagSearch()', () => {
       node: {
         id: 2,
         userId,
+        macroId: 'macro-test',
         origId: 'conv-b',
         nodeTitle: 'Seed B from vector',
         clusterId: 'cluster-ai',

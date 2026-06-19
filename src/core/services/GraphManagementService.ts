@@ -213,11 +213,11 @@ export class GraphManagementService {
    * @param id 노드 ID
    * @returns GraphNodeDto 또는 null
    */
-  async findNode(userId: string, id: number): Promise<GraphNodeDto | null> {
+  async findNode(userId: string, id: number, options?: RepoOptions): Promise<GraphNodeDto | null> {
     try {
       this.assertUser(userId);
       const nId = this.parseId(id);
-      return await this.repo.findNode(userId, nId);
+      return await this.repo.findNode(userId, nId, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.findNode failed', { cause: String(err) });
@@ -230,10 +230,10 @@ export class GraphManagementService {
    * @param origIds 원본 식별자 배열
    * @returns GraphNodeDto 배열
    */
-  async findNodesByOrigIds(userId: string, origIds: string[]): Promise<GraphNodeDto[]> {
+  async findNodesByOrigIds(userId: string, origIds: string[], options?: RepoOptions): Promise<GraphNodeDto[]> {
     try {
       this.assertUser(userId);
-      return await this.repo.findNodesByOrigIds(userId, origIds);
+      return await this.repo.findNodesByOrigIds(userId, origIds, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.findNodesByOrigIds failed', { cause: String(err) });
@@ -261,10 +261,10 @@ export class GraphManagementService {
    * @param userId 사용자 ID
    * @returns GraphNodeDto 배열
    */
-  async listNodes(userId: string): Promise<GraphNodeDto[]> {
+  async listNodes(userId: string, options?: RepoOptions): Promise<GraphNodeDto[]> {
     try {
       this.assertUser(userId);
-      return await this.repo.listNodes(userId);
+      return await this.repo.listNodes(userId, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.listNodes failed', { cause: String(err) });
@@ -292,10 +292,10 @@ export class GraphManagementService {
    * @param clusterId 클러스터 ID
    * @returns GraphNodeDto 배열
    */
-  async listNodesByCluster(userId: string, clusterId: string): Promise<GraphNodeDto[]> {
+  async listNodesByCluster(userId: string, clusterId: string, options?: RepoOptions): Promise<GraphNodeDto[]> {
     try {
       this.assertUser(userId);
-      return await this.repo.listNodesByCluster(userId, clusterId);
+      return await this.repo.listNodesByCluster(userId, clusterId, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.listNodesByCluster failed', { cause: String(err) });
@@ -440,10 +440,10 @@ export class GraphManagementService {
    * @param userId 사용자 ID
    * @returns GraphEdgeDto 배열
    */
-  async listEdges(userId: string): Promise<GraphEdgeDto[]> {
+  async listEdges(userId: string, options?: RepoOptions): Promise<GraphEdgeDto[]> {
     try {
       this.assertUser(userId);
-      return await this.repo.listEdges(userId);
+      return await this.repo.listEdges(userId, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.listEdges failed', { cause: String(err) });
@@ -538,11 +538,11 @@ export class GraphManagementService {
    * @param clusterId 클러스터 ID
    * @returns GraphClusterDto 또는 null
    */
-  async findCluster(userId: string, clusterId: string): Promise<GraphClusterDto | null> {
+  async findCluster(userId: string, clusterId: string, options?: RepoOptions): Promise<GraphClusterDto | null> {
     try {
       this.assertUser(userId);
       if (!clusterId) throw new ValidationError('clusterId required');
-      return await this.repo.findCluster(userId, clusterId);
+      return await this.repo.findCluster(userId, clusterId, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.findCluster failed', { cause: String(err) });
@@ -554,10 +554,10 @@ export class GraphManagementService {
    * @param userId 사용자 ID
    * @returns GraphClusterDto 배열
    */
-  async listClusters(userId: string): Promise<GraphClusterDto[]> {
+  async listClusters(userId: string, options?: RepoOptions): Promise<GraphClusterDto[]> {
     try {
       this.assertUser(userId);
-      return await this.repo.listClusters(userId);
+      return await this.repo.listClusters(userId, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.listClusters failed', { cause: String(err) });
@@ -741,10 +741,10 @@ export class GraphManagementService {
       throw new UpstreamError('GraphService.restoreSubcluster failed', { cause: String(err) });
     }
   }
-  async listSubclusters(userId: string): Promise<GraphSubclusterDto[]> {
+  async listSubclusters(userId: string, options?: RepoOptions): Promise<GraphSubclusterDto[]> {
     try {
       this.assertUser(userId);
-      return await this.repo.listSubclusters(userId);
+      return await this.repo.listSubclusters(userId, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.listSubclusters failed', { cause: String(err) });
@@ -809,10 +809,11 @@ export class GraphManagementService {
    */
   async persistSnapshotBulk(payload: PersistGraphPayloadDto, options?: RepoOptions): Promise<void> {
     try {
-      const { userId, snapshot } = payload;
+      const { userId, macroId, snapshot } = payload;
       this.assertUser(userId);
+      const macroOptions: RepoOptions = { ...options, macroId };
 
-      const nodes: GraphNodeDto[] = snapshot.nodes.map((node) => ({ ...node, userId }));
+      const nodes: GraphNodeDto[] = snapshot.nodes.map((node) => ({ ...node, userId, macroId }));
       const edges: GraphEdgeDto[] = snapshot.edges.map((edge) => ({ ...edge, userId }));
       const clusters: GraphClusterDto[] = snapshot.clusters.map((cluster) => ({
         ...cluster,
@@ -827,18 +828,18 @@ export class GraphManagementService {
         };
       });
 
-      await this.upsertClusters(clusters, options);
-      await this.upsertNodes(nodes, options);
-      await this.upsertEdges(edges, options);
-      await this.upsertSubclusters(subclusters, options);
+      await this.upsertClusters(clusters, macroOptions);
+      await this.upsertNodes(nodes, macroOptions);
+      await this.upsertEdges(edges, macroOptions);
+      await this.upsertSubclusters(subclusters, macroOptions);
 
       const statsPayload: GraphStatsDto = { ...snapshot.stats, userId };
       // Graph generation persistSnapshot은 handler 완료 전에도 CREATED를 쓰므로,
       // AddNode UPDATING/UPDATED를 덮어쓰지 않도록 compare-and-set을 사용합니다.
       if (statsPayload.status === 'CREATED') {
-        await this.saveStatsIfStatusIn(statsPayload, GRAPH_GENERATION_MUTABLE_STATUSES, options);
+        await this.saveStatsIfStatusIn(statsPayload, GRAPH_GENERATION_MUTABLE_STATUSES, macroOptions);
       } else {
-        await this.saveStats(statsPayload, options);
+        await this.saveStats(statsPayload, macroOptions);
       }
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
@@ -890,12 +891,12 @@ export class GraphManagementService {
    * @param userId 사용자 ID
    * @returns 상태 메타데이터를 포함한 stats DTO. MacroStats가 없으면 NOT_CREATED 기본값을 반환합니다.
    */
-  async getStatsMetadata(userId: string): Promise<GraphStatsDto> {
+  async getStatsMetadata(userId: string, options?: RepoOptions): Promise<GraphStatsDto> {
     try {
       this.assertUser(userId);
       const stats = this.repo.getStatsMetadata
-        ? await this.repo.getStatsMetadata(userId)
-        : await this.repo.getStats(userId);
+        ? await this.repo.getStatsMetadata(userId, options)
+        : await this.repo.getStats(userId, options);
       return stats ?? {
             userId,
             nodes: 0,

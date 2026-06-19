@@ -132,8 +132,8 @@ export class GraphEmbeddingService {
    * @returns Promise<void>
    * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
    */
-  upsertNodes(nodes: GraphNodeDto[]) {
-    return this.graphManagementService.upsertNodes(nodes);
+  upsertNodes(nodes: GraphNodeDto[], options?: RepoOptions) {
+    return this.graphManagementService.upsertNodes(nodes, options);
   }
 
   /**
@@ -291,8 +291,8 @@ export class GraphEmbeddingService {
    * @returns Promise<void>
    * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
    */
-  upsertClusters(clusters: GraphClusterDto[]) {
-    return this.graphManagementService.upsertClusters(clusters);
+  upsertClusters(clusters: GraphClusterDto[], options?: RepoOptions) {
+    return this.graphManagementService.upsertClusters(clusters, options);
   }
 
   /**
@@ -489,17 +489,19 @@ export class GraphEmbeddingService {
    * @returns 그래프 스냅샷 DTO. 데이터가 없으면 각 배열은 비어있고, stats는 null일 수 있습니다.
    * @throws {UpstreamError} - DB 조회 중 오류 발생 시
    */
-  async getSnapshotForUser(userId: string): Promise<GraphSnapshotDto> {
+  async getSnapshotForUser(userId: string, macroId: string): Promise<GraphSnapshotDto> {
+    const opts: MacroGraphStoreOptions = { macroId };
     const [nodes, edges, clusters, subclusters, stats] = await Promise.all([
-      this.graphManagementService.listNodes(userId),
-      this.graphManagementService.listEdges(userId),
-      this.graphManagementService.listClusters(userId),
-      this.graphManagementService.listSubclusters(userId),
-      this.graphManagementService.getStatsMetadata(userId),
+      this.graphManagementService.listNodes(userId, opts),
+      this.graphManagementService.listEdges(userId, opts),
+      this.graphManagementService.listClusters(userId, opts),
+      this.graphManagementService.listSubclusters(userId, opts),
+      this.graphManagementService.getStatsMetadata(userId, opts),
     ]);
     const enrichedNodes = await this.attachNodeTitles(userId, nodes);
 
     return {
+      macroId,
       nodes: enrichedNodes,
       edges,
       clusters,
@@ -619,8 +621,8 @@ export class GraphEmbeddingService {
    * @param userId 사용자 Id
    * @param summary
    */
-  async upsertGraphSummary(userId: string, summary: GraphSummaryDoc) {
-    return this.graphManagementService.upsertGraphSummary(userId, summary);
+  async upsertGraphSummary(userId: string, summary: GraphSummaryDoc, options?: MacroGraphStoreOptions) {
+    return this.graphManagementService.upsertGraphSummary(userId, summary, options);
   }
   /**
    * 그래프 요약/인사이트 조회 (Delegation)

@@ -255,12 +255,15 @@ export class GraphGenerationResultHandler implements JobHandler {
         );
 
         // 7. sourceType까지 보정된 graph output을 최종 snapshot DTO로 변환한다.
+        const macroId = ulid();
         const snapshot: GraphSnapshotDto = mapAiOutputToSnapshot(
           sourceTypeResolvedGraphOutput,
-          userId
+          userId,
+          macroId
         );
         const persistPayload: PersistGraphPayloadDto = {
           userId,
+          macroId,
           snapshot,
         };
 
@@ -325,7 +328,7 @@ export class GraphGenerationResultHandler implements JobHandler {
                   generatedAt: summaryJson.generated_at || new Date().toISOString(),
                 };
 
-                await graphService.upsertGraphSummary(userId, summaryDoc);
+                await graphService.upsertGraphSummary(userId, summaryDoc, { macroId });
                 logger.info({ taskId, userId }, 'Integrated graph summary persisted to DB');
               } catch (sumErr) {
                 logger.error(

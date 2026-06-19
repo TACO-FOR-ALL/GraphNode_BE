@@ -70,6 +70,10 @@ export type MacroFileType =
  * @description 사용자별 Macro Graph 루트 노드입니다.
  *
  * @property userId 사용자의 고유 ID이며 Neo4j tenant boundary의 기준입니다.
+ * @property macroId 매크로 뷰 고유 ID입니다. (userId, macroId) 복합 키로 유일합니다.
+ * @property title 사용자가 지정한 매크로 뷰 제목입니다.
+ * @property description 사용자가 지정한 매크로 뷰 설명입니다.
+ * @property scopeJson 데이터 필터 조건을 JSON 직렬화한 값입니다. 스키마: `{ mode: 'auto'|'manual', filters?: { dataTypes: ('chat'|'file'|'notion'|'note')[], createdPeriod?: '1w'|'1m'|'3m'|'1y' }, intent?: string }`
  * @property createdAt 루트 그래프가 처음 생성된 ISO 시각입니다.
  * @property updatedAt 루트 그래프가 마지막으로 변경된 ISO 시각입니다.
  * @property deletedAt soft delete 시각입니다. 없으면 활성 그래프입니다.
@@ -77,6 +81,14 @@ export type MacroFileType =
 export interface Neo4jMacroGraphNode {
   /** 사용자의 고유 ID이며 Neo4j tenant boundary의 기준입니다. */
   userId: string;
+  /** 매크로 뷰 고유 ID입니다. (userId, macroId) 복합 키로 유일합니다. */
+  macroId: string;
+  /** 사용자가 지정한 매크로 뷰 제목입니다. */
+  title?: string;
+  /** 사용자가 지정한 매크로 뷰 설명입니다. */
+  description?: string;
+  /** 데이터 필터 조건을 JSON 문자열로 직렬화한 값입니다. */
+  scopeJson?: string;
   /** 루트 그래프가 처음 생성된 ISO 시각입니다. */
   createdAt?: string;
   /** 루트 그래프가 마지막으로 변경된 ISO 시각입니다. */

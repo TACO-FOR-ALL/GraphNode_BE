@@ -23,6 +23,7 @@ import { SearchService } from '../core/services/SearchService';
 import { FeedbackService } from '../core/services/FeedbackService';
 import { ChatExportService } from '../core/services/ChatExportService';
 import { GraphEditorService } from '../core/services/GraphEditorService';
+import { MacroViewService } from '../core/services/MacroViewService';
 import { GoogleOAuthService } from '../core/services/GoogleOAuthService';
 import { AppleOAuthService } from '../core/services/AppleOAuthService';
 import { MicroscopeManagementService } from '../core/services/MicroscopeManagementService';
@@ -160,6 +161,7 @@ export class Container {
   private feedbackService: FeedbackService | null = null;
   private chatExportService: ChatExportService | null = null;
   private graphEditorService: GraphEditorService | null = null;
+  private macroViewService: MacroViewService | null = null;
   private fileServiceClient: FileServicePort | null = null;
   private importArchiveService: ImportArchiveService | null = null;
   private importFinalizeProcessor: ImportFinalizeProcessor | null = null;
@@ -959,6 +961,25 @@ export class Container {
       this.importArchiveService = createAuditProxy(raw, 'ImportArchiveService');
     }
     return this.importArchiveService;
+  }
+
+  /**
+   * @description MacroViewService 인스턴스를 반환합니다.
+   */
+  getMacroViewService(): MacroViewService {
+    if (!this.macroViewService) {
+      const raw = new MacroViewService(
+        this.getMacroGraphStore(),
+        this.getAwsSqsAdapter(),
+        this.getAwsS3Adapter(),
+        this.getConversationRepository(),
+        this.getNoteRepository(),
+        this.getUserFileRepository(),
+        this.getNotionCacheRepository()
+      );
+      this.macroViewService = createAuditProxy(raw, 'MacroViewService');
+    }
+    return this.macroViewService;
   }
 }
 

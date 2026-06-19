@@ -7,7 +7,7 @@ import { IAgentTool } from '../types';
 type NodeDetailsArgs = {
   nodeId?: number | string;
   keyword?: string;
-  graphId?: string;
+  macroId?: string;
   limit?: number;
 };
 
@@ -34,10 +34,10 @@ export class GetGraphNodeDetailsTool implements IAgentTool {
             type: 'string',
             description: 'nodeId가 없을 때 title/요약/origId 기준으로 노드 검색 키워드',
           },
-          graphId: {
+          macroId: {
             type: 'string',
             description:
-              '향후 다중 그래프 지원용 선택 파라미터. 현재는 1유저 1매크로 그래프라 무시됩니다.',
+              '조회할 매크로 뷰 ID. 시스템 프롬프트의 Active Macro View ID를 전달하세요. 미지정 시 빈 스냅샷을 반환합니다.',
           },
           limit: {
             type: 'number',
@@ -61,7 +61,7 @@ export class GetGraphNodeDetailsTool implements IAgentTool {
     deps: AgentServiceDeps,
     _openai: OpenAI
   ): Promise<string> {
-    const snapshot = await this.fetchMacroSnapshot(deps, userId, args.graphId);
+    const snapshot = await this.fetchMacroSnapshot(deps, userId, args.macroId);
     const nodeId = this.parseNodeId(args.nodeId);
     const keyword = typeof args.keyword === 'string' ? args.keyword.trim().toLowerCase() : '';
     const limit = Math.max(1, Number(args.limit) || 5);
@@ -89,7 +89,7 @@ export class GetGraphNodeDetailsTool implements IAgentTool {
       message: '노드 상세 조회 결과입니다.',
       scope: {
         userId,
-        graphId: args.graphId ?? null,
+        macroId: args.macroId ?? null,
         multiGraphReady: true,
       },
       nodes: details,
@@ -106,9 +106,12 @@ export class GetGraphNodeDetailsTool implements IAgentTool {
   private async fetchMacroSnapshot(
     deps: AgentServiceDeps,
     userId: string,
-    _graphId?: string
+    macroId?: string
   ): Promise<GraphSnapshotDto> {
-    return deps.graphEmbeddingService.getSnapshotForUser(userId);
+    if (!macroId) {
+      return { macroId: '', nodes: [], edges: [], clusters: [], subclusters: [], stats: { nodes: 0, edges: 0, clusters: 0, status: 'NOT_CREATED' } };
+    }
+    return deps.graphEmbeddingService.getSnapshotForUser(userId, macroId);
   }
 
   /**

@@ -267,12 +267,10 @@ describe('AddNodeResultHandler', () => {
 
     await handler.handle(message, mockContainer);
 
-    expect(graphService.upsertNodes).toHaveBeenCalledWith([
-      expect.objectContaining({
-        origId: 'conv-e2e-123',
-        numMessages: 4,
-      }),
-    ]);
+    expect(graphService.upsertNodes).toHaveBeenCalledWith(
+      [expect.objectContaining({ origId: 'conv-e2e-123', numMessages: 4 })],
+      undefined
+    );
   });
 
   it('continues when batch.json is missing (legacy AI result only)', async () => {

@@ -79,6 +79,7 @@ describe('GraphEmbeddingService', () => {
       const node: GraphNodeDto = {
         id: 1,
         userId: 'u1',
+        macroId: 'macro-1',
         origId: 'conv-1',
         clusterId: 'c1',
         clusterName: 'Cluster 1',
@@ -179,11 +180,11 @@ describe('GraphEmbeddingService', () => {
         title: 'Note Title',
       } as any);
 
-      const snapshot = await service.getSnapshotForUser('u1');
+      const snapshot = await service.getSnapshotForUser('u1', 'macro-test');
 
       expect(mockConversationService.findDocsByIds).toHaveBeenCalledWith(['conv-1'], 'u1');
       expect(mockNoteService.getNoteDoc).toHaveBeenCalledWith('note-1', 'u1');
-      expect(mockGraphService.getStatsMetadata).toHaveBeenCalledWith('u1');
+      expect(mockGraphService.getStatsMetadata).toHaveBeenCalledWith('u1', expect.objectContaining({ macroId: 'macro-test' }));
       expect(mockGraphService.getStats).not.toHaveBeenCalled();
       expect(snapshot.nodes).toHaveLength(3);
       expect(snapshot.stats).toMatchObject({
@@ -211,7 +212,7 @@ describe('GraphEmbeddingService', () => {
     it('upsertGraphSummary delegates', async () => {
       const summary: any = { id: 'u1' };
       await service.upsertGraphSummary('u1', summary);
-      expect(mockGraphService.upsertGraphSummary).toHaveBeenCalledWith('u1', summary);
+      expect(mockGraphService.upsertGraphSummary).toHaveBeenCalledWith('u1', summary, undefined);
     });
 
     it('getGraphSummary delegates to graphManagementService without calling MongoDB services', async () => {

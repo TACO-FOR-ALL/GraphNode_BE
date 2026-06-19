@@ -6,6 +6,12 @@ import type {
   GraphSubclusterDto,
 } from '../../shared/dtos/graph';
 import type { GraphSummaryDoc } from '../types/persistence/graph.persistence';
+import type {
+  ListMacroViewsQuery,
+  MacroViewDto,
+  ScopeFilter,
+  UpdateMacroViewDto,
+} from '../../shared/dtos/macro';
 
 /**
  * @description Graph RAG 이웃 탐색 결과 단일 항목입니다.
@@ -54,6 +60,8 @@ export interface MacroGraphStoreOptions {
   afterCommit?: Array<() => Promise<void>>;
   /** soft delete 된 항목을 조회 결과에 포함할지 여부입니다. 기본값은 Mongo와 동일하게 false입니다. */
   includeDeleted?: boolean;
+  /** 대상 매크로 뷰 ID입니다. 모든 Adapter 공개 메서드에서 필수값이며 없으면 오류를 던집니다. */
+  macroId?: string;
 }
 
 /**
@@ -73,6 +81,8 @@ export interface MacroGraphStoreOptions {
 export interface MacroGraphUpsertInput {
   /** 저장 대상 사용자 ID입니다. */
   userId: string;
+  /** 저장 대상 매크로 뷰 ID입니다. */
+  macroId: string;
   nodes: GraphNodeDto[];
   edges: GraphEdgeDto[];
   clusters: GraphClusterDto[];
@@ -877,6 +887,122 @@ export interface MacroGraphStore {
     userId: string,
     options?: MacroGraphStoreOptions
   ): Promise<{ duplicateNodeCount: number; excessRelCount: number }>;
+
+  /**
+   * @description 기존 매크로 뷰의 노드·엣지·클러스터를 새 macroId로 물리 복제합니다.
+   *
+   * AI 파이프라인 재호출 없이 Neo4j 내부에서 CALL { ... } IN TRANSACTIONS 배치로 복제하므로
+   * 대용량 그래프에서도 트랜잭션 OOM이 발생하지 않습니다.
+   *
+   * @param userId 소유 사용자 ID
+   * @param sourceMacroId 원본 매크로 뷰 ID
+   * @param newMacroId 복제 대상 매크로 뷰 ID
+   * @param options transaction 등 adapter 전용 옵션
+   * @throws {ValidationError} userId 또는 macroId 미전달 시
+   * @throws {UpstreamError} Neo4j 복제 실패 시
+   */
+  cloneMacroGraph(
+    userId: string,
+    sourceMacroId: string,
+    newMacroId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  // =====================
+  // MacroView 루트 노드 생명주기 메서드 (작성일: 2026-06-19)
+  // =====================
+
+  /**
+   * @description 사용자의 매크로 뷰 목록을 조회합니다.
+   *
+   * @param userId 조회 대상 사용자 ID
+   * @param query 정렬·필터 옵션 (onlyDeleted 등)
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 매크로 뷰 메타데이터 목록
+   */
+  listMacroViews(
+    userId: string,
+    query?: ListMacroViewsQuery,
+    options?: MacroGraphStoreOptions
+  ): Promise<MacroViewDto[]>;
+
+  /**
+   * @description 새 MacroGraph 루트 노드를 생성합니다.
+   *
+   * @param userId 소유 사용자 ID
+   * @param macroId 생성할 매크로 뷰 ID (ULID)
+   * @param data 생성 데이터 (title, description, scopeFilter)
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 생성된 매크로 뷰 메타데이터
+   * @throws {ConflictError} 동일 (userId, macroId) 노드가 이미 존재하는 경우
+   */
+  createMacroView(
+    userId: string,
+    macroId: string,
+    data: { title?: string; description?: string; scopeFilter: ScopeFilter },
+    options?: MacroGraphStoreOptions
+  ): Promise<MacroViewDto>;
+
+  /**
+   * @description macroId로 단일 매크로 뷰 메타데이터를 조회합니다.
+   *
+   * @param userId 소유 사용자 ID
+   * @param macroId 조회할 매크로 뷰 ID
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 매크로 뷰 메타데이터. 없으면 null.
+   */
+  getMacroView(
+    userId: string,
+    macroId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<MacroViewDto | null>;
+
+  /**
+   * @description 매크로 뷰 메타데이터를 부분 업데이트합니다. (title, description, scopeFilter)
+   *
+   * @param userId 소유 사용자 ID
+   * @param macroId 업데이트할 매크로 뷰 ID
+   * @param patch 업데이트할 필드 부분 객체
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 업데이트된 매크로 뷰 메타데이터
+   * @throws {NotFoundError} 해당 macroId의 뷰가 없는 경우
+   */
+  updateMacroView(
+    userId: string,
+    macroId: string,
+    patch: UpdateMacroViewDto,
+    options?: MacroGraphStoreOptions
+  ): Promise<MacroViewDto>;
+
+  /**
+   * @description 매크로 뷰를 Soft Delete합니다. (deletedAt 타임스탬프 설정)
+   *
+   * 삭제 후 30일 이내에 `restoreMacroView`로 복원 가능합니다.
+   *
+   * @param userId 소유 사용자 ID
+   * @param macroId Soft Delete할 매크로 뷰 ID
+   * @param options transaction 등 adapter 전용 옵션
+   * @throws {NotFoundError} 해당 macroId의 뷰가 없는 경우
+   */
+  softDeleteMacroView(
+    userId: string,
+    macroId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
+
+  /**
+   * @description Soft Delete된 매크로 뷰를 복원합니다. (deletedAt 초기화)
+   *
+   * @param userId 소유 사용자 ID
+   * @param macroId 복원할 매크로 뷰 ID
+   * @param options transaction 등 adapter 전용 옵션
+   * @throws {NotFoundError} 해당 macroId의 뷰가 없거나 삭제 상태가 아닌 경우
+   */
+  restoreMacroView(
+    userId: string,
+    macroId: string,
+    options?: MacroGraphStoreOptions
+  ): Promise<void>;
 }
 /**
  * @description Graph RAG 클러스터 시블링 탐색 결과 단일 항목입니다.
