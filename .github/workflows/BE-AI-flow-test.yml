@@ -134,7 +134,7 @@ jobs:
           provenance: false
           sbom: false
           cache-from: type=gha,scope=ai-graphnode-${{ steps.ai-ref.outputs.ref }}
-          cache-to: type=gha,scope=ai-graphnode-${{ steps.ai-ref.outputs.ref }},mode=max,ignore-error=true
+          cache-to: type=gha,scope=ai-graphnode-${{ steps.ai-ref.outputs.ref }},ignore-error=true
 
       # 5-1. File Service 이미지 빌드 및 캐싱
       - name: Build File Service Image
