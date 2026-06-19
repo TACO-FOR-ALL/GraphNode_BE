@@ -2255,64 +2255,238 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   }
 
   // =====================
-  // MacroView 루트 노드 생명주기 스텁 (작성일: 2026-06-19)
-  // TODO: Cypher 쿼리 및 MacroGraph 루트 노드 모델 정의 후 완전 구현 필요
+  // MacroView 루트 노드 생명주기 구현 (작성일: 2026-06-19)
   // =====================
 
-  /** @description 사용자 매크로 뷰 목록 조회 (스텁 — 완전 구현 미완료) */
+  /**
+   * @description MacroGraph 노드 properties + status/nodeCount 집계 결과를 MacroViewDto로 변환합니다.
+   */
+  private static parseMacroViewRecord(record: { get(key: string): unknown }): MacroViewDto {
+    const g = record.get('g') as { properties: Record<string, unknown> };
+    const props = g.properties;
+    const status = record.get('status');
+    const nodeCount = record.get('nodeCount');
+    const deletedAt = props['deletedAt'];
+    return {
+      macroId: String(props['macroId'] ?? ''),
+      userId: String(props['userId'] ?? ''),
+      title: props['title'] ? String(props['title']) : undefined,
+      description: props['description'] ? String(props['description']) : undefined,
+      scopeFilter: props['scopeJson']
+        ? (JSON.parse(String(props['scopeJson'])) as ScopeFilter)
+        : undefined,
+      status: status != null ? String(status) : undefined,
+      nodeCount: nodeCount != null ? toJsNumber(nodeCount) : undefined,
+      createdAt: props['createdAt'] ? String(props['createdAt']) : undefined,
+      updatedAt: props['updatedAt'] ? String(props['updatedAt']) : undefined,
+      deletedAt: typeof deletedAt === 'number' ? new Date(deletedAt).toISOString() : undefined,
+    };
+  }
+
+  /**
+   * @description 사용자의 매크로 뷰 목록을 조회합니다.
+   *
+   * @param userId 조회 대상 사용자 ID
+   * @param query 정렬·필터 옵션 (onlyDeleted, sortBy)
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 매크로 뷰 메타데이터 목록 (JS 레이어에서 정렬)
+   */
   async listMacroViews(
-    _userId: string,
-    _query?: ListMacroViewsQuery,
-    _options?: MacroGraphStoreOptions
+    userId: string,
+    query?: ListMacroViewsQuery,
+    options?: MacroGraphStoreOptions
   ): Promise<MacroViewDto[]> {
-    throw new Error('Neo4jMacroGraphAdapter.listMacroViews: not yet implemented');
+    const onlyDeleted = query?.onlyDeleted ?? false;
+    const sortBy = query?.sortBy ?? 'updatedAt';
+
+    const views = await this.runRead(async (runner) => {
+      const result = await runner.run(MACRO_GRAPH_CYPHER.listMacroViews, { userId, onlyDeleted });
+      return (result.records as unknown[]).map((rec) =>
+        Neo4jMacroGraphAdapter.parseMacroViewRecord(rec as { get(key: string): unknown })
+      );
+    }, options);
+
+    return views.sort((a, b) => {
+      if (sortBy === 'nodeCount') {
+        return (b.nodeCount ?? 0) - (a.nodeCount ?? 0);
+      }
+      if (sortBy === 'title') {
+        return (a.title ?? '').localeCompare(b.title ?? '', 'ko');
+      }
+      const dateA = a[sortBy] ?? '';
+      const dateB = b[sortBy] ?? '';
+      return dateB.localeCompare(dateA);
+    });
   }
 
-  /** @description 새 MacroGraph 루트 노드 생성 (스텁 — 완전 구현 미완료) */
+  /**
+   * @description 새 MacroGraph 루트 노드를 생성합니다.
+   *
+   * @param userId 소유 사용자 ID
+   * @param macroId 생성할 매크로 뷰 ID (ULID)
+   * @param data 생성 데이터
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 생성된 매크로 뷰 메타데이터
+   */
   async createMacroView(
-    _userId: string,
-    _macroId: string,
-    _data: { title?: string; description?: string; scopeFilter: ScopeFilter },
-    _options?: MacroGraphStoreOptions
+    userId: string,
+    macroId: string,
+    data: { title?: string; description?: string; scopeFilter: ScopeFilter },
+    options?: MacroGraphStoreOptions
   ): Promise<MacroViewDto> {
-    throw new Error('Neo4jMacroGraphAdapter.createMacroView: not yet implemented');
+    const now = new Date().toISOString();
+    const scopeJson = JSON.stringify(data.scopeFilter);
+
+    return this.runWrite(async (runner) => {
+      const result = await runner.run(MACRO_GRAPH_CYPHER.createMacroView, {
+        userId,
+        macroId,
+        title: data.title ?? null,
+        description: data.description ?? null,
+        scopeJson,
+        now,
+      });
+      const records = result.records as unknown[];
+      const record = records[0] as { get(key: string): unknown };
+      const g = record.get('g') as { properties: Record<string, unknown> };
+      const props = g.properties;
+      return {
+        macroId: String(props['macroId'] ?? macroId),
+        userId: String(props['userId'] ?? userId),
+        title: props['title'] ? String(props['title']) : undefined,
+        description: props['description'] ? String(props['description']) : undefined,
+        scopeFilter: data.scopeFilter,
+        status: undefined,
+        nodeCount: 0,
+        createdAt: String(props['createdAt'] ?? now),
+        updatedAt: String(props['updatedAt'] ?? now),
+        deletedAt: undefined,
+      };
+    }, options);
   }
 
-  /** @description macroId 기준 단일 매크로 뷰 조회 (스텁 — 완전 구현 미완료) */
+  /**
+   * @description macroId 기준으로 단일 매크로 뷰 메타데이터를 조회합니다.
+   *
+   * @param userId 소유 사용자 ID
+   * @param macroId 조회할 매크로 뷰 ID
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 매크로 뷰 메타데이터. 없으면 null.
+   */
   async getMacroView(
-    _userId: string,
-    _macroId: string,
-    _options?: MacroGraphStoreOptions
+    userId: string,
+    macroId: string,
+    options?: MacroGraphStoreOptions
   ): Promise<MacroViewDto | null> {
-    throw new Error('Neo4jMacroGraphAdapter.getMacroView: not yet implemented');
+    return this.runRead(async (runner) => {
+      const result = await runner.run(MACRO_GRAPH_CYPHER.getMacroView, { userId, macroId });
+      const records = result.records as unknown[];
+      if (records.length === 0) return null;
+      return Neo4jMacroGraphAdapter.parseMacroViewRecord(
+        records[0] as { get(key: string): unknown }
+      );
+    }, options);
   }
 
-  /** @description 매크로 뷰 메타데이터 부분 업데이트 (스텁 — 완전 구현 미완료) */
+  /**
+   * @description 매크로 뷰 메타데이터를 부분 업데이트합니다.
+   *
+   * @param userId 소유 사용자 ID
+   * @param macroId 업데이트할 매크로 뷰 ID
+   * @param patch 업데이트할 필드 (title, description, scopeFilter)
+   * @param options transaction 등 adapter 전용 옵션
+   * @returns 업데이트된 매크로 뷰 메타데이터
+   */
   async updateMacroView(
-    _userId: string,
-    _macroId: string,
-    _patch: UpdateMacroViewDto,
-    _options?: MacroGraphStoreOptions
+    userId: string,
+    macroId: string,
+    patch: UpdateMacroViewDto,
+    options?: MacroGraphStoreOptions
   ): Promise<MacroViewDto> {
-    throw new Error('Neo4jMacroGraphAdapter.updateMacroView: not yet implemented');
+    const now = new Date().toISOString();
+    const props: Record<string, unknown> = { updatedAt: now };
+    if (patch.title !== undefined) props['title'] = patch.title ?? null;
+    if (patch.description !== undefined) props['description'] = patch.description ?? null;
+    if (patch.scopeFilter !== undefined) props['scopeJson'] = JSON.stringify(patch.scopeFilter);
+
+    return this.runWrite(async (runner) => {
+      const result = await runner.run(MACRO_GRAPH_CYPHER.updateMacroView, {
+        userId,
+        macroId,
+        props,
+      });
+      const records = result.records as unknown[];
+      if (records.length === 0) {
+        throw new Error(`MacroView not found or already deleted: ${macroId}`);
+      }
+      return Neo4jMacroGraphAdapter.parseMacroViewRecord(
+        records[0] as { get(key: string): unknown }
+      );
+    }, options);
   }
 
-  /** @description 매크로 뷰 Soft Delete (스텁 — 완전 구현 미완료) */
+  /**
+   * @description 매크로 뷰를 Soft Delete합니다. (deletedAt = number timestamp)
+   *
+   * @param userId 소유 사용자 ID
+   * @param macroId 삭제할 매크로 뷰 ID
+   * @param options transaction 등 adapter 전용 옵션
+   */
   async softDeleteMacroView(
-    _userId: string,
-    _macroId: string,
-    _options?: MacroGraphStoreOptions
+    userId: string,
+    macroId: string,
+    options?: MacroGraphStoreOptions
   ): Promise<void> {
-    throw new Error('Neo4jMacroGraphAdapter.softDeleteMacroView: not yet implemented');
+    await this.runWrite(async (runner) => {
+      await runner.run(MACRO_GRAPH_CYPHER.softDeleteMacroView, {
+        userId,
+        macroId,
+        deletedAt: Date.now(),
+      });
+    }, options);
   }
 
-  /** @description Soft Delete된 매크로 뷰 복원 (스텁 — 완전 구현 미완료) */
+  /**
+   * @description Soft Delete된 매크로 뷰를 복원합니다.
+   *
+   * @param userId 소유 사용자 ID
+   * @param macroId 복원할 매크로 뷰 ID
+   * @param options transaction 등 adapter 전용 옵션
+   */
   async restoreMacroView(
-    _userId: string,
-    _macroId: string,
-    _options?: MacroGraphStoreOptions
+    userId: string,
+    macroId: string,
+    options?: MacroGraphStoreOptions
   ): Promise<void> {
-    throw new Error('Neo4jMacroGraphAdapter.restoreMacroView: not yet implemented');
+    await this.runWrite(async (runner) => {
+      await runner.run(MACRO_GRAPH_CYPHER.restoreMacroView, { userId, macroId });
+    }, options);
+  }
+
+  /**
+   * @description deletedAt 기준 만료된 MacroGraph와 하위 노드를 영구 삭제합니다.
+   *
+   * CALL {} IN TRANSACTIONS 배치 처리로 대용량 그래프에서도 OOM 없이 동작합니다.
+   * auto-commit session이 필요하므로 독립 세션을 사용합니다.
+   *
+   * @param expiredBefore 이 시각 이전에 soft-delete된 뷰를 영구 삭제
+   */
+  async cleanupExpiredMacroViews(expiredBefore: Date): Promise<void> {
+    const expiredBeforeMs = expiredBefore.getTime();
+    const params = { expiredBefore: expiredBeforeMs };
+    const session = this.getDriver().session({ defaultAccessMode: neo4j.session.WRITE });
+    try {
+      const batch = MACRO_GRAPH_CYPHER.cleanupExpiredMacroViewsBatch;
+      await session.run(batch.relations, params);
+      await session.run(batch.nodes, params);
+      await session.run(batch.subclusters, params);
+      await session.run(batch.clusters, params);
+      await session.run(batch.statsAndSummary, params);
+      await session.run(batch.graphRoot, params);
+      logger.info({ expiredBefore: expiredBefore.toISOString() }, 'Neo4jMacroGraphAdapter.cleanupExpiredMacroViews completed');
+    } finally {
+      await session.close();
+    }
   }
 }
 

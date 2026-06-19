@@ -1031,6 +1031,26 @@ export class GraphManagementService {
   }
 
 
+  /**
+   * @description 30일이 경과한 Soft Delete 매크로 뷰와 하위 그래프 요소를 Neo4j에서 영구 삭제합니다.
+   *
+   * CleanupCron에서 매일 자정 호출됩니다.
+   * CALL {} IN TRANSACTIONS 배치 처리로 대용량 그래프에서도 OOM 없이 동작합니다.
+   *
+   * @param expiredBefore 이 시각 이전에 soft-delete된 뷰를 영구 삭제합니다.
+   * @throws {UpstreamError} Neo4j 삭제 실패 시
+   */
+  async cleanupExpiredMacroViews(expiredBefore: Date): Promise<void> {
+    try {
+      await this.repo.cleanupExpiredMacroViews(expiredBefore);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphManagementService.cleanupExpiredMacroViews failed', {
+        cause: String(err),
+      });
+    }
+  }
+
   private assertUser(userId: string | undefined): asserts userId is string {
     if (!userId) throw new ValidationError('userId required');
   }

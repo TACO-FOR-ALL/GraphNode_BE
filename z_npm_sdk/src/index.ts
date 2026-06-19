@@ -250,3 +250,20 @@ export type {
   AiInputMessageAuthor,
   AiInputMessageContent,
 } from './types/aiInput.js';
+export { MacroViewApi } from './endpoints/macroViews.js';
+export type {
+  ScopeDataType,
+  ScopeCreatedPeriod,
+  ScopeFilter,
+  MacroViewSortKey,
+  MacroViewDto,
+  CreateMacroViewDto,
+  UpdateMacroViewDto,
+  ListMacroViewsQuery,
+  ListMacroViewsResponse,
+  GetMacroViewResponse,
+  CreateMacroViewResponse,
+  UpdateMacroViewResponse,
+  CloneMacroViewResponse,
+  RestoreMacroViewResponse,
+} from './types/macroView.js';

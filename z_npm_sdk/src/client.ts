@@ -22,6 +22,7 @@ import { ImportsApi } from './endpoints/imports.js';
 import { ExportApi } from './endpoints/export.js';
 import { BillingApi } from './endpoints/billing.js';
 import { AgentApi } from './endpoints/agent.js';
+import { MacroViewApi } from './endpoints/macroViews.js';
 
 /**
  * GraphNode 클라이언트 옵션
@@ -53,6 +54,7 @@ export interface GraphNodeClientOptions extends Omit<BuilderOptions, 'baseUrl' |
  * @property file AI 채팅용 파일 업로드 API (`/api/v1/ai/files`)
  * @property userFiles 사용자 라이브러리 파일 API (`/v1/files`, `/v1/sidebar-items`, Presigned 뷰 URL 등)
  * @property microscope 마이크로스코프 API
+ * @property macroViews 매크로 뷰 생명주기(CRUD) API
  */
 export class GraphNodeClient {
   readonly health: HealthApi;
@@ -78,6 +80,8 @@ export class GraphNodeClient {
   readonly billing: BillingApi;
   /** AI 에이전트 채팅 스트림 API */
   readonly agent: AgentApi;
+  /** 매크로 뷰 생명주기(CRUD) API */
+  readonly macroViews: MacroViewApi;
 
   /**
    * HTTP 요청 빌더 인스턴스.
@@ -155,6 +159,7 @@ export class GraphNodeClient {
     this.export = new ExportApi(this.rb);
     this.billing = new BillingApi(this.rb);
     this.agent = new AgentApi(this.rb);
+    this.macroViews = new MacroViewApi(this.rb);
   }
 
   /**

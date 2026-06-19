@@ -1003,6 +1003,18 @@ export interface MacroGraphStore {
     macroId: string,
     options?: MacroGraphStoreOptions
   ): Promise<void>;
+
+  /**
+   * @description deletedAt 기준 30일이 경과한 MacroGraph 루트 노드와
+   * 하위 노드(MacroNode, MacroRelation, MacroCluster, MacroSubcluster, MacroStats, MacroSummary)를
+   * Neo4j에서 영구 삭제합니다.
+   *
+   * CALL {} IN TRANSACTIONS 배치 처리로 대용량 그래프에서도 OOM 없이 동작합니다.
+   *
+   * @param expiredBefore 이 시각(포함하지 않음) 이전에 soft-delete된 뷰를 영구 삭제합니다.
+   * @throws {UpstreamError} Neo4j 삭제 실패 시
+   */
+  cleanupExpiredMacroViews(expiredBefore: Date): Promise<void>;
 }
 /**
  * @description Graph RAG 클러스터 시블링 탐색 결과 단일 항목입니다.

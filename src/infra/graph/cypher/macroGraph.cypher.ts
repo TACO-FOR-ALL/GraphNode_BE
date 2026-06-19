@@ -1883,4 +1883,159 @@ export const MACRO_GRAPH_CYPHER = {
       MERGE (dst)-[:HAS_SUBCLUSTER]->(newSc)
     } IN TRANSACTIONS OF 500 ROWS
   `,
+
+  // =====================
+  // MacroView 루트 노드 생명주기 Cypher (작성일: 2026-06-19)
+  // =====================
+
+  /**
+   * @description 사용자의 MacroGraph 루트 노드 목록을 조회합니다.
+   *
+   * MacroStats 노드에서 status, HAS_NODE count에서 nodeCount를 함께 반환합니다.
+   * onlyDeleted=true이면 soft-deleted 뷰만, false이면 활성 뷰만 반환합니다.
+   *
+   * @param userId 사용자 ID
+   * @param onlyDeleted true: 삭제된 뷰만, false: 활성 뷰만
+   */
+  listMacroViews: `
+    MATCH (g:MacroGraph {userId: $userId})
+    WHERE ($onlyDeleted AND g.deletedAt IS NOT NULL) OR (NOT $onlyDeleted AND g.deletedAt IS NULL)
+    OPTIONAL MATCH (g)-[:HAS_STATS]->(st:MacroStats)
+    OPTIONAL MATCH (g)-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+    WHERE n.deletedAt IS NULL
+    RETURN g, st.status AS status, count(DISTINCT n) AS nodeCount
+  `,
+
+  /**
+   * @description MacroGraph 루트 노드를 신규 생성합니다.
+   *
+   * (userId, macroId) 복합 unique constraint에 의해 중복 생성이 차단됩니다.
+   * upsertGraphRoot와 달리 scopeJson과 deletedAt을 명시적으로 초기화합니다.
+   *
+   * @param userId 사용자 ID
+   * @param macroId 매크로 뷰 ID (ULID)
+   * @param title 제목 (nullable)
+   * @param description 설명 (nullable)
+   * @param scopeJson ScopeFilter JSON 문자열
+   * @param now 현재 ISO 시각
+   */
+  createMacroView: `
+    MERGE (g:MacroGraph {userId: $userId, macroId: $macroId})
+    ON CREATE SET
+      g.title       = $title,
+      g.description = $description,
+      g.scopeJson   = $scopeJson,
+      g.deletedAt   = null,
+      g.createdAt   = $now,
+      g.updatedAt   = $now
+    RETURN g
+  `,
+
+  /**
+   * @description macroId 기준으로 단일 MacroGraph 루트 노드를 조회합니다.
+   *
+   * @param userId 사용자 ID
+   * @param macroId 매크로 뷰 ID
+   */
+  getMacroView: `
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})
+    OPTIONAL MATCH (g)-[:HAS_STATS]->(st:MacroStats)
+    OPTIONAL MATCH (g)-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+    WHERE n.deletedAt IS NULL
+    RETURN g, st.status AS status, count(DISTINCT n) AS nodeCount
+  `,
+
+  /**
+   * @description MacroGraph 루트 노드 메타데이터를 부분 업데이트합니다.
+   *
+   * $props 맵의 필드만 덮어씁니다. 활성(deletedAt IS NULL) 뷰에만 적용됩니다.
+   *
+   * @param userId 사용자 ID
+   * @param macroId 매크로 뷰 ID
+   * @param props 업데이트할 속성 맵 (title, description, scopeJson, updatedAt 등)
+   */
+  updateMacroView: `
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})
+    WHERE g.deletedAt IS NULL
+    SET g += $props
+    WITH g
+    OPTIONAL MATCH (g)-[:HAS_STATS]->(st:MacroStats)
+    OPTIONAL MATCH (g)-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+    WHERE n.deletedAt IS NULL
+    RETURN g, st.status AS status, count(DISTINCT n) AS nodeCount
+  `,
+
+  /**
+   * @description MacroGraph 루트 노드를 Soft Delete합니다. (deletedAt = number timestamp)
+   *
+   * 30일 경과 후 cleanupExpiredMacroViewsBatch로 영구 삭제됩니다.
+   *
+   * @param userId 사용자 ID
+   * @param macroId 매크로 뷰 ID
+   * @param deletedAt 삭제 타임스탬프 (ms)
+   */
+  softDeleteMacroView: `
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})
+    WHERE g.deletedAt IS NULL
+    SET g.deletedAt = $deletedAt
+  `,
+
+  /**
+   * @description Soft Delete된 MacroGraph 루트 노드를 복원합니다.
+   *
+   * @param userId 사용자 ID
+   * @param macroId 매크로 뷰 ID
+   */
+  restoreMacroView: `
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})
+    WHERE g.deletedAt IS NOT NULL
+    SET g.deletedAt = null
+  `,
+
+  /**
+   * @description deletedAt 기준 30일이 경과한 MacroGraph와 하위 노드를 타입별 배치 삭제합니다.
+   *
+   * CALL {} IN TRANSACTIONS 기반 배치 처리로 대용량 그래프에서도 OOM 없이 동작합니다.
+   * Cleanup Cron에서 단계적으로 호출합니다.
+   *
+   * @param expiredBefore 이 값보다 작은 deletedAt을 가진 뷰를 삭제 (ms timestamp)
+   */
+  cleanupExpiredMacroViewsBatch: {
+    relations: `
+      MATCH (g:MacroGraph)
+      WHERE g.deletedAt IS NOT NULL AND g.deletedAt < $expiredBefore
+      MATCH (g)-[:HAS_RELATION]->(rel:MacroRelation)
+      CALL { WITH rel DETACH DELETE rel } IN TRANSACTIONS OF 500 ROWS
+    `,
+    nodes: `
+      MATCH (g:MacroGraph)
+      WHERE g.deletedAt IS NOT NULL AND g.deletedAt < $expiredBefore
+      MATCH (g)-[:HAS_NODE]->(n:MacroNode)
+      CALL { WITH n DETACH DELETE n } IN TRANSACTIONS OF 500 ROWS
+    `,
+    subclusters: `
+      MATCH (g:MacroGraph)
+      WHERE g.deletedAt IS NOT NULL AND g.deletedAt < $expiredBefore
+      MATCH (g)-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster)
+      CALL { WITH sc DETACH DELETE sc } IN TRANSACTIONS OF 500 ROWS
+    `,
+    clusters: `
+      MATCH (g:MacroGraph)
+      WHERE g.deletedAt IS NOT NULL AND g.deletedAt < $expiredBefore
+      MATCH (g)-[:HAS_CLUSTER]->(cl:MacroCluster)
+      CALL { WITH cl DETACH DELETE cl } IN TRANSACTIONS OF 500 ROWS
+    `,
+    statsAndSummary: `
+      MATCH (g:MacroGraph)
+      WHERE g.deletedAt IS NOT NULL AND g.deletedAt < $expiredBefore
+      OPTIONAL MATCH (g)-[:HAS_STATS]->(st:MacroStats)
+      OPTIONAL MATCH (g)-[:HAS_SUMMARY]->(sm:MacroSummary)
+      DETACH DELETE st, sm
+    `,
+    graphRoot: `
+      MATCH (g:MacroGraph)
+      WHERE g.deletedAt IS NOT NULL AND g.deletedAt < $expiredBefore
+      DETACH DELETE g
+    `,
+  },
 } as const;

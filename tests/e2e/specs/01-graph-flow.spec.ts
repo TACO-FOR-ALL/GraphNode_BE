@@ -20,21 +20,16 @@ import type { Session } from 'neo4j-driver';
  * Neo4j에만 저장됩니다. MongoDB graph_nodes / graph_stats / graph_summaries 컬렉션은
  * 더 이상 사용하지 않으므로 모든 그래프 검증을 Neo4j 쿼리로 대체합니다.
  *
+ * [1:N MacroView 구조]
+ * beforeAll에서 POST /v1/macro-views로 macroId를 생성하여 모든 시나리오에서 공유합니다.
+ * summary/snapshot API 등 macroId 필수 endpoint에는 해당 macroId를 주입합니다.
+ *
  * 시나리오 1: 전체 그래프 생성 (Graph Generation)
- * - 사용자의 대화·노트·사용자 라이브러리 파일(UserFile)을 기반으로 지식 그래프 추출을 요청하고,
- *   비동기 작업(Worker/AI)이 완료되어 Neo4j에 'CREATED' 상태로 저장되는지 검증합니다.
- *
- * 시나리오 2: 그래프 요약 (Graph Summary)
- * - 생성된 그래프를 기반으로 AI 요약(Summary) 생성을 요청하고,
- *   최종적으로 Neo4j MacroSummary 노드에 데이터가 생성되는지 검증합니다.
- *
+ * 시나리오 2: 그래프 요약 (Graph Summary) — macroId body 주입
  * 시나리오 3: 노드 추가 (Add Node — 대화 + 노트 혼합)
- * - 기존에 생성된 그래프에 새로운 대화와 노트를 동시에 삽입하고 AddNode를 호출합니다.
- * - 비동기 AI 파이프라인이 완료된 후 Neo4j MacroNode에 대화 노드(nodeType: 'conversation')와
- *   노트 노드(nodeType: 'note')가 모두 저장되었는지 검증합니다.
- *
  * 시나리오 4: Graph Node Soft Delete 정합성 검증
- * - Neo4j에서 활성 노드를 찾아 API 소프트 삭제 후 Neo4j deletedAt 설정 여부를 검증합니다.
+ * 시나리오 5: MacroView Clone (1:N 복제 독립성 검증)
+ * 시나리오 6: MacroView Soft Delete (휴지통 이동 + deletedAt Neo4j 검증)
  *
  * E2E_SCOPE=full + LLM 키 있을 때만 실행 (`E2E_SCOPE=bundle` 은 macro-s3-bundle 만).
  */
@@ -67,10 +62,13 @@ describeGraphFlow('End-to-End Graph Flow', () => {
   const userId = getTestUserId();
   const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/graphnode';
   let scenario1Passed = false;
+  /** beforeAll에서 생성한 macroId — 모든 시나리오에서 공유 */
+  let macroId = '';
 
   beforeAll(async () => {
     await seedTestData();
 
+    // 1. Neo4j userId 데이터 전체 초기화
     const neo4jDriver = createNeo4jE2eDriver();
     const neo4jSession = neo4jDriver.session();
     try {
@@ -82,6 +80,19 @@ describeGraphFlow('End-to-End Graph Flow', () => {
       await neo4jSession.close();
       await neo4jDriver.close();
     }
+
+    // 2. 테스트 전용 MacroView 생성 (macroId 확보)
+    const mvRes = await apiClient.post('/v1/macro-views', {
+      title: 'E2E Test Macro View',
+      scopeFilter: {
+        mode: 'manual',
+        filters: { dataTypes: ['chat', 'note', 'file'] },
+      },
+    });
+    expect(mvRes.status).toBe(201);
+    macroId = mvRes.data.view.macroId as string;
+    expect(macroId).toBeTruthy();
+    console.log(`[beforeAll] MacroView created: macroId=${macroId}`);
   });
 
   it('Scenario 1: Full Graph Generation Flow', async () => {
@@ -154,8 +165,9 @@ describeGraphFlow('End-to-End Graph Flow', () => {
       const maxPollAttempts = scope === 'full' ? 180 : 60;
       for (let i = 0; i < maxPollAttempts; i++) {
         const statsRes = await neo4jSession.run(
-          'MATCH (g:MacroGraph {userId: $userId})-[:HAS_STATS]->(st:MacroStats) RETURN st.status AS status',
-          { userId }
+          `MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_STATS]->(st:MacroStats)
+           RETURN st.status AS status`,
+          { userId, macroId }
         );
         const status = statsRes.records[0]?.get('status') as string | undefined;
 
@@ -167,14 +179,14 @@ describeGraphFlow('End-to-End Graph Flow', () => {
         if (status === 'CREATED') {
           // MacroNode 목록 조회 (BELONGS_TO로 cluster 정보도 함께)
           const nodesRes = await neo4jSession.run(
-            `MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+            `MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
              WHERE n.deletedAt IS NULL
              OPTIONAL MATCH (n)-[:BELONGS_TO]->(c:MacroCluster {userId: $userId})
              RETURN n.id AS id, n.origId AS origId, n.nodeType AS nodeType,
                     n.fileType AS fileType,
                     n.numMessages AS numMessages, n.updatedAt AS updatedAt,
                     coalesce(c.id, '') AS clusterId`,
-            { userId }
+            { userId, macroId }
           );
 
           const nodes = nodesRes.records.map((r) => ({
@@ -258,10 +270,10 @@ describeGraphFlow('End-to-End Graph Flow', () => {
               expect(node?.fileType).toBe(expectedMacroFileType);
 
               const metaRes = await neo4jSession.run(
-                `MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+                `MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
                  WHERE n.origId = $origId AND n.deletedAt IS NULL
                  RETURN n.metadataJson AS metadataJson, n.mimeType AS mimeType`,
-                { userId, origId: uf._id }
+                { userId, macroId, origId: uf._id }
               );
               expect(metaRes.records.length).toBe(1);
               const metadata = parseNeo4jMetadataJson(
@@ -294,7 +306,8 @@ describeGraphFlow('End-to-End Graph Flow', () => {
           expect(statsApiRes.status).toBe(200);
           expect(statsApiRes.data?.status).toBe('CREATED');
 
-          const snapshotApiRes = await apiClient.get('/v1/graph/snapshot');
+          // macroId를 query param으로 주입 (GET /v1/graph/snapshot 필수)
+          const snapshotApiRes = await apiClient.get(`/v1/graph/snapshot?macroId=${macroId}`);
           expect(snapshotApiRes.status).toBe(200);
           const snapshotNodes = (snapshotApiRes.data?.nodes ?? []) as Array<{
             origId: string;
@@ -311,7 +324,7 @@ describeGraphFlow('End-to-End Graph Flow', () => {
           }
 
           console.log(
-            `Macro graph API snapshot verified (${snapshotNodes.length} nodes via GET /v1/graph/snapshot).`
+            `Macro graph API snapshot verified (${snapshotNodes.length} nodes via GET /v1/graph/snapshot?macroId=${macroId}).`
           );
 
           isFinished = true;
@@ -341,7 +354,8 @@ describeGraphFlow('End-to-End Graph Flow', () => {
       );
     }
 
-    const response = await apiClient.post('/v1/graph-ai/summary');
+    // macroId를 body에 주입 (POST /v1/graph-ai/summary 필수)
+    const response = await apiClient.post('/v1/graph-ai/summary', { macroId });
     expect(response.status).toBe(202);
 
     const taskId = response.data.taskId;
@@ -357,10 +371,10 @@ describeGraphFlow('End-to-End Graph Flow', () => {
     try {
       for (let i = 0; i < maxSummaryAttempts; i++) {
         const summaryRes = await neo4jSession.run(
-          `MATCH (g:MacroGraph {userId: $userId})-[:HAS_SUMMARY]->(sm:MacroSummary)
+          `MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_SUMMARY]->(sm:MacroSummary)
            WHERE sm.deletedAt IS NULL
            RETURN sm.id AS id`,
-          { userId }
+          { userId, macroId }
         );
         if (summaryRes.records.length > 0) {
           isFinished = true;
@@ -450,10 +464,10 @@ describeGraphFlow('End-to-End Graph Flow', () => {
     let oldUpdatedAt = '';
     try {
       const initRes = await neo4jSessionInit.run(
-        `MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+        `MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
          WHERE n.origId = $origId AND n.deletedAt IS NULL
          RETURN n.numMessages AS numMessages, n.updatedAt AS updatedAt`,
-        { userId, origId: 'conv-e2e-123' }
+        { userId, macroId, origId: 'conv-e2e-123' }
       );
       if (initRes.records.length === 0) {
         throw new Error('Initial node for conv-e2e-123 not found in Neo4j. Check Scenario 1.');
@@ -565,10 +579,10 @@ describeGraphFlow('End-to-End Graph Flow', () => {
       try {
         // [기존 노드 업데이트 검증] conv-e2e-123
         const updatedNodeRes = await neo4jSession.run(
-          `MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+          `MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
            WHERE n.origId = $origId AND n.deletedAt IS NULL
            RETURN n.id AS id, n.numMessages AS numMessages, n.updatedAt AS updatedAt`,
-          { userId, origId: 'conv-e2e-123' }
+          { userId, macroId, origId: 'conv-e2e-123' }
         );
 
         expect(updatedNodeRes.records.length).toBe(1);
@@ -583,10 +597,10 @@ describeGraphFlow('End-to-End Graph Flow', () => {
 
         // [신규 대화 노드 생성 확인]
         const newConvNodeRes = await neo4jSession.run(
-          `MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+          `MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
            WHERE n.origId = $origId AND n.deletedAt IS NULL
            RETURN n.id AS id, n.nodeType AS nodeType`,
-          { userId, origId: newConvId }
+          { userId, macroId, origId: newConvId }
         );
         expect(newConvNodeRes.records.length).toBe(1);
         const newConvNodeId = newConvNodeRes.records[0].get('id') as number;
@@ -595,10 +609,10 @@ describeGraphFlow('End-to-End Graph Flow', () => {
 
         // [신규 노트 노드 생성 확인]
         const newNoteNodeRes = await neo4jSession.run(
-          `MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+          `MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
            WHERE n.origId = $origId AND n.deletedAt IS NULL
            RETURN n.id AS id, n.nodeType AS nodeType`,
-          { userId, origId: newNoteId }
+          { userId, macroId, origId: newNoteId }
         );
         expect(newNoteNodeRes.records.length).toBe(1);
         const newNoteNodeId = newNoteNodeRes.records[0].get('id') as number;
@@ -632,11 +646,11 @@ describeGraphFlow('End-to-End Graph Flow', () => {
     try {
       // 1. Neo4j에서 삭제할 활성 노드 선정
       const activeNodeRes = await neo4jSession.run(
-        `MATCH (g:MacroGraph {userId: $userId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+        `MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
          WHERE n.deletedAt IS NULL
          RETURN n.id AS id, n.origId AS origId
          LIMIT 1`,
-        { userId }
+        { userId, macroId }
       );
 
       if (activeNodeRes.records.length === 0) {
@@ -665,6 +679,115 @@ describeGraphFlow('End-to-End Graph Flow', () => {
       await neo4jSession.close();
       await neo4jDriver.close();
     }
+  });
+
+  it('Scenario 5: MacroView Clone — independent macroId, same scopeFilter', async () => {
+    console.log('\n--- Starting Scenario 5: MacroView Clone ---');
+
+    // 1. 원본 뷰 상태 확인
+    const originalRes = await apiClient.get(`/v1/macro-views/${macroId}`);
+    expect(originalRes.status).toBe(200);
+    const originalView = originalRes.data.view;
+    console.log(`Original view: macroId=${originalView.macroId}, title=${originalView.title}`);
+
+    // 2. Clone 요청
+    const cloneRes = await apiClient.post(`/v1/macro-views/${macroId}/clone`);
+    expect(cloneRes.status).toBe(201);
+    const clonedView = cloneRes.data.view;
+
+    // 3. 복제본이 원본과 다른 macroId를 가지는지 검증
+    expect(clonedView.macroId).toBeTruthy();
+    expect(clonedView.macroId).not.toBe(macroId);
+    console.log(`Cloned view: macroId=${clonedView.macroId}, title=${clonedView.title}`);
+
+    // 4. scopeFilter가 동일하게 복사되었는지 검증
+    expect(clonedView.scopeFilter?.mode).toBe(originalView.scopeFilter?.mode);
+    if (originalView.scopeFilter?.filters?.dataTypes) {
+      expect(clonedView.scopeFilter?.filters?.dataTypes).toEqual(
+        expect.arrayContaining(originalView.scopeFilter.filters.dataTypes)
+      );
+    }
+
+    // 5. 목록 조회에서 원본과 복제본 모두 확인
+    const listRes = await apiClient.get('/v1/macro-views');
+    expect(listRes.status).toBe(200);
+    const views = listRes.data.views as Array<{ macroId: string }>;
+    const macroIds = views.map((v) => v.macroId);
+    expect(macroIds).toContain(macroId);
+    expect(macroIds).toContain(clonedView.macroId);
+
+    // 6. 복제본이 Neo4j에 독립 MacroGraph 루트 노드로 존재하는지 검증
+    const neo4jDriver = createNeo4jE2eDriver();
+    const neo4jSession: Session = neo4jDriver.session();
+    try {
+      const cloneCheckRes = await neo4jSession.run(
+        'MATCH (g:MacroGraph {userId: $userId, macroId: $clonedMacroId}) RETURN g.macroId AS macroId',
+        { userId, clonedMacroId: clonedView.macroId }
+      );
+      expect(cloneCheckRes.records.length).toBe(1);
+      expect(cloneCheckRes.records[0].get('macroId')).toBe(clonedView.macroId);
+      console.log(`Clone Neo4j MacroGraph root verified: macroId=${clonedView.macroId}`);
+    } finally {
+      await neo4jSession.close();
+      await neo4jDriver.close();
+    }
+
+    console.log('Scenario 5: MacroView Clone verified.');
+  });
+
+  it('Scenario 6: MacroView Soft Delete — trash move + Neo4j deletedAt verification', async () => {
+    console.log('\n--- Starting Scenario 6: MacroView Soft Delete ---');
+
+    // 1. 삭제할 뷰 별도 생성 (macroId는 유지)
+    const newViewRes = await apiClient.post('/v1/macro-views', {
+      title: 'E2E Soft Delete Target',
+      scopeFilter: { mode: 'manual', filters: { dataTypes: ['note'] } },
+    });
+    expect(newViewRes.status).toBe(201);
+    const targetMacroId = newViewRes.data.view.macroId as string;
+    console.log(`Target MacroView for soft delete: macroId=${targetMacroId}`);
+
+    // 2. 소프트 삭제 요청
+    const deleteRes = await apiClient.delete(`/v1/macro-views/${targetMacroId}`);
+    expect(deleteRes.status).toBe(204);
+
+    // 3. 활성 목록 조회 — 삭제된 뷰가 미출력되는지 확인
+    const activeListRes = await apiClient.get('/v1/macro-views');
+    expect(activeListRes.status).toBe(200);
+    const activeMacroIds = (activeListRes.data.views as Array<{ macroId: string }>).map(
+      (v) => v.macroId
+    );
+    expect(activeMacroIds).not.toContain(targetMacroId);
+    console.log('Soft-deleted view not present in active list. ✓');
+
+    // 4. 휴지통 목록 조회 — 삭제된 뷰가 포함되는지 확인
+    const trashedListRes = await apiClient.get('/v1/macro-views?onlyDeleted=true');
+    expect(trashedListRes.status).toBe(200);
+    const trashedMacroIds = (trashedListRes.data.views as Array<{ macroId: string }>).map(
+      (v) => v.macroId
+    );
+    expect(trashedMacroIds).toContain(targetMacroId);
+    console.log('Soft-deleted view present in trash list. ✓');
+
+    // 5. Neo4j에서 deletedAt이 설정되었는지 검증
+    const neo4jDriver = createNeo4jE2eDriver();
+    const neo4jSession: Session = neo4jDriver.session();
+    try {
+      const neo4jRes = await neo4jSession.run(
+        'MATCH (g:MacroGraph {userId: $userId, macroId: $macroId}) RETURN g.deletedAt AS deletedAt',
+        { userId, macroId: targetMacroId }
+      );
+      expect(neo4jRes.records.length).toBe(1);
+      const deletedAt = neo4jRes.records[0].get('deletedAt');
+      expect(deletedAt).not.toBeNull();
+      expect(typeof deletedAt).toBe('number');
+      console.log(`Neo4j MacroGraph deletedAt=${deletedAt} verified. ✓`);
+    } finally {
+      await neo4jSession.close();
+      await neo4jDriver.close();
+    }
+
+    console.log('Scenario 6: MacroView Soft Delete verified.');
   });
 
   // ── AC-13: notion 노드 포함 그래프 생성 후 Neo4j sourceType='notion' 검증 ──
