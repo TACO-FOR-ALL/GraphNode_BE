@@ -229,6 +229,9 @@ services:
       - OAUTH_GOOGLE_CLIENT_ID=dummy-google-client-id
       - OAUTH_GOOGLE_CLIENT_SECRET=dummy-google-client-secret
       - OAUTH_GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google/callback
+      - OAUTH_NOTION_CLIENT_ID=dummy-notion-client-id
+      - OAUTH_NOTION_CLIENT_SECRET=dummy-notion-client-secret
+      - OAUTH_NOTION_REDIRECT_URI=http://localhost:3000/auth/notion/callback
       - OAUTH_APPLE_TEAM_ID=dummy-apple-team-id
       - OAUTH_APPLE_KEY_ID=dummy-apple-key-id
       - OAUTH_APPLE_CLIENT_ID=dummy-apple-client-id
@@ -317,6 +320,9 @@ services:
       - OAUTH_GOOGLE_CLIENT_ID=dummy-google-client-id
       - OAUTH_GOOGLE_CLIENT_SECRET=dummy-google-client-secret
       - OAUTH_GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google/callback
+      - OAUTH_NOTION_CLIENT_ID=dummy-notion-client-id
+      - OAUTH_NOTION_CLIENT_SECRET=dummy-notion-client-secret
+      - OAUTH_NOTION_REDIRECT_URI=http://localhost:3000/auth/notion/callback
       - OAUTH_APPLE_TEAM_ID=dummy-apple-team-id
       - OAUTH_APPLE_KEY_ID=dummy-apple-key-id
       - OAUTH_APPLE_CLIENT_ID=dummy-apple-client-id

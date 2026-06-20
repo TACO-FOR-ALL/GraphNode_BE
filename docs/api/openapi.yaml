@@ -628,6 +628,54 @@ paths:
           description: Unauthorized
         '429':
           description: Too Many Requests
+  /api/notion/pages/{pageId}:
+    get:
+      summary: Get a single cached Notion page
+      description: |
+        MongoDB notion_page_caches에서 단일 Notion 페이지를 조회합니다.
+        FE가 그래프 노드 클릭 시 notion 원본 페이지 데이터로 연결할 때 사용합니다.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: pageId
+          required: true
+          description: Notion page UUID (_id 필드와 동일)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK — 캐시된 Notion 페이지 문서
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  _id:
+                    type: string
+                    format: uuid
+                  ownerUserId:
+                    type: string
+                  title:
+                    type: string
+                  plainText:
+                    type: string
+                  isStale:
+                    type: boolean
+                required: [_id, ownerUserId, title, plainText]
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '404':
+          description: Notion page not found in cache
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../schemas/problem.json'
+        '429':
+          description: Too Many Requests
   /api/notion/blocks/{blockId}/children:
     get:
       summary: Get Notion block children

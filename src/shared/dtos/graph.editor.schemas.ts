@@ -40,6 +40,7 @@ export const createNodeEditorSchema = z.object({
   sourceType: z.enum(GRAPH_SOURCE_TYPES).optional(),
   timestamp: z.string().nullable().optional(),
   numMessages: z.number().int().min(0).optional(),
+  nodeTitle: z.string().max(500).optional(),
 });
 
 /**
@@ -52,6 +53,7 @@ export const updateNodeEditorSchema = z.object({
   sourceType: z.enum(GRAPH_SOURCE_TYPES).optional(),
   timestamp: z.string().nullable().optional(),
   numMessages: z.number().int().min(0).optional(),
+  nodeTitle: z.string().max(500).optional(),
 });
 
 // =====================

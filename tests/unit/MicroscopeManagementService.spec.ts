@@ -30,12 +30,17 @@ describe('MicroscopeManagementService', () => {
       deleteWorkspace: jest.fn(),
       addDocument: jest.fn(),
       updateDocumentStatus: jest.fn(),
+      updateDocumentSubStatus: jest.fn(),
       saveGraphPayload: jest.fn(),
       findGraphPayloadsByIds: jest.fn(),
       deleteGraphPayloadsByGroupId: jest.fn(),
       findLatestWorkspaceByNodeId: jest.fn(),
       findWorkspaceByMostRecentDocumentNodeId: jest.fn(),
       findWorkspaceByDocumentId: jest.fn(),
+      saveBlockGraphPayload: jest.fn(),
+      saveBlockRawTextPayload: jest.fn(),
+      findBlockGraphPayloadByTaskId: jest.fn(),
+      findBlockRawTextPayloadByTaskId: jest.fn(),
     } as any;
 
     mockGraphNeo4jStore = {
@@ -161,9 +166,12 @@ describe('MicroscopeManagementService', () => {
         nodeType: nodeType
       });
 
+      // 듀얼 SQS: block + nonblock 2개 메시지 발행 확인
+      expect(mockQueuePort.sendMessage).toHaveBeenCalledTimes(2);
       expect(mockQueuePort.sendMessage).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
+          taskId: expect.stringMatching(/_block$/),
           taskType: TaskType.MICROSCOPE_INGEST_FROM_NODE_REQUEST,
           payload: expect.objectContaining({
             user_id: userId,
@@ -173,11 +181,29 @@ describe('MicroscopeManagementService', () => {
             schema_name: schemaName,
             language: 'ko',
             ingest_mode: 'from_graphnode',
+            block_mode: true,
+          }),
+        })
+      );
+      expect(mockQueuePort.sendMessage).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          taskId: expect.stringMatching(/_nonblock$/),
+          taskType: TaskType.MICROSCOPE_INGEST_FROM_NODE_REQUEST,
+          payload: expect.objectContaining({
             block_mode: false,
           }),
         })
       );
       expect(result._id).toBe(createdWorkspaceId);
+
+      // document에 blockStatus, nonBlockStatus 초기화 확인
+      const createdDoc = mockWorkspaceStore.addDocument.mock.calls[0][1];
+      expect(createdDoc).toMatchObject({
+        blockStatus: 'PROCESSING',
+        nonBlockStatus: 'PROCESSING',
+        blockModeRequested: true,
+      });
     });
 
     it('should throw NotFoundError if note is not found', async () => {
@@ -375,9 +401,12 @@ describe('MicroscopeManagementService', () => {
         expect.objectContaining({ bucketType: 'payload' })
       );
       expect(mockWorkspaceStore.addDocument).toHaveBeenCalledWith(groupId, expect.any(Object));
+      // 듀얼 SQS: 2개 메시지 발행 확인
+      expect(mockQueuePort.sendMessage).toHaveBeenCalledTimes(2);
       expect(mockQueuePort.sendMessage).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
+          taskId: expect.stringMatching(/_block$/),
           taskType: TaskType.MICROSCOPE_INGEST_REQUEST,
           payload: expect.objectContaining({
             user_id: userId,
@@ -385,16 +414,345 @@ describe('MicroscopeManagementService', () => {
             schema_name: 'schema-a',
             file_name: 'report.pdf',
             ingest_mode: 'raw_file',
-            block_mode: false,
+            block_mode: true,
           }),
+        })
+      );
+      expect(mockQueuePort.sendMessage).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          taskId: expect.stringMatching(/_nonblock$/),
+          payload: expect.objectContaining({ block_mode: false }),
         })
       );
       expect(out._id).toBe(groupId);
       expect(out.documents.length).toBe(1);
+
+      // document sub-status 초기화 확인
+      const addedDoc = mockWorkspaceStore.addDocument.mock.calls[0][1];
+      expect(addedDoc).toMatchObject({ blockStatus: 'PROCESSING', nonBlockStatus: 'PROCESSING' });
     });
 
     it('throws ValidationError when files array is empty', async () => {
       await expect(service.ingestRawDocumentsToWorkspace('u', 'ws', [])).rejects.toThrow(ValidationError);
+    });
+  });
+
+  describe('updateBlockViewDocumentStatus', () => {
+    const userId = 'user_1';
+    const groupId = 'ws_block_1';
+    const docId = 'task_microscope_node_user_1_ABC';
+
+    const baseWorkspace = {
+      _id: groupId,
+      userId,
+      documents: [
+        {
+          id: docId,
+          s3Key: '',
+          fileName: `${docId}.md`,
+          status: 'PROCESSING' as const,
+          nonBlockStatus: 'PROCESSING' as const,
+          blockStatus: 'PROCESSING' as const,
+          createdAt: '2026-06-01T00:00:00Z',
+          updatedAt: '2026-06-01T00:00:00Z',
+        },
+      ],
+      createdAt: '2026-06-01T00:00:00Z',
+      updatedAt: '2026-06-01T00:00:00Z',
+    };
+
+    it('stores block graph payload and updates blockStatus to COMPLETED', async () => {
+      const blockGraphJson = {
+        block_graph: {
+          blocks: [
+            {
+              block_id: 'blk_1',
+              title: '블록1',
+              summary: '요약',
+              key_concepts: ['개념1'],
+              order_index: 0,
+              turn_range: null,
+              micro_graph: { nodes: [], edges: [] },
+              raw_text: '원문 텍스트',
+            },
+          ],
+          edges: [],
+          paths: [['blk_1']],
+          ordering_rationale: '순서 근거',
+        },
+      };
+
+      // findById: 첫 번째 호출 = 소유권 확인, 두 번째 = nonBlockStatus 확인, 세 번째 = 최신 반환
+      const completedWorkspace = {
+        ...baseWorkspace,
+        documents: [
+          {
+            ...baseWorkspace.documents[0],
+            blockStatus: 'COMPLETED' as const,
+            status: 'PROCESSING' as const,
+          },
+        ],
+      };
+      mockWorkspaceStore.findById
+        .mockResolvedValueOnce(baseWorkspace as any)          // 소유권 확인
+        .mockResolvedValueOnce(baseWorkspace as any)          // nonBlockStatus 확인
+        .mockResolvedValueOnce(completedWorkspace as any);    // 최신 반환
+
+      mockWorkspaceStore.saveBlockGraphPayload.mockResolvedValue(undefined);
+      mockWorkspaceStore.saveBlockRawTextPayload.mockResolvedValue(undefined);
+      mockWorkspaceStore.updateDocumentSubStatus.mockResolvedValue(undefined);
+
+      const result = await service.updateBlockViewDocumentStatus(
+        userId,
+        groupId,
+        docId,
+        'COMPLETED',
+        blockGraphJson as any
+      );
+
+      expect(mockWorkspaceStore.saveBlockGraphPayload).toHaveBeenCalledWith(
+        expect.objectContaining({ groupId, taskId: docId })
+      );
+      expect(mockWorkspaceStore.saveBlockRawTextPayload).toHaveBeenCalledWith(
+        expect.objectContaining({
+          groupId,
+          taskId: docId,
+          rawTexts: expect.arrayContaining([
+            expect.objectContaining({ blockId: 'blk_1', rawText: '원문 텍스트' }),
+          ]),
+        })
+      );
+      expect(mockWorkspaceStore.updateDocumentSubStatus).toHaveBeenCalledWith(
+        groupId,
+        docId,
+        expect.objectContaining({ blockStatus: 'COMPLETED' })
+      );
+      expect(result._id).toBe(groupId);
+    });
+
+    it('sets overall status COMPLETED when both block and nonBlock are COMPLETED', async () => {
+      const nonBlockCompletedWorkspace = {
+        ...baseWorkspace,
+        documents: [{ ...baseWorkspace.documents[0], nonBlockStatus: 'COMPLETED' as const }],
+      };
+      mockWorkspaceStore.findById
+        .mockResolvedValueOnce(baseWorkspace as any)
+        .mockResolvedValueOnce(nonBlockCompletedWorkspace as any)
+        .mockResolvedValueOnce({ ...baseWorkspace, documents: [{ ...baseWorkspace.documents[0], status: 'COMPLETED' }] } as any);
+
+      mockWorkspaceStore.saveBlockGraphPayload.mockResolvedValue(undefined);
+      mockWorkspaceStore.updateDocumentSubStatus.mockResolvedValue(undefined);
+
+      await service.updateBlockViewDocumentStatus(userId, groupId, docId, 'COMPLETED', {
+        block_graph: { blocks: [], edges: [], paths: [] },
+      } as any);
+
+      expect(mockWorkspaceStore.updateDocumentSubStatus).toHaveBeenCalledWith(
+        groupId,
+        docId,
+        expect.objectContaining({ blockStatus: 'COMPLETED', status: 'COMPLETED' })
+      );
+    });
+
+    it('sets overall status FAILED when block status is FAILED', async () => {
+      mockWorkspaceStore.findById
+        .mockResolvedValueOnce(baseWorkspace as any)
+        .mockResolvedValueOnce(baseWorkspace as any)
+        .mockResolvedValueOnce({ ...baseWorkspace } as any);
+
+      mockWorkspaceStore.updateDocumentSubStatus.mockResolvedValue(undefined);
+
+      await service.updateBlockViewDocumentStatus(userId, groupId, docId, 'FAILED', undefined, 'AI error');
+
+      expect(mockWorkspaceStore.updateDocumentSubStatus).toHaveBeenCalledWith(
+        groupId,
+        docId,
+        expect.objectContaining({ blockStatus: 'FAILED', status: 'FAILED' })
+      );
+    });
+
+    it('throws NotFoundError when workspace does not exist', async () => {
+      mockWorkspaceStore.findById.mockResolvedValue(null);
+      await expect(
+        service.updateBlockViewDocumentStatus(userId, 'nonexistent', docId, 'COMPLETED')
+      ).rejects.toThrow(NotFoundError);
+    });
+  });
+
+  describe('updateDocumentStatus (isDualMode=true)', () => {
+    const userId = 'user_dual';
+    const groupId = 'ws_dual';
+    const docId = 'task_microscope_node_user_dual_XYZ';
+
+    const baseWorkspace = {
+      _id: groupId,
+      userId,
+      documents: [
+        {
+          id: docId,
+          s3Key: '',
+          fileName: `${docId}.md`,
+          status: 'PROCESSING' as const,
+          blockStatus: 'PROCESSING' as const,
+          nonBlockStatus: 'PROCESSING' as const,
+          createdAt: '2026-06-01T00:00:00Z',
+          updatedAt: '2026-06-01T00:00:00Z',
+        },
+      ],
+      createdAt: '2026-06-01T00:00:00Z',
+      updatedAt: '2026-06-01T00:00:00Z',
+    };
+
+    it('updates nonBlockStatus and sets overall status PROCESSING when block not yet done', async () => {
+      mockWorkspaceStore.findById
+        .mockResolvedValueOnce(baseWorkspace as any)   // 소유권 확인
+        .mockResolvedValueOnce(baseWorkspace as any)   // blockStatus 확인
+        .mockResolvedValueOnce(baseWorkspace as any);  // 최신 반환
+
+      mockWorkspaceStore.saveGraphPayload.mockResolvedValue(undefined);
+      mockWorkspaceStore.updateDocumentSubStatus.mockResolvedValue(undefined);
+      mockWorkspaceStore.updateDocumentStatus.mockResolvedValue(undefined);
+
+      await service.updateDocumentStatus(
+        userId, groupId, docId, 'COMPLETED',
+        undefined, undefined, undefined, undefined,
+        true // isDualMode
+      );
+
+      expect(mockWorkspaceStore.updateDocumentSubStatus).toHaveBeenCalledWith(
+        groupId,
+        docId,
+        expect.objectContaining({ nonBlockStatus: 'COMPLETED', status: 'PROCESSING' })
+      );
+    });
+
+    it('sets overall status COMPLETED when both pipelines are done in dual mode', async () => {
+      const blockCompletedWorkspace = {
+        ...baseWorkspace,
+        documents: [{ ...baseWorkspace.documents[0], blockStatus: 'COMPLETED' as const }],
+      };
+      mockWorkspaceStore.findById
+        .mockResolvedValueOnce(baseWorkspace as any)
+        .mockResolvedValueOnce(blockCompletedWorkspace as any)
+        .mockResolvedValueOnce({ ...baseWorkspace } as any);
+
+      mockWorkspaceStore.saveGraphPayload.mockResolvedValue(undefined);
+      mockWorkspaceStore.updateDocumentSubStatus.mockResolvedValue(undefined);
+      mockWorkspaceStore.updateDocumentStatus.mockResolvedValue(undefined);
+
+      await service.updateDocumentStatus(
+        userId, groupId, docId, 'COMPLETED',
+        undefined, undefined, undefined, undefined,
+        true
+      );
+
+      expect(mockWorkspaceStore.updateDocumentSubStatus).toHaveBeenCalledWith(
+        groupId,
+        docId,
+        expect.objectContaining({ nonBlockStatus: 'COMPLETED', status: 'COMPLETED' })
+      );
+    });
+  });
+
+  describe('getWorkspaceGraph with blockView', () => {
+    const userId = 'user_gv';
+    const workspaceId = 'ws_gv';
+
+    it('returns blockView when blockGraphPayloadId is set on a COMPLETED document', async () => {
+      const workspaceWithBlock = {
+        _id: workspaceId,
+        userId,
+        documents: [
+          {
+            id: 'doc_1',
+            status: 'COMPLETED' as const,
+            graphPayloadId: 'ply_1',
+            blockGraphPayloadId: 'ply_block_1',
+            s3Key: '',
+            fileName: 'doc1.md',
+            createdAt: '2026-06-01T00:00:00Z',
+            updatedAt: '2026-06-01T00:00:00Z',
+          },
+        ],
+        createdAt: '2026-06-01T00:00:00Z',
+        updatedAt: '2026-06-01T00:00:00Z',
+      };
+
+      mockWorkspaceStore.findById.mockResolvedValue(workspaceWithBlock as any);
+      mockWorkspaceStore.findGraphPayloadsByIds.mockResolvedValue([
+        {
+          _id: 'ply_1',
+          groupId: workspaceId,
+          taskId: 'doc_1',
+          userId,
+          graphData: { nodes: [{ id: 'n1', name: '노드1', type: 'T', description: '', source_chunk_id: null }], edges: [] },
+          createdAt: '2026-06-01T00:00:00Z',
+        } as any,
+      ]);
+
+      mockWorkspaceStore.findBlockGraphPayloadByTaskId.mockResolvedValue({
+        _id: 'ply_block_1',
+        groupId: workspaceId,
+        taskId: 'doc_1',
+        userId,
+        blockGraph: {
+          blocks: [
+            {
+              block_id: 'blk_1',
+              title: '첫 블록',
+              key_concepts: ['개념A'],
+              order_index: 0,
+              turn_range: null,
+              micro_graph: { nodes: [], edges: [] },
+            },
+          ],
+          edges: [{ source: 'blk_1', target: 'blk_2', type: 'FOLLOWS' as const }],
+          paths: [['blk_1', 'blk_2']],
+          ordering_rationale: '순서',
+        },
+        createdAt: '2026-06-01T00:00:00Z',
+      } as any);
+
+      mockWorkspaceStore.findBlockRawTextPayloadByTaskId.mockResolvedValue({
+        rawTexts: [{ blockId: 'blk_1', rawText: '원문 텍스트' }],
+      } as any);
+
+      const result = await service.getWorkspaceGraph(userId, workspaceId);
+
+      expect(result[0].nodes).toHaveLength(1);
+      expect(result[0].blockView).toBeDefined();
+      expect(result[0].blockView?.blocks[0].block_id).toBe('blk_1');
+      expect(result[0].blockView?.blocks[0].raw_text).toBe('원문 텍스트');
+      expect(result[0].blockView?.edges[0].type).toBe('FOLLOWS');
+      expect(result[0].blockView?.paths).toEqual([['blk_1', 'blk_2']]);
+    });
+
+    it('returns empty blockView when no blockGraphPayloadId exists', async () => {
+      const workspaceNoBlock = {
+        _id: workspaceId,
+        userId,
+        documents: [
+          {
+            id: 'doc_2',
+            status: 'COMPLETED' as const,
+            graphPayloadId: 'ply_2',
+            s3Key: '',
+            fileName: 'doc2.md',
+            createdAt: '2026-06-01T00:00:00Z',
+            updatedAt: '2026-06-01T00:00:00Z',
+          },
+        ],
+        createdAt: '2026-06-01T00:00:00Z',
+        updatedAt: '2026-06-01T00:00:00Z',
+      };
+
+      mockWorkspaceStore.findById.mockResolvedValue(workspaceNoBlock as any);
+      mockWorkspaceStore.findGraphPayloadsByIds.mockResolvedValue([]);
+
+      const result = await service.getWorkspaceGraph(userId, workspaceId);
+
+      expect(result[0].blockView).toBeUndefined();
     });
   });
 });
