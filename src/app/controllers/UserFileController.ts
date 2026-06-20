@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { UserFileService } from '../../core/services/UserFileService';
 import { getUserIdFromRequest } from '../utils/request';
 import { ValidationError } from '../../shared/errors/domain';
+import { resolveUploadFilename } from '../../shared/utils/multipartFilename';
 
 /** 쿼리/폼에서 `folderId`를 파싱한다. 빈 값·문자열 `"null"`은 루트(`null`)로 본다. */
 function parseFolderIdParam(value: unknown): string | null {
@@ -28,7 +29,7 @@ export class UserFileController {
       throw new ValidationError('multipart 필드 이름 `file` 로 파일을 보내 주세요.');
     }
     const folderId = parseFolderIdParam(req.body?.folderId);
-    const originalName = file.originalname || 'upload.bin';
+    const originalName = resolveUploadFilename(req.body?.displayName, file.originalname);
     const dto = await this.userFileService.uploadFile(userId, originalName, file.buffer, folderId);
     res.status(201).json(dto);
   }

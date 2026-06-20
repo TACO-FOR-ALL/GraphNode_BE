@@ -32,6 +32,8 @@ import { AgentApi } from './endpoints/agent.js';
  * @property accessToken 초기 Access Token (선택)
  */
 export interface GraphNodeClientOptions extends Omit<BuilderOptions, 'baseUrl' | 'accessToken'> {
+  /** GraphNode BE base URL. 미지정 시 getGraphNodeBaseUrl() 폴백. */
+  baseUrl?: string;
   accessToken?: string | null;
 }
 
@@ -119,14 +121,15 @@ export class GraphNodeClient {
     }
 
     this._accessToken = opts.accessToken ?? null;
+    const baseUrl = opts.baseUrl ?? getGraphNodeBaseUrl();
 
     // 2. RequestBuilder 초기화
     // createRequestBuilder를 통해 내부적으로 사용할 HTTP 요청 처리기를 만듭니다.
     // 여기서 accessToken을 '함수' 형태로 넘기는 이유는,
     // 나중에 setAccessToken()으로 값이 바뀌었을 때, RequestBuilder가 최신 값을 참조할 수 있게 하기 위함입니다.
     this.rb = createRequestBuilder({
-      baseUrl: getGraphNodeBaseUrl(),
       ...opts,
+      baseUrl,
       fetch: fetchFn, // 결정된 fetch 함수 주입
       accessToken: () => this._accessToken, // [중요] 동적 토큰 참조를 위한 Getter 함수 전달
     });
@@ -136,11 +139,11 @@ export class GraphNodeClient {
     this.health = new HealthApi(this.rb);
     this.me = new MeApi(this.rb);
     this.conversations = new ConversationsApi(this.rb);
-    this.googleAuth = new GoogleAuthApi(getGraphNodeBaseUrl());
+    this.googleAuth = new GoogleAuthApi(baseUrl);
     this.graph = new GraphApi(this.rb);
     this.graphAi = new GraphAiApi(this.rb);
     this.note = new NoteApi(this.rb);
-    this.appleAuth = new AppleAuthApi(getGraphNodeBaseUrl());
+    this.appleAuth = new AppleAuthApi(baseUrl);
     this.notionAuth = new NotionAuthApi(this.rb);
     this.sync = new SyncApi(this.rb);
     this.ai = new AiApi(this.rb);
