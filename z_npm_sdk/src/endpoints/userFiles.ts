@@ -67,6 +67,10 @@ export class UserFilesApi {
   async uploadUserFile(file: File | Blob, folderId?: string | null): Promise<HttpResponse<UserFileDto>> {
     const formData = new FormData();
     formData.append('file', file);
+    // multipart filename 헤더 latin1 오해석 방지 — UTF-8 표시명을 별도 필드로 전달
+    if (typeof File !== 'undefined' && file instanceof File && file.name) {
+      formData.append('displayName', file.name);
+    }
     if (folderId) {
       formData.append('folderId', folderId);
     }
