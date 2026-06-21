@@ -15,13 +15,17 @@ export class GraphAiController {
   generateGraph = async (req: Request, res: Response) => {
     // 세션에서 사용자 ID 가져오기
     const userId = getUserIdFromRequest(req);
-    const { includeSummary } = req.body || {};
+    const { includeSummary, scopeFilter, title, description } = req.body || {};
     const macroId = (req.body?.macroId ?? (req.query?.macroId as string | undefined)) ?? userId;
 
     // 그래프 생성 프로세스 시작 (SQS 요청)
+    // scopeFilter가 있으면 1:N 모드, 없으면 레거시 1:1 모드
     const taskId = await this.graphGenerationService.requestGraphGenerationViaQueue(userId, {
       includeSummary,
-      macroId,
+      macroId: scopeFilter ? undefined : macroId,
+      scopeFilter,
+      title,
+      description,
     });
 
     if (!taskId) {

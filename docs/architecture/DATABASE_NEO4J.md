@@ -1,6 +1,6 @@
 # Neo4j — Macro Graph 아키텍처 & Graph RAG
 
-> 마지막 갱신: 2026-06-19
+> 마지막 갱신: 2026-06-21
 
 GraphNode의 Neo4j는 **Macro Graph**를 Native Graph 구조로 저장하고, **Graph RAG(Retrieval-Augmented Generation)** 파이프라인에서 의미 기반 이웃 탐색에 사용됩니다.
 
@@ -39,7 +39,7 @@ GraphNode의 Neo4j는 **Macro Graph**를 Native Graph 구조로 저장하고, **
 | `MacroStats` | 그래프 통계 메타 노드 | `(userId, macroId)` | `userId`, `macroId`, `id`, `status`, `generatedAt`, `metadataJson` |
 | `MacroSummary` | AI 요약 노드 | `(userId, macroId)` | `userId`, `macroId`, `id`, `overviewJson`, `clustersJson`, `patternsJson`, `connectionsJson`, `recommendationsJson`, `generatedAt`, `detailLevel`, `deletedAt` |
 
-> **1:N 격리**: 모든 하위 엔티티(MacroNode/Cluster/Subcluster/Relation/Stats/Summary)는 `macroId`를 포함한 복합 키로 유일하게 식별됩니다. 서로 다른 Macro View는 같은 entity ID를 공유할 수 없으며, Clone 시 `newMacroId`로 독립 복제됩니다. 기존 데이터는 `macroId = userId`로 backfill됩니다.
+> **1:N 격리**: 모든 하위 엔티티(MacroNode/Cluster/Subcluster/Relation/Stats/Summary)는 `(userId, macroId, id)` 복합 키로 유일하게 식별됩니다. **서로 다른 macroId를 가진 Macro View는 동일한 숫자 `id`를 가질 수 있습니다** (unique constraint는 `(userId, macroId, id)` 단위). 따라서 삭제/복원 Cypher는 반드시 `macroId` 조건을 포함해야 하며, `id`만으로 `MATCH`하면 다른 뷰의 노드가 오염됩니다. Clone 시 `newMacroId`로 독립 복제되며, 레거시 1:1 데이터는 `macroId = userId`로 backfill됩니다.
 
 ### 2.2 관계 타입 (Relationship Types)
 
@@ -187,16 +187,38 @@ Phase 4: 관계 생성         — HAS_NODE, HAS_CLUSTER, BELONGS_TO, MACRO_RELA
 
 ## 6. Soft/Hard Delete 정책
 
-| 대상 | Soft Delete | Hard Delete |
-|---|---|---|
-| `MacroNode` | `deletedAt` 타임스탬프 설정 | `DETACH DELETE` |
-| `MacroRelation` (MACRO_RELATED) | `deletedAt` 설정 | 물리 삭제 |
-| `MacroCluster` | `deletedAt` 설정 | 물리 삭제 |
-| `MacroSubcluster` | `deletedAt` 설정 | 물리 삭제 |
-| `MacroSummary` | `deletedAt` 설정 | — |
-| 사용자 전체 | `deleteAllGraphData(permanent=false)` | `deleteGraph()` |
+### 6.1 엔티티별 삭제 방식
 
-복원: `restoreNode`, `restoreNodesByOrigIds`, `restoreAllGraphData`, `restoreGraphSummary` 등
+| 대상 | Soft Delete | Hard Delete | 격리 단위 |
+|---|---|---|---|
+| `MacroNode` | `deletedAt` 타임스탬프 설정 | `DETACH DELETE` | `(userId, macroId, id)` |
+| `MacroRelation` (MACRO_RELATED) | `deletedAt` 설정 | 물리 삭제 | `(userId, macroId, id)` |
+| `MacroCluster` | `deletedAt` 설정 | 물리 삭제 | `(userId, macroId, id)` |
+| `MacroSubcluster` | `deletedAt` 설정 | 물리 삭제 | `(userId, macroId, id)` |
+| `MacroSummary` | `deletedAt` 설정 | — | `(userId, macroId)` |
+| `MacroGraph` (뷰 루트) | `deletedAt` 설정 | `deleteGraph()` 배치 삭제 | `(userId, macroId)` |
+
+복원: `restoreNode`, `restoreNodesByOrigIds`, `restoreAllGraphData`, `restoreGraphSummary`, `restoreMacroView` 등
+
+### 6.2 원본 데이터 삭제 시 전역 Cascade 정책
+
+원본 데이터(Chat/Note/File 등)가 삭제·복원될 때 `deleteNodesByOrigIds` / `restoreNodesByOrigIds`를 통해 모든 뷰(macroId)에 걸쳐 cascade가 적용됩니다.
+
+- **Cascade 대상**: `userId`에 속하는 모든 macroId의 뷰 — soft-deleted 뷰 포함
+- **타입 매칭**: 원본이 soft delete → 노드도 soft delete, hard delete → 노드도 hard delete, restore → 노드도 restore
+- **연결 엣지**: cascade 대상 노드에 연결된 `MacroRelation` 및 `MACRO_RELATED` 관계도 동일 타입으로 처리
+- **구현**: `softDeleteNodesByOrigIds` / `hardDeleteNodesByOrigIds` / `restoreNodesByOrigIds` Cypher는 `macroId` 제한 없이 `userId + origId`로만 매칭하여 전 뷰 동시 처리
+
+> **주의**: `deleteNodesByOrigIds`는 `findNodeIdsByOrigIds`로 숫자 `id` 목록을 먼저 추출한 뒤 `id`만으로 삭제하는 방식을 사용하지 않습니다. 이 방식은 1:N 환경에서 다른 뷰의 동일 `id` 노드를 오염시킬 수 있습니다. 반드시 `origId`를 끝까지 사용하는 전용 Cypher를 사용해야 합니다.
+
+### 6.3 View(MacroGraph) Soft Delete 정책
+
+MacroGraph 루트(`MacroGraph` 노드)를 Soft Delete하면 해당 뷰의 하위 데이터(MacroNode/Cluster/Relation 등)는 변경하지 않고 루트의 `deletedAt`만 설정합니다.
+
+- **접근 차단**: 모든 read Cypher(`listNodes`, `findNode`, `listEdges`, `listClusters`, `listSubclusters`, `findCluster`, `findNodesByOrigIds`, `listNodesByCluster`)는 `g.deletedAt IS NULL` 조건을 포함하여 삭제된 뷰의 데이터 접근을 차단합니다.
+- **Cascade 수신**: Soft-deleted 뷰도 원본 데이터 cascade의 대상입니다 (`restoreNodesByOrigIds` 등은 macroId 제한 없이 전 뷰 처리).
+- **복원 후 상태**: 뷰를 복원(`restoreMacroView`)하면 하위 노드들은 마지막 cascade 상태를 그대로 반영합니다.
+- **30일 경과**: `cleanupExpiredMacroViewsBatch`가 `deletedAt` 기준 30일 초과 뷰를 Hard Delete 처리합니다.
 
 ---
 

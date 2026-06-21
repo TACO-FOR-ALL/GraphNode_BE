@@ -210,6 +210,84 @@ export interface EnrichedNodeResult {
  */
 export type SearchNodesResponse = EnrichedNodeResult[];
 
+/** 1:N 그래프 생성 범위를 제한할 수 있는 데이터 소스 타입입니다. */
+export type ScopeDataType = 'chat' | 'file' | 'notion' | 'note';
+
+/** 1:N 그래프 생성 범위를 제한할 수 있는 데이터 생성 기간입니다. */
+export type ScopeCreatedPeriod = '1w' | '1m' | '3m' | '1y';
+
+/**
+ * 1:N 그래프 생성에 사용할 데이터 범위 필터입니다.
+ */
+export type ScopeFilter =
+  | {
+      mode: 'auto';
+      intent: string;
+      filters?: undefined;
+    }
+  | {
+      mode: 'manual';
+      filters: {
+        dataTypes: ScopeDataType[];
+        createdPeriod?: ScopeCreatedPeriod;
+      };
+      intent?: undefined;
+    };
+
+/** 1:N 그래프 목록 정렬 기준입니다. */
+export type GraphMetadataSortKey = 'updatedAt' | 'createdAt' | 'nodeCount' | 'title';
+
+/**
+ * 1:N 그래프 메타데이터 DTO입니다.
+ */
+export interface GraphMetadataDto {
+  macroId: string;
+  userId: string;
+  title?: string;
+  description?: string;
+  scopeFilter?: ScopeFilter;
+  status?: string;
+  nodeCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  deletedAt?: string;
+}
+
+/**
+ * 1:N 그래프 메타데이터 부분 업데이트 요청입니다.
+ */
+export interface UpdateGraphMetadataDto {
+  title?: string;
+  description?: string;
+  scopeFilter?: ScopeFilter;
+}
+
+/** 1:N 그래프 목록 조회 쿼리입니다. */
+export interface ListGraphsQuery {
+  sortBy?: GraphMetadataSortKey;
+  onlyDeleted?: boolean;
+}
+
+/** `client.graph.listGraphs()`의 public 응답입니다. */
+export interface ListGraphsResponse {
+  graphs: GraphMetadataDto[];
+}
+
+/** 단일 그래프 메타데이터 public 응답입니다. */
+export interface GraphMetadataResponse {
+  graph: GraphMetadataDto;
+}
+
+/** `client.graph.cloneGraph()`의 public 응답입니다. */
+export interface CloneGraphResponse {
+  graph: GraphMetadataDto;
+}
+
+/** `client.graph.restoreGraph()`의 public 응답입니다. */
+export interface RestoreGraphResponse {
+  message: string;
+}
+
 /**
  * Graph Summary DTO
  * @public

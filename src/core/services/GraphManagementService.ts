@@ -1,5 +1,6 @@
+import { ulid } from 'ulid';
 import type { MacroGraphStore, MacroGraphStoreOptions } from '../ports/MacroGraphStore';
-import { ValidationError, UpstreamError } from '../../shared/errors/domain';
+import { ValidationError, UpstreamError, NotFoundError } from '../../shared/errors/domain';
 import { AppError } from '../../shared/errors/base';
 import type {
   GraphClusterDto,
@@ -10,6 +11,7 @@ import type {
   GraphSummaryDto,
   GraphSubclusterDto,
 } from '../../shared/dtos/graph';
+import type { MacroViewDto, UpdateMacroViewDto, ListMacroViewsQuery } from '../../shared/dtos/macro';
 import {
   toGraphSummaryDto,
   createEmptyGraphSummaryDto,
@@ -1048,6 +1050,125 @@ export class GraphManagementService {
       throw new UpstreamError('GraphManagementService.cleanupExpiredMacroViews failed', {
         cause: String(err),
       });
+    }
+  }
+
+  // --- MacroView management (absorbed from GraphViewsService) ---
+
+  /**
+   * @description 사용자의 매크로 뷰 목록을 조회합니다.
+   * @param userId 조회 대상 사용자 ID
+   * @param query 정렬·필터 옵션
+   * @returns 매크로 뷰 메타데이터 목록
+   * @throws {ValidationError} userId 미제공 시
+   * @throws {UpstreamError} DB 조회 실패 시
+   */
+  async listMacroViews(userId: string, query?: ListMacroViewsQuery): Promise<MacroViewDto[]> {
+    try {
+      this.assertUser(userId);
+      return await this.repo.listMacroViews(userId, query);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphManagementService.listMacroViews failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * @description macroId로 단일 매크로 뷰를 조회합니다.
+   * @param userId 소유 사용자 ID
+   * @param macroId 조회할 매크로 뷰 ID
+   * @returns 매크로 뷰 메타데이터
+   * @throws {NotFoundError} 해당 macroId의 뷰가 없는 경우
+   * @throws {UpstreamError} DB 조회 실패 시
+   */
+  async getMacroView(userId: string, macroId: string): Promise<MacroViewDto> {
+    try {
+      this.assertUser(userId);
+      const view = await this.repo.getMacroView(userId, macroId);
+      if (!view) throw new NotFoundError(`MacroView not found: ${macroId}`);
+      return view;
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphManagementService.getMacroView failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * @description 매크로 뷰 메타데이터를 부분 업데이트합니다.
+   * @param userId 소유 사용자 ID
+   * @param macroId 업데이트할 매크로 뷰 ID
+   * @param patch 업데이트할 필드
+   * @returns 업데이트된 매크로 뷰 메타데이터
+   * @throws {UpstreamError} DB 조회 실패 시
+   */
+  async updateMacroView(userId: string, macroId: string, patch: UpdateMacroViewDto): Promise<MacroViewDto> {
+    try {
+      this.assertUser(userId);
+      return await this.repo.updateMacroView(userId, macroId, patch);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphManagementService.updateMacroView failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * @description 매크로 뷰를 소프트 삭제합니다.
+   * @param userId 소유 사용자 ID
+   * @param macroId 삭제할 매크로 뷰 ID
+   * @throws {UpstreamError} DB 삭제 실패 시
+   */
+  async softDeleteMacroView(userId: string, macroId: string): Promise<void> {
+    try {
+      this.assertUser(userId);
+      await this.repo.softDeleteMacroView(userId, macroId);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphManagementService.softDeleteMacroView failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * @description 소프트 삭제된 매크로 뷰를 복원합니다.
+   * @param userId 소유 사용자 ID
+   * @param macroId 복원할 매크로 뷰 ID
+   * @throws {UpstreamError} DB 복원 실패 시
+   */
+  async restoreMacroView(userId: string, macroId: string): Promise<void> {
+    try {
+      this.assertUser(userId);
+      await this.repo.restoreMacroView(userId, macroId);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphManagementService.restoreMacroView failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * @description 기존 매크로 뷰를 새 macroId로 Deep Clone합니다.
+   * @param userId 소유 사용자 ID
+   * @param sourceMacroId 원본 매크로 뷰 ID
+   * @returns 복제된 새 매크로 뷰 메타데이터
+   * @throws {NotFoundError} 원본 macroId의 뷰가 없는 경우
+   * @throws {UpstreamError} DB 복제 실패 시
+   */
+  async cloneMacroView(userId: string, sourceMacroId: string): Promise<MacroViewDto> {
+    try {
+      this.assertUser(userId);
+      const source = await this.repo.getMacroView(userId, sourceMacroId);
+      if (!source) throw new NotFoundError(`Source MacroView not found: ${sourceMacroId}`);
+      const newMacroId = ulid();
+      await this.repo.createMacroView(userId, newMacroId, {
+        title: source.title ? `${source.title} (복사본)` : undefined,
+        description: source.description,
+        scopeFilter: source.scopeFilter ?? { mode: 'auto' as const, intent: '' },
+      });
+      await this.repo.cloneMacroGraph(userId, sourceMacroId, newMacroId);
+      const cloned = await this.repo.getMacroView(userId, newMacroId);
+      if (!cloned) throw new NotFoundError(`Cloned MacroView not found: ${newMacroId}`);
+      return cloned;
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphManagementService.cloneMacroView failed', { cause: String(err) });
     }
   }
 

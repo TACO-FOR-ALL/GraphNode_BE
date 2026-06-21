@@ -640,6 +640,269 @@ describe('Neo4jMacroGraphAdapter', () => {
       expect(session2.close).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('deleteNodesByOrigIds / restoreNodesByOrigIds', () => {
+    it('deleteNode falls back to userId as macroId when macroId is omitted', async () => {
+      const { driver, tx } = makeMockDriver();
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      await adapter.deleteNode('user1', 7);
+
+      expect(tx.run).toHaveBeenCalledTimes(1);
+      expect(tx.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.softDeleteNodesByIds,
+        expect.objectContaining({
+          userId: 'user1',
+          macroId: 'user1',
+          ids: [7],
+          deletedAt: expect.any(Number),
+        })
+      );
+    });
+
+    it('deleteNode scopes by macroId so deleting a node in view A cannot alter the same id in view B', async () => {
+      const { driver, tx } = makeMockDriver();
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      await adapter.deleteNode('user1', 7, false, { macroId: 'view-a' });
+
+      expect(tx.run).toHaveBeenCalledTimes(1);
+      const [query, params] = (tx.run as jest.Mock).mock.calls[0] as [string, Record<string, unknown>];
+
+      expect(query).toBe(MACRO_GRAPH_CYPHER.softDeleteNodesByIds);
+      expect(params).toEqual(expect.objectContaining({
+        userId: 'user1',
+        macroId: 'view-a',
+        ids: [7],
+        deletedAt: expect.any(Number),
+      }));
+      expect(params.macroId).not.toBe('view-b');
+
+      expect(query).toMatch(/MacroGraph \{userId: \$userId, macroId: \$macroId\}/);
+      expect(query).toMatch(/MacroNode \{userId: \$userId, macroId: \$macroId\}/);
+      expect(query).toMatch(/MacroRelation \{userId: \$userId, macroId: \$macroId\}/);
+      expect(query).toMatch(/MACRO_RELATED \{userId: \$userId, macroId: \$macroId\}/);
+      expect(query).not.toMatch(/MacroNode \{userId: \$userId\}\)/);
+      expect(query).not.toMatch(/MacroRelation \{userId: \$userId\}\)/);
+    });
+
+    it('soft deletes all views matching the same userId and origId with the origId-native cascade query', async () => {
+      const tx = makeMockTx();
+      const session = {
+        executeWrite: jest.fn().mockImplementation(async (fn: (t: typeof tx) => Promise<void>) => fn(tx)),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      const driver = { session: jest.fn().mockReturnValue(session) };
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      await adapter.deleteNodesByOrigIds('user1', ['shared-orig', 'second-orig'], false, {
+        macroId: 'macro-a',
+      });
+
+      expect(tx.run).toHaveBeenCalledTimes(1);
+      expect(tx.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.softDeleteNodesByOrigIds,
+        {
+          userId: 'user1',
+          origIds: ['shared-orig', 'second-orig'],
+          deletedAt: expect.any(Number),
+        }
+      );
+      expect((tx.run as jest.Mock).mock.calls[0][1]).not.toHaveProperty('macroId');
+      expect(tx.run).not.toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.findNodeIdsByOrigIds,
+        expect.anything()
+      );
+      expect(tx.run).not.toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.softDeleteNodesByIds,
+        expect.anything()
+      );
+    });
+
+    it('hard deletes all views matching the same userId and origId with the origId-native cascade query', async () => {
+      const tx = makeMockTx();
+      const session = {
+        executeWrite: jest.fn().mockImplementation(async (fn: (t: typeof tx) => Promise<void>) => fn(tx)),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      const driver = { session: jest.fn().mockReturnValue(session) };
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      await adapter.deleteNodesByOrigIds('user1', ['shared-orig'], true);
+
+      expect(tx.run).toHaveBeenCalledTimes(1);
+      expect(tx.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.hardDeleteNodesByOrigIds,
+        expect.objectContaining({
+          userId: 'user1',
+          origIds: ['shared-orig'],
+          deletedAt: expect.any(Number),
+        })
+      );
+      expect(tx.run).not.toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.hardDeleteNodesByIds,
+        expect.anything()
+      );
+    });
+
+    it('restores all views matching the same userId and origId with the origId-native cascade query', async () => {
+      const tx = makeMockTx();
+      const session = {
+        executeWrite: jest.fn().mockImplementation(async (fn: (t: typeof tx) => Promise<void>) => fn(tx)),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      const driver = { session: jest.fn().mockReturnValue(session) };
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      await adapter.restoreNodesByOrigIds('user1', ['shared-orig']);
+
+      expect(tx.run).toHaveBeenCalledTimes(1);
+      expect(tx.run).toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.restoreNodesByOrigIds,
+        { userId: 'user1', origIds: ['shared-orig'] }
+      );
+      expect(tx.run).not.toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.findNodeIdsByOrigIds,
+        expect.anything()
+      );
+      expect(tx.run).not.toHaveBeenCalledWith(
+        MACRO_GRAPH_CYPHER.restoreNodesByIds,
+        expect.anything()
+      );
+    });
+  });
+
+  describe('deleteEdge — cross-view isolation', () => {
+    it('soft deleteEdge passes macroId so view B edge with same id is not touched', async () => {
+      const { driver, tx } = makeMockDriver();
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      await adapter.deleteEdge('user1', 'edge-99', false, { macroId: 'view-a' });
+
+      expect(tx.run).toHaveBeenCalledTimes(1);
+      const [query, params] = (tx.run as jest.Mock).mock.calls[0] as [string, Record<string, unknown>];
+      expect(query).toBe(MACRO_GRAPH_CYPHER.softDeleteEdgesByIds);
+      expect(params).toEqual(expect.objectContaining({ userId: 'user1', macroId: 'view-a', edgeIds: ['edge-99'] }));
+      expect(params.macroId).not.toBe('view-b');
+      expect(query).toMatch(/MacroRelation \{userId: \$userId, macroId: \$macroId\}/);
+    });
+
+    it('hard deleteEdge passes macroId to hardDeleteEdgesByIds Cypher', async () => {
+      const { driver, tx } = makeMockDriver();
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      await adapter.deleteEdge('user1', 'edge-42', true, { macroId: 'view-a' });
+
+      const [query, params] = (tx.run as jest.Mock).mock.calls[0] as [string, Record<string, unknown>];
+      expect(query).toBe(MACRO_GRAPH_CYPHER.deleteEdgeById);
+      expect(params).toEqual(expect.objectContaining({ userId: 'user1', macroId: 'view-a', edgeId: 'edge-42' }));
+    });
+
+    it('deleteEdge falls back to userId as macroId when options omitted', async () => {
+      const { driver, tx } = makeMockDriver();
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      await adapter.deleteEdge('user1', 'edge-1');
+
+      const [, params] = (tx.run as jest.Mock).mock.calls[0] as [string, Record<string, unknown>];
+      expect(params).toEqual(expect.objectContaining({ userId: 'user1', macroId: 'user1' }));
+    });
+  });
+
+  describe('deleteCluster — cross-view isolation', () => {
+    it('soft deleteCluster passes macroId so cluster in view B is not affected', async () => {
+      const { driver, tx } = makeMockDriver();
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      await adapter.deleteCluster('user1', 'cluster-x', false, { macroId: 'view-a' });
+
+      expect(tx.run).toHaveBeenCalledTimes(1);
+      const [query, params] = (tx.run as jest.Mock).mock.calls[0] as [string, Record<string, unknown>];
+      expect(query).toBe(MACRO_GRAPH_CYPHER.softDeleteClusterById);
+      expect(params).toEqual(expect.objectContaining({ userId: 'user1', macroId: 'view-a', clusterId: 'cluster-x' }));
+      expect(params.macroId).not.toBe('view-b');
+      expect(query).toMatch(/MacroCluster \{userId: \$userId, macroId: \$macroId/);
+    });
+
+    it('deleteCluster falls back to userId when macroId is omitted', async () => {
+      const { driver, tx } = makeMockDriver();
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      await adapter.deleteCluster('user1', 'cluster-y');
+
+      const [, params] = (tx.run as jest.Mock).mock.calls[0] as [string, Record<string, unknown>];
+      expect(params).toEqual(expect.objectContaining({ userId: 'user1', macroId: 'user1', clusterId: 'cluster-y' }));
+    });
+  });
+
+  describe('restoreNode — macroId scoping', () => {
+    it('restoreNode passes macroId to restoreNodesByIds Cypher', async () => {
+      const { driver, tx } = makeMockDriver();
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      await adapter.restoreNode('user1', 5, { macroId: 'view-a' });
+
+      expect(tx.run).toHaveBeenCalledTimes(1);
+      const [query, params] = (tx.run as jest.Mock).mock.calls[0] as [string, Record<string, unknown>];
+      expect(query).toBe(MACRO_GRAPH_CYPHER.restoreNodesByIds);
+      expect(params).toEqual(expect.objectContaining({ userId: 'user1', macroId: 'view-a', ids: [5] }));
+      expect(query).toMatch(/MacroGraph \{userId: \$userId, macroId: \$macroId\}/);
+      expect(query).toMatch(/MacroNode \{userId: \$userId, macroId: \$macroId\}/);
+    });
+
+    it('restoreNode falls back to userId as macroId when options omitted', async () => {
+      const { driver, tx } = makeMockDriver();
+      (getNeo4jDriver as jest.Mock).mockReturnValue(driver);
+
+      const adapter = new Neo4jMacroGraphAdapter();
+      await adapter.restoreNode('user1', 3);
+
+      const [, params] = (tx.run as jest.Mock).mock.calls[0] as [string, Record<string, unknown>];
+      expect(params).toEqual(expect.objectContaining({ userId: 'user1', macroId: 'user1', ids: [3] }));
+    });
+  });
+
+  describe('soft-deleted view access gate (g.deletedAt IS NULL)', () => {
+    it('listNodes Cypher contains g.deletedAt IS NULL filter', () => {
+      expect(MACRO_GRAPH_CYPHER.listNodes).toMatch(/g\.deletedAt IS NULL/);
+    });
+
+    it('findNode Cypher contains g.deletedAt IS NULL filter', () => {
+      expect(MACRO_GRAPH_CYPHER.findNode).toMatch(/g\.deletedAt IS NULL/);
+    });
+
+    it('findNodesByOrigIds Cypher contains g.deletedAt IS NULL filter', () => {
+      expect(MACRO_GRAPH_CYPHER.findNodesByOrigIds).toMatch(/g\.deletedAt IS NULL/);
+    });
+
+    it('listEdges Cypher contains g.deletedAt IS NULL filter', () => {
+      expect(MACRO_GRAPH_CYPHER.listEdges).toMatch(/g\.deletedAt IS NULL/);
+    });
+
+    it('listClusters Cypher contains g.deletedAt IS NULL filter', () => {
+      expect(MACRO_GRAPH_CYPHER.listClusters).toMatch(/g\.deletedAt IS NULL/);
+    });
+
+    it('listSubclusters Cypher contains g.deletedAt IS NULL filter', () => {
+      expect(MACRO_GRAPH_CYPHER.listSubclusters).toMatch(/g\.deletedAt IS NULL/);
+    });
+
+    it('findCluster Cypher contains g.deletedAt IS NULL filter', () => {
+      expect(MACRO_GRAPH_CYPHER.findCluster).toMatch(/g\.deletedAt IS NULL/);
+    });
+  });
+
   describe('removeEmptyClusters', () => {
     it('write session에서 cleanupEmptyClusters Cypher를 실행한다', async () => {
       const tx = makeMockTx();

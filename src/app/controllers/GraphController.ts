@@ -12,18 +12,21 @@
  * - DTO Schemas: 데이터 검증 (Zod)
  */
 
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 
 import { GraphEmbeddingService } from '../../core/services/GraphEmbeddingService';
 import { GraphVectorService } from '../../core/services/GraphVectorService';
+import { GraphManagementService } from '../../core/services/GraphManagementService';
 import { persistGraphPayloadSchema } from '../../shared/dtos/graph.schemas';
+import { updateMacroViewSchema, listMacroViewsQuerySchema } from '../../shared/dtos/macro.schemas';
 import { getUserIdFromRequest } from '../utils/request';
 import { GraphSnapshotDto } from '../../shared/dtos/graph';
 
 export class GraphController {
   constructor(
     private readonly graphEmbeddingService: GraphEmbeddingService,
-    private readonly graphVectorService: GraphVectorService
+    private readonly graphVectorService: GraphVectorService,
+    private readonly graphManagementService: GraphManagementService
   ) {}
 
   private resolveMacroId(req: Request, userId: string): string {
@@ -409,4 +412,85 @@ export class GraphController {
 
     res.status(204).send();
   }
+
+  // --- Graph metadata management (absorbed from GraphViewsController) ---
+
+  /**
+   * 매크로 뷰 목록 조회
+   * [GET] /v1/graph/graphs
+   */
+  listViews = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = getUserIdFromRequest(req);
+      const query = listMacroViewsQuerySchema.parse(req.query);
+      const views = await this.graphManagementService.listMacroViews(userId, query);
+      res.status(200).json({ graphs: views });
+    } catch (e) { next(e); }
+  };
+
+  /**
+   * 매크로 뷰 단건 조회
+   * [GET] /v1/graph/graphs/:macroId
+   */
+  getView = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = getUserIdFromRequest(req);
+      const { macroId } = req.params;
+      const view = await this.graphManagementService.getMacroView(userId, macroId);
+      res.status(200).json({ graph: view });
+    } catch (e) { next(e); }
+  };
+
+  /**
+   * 매크로 뷰 메타데이터 수정
+   * [PATCH] /v1/graph/graphs/:macroId
+   */
+  updateView = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = getUserIdFromRequest(req);
+      const { macroId } = req.params;
+      const patch = updateMacroViewSchema.parse(req.body);
+      const updated = await this.graphManagementService.updateMacroView(userId, macroId, patch);
+      res.status(200).json({ graph: updated });
+    } catch (e) { next(e); }
+  };
+
+  /**
+   * 매크로 뷰 소프트 삭제
+   * [DELETE] /v1/graph/graphs/:macroId
+   */
+  deleteView = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = getUserIdFromRequest(req);
+      const { macroId } = req.params;
+      await this.graphManagementService.softDeleteMacroView(userId, macroId);
+      res.status(204).send();
+    } catch (e) { next(e); }
+  };
+
+  /**
+   * 매크로 뷰 복원
+   * [POST] /v1/graph/graphs/:macroId/restore
+   */
+  restoreView = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = getUserIdFromRequest(req);
+      const { macroId } = req.params;
+      await this.graphManagementService.restoreMacroView(userId, macroId);
+      res.status(200).json({ message: 'Graph restored' });
+    } catch (e) { next(e); }
+  };
+
+  /**
+   * 매크로 뷰 Deep Clone
+   * [POST] /v1/graph/graphs/:macroId/clone
+   */
+  cloneView = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = getUserIdFromRequest(req);
+      const { macroId } = req.params;
+      const cloned = await this.graphManagementService.cloneMacroView(userId, macroId);
+      res.status(201).json({ graph: cloned });
+    } catch (e) { next(e); }
+  };
 }

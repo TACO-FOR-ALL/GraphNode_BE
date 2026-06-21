@@ -10,6 +10,14 @@ import type {
   UpdateNodePayload,
   SearchNodesResponse,
 } from '../types/graph.js';
+import type {
+  CloneGraphResponse,
+  GraphMetadataResponse,
+  ListGraphsQuery,
+  ListGraphsResponse,
+  RestoreGraphResponse,
+  UpdateGraphMetadataDto,
+} from '../types/graph.js';
 
 /**
  * Graph API
@@ -30,6 +38,81 @@ export class GraphApi {
 
   constructor(rb: RequestBuilder) {
     this.rb = rb.path('/v1/graph');
+  }
+
+  /**
+   * 1:N 그래프 메타데이터 목록을 조회합니다.
+   *
+   * **API Endpoint**: `GET /v1/graph/graphs`
+   *
+   * @param query 정렬 기준과 삭제 그래프 조회 여부입니다.
+   * @returns `{ graphs: GraphMetadataDto[] }`
+   */
+  async listGraphs(query?: ListGraphsQuery): Promise<HttpResponse<ListGraphsResponse>> {
+    return this.rb.path('/graphs').query(query as Record<string, unknown> | undefined).get<ListGraphsResponse>();
+  }
+
+  /**
+   * 특정 1:N 그래프의 메타데이터를 조회합니다.
+   *
+   * **API Endpoint**: `GET /v1/graph/graphs/:macroId`
+   *
+   * @param macroId 조회할 1:N 그래프 ID입니다.
+   * @returns `{ graph: GraphMetadataDto }`
+   */
+  async getGraphMetadata(macroId: string): Promise<HttpResponse<GraphMetadataResponse>> {
+    return this.rb.path(`/graphs/${macroId}`).get<GraphMetadataResponse>();
+  }
+
+  /**
+   * 특정 1:N 그래프의 메타데이터를 수정합니다.
+   *
+   * **API Endpoint**: `PATCH /v1/graph/graphs/:macroId`
+   *
+   * @param macroId 수정할 1:N 그래프 ID입니다.
+   * @param patch 수정할 메타데이터입니다.
+   * @returns `{ graph: GraphMetadataDto }`
+   */
+  async updateGraphMetadata(
+    macroId: string,
+    patch: UpdateGraphMetadataDto
+  ): Promise<HttpResponse<GraphMetadataResponse>> {
+    return this.rb.path(`/graphs/${macroId}`).patch<GraphMetadataResponse>(patch);
+  }
+
+  /**
+   * 기존 1:N 그래프를 새 `macroId`로 복제합니다.
+   *
+   * **API Endpoint**: `POST /v1/graph/graphs/:macroId/clone`
+   *
+   * @param macroId 복제할 원본 1:N 그래프 ID입니다.
+   * @returns `{ graph: GraphMetadataDto }`
+   */
+  async cloneGraph(macroId: string): Promise<HttpResponse<CloneGraphResponse>> {
+    return this.rb.path(`/graphs/${macroId}/clone`).post<CloneGraphResponse>();
+  }
+
+  /**
+   * 1:N 그래프를 soft delete 처리합니다.
+   *
+   * **API Endpoint**: `DELETE /v1/graph/graphs/:macroId`
+   *
+   * @param macroId 삭제할 1:N 그래프 ID입니다.
+   */
+  async deleteGraph(macroId: string): Promise<HttpResponse<void>> {
+    return this.rb.path(`/graphs/${macroId}`).delete<void>();
+  }
+
+  /**
+   * soft delete 된 1:N 그래프를 복원합니다.
+   *
+   * **API Endpoint**: `POST /v1/graph/graphs/:macroId/restore`
+   *
+   * @param macroId 복원할 1:N 그래프 ID입니다.
+   * @returns 서버 복원 메시지입니다.
+   */
+  async restoreGraph(macroId: string): Promise<HttpResponse<RestoreGraphResponse>> {
+    return this.rb.path(`/graphs/${macroId}/restore`).post<RestoreGraphResponse>();
   }
 
   /**
@@ -123,8 +206,8 @@ export class GraphApi {
    *   }
    * ]
    */
-  listNodes(): Promise<HttpResponse<GraphNodeDto[]>> {
-    return this.rb.path('/nodes').get<GraphNodeDto[]>();
+  listNodes(macroId?: string): Promise<HttpResponse<GraphNodeDto[]>> {
+    return this.rb.path('/nodes').query(macroId ? { macroId } : undefined).get<GraphNodeDto[]>();
   }
 
   /**
@@ -147,8 +230,8 @@ export class GraphApi {
    *   sourceType: 'chat'
    * }
    */
-  getNode(nodeId: number): Promise<HttpResponse<GraphNodeDto>> {
-    return this.rb.path(`/nodes/${nodeId}`).get<GraphNodeDto>();
+  getNode(nodeId: number, macroId?: string): Promise<HttpResponse<GraphNodeDto>> {
+    return this.rb.path(`/nodes/${nodeId}`).query(macroId ? { macroId } : undefined).get<GraphNodeDto>();
   }
 
   /**
@@ -170,8 +253,8 @@ export class GraphApi {
    * });
    * // Output: (No content)
    */
-  updateNode(nodeId: number, payload: UpdateNodePayload): Promise<HttpResponse<void>> {
-    return this.rb.path(`/nodes/${nodeId}`).patch<void>(payload);
+  updateNode(nodeId: number, payload: UpdateNodePayload, macroId?: string): Promise<HttpResponse<void>> {
+    return this.rb.path(`/nodes/${nodeId}`).query(macroId ? { macroId } : undefined).patch<void>(payload);
   }
 
   /**
@@ -189,9 +272,11 @@ export class GraphApi {
    * await client.graph.deleteNode(101, { permanent: true });
    * // Output: (No content)
    */
-  deleteNode(nodeId: number, options?: { permanent?: boolean }): Promise<HttpResponse<void>> {
-    const q = options?.permanent ? '?permanent=true' : '';
-    return this.rb.path(`/nodes/${nodeId}${q}`).delete<void>();
+  deleteNode(nodeId: number, options?: { permanent?: boolean; macroId?: string }): Promise<HttpResponse<void>> {
+    const q: Record<string, unknown> = {};
+    if (options?.permanent) q['permanent'] = true;
+    if (options?.macroId) q['macroId'] = options.macroId;
+    return this.rb.path(`/nodes/${nodeId}`).query(Object.keys(q).length > 0 ? q : undefined).delete<void>();
   }
 
   /**
@@ -207,8 +292,8 @@ export class GraphApi {
    * @example
    * await client.graph.restoreNode(101);
    */
-  restoreNode(nodeId: number): Promise<HttpResponse<void>> {
-    return this.rb.path(`/nodes/${nodeId}/restore`).post<void>();
+  restoreNode(nodeId: number, macroId?: string): Promise<HttpResponse<void>> {
+    return this.rb.path(`/nodes/${nodeId}/restore`).query(macroId ? { macroId } : undefined).post<void>();
   }
 
   /**
@@ -219,9 +304,11 @@ export class GraphApi {
    * await client.graph.deleteNodeCascade(101);
    * // Output: (No content)
    */
-  deleteNodeCascade(nodeId: number, options?: { permanent?: boolean }): Promise<HttpResponse<void>> {
-    const q = options?.permanent ? '?permanent=true' : '';
-    return this.rb.path(`/nodes/${nodeId}/cascade${q}`).delete<void>();
+  deleteNodeCascade(nodeId: number, options?: { permanent?: boolean; macroId?: string }): Promise<HttpResponse<void>> {
+    const q: Record<string, unknown> = {};
+    if (options?.permanent) q['permanent'] = true;
+    if (options?.macroId) q['macroId'] = options.macroId;
+    return this.rb.path(`/nodes/${nodeId}/cascade`).query(Object.keys(q).length > 0 ? q : undefined).delete<void>();
   }
 
   /**
@@ -249,8 +336,8 @@ export class GraphApi {
    *   id: 'edge-uuid-...'
    * }
    */
-  createEdge(edge: GraphEdgeDto): Promise<HttpResponse<CreateEdgeResponse>> {
-    return this.rb.path('/edges').post<CreateEdgeResponse>(edge);
+  createEdge(edge: GraphEdgeDto, macroId?: string): Promise<HttpResponse<CreateEdgeResponse>> {
+    return this.rb.path('/edges').query(macroId ? { macroId } : undefined).post<CreateEdgeResponse>(edge);
   }
 
   /**
@@ -280,8 +367,8 @@ export class GraphApi {
    *   }
    * ]
    */
-  listEdges(): Promise<HttpResponse<GraphEdgeDto[]>> {
-    return this.rb.path('/edges').get<GraphEdgeDto[]>();
+  listEdges(macroId?: string): Promise<HttpResponse<GraphEdgeDto[]>> {
+    return this.rb.path('/edges').query(macroId ? { macroId } : undefined).get<GraphEdgeDto[]>();
   }
 
   /**
@@ -289,12 +376,11 @@ export class GraphApi {
    * @param edgeId - 삭제할 엣지의 ID
    * @param options - 옵션 (`permanent`가 true이면 영구 삭제, 아니면 소프트 삭제)
    * @example
-   * await client.graph.deleteEdge('edge-uuid-...', { permanent: true });
+   * await client.graph.deleteEdge('edge-uuid-...', { permanent: true, macroId: 'macro-view-1' });
    * // Output: (No content)
    */
-  deleteEdge(edgeId: string, options?: { permanent?: boolean }): Promise<HttpResponse<void>> {
-    const q = options?.permanent ? '?permanent=true' : '';
-    return this.rb.path(`/edges/${edgeId}${q}`).delete<void>();
+  deleteEdge(edgeId: string, options?: { permanent?: boolean; macroId?: string }): Promise<HttpResponse<void>> {
+    return this.rb.path(`/edges/${edgeId}`).query(options).delete<void>();
   }
 
   /**
@@ -309,8 +395,8 @@ export class GraphApi {
    * @example
    * await client.graph.restoreEdge('edge-uuid-...');
    */
-  restoreEdge(edgeId: string): Promise<HttpResponse<void>> {
-    return this.rb.path(`/edges/${edgeId}/restore`).post<void>();
+  restoreEdge(edgeId: string, macroId?: string): Promise<HttpResponse<void>> {
+    return this.rb.path(`/edges/${edgeId}/restore`).query(macroId ? { macroId } : undefined).post<void>();
   }
 
   /**
@@ -357,8 +443,8 @@ export class GraphApi {
    *   }
    * ]
    */
-  listClusters(): Promise<HttpResponse<GraphClusterDto[]>> {
-    return this.rb.path('/clusters').get<GraphClusterDto[]>();
+  listClusters(macroId?: string): Promise<HttpResponse<GraphClusterDto[]>> {
+    return this.rb.path('/clusters').query(macroId ? { macroId } : undefined).get<GraphClusterDto[]>();
   }
 
   /**
@@ -376,8 +462,8 @@ export class GraphApi {
    *   summary: 'Main project discussion'
    * }
    */
-  getCluster(clusterId: string): Promise<HttpResponse<GraphClusterDto>> {
-    return this.rb.path(`/clusters/${clusterId}`).get<GraphClusterDto>();
+  getCluster(clusterId: string, macroId?: string): Promise<HttpResponse<GraphClusterDto>> {
+    return this.rb.path(`/clusters/${clusterId}`).query(macroId ? { macroId } : undefined).get<GraphClusterDto>();
   }
 
   /**
@@ -388,9 +474,11 @@ export class GraphApi {
    * await client.graph.deleteCluster('cluster-a');
    * // Output: (No content)
    */
-  deleteCluster(clusterId: string, options?: { permanent?: boolean }): Promise<HttpResponse<void>> {
-    const q = options?.permanent ? '?permanent=true' : '';
-    return this.rb.path(`/clusters/${clusterId}${q}`).delete<void>();
+  deleteCluster(clusterId: string, options?: { permanent?: boolean; macroId?: string }): Promise<HttpResponse<void>> {
+    const q: Record<string, unknown> = {};
+    if (options?.permanent) q['permanent'] = true;
+    if (options?.macroId) q['macroId'] = options.macroId;
+    return this.rb.path(`/clusters/${clusterId}`).query(Object.keys(q).length > 0 ? q : undefined).delete<void>();
   }
 
   /**
@@ -405,8 +493,8 @@ export class GraphApi {
    * @example
    * await client.graph.restoreCluster('cluster-a');
    */
-  restoreCluster(clusterId: string): Promise<HttpResponse<void>> {
-    return this.rb.path(`/clusters/${clusterId}/restore`).post<void>();
+  restoreCluster(clusterId: string, macroId?: string): Promise<HttpResponse<void>> {
+    return this.rb.path(`/clusters/${clusterId}/restore`).query(macroId ? { macroId } : undefined).post<void>();
   }
 
   /**
@@ -414,8 +502,8 @@ export class GraphApi {
    * 
    * @returns 서브클러스터 DTO 배열
    */
-  async listSubclusters(): Promise<HttpResponse<GraphSubclusterDto[]>> {
-    return this.rb.path('/subclusters').get<GraphSubclusterDto[]>();
+  async listSubclusters(macroId?: string): Promise<HttpResponse<GraphSubclusterDto[]>> {
+    return this.rb.path('/subclusters').query(macroId ? { macroId } : undefined).get<GraphSubclusterDto[]>();
   }
 
   /**
@@ -435,8 +523,8 @@ export class GraphApi {
    * @example
    * await client.graph.deleteSubcluster('sub_123');
    */
-  async deleteSubcluster(subclusterId: string): Promise<HttpResponse<void>> {
-    return this.rb.path(`/subclusters/${subclusterId}`).delete<void>();
+  async deleteSubcluster(subclusterId: string, macroId?: string): Promise<HttpResponse<void>> {
+    return this.rb.path(`/subclusters/${subclusterId}`).query(macroId ? { macroId } : undefined).delete<void>();
   }
 
   /**
@@ -447,9 +535,11 @@ export class GraphApi {
    * await client.graph.deleteClusterCascade('cluster-a');
    * // Output: (No content)
    */
-  deleteClusterCascade(clusterId: string, options?: { permanent?: boolean }): Promise<HttpResponse<void>> {
-    const q = options?.permanent ? '?permanent=true' : '';
-    return this.rb.path(`/clusters/${clusterId}/cascade${q}`).delete<void>();
+  deleteClusterCascade(clusterId: string, options?: { permanent?: boolean; macroId?: string }): Promise<HttpResponse<void>> {
+    const q: Record<string, unknown> = {};
+    if (options?.permanent) q['permanent'] = true;
+    if (options?.macroId) q['macroId'] = options.macroId;
+    return this.rb.path(`/clusters/${clusterId}/cascade`).query(Object.keys(q).length > 0 ? q : undefined).delete<void>();
   }
 
   /**
@@ -467,25 +557,44 @@ export class GraphApi {
    *   density: 0.03
    * }
    */
-  getStats(): Promise<HttpResponse<GraphStatsDto>> {
-    return this.rb.path('/stats').get<GraphStatsDto>();
+  getStats(macroId?: string): Promise<HttpResponse<GraphStatsDto>> {
+    return this.rb.path('/stats').query(macroId ? { macroId } : undefined).get<GraphStatsDto>();
   }
 
   /**
-   * 전체 그래프 스냅샷을 가져옵니다.
+   * 그래프 렌더링에 필요한 전체 스냅샷을 조회합니다.
    *
-   * 만약 `nodes`나 `edges` 등 특정 필드가 빈 배열이라면, 해당 사용자의 그래프 데이터가 존재하지 않음을 의미합니다.
+   * `macroId`를 생략하면 서버는 기존 1:1 그래프 호환 모드로 현재 사용자 ID를
+   * 그래프 ID처럼 사용합니다. `macroId`를 전달하면 해당 1:N 그래프의 노드,
+   * 엣지, 클러스터, 서브클러스터, 통계를 조회합니다.
    *
-   * @returns 그래프 스냅샷 (GraphSnapshotDto)
+   * **API Endpoint**: `GET /v1/graph/snapshot?macroId=:macroId`
+   *
+   * **가능한 응답 상태 코드:**
+   * - `200 OK`: 그래프 스냅샷을 반환합니다.
+   * - `401 Unauthorized`: 인증되지 않은 요청입니다.
+   * - `404 Not Found`: 해당 `macroId`의 그래프가 없습니다.
+   * - `502 Bad Gateway`: 그래프 저장소 조회에 실패했습니다.
+   *
+   * @param macroId 조회할 1:N 그래프 ID입니다. 생략하면 레거시 1:1 그래프를 조회합니다.
+   * @returns 그래프 렌더링용 `GraphSnapshotDto`입니다.
+   *
    * @example
-   * const response = await client.graph.getSnapshot();
-   *
-   * if (response.data.nodes.length === 0) {
-   *   console.log('그래프 데이터가 없습니다.');
+   * ```ts
+   * const list = await client.graph.listGraphs();
+   * if (list.isSuccess && list.data.graphs[0]) {
+   *   const snapshot = await client.graph.getSnapshot(list.data.graphs[0].macroId);
+   *   if (snapshot.isSuccess) {
+   *     renderGraph(snapshot.data.nodes, snapshot.data.edges);
+   *   }
    * }
+   * ```
    */
-  getSnapshot(): Promise<HttpResponse<GraphSnapshotDto>> {
-    return this.rb.path('/snapshot').get<GraphSnapshotDto>();
+  getSnapshot(macroId?: string): Promise<HttpResponse<GraphSnapshotDto>> {
+    return this.rb
+      .path('/snapshot')
+      .query(macroId ? { macroId } : undefined)
+      .get<GraphSnapshotDto>();
   }
 
   /**

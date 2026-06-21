@@ -80,16 +80,27 @@ describeGraphFlow('End-to-End Graph Flow', () => {
       await neo4jDriver.close();
     }
 
-    // 2. 테스트 전용 MacroView 생성 (macroId 확보)
-    const mvRes = await apiClient.post('/v1/macro-views', {
+    // 2. 테스트 전용 MacroView 생성 (macroId 확보) — POST /v1/graph-ai/generate로 별도 생성 필요.
+    // MacroView는 이제 /v1/graph/graphs 경로를 사용합니다.
+    // graph-ai/generate가 macroId를 반환하거나, graph/graphs를 통해 생성합니다.
+    // 여기서는 generate API를 통해 macroId를 발급받습니다.
+    const mvRes = await apiClient.post('/v1/graph-ai/generate', {
       title: 'E2E Test Macro View',
       scopeFilter: {
         mode: 'manual',
-        filters: { dataTypes: ['chat', 'note', 'file'] },
+        filters: { dataTypes: ['chat', 'note', 'file', 'notion'] },
       },
     });
-    expect(mvRes.status).toBe(201);
-    macroId = mvRes.data.view.macroId as string;
+    expect([202, 200]).toContain(mvRes.status);
+    // generate가 macroId를 직접 반환하거나, graph 목록에서 가져옵니다
+    if (mvRes.data?.macroId) {
+      macroId = mvRes.data.macroId as string;
+    } else {
+      // 목록에서 최신 macroId 조회
+      const listRes = await apiClient.get('/v1/graph/graphs');
+      expect(listRes.status).toBe(200);
+      macroId = (listRes.data.graphs as Array<{ macroId: string }>)[0]?.macroId ?? '';
+    }
     expect(macroId).toBeTruthy();
     console.log(`[beforeAll] MacroView created: macroId=${macroId}`);
 
@@ -678,15 +689,15 @@ describeGraphFlow('End-to-End Graph Flow', () => {
     console.log('\n--- Starting Scenario 5: MacroView Clone ---');
 
     // 1. 원본 뷰 상태 확인
-    const originalRes = await apiClient.get(`/v1/macro-views/${macroId}`);
+    const originalRes = await apiClient.get(`/v1/graph/graphs/${macroId}`);
     expect(originalRes.status).toBe(200);
-    const originalView = originalRes.data.view;
+    const originalView = originalRes.data.graph;
     console.log(`Original view: macroId=${originalView.macroId}, title=${originalView.title}`);
 
     // 2. Clone 요청
-    const cloneRes = await apiClient.post(`/v1/macro-views/${macroId}/clone`);
+    const cloneRes = await apiClient.post(`/v1/graph/graphs/${macroId}/clone`);
     expect(cloneRes.status).toBe(201);
-    const clonedView = cloneRes.data.view;
+    const clonedView = cloneRes.data.graph;
 
     // 3. 복제본이 원본과 다른 macroId를 가지는지 검증
     expect(clonedView.macroId).toBeTruthy();
@@ -702,9 +713,9 @@ describeGraphFlow('End-to-End Graph Flow', () => {
     }
 
     // 5. 목록 조회에서 원본과 복제본 모두 확인
-    const listRes = await apiClient.get('/v1/macro-views');
+    const listRes = await apiClient.get('/v1/graph/graphs');
     expect(listRes.status).toBe(200);
-    const views = listRes.data.views as Array<{ macroId: string }>;
+    const views = listRes.data.graphs as Array<{ macroId: string }>;
     const macroIds = views.map((v) => v.macroId);
     expect(macroIds).toContain(macroId);
     expect(macroIds).toContain(clonedView.macroId);
@@ -731,32 +742,30 @@ describeGraphFlow('End-to-End Graph Flow', () => {
   it('Scenario 6: MacroView Soft Delete — trash move + Neo4j deletedAt verification', async () => {
     console.log('\n--- Starting Scenario 6: MacroView Soft Delete ---');
 
-    // 1. 삭제할 뷰 별도 생성 (macroId는 유지)
-    const newViewRes = await apiClient.post('/v1/macro-views', {
-      title: 'E2E Soft Delete Target',
-      scopeFilter: { mode: 'manual', filters: { dataTypes: ['note'] } },
-    });
+    // 1. 삭제할 뷰 별도 생성 — graph/graphs에서 기존 뷰 하나를 대상으로 사용
+    // 새 뷰 생성은 graph-ai/generate를 통해 별도로 수행하므로, 기존 cloneGraph API를 사용합니다.
+    const newViewRes = await apiClient.post(`/v1/graph/graphs/${macroId}/clone`);
     expect(newViewRes.status).toBe(201);
-    const targetMacroId = newViewRes.data.view.macroId as string;
+    const targetMacroId = newViewRes.data.graph.macroId as string;
     console.log(`Target MacroView for soft delete: macroId=${targetMacroId}`);
 
     // 2. 소프트 삭제 요청
-    const deleteRes = await apiClient.delete(`/v1/macro-views/${targetMacroId}`);
+    const deleteRes = await apiClient.delete(`/v1/graph/graphs/${targetMacroId}`);
     expect(deleteRes.status).toBe(204);
 
     // 3. 활성 목록 조회 — 삭제된 뷰가 미출력되는지 확인
-    const activeListRes = await apiClient.get('/v1/macro-views');
+    const activeListRes = await apiClient.get('/v1/graph/graphs');
     expect(activeListRes.status).toBe(200);
-    const activeMacroIds = (activeListRes.data.views as Array<{ macroId: string }>).map(
+    const activeMacroIds = (activeListRes.data.graphs as Array<{ macroId: string }>).map(
       (v) => v.macroId
     );
     expect(activeMacroIds).not.toContain(targetMacroId);
     console.log('Soft-deleted view not present in active list. ✓');
 
     // 4. 휴지통 목록 조회 — 삭제된 뷰가 포함되는지 확인
-    const trashedListRes = await apiClient.get('/v1/macro-views?onlyDeleted=true');
+    const trashedListRes = await apiClient.get('/v1/graph/graphs?onlyDeleted=true');
     expect(trashedListRes.status).toBe(200);
-    const trashedMacroIds = (trashedListRes.data.views as Array<{ macroId: string }>).map(
+    const trashedMacroIds = (trashedListRes.data.graphs as Array<{ macroId: string }>).map(
       (v) => v.macroId
     );
     expect(trashedMacroIds).toContain(targetMacroId);
@@ -826,5 +835,197 @@ describeGraphFlow('End-to-End Graph Flow', () => {
     expect(statsResponse.status).toBe(200);
     expect(['CREATED', 'UPDATING', 'UPDATED']).toContain(statsResponse.data.status);
     console.log(`[AC-14] Graph status after notion-enabled run: ${statsResponse.data.status}`);
+  });
+
+  // ── Scenario 7: Cascade Delete — 원본 대화 삭제 시 모든 매크로 뷰에서 노드·엣지 일괄 soft-delete ──
+  it('Scenario 7: Cascade Delete — source conversation deletion propagates to all macro views', async () => {
+    console.log('\n--- Starting Scenario 7: Cascade Delete (cross-view) ---');
+
+    if (!scenario1Passed) {
+      throw new Error('Scenario 7 requires Scenario 1 to have completed successfully.');
+    }
+
+    const neo4jDriver = createNeo4jE2eDriver();
+    const neo4jSession: Session = neo4jDriver.session();
+    let targetOrigId = '';
+    let cascadeMacro2Id = '';
+
+    try {
+      // 1. 원본 뷰에서 아직 삭제되지 않은 conversation 노드를 하나 선택
+      const activeConvRes = await neo4jSession.run(
+        `MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+         WHERE n.deletedAt IS NULL AND n.nodeType = 'conversation'
+         RETURN n.origId AS origId
+         LIMIT 1`,
+        { userId, macroId }
+      );
+
+      if (activeConvRes.records.length === 0) {
+        console.warn('[Scenario 7] No active conversation node found in macroId; skipping cascade delete test.');
+        return;
+      }
+      targetOrigId = activeConvRes.records[0].get('origId') as string;
+      console.log(`[Scenario 7] Target conversation origId: ${targetOrigId}`);
+
+      // 2. 원본 뷰를 복제하여 두 번째 매크로 뷰(macro2) 생성
+      //    cloneMacroGraphNodes는 deletedAt IS NULL 노드만 복제하므로
+      //    targetOrigId 노드가 macro2에도 독립 MacroNode 인스턴스로 존재함
+      const clone2Res = await apiClient.post(`/v1/graph/graphs/${macroId}/clone`);
+      expect(clone2Res.status).toBe(201);
+      cascadeMacro2Id = clone2Res.data.graph.macroId as string;
+      console.log(`[Scenario 7] Created cascade-test clone: macro2Id=${cascadeMacro2Id}`);
+
+      // 3. macro2에도 해당 노드가 존재하는지 사전 확인
+      const macro2BeforeRes = await neo4jSession.run(
+        `MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+         WHERE n.origId = $origId AND n.deletedAt IS NULL
+         RETURN n.origId AS origId`,
+        { userId, macroId: cascadeMacro2Id, origId: targetOrigId }
+      );
+      expect(macro2BeforeRes.records.length).toBe(1);
+      console.log(`[Scenario 7] Target node confirmed in macro2 before deletion. ✓`);
+
+      // 4. 원본 대화 삭제 API 호출 — softDeleteNodesByOrigIds가 userId 기준으로
+      //    모든 매크로 뷰의 동일 origId 노드를 일괄 soft-delete
+      const deleteConvRes = await apiClient.delete(`/v1/ai/conversations/${targetOrigId}`);
+      expect([200, 204]).toContain(deleteConvRes.status);
+      console.log(`[Scenario 7] DELETE /v1/ai/conversations/${targetOrigId} → ${deleteConvRes.status}`);
+
+      // 5. 원본 뷰(macro1)에서 해당 노드의 deletedAt이 설정되었는지 검증
+      const macro1AfterRes = await neo4jSession.run(
+        `MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+         WHERE n.origId = $origId
+         RETURN n.deletedAt AS deletedAt`,
+        { userId, macroId, origId: targetOrigId }
+      );
+      expect(macro1AfterRes.records.length).toBeGreaterThan(0);
+      expect(macro1AfterRes.records[0].get('deletedAt')).not.toBeNull();
+      console.log(`[Scenario 7] MacroNode soft-deleted in original view (macroId=${macroId}). ✓`);
+
+      // 6. 복제 뷰(macro2)에서도 동일 origId 노드의 deletedAt이 설정되었는지 검증
+      const macro2AfterRes = await neo4jSession.run(
+        `MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_NODE]->(n:MacroNode {userId: $userId})
+         WHERE n.origId = $origId
+         RETURN n.deletedAt AS deletedAt`,
+        { userId, macroId: cascadeMacro2Id, origId: targetOrigId }
+      );
+      expect(macro2AfterRes.records.length).toBeGreaterThan(0);
+      expect(macro2AfterRes.records[0].get('deletedAt')).not.toBeNull();
+      console.log(`[Scenario 7] MacroNode soft-deleted in cloned view (macroId=${cascadeMacro2Id}). ✓`);
+
+      // 7. 원본 뷰에서 해당 노드에 연결된 MacroRelation 엣지도 soft-delete 됐는지 검증
+      //    softDeleteNodesByOrigIds: MacroRelation WHERE RELATES_SOURCE|RELATES_TARGET → 해당 노드
+      const edgeCheckRes = await neo4jSession.run(
+        `MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_RELATION]->(r:MacroRelation {userId: $userId})
+         MATCH (r)-[:RELATES_SOURCE|RELATES_TARGET]->(n:MacroNode {userId: $userId})
+         WHERE n.origId = $origId
+         RETURN count(DISTINCT r) AS totalEdges,
+                count(DISTINCT CASE WHEN r.deletedAt IS NOT NULL THEN r END) AS deletedEdges`,
+        { userId, macroId, origId: targetOrigId }
+      );
+      const totalEdges = edgeCheckRes.records[0]?.get('totalEdges')?.toNumber?.() ?? 0;
+      const deletedEdges = edgeCheckRes.records[0]?.get('deletedEdges')?.toNumber?.() ?? 0;
+      console.log(`[Scenario 7] Edges connected to target node: total=${totalEdges}, deleted=${deletedEdges}`);
+      if (totalEdges > 0) {
+        expect(deletedEdges).toBe(totalEdges);
+      }
+
+      console.log('[Scenario 7] Cascade Delete across all macro views verified. ✓');
+    } finally {
+      await neo4jSession.close();
+      await neo4jDriver.close();
+    }
+  });
+
+  // ── Scenario 8: Clone Deep-Copy — 복제본의 MacroRelation 핵심 필드가 원본과 100% 일치 ──
+  it('Scenario 8: Clone Deep-Copy — MacroRelation core fields are identically copied to clone', async () => {
+    console.log('\n--- Starting Scenario 8: Clone Deep-Copy Integrity ---');
+
+    if (!scenario1Passed) {
+      throw new Error('Scenario 8 requires Scenario 1 to have completed successfully.');
+    }
+
+    // 별도 클론 생성 (다른 시나리오의 clone과 독립적으로 검증)
+    const cloneRes = await apiClient.post(`/v1/graph/graphs/${macroId}/clone`);
+    expect(cloneRes.status).toBe(201);
+    const deepCopyMacroId = cloneRes.data.graph.macroId as string;
+    console.log(`[Scenario 8] Created deep-copy clone: macroId=${deepCopyMacroId}`);
+
+    const neo4jDriver = createNeo4jE2eDriver();
+    const neo4jSession: Session = neo4jDriver.session();
+
+    try {
+      // 원본 뷰의 MacroRelation 엣지 목록 조회
+      // cloneMacroGraphRelations: MERGE (newRel) SET newRel = r, newRel.macroId = $newMacroId
+      // → weight, type, relationType, relation, propertiesJson, intraCluster 등 모든 속성 복사
+      const origEdgesRes = await neo4jSession.run(
+        `MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_RELATION]->(r:MacroRelation {userId: $userId})
+         WHERE r.deletedAt IS NULL
+         MATCH (r)-[:RELATES_SOURCE]->(src:MacroNode {userId: $userId})
+         MATCH (r)-[:RELATES_TARGET]->(tgt:MacroNode {userId: $userId})
+         RETURN r.weight        AS weight,
+                r.type          AS type,
+                r.relationType  AS relationType,
+                r.relation      AS relation,
+                r.propertiesJson AS propertiesJson,
+                r.intraCluster  AS intraCluster,
+                src.origId      AS sourceOrigId,
+                tgt.origId      AS targetOrigId
+         ORDER BY src.origId, tgt.origId, r.id`,
+        { userId, macroId }
+      );
+
+      // 복제 뷰의 MacroRelation 엣지 목록 조회
+      const cloneEdgesRes = await neo4jSession.run(
+        `MATCH (g:MacroGraph {userId: $userId, macroId: $clonedMacroId})-[:HAS_RELATION]->(r:MacroRelation {userId: $userId})
+         WHERE r.deletedAt IS NULL
+         MATCH (r)-[:RELATES_SOURCE]->(src:MacroNode {userId: $userId})
+         MATCH (r)-[:RELATES_TARGET]->(tgt:MacroNode {userId: $userId})
+         RETURN r.weight        AS weight,
+                r.type          AS type,
+                r.relationType  AS relationType,
+                r.relation      AS relation,
+                r.propertiesJson AS propertiesJson,
+                r.intraCluster  AS intraCluster,
+                src.origId      AS sourceOrigId,
+                tgt.origId      AS targetOrigId
+         ORDER BY src.origId, tgt.origId, r.id`,
+        { userId, clonedMacroId: deepCopyMacroId }
+      );
+
+      console.log(
+        `[Scenario 8] Original edges: ${origEdgesRes.records.length}, Clone edges: ${cloneEdgesRes.records.length}`
+      );
+
+      // 엣지 수 일치 검증
+      expect(cloneEdgesRes.records.length).toBe(origEdgesRes.records.length);
+
+      if (origEdgesRes.records.length === 0) {
+        console.warn('[Scenario 8] No edges in original view; skipping per-field comparison.');
+        return;
+      }
+
+      // 각 엣지의 핵심 비즈니스 필드 비교 (id·macroId·createdAt·updatedAt 제외)
+      for (let i = 0; i < origEdgesRes.records.length; i++) {
+        const orig = origEdgesRes.records[i];
+        const clone = cloneEdgesRes.records[i];
+
+        expect(clone.get('weight')).toEqual(orig.get('weight'));
+        expect(clone.get('type')).toBe(orig.get('type'));
+        expect(clone.get('relationType')).toBe(orig.get('relationType'));
+        expect(clone.get('relation')).toBe(orig.get('relation'));
+        expect(clone.get('propertiesJson')).toBe(orig.get('propertiesJson'));
+        expect(clone.get('intraCluster')).toBe(orig.get('intraCluster'));
+        expect(clone.get('sourceOrigId')).toBe(orig.get('sourceOrigId'));
+        expect(clone.get('targetOrigId')).toBe(orig.get('targetOrigId'));
+      }
+
+      console.log(
+        `[Scenario 8] Deep-copy integrity verified: ${origEdgesRes.records.length} edges all match core fields. ✓`
+      );
+    } finally {
+      await neo4jSession.close();
+      await neo4jDriver.close();
+    }
   });
 });

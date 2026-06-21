@@ -8,8 +8,6 @@
  * - timestamp: 발행 시각
  */
 
-import type { ScopeFilter } from './macro';
-
 // 작업 타입 열거
 export enum TaskType {
   GRAPH_GENERATION_REQUEST = 'GRAPH_GENERATION_REQUEST', // API -> AI
@@ -23,7 +21,6 @@ export enum TaskType {
   MICROSCOPE_INGEST_REQUEST = 'MICROSCOPE_INGEST_REQUEST', // API -> AI (Microscope raw file upload)
   MICROSCOPE_INGEST_FROM_NODE_RESULT = 'MICROSCOPE_INGEST_FROM_NODE_RESULT', // AI -> Worker (Microscope ingest result)
   MICROSCOPE_INGEST_RESULT = 'MICROSCOPE_INGEST_RESULT', // AI -> Worker (Microscope raw file result, alias)
-  MACRO_GRAPH_AUTO_REQUEST = 'MACRO_GRAPH_AUTO_REQUEST', // API -> AI (매크로 뷰 AUTO 모드 생성 요청)
 }
 
 // 공통 메시지 베이스
@@ -304,44 +301,6 @@ export interface MicroscopeIngestFromNodeResultQueuePayload extends BaseQueueMes
   };
 }
 
-/**
- * @description 매크로 뷰 AUTO 모드 생성 요청 메시지 페이로드 (API → AI)
- *
- * AUTO 모드: 사용자가 자연어 intent를 제공하면 AI가 전달된 데이터 ID 목록에서 적합한 항목을 자율 선택하여 그래프를 생성합니다.
- * BE는 해당 사용자의 전체 데이터(대화/노트/파일/Notion) ID 목록을 S3에 업로드한 뒤 이 메시지를 전송합니다.
- *
- * AI측 처리 핸들러 구현 상세는 `docs/ai-handoff/macro-auto-mode.md`를 참조하세요.
- *
- * @property taskId taskId === macroId (AI가 결과 메시지에 macroId를 별도로 수신하지 않아도 됨)
- * @property payload.userId 요청한 사용자 ID
- * @property payload.macroId 생성할 매크로 뷰 ID (taskId와 동일)
- * @property payload.scopeFilter AUTO 모드 스코프 조건 (mode: 'auto', intent 포함)
- * @property payload.dataIdsS3Key 전체 데이터 ID 목록 JSON이 담긴 S3 키
- * @property payload.bucket S3 버킷명 (옵션)
- * @property payload.language 사용자 선호 언어 (그래프 클러스터 이름 언어)
- */
-export interface MacroGraphAutoRequestPayload extends BaseQueueMessage {
-  taskType: TaskType.MACRO_GRAPH_AUTO_REQUEST;
-  payload: {
-    /** 요청한 사용자 ID */
-    userId: string;
-    /** 생성할 매크로 뷰 ID (taskId와 동일하므로 AI 측 SQS 계약 수정 불필요) */
-    macroId: string;
-    /** AUTO 모드 스코프 조건 */
-    scopeFilter: ScopeFilter;
-    /**
-     * 전체 데이터 ID 목록 JSON S3 키.
-     * 형식: `macro-auto/{taskId}/data_ids.json`
-     * JSON 내용: `{ conversations: string[], notes: string[], files: string[], notionPages: string[] }`
-     */
-    dataIdsS3Key: string;
-    /** S3 버킷명 */
-    bucket?: string;
-    /** 사용자 선호 언어 (ko, en, zh 등) */
-    language?: string;
-  };
-}
-
 // 전체 메시지 유니온 타입 (확장성을 위해)
 export type QueueMessage =
   | GraphGenRequestPayload
@@ -353,6 +312,5 @@ export type QueueMessage =
   | AddNodeResultPayload
   | MicroscopeIngestFromNodeQueuePayload
   | MicroscopeIngestRawFileQueuePayload
-  | MicroscopeIngestFromNodeResultQueuePayload
-  | MacroGraphAutoRequestPayload;
+  | MicroscopeIngestFromNodeResultQueuePayload;
 

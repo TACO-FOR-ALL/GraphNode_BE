@@ -49,6 +49,9 @@ describe('macroGraph.cypher', () => {
       'getGraphSummary',
       'deleteGraph',
       'deleteGraphSummary',
+      'softDeleteNodesByOrigIds',
+      'hardDeleteNodesByOrigIds',
+      'restoreNodesByOrigIds',
       'getMaxNodeId',
       'findEdgeById',
       'findSubclusterById',
@@ -193,9 +196,62 @@ describe('macroGraph.cypher', () => {
       expect(q).toMatch(/MERGE \(st:MacroStats \{userId: \$userId, macroId: \$macroId\}\)/);
     });
 
+    it('softDeleteNodesByIds: macroId로 선택한 MacroGraph의 노드만 삭제한다', () => {
+      const q = MACRO_GRAPH_CYPHER.softDeleteNodesByIds;
+      expect(q).toMatch(/MacroGraph \{userId: \$userId, macroId: \$macroId\}/);
+      expect(q).toMatch(/MacroNode \{userId: \$userId, macroId: \$macroId\}/);
+      expect(q).toMatch(/MacroRelation \{userId: \$userId, macroId: \$macroId\}/);
+      expect(q).toMatch(/MACRO_RELATED \{userId: \$userId, macroId: \$macroId\}/);
+    });
+
+    it('hardDeleteNodesByIds: macroId로 선택한 MacroGraph의 노드만 삭제한다', () => {
+      const q = MACRO_GRAPH_CYPHER.hardDeleteNodesByIds;
+      expect(q).toMatch(/MacroGraph \{userId: \$userId, macroId: \$macroId\}/);
+      expect(q).toMatch(/MacroNode \{userId: \$userId, macroId: \$macroId\}/);
+      expect(q).toMatch(/MacroRelation \{userId: \$userId, macroId: \$macroId\}/);
+      expect(q).toMatch(/MACRO_RELATED \{userId: \$userId, macroId: \$macroId\}/);
+    });
+
     it('upsertSummary: macroId를 MERGE 키에 포함한다', () => {
       const q = MACRO_GRAPH_CYPHER.upsertSummary;
       expect(q).toMatch(/MERGE \(sm:MacroSummary \{userId: \$userId, macroId: \$macroId\}\)/);
+    });
+
+    it('delete/restore by origId targets matched node entities instead of numeric ids', () => {
+      const queries = [
+        MACRO_GRAPH_CYPHER.hardDeleteNodesByOrigIds,
+        MACRO_GRAPH_CYPHER.restoreNodesByOrigIds,
+      ];
+
+      for (const q of queries) {
+        expect(q).toMatch(/MATCH \(n:MacroNode \{userId: \$userId\}\)/);
+        expect(q).toMatch(/WHERE n\.origId IN \$origIds/);
+        expect(q).toMatch(/WITH collect\(n\) AS nodes/);
+        expect(q).toMatch(/endpoint IN nodes/);
+        expect(q).toMatch(/source IN nodes OR target IN nodes/);
+        expect(q).not.toMatch(/collect\(n\.id\) AS nodeIds/);
+        expect(q).not.toMatch(/endpoint\.id IN nodeIds/);
+      }
+    });
+
+    it('softDeleteNodesByOrigIds soft-deletes matched nodes and connected edges across active and soft-deleted macro views', () => {
+      const q = MACRO_GRAPH_CYPHER.softDeleteNodesByOrigIds;
+
+      expect(q).toMatch(/MATCH \(n:MacroNode \{userId: \$userId\}\)/);
+      expect(q).toMatch(/WHERE n\.origId IN \$origIds/);
+      expect(q).toMatch(/SET n\.deletedAt = \$deletedAt/);
+      expect(q).toMatch(/WITH collect\(DISTINCT n\) AS nodes/);
+      expect(q).toMatch(/MATCH \(r:MacroRelation \{userId: \$userId\}\)/);
+      expect(q).toMatch(/endpoint IN nodes/);
+      expect(q).toMatch(/SET r\.deletedAt = \$deletedAt/);
+      expect(q).toMatch(/MATCH \(source:MacroNode \{userId: \$userId\}\)-\[mr:MACRO_RELATED \{userId: \$userId\}\]->\(target:MacroNode \{userId: \$userId\}\)/);
+      expect(q).toMatch(/source IN nodes OR target IN nodes/);
+      expect(q).toMatch(/SET mr\.deletedAt = \$deletedAt/);
+      expect(q).not.toMatch(/g\.deletedAt IS NULL/);
+      expect(q).not.toMatch(/HAS_NODE/);
+      expect(q).not.toMatch(/macroId: \$macroId/);
+      expect(q).not.toMatch(/n\.id IN \$ids/);
+      expect(q).not.toMatch(/collect\(n\.id\)/);
     });
 
     it('cloneMacroGraph: 하위 엔티티를 newMacroId로 독립 복제한다', () => {
