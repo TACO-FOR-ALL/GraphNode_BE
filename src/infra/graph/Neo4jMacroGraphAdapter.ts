@@ -801,6 +801,7 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
       await this.ensureGraphRoot(userId, macroId, runner);
       await runner.run(MACRO_GRAPH_CYPHER.upsertSummary, {
         userId,
+        macroId,
         id: summaryNeo4j.id,
         overviewJson: summaryNeo4j.overviewJson,
         clustersJson: summaryNeo4j.clustersJson,

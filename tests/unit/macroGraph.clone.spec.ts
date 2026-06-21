@@ -55,9 +55,19 @@ describe('MACRO_GRAPH_CYPHER — Deep Clone 쿼리 존재 확인', () => {
     const q = expectQuery('cloneMacroGraphBelongsTo');
     expect(q).toContain('BELONGS_TO');
     expect(q).toContain('MERGE');
-    expect(q).toContain('IN TRANSACTIONS OF 500 ROWS');
+    expect(q).not.toContain('IN TRANSACTIONS');
     expect(q).toContain('$newMacroId');
     expect(q).toContain('$sourceMacroId');
+  });
+
+  it('cloneMacroGraph 쿼리는 명시적 executeWrite 안에서 실행되므로 IN TRANSACTIONS를 사용하지 않는다', () => {
+    EXPECTED_CLONE_KEYS
+      .filter((key) => key !== 'cloneMacroGraphRoot')
+      .forEach((key) => {
+        const q = expectQuery(key);
+        expect(q).toContain('CALL {');
+        expect(q).not.toMatch(/IN TRANSACTIONS OF \d+ ROWS/);
+      });
   });
 
   it('cloneMacroGraphRelatesSource는 RELATES_SOURCE를 MERGE한다', () => {

@@ -1915,7 +1915,7 @@ export const MACRO_GRAPH_CYPHER = {
   /**
    * @description 원본 매크로 뷰의 노드·관계·클러스터·서브클러스터를 새 macroId로 물리 복제합니다.
    *
-   * CALL { ... } IN TRANSACTIONS OF 500 ROWS 배치 처리로 대용량 그래프에서도 OOM 없이 동작합니다.
+   * 호출부의 명시적 트랜잭션 안에서 일반 CALL 서브쿼리로 복제합니다.
    * 원본 MacroGraph 루트 메타데이터(title, description, scopeJson)는 복사하지 않습니다 — 호출자가 별도로 upsertGraphRoot를 호출해야 합니다.
    *
    * @param userId 소유 사용자 ID
@@ -1940,7 +1940,7 @@ export const MACRO_GRAPH_CYPHER = {
       MERGE (newNode:MacroNode {userId: $userId, macroId: $newMacroId, id: n.id})
       SET newNode = n, newNode.macroId = $newMacroId
       MERGE (dst)-[:HAS_NODE]->(newNode)
-    } IN TRANSACTIONS OF 500 ROWS
+    }
   `,
 
   cloneMacroGraphClusters: `
@@ -1953,7 +1953,7 @@ export const MACRO_GRAPH_CYPHER = {
       MERGE (newCluster:MacroCluster {userId: $userId, macroId: $newMacroId, id: c.id})
       SET newCluster = c, newCluster.macroId = $newMacroId
       MERGE (dst)-[:HAS_CLUSTER]->(newCluster)
-    } IN TRANSACTIONS OF 500 ROWS
+    }
   `,
 
   cloneMacroGraphRelations: `
@@ -1966,7 +1966,7 @@ export const MACRO_GRAPH_CYPHER = {
       MERGE (newRel:MacroRelation {userId: $userId, macroId: $newMacroId, id: r.id})
       SET newRel = r, newRel.macroId = $newMacroId
       MERGE (dst)-[:HAS_RELATION]->(newRel)
-    } IN TRANSACTIONS OF 500 ROWS
+    }
   `,
 
   cloneMacroGraphSubclusters: `
@@ -1979,7 +1979,7 @@ export const MACRO_GRAPH_CYPHER = {
       MERGE (newSc:MacroSubcluster {userId: $userId, macroId: $newMacroId, id: sc.id})
       SET newSc = sc, newSc.macroId = $newMacroId
       MERGE (dst)-[:HAS_SUBCLUSTER]->(newSc)
-    } IN TRANSACTIONS OF 500 ROWS
+    }
   `,
 
   cloneMacroGraphBelongsTo: `
@@ -1993,7 +1993,7 @@ export const MACRO_GRAPH_CYPHER = {
       MATCH (dstCluster:MacroCluster {userId: $userId, macroId: $newMacroId, id: srcCluster.id})
       MERGE (dstNode)-[newRel:BELONGS_TO]->(dstCluster)
       ON CREATE SET newRel = properties(r)
-    } IN TRANSACTIONS OF 500 ROWS
+    }
   `,
 
   cloneMacroGraphRelatesSource: `
@@ -2007,7 +2007,7 @@ export const MACRO_GRAPH_CYPHER = {
       MATCH (dstNode:MacroNode {userId: $userId, macroId: $newMacroId, id: srcNode.id})
       MERGE (dstRel)-[newRel:RELATES_SOURCE]->(dstNode)
       ON CREATE SET newRel = properties(r)
-    } IN TRANSACTIONS OF 500 ROWS
+    }
   `,
 
   cloneMacroGraphRelatesTarget: `
@@ -2021,7 +2021,7 @@ export const MACRO_GRAPH_CYPHER = {
       MATCH (dstNode:MacroNode {userId: $userId, macroId: $newMacroId, id: srcNode.id})
       MERGE (dstRel)-[newRel:RELATES_TARGET]->(dstNode)
       ON CREATE SET newRel = properties(r)
-    } IN TRANSACTIONS OF 500 ROWS
+    }
   `,
 
   cloneMacroGraphMacroRelated: `
@@ -2035,7 +2035,7 @@ export const MACRO_GRAPH_CYPHER = {
       MATCH (dstN2:MacroNode {userId: $userId, macroId: $newMacroId, id: srcN2.id})
       MERGE (dstN1)-[newRel:MACRO_RELATED]->(dstN2)
       ON CREATE SET newRel = properties(r)
-    } IN TRANSACTIONS OF 500 ROWS
+    }
   `,
 
   cloneMacroGraphContains: `
@@ -2049,7 +2049,7 @@ export const MACRO_GRAPH_CYPHER = {
       MATCH (dstNode:MacroNode {userId: $userId, macroId: $newMacroId, id: srcNode.id})
       MERGE (dstSc)-[newRel:CONTAINS]->(dstNode)
       ON CREATE SET newRel = properties(r)
-    } IN TRANSACTIONS OF 500 ROWS
+    }
   `,
 
   cloneMacroGraphRepresents: `
@@ -2063,7 +2063,7 @@ export const MACRO_GRAPH_CYPHER = {
       MATCH (dstNode:MacroNode {userId: $userId, macroId: $newMacroId, id: srcNode.id})
       MERGE (dstSc)-[newRel:REPRESENTS]->(dstNode)
       ON CREATE SET newRel = properties(r)
-    } IN TRANSACTIONS OF 500 ROWS
+    }
   `,
 
   cloneMacroGraphHasSubcluster: `
@@ -2077,7 +2077,7 @@ export const MACRO_GRAPH_CYPHER = {
       MATCH (dstSc:MacroSubcluster {userId: $userId, macroId: $newMacroId, id: srcSc.id})
       MERGE (dstCluster)-[newRel:HAS_SUBCLUSTER]->(dstSc)
       ON CREATE SET newRel = properties(r)
-    } IN TRANSACTIONS OF 500 ROWS
+    }
   `,
 
   // =====================

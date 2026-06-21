@@ -138,9 +138,10 @@ describe('macroGraph.cypher', () => {
       expect(qRoot).toMatch(/MacroGraph \{userId: \$userId, macroId: \$newMacroId\}/);
     });
 
-    it('cloneMacroGraph: CALL {} IN TRANSACTIONS 배치 복제를 사용한다', () => {
+    it('cloneMacroGraph: executeWrite 내부에서 일반 CALL {} 서브쿼리를 사용한다', () => {
       const qNodes = MACRO_GRAPH_CYPHER.cloneMacroGraphNodes;
-      expect(qNodes).toMatch(/IN TRANSACTIONS OF \d+ ROWS/);
+      expect(qNodes).toContain('CALL {');
+      expect(qNodes).not.toMatch(/IN TRANSACTIONS OF \d+ ROWS/);
     });
 
     it('MacroGraph {userId: $userId}만 단독으로 쓰는 쿼리가 없다 (listMacroViews 제외)', () => {
