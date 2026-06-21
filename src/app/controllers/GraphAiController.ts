@@ -20,7 +20,7 @@ export class GraphAiController {
 
     // 그래프 생성 프로세스 시작 (SQS 요청)
     // scopeFilter가 있으면 1:N 모드, 없으면 레거시 1:1 모드
-    const taskId = await this.graphGenerationService.requestGraphGenerationViaQueue(userId, {
+    const generation = await this.graphGenerationService.requestGraphGenerationViaQueue(userId, {
       includeSummary,
       macroId: scopeFilter ? undefined : macroId,
       scopeFilter,
@@ -28,7 +28,7 @@ export class GraphAiController {
       description,
     });
 
-    if (!taskId) {
+    if (!generation) {
       res.status(200).json({
         message: 'No conversation or note data found to generate graph',
         status: 'skipped',
@@ -40,7 +40,8 @@ export class GraphAiController {
     captureEvent(userId, POSTHOG_EVENT.GRAPH_GENERATION_REQUESTED, { include_summary: includeSummary });
     res.status(202).json({
       message: 'Graph generation queued',
-      taskId: taskId,
+      taskId: generation.taskId,
+      macroId: generation.macroId,
       status: 'queued',
     });
   };

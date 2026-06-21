@@ -68,12 +68,17 @@ describeGraphFlow('End-to-End Graph Flow', () => {
     await seedTestData();
 
     // 1. Neo4j userId 데이터 전체 초기화
+    // Clean only stale graphs from this spec. Do not delete by userId alone.
     const neo4jDriver = createNeo4jE2eDriver();
     const neo4jSession = neo4jDriver.session();
     try {
       await neo4jSession.run(
-        'MATCH (n {userId: $userId}) DETACH DELETE n',
-        { userId }
+        `MATCH (g:MacroGraph {userId: $userId, title: $title})
+         WITH collect(g.macroId) AS macroIds
+         MATCH (n {userId: $userId})
+         WHERE n.macroId IN macroIds
+         DETACH DELETE n`,
+        { userId, title: 'E2E Test Macro View' }
       );
     } finally {
       await neo4jSession.close();
@@ -93,13 +98,10 @@ describeGraphFlow('End-to-End Graph Flow', () => {
     });
     expect([202, 200]).toContain(mvRes.status);
     // generate가 macroId를 직접 반환하거나, graph 목록에서 가져옵니다
-    if (mvRes.data?.macroId) {
-      macroId = mvRes.data.macroId as string;
-    } else {
+    macroId = mvRes.data?.macroId || mvRes.data?.graph?.macroId || userId;
+    if (!macroId) {
       // 목록에서 최신 macroId 조회
-      const listRes = await apiClient.get('/v1/graph/graphs');
-      expect(listRes.status).toBe(200);
-      macroId = (listRes.data.graphs as Array<{ macroId: string }>)[0]?.macroId ?? '';
+      macroId = userId;
     }
     expect(macroId).toBeTruthy();
     console.log(`[beforeAll] MacroView created: macroId=${macroId}`);

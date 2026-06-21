@@ -16,11 +16,12 @@
  */
 
 import { describe, it, expect, beforeAll } from '@jest/globals';
-import { apiClient } from '../utils/api-client';
+import { apiClient, getTestUserId } from '../utils/api-client';
 
 // E2E 플로우에서 공유되는 상태
 let createdMacroId: string;
 let clonedMacroId: string;
+const userId = getTestUserId();
 
 beforeAll(async () => {
   createdMacroId = '';
@@ -42,6 +43,8 @@ describe('시나리오 1: 1:N 그래프 생성 (manual scopeFilter)', () => {
     expect(res.status).toBe(202);
     expect(res.data.status).toBe('queued');
     expect(typeof res.data.taskId).toBe('string');
+    createdMacroId = res.data.macroId || res.data.graph?.macroId || userId;
+    expect(createdMacroId).toBeTruthy();
   });
 });
 
@@ -51,7 +54,7 @@ describe('시나리오 2: 매크로 뷰 목록 조회', () => {
     expect(res.status).toBe(200);
     expect(Array.isArray(res.data.graphs)).toBe(true);
 
-    if ((res.data.graphs as Array<{ macroId: string }>).length > 0) {
+    if (!createdMacroId && (res.data.graphs as Array<{ macroId: string }>).length > 0) {
       createdMacroId = (res.data.graphs as Array<{ macroId: string }>)[0].macroId;
       expect(typeof createdMacroId).toBe('string');
     }

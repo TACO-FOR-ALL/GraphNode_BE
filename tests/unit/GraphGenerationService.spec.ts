@@ -206,10 +206,11 @@ describe('GraphGenerationService', () => {
       mockGraphEmbSvc.saveStats.mockResolvedValue(undefined);
 
       // Act
-      const taskId = await service.requestGraphGenerationViaQueue(userId);
+      const result = await service.requestGraphGenerationViaQueue(userId);
 
       // Assert
-      expect(taskId).toContain('task_user1_');
+      expect(result?.taskId).toContain('task_user1_');
+      expect(result?.macroId).toBe(userId);
       expect(mockChatSvc.listConversations).toHaveBeenCalled();
       expect(mockStoragePort.upload).toHaveBeenCalledWith(
         expect.stringContaining('graph-generation/'),

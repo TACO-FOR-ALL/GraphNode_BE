@@ -1938,7 +1938,7 @@ export const MACRO_GRAPH_CYPHER = {
       MATCH (src)-[:HAS_NODE]->(n:MacroNode {userId: $userId})
       WHERE n.deletedAt IS NULL
       MERGE (newNode:MacroNode {userId: $userId, macroId: $newMacroId, id: n.id})
-      SET newNode = n, newNode.macroId = $newMacroId
+      SET newNode += n, newNode.macroId = $newMacroId
       MERGE (dst)-[:HAS_NODE]->(newNode)
     }
   `,
@@ -1951,7 +1951,7 @@ export const MACRO_GRAPH_CYPHER = {
       MATCH (src)-[:HAS_CLUSTER]->(c:MacroCluster {userId: $userId})
       WHERE c.deletedAt IS NULL
       MERGE (newCluster:MacroCluster {userId: $userId, macroId: $newMacroId, id: c.id})
-      SET newCluster = c, newCluster.macroId = $newMacroId
+      SET newCluster += c, newCluster.macroId = $newMacroId
       MERGE (dst)-[:HAS_CLUSTER]->(newCluster)
     }
   `,
@@ -1964,7 +1964,7 @@ export const MACRO_GRAPH_CYPHER = {
       MATCH (src)-[:HAS_RELATION]->(r:MacroRelation {userId: $userId})
       WHERE r.deletedAt IS NULL
       MERGE (newRel:MacroRelation {userId: $userId, macroId: $newMacroId, id: r.id})
-      SET newRel = r, newRel.macroId = $newMacroId
+      SET newRel += r, newRel.macroId = $newMacroId
       MERGE (dst)-[:HAS_RELATION]->(newRel)
     }
   `,
@@ -1977,7 +1977,7 @@ export const MACRO_GRAPH_CYPHER = {
       MATCH (src)-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId})
       WHERE sc.deletedAt IS NULL
       MERGE (newSc:MacroSubcluster {userId: $userId, macroId: $newMacroId, id: sc.id})
-      SET newSc = sc, newSc.macroId = $newMacroId
+      SET newSc += sc, newSc.macroId = $newMacroId
       MERGE (dst)-[:HAS_SUBCLUSTER]->(newSc)
     }
   `,

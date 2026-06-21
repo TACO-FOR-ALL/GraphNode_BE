@@ -127,7 +127,7 @@ export class GraphGenerationService {
        */
       scopeFilter?: ScopeFilter;
     }
-  ): Promise<string | null> {
+  ): Promise<{ taskId: string; macroId: string } | null> {
     // 1:N 모드: scopeFilter가 있으면 별도 macroId 발급 후 필터된 번들 전송
     if (options?.scopeFilter) {
       return this.requestGraphGenerationScoped(userId, options.scopeFilter, {
@@ -140,6 +140,7 @@ export class GraphGenerationService {
     }
 
     // 레거시 1:1 모드 (하위 호환 100% 유지)
+    const macroId = options?.macroId ?? userId;
     let taskId: string | undefined;
     let creditHeldTaskId: string | undefined;
     let messageSent = false;
@@ -270,7 +271,7 @@ export class GraphGenerationService {
       try {
         await redis.set(
           `macro_graph:macroId:${taskId}`,
-          options?.macroId ?? userId,
+          macroId,
           'EX',
           GraphGenerationService.GRAPH_GEN_START_TTL_SECONDS
         );
@@ -281,7 +282,7 @@ export class GraphGenerationService {
       // 성공 알림 전송
       await this.notificationService.sendGraphGenerationRequested(userId, taskId);
 
-      return taskId;
+      return { taskId, macroId };
     } catch (err) {
       // queue 전송 실패 시 차감된 크레딧 롤백
       if (creditHeldTaskId && !messageSent) {
@@ -322,7 +323,7 @@ export class GraphGenerationService {
       macroMinClusters?: number;
       macroMaxClusters?: number;
     }
-  ): Promise<string | null> {
+  ): Promise<{ taskId: string; macroId: string } | null> {
     if (!this.macroGraphStore) {
       throw new UpstreamError('MacroGraphStore not available for scoped graph generation');
     }
@@ -475,7 +476,7 @@ export class GraphGenerationService {
       }
 
       await this.notificationService.sendGraphGenerationRequested(userId, taskId);
-      return taskId;
+      return { taskId, macroId: newMacroId };
     } catch (err) {
       if (creditHeldTaskId && !messageSent) {
         await this.rollbackCreditHold(creditHeldTaskId, 'scoped graph generation enqueue failed');
