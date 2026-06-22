@@ -520,6 +520,33 @@ export class AddNodeResultHandler implements JobHandler {
     } catch (err) {
       logger.error({ err, taskId, userId }, 'Failed to process add node result');
 
+      // UPDATING 상태 고착 방지: 예외 발생 시 CREATED로 복원하고 실패 메타데이터 기록
+      try {
+        const failedStats = await graphService.getStats(userId, macroOptions);
+        if (failedStats) {
+          failedStats.status = 'CREATED';
+          failedStats.metadata = {
+            ...(failedStats.metadata ?? {}),
+            lastAddNodeFailure: {
+              taskId,
+              error: err instanceof Error ? err.message : String(err),
+              at: new Date().toISOString(),
+            },
+          };
+          await graphService.saveStats(failedStats, macroOptions);
+        } else {
+          logger.error(
+            { taskId, userId, macroId },
+            'AddNode BE failure: stats not found, UPDATING status cannot be reverted'
+          );
+        }
+      } catch (statusErr) {
+        logger.error(
+          { err: statusErr, taskId, userId },
+          'Failed to revert graph status after add-node BE exception'
+        );
+      }
+
       await notiService.sendAddConversationFailed(
         userId,
         taskId,

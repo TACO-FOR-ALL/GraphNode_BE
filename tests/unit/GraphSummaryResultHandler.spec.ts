@@ -75,7 +75,8 @@ describe('GraphSummaryResultHandler', () => {
           total_files: 0,
         }),
         generatedAt: '2023-01-02T00:00:00Z',
-      })
+      }),
+      { macroId: 'user_1' }
     );
     expect(mockGraphService.saveStatsIfStatusIn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -84,7 +85,8 @@ describe('GraphSummaryResultHandler', () => {
         generatedAt: '2023-01-01T00:00:00Z',
         updatedAt: expect.any(String),
       }),
-      ['CREATING', 'NOT_CREATED']
+      ['CREATING', 'NOT_CREATED'],
+      { macroId: 'user_1' }
     );
     expect(mockNotiService.sendFcmPushNotification).toHaveBeenCalledWith('user_1', 'Graph Ready', 'Your graph is ready', expect.objectContaining({ taskId: 'task_1', status: 'COMPLETED' }));
   });

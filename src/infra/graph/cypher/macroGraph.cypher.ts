@@ -1938,7 +1938,19 @@ export const MACRO_GRAPH_CYPHER = {
       MATCH (src)-[:HAS_NODE]->(n:MacroNode {userId: $userId})
       WHERE n.deletedAt IS NULL
       MERGE (newNode:MacroNode {userId: $userId, macroId: $newMacroId, id: n.id})
-      SET newNode += n, newNode.macroId = $newMacroId
+      SET newNode.label        = n.label,
+          newNode.summary      = n.summary,
+          newNode.metadataJson = n.metadataJson,
+          newNode.origId       = n.origId,
+          newNode.nodeType     = n.nodeType,
+          newNode.fileType     = n.fileType,
+          newNode.mimeType     = n.mimeType,
+          newNode.timestamp    = n.timestamp,
+          newNode.numMessages  = n.numMessages,
+          newNode.embedding    = n.embedding,
+          newNode.createdAt    = n.createdAt,
+          newNode.updatedAt    = n.updatedAt,
+          newNode.deletedAt    = n.deletedAt
       MERGE (dst)-[:HAS_NODE]->(newNode)
     }
   `,
@@ -1951,7 +1963,12 @@ export const MACRO_GRAPH_CYPHER = {
       MATCH (src)-[:HAS_CLUSTER]->(c:MacroCluster {userId: $userId})
       WHERE c.deletedAt IS NULL
       MERGE (newCluster:MacroCluster {userId: $userId, macroId: $newMacroId, id: c.id})
-      SET newCluster += c, newCluster.macroId = $newMacroId
+      SET newCluster.name        = c.name,
+          newCluster.description = c.description,
+          newCluster.themes      = c.themes,
+          newCluster.createdAt   = c.createdAt,
+          newCluster.updatedAt   = c.updatedAt,
+          newCluster.deletedAt   = c.deletedAt
       MERGE (dst)-[:HAS_CLUSTER]->(newCluster)
     }
   `,
@@ -1964,7 +1981,15 @@ export const MACRO_GRAPH_CYPHER = {
       MATCH (src)-[:HAS_RELATION]->(r:MacroRelation {userId: $userId})
       WHERE r.deletedAt IS NULL
       MERGE (newRel:MacroRelation {userId: $userId, macroId: $newMacroId, id: r.id})
-      SET newRel += r, newRel.macroId = $newMacroId
+      SET newRel.weight         = r.weight,
+          newRel.type           = r.type,
+          newRel.relationType   = r.relationType,
+          newRel.relation       = r.relation,
+          newRel.propertiesJson = r.propertiesJson,
+          newRel.intraCluster   = r.intraCluster,
+          newRel.createdAt      = r.createdAt,
+          newRel.updatedAt      = r.updatedAt,
+          newRel.deletedAt      = r.deletedAt
       MERGE (dst)-[:HAS_RELATION]->(newRel)
     }
   `,
@@ -1977,7 +2002,11 @@ export const MACRO_GRAPH_CYPHER = {
       MATCH (src)-[:HAS_SUBCLUSTER]->(sc:MacroSubcluster {userId: $userId})
       WHERE sc.deletedAt IS NULL
       MERGE (newSc:MacroSubcluster {userId: $userId, macroId: $newMacroId, id: sc.id})
-      SET newSc += sc, newSc.macroId = $newMacroId
+      SET newSc.topKeywords = sc.topKeywords,
+          newSc.density     = sc.density,
+          newSc.createdAt   = sc.createdAt,
+          newSc.updatedAt   = sc.updatedAt,
+          newSc.deletedAt   = sc.deletedAt
       MERGE (dst)-[:HAS_SUBCLUSTER]->(newSc)
     }
   `,

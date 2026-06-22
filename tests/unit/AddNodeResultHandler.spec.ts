@@ -142,7 +142,8 @@ describe('AddNodeResultHandler', () => {
     expect(storagePort.downloadJson).toHaveBeenCalledWith(resultS3Key);
     expect(storagePort.downloadJson).toHaveBeenCalledWith(`add-node/${taskId}/batch.json`);
     expect(graphService.saveStats).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'UPDATED', updatedAt: expect.any(String) })
+      expect.objectContaining({ status: 'UPDATED', updatedAt: expect.any(String) }),
+      undefined
     );
   });
 
@@ -174,7 +175,8 @@ describe('AddNodeResultHandler', () => {
     await handler.handle(message, mockContainer);
 
     expect(graphService.saveStats).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'UPDATED' })
+      expect.objectContaining({ status: 'UPDATED' }),
+      undefined
     );
   });
 
@@ -197,7 +199,8 @@ describe('AddNodeResultHandler', () => {
             error: 'S3 download failed',
           }),
         }),
-      })
+      }),
+      undefined
     );
   });
 
