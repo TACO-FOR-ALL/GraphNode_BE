@@ -8,6 +8,7 @@ import { AiAddNodeBatchResult } from '../../shared/dtos/ai_graph_output';
 import { augmentAddNodeBatchWithUserFiles } from '../utils/augmentAddNodeBatchWithUserFiles';
 import { logger } from '../../shared/utils/logger';
 import { withRetry } from '../../shared/utils/retry';
+import { redis } from '../../infra/redis/client';
 import { captureEvent, POSTHOG_EVENT } from '../../shared/utils/posthog';
 import { notifyWorkerFailed } from '../../shared/utils/discord';
 import {
@@ -50,9 +51,20 @@ interface NormalizedAddNodeItem {
 export class AddNodeResultHandler implements JobHandler {
   async handle(message: AddNodeResultPayload, container: Container): Promise<void> {
     const { payload, taskId } = message;
-    const { userId, macroId, status, resultS3Key, error } = payload;
+    const { userId, macroId: payloadMacroId, status, resultS3Key, error } = payload;
 
-    logger.info({ taskId, userId, status }, 'Handling AddNode result');
+    // AI 서버는 ADD_NODE_RESULT에 macroId를 포함하지 않으므로 Redis에서 복구한다.
+    // GraphGenerationResultHandler / GraphSummaryResultHandler와 동일한 패턴.
+    let macroId = payloadMacroId;
+    if (!macroId) {
+      try {
+        macroId = (await redis.get(`add-node:macroId:${taskId}`)) ?? userId;
+      } catch {
+        macroId = userId;
+      }
+    }
+
+    logger.info({ taskId, userId, macroId, status }, 'Handling AddNode result');
 
     // 의존성 주입
     const storagePort = container.getAwsS3Adapter();
@@ -64,7 +76,7 @@ export class AddNodeResultHandler implements JobHandler {
     const messageService = container.getMessageService();
     const creditService = container.getCreditService();
 
-    const macroOptions = macroId ? { macroId } : undefined;
+    const macroOptions = macroId && macroId !== userId ? { macroId } : undefined;
 
     // AI 서버에서 실패한 경우 (COMPLETED + optional error 필드는 성공 경로로 처리)
     if (status === 'FAILED') {

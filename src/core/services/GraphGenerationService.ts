@@ -976,6 +976,14 @@ export class GraphGenerationService {
       });
       messageSent = true;
 
+      // result handler가 macroId를 복구할 수 있도록 Redis에 저장한다.
+      // AI 서버는 ADD_NODE_RESULT에 macroId를 포함하지 않으므로 Redis가 유일한 복구 경로다.
+      try {
+        await redis.set(`add-node:macroId:${taskId}`, macroId ?? userId, 'EX', 60 * 60 * 24);
+      } catch (cacheErr) {
+        logger.warn({ err: cacheErr, userId, taskId }, 'Failed to cache macroId for add-node task');
+      }
+
       // 성공 알림 전송
       await this.notificationService.sendAddConversationRequested(userId, taskId, macroId);
 
