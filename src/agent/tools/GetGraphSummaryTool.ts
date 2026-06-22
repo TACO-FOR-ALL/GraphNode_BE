@@ -29,7 +29,8 @@ export class GetGraphSummaryTool implements IAgentTool {
     const { graphEmbeddingService } = deps;
     const macroId = typeof args?.macroId === 'string' ? args.macroId : undefined;
 
-    const stats = await graphEmbeddingService.getStats(userId);
+    const macroOptions = macroId ? { macroId } : undefined;
+    const stats = await graphEmbeddingService.getStats(userId, macroOptions);
     const snapshot = macroId
       ? await graphEmbeddingService.getSnapshotForUser(userId, macroId)
       : null;

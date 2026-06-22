@@ -42,9 +42,10 @@ export class GetMacroGraphContextTool implements IAgentTool {
     _openai: OpenAI
   ): Promise<string> {
     const macroId = typeof args?.macroId === 'string' ? args.macroId : null;
+    const macroOptions = macroId ? { macroId } : undefined;
     const snapshot = await this.fetchMacroSnapshot(deps, userId, macroId ?? undefined);
-    const summary = await deps.graphEmbeddingService.getGraphSummary(userId);
-    const stats = await deps.graphEmbeddingService.getStats(userId);
+    const summary = await deps.graphEmbeddingService.getGraphSummary(userId, macroId ?? undefined);
+    const stats = await deps.graphEmbeddingService.getStats(userId, macroOptions);
 
     return JSON.stringify({
       message: 'Macro graph 전체 컨텍스트입니다.',

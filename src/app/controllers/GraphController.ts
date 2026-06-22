@@ -70,9 +70,10 @@ export class GraphController {
   async createNode(req: Request, res: Response) {
     const node = req.body;
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
 
     // 서비스 호출 (노드 저장)
-    await this.graphEmbeddingService.upsertNode({ ...node, userId });
+    await this.graphEmbeddingService.upsertNode({ ...node, userId, macroId });
 
     res.status(201).json(node);
   }
@@ -181,11 +182,12 @@ export class GraphController {
    */
   async deleteNodeCascade(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
     const id = parseInt(req.params.id, 10);
     const permanent = req.query.permanent === 'true';
 
     // 서비스 호출 (Cascade 삭제)
-    await this.graphEmbeddingService.removeNodeCascade(userId, id, permanent);
+    await this.graphEmbeddingService.removeNodeCascade(userId, id, permanent, { macroId });
 
     res.status(204).send();
   }
@@ -259,9 +261,10 @@ export class GraphController {
   async createCluster(req: Request, res: Response) {
     const cluster = req.body;
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
 
     // 서비스 호출 (클러스터 저장)
-    await this.graphEmbeddingService.upsertCluster({ ...cluster, userId });
+    await this.graphEmbeddingService.upsertClusters([{ ...cluster, userId }], { macroId });
 
     res.status(201).json(cluster);
   }
@@ -337,11 +340,12 @@ export class GraphController {
    */
   async deleteClusterCascade(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
     const id = req.params.id;
     const permanent = req.query.permanent === 'true';
 
     // 서비스 호출 (Cascade 삭제)
-    await this.graphEmbeddingService.removeClusterCascade(userId, id, permanent);
+    await this.graphEmbeddingService.removeClusterCascade(userId, id, permanent, { macroId });
 
     res.status(204).send();
   }

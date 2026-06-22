@@ -12,6 +12,7 @@ import { withRetry } from '../../shared/utils/retry';
 import { countSourceTypesFromNodeList } from '../utils/countSourceTypes';
 import { GraphNodeDto } from '../../shared/dtos/graph';
 import { GRAPH_GENERATION_MUTABLE_STATUSES } from '../utils/macroStatsTransition';
+import { redis } from '../../infra/redis/client';
 
 export class GraphSummaryResultHandler implements JobHandler {
   async handle(message: QueueMessage, container: Container): Promise<void> {
@@ -23,6 +24,17 @@ export class GraphSummaryResultHandler implements JobHandler {
     const notiService = container.getNotificationService();
 
     logger.info({ taskId, userId, status }, 'Handling Graph Summary Result');
+
+    // payload macroId 우선, 없으면 Redis fallback, 둘 다 없으면 userId(레거시) fallback
+    let macroId: string = payload.macroId ?? userId;
+    if (!payload.macroId) {
+      try {
+        macroId = (await redis.get(`graph-summary:macroId:${taskId}`)) ?? userId;
+      } catch {
+        macroId = userId;
+      }
+    }
+    const macroOptions = { macroId };
 
     try {
       if (status === 'FAILED') {
@@ -80,7 +92,7 @@ export class GraphSummaryResultHandler implements JobHandler {
         );
 
         //사용자의 Node 목록 조회
-        const nodeList: GraphNodeDto[] = await graphService.listNodes(userId);
+        const nodeList: GraphNodeDto[] = await graphService.listNodes(userId, macroOptions);
 
         // SnapShot 정보 통해서 chat, note, notion 개수 계산
         const { chatCount, noteCount, notionCount, fileCount, fileCountsByExtension } =
@@ -107,10 +119,10 @@ export class GraphSummaryResultHandler implements JobHandler {
           generatedAt: summaryJson.generated_at || new Date().toISOString(), // Map snake_case to camelCase
         };
 
-        await graphService.upsertGraphSummary(userId, summaryDoc);
+        await graphService.upsertGraphSummary(userId, summaryDoc, macroOptions);
 
         // 2.5. 상태 변경: CREATED (생성 중이었다면 완료로 변경; AddNode UPDATING 덮어쓰기 방지)
-        const stats = await graphService.getStatsMetadata(userId);
+        const stats = await graphService.getStatsMetadata(userId, macroOptions);
         const syncAt = new Date().toISOString();
         await graphService.saveStatsIfStatusIn(
           {
@@ -120,7 +132,8 @@ export class GraphSummaryResultHandler implements JobHandler {
             updatedAt: syncAt,
             generatedAt: stats.generatedAt || syncAt,
           },
-          GRAPH_GENERATION_MUTABLE_STATUSES
+          GRAPH_GENERATION_MUTABLE_STATUSES,
+          macroOptions
         );
 
         logger.info({ taskId, userId }, 'Graph summary persisted to DB');

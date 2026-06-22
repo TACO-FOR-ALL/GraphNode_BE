@@ -124,6 +124,7 @@ export interface GraphSummaryRequestPayload extends BaseQueueMessage {
   taskType: TaskType.GRAPH_SUMMARY_REQUEST;
   payload: {
     userId: string;
+    macroId?: string;
     chatId?: string;
     graphS3Key: string; // 요약할 대상 그래프(graph_postprocessed.json) S3 키
     bucket: string;
@@ -145,6 +146,7 @@ export interface GraphSummaryResultPayload extends BaseQueueMessage {
   taskType: TaskType.GRAPH_SUMMARY_RESULT;
   payload: {
     userId: string;
+    macroId?: string;
     status: 'COMPLETED' | 'FAILED';
     summaryS3Key?: string; // 성공 시 요약 JSON Key
     error?: string;

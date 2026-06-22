@@ -272,9 +272,10 @@ export class NotificationService {
    * 그래프 생성 요청이 서버에 정상 접수되었음을 알립니다.
    * @param userId 사용자 ID
    * @param taskId 작업 ID
+   * @param macroId 1:N 매크로 그래프 식별자. 미제공 시 레거시(1:1) 그래프 동작으로 간주합니다.
    */
-  async sendGraphGenerationRequested(userId: string, taskId: string): Promise<void> {
-    await this.sendNotification(userId, NotificationType.GRAPH_GENERATION_REQUESTED, { taskId });
+  async sendGraphGenerationRequested(userId: string, taskId: string, macroId?: string): Promise<void> {
+    await this.sendNotification(userId, NotificationType.GRAPH_GENERATION_REQUESTED, { taskId, macroId });
   }
 
   /**
@@ -282,15 +283,18 @@ export class NotificationService {
    * @param userId 사용자 ID
    * @param taskId 작업 ID
    * @param error 실패 원인 메시지
+   * @param macroId 1:N 매크로 그래프 식별자. 미제공 시 레거시(1:1) 그래프 동작으로 간주합니다.
    */
   async sendGraphGenerationRequestFailed(
     userId: string,
     taskId: string,
-    error: string
+    error: string,
+    macroId?: string
   ): Promise<void> {
     await this.sendNotification(userId, NotificationType.GRAPH_GENERATION_REQUEST_FAILED, {
       taskId,
       error,
+      macroId,
     });
   }
 
@@ -308,11 +312,13 @@ export class NotificationService {
    * @param userId 사용자 ID
    * @param taskId 작업 ID
    * @param error 실패 원인 메시지
+   * @param macroId 1:N 매크로 그래프 식별자. 미제공 시 레거시(1:1) 그래프 동작으로 간주합니다.
    */
-  async sendGraphGenerationFailed(userId: string, taskId: string, error: string): Promise<void> {
+  async sendGraphGenerationFailed(userId: string, taskId: string, error: string, macroId?: string): Promise<void> {
     await this.sendNotification(userId, NotificationType.GRAPH_GENERATION_FAILED, {
       taskId,
       error,
+      macroId,
     });
   }
 
@@ -396,9 +402,10 @@ export class NotificationService {
    * 대화 추가 요청이 서버에 정상 접수되었음을 알립니다.
    * @param userId 사용자 ID
    * @param taskId 작업 ID
+   * @param macroId 1:N 매크로 그래프 식별자. 미제공 시 레거시(1:1) 그래프 동작으로 간주합니다.
    */
-  async sendAddConversationRequested(userId: string, taskId: string): Promise<void> {
-    await this.sendNotification(userId, NotificationType.ADD_CONVERSATION_REQUESTED, { taskId });
+  async sendAddConversationRequested(userId: string, taskId: string, macroId?: string): Promise<void> {
+    await this.sendNotification(userId, NotificationType.ADD_CONVERSATION_REQUESTED, { taskId, macroId });
   }
 
   /**
@@ -406,15 +413,18 @@ export class NotificationService {
    * @param userId 사용자 ID
    * @param taskId 작업 ID
    * @param error 실패 원인 메시지
+   * @param macroId 1:N 매크로 그래프 식별자. 미제공 시 레거시(1:1) 그래프 동작으로 간주합니다.
    */
   async sendAddConversationRequestFailed(
     userId: string,
     taskId: string,
-    error: string
+    error: string,
+    macroId?: string
   ): Promise<void> {
     await this.sendNotification(userId, NotificationType.ADD_CONVERSATION_REQUEST_FAILED, {
       taskId,
       error,
+      macroId,
     });
   }
 
@@ -445,11 +455,13 @@ export class NotificationService {
    * @param userId 사용자 ID
    * @param taskId 작업 ID
    * @param error 실패 원인 메시지
+   * @param macroId 1:N 매크로 그래프 식별자. 미제공 시 레거시(1:1) 그래프 동작으로 간주합니다.
    */
-  async sendAddConversationFailed(userId: string, taskId: string, error: string): Promise<void> {
+  async sendAddConversationFailed(userId: string, taskId: string, error: string, macroId?: string): Promise<void> {
     await this.sendNotification(userId, NotificationType.ADD_CONVERSATION_FAILED, {
       taskId,
       error,
+      macroId,
     });
   }
 

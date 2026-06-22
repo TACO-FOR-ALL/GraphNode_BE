@@ -209,8 +209,8 @@ export class GraphEmbeddingService {
    * @returns 노드 객체 배열
    * @throws {UpstreamError} - DB 오류 발생 시
    */
-  listNodesAll(userId: string) {
-    return this.graphManagementService.listNodesAll(userId);
+  listNodesAll(userId: string, options?: RepoOptions) {
+    return this.graphManagementService.listNodesAll(userId, options);
   }
 
   listNodesByCluster(userId: string, clusterId: string, options?: RepoOptions) {
@@ -238,8 +238,8 @@ export class GraphEmbeddingService {
    * @returns Promise<void>
    * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
    */
-  upsertEdges(edges: GraphEdgeDto[]) {
-    return this.graphManagementService.upsertEdges(edges);
+  upsertEdges(edges: GraphEdgeDto[], options?: RepoOptions) {
+    return this.graphManagementService.upsertEdges(edges, options);
   }
 
   /**
@@ -367,31 +367,32 @@ export class GraphEmbeddingService {
    *
    * @param userId 사용자 ID
    */
-  removeEmptyClusters(userId: string) {
-    return this.graphManagementService.removeEmptyClusters(userId);
+  removeEmptyClusters(userId: string, options?: RepoOptions) {
+    return this.graphManagementService.removeEmptyClusters(userId, options);
   }
 
   async pruneIncompatibleSubclusterMemberships(
     userId: string,
     nodeIds?: number[],
-    limit?: number
+    limit?: number,
+    externalOptions?: RepoOptions
   ): Promise<{ containsDeleted: number; representsDeleted: number }> {
     let result = { containsDeleted: 0, representsDeleted: 0 };
     await this.runGraphWriteTransaction(
       'GraphEmbeddingService.pruneIncompatibleSubclusterMemberships.transaction',
-      async (options) => {
+      async (txOptions) => {
         result = await this.graphManagementService.pruneIncompatibleSubclusterMemberships(
           userId,
           nodeIds,
           limit,
-          options
+          { ...externalOptions, ...txOptions }
         );
       }
     );
     return result;
   }
 
-  async reconcileSubclusterMemberships(userId: string): Promise<{
+  async reconcileSubclusterMemberships(userId: string, externalOptions?: RepoOptions): Promise<{
     deletedSubclusters: number;
     reassignedRepresentatives: number;
     removedInvalidRepresents: number;
@@ -403,10 +404,10 @@ export class GraphEmbeddingService {
     };
     await this.runGraphWriteTransaction(
       'GraphEmbeddingService.reconcileSubclusterMemberships.transaction',
-      async (options) => {
+      async (txOptions) => {
         result = await this.graphManagementService.reconcileSubclusterMemberships(
           userId,
-          options
+          { ...externalOptions, ...txOptions }
         );
       }
     );
@@ -419,27 +420,29 @@ export class GraphEmbeddingService {
    * @returns Promise<void>
    * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
    */
-  saveStats(stats: GraphStatsDto) {
-    return this.graphManagementService.saveStats(stats);
+  saveStats(stats: GraphStatsDto, options?: RepoOptions) {
+    return this.graphManagementService.saveStats(stats, options);
   }
 
   /**
    * @description MacroStats를 현재 status가 허용 목록에 있을 때만 갱신합니다.
    * @param stats 저장할 stats DTO.
    * @param allowedStatuses 갱신을 허용할 현재 status 목록.
+   * @param options macroId 등 저장소 옵션.
    * @returns 실제로 갱신되었으면 true.
    */
-  saveStatsIfStatusIn(stats: GraphStatsDto, allowedStatuses: GraphStatsDto['status'][]) {
-    return this.graphManagementService.saveStatsIfStatusIn(stats, allowedStatuses);
+  saveStatsIfStatusIn(stats: GraphStatsDto, allowedStatuses: GraphStatsDto['status'][], options?: RepoOptions) {
+    return this.graphManagementService.saveStatsIfStatusIn(stats, allowedStatuses, options);
   }
 
   /**
    * @description MacroStats 상태 메타데이터만 조회합니다 (count 집계 없음).
    * @param userId 사용자 ID.
+   * @param options macroId 등 저장소 옵션.
    * @returns stats 메타데이터 DTO.
    */
-  getStatsMetadata(userId: string) {
-    return this.graphManagementService.getStatsMetadata(userId);
+  getStatsMetadata(userId: string, options?: RepoOptions) {
+    return this.graphManagementService.getStatsMetadata(userId, options);
   }
 
   /**
@@ -478,9 +481,9 @@ export class GraphEmbeddingService {
    * // 노드 5와 연결된 모든 엣지를 함께 삭제
    * await service.removeNodeCascade('u-123', 5);
    */
-  async removeNodeCascade(userId: string, id: number, permanent?: boolean): Promise<void> {
+  async removeNodeCascade(userId: string, id: number, permanent?: boolean, externalOptions?: RepoOptions): Promise<void> {
     // 그래프 저장소 deleteNode에 관련 엣지 삭제 로직이 포함되어 있음
-    await this.graphManagementService.deleteNode(userId, id, permanent);
+    await this.graphManagementService.deleteNode(userId, id, permanent, externalOptions);
   }
 
   /**
@@ -494,17 +497,18 @@ export class GraphEmbeddingService {
    * @returns Promise<void>
    * @throws {UpstreamError} - DB 작업 중 오류 발생 시
    */
-  async removeClusterCascade(userId: string, id: string, permanent?: boolean): Promise<void> {
+  async removeClusterCascade(userId: string, id: string, permanent?: boolean, externalOptions?: RepoOptions): Promise<void> {
     await this.runGraphWriteTransaction(
       'GraphEmbeddingService.removeClusterCascade.transaction',
-      async (options) => {
-        const nodesInCluster = await this.graphManagementService.listNodesByCluster(userId, id);
+      async (txOptions) => {
+        const mergedOptions = { ...externalOptions, ...txOptions };
+        const nodesInCluster = await this.graphManagementService.listNodesByCluster(userId, id, mergedOptions);
         if (nodesInCluster.length > 0) {
           const ids = nodesInCluster.map((n) => n.id);
-          await this.graphManagementService.deleteEdgesByNodeIds(userId, ids, permanent, options);
-          await this.graphManagementService.deleteNodes(userId, ids, permanent, options);
+          await this.graphManagementService.deleteEdgesByNodeIds(userId, ids, permanent, mergedOptions);
+          await this.graphManagementService.deleteNodes(userId, ids, permanent, mergedOptions);
         }
-        await this.graphManagementService.deleteCluster(userId, id, permanent, options);
+        await this.graphManagementService.deleteCluster(userId, id, permanent, mergedOptions);
       }
     );
   }

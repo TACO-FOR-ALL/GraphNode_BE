@@ -64,6 +64,8 @@ export class AddNodeResultHandler implements JobHandler {
     const messageService = container.getMessageService();
     const creditService = container.getCreditService();
 
+    const macroOptions = macroId ? { macroId } : undefined;
+
     // AI 서버에서 실패한 경우 (COMPLETED + optional error 필드는 성공 경로로 처리)
     if (status === 'FAILED') {
       const errorMsg = error || 'Unknown AI error';
@@ -94,7 +96,7 @@ export class AddNodeResultHandler implements JobHandler {
         sentryEventId,
       }).catch(() => {});
 
-      const stats = await graphService.getStats(userId);
+      const stats = await graphService.getStats(userId, macroOptions);
       if (stats) {
         stats.status = 'CREATED';
         stats.metadata = {
@@ -105,10 +107,10 @@ export class AddNodeResultHandler implements JobHandler {
             at: new Date().toISOString(),
           },
         };
-        await graphService.saveStats(stats);
+        await graphService.saveStats(stats, macroOptions);
       }
 
-      await notiService.sendAddConversationFailed(userId, taskId, errorMsg);
+      await notiService.sendAddConversationFailed(userId, taskId, errorMsg, macroId);
 
       // 4-1. 선제적 차감된 크레딧 롤백 (Rollback)
       try {
@@ -186,7 +188,7 @@ export class AddNodeResultHandler implements JobHandler {
 
       // 기존 노드 조회
       // 4. 기존 Mongo 노드를 읽어 update / dedup 기준을 만든다.
-      const existingNodes: GraphNodeDto[] = await graphService.listNodesAll(userId);
+      const existingNodes: GraphNodeDto[] = await graphService.listNodesAll(userId, macroOptions);
 
       // 5. normalized origId -> Mongo numeric id 맵을 만든다.
       const origIdToDbId: Map<string, number> = this.buildOrigIdToDbIdMap(existingNodes);
@@ -336,8 +338,6 @@ export class AddNodeResultHandler implements JobHandler {
 
       // Neo4j는 MacroNode.clusterId 속성을 저장하지 않고 BELONGS_TO 관계를 소속 정보의 source of truth로 사용합니다.
       // 따라서 신규 cluster가 포함된 AddNode 결과에서는 cluster upsert가 먼저 끝나야 node upsert 시 관계 생성 Cypher가 성공합니다.
-      const macroOptions = macroId ? { macroId } : undefined;
-
       if (pendingClusters.length > 0) {
         await graphService.upsertClusters(pendingClusters, macroOptions); // 단일 트랜잭션 배치
       }
@@ -353,9 +353,11 @@ export class AddNodeResultHandler implements JobHandler {
         const movedNodeIdList = Array.from(movedNodeIds);
         const pruneResult = await graphService.pruneIncompatibleSubclusterMemberships(
           userId,
-          movedNodeIdList
+          movedNodeIdList,
+          undefined,
+          macroOptions
         );
-        const reconcileResult = await graphService.reconcileSubclusterMemberships(userId);
+        const reconcileResult = await graphService.reconcileSubclusterMemberships(userId, macroOptions);
         logger.info(
           {
             taskId,
@@ -460,7 +462,7 @@ export class AddNodeResultHandler implements JobHandler {
       const EDGE_CHUNK_SIZE = 20;
       for (let i = 0; i < pendingEdges.length; i += EDGE_CHUNK_SIZE) {
         const chunk = pendingEdges.slice(i, i + EDGE_CHUNK_SIZE);
-        await graphService.upsertEdges(chunk);
+        await graphService.upsertEdges(chunk, macroOptions);
       }
 
       // 260411: sourceType resolve 결과 로깅 추가
@@ -477,15 +479,15 @@ export class AddNodeResultHandler implements JobHandler {
 
       // 고아 클러스터(Ghost Cluster) 정리
       // 방금 전 배치에서 노드가 다른 클러스터로 모두 이동해 비어버린 이전 클러스터를 삭제합니다.
-      await graphService.removeEmptyClusters(userId);
+      await graphService.removeEmptyClusters(userId, macroOptions);
 
       //
       // Stat 갱신
-      const stats = await graphService.getStats(userId);
+      const stats = await graphService.getStats(userId, macroOptions);
       if (stats) {
         stats.status = 'UPDATED';
         stats.updatedAt = new Date().toISOString();
-        await graphService.saveStats(stats);
+        await graphService.saveStats(stats, macroOptions);
       }
 
       // macro_graph_updated PostHog 이벤트
@@ -521,7 +523,8 @@ export class AddNodeResultHandler implements JobHandler {
       await notiService.sendAddConversationFailed(
         userId,
         taskId,
-        err instanceof Error ? err.message : String(err)
+        err instanceof Error ? err.message : String(err),
+        macroId
       );
       await notiService.sendFcmPushNotification(
         userId,

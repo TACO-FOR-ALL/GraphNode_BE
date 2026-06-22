@@ -278,10 +278,10 @@ export class GraphManagementService {
    * @returns 노드 객체 배열
    * @throws {UpstreamError} - DB 오류 발생 시
    */
-  async listNodesAll(userId: string): Promise<GraphNodeDto[]> {
+  async listNodesAll(userId: string, options?: RepoOptions): Promise<GraphNodeDto[]> {
     try {
       this.assertUser(userId);
-      return await this.repo.listNodesAll(userId);
+      return await this.repo.listNodesAll(userId, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.listNodesAll failed', { cause: String(err) });
@@ -784,7 +784,7 @@ export class GraphManagementService {
       if (this.repo.saveStatsIfStatusIn) {
         return await this.repo.saveStatsIfStatusIn(stats, allowedStatuses, options);
       }
-      const current = await this.getStatsMetadata(stats.userId);
+      const current = await this.getStatsMetadata(stats.userId, options);
       if (!allowedStatuses.includes(current.status)) {
         return false;
       }

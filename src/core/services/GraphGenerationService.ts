@@ -280,7 +280,7 @@ export class GraphGenerationService {
       }
 
       // 성공 알림 전송
-      await this.notificationService.sendGraphGenerationRequested(userId, taskId);
+      await this.notificationService.sendGraphGenerationRequested(userId, taskId, macroId);
 
       return { taskId, macroId };
     } catch (err) {
@@ -295,7 +295,8 @@ export class GraphGenerationService {
       await this.notificationService.sendGraphGenerationRequestFailed(
         userId,
         taskId || 'unknown',
-        String(err)
+        String(err),
+        macroId
       );
 
       if (err instanceof AppError) throw err;
@@ -391,7 +392,7 @@ export class GraphGenerationService {
             clusters: 0,
             status: 'CREATING',
             generatedAt: new Date().toISOString(),
-          }),
+          }, { macroId: newMacroId }),
         { label: 'scoped.saveStats' }
       );
 
@@ -475,7 +476,7 @@ export class GraphGenerationService {
         logger.warn({ err, userId, taskId }, 'Failed to cache scoped macroId');
       }
 
-      await this.notificationService.sendGraphGenerationRequested(userId, taskId);
+      await this.notificationService.sendGraphGenerationRequested(userId, taskId, newMacroId);
       return { taskId, macroId: newMacroId };
     } catch (err) {
       if (creditHeldTaskId && !messageSent) {
@@ -485,7 +486,8 @@ export class GraphGenerationService {
       await this.notificationService.sendGraphGenerationRequestFailed(
         userId,
         taskId || 'unknown',
-        String(err)
+        String(err),
+        newMacroId
       );
       if (err instanceof AppError) throw err;
       throw new UpstreamError('Failed to request scoped graph generation via queue', { cause: String(err) });
@@ -666,12 +668,20 @@ export class GraphGenerationService {
         taskType: TaskType.GRAPH_SUMMARY_REQUEST,
         payload: {
           userId,
+          macroId,
           graphS3Key: s3Key,
           bucket: bucket,
           language: language,
         },
         timestamp: new Date().toISOString(),
       };
+
+      // result handler가 macroId를 복구할 수 있도록 Redis에 저장한다.
+      try {
+        await redis.set(`graph-summary:macroId:${taskId}`, macroId, 'EX', 60 * 60 * 24);
+      } catch (redisErr) {
+        logger.warn({ err: redisErr, taskId, userId }, 'Failed to cache summary macroId in Redis');
+      }
 
       await withRetry(async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
         label: 'QueuePort.sendMessage.Summary',
@@ -764,6 +774,7 @@ export class GraphGenerationService {
     let taskId = 'unknown';
     let creditHeldTaskId: string | undefined;
     let messageSent = false;
+    const macroOptions = { macroId: macroId ?? userId };
 
     try {
       taskId = `task_add_node_${userId}_${ulid()}`;
@@ -771,7 +782,7 @@ export class GraphGenerationService {
       const taskPrefix = `add-node/${taskId}/`;
       const batchObjectKey = `${taskPrefix}batch.json`;
 
-      const stats = await withRetry(async () => await this.graphEmbeddingService.getStats(userId), {
+      const stats = await withRetry(async () => await this.graphEmbeddingService.getStats(userId, macroOptions), {
         label: 'GraphEmbeddingService.getStats',
       });
       if (!stats) {
@@ -897,7 +908,7 @@ export class GraphGenerationService {
 
       // 기존 클러스터 정보 가져오기 (AI 계약용 lean 필드만 전송)
       const existingClusters = mapGraphClustersForAiAddNode(
-        await this.graphEmbeddingService.listClusters(userId)
+        await this.graphEmbeddingService.listClusters(userId, macroOptions)
       );
       const batchPayload: AiAddNodeBatchRequest = {
         userId,
@@ -924,7 +935,7 @@ export class GraphGenerationService {
 
       // 그래프 상태 업데이트
       stats.status = 'UPDATING';
-      await this.graphEmbeddingService.saveStats(stats);
+      await this.graphEmbeddingService.saveStats(stats, macroOptions);
 
       // SQS 메시지 생성
       const addNodeS3Key = resolveAddNodeQueueS3Key(
@@ -966,7 +977,7 @@ export class GraphGenerationService {
       messageSent = true;
 
       // 성공 알림 전송
-      await this.notificationService.sendAddConversationRequested(userId, taskId);
+      await this.notificationService.sendAddConversationRequested(userId, taskId, macroId);
 
       return taskId;
     } catch (err) {
@@ -979,7 +990,7 @@ export class GraphGenerationService {
 
       // 실패 알림 전송 (taskId가 try 블록 내부에 정의되어 있으므로 에러 객체에 taskId를 담아두거나 스코프를 조정해야 함)
       // 여기서는 스코프 문제로 'unknown' 처리하거나 상단으로 taskId 정의를 뺌
-      await this.notificationService.sendAddConversationRequestFailed(userId, taskId, String(err));
+      await this.notificationService.sendAddConversationRequestFailed(userId, taskId, String(err), macroId);
 
       if (err instanceof AppError) throw err;
       throw new UpstreamError('Failed to request add node via queue', { cause: String(err) });
