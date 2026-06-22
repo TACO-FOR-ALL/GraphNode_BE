@@ -49,6 +49,9 @@ describe('macroGraph.cypher', () => {
       'getGraphSummary',
       'deleteGraph',
       'deleteGraphSummary',
+      'softDeleteNodesByOrigIds',
+      'hardDeleteNodesByOrigIds',
+      'restoreNodesByOrigIds',
       'getMaxNodeId',
       'findEdgeById',
       'findSubclusterById',
@@ -62,6 +65,12 @@ describe('macroGraph.cypher', () => {
       'clusterHasNodes',
       'pruneIncompatibleSubclusterMemberships',
       'reconcileSubclusterMemberships',
+      'getSummaryNodeCounts',
+      'cloneMacroGraphRoot',
+      'cloneMacroGraphNodes',
+      'cloneMacroGraphClusters',
+      'cloneMacroGraphRelations',
+      'cloneMacroGraphSubclusters',
     ] as const;
 
     for (const key of requiredKeys) {
@@ -71,6 +80,189 @@ describe('macroGraph.cypher', () => {
         expect((MACRO_GRAPH_CYPHER[key] as string).trim().length).toBeGreaterThan(0);
       });
     }
+  });
+
+  describe('macroId 스코핑 검증 (1:N 전환)', () => {
+    it('MACRO_GRAPH_SCHEMA_CYPHER에 기존 unique 제약 삭제 구문이 있다', () => {
+      const joined = MACRO_GRAPH_SCHEMA_CYPHER.join('\n');
+      expect(joined).toMatch(/DROP CONSTRAINT macro_graph_user_unique/);
+    });
+
+    it('MACRO_GRAPH_SCHEMA_CYPHER에 (userId, macroId) 복합 unique 제약 생성 구문이 있다', () => {
+      const joined = MACRO_GRAPH_SCHEMA_CYPHER.join('\n');
+      expect(joined).toMatch(/REQUIRE \(g\.userId, g\.macroId\) IS UNIQUE/);
+    });
+
+    it('MACRO_GRAPH_SCHEMA_CYPHER에 기존 MacroGraph 노드 마이그레이션 구문이 있다', () => {
+      const joined = MACRO_GRAPH_SCHEMA_CYPHER.join('\n');
+      expect(joined).toMatch(/SET g\.macroId = g\.userId/);
+    });
+
+    it('upsertGraphRoot: MacroGraph를 {userId, macroId} 복합키로 MERGE한다', () => {
+      const q = MACRO_GRAPH_CYPHER.upsertGraphRoot;
+      expect(q).toMatch(/MacroGraph \{userId: \$userId, macroId: \$macroId\}/);
+    });
+
+    it('linkNodesToGraph: MacroGraph를 {userId, macroId}로 조회한다', () => {
+      const q = MACRO_GRAPH_CYPHER.linkNodesToGraph;
+      expect(q).toMatch(/MacroGraph \{userId: \$userId, macroId: \$macroId\}/);
+    });
+
+    it('deleteStats: MacroGraph를 {userId, macroId}로 조회한다', () => {
+      const q = MACRO_GRAPH_CYPHER.deleteStats;
+      expect(q).toMatch(/MacroGraph \{userId: \$userId, macroId: \$macroId\}/);
+    });
+
+    it('deleteGraphSummary: MacroGraph를 {userId, macroId}로 조회한다', () => {
+      const q = MACRO_GRAPH_CYPHER.deleteGraphSummary;
+      expect(q).toMatch(/MacroGraph \{userId: \$userId, macroId: \$macroId\}/);
+    });
+
+    it('deleteGraphBatch.graphRoot: MacroGraph를 {userId, macroId}로 조회한다', () => {
+      const q = MACRO_GRAPH_CYPHER.deleteGraphBatch.graphRoot;
+      expect(q).toMatch(/MacroGraph \{userId: \$userId, macroId: \$macroId\}/);
+    });
+
+    it('cloneMacroGraph 쿼리가 존재한다 (5개 분리 상수)', () => {
+      expect(MACRO_GRAPH_CYPHER).toHaveProperty('cloneMacroGraphRoot');
+      expect(MACRO_GRAPH_CYPHER).toHaveProperty('cloneMacroGraphNodes');
+      expect(MACRO_GRAPH_CYPHER).toHaveProperty('cloneMacroGraphClusters');
+      expect(MACRO_GRAPH_CYPHER).toHaveProperty('cloneMacroGraphRelations');
+      expect(MACRO_GRAPH_CYPHER).toHaveProperty('cloneMacroGraphSubclusters');
+      expect(MACRO_GRAPH_CYPHER.cloneMacroGraphRoot.trim().length).toBeGreaterThan(0);
+    });
+
+    it('cloneMacroGraph: src/dst MacroGraph를 {userId, macroId}로 구분한다', () => {
+      const qRoot = MACRO_GRAPH_CYPHER.cloneMacroGraphRoot;
+      expect(qRoot).toMatch(/MacroGraph \{userId: \$userId, macroId: \$sourceMacroId\}/);
+      expect(qRoot).toMatch(/MacroGraph \{userId: \$userId, macroId: \$newMacroId\}/);
+    });
+
+    it('cloneMacroGraph: executeWrite 내부에서 일반 CALL {} 서브쿼리를 사용한다', () => {
+      const qNodes = MACRO_GRAPH_CYPHER.cloneMacroGraphNodes;
+      expect(qNodes).toContain('CALL {');
+      expect(qNodes).not.toMatch(/IN TRANSACTIONS OF \d+ ROWS/);
+    });
+
+    it('MacroGraph {userId: $userId}만 단독으로 쓰는 쿼리가 없다 (listMacroViews 제외)', () => {
+      const allCyphers = [
+        ...Object.entries(MACRO_GRAPH_CYPHER)
+          .filter(([key]) => key !== 'listMacroViews')
+          .flatMap(([, v]) =>
+            typeof v === 'string' ? [v] : Object.values(v as Record<string, string>)
+          ),
+      ].join('\n');
+      // {userId: $userId}만 있고 macroId가 없는 MacroGraph 매칭 패턴은 없어야 한다
+      const matches = allCyphers.match(/MacroGraph\s*\{userId:\s*\$userId\s*\}/g);
+      expect(matches ?? []).toHaveLength(0);
+    });
+
+    it('MACRO_GRAPH_SCHEMA_CYPHER에 MacroNode (userId, macroId, id) 복합 unique 제약이 있다', () => {
+      const joined = MACRO_GRAPH_SCHEMA_CYPHER.join('\n');
+      expect(joined).toMatch(/FOR \(n:MacroNode\) REQUIRE \(n\.userId, n\.macroId, n\.id\) IS UNIQUE/);
+    });
+
+    it('MACRO_GRAPH_SCHEMA_CYPHER에 MacroCluster (userId, macroId, id) 복합 unique 제약이 있다', () => {
+      const joined = MACRO_GRAPH_SCHEMA_CYPHER.join('\n');
+      expect(joined).toMatch(/FOR \(c:MacroCluster\) REQUIRE \(c\.userId, c\.macroId, c\.id\) IS UNIQUE/);
+    });
+
+    it('MACRO_GRAPH_SCHEMA_CYPHER에 MacroSubcluster (userId, macroId, id) 복합 unique 제약이 있다', () => {
+      const joined = MACRO_GRAPH_SCHEMA_CYPHER.join('\n');
+      expect(joined).toMatch(/FOR \(sc:MacroSubcluster\) REQUIRE \(sc\.userId, sc\.macroId, sc\.id\) IS UNIQUE/);
+    });
+
+    it('MACRO_GRAPH_SCHEMA_CYPHER에 MacroRelation (userId, macroId, id) 복합 unique 제약이 있다', () => {
+      const joined = MACRO_GRAPH_SCHEMA_CYPHER.join('\n');
+      expect(joined).toMatch(/FOR \(r:MacroRelation\) REQUIRE \(r\.userId, r\.macroId, r\.id\) IS UNIQUE/);
+    });
+
+    it('MACRO_GRAPH_SCHEMA_CYPHER에 MacroStats (userId, macroId) 복합 unique 제약이 있다', () => {
+      const joined = MACRO_GRAPH_SCHEMA_CYPHER.join('\n');
+      expect(joined).toMatch(/FOR \(st:MacroStats\) REQUIRE \(st\.userId, st\.macroId\) IS UNIQUE/);
+    });
+
+    it('MACRO_GRAPH_SCHEMA_CYPHER에 MacroSummary (userId, macroId) 복합 unique 제약이 있다', () => {
+      const joined = MACRO_GRAPH_SCHEMA_CYPHER.join('\n');
+      expect(joined).toMatch(/FOR \(sm:MacroSummary\) REQUIRE \(sm\.userId, sm\.macroId\) IS UNIQUE/);
+    });
+
+    it('upsertNodes: macroId를 MERGE 키에 포함한다', () => {
+      const q = MACRO_GRAPH_CYPHER.upsertNodes;
+      expect(q).toMatch(/MERGE \(n:MacroNode \{userId: row\.userId, macroId: row\.macroId, id: row\.id\}\)/);
+    });
+
+    it('upsertStats: macroId를 MERGE 키에 포함한다', () => {
+      const q = MACRO_GRAPH_CYPHER.upsertStats;
+      expect(q).toMatch(/MERGE \(st:MacroStats \{userId: \$userId, macroId: \$macroId\}\)/);
+    });
+
+    it('softDeleteNodesByIds: macroId로 선택한 MacroGraph의 노드만 삭제한다', () => {
+      const q = MACRO_GRAPH_CYPHER.softDeleteNodesByIds;
+      expect(q).toMatch(/MacroGraph \{userId: \$userId, macroId: \$macroId\}/);
+      expect(q).toMatch(/MacroNode \{userId: \$userId, macroId: \$macroId\}/);
+      expect(q).toMatch(/MacroRelation \{userId: \$userId, macroId: \$macroId\}/);
+      expect(q).toMatch(/MACRO_RELATED \{userId: \$userId, macroId: \$macroId\}/);
+    });
+
+    it('hardDeleteNodesByIds: macroId로 선택한 MacroGraph의 노드만 삭제한다', () => {
+      const q = MACRO_GRAPH_CYPHER.hardDeleteNodesByIds;
+      expect(q).toMatch(/MacroGraph \{userId: \$userId, macroId: \$macroId\}/);
+      expect(q).toMatch(/MacroNode \{userId: \$userId, macroId: \$macroId\}/);
+      expect(q).toMatch(/MacroRelation \{userId: \$userId, macroId: \$macroId\}/);
+      expect(q).toMatch(/MACRO_RELATED \{userId: \$userId, macroId: \$macroId\}/);
+    });
+
+    it('upsertSummary: macroId를 MERGE 키에 포함한다', () => {
+      const q = MACRO_GRAPH_CYPHER.upsertSummary;
+      expect(q).toMatch(/MERGE \(sm:MacroSummary \{userId: \$userId, macroId: \$macroId\}\)/);
+    });
+
+    it('delete/restore by origId targets matched node entities instead of numeric ids', () => {
+      const queries = [
+        MACRO_GRAPH_CYPHER.hardDeleteNodesByOrigIds,
+        MACRO_GRAPH_CYPHER.restoreNodesByOrigIds,
+      ];
+
+      for (const q of queries) {
+        expect(q).toMatch(/MATCH \(n:MacroNode \{userId: \$userId\}\)/);
+        expect(q).toMatch(/WHERE n\.origId IN \$origIds/);
+        expect(q).toMatch(/WITH collect\(n\) AS nodes/);
+        expect(q).toMatch(/endpoint IN nodes/);
+        expect(q).toMatch(/source IN nodes OR target IN nodes/);
+        expect(q).not.toMatch(/collect\(n\.id\) AS nodeIds/);
+        expect(q).not.toMatch(/endpoint\.id IN nodeIds/);
+      }
+    });
+
+    it('softDeleteNodesByOrigIds soft-deletes matched nodes and connected edges across active and soft-deleted macro views', () => {
+      const q = MACRO_GRAPH_CYPHER.softDeleteNodesByOrigIds;
+
+      expect(q).toMatch(/MATCH \(n:MacroNode \{userId: \$userId\}\)/);
+      expect(q).toMatch(/WHERE n\.origId IN \$origIds/);
+      expect(q).toMatch(/SET n\.deletedAt = \$deletedAt/);
+      expect(q).toMatch(/WITH collect\(DISTINCT n\) AS nodes/);
+      expect(q).toMatch(/MATCH \(r:MacroRelation \{userId: \$userId\}\)/);
+      expect(q).toMatch(/endpoint IN nodes/);
+      expect(q).toMatch(/SET r\.deletedAt = \$deletedAt/);
+      expect(q).toMatch(/MATCH \(source:MacroNode \{userId: \$userId\}\)-\[mr:MACRO_RELATED \{userId: \$userId\}\]->\(target:MacroNode \{userId: \$userId\}\)/);
+      expect(q).toMatch(/source IN nodes OR target IN nodes/);
+      expect(q).toMatch(/SET mr\.deletedAt = \$deletedAt/);
+      expect(q).not.toMatch(/g\.deletedAt IS NULL/);
+      expect(q).not.toMatch(/HAS_NODE/);
+      expect(q).not.toMatch(/macroId: \$macroId/);
+      expect(q).not.toMatch(/n\.id IN \$ids/);
+      expect(q).not.toMatch(/collect\(n\.id\)/);
+    });
+
+    it('cloneMacroGraph: 하위 엔티티를 newMacroId로 독립 복제한다', () => {
+      expect(MACRO_GRAPH_CYPHER.cloneMacroGraphNodes).toMatch(
+        /MERGE \(newNode:MacroNode \{userId: \$userId, macroId: \$newMacroId, id: n\.id\}\)/
+      );
+      expect(MACRO_GRAPH_CYPHER.cloneMacroGraphClusters).toMatch(
+        /MERGE \(newCluster:MacroCluster \{userId: \$userId, macroId: \$newMacroId, id: c\.id\}\)/
+      );
+    });
   });
 
   describe('Cypher 원칙 검증 (금지 패턴 없음)', () => {
@@ -109,6 +301,12 @@ describe('macroGraph.cypher', () => {
       const q = MACRO_GRAPH_CYPHER.upsertRelations;
       expect(q).not.toMatch(/\.source\s*=/);
       expect(q).not.toMatch(/\.target\s*=/);
+    });
+
+    it('getSummaryNodeCounts: totalFiles 컬럼을 포함한다', () => {
+      const q = MACRO_GRAPH_CYPHER.getSummaryNodeCounts;
+      expect(q).toMatch(/totalFiles/);
+      expect(q).toMatch(/nodeType\s*=\s*'file'/);
     });
 
     it('getStats: nodes/edges/clusters를 property가 아닌 count 집계로 조회한다', () => {
@@ -203,7 +401,7 @@ describe('macroGraph.cypher', () => {
       const q = MACRO_GRAPH_CYPHER.clearSubclusterRelationshipsForReplacement;
 
       expect(q).toMatch(/UNWIND \$subclusterIds AS subclusterId/);
-      expect(q).toMatch(/MacroSubcluster \{userId: \$userId, id: subclusterId\}/);
+      expect(q).toMatch(/MacroSubcluster \{userId: \$userId, macroId: \$macroId, id: subclusterId\}/);
       expect(q).toMatch(/HAS_SUBCLUSTER/);
       expect(q).toMatch(/CONTAINS/);
       expect(q).toMatch(/REPRESENTS/);

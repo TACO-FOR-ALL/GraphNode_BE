@@ -89,7 +89,7 @@ describe('Agent macro graph tools', () => {
   it('GetMacroGraphContextTool returns full snapshot payload', async () => {
     const tool = new GetMacroGraphContextTool();
 
-    const raw = await tool.execute('user-1', {}, deps, {} as OpenAI);
+    const raw = await tool.execute('user-1', { macroId: 'macro-test' }, deps, {} as OpenAI);
     const parsed = JSON.parse(raw);
 
     expect(parsed.scope.userId).toBe('user-1');
@@ -101,7 +101,7 @@ describe('Agent macro graph tools', () => {
   it('GetGraphNodeDetailsTool returns node detail by nodeId', async () => {
     const tool = new GetGraphNodeDetailsTool();
 
-    const raw = await tool.execute('user-1', { nodeId: 101 }, deps, {} as OpenAI);
+    const raw = await tool.execute('user-1', { nodeId: 101, macroId: 'macro-test' }, deps, {} as OpenAI);
     const parsed = JSON.parse(raw);
 
     expect(parsed.nodes).toHaveLength(1);
@@ -113,14 +113,14 @@ describe('Agent macro graph tools', () => {
   it('GetGraphNodeDetailsTool supports keyword search', async () => {
     const tool = new GetGraphNodeDetailsTool();
 
-    const raw = await tool.execute('user-1', { keyword: '회고' }, deps, {} as OpenAI);
+    const raw = await tool.execute('user-1', { keyword: '회고', macroId: 'macro-test' }, deps, {} as OpenAI);
     const parsed = JSON.parse(raw);
 
     expect(parsed.nodes).toHaveLength(1);
     expect(parsed.nodes[0].title).toBe('프로젝트 회고');
   });
 
-  it('AgentService chat prompt contains macro vs micro routing guidance', () => {
+  it('AgentService chat prompt without macroId contains fallback guidance', () => {
     const service = new AgentService(deps);
     const prompt = (service as any).getChatSystemPrompt();
 
@@ -128,5 +128,24 @@ describe('Agent macro graph tools', () => {
     expect(prompt).toContain('get_graph_node_details');
     expect(prompt).toContain('search_conversations');
     expect(prompt).toContain('Macro vs Micro Tool 선택 규칙');
+    expect(prompt).toContain('MACRO VIEW CONTEXT (비활성)');
+  });
+
+  it('AgentService chat prompt with macroId injects active context section', () => {
+    const service = new AgentService(deps);
+    const prompt = (service as any).getChatSystemPrompt(undefined, 'macro-abc-123');
+
+    expect(prompt).toContain('MACRO VIEW CONTEXT (활성)');
+    expect(prompt).toContain('macro-abc-123');
+  });
+
+  it('AgentService chat prompt with microscopeGroupId AND macroId includes both sections', () => {
+    const service = new AgentService(deps);
+    const prompt = (service as any).getChatSystemPrompt('scope-group-1', 'macro-abc-123');
+
+    expect(prompt).toContain('MICROSCOPE CONTEXT MODE (활성)');
+    expect(prompt).toContain('scope-group-1');
+    expect(prompt).toContain('MACRO VIEW CONTEXT (활성)');
+    expect(prompt).toContain('macro-abc-123');
   });
 });

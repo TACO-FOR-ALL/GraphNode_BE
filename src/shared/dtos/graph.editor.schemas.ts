@@ -183,6 +183,7 @@ export const batchOperationSchema = z.discriminatedUnion('type', [
  * 배치 트랜잭션 요청 스키마. 작성일: 2026-05-01
  */
 export const batchEditorRequestSchema = z.object({
+  macroId: z.string().min(1),
   operations: z.array(batchOperationSchema).min(1).max(100),
 });
 

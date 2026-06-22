@@ -10,6 +10,7 @@
         "total_conversations": { "type": "integer" },
         "total_notes": { "type": "integer" },
         "total_notions": { "type": "integer" },
+        "total_files": { "type": "integer" },
         "time_span": { "type": "string" },
         "primary_interests": { "type": "array", "items": { "type": "string" } },
         "conversation_style": { "type": "string" },

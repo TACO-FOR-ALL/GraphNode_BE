@@ -211,3 +211,128 @@ onUnmount(() => closeStream());
 ## 📄 라이선스 (License)
 
 Copyright © 2026 TACO. All rights reserved.
+---
+
+## Unified Graph API: 1:N 매크로 그래프 사용 가이드
+
+FE SDK의 1:N 그래프 공개 표면은 `client.graph.*`와 `client.graphAi.*`로 통일됩니다. 서버 내부 라우트는 `/v1/graph/graphs*`를 사용하며, SDK 사용자는 별도 뷰 서브클라이언트나 레거시 뷰 타입을 직접 다루지 않습니다.
+
+### 1. 1:N 그래프 생성 요청
+
+`scopeFilter`를 전달하면 서버가 새 `macroId`를 발급하고, 선택된 데이터 범위로 1:N 그래프 생성 작업을 큐에 넣습니다. `scopeFilter`를 생략하면 기존 1:1 그래프 생성 모드로 동작합니다.
+
+```typescript
+const queued = await client.graphAi.generateGraph({
+  title: '최근 프로젝트 그래프',
+  description: '최근 3개월 채팅과 파일을 묶은 작업 그래프',
+  scopeFilter: {
+    mode: 'manual',
+    filters: {
+      dataTypes: ['chat', 'file'],
+      createdPeriod: '3m'
+    }
+  },
+  includeSummary: true
+});
+
+if (!queued.isSuccess) {
+  throw new Error(queued.error.message);
+}
+```
+
+`scopeFilter`는 두 가지 형태를 지원합니다.
+
+```typescript
+// AUTO: 의도 기반 자동 범위 선택
+await client.graphAi.generateGraph({
+  title: 'RAG 품질 개선 그래프',
+  scopeFilter: {
+    mode: 'auto',
+    intent: 'RAG 답변 품질을 높이기 위한 프로젝트 맥락 그래프'
+  }
+});
+
+// MANUAL: FE가 데이터 타입과 기간을 직접 지정
+await client.graphAi.generateGraph({
+  title: '최근 노트/파일 그래프',
+  scopeFilter: {
+    mode: 'manual',
+    filters: {
+      dataTypes: ['note', 'file'],
+      createdPeriod: '1m'
+    }
+  }
+});
+```
+
+### 2. 1:N 그래프 목록 조회
+
+생성 완료 후 FE는 `client.graph.listGraphs()`로 그래프 메타데이터 목록을 조회합니다. 응답은 `{ graphs }` 형태입니다.
+
+```typescript
+const list = await client.graph.listGraphs({ sortBy: 'updatedAt' });
+
+if (list.isSuccess) {
+  for (const graph of list.data.graphs) {
+    console.log(graph.macroId, graph.title, graph.nodeCount);
+  }
+}
+```
+
+삭제된 그래프만 보고 싶으면 다음처럼 호출합니다.
+
+```typescript
+const deleted = await client.graph.listGraphs({ onlyDeleted: true });
+```
+
+### 3. 그래프 렌더링
+
+렌더링 데이터는 `getSnapshot(macroId)`로 가져옵니다. `macroId`를 생략하면 기존 1:1 그래프를 조회하고, 전달하면 해당 1:N 그래프를 조회합니다.
+
+```typescript
+const graphs = await client.graph.listGraphs();
+
+if (graphs.isSuccess && graphs.data.graphs[0]) {
+  const macroId = graphs.data.graphs[0].macroId;
+  const snapshot = await client.graph.getSnapshot(macroId);
+
+  if (snapshot.isSuccess) {
+    renderGraph({
+      nodes: snapshot.data.nodes,
+      edges: snapshot.data.edges,
+      clusters: snapshot.data.clusters,
+      subclusters: snapshot.data.subclusters ?? [],
+      stats: snapshot.data.stats
+    });
+  }
+}
+```
+
+### 4. 메타데이터 수정, 복제, 삭제, 복원
+
+`client.graph.*` 메서드만 사용합니다. 별도 뷰 서브클라이언트는 더 이상 SDK 공개 API가 아닙니다.
+
+```typescript
+await client.graph.updateGraphMetadata('01HWXYZ...', {
+  title: '제품 기획 그래프',
+  description: '제품 기획 관련 자료만 모은 그래프'
+});
+
+const cloned = await client.graph.cloneGraph('01HWXYZ...');
+
+if (cloned.isSuccess) {
+  const clonedSnapshot = await client.graph.getSnapshot(cloned.data.graph.macroId);
+  console.log(clonedSnapshot.statusCode);
+}
+
+await client.graph.deleteGraph('01HWXYZ...');
+await client.graph.restoreGraph('01HWXYZ...');
+```
+
+주요 실패 상태는 다음과 같습니다.
+
+- `400 Bad Request`: `scopeFilter` 또는 메타데이터 수정 payload가 서버 스키마와 맞지 않습니다.
+- `401 Unauthorized`: 로그인 세션 또는 인증 토큰이 없습니다.
+- `404 Not Found`: 전달한 `macroId`에 해당하는 그래프가 없습니다.
+- `409 Conflict`: 생성/복제 작업이 기존 작업 또는 저장소 제약과 충돌했습니다.
+- `502 Bad Gateway`: 큐, 그래프 저장소, 외부 저장소 연동에 실패했습니다.

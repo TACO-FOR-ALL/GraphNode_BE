@@ -8,7 +8,7 @@
 import type { Request, Response } from 'express';
 import { AgentService } from '../../core/services/AgentService';
 import { getUserIdFromRequest } from '../utils/request';
-import type { ChatStreamRequestBody } from '../../shared/dtos/agent';
+import type { ChatStreamRequestBody } from '../../agent/types';
 
 export class AgentController {
   // AgentController 생성자에서, UserRepository 안가지게 수정
@@ -19,7 +19,7 @@ export class AgentController {
    * SSE 스트리밍 채팅
    */
   async chatStream(req: Request, res: Response): Promise<void> {
-    const { userMessage, contextText, modeHint, microscopeGroupId } = req.body as ChatStreamRequestBody;
+    const { userMessage, contextText, modeHint, microscopeGroupId, macroId } = req.body as ChatStreamRequestBody;
 
     // 사용자 메시지 검증
     const trimmedUser = (userMessage || '').trim();
@@ -53,6 +53,7 @@ export class AgentController {
           contextText: contextText?.trim(),
           modeHint,
           microscopeGroupId: microscopeGroupId?.trim() || undefined,
+          macroId: macroId?.trim() || undefined,
         },
         sendEvent
       );

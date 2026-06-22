@@ -64,7 +64,7 @@ export function toGraphNodeDoc(dto: GraphNodeDto): GraphNodeDoc {
  * @param doc 노드 문서
  * @returns 클라이언트용 노드 DTO
  */
-export function toGraphNodeDto(doc: GraphNodeDoc): GraphNodeDto {
+export function toGraphNodeDto(doc: GraphNodeDoc): Omit<GraphNodeDto, 'macroId'> {
   return {
     id: doc.id,
     userId: doc.userId,

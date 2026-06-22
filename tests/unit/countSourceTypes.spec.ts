@@ -3,6 +3,7 @@ import type { GraphNodeDto } from '../../src/shared/dtos/graph';
 
 const baseFileNode = {
   userId: 'u1',
+  macroId: 'macro-test',
   label: 'file',
   summary: '',
   clusterId: 'c1',

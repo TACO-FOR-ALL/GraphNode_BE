@@ -218,6 +218,7 @@ function makeNode(id: number, clusterId: string): GraphNodeDto {
   return {
     id,
     userId: USER,
+    macroId: 'macro-test',
     origId: `orig:${id}`,
     clusterId,
     clusterName: 'Test Cluster',
@@ -275,7 +276,7 @@ describe('GraphEditorService', () => {
     it('클러스터가 존재할 때 노드를 생성한다', async () => {
       await repo.upsertCluster(makeCluster('c1'));
 
-      const result = await service.createNode(USER, { label: 'My Node', clusterId: 'c1' });
+      const result = await service.createNode(USER, { label: 'My Node', clusterId: 'c1' }, { macroId: 'macro-test' });
 
       expect(result.nodeId).toBeGreaterThan(0);
       expect(result.node.label).toBe('My Node');
@@ -311,7 +312,7 @@ describe('GraphEditorService', () => {
         label: 'My Node',
         clusterId: 'c1',
         nodeTitle: '나의 첫 번째 노드',
-      });
+      }, { macroId: 'macro-test' });
 
       expect(result.node.nodeTitle).toBe('나의 첫 번째 노드');
     });
@@ -319,7 +320,7 @@ describe('GraphEditorService', () => {
     it('AC-3: nodeTitle을 생략하면 undefined로 저장된다', async () => {
       await repo.upsertCluster(makeCluster('c1'));
 
-      const result = await service.createNode(USER, { label: 'My Node', clusterId: 'c1' });
+      const result = await service.createNode(USER, { label: 'My Node', clusterId: 'c1' }, { macroId: 'macro-test' });
 
       expect(result.node.nodeTitle).toBeUndefined();
     });
@@ -676,6 +677,7 @@ describe('GraphEditorService', () => {
       await repo.upsertCluster(makeCluster('c1'));
 
       const result = await service.executeBatch(USER, {
+        macroId: 'macro-test',
         operations: [
           { type: 'createCluster', payload: { name: 'Batch Cluster' } },
           { type: 'createNode', payload: { label: 'Batch Node', clusterId: 'c1' } },
@@ -691,6 +693,7 @@ describe('GraphEditorService', () => {
 
     it('첫 번째 실패 시 이후 오퍼레이션은 실행되지 않는다', async () => {
       const result = await service.executeBatch(USER, {
+        macroId: 'macro-test',
         operations: [
           { type: 'createNode', payload: { label: 'Node', clusterId: 'nonexistent' } },
           { type: 'createCluster', payload: { name: 'Should Not Run' } },
@@ -703,7 +706,7 @@ describe('GraphEditorService', () => {
 
     it('빈 operations이면 ValidationError를 던진다', async () => {
       await expect(
-        service.executeBatch(USER, { operations: [] })
+        service.executeBatch(USER, { macroId: 'macro-test', operations: [] })
       ).rejects.toThrow(ValidationError);
     });
   });

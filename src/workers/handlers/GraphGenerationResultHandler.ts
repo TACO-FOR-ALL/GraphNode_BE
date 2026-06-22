@@ -59,6 +59,8 @@ export class GraphGenerationResultHandler implements JobHandler {
 
     logger.info({ taskId, userId, status }, 'Handling graph generation result');
 
+    let macroId: string = userId;
+
     // 의존성 가져오기
     const storagePort = container.getAwsS3Adapter();
     const graphService = container.getGraphEmbeddingService();
@@ -107,10 +109,18 @@ export class GraphGenerationResultHandler implements JobHandler {
           sentryEventId,
         }).catch(() => {});
 
-        const stats = await graphService.getStatsMetadata(userId);
+        // Redis에서 요청 시점 macroId를 복구한다. 복구 실패 시 userId(레거시) fallback.
+        try {
+          macroId = (await redis.get(`macro_graph:macroId:${taskId}`)) ?? userId;
+        } catch {
+          macroId = userId;
+        }
+
+        const stats = await graphService.getStatsMetadata(userId, { macroId });
         const applied = await graphService.saveStatsIfStatusIn(
           { ...stats, userId, status: 'NOT_CREATED' },
-          GRAPH_GENERATION_MUTABLE_STATUSES
+          GRAPH_GENERATION_MUTABLE_STATUSES,
+          { macroId }
         );
         if (!applied) {
           logger.warn(
@@ -120,7 +130,7 @@ export class GraphGenerationResultHandler implements JobHandler {
         }
 
         // 실패 알림 전송
-        await notiService.sendGraphGenerationFailed(userId, taskId, errorMsg);
+        await notiService.sendGraphGenerationFailed(userId, taskId, errorMsg, macroId);
         await notiService.sendFcmPushNotification(
           userId,
           'Graph Generation Failed',
@@ -255,12 +265,20 @@ export class GraphGenerationResultHandler implements JobHandler {
         );
 
         // 7. sourceType까지 보정된 graph output을 최종 snapshot DTO로 변환한다.
+        // Redis에 캐시된 요청 시점의 macroId를 사용해 stats와 snapshot이 동일 macroId 아래 저장되도록 보장.
+        try {
+          macroId = (await redis.get(`macro_graph:macroId:${taskId}`)) ?? userId;
+        } catch {
+          macroId = userId;
+        }
         const snapshot: GraphSnapshotDto = mapAiOutputToSnapshot(
           sourceTypeResolvedGraphOutput,
-          userId
+          userId,
+          macroId
         );
         const persistPayload: PersistGraphPayloadDto = {
           userId,
+          macroId,
           snapshot,
         };
 
@@ -325,7 +343,7 @@ export class GraphGenerationResultHandler implements JobHandler {
                   generatedAt: summaryJson.generated_at || new Date().toISOString(),
                 };
 
-                await graphService.upsertGraphSummary(userId, summaryDoc);
+                await graphService.upsertGraphSummary(userId, summaryDoc, { macroId });
                 logger.info({ taskId, userId }, 'Integrated graph summary persisted to DB');
               } catch (sumErr) {
                 logger.error(
@@ -349,7 +367,7 @@ export class GraphGenerationResultHandler implements JobHandler {
         });
 
         // 11. graph status를 CREATED로 업데이트한다 (compare-and-set; AddNode UPDATING 덮어쓰기 방지).
-        const stats = await graphService.getStatsMetadata(userId);
+        const stats = await graphService.getStatsMetadata(userId, { macroId });
         const syncAt = new Date().toISOString();
         const statsPatch: GraphStatsDto = {
           ...stats,
@@ -360,7 +378,8 @@ export class GraphGenerationResultHandler implements JobHandler {
         };
         const applied = await graphService.saveStatsIfStatusIn(
           statsPatch,
-          GRAPH_GENERATION_MUTABLE_STATUSES
+          GRAPH_GENERATION_MUTABLE_STATUSES,
+          { macroId }
         );
         if (applied) {
           logger.info({ taskId, userId }, 'Graph status updated to CREATED');
@@ -373,7 +392,7 @@ export class GraphGenerationResultHandler implements JobHandler {
 
         // 12. graph generation completed 이벤트를 발생시킨다.
         await Promise.allSettled([
-          notiService.sendGraphGenerationCompleted(userId, taskId),
+          notiService.sendGraphGenerationCompleted(userId, taskId, macroId),
           notiService.sendFcmPushNotification(
             userId,
             'Graph Ready',
@@ -404,13 +423,14 @@ export class GraphGenerationResultHandler implements JobHandler {
       logger.error({ err, taskId, userId }, 'Error processing graph generation result');
 
       try {
-        const stats = await graphService.getStatsMetadata(userId);
+        const stats = await graphService.getStatsMetadata(userId, { macroId });
         await graphService.saveStatsIfStatusIn(
           { ...stats, userId, status: 'NOT_CREATED' },
-          GRAPH_GENERATION_MUTABLE_STATUSES
+          GRAPH_GENERATION_MUTABLE_STATUSES,
+          { macroId }
         );
 
-        await notiService.sendGraphGenerationFailed(userId, taskId, errorMsg);
+        await notiService.sendGraphGenerationFailed(userId, taskId, errorMsg, macroId);
         await notiService.sendFcmPushNotification(
           userId,
           'Graph Generation Failed',

@@ -159,6 +159,40 @@ interface FailedPayload extends BaseNotificationPayload {
 }
 ```
 
+### `macroId` 필드 — 1:N 그래프 식별자
+
+시스템이 **1:N 멀티 지식 그래프 아키텍처**로 전환되면서 아래 이벤트의 payload에 `macroId?: string`이 추가되었습니다.
+
+| 이벤트 | macroId 포함 여부 |
+| --- | --- |
+| `GRAPH_GENERATION_REQUESTED` | ✅ 옵셔널 |
+| `GRAPH_GENERATION_REQUEST_FAILED` | ✅ 옵셔널 |
+| `GRAPH_GENERATION_FAILED` | ✅ 옵셔널 |
+| `GRAPH_GENERATION_COMPLETED` | ✅ 옵셔널 |
+| `ADD_CONVERSATION_REQUESTED` | ✅ 옵셔널 |
+| `ADD_CONVERSATION_REQUEST_FAILED` | ✅ 옵셔널 |
+| `ADD_CONVERSATION_FAILED` | ✅ 옵셔널 |
+| `ADD_CONVERSATION_COMPLETED` | ✅ 옵셔널 |
+
+**FE 활용 가이드:**
+
+- `macroId`가 **존재**하면 해당 `macroId`에 대응하는 1:N 그래프 뷰에 로딩 스피너 또는 에러 토스트를 표시합니다.
+- `macroId`가 **없으면** 레거시(1:1) 그래프 동작으로 간주합니다. 기존 코드와 하위 호환됩니다.
+
+```typescript
+// Zustand에서 macroId를 기반으로 1:N 그래프 뷰 상태 관리 예시
+socket.on('notification', (event: TypedNotificationEvent) => {
+  if (event.type === NotificationType.GRAPH_GENERATION_REQUESTED) {
+    const macroId = event.payload.macroId ?? 'legacy';
+    setGraphViewLoading(macroId, true);
+  }
+  if (event.type === NotificationType.GRAPH_GENERATION_FAILED) {
+    const macroId = event.payload.macroId ?? 'legacy';
+    setGraphViewError(macroId, event.payload.error);
+  }
+});
+```
+
 ### 추가 필드가 있는 payload
 
 ```typescript
@@ -171,6 +205,7 @@ interface GraphGenerationProgressPayload extends BaseNotificationPayload {
 interface AddConversationCompletedPayload extends BaseNotificationPayload {
   nodeCount: number;
   edgeCount: number;
+  macroId?: string;
 }
 
 interface MicroscopeDocumentCompletedPayload extends BaseNotificationPayload {

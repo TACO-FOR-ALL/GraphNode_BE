@@ -11,8 +11,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 import type { ChatManagementService } from '../../core/services/ChatManagementService';
 import { AiController } from '../controllers/AiController';
 import { asyncHandler } from '../utils/asyncHandler';
-import { bindSessionUser } from '../middlewares/session';
-import { requireLogin } from '../middlewares/auth';
+import { internalOrSession } from '../middlewares/internal';
 import { AiInteractionService } from '../../core/services/AiInteractionService';
 
 export function createAiRouter(deps: {
@@ -22,8 +21,8 @@ export function createAiRouter(deps: {
   const router = Router();
   const aiController = new AiController(deps.chatManagementService, deps.aiInteractionService);
 
-  // 보호 구역(세션 바인딩 + 인증)
-  router.use(bindSessionUser, requireLogin);
+  // 보호 구역(내부 서비스 토큰 또는 세션 인증)
+  router.use(internalOrSession);
 
   // Conversations
   router.post(

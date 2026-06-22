@@ -539,7 +539,8 @@ export class Container {
         this.getAwsS3Adapter(),
         this.getNotificationService(),
         this.getCreditService(),
-        notionEnabled ? this.getNotionService() : undefined
+        notionEnabled ? this.getNotionService() : undefined,
+        this.getMacroGraphStore()
       );
       this.graphGenerationService = createAuditProxy(raw, 'GraphGenerationService');
     }
@@ -960,6 +961,7 @@ export class Container {
     }
     return this.importArchiveService;
   }
+
 }
 
 export const container = Container.getInstance();

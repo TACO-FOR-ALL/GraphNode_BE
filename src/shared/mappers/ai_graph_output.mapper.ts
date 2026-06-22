@@ -19,15 +19,17 @@ import type {
  *
  * @param output AI 서버로부터 수신한 원시 데이터
  * @param userId 데이터를 소유할 사용자 ID
+ * @param macroId 대상 매크로 뷰 ID (ULID)
  * @returns DB 저장을 위한 GraphSnapshotDto
  */
-export function mapAiOutputToSnapshot(output: AiGraphOutputDto, userId: string): GraphSnapshotDto {
+export function mapAiOutputToSnapshot(output: AiGraphOutputDto, userId: string, macroId: string): GraphSnapshotDto {
   const generatedAt = output.metadata?.generated_at || new Date().toISOString();
 
   // 1. Nodes 변환
   const nodes: GraphNodeDto[] = output.nodes.map((node) => ({
     id: node.id,
     userId: userId,
+    macroId: macroId,
     origId: node.orig_id,
     clusterId: node.cluster_id,
     clusterName: node.cluster_name,
@@ -105,6 +107,7 @@ export function mapAiOutputToSnapshot(output: AiGraphOutputDto, userId: string):
   };
 
   return {
+    macroId,
     nodes,
     edges,
     clusters,

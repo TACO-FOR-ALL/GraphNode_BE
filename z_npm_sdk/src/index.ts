@@ -250,3 +250,16 @@ export type {
   AiInputMessageAuthor,
   AiInputMessageContent,
 } from './types/aiInput.js';
+export type {
+  CloneGraphResponse,
+  GraphMetadataDto,
+  GraphMetadataResponse,
+  GraphMetadataSortKey,
+  ListGraphsQuery,
+  ListGraphsResponse,
+  RestoreGraphResponse,
+  ScopeCreatedPeriod,
+  ScopeDataType,
+  ScopeFilter,
+  UpdateGraphMetadataDto,
+} from './types/graph.js';

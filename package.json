@@ -19,6 +19,7 @@
     "db:down": "docker compose -f docker-compose.test.yml down -v",
     "db:logs": "docker compose -f docker-compose.test.yml logs -f",
     "e2e:up": "bash scripts/e2e-up.sh",
+    "test:e2e": "jest --config tests/e2e/jest.e2e.config.ts tests/e2e/specs/ --runInBand --forceExit",
     "e2e:test": "bash scripts/e2e-test.sh",
     "e2e:test:bundle": "E2E_SCOPE=bundle bash scripts/e2e-test.sh",
     "e2e:local": "bash scripts/local-e2e.sh",

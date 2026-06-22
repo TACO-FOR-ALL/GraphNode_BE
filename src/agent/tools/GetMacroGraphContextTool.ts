@@ -18,10 +18,10 @@ export class GetMacroGraphContextTool implements IAgentTool {
       parameters: {
         type: 'object',
         properties: {
-          graphId: {
+          macroId: {
             type: 'string',
             description:
-              '향후 다중 그래프 지원용 선택 파라미터. 현재는 1유저 1매크로 그래프라 무시됩니다.',
+              '조회할 매크로 뷰 ID. 시스템 프롬프트의 Active Macro View ID를 전달하세요. 미지정 시 빈 스냅샷을 반환합니다.',
           },
         },
       },
@@ -37,20 +37,21 @@ export class GetMacroGraphContextTool implements IAgentTool {
    */
   async execute(
     userId: string,
-    args: { graphId?: string },
+    args: { macroId?: string },
     deps: AgentServiceDeps,
     _openai: OpenAI
   ): Promise<string> {
-    const graphId = typeof args?.graphId === 'string' ? args.graphId : null;
-    const snapshot = await this.fetchMacroSnapshot(deps, userId, graphId ?? undefined);
-    const summary = await deps.graphEmbeddingService.getGraphSummary(userId);
-    const stats = await deps.graphEmbeddingService.getStats(userId);
+    const macroId = typeof args?.macroId === 'string' ? args.macroId : null;
+    const macroOptions = macroId ? { macroId } : undefined;
+    const snapshot = await this.fetchMacroSnapshot(deps, userId, macroId ?? undefined);
+    const summary = await deps.graphEmbeddingService.getGraphSummary(userId, macroId ?? undefined);
+    const stats = await deps.graphEmbeddingService.getStats(userId, macroOptions);
 
     return JSON.stringify({
       message: 'Macro graph 전체 컨텍스트입니다.',
       scope: {
         userId,
-        graphId,
+        macroId,
         multiGraphReady: true,
       },
       stats,
@@ -69,8 +70,11 @@ export class GetMacroGraphContextTool implements IAgentTool {
   private async fetchMacroSnapshot(
     deps: AgentServiceDeps,
     userId: string,
-    _graphId?: string
+    macroId?: string
   ): Promise<Awaited<ReturnType<AgentServiceDeps['graphEmbeddingService']['getSnapshotForUser']>>> {
-    return deps.graphEmbeddingService.getSnapshotForUser(userId);
+    if (!macroId) {
+      return { macroId: '', nodes: [], edges: [], clusters: [], subclusters: [], stats: { nodes: 0, edges: 0, clusters: 0, status: 'NOT_CREATED' } };
+    }
+    return deps.graphEmbeddingService.getSnapshotForUser(userId, macroId);
   }
 }

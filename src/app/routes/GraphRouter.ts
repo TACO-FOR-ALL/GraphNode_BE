@@ -7,6 +7,7 @@ import { Router } from 'express';
 
 import type { GraphEmbeddingService } from '../../core/services/GraphEmbeddingService';
 import type { GraphVectorService } from '../../core/services/GraphVectorService';
+import type { GraphManagementService } from '../../core/services/GraphManagementService';
 import { internalOrSession } from '../middlewares/internal';
 import { asyncHandler } from '../utils/asyncHandler';
 import { GraphController } from '../controllers/GraphController';
@@ -15,14 +16,16 @@ import { GraphController } from '../controllers/GraphController';
  * 라우터 팩토리 함수
  * @param graphEmbeddingService - 그래프 관리 서비스
  * @param graphVectorService - 벡터 검색 서비스
+ * @param graphManagementService - 그래프 메타데이터 관리 서비스
  * @returns 라우터 객체
  */
 export function createGraphRouter(
   graphEmbeddingService: GraphEmbeddingService,
-  graphVectorService: GraphVectorService
+  graphVectorService: GraphVectorService,
+  graphManagementService: GraphManagementService
 ) {
   const router = Router();
-  const graphController = new GraphController(graphEmbeddingService, graphVectorService);
+  const graphController = new GraphController(graphEmbeddingService, graphVectorService, graphManagementService);
 
   // 공통 미들웨어 적용: 세션 사용자 바인딩 및 로그인 요구
   router.use(internalOrSession);
@@ -74,6 +77,14 @@ export function createGraphRouter(
   // Snapshot routes
   router.get('/snapshot', asyncHandler(graphController.getSnapshot.bind(graphController)));
   router.post('/snapshot', asyncHandler(graphController.saveSnapshot.bind(graphController)));
+
+  // Graph metadata management routes (absorbed from GraphViewsRouter)
+  router.get('/graphs', asyncHandler(graphController.listViews));
+  router.get('/graphs/:macroId', asyncHandler(graphController.getView));
+  router.patch('/graphs/:macroId', asyncHandler(graphController.updateView));
+  router.delete('/graphs/:macroId', asyncHandler(graphController.deleteView));
+  router.post('/graphs/:macroId/clone', asyncHandler(graphController.cloneView));
+  router.post('/graphs/:macroId/restore', asyncHandler(graphController.restoreView));
 
   return router;
 }

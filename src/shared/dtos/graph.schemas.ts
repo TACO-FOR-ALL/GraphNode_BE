@@ -21,6 +21,7 @@ import type {
 export const graphNodeSchema = z.object({
   id: z.number().int(),
   userId: z.string().min(1),
+  macroId: z.string().min(1),
   origId: z.string().min(1),
   nodeTitle: z.string().min(1).optional(),
   clusterId: z.string().min(1),
@@ -85,6 +86,7 @@ export const graphStatsSchema = z.object({
  * 스키마: 그래프 스냅샷(단일 사용자 기준).
  */
 export const graphSnapshotSchema = z.object({
+  macroId: z.string().min(1),
   nodes: z.array(graphNodeSchema),
   edges: z.array(graphEdgeSchema),
   clusters: z.array(graphClusterSchema),
@@ -104,6 +106,7 @@ export const graphSnapshotSchema = z.object({
  */
 export const persistGraphPayloadSchema = z.object({
   userId: z.string().min(1),
+  macroId: z.string().min(1),
   snapshot: graphSnapshotSchema,
 }) satisfies z.ZodType<PersistGraphPayloadDto>;
 

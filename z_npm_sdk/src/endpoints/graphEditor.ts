@@ -137,8 +137,12 @@ export class GraphEditorApi {
    * - `404 Not Found`: node가 없음
    * - `502 Bad Gateway`: graph 저장소 처리 실패
    */
-  deleteNode(nodeId: number, permanent?: boolean): Promise<HttpResponse<void>> {
-    return this.rb.path(`${BASE}/nodes/${nodeId}`).query({ permanent }).delete<void>();
+  deleteNode(
+    nodeId: number,
+    options?: boolean | { permanent?: boolean; macroId?: string }
+  ): Promise<HttpResponse<void>> {
+    const query = typeof options === 'boolean' ? { permanent: options } : options;
+    return this.rb.path(`${BASE}/nodes/${nodeId}`).query(query).delete<void>();
   }
 
   /**
@@ -229,6 +233,7 @@ export class GraphEditorApi {
    * ```ts
    * await client.graphEditor.deleteEdge('edge-id');          // soft delete
    * await client.graphEditor.deleteEdge('edge-id', true);    // hard delete
+   * await client.graphEditor.deleteEdge('edge-id', { macroId: 'macro-view-1' });
    * ```
    * @remarks
    * - `204 No Content`: 삭제 성공
@@ -236,8 +241,12 @@ export class GraphEditorApi {
    * - `404 Not Found`: edge가 없음
    * - `502 Bad Gateway`: graph 저장소 처리 실패
    */
-  deleteEdge(edgeId: string, permanent?: boolean): Promise<HttpResponse<void>> {
-    return this.rb.path(`${BASE}/edges/${edgeId}`).query({ permanent }).delete<void>();
+  deleteEdge(
+    edgeId: string,
+    options?: boolean | { permanent?: boolean; macroId?: string }
+  ): Promise<HttpResponse<void>> {
+    const query = typeof options === 'boolean' ? { permanent: options } : options;
+    return this.rb.path(`${BASE}/edges/${edgeId}`).query(query).delete<void>();
   }
 
   /**

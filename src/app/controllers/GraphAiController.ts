@@ -15,14 +15,20 @@ export class GraphAiController {
   generateGraph = async (req: Request, res: Response) => {
     // 세션에서 사용자 ID 가져오기
     const userId = getUserIdFromRequest(req);
-    const { includeSummary } = req.body || {};
+    const { includeSummary, scopeFilter, title, description } = req.body || {};
+    const macroId = (req.body?.macroId ?? (req.query?.macroId as string | undefined)) ?? userId;
 
     // 그래프 생성 프로세스 시작 (SQS 요청)
-    const taskId = await this.graphGenerationService.requestGraphGenerationViaQueue(userId, {
+    // scopeFilter가 있으면 1:N 모드, 없으면 레거시 1:1 모드
+    const generation = await this.graphGenerationService.requestGraphGenerationViaQueue(userId, {
       includeSummary,
+      macroId: scopeFilter ? undefined : macroId,
+      scopeFilter,
+      title,
+      description,
     });
 
-    if (!taskId) {
+    if (!generation) {
       res.status(200).json({
         message: 'No conversation or note data found to generate graph',
         status: 'skipped',
@@ -34,7 +40,8 @@ export class GraphAiController {
     captureEvent(userId, POSTHOG_EVENT.GRAPH_GENERATION_REQUESTED, { include_summary: includeSummary });
     res.status(202).json({
       message: 'Graph generation queued',
-      taskId: taskId,
+      taskId: generation.taskId,
+      macroId: generation.macroId,
       status: 'queued',
     });
   };
@@ -45,9 +52,10 @@ export class GraphAiController {
    */
   summarizeGraph = async (req: Request, res: Response) => {
     const userId = getUserIdFromRequest(req);
+    const macroId = (req.body?.macroId ?? (req.query?.macroId as string | undefined)) ?? userId;
 
     // 그래프 요약 프로세스 시작 (SQS 요청)
-    const taskId = await this.graphGenerationService.requestGraphSummary(userId!);
+    const taskId = await this.graphGenerationService.requestGraphSummary(userId!, macroId);
 
     res.status(202).json({
       message: 'Graph summary generation queued',
@@ -62,7 +70,8 @@ export class GraphAiController {
    */
   getSummary = async (req: Request, res: Response) => {
     const userId = getUserIdFromRequest(req);
-    const summary = await this.graphGenerationService.getGraphSummary(userId!);
+    const macroId = (req.query?.macroId as string | undefined) ?? userId;
+    const summary = await this.graphGenerationService.getGraphSummary(userId!, macroId);
 
     res.status(200).json(summary);
   };
@@ -75,8 +84,9 @@ export class GraphAiController {
    */
   addNodeToGraph = async (req: Request, res: Response) => {
     const userId = getUserIdFromRequest(req);
+    const macroId = (req.body?.macroId ?? (req.query?.macroId as string | undefined)) ?? userId;
 
-    const taskId = await this.graphGenerationService.requestAddNodeViaQueue(userId);
+    const taskId = await this.graphGenerationService.requestAddNodeViaQueue(userId, macroId);
 
     if (!taskId) {
         res.status(200).json({
@@ -126,7 +136,8 @@ export class GraphAiController {
   deleteGraph = async (req: Request, res: Response) => {
     const userId = getUserIdFromRequest(req);
     const permanent = req.query.permanent === 'true';
-    await this.graphGenerationService.deleteGraph(userId!, permanent);
+    const macroId = (req.body?.macroId ?? (req.query?.macroId as string | undefined)) ?? userId;
+    await this.graphGenerationService.deleteGraph(userId!, permanent, macroId);
     res.status(204).send();
   };
 
@@ -139,7 +150,8 @@ export class GraphAiController {
    */
   restoreGraph = async (req: Request, res: Response) => {
     const userId = getUserIdFromRequest(req);
-    await this.graphGenerationService.restoreGraph(userId!);
+    const macroId = (req.body?.macroId ?? (req.query?.macroId as string | undefined)) ?? userId;
+    await this.graphGenerationService.restoreGraph(userId!, macroId);
     res.status(200).json({ message: 'Graph restored' });
   };
 
@@ -159,7 +171,8 @@ export class GraphAiController {
   deleteSummary = async (req: Request, res: Response) => {
     const userId = getUserIdFromRequest(req);
     const permanent = req.query.permanent === 'true';
-    await this.graphGenerationService.deleteGraphSummary(userId!, permanent);
+    const macroId = (req.body?.macroId ?? (req.query?.macroId as string | undefined)) ?? userId;
+    await this.graphGenerationService.deleteGraphSummary(userId!, permanent, macroId);
     res.status(204).send();
   };
 
@@ -172,7 +185,8 @@ export class GraphAiController {
    */
   restoreSummary = async (req: Request, res: Response) => {
     const userId = getUserIdFromRequest(req);
-    await this.graphGenerationService.restoreGraphSummary(userId!);
+    const macroId = (req.body?.macroId ?? (req.query?.macroId as string | undefined)) ?? userId;
+    await this.graphGenerationService.restoreGraphSummary(userId!, macroId);
     res.status(200).json({ message: 'Summary restored' });
   };
 }

@@ -116,7 +116,10 @@ export interface BaseNotificationPayload {
  *
  * @public
  */
-export interface GraphGenerationRequestedPayload extends BaseNotificationPayload {}
+export interface GraphGenerationRequestedPayload extends BaseNotificationPayload {
+  /** 1:N 특정 매크로 그래프(뷰) 식별자. 존재하지 않을 경우 레거시(1:1) 그래프 동작으로 간주합니다. */
+  macroId?: string;
+}
 
 /**
  * `GRAPH_GENERATION_REQUEST_FAILED` 이벤트의 payload입니다.
@@ -133,6 +136,8 @@ export interface GraphGenerationRequestedPayload extends BaseNotificationPayload
 export interface GraphGenerationRequestFailedPayload extends BaseNotificationPayload {
   /** 요청 접수 실패 원인을 설명하는 사람이 읽을 수 있는 오류 메시지입니다. */
   error: string;
+  /** 1:N 특정 매크로 그래프(뷰) 식별자. 존재하지 않을 경우 레거시(1:1) 그래프 동작으로 간주합니다. */
+  macroId?: string;
 }
 
 /**
@@ -163,6 +168,8 @@ export interface GraphGenerationCompletedPayload extends BaseNotificationPayload
 export interface GraphGenerationFailedPayload extends BaseNotificationPayload {
   /** 그래프 생성 작업 실패 사유를 설명하는 오류 메시지입니다. */
   error: string;
+  /** 1:N 특정 매크로 그래프(뷰) 식별자. 존재하지 않을 경우 레거시(1:1) 그래프 동작으로 간주합니다. */
+  macroId?: string;
 }
 
 /**
@@ -253,7 +260,10 @@ export interface GraphSummaryFailedPayload extends BaseNotificationPayload {
  *
  * @public
  */
-export interface AddConversationRequestedPayload extends BaseNotificationPayload {}
+export interface AddConversationRequestedPayload extends BaseNotificationPayload {
+  /** 1:N 특정 매크로 그래프(뷰) 식별자. 존재하지 않을 경우 레거시(1:1) 그래프 동작으로 간주합니다. */
+  macroId?: string;
+}
 
 /**
  * `ADD_CONVERSATION_REQUEST_FAILED` 이벤트의 payload입니다.
@@ -269,6 +279,8 @@ export interface AddConversationRequestedPayload extends BaseNotificationPayload
 export interface AddConversationRequestFailedPayload extends BaseNotificationPayload {
   /** 요청 접수 실패 원인을 설명하는 오류 메시지입니다. */
   error: string;
+  /** 1:N 특정 매크로 그래프(뷰) 식별자. 존재하지 않을 경우 레거시(1:1) 그래프 동작으로 간주합니다. */
+  macroId?: string;
 }
 
 /**
@@ -305,6 +317,8 @@ export interface AddConversationCompletedPayload extends BaseNotificationPayload
 export interface AddConversationFailedPayload extends BaseNotificationPayload {
   /** 대화 반영 작업 실패 사유를 설명하는 오류 메시지입니다. */
   error: string;
+  /** 1:N 특정 매크로 그래프(뷰) 식별자. 존재하지 않을 경우 레거시(1:1) 그래프 동작으로 간주합니다. */
+  macroId?: string;
 }
 
 /**
