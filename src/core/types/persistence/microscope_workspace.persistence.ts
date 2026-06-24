@@ -73,6 +73,8 @@ export interface MicroscopeDocumentMetaDoc {
   nonBlockStatus?: MicroscopeDocumentStatus;
   /** block 파이프라인 결과 MongoDB 페이로드 ID입니다. */
   blockGraphPayloadId?: string;
+  /** 원본 파일 크기 (bytes). 파일 저장 용량 한도 집계에 사용됩니다. */
+  fileSize?: number;
   /** 실패 시의 에러 원인입니다. */
   error?: string;
   /** 등록 일시입니다. */

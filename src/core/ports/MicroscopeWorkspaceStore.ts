@@ -136,6 +136,22 @@ export interface MicroscopeWorkspaceStore {
   findBlockRawTextPayloadByTaskId(taskId: string, session?: ClientSession): Promise<MicroscopeBlockRawTextPayloadDoc | null>;
 
   /**
+   * 유저 ID가 소유한 워크스페이스 수를 반환합니다. (마이크로 공간 수 한도 검증용)
+   * @param userId 유저 고유 식별자
+   * @returns 활성 워크스페이스 개수
+   */
+  countByUserId(userId: string): Promise<number>;
+
+  /**
+   * 유저 ID가 소유한 모든 워크스페이스의 누적 파일 크기 합계를 반환합니다 (bytes).
+   * documents 배열 내 fileSize 필드를 $sum으로 집계합니다.
+   * 기존 documents에 fileSize가 없으면 0으로 취급합니다.
+   * @param userId 유저 고유 식별자
+   * @returns 누적 파일 크기 합계 (bytes)
+   */
+  getTotalFileSizeByUserId(userId: string): Promise<number>;
+
+  /**
    * 문서의 blockStatus 또는 nonBlockStatus 및 관련 서브 필드를 원자적으로 갱신합니다.
    * 듀얼 SQS 처리 흐름에서 개별 파이프라인 완료 상태를 추적하기 위해 사용됩니다.
    * @param groupId 워크스페이스 ID

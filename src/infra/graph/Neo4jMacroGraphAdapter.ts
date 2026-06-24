@@ -2387,6 +2387,16 @@ export class Neo4jMacroGraphAdapter implements MacroGraphStore {
   }
 
   /**
+   * @description 사용자가 보유한 활성(삭제되지 않은) MacroView 개수를 반환합니다.
+   * @param userId 소유 사용자 ID
+   * @returns 활성 MacroView 개수
+   */
+  async countByUserId(userId: string): Promise<number> {
+    const views = await this.listMacroViews(userId, { sortBy: 'updatedAt' });
+    return views.length;
+  }
+
+  /**
    * @description macroId 기준으로 단일 매크로 뷰 메타데이터를 조회합니다.
    *
    * @param userId 소유 사용자 ID

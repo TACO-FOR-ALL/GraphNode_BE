@@ -42,6 +42,7 @@ import { ICreditService } from '../ports/ICreditService';
 import { CreditFeature } from '../types/persistence/credit.persistence';
 import type { NotionService } from './NotionService';
 import type { MacroGraphStore } from '../ports/MacroGraphStore';
+import type { PlanLimitService } from './PlanLimitService';
 import type { ScopeFilter, ScopeDataType } from '../../shared/dtos/macro';
 
 /**
@@ -72,7 +73,8 @@ export class GraphGenerationService {
     private readonly notificationService: NotificationService,
     private readonly creditService?: ICreditService,
     private readonly notionService?: NotionService,
-    private readonly macroGraphStore?: MacroGraphStore
+    private readonly macroGraphStore?: MacroGraphStore,
+    private readonly planLimitService?: PlanLimitService
   ) {
     const env = loadEnv();
     // FIXME TODO : HTTP Client 사용하지 않고 SQS로만 통신하도록 변경 예정
@@ -365,6 +367,11 @@ export class GraphGenerationService {
       if (convCount === 0 && noteCount === 0 && fileCount === 0 && notionCount === 0) {
         logger.info({ userId, scopeFilter }, 'No scoped data found. Skipping 1:N graph generation.');
         return null;
+      }
+
+      // 매크로 공간 수 플랜 한도 확인
+      if (this.planLimitService) {
+        await this.planLimitService.checkMacroSpaceLimit(userId);
       }
 
       // MacroGraph 루트 노드 생성 (Neo4j)

@@ -9,7 +9,7 @@
  */
 
 /** 플랜 타입 */
-export type CreditPlanType = 'FREE' | 'PRO' | 'ENTERPRISE';
+export type CreditPlanType = 'FREE' | 'BASIC' | 'PLUS' | 'PRO' | 'ENTERPRISE';
 
 /** 크레딧 기능 타입 */
 export type CreditFeatureType =

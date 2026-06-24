@@ -1,6 +1,7 @@
 import { ulid } from 'ulid';
 import type { MacroGraphStore, MacroGraphStoreOptions } from '../ports/MacroGraphStore';
 import { ValidationError, UpstreamError, NotFoundError } from '../../shared/errors/domain';
+import type { PlanLimitService } from './PlanLimitService';
 import { AppError } from '../../shared/errors/base';
 import type {
   GraphClusterDto,
@@ -34,7 +35,10 @@ const GRAPH_GENERATION_MUTABLE_STATUSES: GraphStatsDto['status'][] = ['CREATING'
  * - GraphStore(Port)를 통해 DB 작업을 수행하며, 이 과정에서 Mapper를 사용해 DTO <-> Doc 변환을 수행합니다.
  */
 export class GraphManagementService {
-  constructor(private readonly repo: MacroGraphStore) {}
+  constructor(
+    private readonly repo: MacroGraphStore,
+    private readonly planLimitService?: PlanLimitService
+  ) {}
   /**
    * 노드 생성 또는 업데이트 (Upsert)
    *
@@ -1152,6 +1156,9 @@ export class GraphManagementService {
    * @throws {UpstreamError} DB 복제 실패 시
    */
   async cloneMacroView(userId: string, sourceMacroId: string): Promise<MacroViewDto> {
+    if (this.planLimitService) {
+      await this.planLimitService.checkMacroSpaceLimit(userId);
+    }
     try {
       this.assertUser(userId);
       const source = await this.repo.getMacroView(userId, sourceMacroId);

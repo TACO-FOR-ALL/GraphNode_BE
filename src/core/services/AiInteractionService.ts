@@ -54,6 +54,7 @@ import type { UserFileSummaryStructured } from '../../shared/types/userFileSumma
 import { FEATURE_COSTS, CreditContext } from '../../config/billing.config';
 import { ICreditService } from '../ports/ICreditService';
 import { CreditFeature } from '../types/persistence/credit.persistence';
+import type { PlanLimitService } from './PlanLimitService';
 
 /** 사용자 라이브러리 파일 요약(OpenAI·첨부 파이프라인) 결과 */
 export type UserLibraryFileSummaryResult =
@@ -78,7 +79,8 @@ export class AiInteractionService {
     private readonly chatManagementService: ChatManagementService,
     private readonly userService: UserService,
     private readonly storageAdapter: StoragePort,
-    private readonly creditService?: ICreditService
+    private readonly creditService?: ICreditService,
+    private readonly planLimitService?: PlanLimitService
   ) {}
 
   /**
@@ -424,6 +426,12 @@ export class AiInteractionService {
         userAttachments.length,
         chatbody.modelName
       );
+
+      // 6-a. 일일 채팅 토큰 한도 확인 (한도 초과 시 PlanLimitExceededError)
+      if (this.planLimitService) {
+        await this.planLimitService.checkChatTokenLimit(ownerUserId);
+      }
+
       deductedCreditAmount = await this.deductAiChatCredit(ownerUserId, creditContext);
       creditDeducted = deductedCreditAmount > 0;
 
@@ -482,6 +490,14 @@ export class AiInteractionService {
         chat_type: 'normal',
         attachments_count: userAttachments.length,
       });
+
+      // 일일 채팅 토큰 누적 (입력 + 출력 문자를 4로 나눈 추정치)
+      if (this.planLimitService) {
+        const estimatedTokens = BigInt(
+          Math.ceil((chatbody.chatContent.length + aiResponse.content.length) / 4)
+        );
+        await this.planLimitService.recordChatTokens(ownerUserId, estimatedTokens);
+      }
 
       return { title: newTitle ?? undefined, messages: [userMessage, aiMessage] };
     } catch (err: unknown) {
@@ -602,6 +618,12 @@ export class AiInteractionService {
         userAttachments.length,
         chatbody.modelName
       );
+
+      // 일일 채팅 토큰 한도 확인
+      if (this.planLimitService) {
+        await this.planLimitService.checkChatTokenLimit(ownerUserId);
+      }
+
       deductedCreditAmount = await this.deductAiChatCredit(ownerUserId, creditContext);
       creditDeducted = deductedCreditAmount > 0;
 
@@ -654,6 +676,14 @@ export class AiInteractionService {
         attachments_count: userAttachments.length,
         context_count: chatbody.retrievedContext.length,
       });
+
+      // 일일 채팅 토큰 누적
+      if (this.planLimitService) {
+        const estimatedTokens = BigInt(
+          Math.ceil((chatbody.chatContent.length + aiResponse.content.length) / 4)
+        );
+        await this.planLimitService.recordChatTokens(ownerUserId, estimatedTokens);
+      }
 
       return {
         title: isNewConversation ? conversation.title : undefined,
@@ -781,6 +811,12 @@ export class AiInteractionService {
         newAttachments.length,
         retrybody.modelName
       );
+
+      // 일일 채팅 토큰 한도 확인
+      if (this.planLimitService) {
+        await this.planLimitService.checkChatTokenLimit(ownerUserId);
+      }
+
       deductedCreditAmount = await this.deductAiChatCredit(ownerUserId, creditContext);
       creditDeducted = deductedCreditAmount > 0;
 
@@ -825,6 +861,15 @@ export class AiInteractionService {
         model_name: retrybody.modelName,
         chat_type: 'retry',
       });
+
+      // 일일 채팅 토큰 누적
+      if (this.planLimitService) {
+        const inputContent = lastUserMsg?.content ?? '';
+        const estimatedTokens = BigInt(
+          Math.ceil((inputContent.length + aiResponse.content.length) / 4)
+        );
+        await this.planLimitService.recordChatTokens(ownerUserId, estimatedTokens);
+      }
 
       return { title: conversation.title, messages: [newAiMessage] };
     } catch (err: unknown) {

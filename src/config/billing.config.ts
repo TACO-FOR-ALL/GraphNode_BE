@@ -105,11 +105,68 @@ export const FEATURE_COSTS: Record<CreditFeature, CreditCostCalculator> = {
 } satisfies Record<CreditFeature, CreditCostCalculator>;
 
 /**
+ * 플랜별 리소스 한도 정의.
+ * `null`은 무제한을 의미합니다.
+ */
+export interface PlanResourceLimits {
+  /** 일일 AI 채팅 토큰 한도 (AI_CHAT + AGENT_CHAT 합산). null = 무제한. */
+  dailyChatTokens: bigint | null;
+  /** 전체 파일 저장 용량 한도 (bytes). null = 무제한. */
+  fileStorageBytes: bigint | null;
+  /** 동시 활성 매크로 공간(MacroView) 최대 개수. null = 무제한. */
+  macroSpaceCount: number | null;
+  /** 동시 활성 마이크로 데이터 공간(MicroscopeWorkspace) 최대 개수. null = 무제한. */
+  microSpaceCount: number | null;
+}
+
+const GB = BigInt(1024 * 1024 * 1024);
+
+/**
+ * 플랜별 리소스 한도 (중앙 조정 포인트).
+ * BM 변경 시 이 객체만 수정하면 됩니다.
+ */
+export const PLAN_LIMITS: Record<PlanType, PlanResourceLimits> = {
+  [PlanType.FREE]: {
+    dailyChatTokens: BigInt(50_000),
+    fileStorageBytes: BigInt(1) * GB,
+    macroSpaceCount: 1,
+    microSpaceCount: 5,
+  },
+  [PlanType.BASIC]: {
+    dailyChatTokens: BigInt(250_000),
+    fileStorageBytes: BigInt(10) * GB,
+    macroSpaceCount: 10,
+    microSpaceCount: 50,
+  },
+  /** @deprecated PRO는 BASIC과 동일한 한도 적용. */
+  [PlanType.PRO]: {
+    dailyChatTokens: BigInt(250_000),
+    fileStorageBytes: BigInt(10) * GB,
+    macroSpaceCount: 10,
+    microSpaceCount: 50,
+  },
+  [PlanType.PLUS]: {
+    dailyChatTokens: BigInt(500_000),
+    fileStorageBytes: BigInt(20) * GB,
+    macroSpaceCount: 20,
+    microSpaceCount: 100,
+  },
+  [PlanType.ENTERPRISE]: {
+    dailyChatTokens: null,
+    fileStorageBytes: null,
+    macroSpaceCount: null,
+    microSpaceCount: null,
+  },
+} satisfies Record<PlanType, PlanResourceLimits>;
+
+/**
  * 플랜별 월간 크레딧 한도 (refill 시 이 값으로 리셋)
  */
 export const PLAN_CREDIT_LIMITS: Record<PlanType, number> = {
   [PlanType.FREE]: 30,
+  [PlanType.BASIC]: 500,
   [PlanType.PRO]: 500,
+  [PlanType.PLUS]: 1000,
   [PlanType.ENTERPRISE]: 9999,
 } satisfies Record<PlanType, number>;
 
@@ -177,9 +234,11 @@ export interface PlanPrice {
 export class BillingConfig {
   /** 플랜별 가격 (KRW 기준) */
   private readonly planPrices: Record<PlanType, PlanPrice> = {
-    [PlanType.FREE]:       { monthly: 0,    yearly: 0 },
-    [PlanType.PRO]:        { monthly: 9900, yearly: 95040 }, // 9900 * 12 * 0.8
-    [PlanType.ENTERPRISE]: { monthly: 0,    yearly: 0 },     // Contact Sales
+    [PlanType.FREE]:       { monthly: 0,      yearly: 0 },
+    [PlanType.BASIC]:      { monthly: 13000,  yearly: 124800 }, // 13000 * 12 * 0.8
+    [PlanType.PRO]:        { monthly: 13000,  yearly: 124800 }, // 레거시 → BASIC과 동일
+    [PlanType.PLUS]:       { monthly: 29000,  yearly: 278400 }, // 29000 * 12 * 0.8
+    [PlanType.ENTERPRISE]: { monthly: 0,      yearly: 0 },      // Contact Sales
   };
 
   /** 연결제 할인율 (0.0 ~ 1.0) */

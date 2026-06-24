@@ -5,7 +5,7 @@ export type PgProvider = 'PORTONE' | 'TOSS' | 'STRIPE';
 export type BillingCycle = 'MONTHLY' | 'YEARLY';
 
 /** 구독 플랜 등급 */
-export type BillingPlanType = 'FREE' | 'PRO' | 'ENTERPRISE';
+export type BillingPlanType = 'FREE' | 'BASIC' | 'PLUS' | 'PRO' | 'ENTERPRISE';
 
 /**
  * 결제 수단 등록 요청 DTO
@@ -28,7 +28,7 @@ export interface RegisterPaymentMethodRequest {
  * 구독 신청 요청 DTO
  *
  * @property pgProvider - PG사 식별자 — 필수
- * @property planType - 구독 플랜. FREE는 선택 불가 ('PRO' | 'ENTERPRISE')
+ * @property planType - 구독 플랜. FREE는 선택 불가 ('BASIC' | 'PLUS' | 'PRO' | 'ENTERPRISE')
  * @property billingCycle - 결제 주기 ('MONTHLY' | 'YEARLY')
  * @property paymentMethodId - 등록된 결제 수단 ID (선택, 미지정 시 기본 수단 사용)
  */
