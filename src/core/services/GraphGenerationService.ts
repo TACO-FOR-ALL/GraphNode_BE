@@ -293,6 +293,22 @@ export class GraphGenerationService {
 
       logger.error({ err, userId }, 'Failed to enqueue graph generation request');
 
+      // CREATING으로 전환된 상태를 FAILED로 복구
+      if (taskId) {
+        try {
+          await this.graphEmbeddingService.saveStats({
+            userId,
+            nodes: 0,
+            edges: 0,
+            clusters: 0,
+            status: 'FAILED',
+            generatedAt: new Date().toISOString(),
+          });
+        } catch (statsErr) {
+          logger.warn({ statsErr, userId, taskId }, 'Failed to revert graph status to FAILED after enqueue failure');
+        }
+      }
+
       // 실패 알림 전송
       await this.notificationService.sendGraphGenerationRequestFailed(
         userId,
@@ -335,6 +351,7 @@ export class GraphGenerationService {
     let taskId: string | undefined;
     let creditHeldTaskId: string | undefined;
     let messageSent = false;
+    let macroViewCreated = false;
 
     try {
       const isManual = scopeFilter.mode === 'manual';
@@ -380,6 +397,7 @@ export class GraphGenerationService {
         description: options?.description,
         scopeFilter,
       });
+      macroViewCreated = true;
 
       taskId = `task_${userId}_${ulid()}`;
       const taskPrefix = `graph-generation/${taskId}/`;
@@ -488,6 +506,26 @@ export class GraphGenerationService {
     } catch (err) {
       if (creditHeldTaskId && !messageSent) {
         await this.rollbackCreditHold(creditHeldTaskId, 'scoped graph generation enqueue failed');
+      }
+      if (macroViewCreated && !messageSent) {
+        try {
+          await this.graphEmbeddingService.saveStats(
+            {
+              userId,
+              nodes: 0,
+              edges: 0,
+              clusters: 0,
+              status: 'FAILED',
+              generatedAt: new Date().toISOString(),
+            },
+            { macroId: newMacroId }
+          );
+        } catch (statsErr) {
+          logger.error(
+            { err: statsErr, userId, macroId: newMacroId },
+            'Failed to mark scoped graph generation as FAILED after enqueue failure'
+          );
+        }
       }
       logger.error({ err, userId }, 'Failed to enqueue scoped graph generation');
       await this.notificationService.sendGraphGenerationRequestFailed(

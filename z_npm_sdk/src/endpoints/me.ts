@@ -308,6 +308,7 @@ export class MeApi {
    * - `200 OK`: 조회 성공
    * - `400 Bad Request`: limit/offset 파라미터 유효성 오류
    * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `503 Service Unavailable`: 크레딧 서비스 이용 불가
    *
    * @param params.limit  한 번에 가져올 항목 수 (기본 20, 최대 100)
    * @param params.offset 건너뛸 항목 수 (기본 0)

@@ -218,6 +218,27 @@ describe('macroGraph.cypher', () => {
       expect(q).toMatch(/MERGE \(sm:MacroSummary \{userId: \$userId, macroId: \$macroId\}\)/);
     });
 
+    it('listEdges returns only relations and endpoints from the requested Macro View', () => {
+      const q = MACRO_GRAPH_CYPHER.listEdges;
+
+      expect(q).toMatch(
+        /MacroGraph \{userId: \$userId, macroId: \$macroId\}\)-\[:HAS_RELATION\]->\(rel:MacroRelation \{userId: \$userId, macroId: \$macroId\}/
+      );
+      expect(q).toMatch(/RELATES_SOURCE\]->\(src:MacroNode \{userId: \$userId, macroId: \$macroId\}/);
+      expect(q).toMatch(/RELATES_TARGET\]->\(tgt:MacroNode \{userId: \$userId, macroId: \$macroId\}/);
+      expect(q).not.toMatch(/MacroRelation \{userId: \$userId\}\)/);
+      expect(q).not.toMatch(/MacroNode\)/);
+    });
+
+    it('edge creation links MacroRelation and materialized edges with macroId scope', () => {
+      expect(MACRO_GRAPH_CYPHER.linkRelationsToGraph).toMatch(
+        /MacroRelation \{userId: \$userId, macroId: \$macroId, id: row\.id\}/
+      );
+      expect(MACRO_GRAPH_CYPHER.linkMaterializedMacroRelated).toMatch(
+        /MACRO_RELATED \{id: row\.edgeId, userId: \$userId, macroId: row\.macroId\}/
+      );
+    });
+
     it('delete/restore by origId targets matched node entities instead of numeric ids', () => {
       const queries = [
         MACRO_GRAPH_CYPHER.hardDeleteNodesByOrigIds,

@@ -1,4 +1,5 @@
 import type { ScopeFilter } from './graph.js';
+import type { PlanLimitExceededProblemDetails } from './problem.js';
 
 /**
  * Graph AI 생성 작업 응답 DTO입니다.
@@ -7,11 +8,13 @@ import type { ScopeFilter } from './graph.js';
  * @property message 서버가 반환한 작업 접수 메시지입니다.
  * @property taskId 백그라운드 그래프 생성 작업 ID입니다. `status`가 `skipped`인 경우 없을 수 있습니다.
  * @property status 작업 상태입니다. 일반적으로 `queued` 또는 `skipped`입니다.
+ * @property macroId 1:N 뷰 생성 요청 시 발급된 Macro View ID입니다. 1:1 레거시 모드 또는 `skipped` 상태인 경우 없을 수 있습니다.
  */
 export interface GraphGenerationResponseDto {
   message: string;
   taskId?: string;
   status: string;
+  macroId?: string;
 }
 
 /**
@@ -57,3 +60,13 @@ export interface GenerateGraphOptions {
   title?: string;
   description?: string;
 }
+
+/**
+ * `client.graphAi.generateGraph()` 플랜 한도 초과 에러 컨트랙트입니다.
+ *
+ * BM/플랜 한도 초과로 인해 백엔드에서 PlanLimitExceededError가 발생하면
+ * HTTP 402 Payment Required 상태 코드와 함께 반환됩니다.
+ *
+ * @public
+ */
+export type GenerateGraphPlanLimitExceededError = PlanLimitExceededProblemDetails;

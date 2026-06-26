@@ -19,7 +19,7 @@
 | Method                     | Endpoint                    | Description                          | Status Codes |
 | :------------------------- | :-------------------------- | :----------------------------------- | :----------- |
 | `getCredits()`             | `GET /v1/me/credits`        | 크레딧 잔액 및 플랜 조회 (JIT 갱신)  | 200, 401, 503 |
-| `getCreditUsage(params?)`  | `GET /v1/me/credits/usage`  | 크레딧 사용 내역 조회 (페이지네이션) | 200, 400, 401 |
+| `getCreditUsage(params?)`  | `GET /v1/me/credits/usage`  | 크레딧 사용 내역 조회 (페이지네이션) | 200, 400, 401, 503 |
 
 ### API Keys & AI Settings
 
@@ -367,6 +367,7 @@ AI 응답 및 요약 시 우선적으로 사용되는 언어 설정을 확인합
   - `200 OK`: 사용 내역 조회 성공 (내역 없으면 빈 배열)
   - `400 Bad Request`: `limit` / `offset` 파라미터 유효성 오류
   - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `503 Service Unavailable`: 크레딧 서비스 이용 불가
 
 ---
 

@@ -20,3 +20,18 @@ export interface ProblemDetails {
   errors?: Array<Record<string, unknown>>;
   retryable?: boolean;
 }
+
+/**
+ * 플랜 한도 초과 문제 응답 DTO입니다.
+ *
+ * 플랜 한도를 초과했을 때 HTTP 402 Payment Required로 반환됩니다.
+ * 백엔드 에러 클래스: PlanLimitExceededError.
+ *
+ * @public
+ */
+export interface PlanLimitExceededProblemDetails extends ProblemDetails {
+  type: 'https://graphnode.dev/problems/plan-limit-exceeded';
+  title: 'PLAN LIMIT EXCEEDED';
+  status: 402;
+  retryable: false;
+}

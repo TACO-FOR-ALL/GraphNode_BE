@@ -1,5 +1,5 @@
 import { NotionApiClient } from '../../src/infra/notion/NotionApiClient';
-import { UpstreamError, ValidationError } from '../../src/shared/errors/domain';
+import { RateLimitError, UpstreamError, ValidationError } from '../../src/shared/errors/domain';
 
 global.fetch = jest.fn();
 
@@ -93,7 +93,14 @@ describe('NotionApiClient', () => {
         jest.advanceTimersByTime(1000);
       }
 
-      await expect(promise).rejects.toThrow(UpstreamError);
+      await expect(promise).rejects.toBeInstanceOf(UpstreamError);
+      await promise.catch((err: unknown) => {
+        expect(err).toMatchObject({
+          code: 'UPSTREAM_ERROR',
+          httpStatus: 502,
+        });
+        expect(err).not.toBeInstanceOf(RateLimitError);
+      });
       expect(global.fetch).toHaveBeenCalledTimes(3); // attempt는 0, 1, 2 = 3회
     });
   });
