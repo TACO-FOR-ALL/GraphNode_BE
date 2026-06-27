@@ -219,6 +219,28 @@ export async function seedTestData(): Promise<void> {
       preferredLanguage: 'en',
     },
   });
+
+  const now = new Date();
+  const nextMonth = new Date();
+  nextMonth.setMonth(nextMonth.getMonth() + 1);
+
+  await prisma.creditBalance.upsert({
+    where: { userId: TEST_USER_ID },
+    update: {
+      planType: 'ENTERPRISE',
+      balance: 9999,
+      cycleStart: now,
+      cycleEnd: nextMonth,
+    },
+    create: {
+      userId: TEST_USER_ID,
+      planType: 'ENTERPRISE',
+      balance: 9999,
+      cycleStart: now,
+      cycleEnd: nextMonth,
+    },
+  });
+
   console.log('PostgreSQL User seeded.');
 
   const mongoClient = new MongoClient(MONGO_URI);

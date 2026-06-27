@@ -43,7 +43,7 @@ export class GraphAiApi {
    * - `202 Accepted`: 그래프 생성 작업이 큐에 등록됨
    * - `200 OK`: 사용자의 대화 또는 노트 데이터가 없어 작업을 생성하지 않고 건너뜀 (`status: 'skipped'`)
    * - `401 Unauthorized`: 인증되지 않은 요청
-   * - `402 Payment Required`: 플랜 한도 초과 (`PlanLimitExceededError`). FE는 자동 재시도 대신 플랜 업그레이드 CTA를 보여주어야 합니다.
+   * - `402 Payment Required`: BM/plan limit exceeded (`PlanLimitExceededError`, `GenerateGraphPlanLimitExceededError`). Frontends should show an upgrade CTA instead of retrying automatically.
    * - `409 Conflict`: 동일한 작업이 이미 진행 중임
    *
    * @example

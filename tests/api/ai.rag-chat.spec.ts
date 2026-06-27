@@ -6,6 +6,13 @@ import { jest, describe, test, expect, beforeAll } from '@jest/globals';
 import { createApp } from '../../src/bootstrap/server';
 import { AiStreamEvent } from '../../src/shared/ai-providers/AiStreamEvent';
 
+jest.mock('../../src/core/services/SubscriptionService', () => ({
+  SubscriptionService: class {
+    createFreeSubscription() { return Promise.resolve(null); }
+    findActiveSubscription() { return Promise.resolve({ planType: 'FREE' }); }
+  },
+}));
+
 // --- Mocks ---
 jest.mock('../../src/core/services/GoogleOAuthService', () => ({
   GoogleOAuthService: class {

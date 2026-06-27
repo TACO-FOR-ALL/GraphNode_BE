@@ -4,6 +4,13 @@ import request from 'supertest';
 import { createApp } from '../../src/bootstrap/server';
 import { container } from '../../src/bootstrap/container';
 
+jest.mock('../../src/core/services/SubscriptionService', () => ({
+  SubscriptionService: class {
+    createFreeSubscription() { return Promise.resolve(null); }
+    findActiveSubscription() { return Promise.resolve({ planType: 'FREE' }); }
+  },
+}));
+
 // --- Mocks ---
 const mockUser = {
   id: '12345',

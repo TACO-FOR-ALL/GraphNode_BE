@@ -31,7 +31,7 @@ export class MicroscopeApi {
    * - `201 Created`: 워크스페이스 생성 및 Ingest 파이프라인 시작 성공
    * - `400 Bad Request`: nodeId 또는 nodeType 누락
    * - `401 Unauthorized`: 인증되지 않은 요청
-   * - `402 Payment Required`: 워크스페이스 생성 시 플랜 한도 초과 (`PlanLimitExceededError`). FE는 자동 재시도 대신 플랜 업그레이드 CTA를 보여주어야 합니다.
+   * - `402 Payment Required`: BM/plan limit exceeded while creating the Microscope workspace (`PlanLimitExceededError`, `CreateWorkspacePlanLimitExceededError`). Frontends should show an upgrade CTA instead of retrying automatically.
    * - `502 Bad Gateway`: SQS 전송 또는 데이터베이스 오류
    *
    * @example
@@ -58,7 +58,7 @@ export class MicroscopeApi {
    * - `201 Created`: 워크스페이스 생성 및 Ingest 파이프라인 시작 성공
    * - `400 Bad Request`: nodeId 또는 nodeType 누락
    * - `401 Unauthorized`: 인증되지 않은 요청
-   * - `402 Payment Required`: 워크스페이스 생성 시 플랜 한도 초과 (`PlanLimitExceededError`). FE는 자동 재시도 대신 플랜 업그레이드 CTA를 보여주어야 합니다.
+   * - `402 Payment Required`: BM/plan limit exceeded while creating the Microscope workspace (`PlanLimitExceededError`, `CreateWorkspacePlanLimitExceededError`). Frontends should show an upgrade CTA instead of retrying automatically.
    * - `502 Bad Gateway`: SQS 전송 또는 데이터베이스 오류
    *
    * @example
@@ -224,7 +224,7 @@ export class MicroscopeApi {
    * - `201 Created`: 워크스페이스 생성 및 Ingest 파이프라인 시작 성공
    * - `400 Bad Request`: sources 배열이 비어있거나 nodeId/nodeType 누락
    * - `401 Unauthorized`: 인증되지 않은 요청
-   * - `402 Payment Required`: 워크스페이스 생성 시 플랜 한도 초과 (`PlanLimitExceededError`). FE는 자동 재시도 대신 플랜 업그레이드 CTA를 보여주어야 합니다.
+   * - `402 Payment Required`: BM/plan limit exceeded while creating the Microscope workspace (`PlanLimitExceededError`, `CreateWorkspacePlanLimitExceededError`). Frontends should show an upgrade CTA instead of retrying automatically.
    * - `502 Bad Gateway`: SQS 전송 또는 데이터베이스 오류
    *
    * @example
