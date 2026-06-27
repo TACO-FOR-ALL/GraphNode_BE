@@ -7,6 +7,7 @@ import { UserService } from '../../core/services/UserService';
 import { asyncHandler } from '../utils/asyncHandler';
 import type { ICreditService } from '../../core/ports/ICreditService';
 import type { SubscriptionService } from '../../core/services/SubscriptionService';
+import type { PlanLimitService } from '../../core/services/PlanLimitService';
 
 
 /**
@@ -18,9 +19,15 @@ export function createMeRouter(deps: {
   userService: UserService;
   creditService: ICreditService;
   subscriptionService?: SubscriptionService;
+  planLimitService?: PlanLimitService;
 }): Router {
   const router = Router();
-  const meController = new MeController(deps.userService, deps.creditService, deps.subscriptionService);
+  const meController = new MeController(
+    deps.userService,
+    deps.creditService,
+    deps.subscriptionService,
+    deps.planLimitService,
+  );
 
 
   router.use(bindSessionUser);

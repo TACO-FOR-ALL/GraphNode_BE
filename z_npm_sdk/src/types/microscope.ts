@@ -1,17 +1,34 @@
+import type { PlanLimitExceededProblemDetails } from './problem.js';
+
+/**
+ * 마이크로 공간(Microscope) 워크스페이스 생성 시 플랜 한도 초과 에러 컨트랙트입니다.
+ *
+ * BM/플랜 한도 초과로 인해 백엔드에서 PlanLimitExceededError가 발생하면
+ * HTTP 402 Payment Required 상태 코드와 함께 반환됩니다.
+ *
+ * @public
+ */
+export type CreateWorkspacePlanLimitExceededError = PlanLimitExceededProblemDetails;
+
 /**
  * @public
- * microscope 문서
+ * Microscope 문서(Document) DTO입니다. 하나의 소스(노트/대화)에 대한 Ingest 작업 상태와 결과를 나타냅니다.
  * @property id 문서 ID
- * @property s3Key S3 키 > 안씀
+ * @property s3Key S3 키 (내부용, 미사용)
  * @property fileName 파일 이름
- * @property status 문서 상태
+ * @property status 전체 문서 처리 상태입니다. block 및 non-block 파이프라인이 모두 완료되어야 `COMPLETED`가 됩니다.
  * @property nodeId 원본 노드 ID
  * @property nodeType 원본 노드 타입
  * @property sourceId 소스 ID
- * @property graphPayloadId Microscope Graph 획득용 ID
- * @property error 에러
+ * @property graphPayloadId Non-block 파이프라인 Microscope Graph 획득용 ID
+ * @property error 에러 메시지
  * @property createdAt 생성일
  * @property updatedAt 업데이트일
+ * @property blockModeRequested Block 파이프라인 요청 여부입니다. `true`이면 block 파이프라인도 함께 실행됩니다.
+ * @property blockStatus Block 파이프라인 처리 상태입니다. `blockModeRequested`가 `true`인 경우에만 존재합니다.
+ * @property nonBlockStatus Non-block 파이프라인 처리 상태입니다.
+ * @property blockGraphPayloadId Block 파이프라인 결과 획득용 ID입니다.
+ * @property blockGraphS3Key Block 그래프 데이터의 S3 키입니다. 데이터가 10MB를 초과하는 경우 FE가 이 키를 통해 S3에서 직접 조회합니다.
  */
 export interface MicroscopeDocument {
   id: string;
@@ -25,6 +42,11 @@ export interface MicroscopeDocument {
   error?: string;
   createdAt: string;
   updatedAt: string;
+  blockModeRequested?: boolean;
+  blockStatus?: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  nonBlockStatus?: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  blockGraphPayloadId?: string;
+  blockGraphS3Key?: string;
 }
 
 

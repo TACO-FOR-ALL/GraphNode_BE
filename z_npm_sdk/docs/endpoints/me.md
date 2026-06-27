@@ -1,18 +1,25 @@
 # Me API Reference (`client.me`)
 
-현재 로그인된 사용자의 프로필 정보, 환경 설정(선호 언어 등), 그리고 LLM 서비스 이용을 위한 API Key 등을 관리합니다.
+현재 로그인된 사용자의 프로필 정보, 플랜 사용량, 환경 설정(선호 언어 등), 그리고 LLM 서비스 이용을 위한 API Key 등을 관리합니다.
 
 ## Summary
 
-### Profile & Session
+### Profile, Session & Plan Usage
 
-| Method               | Endpoint                     | Description                | Status Codes |
-| :------------------- | :--------------------------- | :------------------------- | :----------- |
-| `get()`              | `GET /v1/me`                 | 내 프로필 및 계정 정보 조회 | 200, 401, 404, 502 |
-| `logout()`           | `POST /auth/logout`          | 현재 세션 로그아웃          | 204, 401     |
-| `refresh()`          | `POST /auth/refresh`         | Access Token 갱신          | 200, 401     |
-| `getSessions()`      | `GET /v1/me/sessions`        | 활성 세션(기기) 목록 조회   | 200, 401     |
-| `revokeSession(id)`  | `DELETE /v1/me/sessions/:id` | 특정 세션 강제 종료        | 204, 400, 401 |
+| Method               | Endpoint                     | Description                         | Status Codes |
+| :------------------- | :--------------------------- | :---------------------------------- | :----------- |
+| `get()`              | `GET /v1/me`                 | 내 프로필 + planUsage 포함 조회      | 200, 401, 404, 502 |
+| `logout()`           | `POST /auth/logout`          | 현재 세션 로그아웃                   | 204, 401     |
+| `refresh()`          | `POST /auth/refresh`         | Access Token 갱신                   | 200, 401     |
+| `getSessions()`      | `GET /v1/me/sessions`        | 활성 세션(기기) 목록 조회            | 200, 401     |
+| `revokeSession(id)`  | `DELETE /v1/me/sessions/:id` | 특정 세션 강제 종료                  | 204, 400, 401 |
+
+### Credits & Plan
+
+| Method                     | Endpoint                    | Description                          | Status Codes |
+| :------------------------- | :-------------------------- | :----------------------------------- | :----------- |
+| `getCredits()`             | `GET /v1/me/credits`        | 크레딧 잔액 및 플랜 조회 (JIT 갱신)  | 200, 401, 503 |
+| `getCreditUsage(params?)`  | `GET /v1/me/credits/usage`  | 크레딧 사용 내역 조회 (페이지네이션) | 200, 400, 401, 503 |
 
 ### API Keys & AI Settings
 
@@ -37,12 +44,19 @@
 
 ### `get()`
 
-현재 로그인된 사용자의 고유 ID, 이메일, 아바타, 그리고 가입일 등의 상세 프로필 정보를 가져옵니다.
+현재 로그인된 사용자의 프로필 정보와 플랜 리소스 사용량 스냅샷을 가져옵니다.
 
 - **Usage Example**
   ```typescript
   const { data } = await client.me.get();
-  console.log(`Hello, ${data.profile.displayName}`);
+  console.log(`Hello, ${data.profile?.displayName}`);
+
+  // 플랜 사용량 (planUsage는 optional — graceful degradation)
+  if (data.planUsage) {
+    const { chatTokens, macroSpace, microSpace, fileStorage } = data.planUsage;
+    console.log(`채팅 토큰: ${chatTokens.used} / ${chatTokens.limit ?? '무제한'}`);
+    console.log(`파일 용량: ${fileStorage.usedBytes} bytes`);
+  }
   ```
 - **Response Type**: `MeResponseDto`
 - **Example Response Data**
@@ -58,9 +72,39 @@
       "providerUserId": "12345",
       "createdAt": "2024-01-01T00:00:00.000Z",
       "preferredLanguage": "ko"
+    },
+    "credit": {
+      "balance": 30,
+      "holdAmount": 0,
+      "availableBalance": 30,
+      "planType": "BASIC",
+      "cycleStart": "2026-06-01T00:00:00.000Z",
+      "cycleEnd": "2026-07-01T00:00:00.000Z"
+    },
+    "planUsage": {
+      "planType": "BASIC",
+      "chatTokens": { "used": 47832, "limit": 250000 },
+      "macroSpace": { "used": 3, "limit": 10 },
+      "microSpace": { "used": 12, "limit": 50 },
+      "fileStorage": { "usedBytes": 524288000, "limitBytes": 10737418240 }
     }
   }
   ```
+- **Enterprise 플랜 예시** (limit = null):
+  ```json
+  {
+    "planUsage": {
+      "planType": "ENTERPRISE",
+      "chatTokens": { "used": 123456, "limit": null },
+      "macroSpace": { "used": 42, "limit": null },
+      "microSpace": { "used": 300, "limit": null },
+      "fileStorage": { "usedBytes": 2147483648, "limitBytes": null }
+    }
+  }
+  ```
+- **Edge Cases**
+  - `planUsage` 필드가 없는 경우: 서버 내부 집계 실패 (graceful degradation). `data.planUsage?.chatTokens` 로 optional chaining 필수.
+  - `chatTokens.used`는 UTC 자정 기준으로 리셋됩니다.
 - **Type Location**: `z_npm_sdk/src/types/me.ts`
 - **Status Codes**
   - `200 OK`: 프로필 조회 성공
@@ -254,7 +298,83 @@ AI 응답 및 요약 시 우선적으로 사용되는 언어 설정을 확인합
 
 ---
 
+---
+
+## Methods (Credits & Plan)
+
+### `getCredits()`
+
+현재 크레딧 잔액 및 플랜 정보를 조회합니다. 내부적으로 JIT(Just-In-Time) 갱신 로직이 실행되어 구독 주기가 만료된 경우 자동으로 크레딧이 충전됩니다.
+
+- **Usage Example**
+  ```typescript
+  const { data } = await client.me.getCredits();
+  console.log(`잔액: ${data.availableBalance} 크레딧 (플랜: ${data.planType})`);
+  ```
+- **Response Type**: `CreditBalanceDto`
+- **Example Response Data**
+  ```json
+  {
+    "balance": 500,
+    "holdAmount": 0,
+    "availableBalance": 500,
+    "planType": "BASIC",
+    "cycleStart": "2026-06-01T00:00:00.000Z",
+    "cycleEnd": "2026-07-01T00:00:00.000Z"
+  }
+  ```
+- **Status Codes**
+  - `200 OK`: 크레딧 잔액 조회 성공
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `503 Service Unavailable`: 크레딧 서비스 이용 불가
+
+---
+
+### `getCreditUsage(params?)`
+
+크레딧 사용 내역을 최신순으로 페이지네이션 조회합니다.
+
+- **Usage Example**
+  ```typescript
+  const { data } = await client.me.getCreditUsage({ limit: 10, offset: 0 });
+  data.items.forEach(item => {
+    console.log(`${item.feature}: -${item.creditUsed} (${item.createdAt})`);
+  });
+  // 사용 내역 없음
+  // { items: [], total: 0 }
+  ```
+- **Parameters**
+  - `params.limit` (number, optional): 한 번에 가져올 항목 수 (기본 20, 최대 100)
+  - `params.offset` (number, optional): 건너뛸 항목 수 (기본 0)
+- **Response Type**: `CreditUsageDto`
+- **Example Response Data**
+  ```json
+  {
+    "items": [
+      {
+        "id": "log-uuid-1",
+        "feature": "AI_CHAT",
+        "creditUsed": 1,
+        "status": "SUCCESS",
+        "taskId": null,
+        "createdAt": "2026-06-25T10:30:00.000Z"
+      }
+    ],
+    "total": 42
+  }
+  ```
+- **Status Codes**
+  - `200 OK`: 사용 내역 조회 성공 (내역 없으면 빈 배열)
+  - `400 Bad Request`: `limit` / `offset` 파라미터 유효성 오류
+  - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `503 Service Unavailable`: 크레딧 서비스 이용 불가
+
+---
+
 ## Remarks
 
 > [!WARNING]
 > **API Key Security**: `updateApiKey` 호출 시 전달하는 실제 키 값은 외부로 노출되지 않도록 주의하십시오. SDK는 내부적으로 HTTPS 보안 연결을 통해 서버에 전송합니다.
+
+> [!NOTE]
+> **planUsage optional chaining**: `GET /v1/me` 응답의 `planUsage` 필드는 서버 내부 집계 실패 시 생략될 수 있습니다. `data.planUsage?.chatTokens` 형식으로 optional chaining을 반드시 사용하세요.

@@ -88,7 +88,13 @@ export type GraphRelationType = string;
  * 그래프 백엔드 처리 상태.
  * @public
  */
-export type GraphStatus = 'NOT_CREATED' | 'CREATING' | 'CREATED' | 'UPDATING' | 'UPDATED';
+export type GraphStatus =
+  | 'NOT_CREATED'
+  | 'CREATING'
+  | 'CREATED'
+  | 'UPDATING'
+  | 'UPDATED'
+  | 'FAILED';
 
 /**
  * 그래프 엣지 DTO.

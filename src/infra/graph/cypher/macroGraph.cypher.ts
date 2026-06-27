@@ -418,7 +418,7 @@ export const MACRO_GRAPH_CYPHER = {
   linkRelationsToGraph: `
     UNWIND $rows AS row
     MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})
-    MATCH (r:MacroRelation {userId: $userId, id: row.id})
+    MATCH (r:MacroRelation {userId: $userId, macroId: $macroId, id: row.id})
     MERGE (g)-[:HAS_RELATION]->(r)
   `,
 
@@ -719,8 +719,9 @@ export const MACRO_GRAPH_CYPHER = {
     UNWIND $rows AS row
     MATCH (src:MacroNode {userId: $userId, macroId: row.macroId, id: row.source})
     MATCH (tgt:MacroNode {userId: $userId, macroId: row.macroId, id: row.target})
-    MERGE (src)-[r:MACRO_RELATED {id: row.edgeId, userId: $userId}]->(tgt)
-    SET r.weight       = row.weight,
+    MERGE (src)-[r:MACRO_RELATED {id: row.edgeId, userId: $userId, macroId: row.macroId}]->(tgt)
+    SET r.macroId      = row.macroId,
+        r.weight       = row.weight,
         r.type         = row.type,
         r.relationType = row.relationType,
         r.relation     = row.relation,
@@ -815,10 +816,10 @@ export const MACRO_GRAPH_CYPHER = {
    * // }
    */
   listEdges: `
-    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_RELATION]->(rel:MacroRelation {userId: $userId})
+    MATCH (g:MacroGraph {userId: $userId, macroId: $macroId})-[:HAS_RELATION]->(rel:MacroRelation {userId: $userId, macroId: $macroId})
     WHERE g.deletedAt IS NULL AND ($includeDeleted OR rel.deletedAt IS NULL)
-    MATCH (rel)-[:RELATES_SOURCE]->(src:MacroNode)
-    MATCH (rel)-[:RELATES_TARGET]->(tgt:MacroNode)
+    MATCH (rel)-[:RELATES_SOURCE]->(src:MacroNode {userId: $userId, macroId: $macroId})
+    MATCH (rel)-[:RELATES_TARGET]->(tgt:MacroNode {userId: $userId, macroId: $macroId})
     RETURN rel, src.id AS sourceNodeId, tgt.id AS targetNodeId
   `,
 

@@ -32,7 +32,7 @@ export { BillingApi } from './endpoints/billing.js';
 export type { BatchOperation } from './endpoints/graphEditor.js';
 
 // Types
-export type { ProblemDetails } from './types/problem.js';
+export type { ProblemDetails, PlanLimitExceededProblemDetails } from './types/problem.js';
 export type {
   MeResponseDto,
   UserProfileDto,
@@ -123,6 +123,7 @@ export type {
   MicroscopeGraphNode,
   MicroscopeGraphEdge,
   MicroscopeGraphData,
+  CreateWorkspacePlanLimitExceededError,
 } from './types/microscope.js';
 export type {
   GraphSourceType,
@@ -208,7 +209,11 @@ export type {
   MicroscopeDocumentFailedNotificationEvent,
   MicroscopeWorkspaceCompletedNotificationEvent,
 } from './types/notification.js';
-export type { GraphGenerationResponseDto, GenerateGraphOptions } from './types/graphAi.js';
+export type {
+  GraphGenerationResponseDto,
+  GenerateGraphOptions,
+  GenerateGraphPlanLimitExceededError,
+} from './types/graphAi.js';
 export type {
   CreateFeedbackRequestDto,
   CreateFeedbackResponseDto,
@@ -222,6 +227,14 @@ export type {
   ImportFinalizeResponse,
   ImportAttachment,
 } from './types/import.js';
+export type {
+  NotionBlockDTO,
+  NotionBlocksResponseDTO,
+  NotionPageDTO,
+  NotionPageParentDTO,
+  NotionPagesResponseDTO,
+  NotionRichTextDTO,
+} from './types/notion.js';
 export type {
   CreateNodeEditorDto,
   UpdateNodeEditorDto,

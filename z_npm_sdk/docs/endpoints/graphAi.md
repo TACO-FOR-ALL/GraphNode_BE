@@ -8,7 +8,7 @@ AI를 사용하여 사용자의 대화 기록이나 외부 데이터를 분석�
 
 | Method | Endpoint | Description | Status Codes |
 | :--- | :--- | :--- | :--- |
-| `generateGraph(opts?)` | `POST /v1/graph-ai/generate` | 대화 기록 기반 전체 그래프 생성 요청 (1:N scopeFilter 지원) | 200, 202, 401, 409 |
+| `generateGraph(opts?)` | `POST /v1/graph-ai/generate` | 대화 기록 기반 전체 그래프 생성 요청 (1:N scopeFilter 지원) | 200, 202, 401, 402, 409 |
 | `generateGraphTest(data)` | `POST /.../generate-json` | [테스트] 외부 JSON 데이터로 그래프 생성 | 202, 400, 401 |
 | `addNode()` | `POST /v1/graph-ai/add-node` | 신규 대화 내용을 기존 그래프에 추가 | 202, 200, 401 |
 | ~~`deleteGraph(opts?)`~~ | `DELETE /v1/graph-ai` | **[Deprecated]** 레거시 1:1 그래프 Hard Delete 전용 | 204, 401, 502 |
@@ -53,9 +53,10 @@ AI를 사용하여 사용자의 대화 기록이나 외부 데이터를 분석�
 
 | Property | Type | Description |
 | :--- | :--- | :--- |
-| `status` | `string` | Task status ('queued' or 'skipped') |
-| `taskId` | `string` | Unique identifier for the generation task (only if status is 'queued') |
-| `message` | `string` | Status message |
+| `status` | `string` | 작업 상태 (`queued` 또는 `skipped`) |
+| `taskId` | `string?` | 백그라운드 작업 고유 ID (`status`가 `queued`인 경우에만 존재) |
+| `message` | `string` | 상태 메시지 |
+| `macroId` | `string?` | 1:N 뷰 생성 시 발급된 Macro View ID (`scopeFilter` 제공 시에만 존재) |
 
 - **Example Response Data**
 
@@ -65,9 +66,12 @@ AI를 사용하여 사용자의 대화 기록이나 외부 데이터를 분석�
   {
     "message": "Graph generation task has been queued.",
     "taskId": "task-uuid-1234",
-    "status": "queued"
+    "status": "queued",
+    "macroId": "01HXXXXX..."
   }
   ```
+
+  > `macroId`는 `scopeFilter`를 제공한 1:N 뷰 생성 요청에서만 반환됩니다. 레거시 1:1 모드에서는 포함되지 않습니다.
 
 #### 200 OK (skipped)
 
@@ -84,6 +88,7 @@ AI를 사용하여 사용자의 대화 기록이나 외부 데이터를 분석�
   - `202 Accepted`: 그래프 생성 작업이 큐에 등록됨. `taskId`와 `status: 'queued'` 반환
   - `200 OK`: 사용자의 대화 또는 노트 데이터가 없어 작업을 생성하지 않고 건너뜀. `status: 'skipped'` 반환
   - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `402 Payment Required`: BM/plan limit exceeded. Problem Details response uses backend `PlanLimitExceededError` and SDK type `GenerateGraphPlanLimitExceededError` (`status: 402`, `title: 'PLAN LIMIT EXCEEDED'`, `retryable: false`). Frontends should show an upgrade CTA instead of retrying automatically.
   - `409 Conflict`: 동일한 그래프 생성 작업이 이미 진행 중임
 - **Remarks**: 대규모 데이터 분석이므로 수 분이 소요될 수 있습니다.
 
@@ -132,7 +137,7 @@ AI를 사용하여 사용자의 대화 기록이나 외부 데이터를 분석�
 
 > **[Deprecated]** 이 메서드는 레거시 1:1 그래프(`macroId === userId`)만 **Hard Delete**하며,
 > Soft Delete 및 복원을 지원하지 않습니다.
-> 1:N 특정 뷰를 Soft/Hard Delete하려면 `client.graph.deleteGraph({ macroId })` 를 사용하세요.
+> 1:N 특정 뷰를 Soft/Hard Delete하려면 `client.graph.deleteGraph(macroId)` 를 사용하세요.
 
 - **Usage Example**
 
@@ -154,14 +159,13 @@ AI를 사용하여 사용자의 대화 기록이나 외부 데이터를 분석�
 
 ### ~~`restoreGraph()`~~ — Deprecated
 
-> **[Deprecated] 지원되지 않습니다.**
-> `/v1/graph-ai` 삭제는 Hard Delete 전용이므로 복원이 불가능합니다.
-> 이 메서드는 항상 `501 Not Implemented`를 반환합니다.
+> **[Deprecated]** 
+> 레거시 1:1 그래프를 복원합니다.
 > 1:N 뷰를 복원하려면 `client.graph.restoreGraph(macroId)` 를 사용하세요.
 
 - **Status Codes**
 
-  - `501 Not Implemented`: 복원 불가 — Hard Delete된 레거시 그래프는 복원 지원 안 됨
+  - `200 OK`: 복원 성공
   - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
 
 ---

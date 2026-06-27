@@ -42,6 +42,7 @@ import { ICreditService } from '../ports/ICreditService';
 import { CreditFeature } from '../types/persistence/credit.persistence';
 import type { NotionService } from './NotionService';
 import type { MacroGraphStore } from '../ports/MacroGraphStore';
+import type { PlanLimitService } from './PlanLimitService';
 import type { ScopeFilter, ScopeDataType } from '../../shared/dtos/macro';
 
 /**
@@ -72,7 +73,8 @@ export class GraphGenerationService {
     private readonly notificationService: NotificationService,
     private readonly creditService?: ICreditService,
     private readonly notionService?: NotionService,
-    private readonly macroGraphStore?: MacroGraphStore
+    private readonly macroGraphStore?: MacroGraphStore,
+    private readonly planLimitService?: PlanLimitService
   ) {
     const env = loadEnv();
     // FIXME TODO : HTTP Client 사용하지 않고 SQS로만 통신하도록 변경 예정
@@ -291,6 +293,22 @@ export class GraphGenerationService {
 
       logger.error({ err, userId }, 'Failed to enqueue graph generation request');
 
+      // CREATING으로 전환된 상태를 FAILED로 복구
+      if (taskId) {
+        try {
+          await this.graphEmbeddingService.saveStats({
+            userId,
+            nodes: 0,
+            edges: 0,
+            clusters: 0,
+            status: 'FAILED',
+            generatedAt: new Date().toISOString(),
+          });
+        } catch (statsErr) {
+          logger.warn({ statsErr, userId, taskId }, 'Failed to revert graph status to FAILED after enqueue failure');
+        }
+      }
+
       // 실패 알림 전송
       await this.notificationService.sendGraphGenerationRequestFailed(
         userId,
@@ -333,6 +351,7 @@ export class GraphGenerationService {
     let taskId: string | undefined;
     let creditHeldTaskId: string | undefined;
     let messageSent = false;
+    let macroViewCreated = false;
 
     try {
       const isManual = scopeFilter.mode === 'manual';
@@ -367,12 +386,18 @@ export class GraphGenerationService {
         return null;
       }
 
+      // 매크로 공간 수 플랜 한도 확인
+      if (this.planLimitService) {
+        await this.planLimitService.checkMacroSpaceLimit(userId);
+      }
+
       // MacroGraph 루트 노드 생성 (Neo4j)
       await this.macroGraphStore.createMacroView(userId, newMacroId, {
         title: options?.title,
         description: options?.description,
         scopeFilter,
       });
+      macroViewCreated = true;
 
       taskId = `task_${userId}_${ulid()}`;
       const taskPrefix = `graph-generation/${taskId}/`;
@@ -481,6 +506,26 @@ export class GraphGenerationService {
     } catch (err) {
       if (creditHeldTaskId && !messageSent) {
         await this.rollbackCreditHold(creditHeldTaskId, 'scoped graph generation enqueue failed');
+      }
+      if (macroViewCreated && !messageSent) {
+        try {
+          await this.graphEmbeddingService.saveStats(
+            {
+              userId,
+              nodes: 0,
+              edges: 0,
+              clusters: 0,
+              status: 'FAILED',
+              generatedAt: new Date().toISOString(),
+            },
+            { macroId: newMacroId }
+          );
+        } catch (statsErr) {
+          logger.error(
+            { err: statsErr, userId, macroId: newMacroId },
+            'Failed to mark scoped graph generation as FAILED after enqueue failure'
+          );
+        }
       }
       logger.error({ err, userId }, 'Failed to enqueue scoped graph generation');
       await this.notificationService.sendGraphGenerationRequestFailed(

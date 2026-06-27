@@ -8,8 +8,10 @@
 
 | Method | Endpoint | Description | Status Codes |
 | :--- | :--- | :--- | :--- |
-| `ingestFromNote(...)` | `POST /.../nodes/ingest` | 특정 노트 기반 그래프 추출 시작 | 201, 400, 401, 502 |
-| `ingestFromConversation(...)`| `POST /.../nodes/ingest` | 특정 대화 기반 그래프 추출 시작 | 201, 400, 401, 502 |
+| `ingestFromNote(...)` | `POST /.../nodes/ingest` | 특정 노트 기반 그래프 추출 시작 | 201, 400, 401, 402, 502 |
+| `ingestFromConversation(...)`| `POST /.../nodes/ingest` | 특정 대화 기반 그래프 추출 시작 | 201, 400, 401, 402, 502 |
+| `ingestMultipleSources(...)`| `POST /.../workspaces/batch-ingest` | 다중 소스(Note/Conversation 혼합) 묶음 기반 파이프라인 시작 | 201, 400, 401, 402, 502 |
+| `ingestDocuments(...)`| `POST /.../:id/documents` | 기존 워크스페이스에 Raw File(PDF, DOCX 등) 업로드 및 추가 추출 시작 | 202, 401, 402, 502 |
 | `deleteWorkspace(id)`| `DELETE /v1/microscope/:id`| 워크스페이스 및 그래프 데이터 삭제 | 204, 401, 404, 502 |
 
 ### Workspace & Graph Data
@@ -20,7 +22,7 @@
 | `getWorkspace(id)` | `GET /v1/microscope/:id`| 특정 워크스페이스 메타데이터 조회 | 200, 401, 404, 502 |
 | `getWorkspaceGraph(id)`| `GET /.../:id/graph` | 워크스페이스 내 시각화용 그래프 상세 | 200, 401, 404 |
 | `getLatestWorkspaceByNodeId(...)`| `GET /.../nodes/:nodeId/latest-workspace` | 노드 ID 기준 최신 Ingest 워크스페이스 메타데이터 조회 (status 추적용) | 200, 401, 404, 502 |
-| `getLatestGraphByNodeId(...)`| `GET /.../latest-graph`| 노드 ID 기준 최신 그래프 데이터 조회 | 200, 401, 404 |
+| `getLatestGraphByNodeId(...)`| `GET /.../latest-graph`| 노드 ID 기준 최신 그래프 데이터 조회 (빈 데이터 vs 404 계약 있음) | 200, 401, 404, 502 |
 
 ---
 
@@ -53,6 +55,7 @@
   - `201 Created`: 워크스페이스 생성 및 Ingest 파이프라인 시작 성공
   - `400 Bad Request`: `nodeId` 또는 `nodeType` 누락
   - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `402 Payment Required`: BM/plan limit exceeded while creating the Microscope workspace. Problem Details response uses backend `PlanLimitExceededError` and SDK type `CreateWorkspacePlanLimitExceededError` (`status: 402`, `title: 'PLAN LIMIT EXCEEDED'`, `retryable: false`). Frontends should show an upgrade CTA instead of retrying automatically.
   - `502 Bad Gateway`: SQS 전송 또는 데이터베이스 오류
 
 ---
@@ -69,7 +72,48 @@
   - `201 Created`: 워크스페이스 생성 및 Ingest 파이프라인 시작 성공
   - `400 Bad Request`: `nodeId` 또는 `nodeType` 누락
   - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+  - `402 Payment Required`: BM/plan limit exceeded while creating the Microscope workspace. Problem Details response uses backend `PlanLimitExceededError` and SDK type `CreateWorkspacePlanLimitExceededError` (`status: 402`, `title: 'PLAN LIMIT EXCEEDED'`, `retryable: false`). Frontends should show an upgrade CTA instead of retrying automatically.
   - `502 Bad Gateway`: SQS 전송 또는 데이터베이스 오류
+
+---
+
+### `ingestMultipleSources(sources, schemaName?)`
+
+다중 소스(Note/Conversation 혼합)를 하나의 워크스페이스에 묶어 지식 그래프 구축 파이프라인을 비동기로 시작합니다.
+각 소스별 Ingest가 독립적으로 실행되어 일부 소스 실패 시에도 나머지는 계속 처리됩니다. 크레딧은 소스 수와 무관하게 1회 차감됩니다.
+
+- **Usage Example**
+  ```typescript
+  const res = await client.microscope.ingestMultipleSources([
+    { nodeId: 'note_abc', nodeType: 'note' },
+    { nodeId: 'conv_xyz', nodeType: 'conversation' },
+  ]);
+  const groupId = res.data._id;
+  ```
+- **Status Codes**
+  - `201 Created`: 워크스페이스 생성 및 파이프라인 시작 성공
+  - `400 Bad Request`: sources 배열이 비어있거나 형식 오류
+  - `401 Unauthorized`: 인증되지 않은 요청
+  - `402 Payment Required`: 플랜 한도 초과 (`PlanLimitExceededError`)
+  - `502 Bad Gateway`: 서버측 오류
+
+---
+
+### `ingestDocuments(microscopeWorkspaceId, files, schemaName?, blockMode?)`
+
+기존 생성된 워크스페이스에 원시 파일(Raw file: PDF, DOCX, PPTX 등)을 업로드하고 Ingest를 요청합니다. 내부적으로 `multipart/form-data`를 사용합니다.
+
+- **Usage Example**
+  ```typescript
+  const files = fileInput.files; // FileList
+  const res = await client.microscope.ingestDocuments('ws_123', Array.from(files), undefined, true);
+  console.log(res.data.message); // "Microscope raw file ingest queued"
+  ```
+- **Status Codes**
+  - `202 Accepted`: 업로드 성공 및 파이프라인 큐 진입
+  - `401 Unauthorized`: 인증되지 않은 요청
+  - `402 Payment Required`: 플랜 한도 초과 (`PlanLimitExceededError`)
+  - `502 Bad Gateway`: 서버측 오류
 
 ---
 
@@ -279,16 +323,52 @@ Block 파이프라인이 완료되면 `MicroscopeGraphData.blockView` 필드에 
 
 특정 노드(노트/대화) ID와 연계된 가장 최근의 Microscope 그래프 데이터를 즉시 조회합니다. "1개 노드 = 1개 그래프"를 가정하는 UI에서 편리하게 사용됩니다.
 
+> **Dual Pipeline**: `ingestFromNote` / `ingestFromConversation` 호출 시 block 및 non-block SQS 작업이 각각 발행됩니다.
+> - Non-block 파이프라인 완료 시 → `nodes`, `edges` 필드가 채워집니다.
+> - Block 파이프라인 완료 시 → `blockView` 필드가 추가됩니다.
+
+> **빈 그래프 vs 404 계약:**
+> - `404 Not Found`: 해당 `nodeId`로 생성된 워크스페이스 **자체가 존재하지 않음**. Ingest를 요청한 적 없는 경우입니다.
+> - `200 OK` (빈 데이터): 워크스페이스는 존재하지만 파이프라인이 아직 완료되지 않아 그래프 데이터가 준비되지 않은 경우입니다. `nodes: []`, `edges: []`, `blockView: undefined`가 반환될 수 있습니다. 이 경우 `getLatestWorkspaceByNodeId`로 상태를 먼저 확인하십시오.
+
 - **Usage Example**
   ```typescript
   const { data } = await client.microscope.getLatestGraphByNodeId('note_123');
-  const { nodes, edges } = data;
+  const { nodes, edges, blockView } = data;
+
+  // block 파이프라인 완료 여부 확인
+  if (blockView) {
+    console.log(`블록 수: ${blockView.blocks.length}`);
+  }
   ```
 - **Response Type**: `MicroscopeGraphData`
 - **Status Codes**
-  - `200 OK`: 최신 그래프 데이터 조회 성공
+  - `200 OK`: 그래프 데이터 조회 성공. 파이프라인 진행 중인 경우 빈 nodes/edges가 반환될 수 있음
   - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
-  - `404 Not Found`: 해당 노드 ID와 연결된 워크스페이스가 존재하지 않음
+  - `404 Not Found`: 해당 nodeId로 생성된 워크스페이스가 존재하지 않음 (Ingest 미요청)
+  - `502 Bad Gateway`: 데이터베이스 오류
+
+---
+
+## MicroscopeDocument 타입 상세
+
+`MicroscopeWorkspace.documents` 배열의 각 항목 타입입니다. Block 파이프라인 관련 필드가 포함됩니다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `id` | `string` | 문서 ID |
+| `status` | `'PENDING' \| 'PROCESSING' \| 'COMPLETED' \| 'FAILED'` | 전체 처리 상태. block 및 non-block 파이프라인이 모두 완료되어야 `COMPLETED` |
+| `nodeId` | `string?` | 원본 노드 ID |
+| `nodeType` | `'note' \| 'conversation'?` | 원본 노드 타입 |
+| `graphPayloadId` | `string?` | Non-block 파이프라인 그래프 획득용 ID |
+| `blockModeRequested` | `boolean?` | Block 파이프라인 요청 여부 |
+| `blockStatus` | `'PENDING' \| 'PROCESSING' \| 'COMPLETED' \| 'FAILED'?` | Block 파이프라인 처리 상태 (`blockModeRequested`가 `true`인 경우에만 존재) |
+| `nonBlockStatus` | `'PENDING' \| 'PROCESSING' \| 'COMPLETED' \| 'FAILED'?` | Non-block 파이프라인 처리 상태 |
+| `blockGraphPayloadId` | `string?` | Block 파이프라인 결과 획득용 ID |
+| `blockGraphS3Key` | `string?` | Block 그래프 데이터 S3 키. 데이터가 10MB 초과 시 FE가 S3에서 직접 조회 |
+| `error` | `string?` | 에러 메시지 |
+| `createdAt` | `string` | 생성일 (ISO 8601) |
+| `updatedAt` | `string` | 업데이트일 (ISO 8601) |
 
 ---
 

@@ -201,9 +201,10 @@ export class GraphController {
   async createEdge(req: Request, res: Response) {
     const edge = req.body;
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
 
     // 서비스 호출 (엣지 저장)
-    const edgeId = await this.graphEmbeddingService.upsertEdge({ ...edge, userId });
+    const edgeId = await this.graphEmbeddingService.upsertEdge({ ...edge, userId }, { macroId });
 
     res.status(201).json({ id: edgeId });
   }

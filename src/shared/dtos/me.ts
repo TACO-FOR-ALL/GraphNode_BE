@@ -1,4 +1,4 @@
-import type { CreditBalanceResponseDto } from './credit.js';
+import type { CreditBalanceResponseDto, CreditPlanType } from './credit.js';
 
 /**
  * 사용자 프로필 응답 모델(표시용 스냅샷).
@@ -100,13 +100,54 @@ export interface UpdateOnboardingRequestDto {
 }
 
 /**
+ * 단일 리소스 사용량 항목 (used/limit 쌍).
+ *
+ * @property used  현재 사용량
+ * @property limit 플랜 한도. null = Enterprise 무제한
+ */
+export interface ResourceUsageItemDto {
+  used: number;
+  limit: number | null;
+}
+
+/**
+ * 파일 저장 용량 사용량 항목.
+ *
+ * @property usedBytes  현재 사용 중인 바이트 수
+ * @property limitBytes 플랜 한도(bytes). null = Enterprise 무제한
+ */
+export interface FileStorageUsageDto {
+  usedBytes: number;
+  limitBytes: number | null;
+}
+
+/**
+ * GET /v1/me planUsage 필드 — 플랜별 리소스 사용량 스냅샷.
+ *
+ * @property planType    현재 구독 플랜
+ * @property chatTokens  일일 AI 채팅 토큰 사용량 (UTC 자정 기준 리셋)
+ * @property macroSpace  활성 MacroView(지식 그래프) 개수
+ * @property microSpace  활성 MicroscopeWorkspace 개수
+ * @property fileStorage 전체 파일 저장 용량
+ */
+export interface PlanUsageResponseDto {
+  planType: CreditPlanType;
+  chatTokens: ResourceUsageItemDto;
+  macroSpace: ResourceUsageItemDto;
+  microSpace: ResourceUsageItemDto;
+  fileStorage: FileStorageUsageDto;
+}
+
+/**
  * GET /v1/me 응답 바디 DTO.
  * - 인증이 유효하면 최소한 userId를 포함한다.
  * - 세션 또는 쿠키 스냅샷이 있는 경우 표시용 프로필도 함께 제공된다.
  *
  * @public
- * @property userId 로그인된 사용자 식별자.
- * @property profile 표시용 프로필(가능한 경우 동봉). 세션 스냅샷 또는 보조 쿠키에서 획득한다.
+ * @property userId     로그인된 사용자 식별자.
+ * @property profile    표시용 프로필(가능한 경우 동봉). 세션 스냅샷 또는 보조 쿠키에서 획득한다.
+ * @property credit     크레딧 잔액 정보 (선택). 포함 시 JIT 갱신 후 최신 값이 제공된다.
+ * @property planUsage  플랜 리소스 사용량 스냅샷 (선택). 조회 실패 시 생략된다.
  */
 export interface MeResponseDto {
   /**
@@ -121,6 +162,13 @@ export interface MeResponseDto {
    * 크레딧 잔액 정보 (선택). 포함 시 JIT 갱신 후 최신 값이 제공된다.
    */
   credit?: CreditBalanceResponseDto;
+  /**
+   * 플랜 리소스 사용량 스냅샷 (선택).
+   * chatTokens·macroSpace·microSpace·fileStorage 네 개 리소스의 used/limit 값을 제공한다.
+   * Enterprise 플랜은 limit/limitBytes = null (무제한).
+   * 조회 실패 시 이 필드는 응답에서 생략된다 (graceful degradation).
+   */
+  planUsage?: PlanUsageResponseDto;
 }
 
 /**

@@ -8,20 +8,22 @@
 /**
  * 플랜 타입 정의
  * @param FREE : 무료 플랜
- * @param PRO : 프로 플랜
+ * @param BASIC : 베이직 플랜 (13,000원/월)
+ * @param PLUS : 플러스 플랜 (29,000원/월)
+ * @param PRO : 레거시 플랜 — BASIC과 동일하게 취급. DB 마이그레이션 완료 후 제거 예정.
  * @param ENTERPRISE : 엔터프라이즈 플랜
  */
 export const PlanType = {
   FREE: 'FREE',
+  BASIC: 'BASIC',
+  PLUS: 'PLUS',
+  /** @deprecated DB 마이그레이션 후 BASIC으로 전환됨. 신규 코드에서 사용 금지. */
   PRO: 'PRO',
   ENTERPRISE: 'ENTERPRISE',
 } as const;
 
 /**
  * 플랜 타입 정의
- * @param FREE : 무료 플랜
- * @param PRO : 프로 플랜
- * @param ENTERPRISE : 엔터프라이즈 플랜
  */
 export type PlanType = (typeof PlanType)[keyof typeof PlanType];
 

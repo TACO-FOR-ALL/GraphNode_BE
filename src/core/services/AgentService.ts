@@ -24,6 +24,7 @@ import { ICreditService } from '../ports/ICreditService';
 import { CreditFeature } from '../types/persistence/credit.persistence';
 import { FEATURE_COSTS, CreditContext } from '../../config/billing.config';
 import type { MicroscopeWorkspaceStore } from '../ports/MicroscopeWorkspaceStore';
+import type { PlanLimitService } from './PlanLimitService';
 
 /** SSE 이벤트 전송 함수 타입 */
 export type SendEventFn = (event: string, data: unknown) => void;
@@ -43,6 +44,8 @@ export interface AgentServiceDeps {
   creditService?: ICreditService;
   /** Microscope 워크스페이스 저장소 (MicroscopeContextTool에서 사용) */
   microscopeWorkspaceStore?: MicroscopeWorkspaceStore;
+  /** 플랜 한도 검증 서비스 */
+  planLimitService?: PlanLimitService;
 }
 
 export class AgentService {
@@ -73,7 +76,13 @@ export class AgentService {
       graphEmbeddingService,
       graphVectorService,
       creditService,
+      planLimitService,
     } = this.deps;
+
+    // 일일 채팅 토큰 한도 확인 (에이전트 채팅도 동일한 풀 소비)
+    if (planLimitService) {
+      await planLimitService.checkChatTokenLimit(userId);
+    }
 
     let creditDeducted = false;
     let deductedCreditAmount = 0;
@@ -171,15 +180,19 @@ export class AgentService {
     // 모드에 따른 처리
     if (mode === 'chat') {
       await this.handleChatMode(userId, trimmedUser, context, hasContext, openai, sendEvent, microscopeGroupId, macroId);
-      return;
-    }
-
-    if (mode === 'summary') {
+    } else if (mode === 'summary') {
       await this.handleSummaryMode(trimmedUser, context, openai, sendEvent);
-      return;
+    } else {
+      await this.handleNoteMode(trimmedUser, context, openai, sendEvent);
     }
 
-    await this.handleNoteMode(trimmedUser, context, openai, sendEvent);
+    // 에이전트 채팅 완료 후 토큰 누적 (입력 기반 추정)
+    if (planLimitService) {
+      const estimatedTokens = BigInt(Math.ceil((trimmedUser.length + context.length) / 4));
+      await planLimitService.recordChatTokens(userId, estimatedTokens).catch(() => {
+        // 토큰 기록 실패는 비즈니스 플로우를 차단하지 않음
+      });
+    }
     } catch (err: unknown) {
       if (creditDeducted) {
         await this.refundAgentChatCredit(userId, deductedCreditAmount, err, creditService);

@@ -448,6 +448,40 @@ export class MicroscopeWorkspaceRepositoryMongo implements MicroscopeWorkspaceSt
     }
   }
 
+  /**
+   * 유저 ID가 소유한 워크스페이스 수를 반환합니다.
+   * @param userId 유저 고유 식별자
+   * @returns 활성 워크스페이스 개수
+   */
+  async countByUserId(userId: string): Promise<number> {
+    try {
+      return await this.microscope_workspaces_collection().countDocuments({ userId });
+    } catch (err: unknown) {
+      this.handleError('MicroscopeWorkspaceRepositoryMongo.countByUserId', err);
+    }
+  }
+
+  /**
+   * 유저 ID가 소유한 모든 워크스페이스의 누적 파일 크기 합계를 반환합니다 (bytes).
+   * documents 배열 내 fileSize 필드를 $sum으로 집계합니다.
+   * @param userId 유저 고유 식별자
+   * @returns 누적 파일 크기 합계 (bytes). fileSize가 없는 기존 documents는 0으로 취급.
+   */
+  async getTotalFileSizeByUserId(userId: string): Promise<number> {
+    try {
+      const result = await this.microscope_workspaces_collection()
+        .aggregate([
+          { $match: { userId } },
+          { $unwind: { path: '$documents', preserveNullAndEmpty: true } },
+          { $group: { _id: null, total: { $sum: '$documents.fileSize' } } },
+        ])
+        .toArray();
+      return result.length > 0 ? (result[0] as any).total ?? 0 : 0;
+    } catch (err: unknown) {
+      this.handleError('MicroscopeWorkspaceRepositoryMongo.getTotalFileSizeByUserId', err);
+    }
+  }
+
   private handleError(methodName: string, err: unknown): never {
     if (
       err instanceof Error &&

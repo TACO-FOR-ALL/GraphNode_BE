@@ -944,6 +944,13 @@ export interface MacroGraphStore {
   ): Promise<MacroViewDto>;
 
   /**
+   * @description 사용자가 보유한 활성 MacroView 개수를 반환합니다. (매크로 공간 수 한도 검증용)
+   * @param userId 소유 사용자 ID
+   * @returns 삭제되지 않은 활성 MacroView 개수
+   */
+  countByUserId(userId: string): Promise<number>;
+
+  /**
    * @description macroId로 단일 매크로 뷰 메타데이터를 조회합니다.
    *
    * @param userId 소유 사용자 ID

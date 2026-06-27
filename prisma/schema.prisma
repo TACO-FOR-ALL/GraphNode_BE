@@ -58,7 +58,7 @@ model DailyUsage {
   id            String   @id @default(uuid()) @map("id")
   userId        String   @unique @map("user_id") @db.VarChar(191)
   lastResetDate DateTime @map("last_reset_date") @db.Date
-  chatCount     Int      @default(0) @map("chat_count")
+  chatTokens    BigInt   @default(0) @map("chat_tokens")
   user          User     @relation("UserToDailyUsage", fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("daily_usages")
@@ -251,6 +251,9 @@ model UserPaymentMethod {
 
 enum PlanType {
   FREE
+  BASIC
+  PLUS
+  /// @deprecated 마이그레이션 후 BASIC으로 전환됨. 신규 구독에 사용 금지.
   PRO
   ENTERPRISE
 }

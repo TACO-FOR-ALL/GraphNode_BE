@@ -224,8 +224,8 @@ export class GraphEmbeddingService {
    * @returns 생성된 엣지의 고유 ID
    * @throws {ValidationError | UpstreamError} - 유효성 검사 실패 또는 DB 오류 발생 시
    */
-  upsertEdge(edge: GraphEdgeDto) {
-    return this.graphManagementService.upsertEdge(edge);
+  upsertEdge(edge: GraphEdgeDto, options?: RepoOptions) {
+    return this.graphManagementService.upsertEdge(edge, options);
   }
 
   /**

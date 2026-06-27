@@ -12,6 +12,7 @@ import {
 import { ValidationError } from '../../shared/errors/domain';
 import type { ICreditService } from '../../core/ports/ICreditService';
 import type { SubscriptionService } from '../../core/services/SubscriptionService';
+import type { PlanLimitService } from '../../core/services/PlanLimitService';
 
 
 /**
@@ -19,13 +20,16 @@ import type { SubscriptionService } from '../../core/services/SubscriptionServic
  */
 export class MeController {
   /**
-   * @param userService   사용자 관련 비즈니스 로직을 승리하는 서비스
-   * @param creditService 크레딧 관련 비즈니스 로직을 승리하는 서비스 (선택)
+   * @param userService        사용자 관련 비즈니스 로직을 담당하는 서비스
+   * @param creditService      크레딧 관련 비즈니스 로직을 담당하는 서비스 (선택)
+   * @param subscriptionService 구독 서비스 (선택)
+   * @param planLimitService   플랜 리소스 한도 및 사용량 조회 서비스 (선택)
    */
   constructor(
     private readonly userService: UserService,
     private readonly creditService?: ICreditService,
     private readonly subscriptionService?: SubscriptionService,
+    private readonly planLimitService?: PlanLimitService,
   ) {}
 
   /**
@@ -55,6 +59,15 @@ export class MeController {
             cycleStart:       credit.cycleStart.toISOString(),
             cycleEnd:         credit.cycleEnd.toISOString(),
           };
+        }
+      }
+
+      // planLimitService가 주입된 경우 리소스 사용량 스냅샷을 함께 반환.
+      // 조회 실패 시 profile·credit 응답에 영향을 주지 않도록 graceful degradation 적용.
+      if (this.planLimitService) {
+        const planUsage = await this.planLimitService.getPlanUsage(userId).catch(() => undefined);
+        if (planUsage) {
+          body.planUsage = planUsage;
         }
       }
 

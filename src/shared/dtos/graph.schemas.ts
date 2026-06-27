@@ -15,6 +15,15 @@ import type {
   PersistGraphPayloadDto,
 } from './graph';
 
+const graphStatusValues = [
+  'NOT_CREATED',
+  'CREATING',
+  'CREATED',
+  'UPDATING',
+  'UPDATED',
+  'FAILED',
+] as const;
+
 /**
  * 스키마: 그래프 노드.
  */
@@ -76,7 +85,7 @@ export const graphStatsSchema = z.object({
   nodes: z.number().int().nonnegative(),
   edges: z.number().int().nonnegative(),
   clusters: z.number().int().nonnegative(),
-  status: z.enum(['NOT_CREATED', 'CREATING', 'CREATED', 'UPDATING', 'UPDATED']),
+  status: z.enum(graphStatusValues),
   generatedAt: z.iso.datetime({ offset: true }).optional(),
   updatedAt: z.iso.datetime({ offset: true }).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
@@ -94,7 +103,7 @@ export const graphSnapshotSchema = z.object({
     nodes: z.number().int().nonnegative(),
     edges: z.number().int().nonnegative(),
     clusters: z.number().int().nonnegative(),
-    status: z.enum(['NOT_CREATED', 'CREATING', 'CREATED', 'UPDATING', 'UPDATED']),
+    status: z.enum(graphStatusValues),
     generatedAt: z.iso.datetime({ offset: true }).optional(),
     updatedAt: z.iso.datetime({ offset: true }).optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),

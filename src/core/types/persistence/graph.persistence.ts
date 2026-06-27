@@ -120,7 +120,7 @@ export interface GraphStatsDoc {
   nodes: number;
   edges: number;
   clusters: number;
-  status: 'NOT_CREATED' | 'CREATING' | 'CREATED' | 'UPDATING' | 'UPDATED';
+  status: 'NOT_CREATED' | 'CREATING' | 'CREATED' | 'UPDATING' | 'UPDATED' | 'FAILED';
   generatedAt: string;
   updatedAt?: string;
   metadata: Record<string, unknown>;

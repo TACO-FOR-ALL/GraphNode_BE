@@ -43,6 +43,7 @@ export class GraphAiApi {
    * - `202 Accepted`: 그래프 생성 작업이 큐에 등록됨
    * - `200 OK`: 사용자의 대화 또는 노트 데이터가 없어 작업을 생성하지 않고 건너뜀 (`status: 'skipped'`)
    * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `402 Payment Required`: BM/plan limit exceeded (`PlanLimitExceededError`, `GenerateGraphPlanLimitExceededError`). Frontends should show an upgrade CTA instead of retrying automatically.
    * - `409 Conflict`: 동일한 작업이 이미 진행 중임
    *
    * @example
@@ -178,7 +179,7 @@ export class GraphAiApi {
 
   /**
    * @deprecated 이 메서드는 레거시 1:1 그래프(`macroId === userId`)만 Hard Delete하며, soft delete 및 restore를 지원하지 않습니다.
-   * 1:N 특정 뷰를 Soft/Hard Delete하려면 `client.graph.deleteGraph({ macroId })` 를 사용하세요.
+   * 1:N 특정 뷰를 Soft/Hard Delete하려면 `client.graph.deleteGraph(macroId)` 를 사용하세요.
    *
    * 사용자의 레거시 1:1 지식 그래프를 영구(Hard) 삭제합니다.
    *
@@ -192,7 +193,7 @@ export class GraphAiApi {
    * await sdk.graphAi.deleteGraph();
    *
    * // 1:N 뷰 삭제는 아래 방식 사용:
-   * await client.graph.deleteGraph({ macroId: 'view-id-to-delete' });
+   * await client.graph.deleteGraph('view-id-to-delete');
    */
   async deleteGraph(options?: { permanent?: boolean; macroId?: string }): Promise<HttpResponse<void>> {
     const q: Record<string, unknown> = {};
@@ -202,12 +203,12 @@ export class GraphAiApi {
   }
 
   /**
-   * @deprecated 이 메서드는 지원되지 않습니다 — `/v1/graph-ai` 삭제는 Hard Delete 전용이므로 복원이 불가능합니다.
-   * 1:N 뷰를 복원하려면 `client.graph.restoreGraph({ macroId })` 를 사용하세요.
+   * @deprecated 이 메서드는 레거시 1:1 그래프 복원을 지원합니다.
+   * 1:N 뷰를 복원하려면 `client.graph.restoreGraph(macroId)` 를 사용하세요.
    *
    * @example
    * // 1:N 뷰 복원은 아래 방식 사용:
-   * await client.graph.restoreGraph({ macroId: 'view-id-to-restore' });
+   * await client.graph.restoreGraph('view-id-to-restore');
    */
   async restoreGraph(macroId?: string): Promise<HttpResponse<void>> {
     return this.rb.path('/restore').query(macroId ? { macroId } : undefined).post<void>();
