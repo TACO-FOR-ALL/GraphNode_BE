@@ -124,6 +124,17 @@ export class InsufficientCreditError extends AppError {
   httpStatus = 402;
   retryable = false;
 }
+
+/**
+ * 플랜 한도 초과 (402 Payment Required)
+ * - 채팅 일일 토큰, 매크로/마이크로 공간 수, 파일 저장 용량 등 플랜 리소스 한도 초과.
+ * - 플랜 업그레이드 후 이용 가능합니다.
+ */
+export class PlanLimitExceededError extends AppError {
+  code = 'PLAN_LIMIT_EXCEEDED';
+  httpStatus = 402;
+  retryable = false;
+}
 /**
  * 업스트림 오류 (502 Bad Gateway)
  * - 외부 서비스(예: OpenAI, DB 등)가 에러를 반환했을 때 사용합니다.

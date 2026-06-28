@@ -142,7 +142,8 @@ describe('AddNodeResultHandler', () => {
     expect(storagePort.downloadJson).toHaveBeenCalledWith(resultS3Key);
     expect(storagePort.downloadJson).toHaveBeenCalledWith(`add-node/${taskId}/batch.json`);
     expect(graphService.saveStats).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'UPDATED', updatedAt: expect.any(String) })
+      expect.objectContaining({ status: 'UPDATED', updatedAt: expect.any(String) }),
+      undefined
     );
   });
 
@@ -174,7 +175,8 @@ describe('AddNodeResultHandler', () => {
     await handler.handle(message, mockContainer);
 
     expect(graphService.saveStats).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'UPDATED' })
+      expect.objectContaining({ status: 'UPDATED' }),
+      undefined
     );
   });
 
@@ -197,7 +199,8 @@ describe('AddNodeResultHandler', () => {
             error: 'S3 download failed',
           }),
         }),
-      })
+      }),
+      undefined
     );
   });
 
@@ -267,12 +270,10 @@ describe('AddNodeResultHandler', () => {
 
     await handler.handle(message, mockContainer);
 
-    expect(graphService.upsertNodes).toHaveBeenCalledWith([
-      expect.objectContaining({
-        origId: 'conv-e2e-123',
-        numMessages: 4,
-      }),
-    ]);
+    expect(graphService.upsertNodes).toHaveBeenCalledWith(
+      [expect.objectContaining({ origId: 'conv-e2e-123', numMessages: 4 })],
+      undefined
+    );
   });
 
   it('continues when batch.json is missing (legacy AI result only)', async () => {

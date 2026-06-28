@@ -155,6 +155,7 @@ export interface Neo4jMacroRelationHydratedRow {
  * @property totalConversations conversation node count입니다.
  * @property totalNotes note node count입니다.
  * @property totalNotions notion node count입니다.
+ * @property totalFiles file node count입니다.
  * @property clusterSizes cluster id별 node count map입니다.
  */
 export interface Neo4jMacroSummaryAggregateContext {
@@ -166,6 +167,8 @@ export interface Neo4jMacroSummaryAggregateContext {
   totalNotes: number;
   /** notion node count입니다. */
   totalNotions: number;
+  /** file node count입니다. */
+  totalFiles: number;
   /** cluster id별 node count map입니다. */
   clusterSizes: Record<string, number>;
 }
@@ -510,6 +513,7 @@ function toNormalizedSummaryOverview(overview: OverviewSection): Neo4jMacroSumma
     total_conversations: _totalConversations,
     total_notes: _totalNotes,
     total_notions: _totalNotions,
+    total_files: _totalFiles,
     ...normalized
   } = overview;
 
@@ -544,6 +548,7 @@ function hydrateSummaryOverview(
     total_notes: aggregateContext.totalNotes,
     total_notions: aggregateContext.totalNotions,
     ...overview,
+    total_files: aggregateContext.totalFiles,
   };
 }
 
@@ -575,6 +580,7 @@ function createEmptySummaryAggregateContext(): Neo4jMacroSummaryAggregateContext
     totalConversations: 0,
     totalNotes: 0,
     totalNotions: 0,
+    totalFiles: 0,
     clusterSizes: {},
   };
 }

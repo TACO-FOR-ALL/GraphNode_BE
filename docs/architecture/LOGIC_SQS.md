@@ -13,9 +13,11 @@ GraphNode는 대용량 AI 처리 작업을 비동기로 수행하기 위해 **Am
 ## 2. Detailed Workflow (Graph Generation)
 
 ### Step 1: User Request (API -> AI)
-사용자가 채팅을 통해 그래프 생성을 요청하면, API 서버는 AI 서버에게 HTTP 요청을 보냅니다 (또는 향후 Task Queue 추가 가능).
-- **Endpoint**: `POST /v1/graphs/generate`
-- **Output**: `taskId` 발급 및 `PENDING` 상태 응답.
+사용자가 채팅을 통해 그래프 생성을 요청하면, API 서버는 SQS Request Queue를 통해 AI Worker에게 작업을 위임합니다.
+- **Endpoint**: `POST /v1/graph-ai/generate` (Unified API)
+- **1:N 지원**: `scopeFilter`, `title`, `description` 파라미터를 통해 새 macroId를 발급하거나 기존 뷰에 추가할 수 있습니다.
+- **macroId 캐시**: 발급된 `macroId`는 `taskId → macroId` 형태로 Redis에 캐시됩니다. AI Worker가 결과를 반환할 때 `macroId`를 복원하는 데 사용됩니다.
+- **Output**: `taskId` 발급 및 `queued` 상태 응답.
 
 ### Step 2: AI Processing (AI Server)
 AI 서버는 요청을 받아 비동기로 그래프 생성을 시작합니다.

@@ -151,11 +151,11 @@ describe('GraphGenerationService', () => {
       mockQueuePort.sendMessage.mockResolvedValue(undefined);
 
       // Act
-      const taskId = await service.requestGraphSummary(userId);
+      const taskId = await service.requestGraphSummary(userId, 'macro1');
 
       // Assert
       expect(taskId).toContain('summary_user1');
-      expect(mockGraphEmbSvc.getSnapshotForUser).toHaveBeenCalledWith(userId);
+      expect(mockGraphEmbSvc.getSnapshotForUser).toHaveBeenCalledWith(userId, 'macro1');
       expect(mockStoragePort.upload).toHaveBeenCalled();
       expect(mockQueuePort.sendMessage).toHaveBeenCalledWith(
         expect.anything(),
@@ -169,7 +169,7 @@ describe('GraphGenerationService', () => {
     it('should throw Error if snapshot not found', async () => {
       (mockGraphEmbSvc.getSnapshotForUser as jest.Mock).mockReturnValue(Promise.resolve(null));
 
-      await expect(service.requestGraphSummary(userId)).rejects.toThrow();
+      await expect(service.requestGraphSummary(userId, 'macro1')).rejects.toThrow();
     });
   });
 
@@ -206,10 +206,11 @@ describe('GraphGenerationService', () => {
       mockGraphEmbSvc.saveStats.mockResolvedValue(undefined);
 
       // Act
-      const taskId = await service.requestGraphGenerationViaQueue(userId);
+      const result = await service.requestGraphGenerationViaQueue(userId);
 
       // Assert
-      expect(taskId).toContain('task_user1_');
+      expect(result?.taskId).toContain('task_user1_');
+      expect(result?.macroId).toBe(userId);
       expect(mockChatSvc.listConversations).toHaveBeenCalled();
       expect(mockStoragePort.upload).toHaveBeenCalledWith(
         expect.stringContaining('graph-generation/'),

@@ -1,47 +1,140 @@
 # Graph API Reference (`client.graph`)
 
-지식 그래프(Knowledge Graph)의 노드, 엣지, 클러스터를 직접 관리하는 하위 수준 API입니다. 백엔드에서 생성된 자동 실시간 그래프 외에도 수동으로 데이터를 조작하거나 시각화용 데이터를 추출할 수 있습니다.
+지식 그래프(Knowledge Graph)의 노드, 엣지, 클러스터를 직접 관리하는 하위 수준 API입니다.
+**1:N Macro View 아키텍처**를 지원합니다 — 한 사용자가 여러 개의 `macroId` 뷰를 가질 수 있으며,
+편집 메서드에 `macroId`를 전달하여 특정 뷰만 격리하여 조작할 수 있습니다.
+`macroId` 미전달 시 레거시 1:1 모드(`macroId = userId`)로 동작합니다.
 
 ## Summary
+
+### Graph Views (1:N)
+
+| Method | Endpoint | Description | Status Codes |
+| :--- | :--- | :--- | :--- |
+| `listGraphs(opts?)` | `GET /v1/graph/graphs` | 사용자의 모든 Macro View 목록 조회 | 200, 401 |
+| `getGraphMetadata(macroId)` | `GET /v1/graph/graphs/:macroId` | 특정 뷰 메타데이터 조회 | 200, 401, 404 |
+| `updateGraphMetadata(macroId, dto)` | `PATCH /v1/graph/graphs/:macroId` | 뷰 메타데이터(title, description) 수정 | 200, 401, 404 |
+| `deleteGraph(macroId, opts?)` | `DELETE /v1/graph/graphs/:macroId` | 특정 뷰 Soft/Hard Delete | 204, 401, 404 |
+| `cloneGraph(macroId, opts?)` | `POST /v1/graph/graphs/:macroId/clone` | 뷰 복제 (새 macroId 생성) | 201, 401, 404 |
+| `restoreGraph(macroId)` | `POST /v1/graph/graphs/:macroId/restore` | Soft Delete된 뷰 복원 | 200, 401, 404 |
 
 ### Nodes
 
 | Method | Endpoint | Description | Status Codes |
 | :--- | :--- | :--- | :--- |
-| `getSnapshot()` | `GET /v1/graph/snapshot` | 그래프 전체 상태 스냅샷 조회 | 200, 401 |
+| `getSnapshot(macroId?)` | `GET /v1/graph/snapshot` | 그래프 전체 상태 스냅샷 조회 | 200, 401 |
 | `saveSnapshot(dto)` | `POST /v1/graph/snapshot` | 그래프 스냅샷 서버에 저장 | 200, 400, 401, 502 |
 | `getStats()` | `GET /v1/graph/stats` | 그래프 통계 정보 조회 | 200, 401 |
-| `listNodes()` | `GET /v1/graph/nodes` | 사용자의 모든 노드 목록 조회 | 200, 401 |
-| `getNode(id)` | `GET /v1/graph/nodes/:id` | 특정 노드의 상세 정보 조회 | 200, 401, 404, 502 |
+| `listNodes(macroId?)` | `GET /v1/graph/nodes` | 사용자의 모든 노드 목록 조회 | 200, 401 |
+| `getNode(id, macroId?)` | `GET /v1/graph/nodes/:id` | 특정 노드의 상세 정보 조회 | 200, 401, 404, 502 |
 | `searchNodes(vec, lim?)` | `POST /v1/graph/search` | 벡터 유사도 기반 노드 검색 | 200, 400, 401 |
 | `createNode(dto)` | `POST /v1/graph/nodes` | 새 노드 생성 또는 업데이트 | 201, 400, 401, 502 |
-| `updateNode(id, payload)` | `PATCH /v1/graph/nodes/:id` | 노드 정보 부분 수정 | 204, 401, 404, 502 |
-| `deleteNode(id, opts?)` | `DELETE /v1/graph/nodes/:id` | 노드 삭제 (Soft/Hard) | 204, 401, 404, 502 |
-| `restoreNode(id)` | `POST /v1/graph/nodes/:id/restore` | 삭제된 노드 복원 | 200, 401, 404, 502 |
-| `deleteNodeCascade(...)` | `DELETE /.../cascade` | 노드 및 연결된 엣지 동시 삭제 | 204, 401, 404, 502 |
+| `updateNode(id, payload, macroId?)` | `PATCH /v1/graph/nodes/:id` | 노드 정보 부분 수정 | 204, 401, 404, 502 |
+| `deleteNode(id, opts?)` | `DELETE /v1/graph/nodes/:id` | 노드 삭제 — `opts.macroId`로 뷰 격리 | 204, 401, 404, 502 |
+| `restoreNode(id, macroId?)` | `POST /v1/graph/nodes/:id/restore` | 삭제된 노드 복원 | 200, 401, 404, 502 |
+| `deleteNodeCascade(id, opts?)` | `DELETE /.../cascade` | 노드 및 연결된 엣지 동시 삭제 — `opts.macroId`로 뷰 격리 | 204, 401, 404, 502 |
 
 ### Edges
 
 | Method | Endpoint | Description | Status Codes |
 | :--- | :--- | :--- | :--- |
-| `listEdges()` | `GET /v1/graph/edges` | 사용자의 모든 엣지 목록 조회 | 200, 401 |
-| `createEdge(dto)` | `POST /v1/graph/edges` | 두 노드 간의 엣지 생성 | 201, 400, 401, 502 |
-| `deleteEdge(id, opts?)` | `DELETE /v1/graph/edges/:id` | 엣지 삭제 (Soft/Hard) | 204, 401, 404, 502 |
-| `restoreEdge(id)` | `POST /v1/graph/edges/:id/restore` | 삭제된 엣지 복원 | 200, 401, 502 |
+| `listEdges(macroId?)` | `GET /v1/graph/edges` | 사용자의 모든 엣지 목록 조회 | 200, 401 |
+| `createEdge(dto, macroId?)` | `POST /v1/graph/edges` | 두 노드 간의 엣지 생성 | 201, 400, 401, 502 |
+| `deleteEdge(id, opts?)` | `DELETE /v1/graph/edges/:id` | 엣지 삭제 — `opts.macroId`로 뷰 격리 | 204, 401, 404, 502 |
+| `restoreEdge(id, macroId?)` | `POST /v1/graph/edges/:id/restore` | 삭제된 엣지 복원 | 200, 401, 502 |
 
 ### Clusters & Subclusters
 
 | Method | Endpoint | Description | Status Codes |
 | :--- | :--- | :--- | :--- |
-| `listClusters()` | `GET /v1/graph/clusters` | 사용자의 모든 클러스터 목록 조회 | 200, 401 |
-| `getCluster(id)` | `GET /v1/graph/clusters/:id` | 클러스터 상세 조회 | 200, 401, 404, 502 |
+| `listClusters(macroId?)` | `GET /v1/graph/clusters` | 사용자의 모든 클러스터 목록 조회 | 200, 401 |
+| `getCluster(id, macroId?)` | `GET /v1/graph/clusters/:id` | 클러스터 상세 조회 | 200, 401, 404, 502 |
 | `createCluster(dto)` | `POST /v1/graph/clusters` | 클러스터 수동 생성/수정 | 201, 400, 401, 502 |
-| `deleteCluster(id, opts)` | `DELETE /v1/graph/clusters/:id` | 클러스터 삭제 | 204, 401, 404, 502 |
-| `restoreCluster(id)` | `POST /.../restore` | 삭제된 클러스터 복원 | 200, 401, 502 |
-| `deleteClusterCascade(...)` | `DELETE /.../cascade` | 클러스터 하위 데이터 전체 삭제 | 204, 401, 404, 502 |
-| `listSubclusters()` | `GET /v1/graph/subclusters` | 모든 서브클러스터 목록 조회 | 200, 401 |
+| `deleteCluster(id, opts?)` | `DELETE /v1/graph/clusters/:id` | 클러스터 삭제 — `opts.macroId`로 뷰 격리 | 204, 401, 404, 502 |
+| `restoreCluster(id, macroId?)` | `POST /.../restore` | 삭제된 클러스터 복원 | 200, 401, 502 |
+| `deleteClusterCascade(id, opts?)` | `DELETE /.../cascade` | 클러스터 하위 데이터 전체 삭제 — `opts.macroId`로 뷰 격리 | 204, 401, 404, 502 |
+| `listSubclusters(macroId?)` | `GET /v1/graph/subclusters` | 모든 서브클러스터 목록 조회 | 200, 401 |
 | `getSubcluster(id)` | `GET /.../subclusters/:id` | 특정 서브클러스터 조회 | 200, 401, 404 |
-| `deleteSubcluster(id)` | `DELETE /.../subclusters/:id` | 서브클러스터 삭제 | 200, 401, 404 |
+| `deleteSubcluster(id, macroId?)` | `DELETE /.../subclusters/:id` | 서브클러스터 삭제 | 200, 401, 404 |
+
+---
+
+## Methods (Graph Views — 1:N)
+
+### `listGraphs(options?)`
+사용자의 모든 Macro View 목록을 반환합니다.
+
+- **Usage Example**
+  ```typescript
+  const { data } = await client.graph.listGraphs({ sortBy: 'updatedAt' });
+  // 삭제된 뷰만 조회
+  const deleted = await client.graph.listGraphs({ onlyDeleted: true });
+  ```
+- **Status Codes**
+  - `200 OK`: 메타데이터 배열 반환 (뷰 없으면 빈 배열)
+  - `401 Unauthorized`
+
+---
+
+### `getGraphMetadata(macroId)`
+특정 macroId에 해당하는 Macro View의 메타데이터를 조회합니다. Soft Delete된 뷰는 404.
+
+- **Usage Example**
+  ```typescript
+  const { data } = await client.graph.getGraphMetadata('01HWXYZ...');
+  ```
+- **Status Codes**
+  - `200 OK`, `401 Unauthorized`, `404 Not Found`
+
+---
+
+### `updateGraphMetadata(macroId, dto)`
+특정 뷰의 title/description을 수정합니다.
+
+- **Usage Example**
+  ```typescript
+  await client.graph.updateGraphMetadata('01HWXYZ...', { title: '새 제목', description: '...' });
+  ```
+- **Status Codes**
+  - `200 OK`, `401 Unauthorized`, `404 Not Found`
+
+---
+
+### `deleteGraph(macroId, options?)`
+특정 macroId 뷰를 삭제합니다. `permanent: false`(기본)이면 Soft Delete, `true`이면 Hard Delete.
+
+- **Usage Example**
+  ```typescript
+  await client.graph.deleteGraph('01HWXYZ...');
+  await client.graph.deleteGraph('01HWXYZ...', { permanent: true });
+  ```
+- **Status Codes**
+  - `204 No Content`, `401 Unauthorized`, `404 Not Found`
+
+---
+
+### `cloneGraph(macroId, options?)`
+특정 뷰를 복제하여 새 Macro View를 생성합니다.
+
+- **Usage Example**
+  ```typescript
+  const { data } = await client.graph.cloneGraph('01HWXYZ...', { title: '복사본' });
+  console.log(data.macroId); // 새 뷰의 macroId
+  ```
+- **Status Codes**
+  - `201 Created`, `401 Unauthorized`, `404 Not Found`
+
+---
+
+### `restoreGraph(macroId)`
+Soft Delete된 뷰를 복원합니다. Hard Delete된 뷰는 복원 불가.
+
+- **Usage Example**
+  ```typescript
+  await client.graph.restoreGraph('01HWXYZ...');
+  ```
+- **Status Codes**
+  - `200 OK`, `401 Unauthorized`, `404 Not Found`
 
 ---
 

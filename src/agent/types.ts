@@ -11,12 +11,14 @@ export type AgentModeHint = 'summary' | 'note' | 'auto';
 /**
  * Chat 스트림 요청 바디
  * @property microscopeGroupId (선택) Microscope 워크스페이스 ID — 존재하면 해당 workspace 기반 RAG 채팅 활성화
+ * @property macroId (선택) 활성 매크로 뷰 ID — 존재하면 해당 뷰를 활성 컨텍스트로 주입
  */
 export interface ChatStreamRequestBody {
   userMessage: string;
   contextText?: string;
   modeHint?: AgentModeHint;
   microscopeGroupId?: string;
+  macroId?: string;
 }
 
 /**

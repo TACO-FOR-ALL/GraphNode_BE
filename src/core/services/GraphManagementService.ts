@@ -1,5 +1,7 @@
+import { ulid } from 'ulid';
 import type { MacroGraphStore, MacroGraphStoreOptions } from '../ports/MacroGraphStore';
-import { ValidationError, UpstreamError } from '../../shared/errors/domain';
+import { ValidationError, UpstreamError, NotFoundError } from '../../shared/errors/domain';
+import type { PlanLimitService } from './PlanLimitService';
 import { AppError } from '../../shared/errors/base';
 import type {
   GraphClusterDto,
@@ -10,6 +12,7 @@ import type {
   GraphSummaryDto,
   GraphSubclusterDto,
 } from '../../shared/dtos/graph';
+import type { MacroViewDto, UpdateMacroViewDto, ListMacroViewsQuery } from '../../shared/dtos/macro';
 import {
   toGraphSummaryDto,
   createEmptyGraphSummaryDto,
@@ -32,7 +35,10 @@ const GRAPH_GENERATION_MUTABLE_STATUSES: GraphStatsDto['status'][] = ['CREATING'
  * - GraphStore(Port)를 통해 DB 작업을 수행하며, 이 과정에서 Mapper를 사용해 DTO <-> Doc 변환을 수행합니다.
  */
 export class GraphManagementService {
-  constructor(private readonly repo: MacroGraphStore) {}
+  constructor(
+    private readonly repo: MacroGraphStore,
+    private readonly planLimitService?: PlanLimitService
+  ) {}
   /**
    * 노드 생성 또는 업데이트 (Upsert)
    *
@@ -213,11 +219,11 @@ export class GraphManagementService {
    * @param id 노드 ID
    * @returns GraphNodeDto 또는 null
    */
-  async findNode(userId: string, id: number): Promise<GraphNodeDto | null> {
+  async findNode(userId: string, id: number, options?: RepoOptions): Promise<GraphNodeDto | null> {
     try {
       this.assertUser(userId);
       const nId = this.parseId(id);
-      return await this.repo.findNode(userId, nId);
+      return await this.repo.findNode(userId, nId, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.findNode failed', { cause: String(err) });
@@ -230,10 +236,10 @@ export class GraphManagementService {
    * @param origIds 원본 식별자 배열
    * @returns GraphNodeDto 배열
    */
-  async findNodesByOrigIds(userId: string, origIds: string[]): Promise<GraphNodeDto[]> {
+  async findNodesByOrigIds(userId: string, origIds: string[], options?: RepoOptions): Promise<GraphNodeDto[]> {
     try {
       this.assertUser(userId);
-      return await this.repo.findNodesByOrigIds(userId, origIds);
+      return await this.repo.findNodesByOrigIds(userId, origIds, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.findNodesByOrigIds failed', { cause: String(err) });
@@ -261,10 +267,10 @@ export class GraphManagementService {
    * @param userId 사용자 ID
    * @returns GraphNodeDto 배열
    */
-  async listNodes(userId: string): Promise<GraphNodeDto[]> {
+  async listNodes(userId: string, options?: RepoOptions): Promise<GraphNodeDto[]> {
     try {
       this.assertUser(userId);
-      return await this.repo.listNodes(userId);
+      return await this.repo.listNodes(userId, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.listNodes failed', { cause: String(err) });
@@ -276,10 +282,10 @@ export class GraphManagementService {
    * @returns 노드 객체 배열
    * @throws {UpstreamError} - DB 오류 발생 시
    */
-  async listNodesAll(userId: string): Promise<GraphNodeDto[]> {
+  async listNodesAll(userId: string, options?: RepoOptions): Promise<GraphNodeDto[]> {
     try {
       this.assertUser(userId);
-      return await this.repo.listNodesAll(userId);
+      return await this.repo.listNodesAll(userId, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.listNodesAll failed', { cause: String(err) });
@@ -292,10 +298,10 @@ export class GraphManagementService {
    * @param clusterId 클러스터 ID
    * @returns GraphNodeDto 배열
    */
-  async listNodesByCluster(userId: string, clusterId: string): Promise<GraphNodeDto[]> {
+  async listNodesByCluster(userId: string, clusterId: string, options?: RepoOptions): Promise<GraphNodeDto[]> {
     try {
       this.assertUser(userId);
-      return await this.repo.listNodesByCluster(userId, clusterId);
+      return await this.repo.listNodesByCluster(userId, clusterId, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.listNodesByCluster failed', { cause: String(err) });
@@ -440,10 +446,10 @@ export class GraphManagementService {
    * @param userId 사용자 ID
    * @returns GraphEdgeDto 배열
    */
-  async listEdges(userId: string): Promise<GraphEdgeDto[]> {
+  async listEdges(userId: string, options?: RepoOptions): Promise<GraphEdgeDto[]> {
     try {
       this.assertUser(userId);
-      return await this.repo.listEdges(userId);
+      return await this.repo.listEdges(userId, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.listEdges failed', { cause: String(err) });
@@ -538,11 +544,11 @@ export class GraphManagementService {
    * @param clusterId 클러스터 ID
    * @returns GraphClusterDto 또는 null
    */
-  async findCluster(userId: string, clusterId: string): Promise<GraphClusterDto | null> {
+  async findCluster(userId: string, clusterId: string, options?: RepoOptions): Promise<GraphClusterDto | null> {
     try {
       this.assertUser(userId);
       if (!clusterId) throw new ValidationError('clusterId required');
-      return await this.repo.findCluster(userId, clusterId);
+      return await this.repo.findCluster(userId, clusterId, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.findCluster failed', { cause: String(err) });
@@ -554,10 +560,10 @@ export class GraphManagementService {
    * @param userId 사용자 ID
    * @returns GraphClusterDto 배열
    */
-  async listClusters(userId: string): Promise<GraphClusterDto[]> {
+  async listClusters(userId: string, options?: RepoOptions): Promise<GraphClusterDto[]> {
     try {
       this.assertUser(userId);
-      return await this.repo.listClusters(userId);
+      return await this.repo.listClusters(userId, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.listClusters failed', { cause: String(err) });
@@ -741,10 +747,10 @@ export class GraphManagementService {
       throw new UpstreamError('GraphService.restoreSubcluster failed', { cause: String(err) });
     }
   }
-  async listSubclusters(userId: string): Promise<GraphSubclusterDto[]> {
+  async listSubclusters(userId: string, options?: RepoOptions): Promise<GraphSubclusterDto[]> {
     try {
       this.assertUser(userId);
-      return await this.repo.listSubclusters(userId);
+      return await this.repo.listSubclusters(userId, options);
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
       throw new UpstreamError('GraphService.listSubclusters failed', { cause: String(err) });
@@ -782,7 +788,7 @@ export class GraphManagementService {
       if (this.repo.saveStatsIfStatusIn) {
         return await this.repo.saveStatsIfStatusIn(stats, allowedStatuses, options);
       }
-      const current = await this.getStatsMetadata(stats.userId);
+      const current = await this.getStatsMetadata(stats.userId, options);
       if (!allowedStatuses.includes(current.status)) {
         return false;
       }
@@ -809,10 +815,11 @@ export class GraphManagementService {
    */
   async persistSnapshotBulk(payload: PersistGraphPayloadDto, options?: RepoOptions): Promise<void> {
     try {
-      const { userId, snapshot } = payload;
+      const { userId, macroId, snapshot } = payload;
       this.assertUser(userId);
+      const macroOptions: RepoOptions = { ...options, macroId };
 
-      const nodes: GraphNodeDto[] = snapshot.nodes.map((node) => ({ ...node, userId }));
+      const nodes: GraphNodeDto[] = snapshot.nodes.map((node) => ({ ...node, userId, macroId }));
       const edges: GraphEdgeDto[] = snapshot.edges.map((edge) => ({ ...edge, userId }));
       const clusters: GraphClusterDto[] = snapshot.clusters.map((cluster) => ({
         ...cluster,
@@ -827,18 +834,18 @@ export class GraphManagementService {
         };
       });
 
-      await this.upsertClusters(clusters, options);
-      await this.upsertNodes(nodes, options);
-      await this.upsertEdges(edges, options);
-      await this.upsertSubclusters(subclusters, options);
+      await this.upsertClusters(clusters, macroOptions);
+      await this.upsertNodes(nodes, macroOptions);
+      await this.upsertEdges(edges, macroOptions);
+      await this.upsertSubclusters(subclusters, macroOptions);
 
       const statsPayload: GraphStatsDto = { ...snapshot.stats, userId };
       // Graph generation persistSnapshot은 handler 완료 전에도 CREATED를 쓰므로,
       // AddNode UPDATING/UPDATED를 덮어쓰지 않도록 compare-and-set을 사용합니다.
       if (statsPayload.status === 'CREATED') {
-        await this.saveStatsIfStatusIn(statsPayload, GRAPH_GENERATION_MUTABLE_STATUSES, options);
+        await this.saveStatsIfStatusIn(statsPayload, GRAPH_GENERATION_MUTABLE_STATUSES, macroOptions);
       } else {
-        await this.saveStats(statsPayload, options);
+        await this.saveStats(statsPayload, macroOptions);
       }
     } catch (err: unknown) {
       if (err instanceof AppError) throw err;
@@ -859,10 +866,10 @@ export class GraphManagementService {
    * 조회하는 경로에서는 이 메서드를 호출하지 말고 `getStatsMetadata`로 상태 메타데이터만
    * 읽은 뒤, count는 실제 조회된 nodes/edges/clusters 배열 길이로 계산해야 합니다.
    */
-  async getStats(userId: string): Promise<GraphStatsDto> {
+  async getStats(userId: string, options?: RepoOptions): Promise<GraphStatsDto> {
     try {
       this.assertUser(userId);
-      const stats = await this.repo.getStats(userId);
+      const stats = await this.repo.getStats(userId, options);
       return stats ?? {
             userId,
             nodes: 0,
@@ -890,12 +897,12 @@ export class GraphManagementService {
    * @param userId 사용자 ID
    * @returns 상태 메타데이터를 포함한 stats DTO. MacroStats가 없으면 NOT_CREATED 기본값을 반환합니다.
    */
-  async getStatsMetadata(userId: string): Promise<GraphStatsDto> {
+  async getStatsMetadata(userId: string, options?: RepoOptions): Promise<GraphStatsDto> {
     try {
       this.assertUser(userId);
       const stats = this.repo.getStatsMetadata
-        ? await this.repo.getStatsMetadata(userId)
-        : await this.repo.getStats(userId);
+        ? await this.repo.getStatsMetadata(userId, options)
+        : await this.repo.getStats(userId, options);
       return stats ?? {
             userId,
             nodes: 0,
@@ -983,10 +990,10 @@ export class GraphManagementService {
    * - DB 저장 필드(total_source_nodes, generatedAt)를 FE 기대 필드(total_conversations, generated_at)로 변환
    * - 변환 로직은 `graph_summary.mapper.ts`의 `toGraphSummaryDto`에 위임
    */
-  async getGraphSummary(userId: string): Promise<GraphSummaryDto> {
+  async getGraphSummary(userId: string, options?: RepoOptions): Promise<GraphSummaryDto> {
     try {
       this.assertUser(userId);
-      const doc: GraphSummaryDoc | null = await this.repo.getGraphSummary(userId);
+      const doc: GraphSummaryDoc | null = await this.repo.getGraphSummary(userId, options);
       if (!doc) {
         return createEmptyGraphSummaryDto();
       }
@@ -1029,6 +1036,148 @@ export class GraphManagementService {
     }
   }
 
+
+  /**
+   * @description 30일이 경과한 Soft Delete 매크로 뷰와 하위 그래프 요소를 Neo4j에서 영구 삭제합니다.
+   *
+   * CleanupCron에서 매일 자정 호출됩니다.
+   * CALL {} IN TRANSACTIONS 배치 처리로 대용량 그래프에서도 OOM 없이 동작합니다.
+   *
+   * @param expiredBefore 이 시각 이전에 soft-delete된 뷰를 영구 삭제합니다.
+   * @throws {UpstreamError} Neo4j 삭제 실패 시
+   */
+  async cleanupExpiredMacroViews(expiredBefore: Date): Promise<void> {
+    try {
+      await this.repo.cleanupExpiredMacroViews(expiredBefore);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphManagementService.cleanupExpiredMacroViews failed', {
+        cause: String(err),
+      });
+    }
+  }
+
+  // --- MacroView management (absorbed from GraphViewsService) ---
+
+  /**
+   * @description 사용자의 매크로 뷰 목록을 조회합니다.
+   * @param userId 조회 대상 사용자 ID
+   * @param query 정렬·필터 옵션
+   * @returns 매크로 뷰 메타데이터 목록
+   * @throws {ValidationError} userId 미제공 시
+   * @throws {UpstreamError} DB 조회 실패 시
+   */
+  async listMacroViews(userId: string, query?: ListMacroViewsQuery): Promise<MacroViewDto[]> {
+    try {
+      this.assertUser(userId);
+      return await this.repo.listMacroViews(userId, query);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphManagementService.listMacroViews failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * @description macroId로 단일 매크로 뷰를 조회합니다.
+   * @param userId 소유 사용자 ID
+   * @param macroId 조회할 매크로 뷰 ID
+   * @returns 매크로 뷰 메타데이터
+   * @throws {NotFoundError} 해당 macroId의 뷰가 없는 경우
+   * @throws {UpstreamError} DB 조회 실패 시
+   */
+  async getMacroView(userId: string, macroId: string): Promise<MacroViewDto> {
+    try {
+      this.assertUser(userId);
+      const view = await this.repo.getMacroView(userId, macroId);
+      if (!view) throw new NotFoundError(`MacroView not found: ${macroId}`);
+      return view;
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphManagementService.getMacroView failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * @description 매크로 뷰 메타데이터를 부분 업데이트합니다.
+   * @param userId 소유 사용자 ID
+   * @param macroId 업데이트할 매크로 뷰 ID
+   * @param patch 업데이트할 필드
+   * @returns 업데이트된 매크로 뷰 메타데이터
+   * @throws {UpstreamError} DB 조회 실패 시
+   */
+  async updateMacroView(userId: string, macroId: string, patch: UpdateMacroViewDto): Promise<MacroViewDto> {
+    try {
+      this.assertUser(userId);
+      return await this.repo.updateMacroView(userId, macroId, patch);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphManagementService.updateMacroView failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * @description 매크로 뷰를 소프트 삭제합니다.
+   * @param userId 소유 사용자 ID
+   * @param macroId 삭제할 매크로 뷰 ID
+   * @throws {UpstreamError} DB 삭제 실패 시
+   */
+  async softDeleteMacroView(userId: string, macroId: string): Promise<void> {
+    try {
+      this.assertUser(userId);
+      await this.repo.softDeleteMacroView(userId, macroId);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphManagementService.softDeleteMacroView failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * @description 소프트 삭제된 매크로 뷰를 복원합니다.
+   * @param userId 소유 사용자 ID
+   * @param macroId 복원할 매크로 뷰 ID
+   * @throws {UpstreamError} DB 복원 실패 시
+   */
+  async restoreMacroView(userId: string, macroId: string): Promise<void> {
+    try {
+      this.assertUser(userId);
+      await this.repo.restoreMacroView(userId, macroId);
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphManagementService.restoreMacroView failed', { cause: String(err) });
+    }
+  }
+
+  /**
+   * @description 기존 매크로 뷰를 새 macroId로 Deep Clone합니다.
+   * @param userId 소유 사용자 ID
+   * @param sourceMacroId 원본 매크로 뷰 ID
+   * @returns 복제된 새 매크로 뷰 메타데이터
+   * @throws {NotFoundError} 원본 macroId의 뷰가 없는 경우
+   * @throws {UpstreamError} DB 복제 실패 시
+   */
+  async cloneMacroView(userId: string, sourceMacroId: string): Promise<MacroViewDto> {
+    if (this.planLimitService) {
+      await this.planLimitService.checkMacroSpaceLimit(userId);
+    }
+    try {
+      this.assertUser(userId);
+      const source = await this.repo.getMacroView(userId, sourceMacroId);
+      if (!source) throw new NotFoundError(`Source MacroView not found: ${sourceMacroId}`);
+      const newMacroId = ulid();
+      await this.repo.createMacroView(userId, newMacroId, {
+        title: source.title ? `${source.title} (복사본)` : undefined,
+        description: source.description,
+        scopeFilter: source.scopeFilter ?? { mode: 'auto' as const, intent: '' },
+      });
+      await this.repo.cloneMacroGraph(userId, sourceMacroId, newMacroId);
+      const cloned = await this.repo.getMacroView(userId, newMacroId);
+      if (!cloned) throw new NotFoundError(`Cloned MacroView not found: ${newMacroId}`);
+      return cloned;
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('GraphManagementService.cloneMacroView failed', { cause: String(err) });
+    }
+  }
 
   private assertUser(userId: string | undefined): asserts userId is string {
     if (!userId) throw new ValidationError('userId required');

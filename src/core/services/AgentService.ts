@@ -24,6 +24,7 @@ import { ICreditService } from '../ports/ICreditService';
 import { CreditFeature } from '../types/persistence/credit.persistence';
 import { FEATURE_COSTS, CreditContext } from '../../config/billing.config';
 import type { MicroscopeWorkspaceStore } from '../ports/MicroscopeWorkspaceStore';
+import type { PlanLimitService } from './PlanLimitService';
 
 /** SSE 이벤트 전송 함수 타입 */
 export type SendEventFn = (event: string, data: unknown) => void;
@@ -43,6 +44,8 @@ export interface AgentServiceDeps {
   creditService?: ICreditService;
   /** Microscope 워크스페이스 저장소 (MicroscopeContextTool에서 사용) */
   microscopeWorkspaceStore?: MicroscopeWorkspaceStore;
+  /** 플랜 한도 검증 서비스 */
+  planLimitService?: PlanLimitService;
 }
 
 export class AgentService {
@@ -73,7 +76,13 @@ export class AgentService {
       graphEmbeddingService,
       graphVectorService,
       creditService,
+      planLimitService,
     } = this.deps;
+
+    // 일일 채팅 토큰 한도 확인 (에이전트 채팅도 동일한 풀 소비)
+    if (planLimitService) {
+      await planLimitService.checkChatTokenLimit(userId);
+    }
 
     let creditDeducted = false;
     let deductedCreditAmount = 0;
@@ -82,7 +91,7 @@ export class AgentService {
     const trimmedUser = (body.userMessage || '').trim();
     const context = (body.contextText || '').trim();
     const hasContext = context.length > 0;
-    const { modeHint, microscopeGroupId } = body;
+    const { modeHint, microscopeGroupId, macroId } = body;
 
     // FIXED(강현일) : Service 단에서 API KEY 검증하던 로직 제거 (환경변수 공통 Key 사용)
     /*
@@ -170,16 +179,20 @@ export class AgentService {
 
     // 모드에 따른 처리
     if (mode === 'chat') {
-      await this.handleChatMode(userId, trimmedUser, context, hasContext, openai, sendEvent, microscopeGroupId);
-      return;
-    }
-
-    if (mode === 'summary') {
+      await this.handleChatMode(userId, trimmedUser, context, hasContext, openai, sendEvent, microscopeGroupId, macroId);
+    } else if (mode === 'summary') {
       await this.handleSummaryMode(trimmedUser, context, openai, sendEvent);
-      return;
+    } else {
+      await this.handleNoteMode(trimmedUser, context, openai, sendEvent);
     }
 
-    await this.handleNoteMode(trimmedUser, context, openai, sendEvent);
+    // 에이전트 채팅 완료 후 토큰 누적 (입력 기반 추정)
+    if (planLimitService) {
+      const estimatedTokens = BigInt(Math.ceil((trimmedUser.length + context.length) / 4));
+      await planLimitService.recordChatTokens(userId, estimatedTokens).catch(() => {
+        // 토큰 기록 실패는 비즈니스 플로우를 차단하지 않음
+      });
+    }
     } catch (err: unknown) {
       if (creditDeducted) {
         await this.refundAgentChatCredit(userId, deductedCreditAmount, err, creditService);
@@ -206,10 +219,11 @@ export class AgentService {
     hasContext: boolean,
     openai: OpenAI,
     sendEvent: SendEventFn,
-    microscopeGroupId?: string
+    microscopeGroupId?: string,
+    macroId?: string
   ): Promise<void> {
     // FIXED (강현일) : Chat Mode의 System Prompt를 반환하는 메서드 추가
-    const systemPrompt = this.getChatSystemPrompt(microscopeGroupId);
+    const systemPrompt = this.getChatSystemPrompt(microscopeGroupId, macroId);
 
     // FIXED (강현일) : User Message도 그렇고, 밖으로 빼내서 메서드 형태로 변경
     const userMessage = this.getChatUserPrompt(trimmedUser, context, hasContext);
@@ -576,9 +590,10 @@ export class AgentService {
   /**
    * HandleChatMode 메서드에서 필요로하는 chatSystemPrompt를 반환하는 메서드
    * @param microscopeGroupId Microscope 워크스페이스 ID — 존재하면 Microscope 전용 지침 추가
+   * @param macroId 활성 매크로 뷰 ID — 존재하면 해당 뷰를 활성 컨텍스트로 주입
    * @returns System Prompt
    */
-  private getChatSystemPrompt(microscopeGroupId?: string): string {
+  private getChatSystemPrompt(microscopeGroupId?: string, macroId?: string): string {
     const microscopeSection = microscopeGroupId
       ? `
       ## MICROSCOPE CONTEXT MODE (활성)
@@ -592,6 +607,27 @@ export class AgentService {
       4. 이 workspace 데이터로 답할 수 없는 경우에만 search_conversations 등 다른 도구를 사용하세요.
       `
       : '';
+
+    const macroSection = macroId
+      ? `
+      ## MACRO VIEW CONTEXT (활성)
+      사용자는 현재 특정 매크로 뷰를 보고 있습니다.
+      Active Macro View ID: ${macroId}
+
+      [필수 규칙]
+      1. 그래프 관련 질문에 답할 때는 macroId = "${macroId}" 를 도구에 전달하세요.
+      2. get_macro_graph_context, get_graph_node_details, get_graph_summary 호출 시 반드시 macroId = "${macroId}" 를 전달하세요.
+      3. 사용자가 "내 그래프", "이 뷰" 등 현재 뷰를 지칭하면 이 macroId를 기준으로 답변하세요.
+      `
+      : `
+      ## MACRO VIEW CONTEXT (비활성)
+      사용자가 특정 매크로 뷰를 지정하지 않았습니다.
+
+      [폴백 규칙]
+      1. 사용자가 "내 그래프" 또는 특정 뷰를 언급하면, 먼저 어떤 뷰를 의미하는지 clarify 질문하세요.
+      2. 또는 get_graph_summary를 먼저 호출하여 사용 가능한 뷰 정보를 파악하세요.
+      3. 특정 macroId 없이 그래프 도구를 호출하지 마세요 — 빈 결과가 반환됩니다.
+      `;
 
     return `
       You are the "GraphNode AI Assistant".
@@ -610,6 +646,7 @@ export class AgentService {
       When the user asks about their data (notes, conversations, graph), use these tools to fetch the information.
       Always respond in the same language as the user's message.
       ${microscopeSection}
+      ${macroSection}
       ## Macro vs Micro Tool 선택 규칙 (반드시 준수)
       - 사용자가 가벼운 "전체 텍스트 요약"이나 "통계"만 물으면 get_graph_summary를 우선 호출하세요.
       - 사용자가 "그래프 전체 구조를 상세히 보여줘", "모든 노드/엣지 데이터"를 요구하면 get_macro_graph_context를 호출하세요.

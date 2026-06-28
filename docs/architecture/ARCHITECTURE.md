@@ -78,8 +78,8 @@ graph TD
 | 저장소 | 역할 | 이유 |
 | :--- | :--- | :--- |
 | **PostgreSQL (Prisma)** | 사용자 계정 · 일일 사용량 · 온보딩 · 피드백 | 관계형 정합성 및 트랜잭션 보장 |
-| **MongoDB** | 대화 · 메시지 · 노트 · Microscope 워크스페이스 · Macro Graph | 비정형 문서 데이터의 유연한 확장성 확보 |
-| **Neo4j** | Macro Graph Native 구조 저장 + **Graph RAG** 이웃 탐색 | 노드-관계 명시적 표현, MACRO_RELATED 홉 탐색 성능 |
+| **MongoDB** | 대화 · 메시지 · 노트 · Microscope 워크스페이스 | 비정형 문서 데이터의 유연한 확장성 확보 |
+| **Neo4j** | **Macro Graph (1:N)** Native 구조 저장 + **Graph RAG** 이웃 탐색. `(userId, macroId)` 복합 키로 여러 뷰를 지원. | 노드-관계 명시적 표현, MACRO_RELATED 홉 탐색 성능 |
 | **ChromaDB** | 384차원 MiniLM 임베딩 벡터 저장 · 유사도 검색 | Graph RAG Phase 1 Seed 추출 (의미 기반) |
 | **Redis** | 세션 정보 · 실시간 알림 큐 · 캐시 · Rate Limit | 빠른 읽기/쓰기 성능 및 TTL 기반 알림 제어 |
 

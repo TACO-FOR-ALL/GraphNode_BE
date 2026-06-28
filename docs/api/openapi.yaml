@@ -1959,6 +1959,222 @@ paths:
             application/problem+json:
               schema:
                 $ref: ../schemas/problem.json
+  /v1/graph/graphs:
+    get:
+      summary: List all 1:N graph views
+      description: |
+        사용자의 모든 Macro View(MacroGraph) 목록을 반환합니다.
+        기본적으로 soft-delete되지 않은 뷰만 반환하며, `onlyDeleted=true`로 삭제된 뷰만 조회할 수 있습니다.
+      tags: [Graph]
+      parameters:
+        - in: query
+          name: sortBy
+          schema:
+            type: string
+            enum: [createdAt, updatedAt, nodeCount]
+            default: updatedAt
+          description: 정렬 기준.
+        - in: query
+          name: onlyDeleted
+          schema: { type: boolean, default: false }
+          description: true이면 soft-delete된 뷰만 반환합니다.
+      responses:
+        '200':
+          description: OK — MacroGraph 메타데이터 배열
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    macroId: { type: string }
+                    userId: { type: string }
+                    title: { type: string }
+                    description: { type: string }
+                    nodeCount: { type: integer }
+                    edgeCount: { type: integer }
+                    createdAt: { type: string, format: date-time }
+                    updatedAt: { type: string, format: date-time }
+                    deletedAt: { type: string, format: date-time, nullable: true }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+
+  /v1/graph/graphs/{macroId}:
+    get:
+      summary: Get graph view metadata
+      description: 특정 macroId에 해당하는 Macro View의 메타데이터를 조회합니다. Soft-delete된 뷰는 접근 불가.
+      tags: [Graph]
+      parameters:
+        - in: path
+          name: macroId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK — MacroGraph 메타데이터
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  macroId: { type: string }
+                  userId: { type: string }
+                  title: { type: string }
+                  description: { type: string }
+                  nodeCount: { type: integer }
+                  edgeCount: { type: integer }
+                  createdAt: { type: string, format: date-time }
+                  updatedAt: { type: string, format: date-time }
+                  deletedAt: { type: string, format: date-time, nullable: true }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '404':
+          description: Not Found — macroId가 존재하지 않거나 soft-deleted
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+    patch:
+      summary: Update graph view metadata (title, description)
+      description: 특정 macroId 뷰의 메타데이터(title, description)를 업데이트합니다.
+      tags: [Graph]
+      parameters:
+        - in: path
+          name: macroId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string, maxLength: 200 }
+                description: { type: string, maxLength: 1000 }
+      responses:
+        '200':
+          description: OK — 업데이트된 메타데이터
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+    delete:
+      summary: Soft or hard delete a graph view
+      description: |
+        특정 macroId 뷰를 삭제합니다.
+        `permanent=false`(기본값)이면 Soft Delete(`deletedAt` 설정), `permanent=true`이면 물리 삭제.
+        Soft Delete된 뷰는 30일 후 스케줄러에 의해 자동 Hard Delete됩니다.
+      tags: [Graph]
+      parameters:
+        - in: path
+          name: macroId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: permanent
+          schema: { type: boolean, default: false }
+          description: true이면 Hard Delete (복원 불가).
+      responses:
+        '204':
+          description: No Content — 삭제 성공
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+
+  /v1/graph/graphs/{macroId}/clone:
+    post:
+      summary: Clone a graph view to a new macroId
+      description: |
+        특정 macroId 뷰를 복제하여 새로운 Macro View를 생성합니다.
+        소스 뷰의 모든 노드, 엣지, 클러스터, 서브클러스터를 새 macroId로 복사합니다.
+      tags: [Graph]
+      parameters:
+        - in: path
+          name: macroId
+          required: true
+          schema: { type: string }
+          description: 복제할 원본 뷰의 macroId.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string, maxLength: 200, description: 새 뷰의 제목. 미입력시 원본 제목 + " (복사본)" }
+                description: { type: string, maxLength: 1000 }
+      responses:
+        '201':
+          description: Created — 복제된 새 뷰의 macroId 반환
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  macroId: { type: string }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '404':
+          description: Not Found — 원본 macroId 없음
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+
+  /v1/graph/graphs/{macroId}/restore:
+    post:
+      summary: Restore a soft-deleted graph view
+      description: |
+        Soft Delete된 macroId 뷰를 복원합니다(`deletedAt = null`).
+        Hard Delete된 뷰는 복원할 수 없습니다.
+      tags: [Graph]
+      parameters:
+        - in: path
+          name: macroId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK — 복원 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: 'Graph view restored' }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+        '404':
+          description: Not Found — macroId가 존재하지 않거나 Hard Delete됨
+          content:
+            application/problem+json:
+              schema: { $ref: ../schemas/problem.json }
+
   /v1/graph/search:
     post:
       summary: Search similar graph nodes using vector
@@ -4068,7 +4284,11 @@ paths:
   /v1/graph-ai/generate:
     post:
       summary: Generate graph from text (Async)
-      description: Starts an asynchronous background task to generate a graph from the user's conversation history. Returns a task ID.
+      description: |
+        Starts an asynchronous background task to generate a knowledge graph from the user's conversation history.
+        Returns a task ID. When `scopeFilter` is provided, a new 1:N macro view is created and the generated `macroId`
+        is cached in Redis under the `taskId` key so the worker can associate the result with the correct view.
+        Omitting `scopeFilter` falls back to legacy 1:1 mode (`macroId = userId`).
       requestBody:
         description: Options for graph generation.
         required: false
@@ -4080,6 +4300,26 @@ paths:
                 includeSummary:
                   type: boolean
                   description: Whether to also generate a graph summary (3-mode pipeline).
+                scopeFilter:
+                  type: object
+                  description: |
+                    If provided, a new Macro View (1:N) is created for this generation.
+                    The filter restricts which source data (chat/note/file) is included.
+                  properties:
+                    chatIds: { type: array, items: { type: string } }
+                    noteIds: { type: array, items: { type: string } }
+                    fileIds: { type: array, items: { type: string } }
+                title:
+                  type: string
+                  description: Optional title for the new Macro View created by scopeFilter.
+                description:
+                  type: string
+                  description: Optional description for the new Macro View created by scopeFilter.
+                macroId:
+                  type: string
+                  description: |
+                    If provided along with scopeFilter, this macroId is used instead of auto-generating one.
+                    Used for "add-node" incremental updates to an existing view.
       responses:
         '202':
           description: Task accepted
@@ -4203,16 +4443,18 @@ paths:
               schema: { $ref: '../schemas/problem.json' }
   /v1/graph-ai:
     delete:
-      summary: Delete all graph data
-      description: Deletes all knowledge graph data (nodes, edges, clusters, subclusters, stats) for the user.
-      parameters:
-        - in: query
-          name: permanent
-          schema: { type: boolean, default: false }
-          description: If true, performs a hard delete. Otherwise, soft delete.
+      summary: Hard delete legacy 1:1 graph (Deprecated)
+      description: |
+        **Hard Delete 전용 — Soft Delete 미지원.**
+        레거시 1:1 그래프(`macroId === userId`)를 물리적으로 영구 삭제합니다.
+        `permanent` 파라미터는 무시되며 항상 Hard Delete로 동작합니다.
+
+        1:N 뷰를 Soft/Hard Delete하려면 `DELETE /v1/graph/graphs/{macroId}` 를 사용하세요.
+        이 엔드포인트는 복원(`/v1/graph-ai/restore`)을 지원하지 않습니다.
+      deprecated: true
       responses:
         '204':
-          description: No Content — successfully deleted
+          description: No Content — legacy graph permanently deleted
         '401':
           description: Not authenticated
           content:
@@ -4225,24 +4467,22 @@ paths:
               schema: { $ref: '../schemas/problem.json' }
   /v1/graph-ai/restore:
     post:
-      summary: Restore all graph data
-      description: Restores all soft-deleted knowledge graph data for the user.
+      summary: Restore graph — NOT SUPPORTED (Deprecated)
+      description: |
+        **지원되지 않습니다.**
+        `/v1/graph-ai` 삭제는 Hard Delete 전용이므로 복원이 불가능합니다.
+        이 엔드포인트는 항상 501 Not Implemented 에러를 반환합니다.
+
+        1:N 뷰를 복원하려면 `POST /v1/graph/graphs/{macroId}/restore` 를 사용하세요.
+      deprecated: true
       responses:
-        '200':
-          description: OK — graph data restored successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message: { type: string, example: 'Graph restored' }
-        '401':
-          description: Not authenticated
+        '501':
+          description: Not Implemented — restore is not supported for hard-deleted legacy graphs
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }
-        '502':
-          description: Bad Gateway — database error
+        '401':
+          description: Not authenticated
           content:
             application/problem+json:
               schema: { $ref: '../schemas/problem.json' }

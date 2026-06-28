@@ -26,6 +26,7 @@ import { GraphEditorService } from '../core/services/GraphEditorService';
 import { GoogleOAuthService } from '../core/services/GoogleOAuthService';
 import { AppleOAuthService } from '../core/services/AppleOAuthService';
 import { MicroscopeManagementService } from '../core/services/MicroscopeManagementService';
+import { PlanLimitService } from '../core/services/PlanLimitService';
 import { createAuditProxy } from '../shared/audit/auditProxy';
 import { loadEnv } from '../config/env';
 // Interfaces
@@ -139,6 +140,7 @@ export class Container {
   private chatManagementService: ChatManagementService | null = null;
   private userService: UserService | null = null;
   private dailyUsageService: DailyUsageService | null = null;
+  private planLimitService: PlanLimitService | null = null;
   private noteService: NoteService | null = null;
   private userFileService: UserFileService | null = null;
   private graphManagementService: GraphManagementService | null = null;
@@ -465,6 +467,21 @@ export class Container {
     return this.dailyUsageService;
   }
   /**
+   * PlanLimitService 인스턴스를 반환합니다.
+   */
+  getPlanLimitService(): PlanLimitService {
+    if (!this.planLimitService) {
+      this.planLimitService = new PlanLimitService(
+        this.getCreditService(),
+        this.getMacroGraphStore(),
+        this.getMicroscopeWorkspaceStore(),
+        this.getDailyUsageService()
+      );
+    }
+    return this.planLimitService;
+  }
+
+  /**
    * NoteService 인스턴스를 반환합니다.
    */
   getNoteService(): NoteService {
@@ -497,7 +514,10 @@ export class Container {
    */
   getGraphManagementService(): GraphManagementService {
     if (!this.graphManagementService) {
-      const raw = new GraphManagementService(this.getMacroGraphStore());
+      const raw = new GraphManagementService(
+        this.getMacroGraphStore(),
+        this.getPlanLimitService()
+      );
       this.graphManagementService = createAuditProxy(raw, 'GraphManagementService');
     }
     return this.graphManagementService;
@@ -539,7 +559,9 @@ export class Container {
         this.getAwsS3Adapter(),
         this.getNotificationService(),
         this.getCreditService(),
-        notionEnabled ? this.getNotionService() : undefined
+        notionEnabled ? this.getNotionService() : undefined,
+        this.getMacroGraphStore(),
+        this.getPlanLimitService()
       );
       this.graphGenerationService = createAuditProxy(raw, 'GraphGenerationService');
     }
@@ -590,6 +612,7 @@ export class Container {
           searchService: this.getSearchService(),
           creditService: this.getCreditService(),
           microscopeWorkspaceStore: this.getMicroscopeWorkspaceStore(),
+          planLimitService: this.getPlanLimitService(),
         }
       );
       this.agentService = createAuditProxy(raw, 'AgentService');
@@ -605,7 +628,8 @@ export class Container {
         this.getChatManagementService(),
         this.getUserService(),
         this.getAwsS3Adapter(),
-        this.getCreditService()
+        this.getCreditService(),
+        this.getPlanLimitService()
       );
       this.aiInteractionService = createAuditProxy(raw, 'AiInteractionService');
     }
@@ -735,7 +759,8 @@ export class Container {
         this.getNoteRepository(),
         this.getNotificationService(),
         this.getUserService(),
-        this.getCreditService()
+        this.getCreditService(),
+        this.getPlanLimitService()
       );
       this.microscopeManagementService = createAuditProxy(raw, 'MicroscopeManagementService');
     }
@@ -960,6 +985,7 @@ export class Container {
     }
     return this.importArchiveService;
   }
+
 }
 
 export const container = Container.getInstance();

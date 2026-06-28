@@ -58,6 +58,7 @@ describe('GraphManagementService', () => {
     const validNode: GraphNodeDto = {
       id: 1,
       userId: 'user-1',
+      macroId: 'macro-test',
       origId: 'conv-1',
       clusterId: 'cluster-1',
       clusterName: 'Cluster 1',
@@ -132,6 +133,7 @@ describe('GraphManagementService', () => {
       const mockNode: GraphNodeDto = {
         id: 1,
         userId: 'user-1',
+        macroId: 'macro-test',
         origId: 'conv-1',
         clusterId: 'cluster-1',
         clusterName: 'Cluster 1',
@@ -161,15 +163,15 @@ describe('GraphManagementService', () => {
       it('should call repo.listNodes', async () => {
           mockRepo.listNodes.mockResolvedValue([]);
           await service.listNodes('user-1');
-          expect(mockRepo.listNodes).toHaveBeenCalledWith('user-1');
+          expect(mockRepo.listNodes).toHaveBeenCalledWith('user-1', undefined);
       });
   });
-  
+
   describe('listNodesByCluster', () => {
       it('should call repo.listNodesByCluster', async () => {
           mockRepo.listNodesByCluster.mockResolvedValue([]);
           await service.listNodesByCluster('user-1', 'c1');
-          expect(mockRepo.listNodesByCluster).toHaveBeenCalledWith('user-1', 'c1');
+          expect(mockRepo.listNodesByCluster).toHaveBeenCalledWith('user-1', 'c1', undefined);
       });
   });
 
@@ -212,7 +214,7 @@ describe('GraphManagementService', () => {
       it('listEdges calls repo', async () => {
           mockRepo.listEdges.mockResolvedValue([]);
           await service.listEdges('u1');
-          expect(mockRepo.listEdges).toHaveBeenCalledWith('u1');
+          expect(mockRepo.listEdges).toHaveBeenCalledWith('u1', undefined);
       });
   });
 
@@ -273,7 +275,7 @@ describe('GraphManagementService', () => {
           >;
           getStatsMetadataMock.mockResolvedValue({ userId: 'u1', nodes: 0, edges: 0, clusters: 0, status: 'CREATED', generatedAt: new Date().toISOString(), metadata: {} });
           const res = await service.getStatsMetadata('u1');
-          expect(mockRepo.getStatsMetadata).toHaveBeenCalledWith('u1');
+          expect(mockRepo.getStatsMetadata).toHaveBeenCalledWith('u1', undefined);
           expect(mockRepo.getStats).not.toHaveBeenCalled();
           expect(res?.status).toBe('CREATED');
       });
@@ -282,7 +284,7 @@ describe('GraphManagementService', () => {
           delete (mockRepo as Partial<MacroGraphStore>).getStatsMetadata;
           mockRepo.getStats.mockResolvedValue({ userId: 'u1', nodes: 10, edges: 5, clusters: 2, status: 'CREATED', generatedAt: new Date().toISOString(), metadata: {} });
           const res = await service.getStatsMetadata('u1');
-          expect(mockRepo.getStats).toHaveBeenCalledWith('u1');
+          expect(mockRepo.getStats).toHaveBeenCalledWith('u1', undefined);
           expect(res?.nodes).toBe(10);
       });
 
@@ -333,7 +335,9 @@ describe('GraphManagementService', () => {
     it('uses compare-and-set when snapshot stats status is CREATED', async () => {
       await service.persistSnapshotBulk({
         userId: 'user-1',
+        macroId: 'macro-test',
         snapshot: {
+          macroId: 'macro-test',
           nodes: [],
           edges: [],
           clusters: [],
@@ -351,7 +355,7 @@ describe('GraphManagementService', () => {
       expect(mockRepo.saveStatsIfStatusIn).toHaveBeenCalledWith(
         expect.objectContaining({ userId: 'user-1', status: 'CREATED' }),
         ['CREATING', 'NOT_CREATED'],
-        undefined
+        { macroId: 'macro-test' }
       );
       expect(mockRepo.saveStats).not.toHaveBeenCalled();
     });
@@ -369,7 +373,9 @@ describe('GraphManagementService', () => {
 
       await service.persistSnapshotBulk({
         userId: 'user-1',
+        macroId: 'macro-test',
         snapshot: {
+          macroId: 'macro-test',
           nodes: [],
           edges: [],
           clusters: [],
@@ -378,7 +384,7 @@ describe('GraphManagementService', () => {
         },
       });
 
-      expect(mockRepo.saveStats).toHaveBeenCalledWith(stats, undefined);
+      expect(mockRepo.saveStats).toHaveBeenCalledWith(stats, { macroId: 'macro-test' });
       expect(mockRepo.saveStatsIfStatusIn).not.toHaveBeenCalled();
     });
   });

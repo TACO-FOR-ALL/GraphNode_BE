@@ -30,7 +30,7 @@ export class MeApi {
   constructor(private rb: RequestBuilder) {}
 
   /**
-   * 내 프로필 정보를 조회합니다.
+   * 내 프로필 정보와 플랜 사용량을 조회합니다.
    *
    * **응답 상태 코드:**
    * - `200 OK`: 조회 성공
@@ -38,8 +38,9 @@ export class MeApi {
    * - `404 Not Found`: 사용자 데이터가 존재하지 않음 (드문 케이스)
    * - `502 Bad Gateway`: 데이터베이스 오류
    *
-   * @returns 내 정보
-   *    - `user` (UserProfileDto): 사용자 프로필 정보
+   * @returns 내 정보 (`MeResponseDto`)
+   *    - `userId` (string): 사용자 ID
+   *    - `profile` (UserProfileDto, optional): 사용자 프로필 정보
    *      - `id` (string): 사용자 ID
    *      - `email` (string, optional): 이메일
    *      - `displayName` (string): 표시 이름
@@ -53,23 +54,31 @@ export class MeApi {
    *      - `createdAt` (string): 생성 일시 (ISO 8601)
    *      - `lastLoginAt` (string | null): 최근 로그인 일시 (ISO 8601)
    *      - `preferredLanguage` (string): 선호 언어
+   *    - `credit` (CreditBalanceDto, optional): 크레딧 잔액 정보 — JIT 갱신 후 최신 값
+   *    - `planUsage` (PlanUsageDto, optional): 플랜 리소스 사용량 스냅샷
+   *      - `planType` (BillingPlanType): 현재 구독 플랜
+   *      - `chatTokens` (ResourceUsageItem): 일일 AI 채팅 토큰 사용량 (UTC 자정 리셋)
+   *        - `used` (number): 오늘 소비된 토큰 수
+   *        - `limit` (number | null): 플랜 한도. Enterprise = null (무제한)
+   *      - `macroSpace` (ResourceUsageItem): 활성 MacroView(지식 그래프) 개수
+   *      - `microSpace` (ResourceUsageItem): 활성 MicroscopeWorkspace 개수
+   *      - `fileStorage` (FileStorageUsage): 전체 파일 저장 용량
+   *        - `usedBytes` (number): 현재 사용 중인 바이트 수
+   *        - `limitBytes` (number | null): 플랜 한도(bytes). Enterprise = null (무제한)
+   *
+   * @remarks
+   * - `planUsage` 필드는 서버 내부 집계 실패 시 응답에서 생략될 수 있습니다 (graceful degradation).
+   *   FE에서는 optional chaining (`data.planUsage?.chatTokens`) 으로 접근하세요.
+   * - Enterprise 플랜의 경우 모든 limit/limitBytes 필드가 null입니다.
+   *
    * @example
-   * const response = await client.me.get();
-   * console.log(response.data);
-   * // Output:
-   * {
-   *   userId: '1...',
-   *   profile: {
-   *     id: '1...',
-   *     email: 'john.doe@example.com',
-   *     displayName: 'John Doe',
-   *     avatarUrl: 'https://example.com/avatar.jpg',
-   *     provider: 'google',
-   *     providerUserId: '123456789',
-   *     createdAt: '2024-01-01T00:00:00.000Z',
-   *     preferredLanguage: 'en'
-   *   }
-   * }
+   * const { data } = await client.me.get();
+   * // 프로필
+   * console.log(data.profile?.displayName);
+   * // 플랜 사용량
+   * console.log(data.planUsage?.chatTokens.used);    // 오늘 사용한 토큰 수
+   * console.log(data.planUsage?.chatTokens.limit);   // 플랜 한도 (Enterprise: null)
+   * console.log(data.planUsage?.fileStorage.usedBytes);
    */
   get(): Promise<HttpResponse<MeResponseDto>> {
     return this.rb.path('/v1/me').get<MeResponseDto>();
@@ -299,6 +308,7 @@ export class MeApi {
    * - `200 OK`: 조회 성공
    * - `400 Bad Request`: limit/offset 파라미터 유효성 오류
    * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `503 Service Unavailable`: 크레딧 서비스 이용 불가
    *
    * @param params.limit  한 번에 가져올 항목 수 (기본 20, 최대 100)
    * @param params.offset 건너뛸 항목 수 (기본 0)

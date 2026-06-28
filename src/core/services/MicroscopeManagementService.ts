@@ -39,6 +39,7 @@ import { withRetry } from '../../shared/utils/retry';
 import { parseUserIdFromMicroscopeNodeTaskId } from '../../shared/utils/microscopeTaskId';
 import { ICreditService } from '../ports/ICreditService';
 import { CreditFeature } from '../types/persistence/credit.persistence';
+import type { PlanLimitService } from './PlanLimitService';
 
 /**
  * Microscope 기능(지식 그래프 분석, RAG 파이프라인)의 전반적인 메타데이터 관리와 작업 요청을 조율하는 서비스 객체.
@@ -71,7 +72,8 @@ export class MicroscopeManagementService {
     private readonly noteRepo: NoteRepository,
     private readonly notificationService: NotificationService,
     private readonly userService: UserService,
-    private readonly creditService?: ICreditService
+    private readonly creditService?: ICreditService,
+    private readonly planLimitService?: PlanLimitService
   ) {
     // SQS Request URL for AI tasks (Microscope 워커 요청 큐)
     this.jobQueueUrl = process.env.SQS_REQUEST_QUEUE_URL || 'TO_BE_CONFIGURED';
@@ -86,6 +88,9 @@ export class MicroscopeManagementService {
    * @throws {UpstreamError} MICRO_WORKSPACE_CREATE_FAIL MongoDB 인서트 실패 시
    */
   async createWorkspace(userId: string, name: string): Promise<MicroscopeWorkspaceMetaDoc> {
+    if (this.planLimitService) {
+      await this.planLimitService.checkMicroSpaceLimit(userId);
+    }
     try {
       const groupId = ulid();
       const now = new Date().toISOString();
@@ -160,6 +165,11 @@ export class MicroscopeManagementService {
       throw new ValidationError('At least one file is required');
     }
 
+    if (this.planLimitService) {
+      const totalIncomingBytes = files.reduce((sum, f) => sum + f.buffer.length, 0);
+      await this.planLimitService.checkFileStorageLimit(userId, totalIncomingBytes);
+    }
+
     const workspace = await this.getWorkspaceActivity(userId, groupId);
     const bucket = process.env.S3_PAYLOAD_BUCKET || 'graph-node-payloads';
     const now = new Date().toISOString();
@@ -194,6 +204,7 @@ export class MicroscopeManagementService {
           blockModeRequested: true,
           blockStatus: 'PROCESSING',
           nonBlockStatus: 'PROCESSING',
+          fileSize: file.buffer.length,
           createdAt: now,
           updatedAt: now,
         };

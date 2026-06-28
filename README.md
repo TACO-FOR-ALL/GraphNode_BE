@@ -170,6 +170,7 @@ infisical run --env=prod -- npm start
 ## 📝 Daily Dev Logs
 
 - [2026-06-02 AddNode Subcluster Pruning Fix](docs/guides/Daily/20260602-add-node-subcluster-pruning.md)
+- [2026-06-22 Multi MacroGraph 1:N 아키텍처 전환](docs/guides/Daily/20260622-multi-macro-graph-1ton-refactor.md)
 
 ---
 

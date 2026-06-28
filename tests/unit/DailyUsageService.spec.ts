@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals
 import { DailyUsageService } from '../../src/core/services/DailyUsageService';
 import type { DailyUsageRepository } from '../../src/core/ports/DailyUsageRepository';
 import { DailyUsage } from '../../src/core/types/persistence/usage.persistence';
-import { RateLimitError, UpstreamError } from '../../src/shared/errors/domain';
+import { PlanLimitExceededError, UpstreamError } from '../../src/shared/errors/domain';
+import { PlanType } from '../../src/core/types/persistence/credit.persistence';
 
 describe('DailyUsageService', () => {
   let service: DailyUsageService;
@@ -14,198 +15,192 @@ describe('DailyUsageService', () => {
   const todayUtcMidnight = new Date('2026-04-13T00:00:00.000Z');
   const yesterdayUtcMidnight = new Date('2026-04-12T00:00:00.000Z');
 
-  const createUsage = (overrides?: Partial<ConstructorParameters<typeof DailyUsage>[0]>) =>
+  const makeUsage = (overrides?: Partial<{ chatTokens: bigint; lastResetDate: Date }>) =>
     new DailyUsage({
       id: 'usage-1',
       userId,
-      lastResetDate: todayUtcMidnight,
-      chatCount: 1,
-      ...overrides,
+      lastResetDate: overrides?.lastResetDate ?? todayUtcMidnight,
+      chatTokens: overrides?.chatTokens ?? 0n,
     });
 
   beforeEach(() => {
     jest.useFakeTimers();
     jest.setSystemTime(fixedNow);
     process.env.NODE_ENV = 'test';
-    process.env.GEMINI_API_KEY = 'test-gemini-key';
-    process.env.CLAUDE_API_KEY = 'test-claude-key';
 
     mockRepo = {
       findByUser: jest.fn(),
-      upsertForToday: jest.fn(),
-    };
+      addTokens: jest.fn(),
+    } as jest.Mocked<DailyUsageRepository>;
 
     service = new DailyUsageService(mockRepo);
-    service.DAILY_CHAT_LIMIT = 3;
   });
 
   afterEach(() => {
     jest.useRealTimers();
   });
 
-  // ─── checkLimit ────────────────────────────────────────────────────────────
+  // ─── checkTokenLimit ────────────────────────────────────────────────────────
 
-  describe('checkLimit', () => {
-    it('passes silently and does not write when no usage exists (new user)', async () => {
+  describe('checkTokenLimit', () => {
+    it('passes when no usage exists (new user)', async () => {
       mockRepo.findByUser.mockResolvedValue(null);
-
-      await expect(service.checkLimit(userId)).resolves.toBeUndefined();
-
-      expect(mockRepo.findByUser).toHaveBeenCalledWith(userId);
-      expect(mockRepo.upsertForToday).not.toHaveBeenCalled();
-    });
-
-    it('passes silently and does not write when today count is below the limit', async () => {
-      mockRepo.findByUser.mockResolvedValue(createUsage({ chatCount: 2 }));
-
-      await expect(service.checkLimit(userId)).resolves.toBeUndefined();
-
-      expect(mockRepo.upsertForToday).not.toHaveBeenCalled();
-    });
-
-    it('treats stale usage as zero and passes without writing', async () => {
-      // 어제 한도를 꽉 채웠더라도 날짜가 바뀌었으면 통과
-      mockRepo.findByUser.mockResolvedValue(
-        createUsage({ lastResetDate: yesterdayUtcMidnight, chatCount: 99 })
-      );
-
-      await expect(service.checkLimit(userId)).resolves.toBeUndefined();
-
-      expect(mockRepo.upsertForToday).not.toHaveBeenCalled();
-    });
-
-    it('throws RateLimitError and does not write when the limit is already reached', async () => {
-      mockRepo.findByUser.mockResolvedValue(createUsage({ chatCount: 3 })); // limit === 3
-
-      await expect(service.checkLimit(userId)).rejects.toThrow(RateLimitError);
-      expect(mockRepo.upsertForToday).not.toHaveBeenCalled();
-    });
-
-    it('wraps repository read failures as UpstreamError', async () => {
-      mockRepo.findByUser.mockRejectedValue(new Error('read failed'));
-
-      await expect(service.checkLimit(userId)).rejects.toMatchObject({
-        message: 'DailyUsageService.checkLimit failed',
-        code: 'UPSTREAM_ERROR',
-      });
-    });
-  });
-
-  // ─── incrementUsage ────────────────────────────────────────────────────────
-
-  describe('incrementUsage', () => {
-    it('calls upsertForToday with today UTC midnight', async () => {
-      mockRepo.upsertForToday.mockResolvedValue(createUsage({ chatCount: 1 }));
-
-      await service.incrementUsage(userId);
-
-      expect(mockRepo.upsertForToday).toHaveBeenCalledWith(userId, todayUtcMidnight);
-    });
-
-    it('wraps repository write failures as UpstreamError', async () => {
-      mockRepo.upsertForToday.mockRejectedValue(new Error('write failed'));
-
-      await expect(service.incrementUsage(userId)).rejects.toMatchObject({
-        message: 'DailyUsageService.incrementUsage failed',
-        code: 'UPSTREAM_ERROR',
-      });
-    });
-  });
-
-  // ─── checkLimit + incrementUsage 분리 보장 ─────────────────────────────────
-
-  describe('checkLimit and incrementUsage separation', () => {
-    it('AI 실패 시나리오: checkLimit 통과 후 incrementUsage 미호출 → 카운트 보존', async () => {
-      // AI 호출 실패 시 incrementUsage를 호출하지 않으면 카운트가 오르지 않는다
-      mockRepo.findByUser.mockResolvedValue(createUsage({ chatCount: 2 }));
-
-      await service.checkLimit(userId); // 통과
-
-      // AI 호출 실패 → incrementUsage 호출 생략
-      expect(mockRepo.upsertForToday).not.toHaveBeenCalled();
-    });
-
-    it('성공 시나리오: checkLimit 통과 후 incrementUsage 호출 → 카운트 소모', async () => {
-      mockRepo.findByUser.mockResolvedValue(createUsage({ chatCount: 2 }));
-      mockRepo.upsertForToday.mockResolvedValue(createUsage({ chatCount: 3 }));
-
-      await service.checkLimit(userId);
-      await service.incrementUsage(userId); // AI 저장 완료 후 호출
-
-      expect(mockRepo.upsertForToday).toHaveBeenCalledWith(userId, todayUtcMidnight);
-    });
-  });
-
-  // ─── getRemainingCount ─────────────────────────────────────────────────────
-
-  describe('getRemainingCount', () => {
-    it('returns the full daily limit when no usage exists', async () => {
-      mockRepo.findByUser.mockResolvedValue(null);
-
-      await expect(service.getRemainingCount(userId)).resolves.toBe(3);
+      await expect(service.checkTokenLimit(userId, PlanType.FREE)).resolves.toBeUndefined();
       expect(mockRepo.findByUser).toHaveBeenCalledWith(userId);
     });
 
-    it('subtracts today usage from the daily limit', async () => {
-      mockRepo.findByUser.mockResolvedValue(createUsage({ chatCount: 2 }));
-
-      await expect(service.getRemainingCount(userId)).resolves.toBe(1);
+    it('passes when today tokens are below the plan limit', async () => {
+      mockRepo.findByUser.mockResolvedValue(makeUsage({ chatTokens: 49_999n }));
+      await expect(service.checkTokenLimit(userId, PlanType.FREE)).resolves.toBeUndefined();
     });
 
-    it('treats stale usage as reset and returns the full daily limit', async () => {
+    it('throws PlanLimitExceededError when tokens reach the FREE plan limit', async () => {
+      mockRepo.findByUser.mockResolvedValue(makeUsage({ chatTokens: 50_000n }));
+      await expect(service.checkTokenLimit(userId, PlanType.FREE)).rejects.toThrow(PlanLimitExceededError);
+      expect(mockRepo.addTokens).not.toHaveBeenCalled();
+    });
+
+    it('enforces BASIC plan limit of 250,000 tokens', async () => {
+      mockRepo.findByUser.mockResolvedValue(makeUsage({ chatTokens: 249_999n }));
+      await expect(service.checkTokenLimit(userId, PlanType.BASIC)).resolves.toBeUndefined();
+
+      mockRepo.findByUser.mockResolvedValue(makeUsage({ chatTokens: 250_000n }));
+      await expect(service.checkTokenLimit(userId, PlanType.BASIC)).rejects.toThrow(PlanLimitExceededError);
+    });
+
+    it('enforces PLUS plan limit of 500,000 tokens', async () => {
+      mockRepo.findByUser.mockResolvedValue(makeUsage({ chatTokens: 499_999n }));
+      await expect(service.checkTokenLimit(userId, PlanType.PLUS)).resolves.toBeUndefined();
+
+      mockRepo.findByUser.mockResolvedValue(makeUsage({ chatTokens: 500_000n }));
+      await expect(service.checkTokenLimit(userId, PlanType.PLUS)).rejects.toThrow(PlanLimitExceededError);
+    });
+
+    it('PRO plan is treated same as BASIC (250,000 token limit)', async () => {
+      mockRepo.findByUser.mockResolvedValue(makeUsage({ chatTokens: 250_000n }));
+      await expect(service.checkTokenLimit(userId, PlanType.PRO)).rejects.toThrow(PlanLimitExceededError);
+    });
+
+    it('ENTERPRISE plan always passes regardless of token count', async () => {
+      mockRepo.findByUser.mockResolvedValue(makeUsage({ chatTokens: 999_999_999n }));
+      await expect(service.checkTokenLimit(userId, PlanType.ENTERPRISE)).resolves.toBeUndefined();
+      expect(mockRepo.findByUser).not.toHaveBeenCalled(); // early return before DB read
+    });
+
+    it('treats stale usage (yesterday) as zero tokens — passes even at prior-day limit', async () => {
       mockRepo.findByUser.mockResolvedValue(
-        createUsage({ lastResetDate: yesterdayUtcMidnight, chatCount: 999 })
+        makeUsage({ chatTokens: 50_000n, lastResetDate: yesterdayUtcMidnight })
       );
-
-      await expect(service.getRemainingCount(userId)).resolves.toBe(3);
+      await expect(service.checkTokenLimit(userId, PlanType.FREE)).resolves.toBeUndefined();
     });
 
-    it('never returns a negative number even if stored count exceeds the limit', async () => {
-      mockRepo.findByUser.mockResolvedValue(createUsage({ chatCount: 100 }));
-
-      await expect(service.getRemainingCount(userId)).resolves.toBe(0);
-    });
-
-    it('wraps repository failures as UpstreamError', async () => {
-      mockRepo.findByUser.mockRejectedValue(new Error('read failed'));
-
-      await expect(service.getRemainingCount(userId)).rejects.toMatchObject({
-        message: 'DailyUsageService.getRemainingCount failed',
+    it('wraps repository read failure as UpstreamError', async () => {
+      mockRepo.findByUser.mockRejectedValue(new Error('DB read failed'));
+      await expect(service.checkTokenLimit(userId, PlanType.FREE)).rejects.toMatchObject({
         code: 'UPSTREAM_ERROR',
+        message: 'DailyUsageService.checkTokenLimit failed',
       });
     });
   });
 
-  // ─── getTodayUsage ─────────────────────────────────────────────────────────
+  // ─── addTokens ──────────────────────────────────────────────────────────────
+
+  describe('addTokens', () => {
+    it('calls repo.addTokens with userId, tokenCount, and today UTC midnight', async () => {
+      mockRepo.addTokens.mockResolvedValue(makeUsage({ chatTokens: 1000n }));
+      await service.addTokens(userId, 1000n, PlanType.FREE);
+      expect(mockRepo.addTokens).toHaveBeenCalledWith(userId, 1000n, todayUtcMidnight);
+    });
+
+    it('skips DB write when tokenCount is zero', async () => {
+      await service.addTokens(userId, 0n, PlanType.FREE);
+      expect(mockRepo.addTokens).not.toHaveBeenCalled();
+    });
+
+    it('skips DB write for ENTERPRISE plan (unlimited)', async () => {
+      await service.addTokens(userId, 5000n, PlanType.ENTERPRISE);
+      expect(mockRepo.addTokens).not.toHaveBeenCalled();
+    });
+
+    it('wraps repository write failure as UpstreamError', async () => {
+      mockRepo.addTokens.mockRejectedValue(new Error('DB write failed'));
+      await expect(service.addTokens(userId, 100n, PlanType.FREE)).rejects.toMatchObject({
+        code: 'UPSTREAM_ERROR',
+        message: 'DailyUsageService.addTokens failed',
+      });
+    });
+  });
+
+  // ─── getRemainingTokens ─────────────────────────────────────────────────────
+
+  describe('getRemainingTokens', () => {
+    it('returns full FREE limit when no usage exists', async () => {
+      mockRepo.findByUser.mockResolvedValue(null);
+      await expect(service.getRemainingTokens(userId, PlanType.FREE)).resolves.toBe(50_000n);
+    });
+
+    it('subtracts used tokens from the plan limit', async () => {
+      mockRepo.findByUser.mockResolvedValue(makeUsage({ chatTokens: 10_000n }));
+      await expect(service.getRemainingTokens(userId, PlanType.FREE)).resolves.toBe(40_000n);
+    });
+
+    it('returns 0n when tokens exactly meet the limit', async () => {
+      mockRepo.findByUser.mockResolvedValue(makeUsage({ chatTokens: 50_000n }));
+      await expect(service.getRemainingTokens(userId, PlanType.FREE)).resolves.toBe(0n);
+    });
+
+    it('never returns negative — clamps to 0n when over limit', async () => {
+      mockRepo.findByUser.mockResolvedValue(makeUsage({ chatTokens: 999_999n }));
+      await expect(service.getRemainingTokens(userId, PlanType.FREE)).resolves.toBe(0n);
+    });
+
+    it('treats stale usage (yesterday) as zero used tokens', async () => {
+      mockRepo.findByUser.mockResolvedValue(
+        makeUsage({ chatTokens: 50_000n, lastResetDate: yesterdayUtcMidnight })
+      );
+      await expect(service.getRemainingTokens(userId, PlanType.FREE)).resolves.toBe(50_000n);
+    });
+
+    it('returns null for ENTERPRISE plan (unlimited)', async () => {
+      await expect(service.getRemainingTokens(userId, PlanType.ENTERPRISE)).resolves.toBeNull();
+      expect(mockRepo.findByUser).not.toHaveBeenCalled();
+    });
+
+    it('wraps repository failure as UpstreamError', async () => {
+      mockRepo.findByUser.mockRejectedValue(new Error('DB read failed'));
+      await expect(service.getRemainingTokens(userId, PlanType.FREE)).rejects.toMatchObject({
+        code: 'UPSTREAM_ERROR',
+        message: 'DailyUsageService.getRemainingTokens failed',
+      });
+    });
+  });
+
+  // ─── getTodayUsage ──────────────────────────────────────────────────────────
 
   describe('getTodayUsage', () => {
     it('returns null when no usage exists', async () => {
       mockRepo.findByUser.mockResolvedValue(null);
-
       await expect(service.getTodayUsage(userId)).resolves.toBeNull();
     });
 
-    it('returns null when the latest usage is from a previous day', async () => {
+    it('returns null when latest usage is from a previous day', async () => {
       mockRepo.findByUser.mockResolvedValue(
-        createUsage({ lastResetDate: yesterdayUtcMidnight, chatCount: 5 })
+        makeUsage({ chatTokens: 5000n, lastResetDate: yesterdayUtcMidnight })
       );
-
       await expect(service.getTodayUsage(userId)).resolves.toBeNull();
     });
 
-    it('returns today usage as-is when the record is from today', async () => {
-      const usage = createUsage({ chatCount: 2 });
+    it('returns the usage record when it is from today', async () => {
+      const usage = makeUsage({ chatTokens: 2000n });
       mockRepo.findByUser.mockResolvedValue(usage);
-
       await expect(service.getTodayUsage(userId)).resolves.toBe(usage);
     });
 
-    it('wraps repository failures as UpstreamError', async () => {
-      mockRepo.findByUser.mockRejectedValue(new Error('read failed'));
-
+    it('wraps repository failure as UpstreamError', async () => {
+      mockRepo.findByUser.mockRejectedValue(new Error('DB read failed'));
       await expect(service.getTodayUsage(userId)).rejects.toMatchObject({
-        message: 'DailyUsageService.getTodayUsage failed',
         code: 'UPSTREAM_ERROR',
+        message: 'DailyUsageService.getTodayUsage failed',
       });
     });
   });

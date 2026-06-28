@@ -15,12 +15,22 @@ import type {
   PersistGraphPayloadDto,
 } from './graph';
 
+const graphStatusValues = [
+  'NOT_CREATED',
+  'CREATING',
+  'CREATED',
+  'UPDATING',
+  'UPDATED',
+  'FAILED',
+] as const;
+
 /**
  * 스키마: 그래프 노드.
  */
 export const graphNodeSchema = z.object({
   id: z.number().int(),
   userId: z.string().min(1),
+  macroId: z.string().min(1),
   origId: z.string().min(1),
   nodeTitle: z.string().min(1).optional(),
   clusterId: z.string().min(1),
@@ -75,7 +85,7 @@ export const graphStatsSchema = z.object({
   nodes: z.number().int().nonnegative(),
   edges: z.number().int().nonnegative(),
   clusters: z.number().int().nonnegative(),
-  status: z.enum(['NOT_CREATED', 'CREATING', 'CREATED', 'UPDATING', 'UPDATED']),
+  status: z.enum(graphStatusValues),
   generatedAt: z.iso.datetime({ offset: true }).optional(),
   updatedAt: z.iso.datetime({ offset: true }).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
@@ -85,6 +95,7 @@ export const graphStatsSchema = z.object({
  * 스키마: 그래프 스냅샷(단일 사용자 기준).
  */
 export const graphSnapshotSchema = z.object({
+  macroId: z.string().min(1),
   nodes: z.array(graphNodeSchema),
   edges: z.array(graphEdgeSchema),
   clusters: z.array(graphClusterSchema),
@@ -92,7 +103,7 @@ export const graphSnapshotSchema = z.object({
     nodes: z.number().int().nonnegative(),
     edges: z.number().int().nonnegative(),
     clusters: z.number().int().nonnegative(),
-    status: z.enum(['NOT_CREATED', 'CREATING', 'CREATED', 'UPDATING', 'UPDATED']),
+    status: z.enum(graphStatusValues),
     generatedAt: z.iso.datetime({ offset: true }).optional(),
     updatedAt: z.iso.datetime({ offset: true }).optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),
@@ -104,6 +115,7 @@ export const graphSnapshotSchema = z.object({
  */
 export const persistGraphPayloadSchema = z.object({
   userId: z.string().min(1),
+  macroId: z.string().min(1),
   snapshot: graphSnapshotSchema,
 }) satisfies z.ZodType<PersistGraphPayloadDto>;
 

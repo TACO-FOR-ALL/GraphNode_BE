@@ -138,12 +138,15 @@ export class GraphEditorService {
       const cluster = await this.repo.findCluster(userId, dto.clusterId, options);
       if (!cluster) throw new NotFoundError(`Cluster '${dto.clusterId}' not found`);
 
+      const macroId = options?.macroId;
+      if (!macroId) throw new ValidationError('macroId is required in options');
       const nodeId = await this.repo.getNextNodeId(userId, options);
       const now = new Date().toISOString();
 
       const node: GraphNodeDto = {
         id: nodeId,
         userId,
+        macroId,
         origId: `editor:${userId}:${nodeId}`,
         clusterId: dto.clusterId,
         clusterName: cluster.name,
@@ -825,6 +828,7 @@ export class GraphEditorService {
       }
 
       const results: BatchOperationResult[] = [];
+      const batchOptions: MacroGraphStoreOptions = { macroId: dto.macroId };
 
       // 각 operation을 순서대로 실행합니다.
       // Neo4j managed transaction 내에서 실행하려면 adapter 레벨의 executeWrite를 사용해야 하지만,
@@ -835,7 +839,7 @@ export class GraphEditorService {
       for (let i = 0; i < dto.operations.length; i++) {
         const op = dto.operations[i];
         try {
-          const data = await this.executeOperation(userId, op);
+          const data = await this.executeOperation(userId, op, batchOptions);
           results.push({ operationIndex: i, success: true, data });
         } catch (opErr: unknown) {
           const message = opErr instanceof Error ? opErr.message : String(opErr);
@@ -866,24 +870,24 @@ export class GraphEditorService {
    * @param op 실행할 operation
    * @returns operation 결과 데이터 (create 계열만 반환)
    */
-  private async executeOperation(userId: string, op: EditorBatchOperation): Promise<unknown> {
+  private async executeOperation(userId: string, op: EditorBatchOperation, options?: MacroGraphStoreOptions): Promise<unknown> {
     switch (op.type) {
-      case 'createNode': return this.createNode(userId, op.payload);
-      case 'updateNode': return this.updateNode(userId, op.nodeId, op.payload);
-      case 'deleteNode': return this.deleteNode(userId, op.nodeId, op.permanent);
-      case 'createEdge': return this.createEdge(userId, op.payload);
-      case 'updateEdge': return this.updateEdge(userId, op.edgeId, op.payload);
-      case 'deleteEdge': return this.deleteEdge(userId, op.edgeId, op.permanent);
-      case 'createCluster': return this.createCluster(userId, op.payload);
-      case 'updateCluster': return this.updateCluster(userId, op.clusterId, op.payload);
-      case 'deleteCluster': return this.deleteCluster(userId, op.clusterId, op.cascade, op.permanent);
-      case 'createSubcluster': return this.createSubcluster(userId, op.payload);
-      case 'updateSubcluster': return this.updateSubcluster(userId, op.subclusterId, op.payload);
-      case 'deleteSubcluster': return this.deleteSubcluster(userId, op.subclusterId, op.permanent);
-      case 'moveNodeToCluster': return this.moveNodeToCluster(userId, op.nodeId, { newClusterId: op.newClusterId });
-      case 'moveSubclusterToCluster': return this.moveSubclusterToCluster(userId, op.subclusterId, { newClusterId: op.newClusterId });
-      case 'addNodeToSubcluster': return this.addNodeToSubcluster(userId, op.subclusterId, { nodeId: op.nodeId });
-      case 'removeNodeFromSubcluster': return this.removeNodeFromSubcluster(userId, op.subclusterId, op.nodeId);
+      case 'createNode': return this.createNode(userId, op.payload, options);
+      case 'updateNode': return this.updateNode(userId, op.nodeId, op.payload, options);
+      case 'deleteNode': return this.deleteNode(userId, op.nodeId, op.permanent, options);
+      case 'createEdge': return this.createEdge(userId, op.payload, options);
+      case 'updateEdge': return this.updateEdge(userId, op.edgeId, op.payload, options);
+      case 'deleteEdge': return this.deleteEdge(userId, op.edgeId, op.permanent, options);
+      case 'createCluster': return this.createCluster(userId, op.payload, options);
+      case 'updateCluster': return this.updateCluster(userId, op.clusterId, op.payload, options);
+      case 'deleteCluster': return this.deleteCluster(userId, op.clusterId, op.cascade, op.permanent, options);
+      case 'createSubcluster': return this.createSubcluster(userId, op.payload, options);
+      case 'updateSubcluster': return this.updateSubcluster(userId, op.subclusterId, op.payload, options);
+      case 'deleteSubcluster': return this.deleteSubcluster(userId, op.subclusterId, op.permanent, options);
+      case 'moveNodeToCluster': return this.moveNodeToCluster(userId, op.nodeId, { newClusterId: op.newClusterId }, options);
+      case 'moveSubclusterToCluster': return this.moveSubclusterToCluster(userId, op.subclusterId, { newClusterId: op.newClusterId }, options);
+      case 'addNodeToSubcluster': return this.addNodeToSubcluster(userId, op.subclusterId, { nodeId: op.nodeId }, options);
+      case 'removeNodeFromSubcluster': return this.removeNodeFromSubcluster(userId, op.subclusterId, op.nodeId, options);
       default: throw new ValidationError(`Unknown operation type`);
     }
   }

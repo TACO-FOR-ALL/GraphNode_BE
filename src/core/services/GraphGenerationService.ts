@@ -41,6 +41,9 @@ import { redis } from '../../infra/redis/client';
 import { ICreditService } from '../ports/ICreditService';
 import { CreditFeature } from '../types/persistence/credit.persistence';
 import type { NotionService } from './NotionService';
+import type { MacroGraphStore } from '../ports/MacroGraphStore';
+import type { PlanLimitService } from './PlanLimitService';
+import type { ScopeFilter, ScopeDataType } from '../../shared/dtos/macro';
 
 /**
  * 모듈: GraphGenerationService
@@ -69,7 +72,9 @@ export class GraphGenerationService {
     private readonly storagePort: StoragePort,
     private readonly notificationService: NotificationService,
     private readonly creditService?: ICreditService,
-    private readonly notionService?: NotionService
+    private readonly notionService?: NotionService,
+    private readonly macroGraphStore?: MacroGraphStore,
+    private readonly planLimitService?: PlanLimitService
   ) {
     const env = loadEnv();
     // FIXME TODO : HTTP Client 사용하지 않고 SQS로만 통신하도록 변경 예정
@@ -88,6 +93,22 @@ export class GraphGenerationService {
    * @param options 옵션 (요약 포함 여부, Macro 클러스터 범위 등)
    * @returns 발행된 작업의 Task ID 또는 건너뛴 경우 null
    */
+  /**
+   * `createdPeriod` 문자열을 절대 Date 객체로 변환합니다.
+   * 값이 없으면 Unix epoch (전체 기간)을 반환합니다.
+   */
+  private static resolveSinceDateFromPeriod(period?: string): Date {
+    const now = Date.now();
+    const DAY_MS = 86_400_000;
+    switch (period) {
+      case '1w': return new Date(now - 7 * DAY_MS);
+      case '1m': return new Date(now - 30 * DAY_MS);
+      case '3m': return new Date(now - 90 * DAY_MS);
+      case '1y': return new Date(now - 365 * DAY_MS);
+      default:   return new Date(0);
+    }
+  }
+
   async requestGraphGenerationViaQueue(
     userId: string,
     options?: {
@@ -96,8 +117,32 @@ export class GraphGenerationService {
       macroMinClusters?: number;
       /** Macro 파이프라인 `maxClusters` (기본 8). */
       macroMaxClusters?: number;
+      /** 대상 MacroView ID. 미제공 시 userId로 폴백 (레거시 호환). */
+      macroId?: string;
+      /** 1:N 매크로 뷰 제목 (scopeFilter 제공 시에만 사용). */
+      title?: string;
+      /** 1:N 매크로 뷰 설명 (scopeFilter 제공 시에만 사용). */
+      description?: string;
+      /**
+       * 스코프 필터. 제공 시 1:N 모드로 새 macroId를 발급하고 필터된 번들을 전송.
+       * 미제공 시 레거시 1:1 모드 (userId === macroId).
+       */
+      scopeFilter?: ScopeFilter;
     }
-  ): Promise<string | null> {
+  ): Promise<{ taskId: string; macroId: string } | null> {
+    // 1:N 모드: scopeFilter가 있으면 별도 macroId 발급 후 필터된 번들 전송
+    if (options?.scopeFilter) {
+      return this.requestGraphGenerationScoped(userId, options.scopeFilter, {
+        title: options.title,
+        description: options.description,
+        includeSummary: options.includeSummary,
+        macroMinClusters: options.macroMinClusters,
+        macroMaxClusters: options.macroMaxClusters,
+      });
+    }
+
+    // 레거시 1:1 모드 (하위 호환 100% 유지)
+    const macroId = options?.macroId ?? userId;
     let taskId: string | undefined;
     let creditHeldTaskId: string | undefined;
     let messageSent = false;
@@ -224,10 +269,22 @@ export class GraphGenerationService {
       // PostHog 분석용 시작 이벤트(A) 기록 및 시작 시각 캐싱
       await this.trackGraphGenerationRequested(userId, taskId, messageBody.timestamp);
 
-      // 성공 알림 전송
-      await this.notificationService.sendGraphGenerationRequested(userId, taskId);
+      // 대상 macroId를 Redis에 캐시: 핸들러가 동일 macroId 아래 결과를 저장하도록 보장
+      try {
+        await redis.set(
+          `macro_graph:macroId:${taskId}`,
+          macroId,
+          'EX',
+          GraphGenerationService.GRAPH_GEN_START_TTL_SECONDS
+        );
+      } catch (err) {
+        logger.warn({ err, userId, taskId }, 'Failed to cache macroId for graph generation task');
+      }
 
-      return taskId;
+      // 성공 알림 전송
+      await this.notificationService.sendGraphGenerationRequested(userId, taskId, macroId);
+
+      return { taskId, macroId };
     } catch (err) {
       // queue 전송 실패 시 차감된 크레딧 롤백
       if (creditHeldTaskId && !messageSent) {
@@ -236,11 +293,28 @@ export class GraphGenerationService {
 
       logger.error({ err, userId }, 'Failed to enqueue graph generation request');
 
+      // CREATING으로 전환된 상태를 FAILED로 복구
+      if (taskId) {
+        try {
+          await this.graphEmbeddingService.saveStats({
+            userId,
+            nodes: 0,
+            edges: 0,
+            clusters: 0,
+            status: 'FAILED',
+            generatedAt: new Date().toISOString(),
+          });
+        } catch (statsErr) {
+          logger.warn({ statsErr, userId, taskId }, 'Failed to revert graph status to FAILED after enqueue failure');
+        }
+      }
+
       // 실패 알림 전송
       await this.notificationService.sendGraphGenerationRequestFailed(
         userId,
         taskId || 'unknown',
-        String(err)
+        String(err),
+        macroId
       );
 
       if (err instanceof AppError) throw err;
@@ -248,6 +322,269 @@ export class GraphGenerationService {
         cause: String(err),
       });
     }
+  }
+
+  /**
+   * 1:N 모드: scopeFilter를 기반으로 새 macroId를 발급하고 필터된 S3 번들을 전송합니다.
+   *
+   * - auto 모드: 전체 데이터 번들 + Neo4j에 scopeJson으로 메타 저장
+   * - manual 모드: dataTypes/createdPeriod 필터로 선별된 데이터만 번들
+   *
+   * 레거시 GRAPH_GENERATION_REQUEST를 사용하므로 AI 서버 변경 불필요.
+   */
+  private async requestGraphGenerationScoped(
+    userId: string,
+    scopeFilter: ScopeFilter,
+    options?: {
+      title?: string;
+      description?: string;
+      includeSummary?: boolean;
+      macroMinClusters?: number;
+      macroMaxClusters?: number;
+    }
+  ): Promise<{ taskId: string; macroId: string } | null> {
+    if (!this.macroGraphStore) {
+      throw new UpstreamError('MacroGraphStore not available for scoped graph generation');
+    }
+
+    const newMacroId = ulid();
+    let taskId: string | undefined;
+    let creditHeldTaskId: string | undefined;
+    let messageSent = false;
+    let macroViewCreated = false;
+
+    try {
+      const isManual = scopeFilter.mode === 'manual';
+      const dataTypes: ScopeDataType[] = isManual
+        ? (scopeFilter.filters?.dataTypes ?? ['chat', 'note', 'file', 'notion'])
+        : ['chat', 'note', 'file', 'notion'];
+      const since = isManual
+        ? GraphGenerationService.resolveSinceDateFromPeriod(scopeFilter.filters?.createdPeriod)
+        : new Date(0);
+
+      // 0. 데이터 존재 여부 확인
+      const hasChat = dataTypes.includes('chat');
+      const hasNote = dataTypes.includes('note');
+      const hasFile = dataTypes.includes('file');
+      const hasNotion = dataTypes.includes('notion');
+
+      const convCount = hasChat
+        ? (await withRetry(() => this.chatManagementService.listConversations(userId, 1), { label: 'scoped.convCheck' })).items.length
+        : 0;
+      const noteCount = hasNote
+        ? (await withRetry(() => this.noteService.findNotesModifiedSince(userId, since), { label: 'scoped.noteCheck' })).filter(n => !n.deletedAt).length
+        : 0;
+      const fileCount = hasFile
+        ? (await withRetry(() => this.userFileService.listAllActiveFiles(userId), { label: 'scoped.fileCheck' })).length
+        : 0;
+      const notionCount = (hasNotion && this.notionService)
+        ? (await withRetry(() => this.notionService!.findCachedPagesModifiedSince(userId, since), { label: 'scoped.notionCheck' })).length
+        : 0;
+
+      if (convCount === 0 && noteCount === 0 && fileCount === 0 && notionCount === 0) {
+        logger.info({ userId, scopeFilter }, 'No scoped data found. Skipping 1:N graph generation.');
+        return null;
+      }
+
+      // 매크로 공간 수 플랜 한도 확인
+      if (this.planLimitService) {
+        await this.planLimitService.checkMacroSpaceLimit(userId);
+      }
+
+      // MacroGraph 루트 노드 생성 (Neo4j)
+      await this.macroGraphStore.createMacroView(userId, newMacroId, {
+        title: options?.title,
+        description: options?.description,
+        scopeFilter,
+      });
+      macroViewCreated = true;
+
+      taskId = `task_${userId}_${ulid()}`;
+      const taskPrefix = `graph-generation/${taskId}/`;
+      const inputObjectKey = `${taskPrefix}input.json`;
+      const noteObjectKey = `${taskPrefix}notes.json`;
+      const notionObjectKey = `${taskPrefix}notions.json`;
+
+      await this.holdCredit(userId, CreditFeature.GRAPH_GENERATION, taskId);
+      creditHeldTaskId = taskId;
+
+      await withRetry(
+        async () =>
+          await this.graphEmbeddingService.saveStats({
+            userId,
+            nodes: 0,
+            edges: 0,
+            clusters: 0,
+            status: 'CREATING',
+            generatedAt: new Date().toISOString(),
+          }, { macroId: newMacroId }),
+        { label: 'scoped.saveStats' }
+      );
+
+      // 대화 번들 (chat 타입 포함 시)
+      if (hasChat) {
+        const dataStream = Readable.from(this.streamUserData(userId));
+        await withRetry(
+          async () => await this.storagePort.upload(inputObjectKey, dataStream, 'application/json'),
+          { label: 'scoped.upload.input' }
+        );
+      } else {
+        await withRetry(
+          async () => await this.storagePort.upload(inputObjectKey, '[]', 'application/json'),
+          { label: 'scoped.upload.emptyInput' }
+        );
+      }
+
+      // 노트 번들 (note 타입 포함 시, since 날짜 필터 적용)
+      const noteStream = Readable.from(this.streamNotesSince(userId, since, hasNote));
+      await withRetry(
+        async () => await this.storagePort.upload(noteObjectKey, noteStream, 'application/json'),
+        { label: 'scoped.upload.notes' }
+      );
+
+      // Notion 번들 (notion 타입 포함 시)
+      if (this.notionService && hasNotion) {
+        const notionStream = Readable.from(this.streamNotionPagesSince(userId, since));
+        await withRetry(
+          async () => await this.storagePort.upload(notionObjectKey, notionStream, 'application/json'),
+          { label: 'scoped.upload.notions' }
+        );
+      }
+
+      // 파일 번들 (file 타입 포함 시)
+      if (hasFile) {
+        const userFiles = await withRetry(
+          () => this.userFileService.listAllActiveFiles(userId),
+          { label: 'scoped.listFiles' }
+        );
+        await copyUserFilesToMacroBundlePrefix(this.storagePort, taskPrefix, userFiles);
+      }
+
+      const language = await withRetry(
+        async () => await this.userService.getPreferredLanguage(userId),
+        { label: 'scoped.getLanguage' }
+      );
+
+      const messageBody: GraphGenRequestPayload = {
+        taskId,
+        taskType: TaskType.GRAPH_GENERATION_REQUEST,
+        payload: {
+          userId,
+          s3Key: taskPrefix,
+          bucket: process.env.S3_PAYLOAD_BUCKET,
+          includeSummary: options?.includeSummary ?? true,
+          summaryLanguage: language,
+          language,
+          inputType: 'auto',
+          minClusters: options?.macroMinClusters ?? GraphGenerationService.MACRO_DEFAULT_MIN_CLUSTERS,
+          maxClusters: options?.macroMaxClusters ?? GraphGenerationService.MACRO_DEFAULT_MAX_CLUSTERS,
+        },
+        timestamp: new Date().toISOString(),
+      };
+
+      await withRetry(async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
+        label: 'scoped.sendMessage',
+      });
+      messageSent = true;
+
+      await this.trackGraphGenerationRequested(userId, taskId, messageBody.timestamp);
+
+      // 1:N macroId를 Redis에 캐시
+      try {
+        await redis.set(
+          `macro_graph:macroId:${taskId}`,
+          newMacroId,
+          'EX',
+          GraphGenerationService.GRAPH_GEN_START_TTL_SECONDS
+        );
+      } catch (err) {
+        logger.warn({ err, userId, taskId }, 'Failed to cache scoped macroId');
+      }
+
+      await this.notificationService.sendGraphGenerationRequested(userId, taskId, newMacroId);
+      return { taskId, macroId: newMacroId };
+    } catch (err) {
+      if (creditHeldTaskId && !messageSent) {
+        await this.rollbackCreditHold(creditHeldTaskId, 'scoped graph generation enqueue failed');
+      }
+      if (macroViewCreated && !messageSent) {
+        try {
+          await this.graphEmbeddingService.saveStats(
+            {
+              userId,
+              nodes: 0,
+              edges: 0,
+              clusters: 0,
+              status: 'FAILED',
+              generatedAt: new Date().toISOString(),
+            },
+            { macroId: newMacroId }
+          );
+        } catch (statsErr) {
+          logger.error(
+            { err: statsErr, userId, macroId: newMacroId },
+            'Failed to mark scoped graph generation as FAILED after enqueue failure'
+          );
+        }
+      }
+      logger.error({ err, userId }, 'Failed to enqueue scoped graph generation');
+      await this.notificationService.sendGraphGenerationRequestFailed(
+        userId,
+        taskId || 'unknown',
+        String(err),
+        newMacroId
+      );
+      if (err instanceof AppError) throw err;
+      throw new UpstreamError('Failed to request scoped graph generation via queue', { cause: String(err) });
+    }
+  }
+
+  /** since 이후 수정된 노트만 스트리밍합니다. include=false이면 빈 배열을 반환합니다. */
+  private async *streamNotesSince(userId: string, since: Date, include: boolean): AsyncGenerator<string> {
+    yield '{"source_nodes":[';
+    if (!include) { yield ']}'; return; }
+    let isFirst = true;
+    const allNotes = await withRetry(
+      async () => await this.noteService.findNotesModifiedSince(userId, since),
+      { label: 'scoped.streamNotes' }
+    );
+    for (const note of allNotes) {
+      if (note.deletedAt) continue;
+      const aiNote = {
+        id: note._id, title: note.title,
+        sections: [{ id: note._id, content: note.content }],
+        source_type: 'markdown',
+        create_time: note.createdAt ? Math.floor(new Date(note.createdAt).getTime() / 1000) : 0,
+        update_time: note.updatedAt ? Math.floor(new Date(note.updatedAt).getTime() / 1000) : 0,
+      };
+      if (!isFirst) yield ',';
+      yield JSON.stringify(aiNote);
+      isFirst = false;
+    }
+    yield ']}';
+  }
+
+  /** since 이후 수정된 Notion 페이지만 스트리밍합니다. */
+  private async *streamNotionPagesSince(userId: string, since: Date): AsyncGenerator<string> {
+    yield '{"source_nodes":[';
+    let isFirst = true;
+    if (!this.notionService) { yield ']}'; return; }
+    const pages = await withRetry(
+      async () => await this.notionService!.findCachedPagesModifiedSince(userId, since),
+      { label: 'scoped.streamNotion' }
+    );
+    for (const page of pages) {
+      const aiNode = {
+        id: page._id, title: page.title,
+        sections: [{ id: `${page._id}-body`, content: page.plainText }],
+        source_type: 'notion',
+        create_time: 0, update_time: 0,
+      };
+      if (!isFirst) yield ',';
+      yield JSON.stringify(aiNode);
+      isFirst = false;
+    }
+    yield ']}';
   }
 
   /**
@@ -347,11 +684,11 @@ export class GraphGenerationService {
    * @param userId 사용자 ID
    * @returns 발행된 작업의 Task ID
    */
-  async requestGraphSummary(userId: string): Promise<string> {
+  async requestGraphSummary(userId: string, macroId: string): Promise<string> {
     try {
       const taskId = `summary_${userId}_${ulid()}`;
       const snapshot = await withRetry(
-        async () => await this.graphEmbeddingService.getSnapshotForUser(userId),
+        async () => await this.graphEmbeddingService.getSnapshotForUser(userId, macroId),
         { label: 'GraphEmbeddingService.getSnapshotForUser' }
       );
       if (!snapshot || snapshot.nodes.length === 0) {
@@ -376,12 +713,20 @@ export class GraphGenerationService {
         taskType: TaskType.GRAPH_SUMMARY_REQUEST,
         payload: {
           userId,
+          macroId,
           graphS3Key: s3Key,
           bucket: bucket,
           language: language,
         },
         timestamp: new Date().toISOString(),
       };
+
+      // result handler가 macroId를 복구할 수 있도록 Redis에 저장한다.
+      try {
+        await redis.set(`graph-summary:macroId:${taskId}`, macroId, 'EX', 60 * 60 * 24);
+      } catch (redisErr) {
+        logger.warn({ err: redisErr, taskId, userId }, 'Failed to cache summary macroId in Redis');
+      }
 
       await withRetry(async () => await this.queuePort.sendMessage(this.jobQueueUrl, messageBody), {
         label: 'QueuePort.sendMessage.Summary',
@@ -406,35 +751,35 @@ export class GraphGenerationService {
   /**
    * 요약 조회
    */
-  async getGraphSummary(userId: string) {
-    return this.graphEmbeddingService.getGraphSummary(userId);
+  async getGraphSummary(userId: string, macroId?: string) {
+    return this.graphEmbeddingService.getGraphSummary(userId, macroId);
   }
 
   /**
    * 요약 삭제
    */
-  async deleteGraphSummary(userId: string, permanent?: boolean) {
-    return this.graphEmbeddingService.deleteGraphSummary(userId, true);
+  async deleteGraphSummary(userId: string, permanent?: boolean, macroId?: string) {
+    return this.graphEmbeddingService.deleteGraphSummary(userId, true, macroId);
   }
 
   /**
    * 요약 복원 (미지원)
    */
-  async restoreGraphSummary(_userId: string) {
+  async restoreGraphSummary(_userId: string, _macroId?: string) {
     throw new UpstreamError('Restore is not supported in hard-delete only mode');
   }
 
   /**
    * 그래프 삭제
    */
-  async deleteGraph(userId: string, _permanent?: boolean) {
-    return this.graphEmbeddingService.deleteGraph(userId, true);
+  async deleteGraph(userId: string, _permanent?: boolean, macroId?: string) {
+    return this.graphEmbeddingService.deleteGraph(userId, true, macroId);
   }
 
   /**
    * 그래프 복원 (미지원)
    */
-  async restoreGraph(userId: string) {
+  async restoreGraph(userId: string, _macroId?: string) {
     throw new UpstreamError('Restore is not supported in hard-delete only mode');
   }
 
@@ -470,10 +815,11 @@ export class GraphGenerationService {
    * @param userId 사용자 ID
    * @returns Task ID 또는 추가할 내용이 없는 경우 null
    */
-  async requestAddNodeViaQueue(userId: string): Promise<string | null> {
+  async requestAddNodeViaQueue(userId: string, macroId?: string): Promise<string | null> {
     let taskId = 'unknown';
     let creditHeldTaskId: string | undefined;
     let messageSent = false;
+    const macroOptions = { macroId: macroId ?? userId };
 
     try {
       taskId = `task_add_node_${userId}_${ulid()}`;
@@ -481,7 +827,7 @@ export class GraphGenerationService {
       const taskPrefix = `add-node/${taskId}/`;
       const batchObjectKey = `${taskPrefix}batch.json`;
 
-      const stats = await withRetry(async () => await this.graphEmbeddingService.getStats(userId), {
+      const stats = await withRetry(async () => await this.graphEmbeddingService.getStats(userId, macroOptions), {
         label: 'GraphEmbeddingService.getStats',
       });
       if (!stats) {
@@ -607,7 +953,7 @@ export class GraphGenerationService {
 
       // 기존 클러스터 정보 가져오기 (AI 계약용 lean 필드만 전송)
       const existingClusters = mapGraphClustersForAiAddNode(
-        await this.graphEmbeddingService.listClusters(userId)
+        await this.graphEmbeddingService.listClusters(userId, macroOptions)
       );
       const batchPayload: AiAddNodeBatchRequest = {
         userId,
@@ -634,7 +980,7 @@ export class GraphGenerationService {
 
       // 그래프 상태 업데이트
       stats.status = 'UPDATING';
-      await this.graphEmbeddingService.saveStats(stats);
+      await this.graphEmbeddingService.saveStats(stats, macroOptions);
 
       // SQS 메시지 생성
       const addNodeS3Key = resolveAddNodeQueueS3Key(
@@ -647,6 +993,7 @@ export class GraphGenerationService {
         taskType: TaskType.ADD_NODE_REQUEST,
         payload: {
           userId,
+          macroId: macroId ?? userId,
           s3Key: addNodeS3Key,
           bucket: process.env.S3_PAYLOAD_BUCKET,
           inputType: 'auto',
@@ -674,8 +1021,16 @@ export class GraphGenerationService {
       });
       messageSent = true;
 
+      // result handler가 macroId를 복구할 수 있도록 Redis에 저장한다.
+      // AI 서버는 ADD_NODE_RESULT에 macroId를 포함하지 않으므로 Redis가 유일한 복구 경로다.
+      try {
+        await redis.set(`add-node:macroId:${taskId}`, macroId ?? userId, 'EX', 60 * 60 * 24);
+      } catch (cacheErr) {
+        logger.warn({ err: cacheErr, userId, taskId }, 'Failed to cache macroId for add-node task');
+      }
+
       // 성공 알림 전송
-      await this.notificationService.sendAddConversationRequested(userId, taskId);
+      await this.notificationService.sendAddConversationRequested(userId, taskId, macroId);
 
       return taskId;
     } catch (err) {
@@ -688,7 +1043,7 @@ export class GraphGenerationService {
 
       // 실패 알림 전송 (taskId가 try 블록 내부에 정의되어 있으므로 에러 객체에 taskId를 담아두거나 스코프를 조정해야 함)
       // 여기서는 스코프 문제로 'unknown' 처리하거나 상단으로 taskId 정의를 뺌
-      await this.notificationService.sendAddConversationRequestFailed(userId, taskId, String(err));
+      await this.notificationService.sendAddConversationRequestFailed(userId, taskId, String(err), macroId);
 
       if (err instanceof AppError) throw err;
       throw new UpstreamError('Failed to request add node via queue', { cause: String(err) });

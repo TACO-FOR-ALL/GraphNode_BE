@@ -213,6 +213,25 @@ describe('NotificationService', () => {
       }));
     });
 
+    it('sendGraphGenerationRequested macroId 제공 시 payload에 포함해야 한다 (1:N 식별자 전파)', async () => {
+      const macroId = 'macro-abc-123';
+      await service.sendGraphGenerationRequested(userId, taskId, macroId);
+      expect(mockEventBus.publish).toHaveBeenCalledWith(
+        `notification:user:${userId}`,
+        expect.objectContaining({
+          type: 'GRAPH_GENERATION_REQUESTED',
+          payload: expect.objectContaining({ taskId, macroId }),
+        })
+      );
+    });
+
+    it('sendGraphGenerationRequested macroId 미제공 시 payload에 macroId 없이 발송해야 한다 (레거시 1:1 fallback)', async () => {
+      await service.sendGraphGenerationRequested(userId, taskId);
+      const publishCall = (mockEventBus.publish as jest.Mock).mock.calls[0];
+      const publishedEvent = publishCall[1] as { payload: Record<string, unknown> };
+      expect(publishedEvent.payload.macroId).toBeUndefined();
+    });
+
     it('sendGraphGenerationProgressUpdated는 AI 시각을 payload·이벤트 루트에 동일 반영해야 한다', async () => {
       const sourceTimestamp = '2026-04-18T07:47:46.067554Z';
 

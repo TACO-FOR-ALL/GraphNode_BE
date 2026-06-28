@@ -57,5 +57,10 @@ export class CleanupCron {
     if (removedExports > 0) {
       logger.info(`[CleanupCron] Removed ${removedExports} expired chat export jobs.`);
     }
+
+    // 4. 만료된 매크로 뷰 및 하위 Neo4j 그래프 요소 영구 삭제
+    const graphManagementService = container.getGraphManagementService();
+    await graphManagementService.cleanupExpiredMacroViews(expiredBefore);
+    logger.info('[CleanupCron] Expired macro views cleanup completed.');
   }
 }

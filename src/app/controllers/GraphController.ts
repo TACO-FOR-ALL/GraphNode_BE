@@ -12,19 +12,28 @@
  * - DTO Schemas: 데이터 검증 (Zod)
  */
 
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 
 import { GraphEmbeddingService } from '../../core/services/GraphEmbeddingService';
 import { GraphVectorService } from '../../core/services/GraphVectorService';
+import { GraphManagementService } from '../../core/services/GraphManagementService';
 import { persistGraphPayloadSchema } from '../../shared/dtos/graph.schemas';
+import { updateMacroViewSchema, listMacroViewsQuerySchema } from '../../shared/dtos/macro.schemas';
 import { getUserIdFromRequest } from '../utils/request';
 import { GraphSnapshotDto } from '../../shared/dtos/graph';
 
 export class GraphController {
   constructor(
     private readonly graphEmbeddingService: GraphEmbeddingService,
-    private readonly graphVectorService: GraphVectorService
+    private readonly graphVectorService: GraphVectorService,
+    private readonly graphManagementService: GraphManagementService
   ) {}
+
+  private resolveMacroId(req: Request, userId: string): string {
+    const queryMacroId = typeof req.query.macroId === 'string' ? req.query.macroId : undefined;
+    const bodyMacroId = typeof req.body?.macroId === 'string' ? req.body.macroId : undefined;
+    return queryMacroId ?? bodyMacroId ?? userId;
+  }
 
   /**
    * 질의 벡터 기반 유사 노드 검색
@@ -61,9 +70,10 @@ export class GraphController {
   async createNode(req: Request, res: Response) {
     const node = req.body;
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
 
     // 서비스 호출 (노드 저장)
-    await this.graphEmbeddingService.upsertNode({ ...node, userId });
+    await this.graphEmbeddingService.upsertNode({ ...node, userId, macroId });
 
     res.status(201).json(node);
   }
@@ -74,10 +84,11 @@ export class GraphController {
    */
   async getNode(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
     const id = parseInt(req.params.id, 10);
 
     // 서비스 호출 (노드 조회)
-    const node = await this.graphEmbeddingService.findNode(userId, id);
+    const node = await this.graphEmbeddingService.findNode(userId, id, { macroId });
 
     res.status(200).json(node);
   }
@@ -93,13 +104,14 @@ export class GraphController {
    */
   async listNodes(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
 
     const clusterId = typeof req.query.clusterId === 'string' ? req.query.clusterId : undefined;
     const includeEmbeddings = req.query.includeEmbeddings === 'true';
 
     const nodes = clusterId
-      ? await this.graphEmbeddingService.listNodesByCluster(userId, clusterId)
-      : await this.graphEmbeddingService.listNodes(userId);
+      ? await this.graphEmbeddingService.listNodesByCluster(userId, clusterId, { macroId })
+      : await this.graphEmbeddingService.listNodes(userId, { macroId });
 
     // includeEmbeddings가 false면 embedding 필드 제거
     if (!includeEmbeddings) {
@@ -119,11 +131,12 @@ export class GraphController {
    */
   async updateNode(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
     const id = parseInt(req.params.id, 10);
     const patch = req.body;
 
     // 서비스 호출 (노드 수정)
-    await this.graphEmbeddingService.updateNode(userId, id, patch);
+    await this.graphEmbeddingService.updateNode(userId, id, patch, { macroId });
 
     res.status(204).send();
   }
@@ -136,11 +149,12 @@ export class GraphController {
    */
   async deleteNode(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
     const id = parseInt(req.params.id, 10);
     const permanent = req.query.permanent === 'true';
 
     // 서비스 호출 (노드 삭제)
-    await this.graphEmbeddingService.deleteNode(userId, id, permanent);
+    await this.graphEmbeddingService.deleteNode(userId, id, permanent, { macroId });
 
     res.status(204).send();
   }
@@ -151,9 +165,10 @@ export class GraphController {
    */
   async restoreNode(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
     const id = parseInt(req.params.id, 10);
 
-    await this.graphEmbeddingService.restoreNode(userId, id);
+    await this.graphEmbeddingService.restoreNode(userId, id, { macroId });
 
     res.status(200).json({ message: 'Node restored' });
   }
@@ -167,11 +182,12 @@ export class GraphController {
    */
   async deleteNodeCascade(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
     const id = parseInt(req.params.id, 10);
     const permanent = req.query.permanent === 'true';
 
     // 서비스 호출 (Cascade 삭제)
-    await this.graphEmbeddingService.removeNodeCascade(userId, id, permanent);
+    await this.graphEmbeddingService.removeNodeCascade(userId, id, permanent, { macroId });
 
     res.status(204).send();
   }
@@ -185,9 +201,10 @@ export class GraphController {
   async createEdge(req: Request, res: Response) {
     const edge = req.body;
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
 
     // 서비스 호출 (엣지 저장)
-    const edgeId = await this.graphEmbeddingService.upsertEdge({ ...edge, userId });
+    const edgeId = await this.graphEmbeddingService.upsertEdge({ ...edge, userId }, { macroId });
 
     res.status(201).json({ id: edgeId });
   }
@@ -198,9 +215,10 @@ export class GraphController {
    */
   async listEdges(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
 
     // 서비스 호출 (전체 엣지 목록)
-    const edges = await this.graphEmbeddingService.listEdges(userId);
+    const edges = await this.graphEmbeddingService.listEdges(userId, { macroId });
 
     res.status(200).json(edges);
   }
@@ -211,11 +229,12 @@ export class GraphController {
    */
   async deleteEdge(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
     const edgeId = req.params.edgeId;
     const permanent = req.query.permanent === 'true';
 
     // 서비스 호출 (엣지 삭제)
-    await this.graphEmbeddingService.deleteEdge(userId, edgeId, permanent);
+    await this.graphEmbeddingService.deleteEdge(userId, edgeId, permanent, { macroId });
 
     res.status(204).send();
   }
@@ -226,9 +245,10 @@ export class GraphController {
    */
   async restoreEdge(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
     const edgeId = req.params.edgeId;
 
-    await this.graphEmbeddingService.restoreEdge(userId, edgeId);
+    await this.graphEmbeddingService.restoreEdge(userId, edgeId, { macroId });
 
     res.status(200).json({ message: 'Edge restored' });
   }
@@ -242,9 +262,10 @@ export class GraphController {
   async createCluster(req: Request, res: Response) {
     const cluster = req.body;
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
 
     // 서비스 호출 (클러스터 저장)
-    await this.graphEmbeddingService.upsertCluster({ ...cluster, userId });
+    await this.graphEmbeddingService.upsertClusters([{ ...cluster, userId }], { macroId });
 
     res.status(201).json(cluster);
   }
@@ -255,10 +276,11 @@ export class GraphController {
    */
   async getCluster(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
     const id = req.params.id;
 
     // 서비스 호출 (클러스터 조회)
-    const cluster = await this.graphEmbeddingService.findCluster(userId, id);
+    const cluster = await this.graphEmbeddingService.findCluster(userId, id, { macroId });
 
     res.status(200).json(cluster);
   }
@@ -269,9 +291,10 @@ export class GraphController {
    */
   async listClusters(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
 
     // 서비스 호출 (전체 클러스터 목록)
-    const clusters = await this.graphEmbeddingService.listClusters(userId);
+    const clusters = await this.graphEmbeddingService.listClusters(userId, { macroId });
 
     res.status(200).json(clusters);
   }
@@ -284,11 +307,12 @@ export class GraphController {
    */
   async deleteCluster(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
     const id = req.params.id;
     const permanent = req.query.permanent === 'true';
 
     // 서비스 호출 (클러스터 삭제)
-    await this.graphEmbeddingService.deleteCluster(userId, id, permanent);
+    await this.graphEmbeddingService.deleteCluster(userId, id, permanent, { macroId });
 
     res.status(204).send();
   }
@@ -299,9 +323,10 @@ export class GraphController {
    */
   async restoreCluster(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
     const id = req.params.id;
 
-    await this.graphEmbeddingService.restoreCluster(userId, id);
+    await this.graphEmbeddingService.restoreCluster(userId, id, { macroId });
 
     res.status(200).json({ message: 'Cluster restored' });
   }
@@ -316,11 +341,12 @@ export class GraphController {
    */
   async deleteClusterCascade(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
     const id = req.params.id;
     const permanent = req.query.permanent === 'true';
 
     // 서비스 호출 (Cascade 삭제)
-    await this.graphEmbeddingService.removeClusterCascade(userId, id, permanent);
+    await this.graphEmbeddingService.removeClusterCascade(userId, id, permanent, { macroId });
 
     res.status(204).send();
   }
@@ -333,9 +359,10 @@ export class GraphController {
    */
   async getStats(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
 
     // 서비스 호출 (통계 조회)
-    let stats = await this.graphEmbeddingService.getStats(userId);
+    let stats = await this.graphEmbeddingService.getStats(userId, { macroId });
     if (!stats) {
       stats = { userId, nodes: 0, edges: 0, clusters: 0, status: 'NOT_CREATED', generatedAt: new Date().toISOString() };
     }
@@ -355,9 +382,9 @@ export class GraphController {
    */
   async getSnapshot(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
 
-    // 서비스 호출 (스냅샷 조회)
-    const snapshot : GraphSnapshotDto = await this.graphEmbeddingService.getSnapshotForUser(userId);
+    const snapshot: GraphSnapshotDto = await this.graphEmbeddingService.getSnapshotForUser(userId, macroId);
 
     res.status(200).json(snapshot);
   }
@@ -372,17 +399,103 @@ export class GraphController {
    */
   async saveSnapshot(req: Request, res: Response) {
     const userId = getUserIdFromRequest(req)!;
+    const macroId = this.resolveMacroId(req, userId);
+    const snapshot = req.body.snapshot
+      ? { ...req.body.snapshot, macroId: req.body.snapshot.macroId ?? macroId }
+      : req.body.snapshot;
 
     // 1. 요청 데이터 검증 (Zod)
     const payloadToValidate = {
       userId,
-      snapshot: req.body.snapshot,
+      macroId,
+      snapshot,
     };
-    const { snapshot } = persistGraphPayloadSchema.parse(payloadToValidate);
+    const parsed = persistGraphPayloadSchema.parse(payloadToValidate);
 
     // 2. 서비스 호출 (스냅샷 저장)
-    await this.graphEmbeddingService.persistSnapshot({ userId, snapshot });
+    await this.graphEmbeddingService.persistSnapshot(parsed);
 
     res.status(204).send();
   }
+
+  // --- Graph metadata management (absorbed from GraphViewsController) ---
+
+  /**
+   * 매크로 뷰 목록 조회
+   * [GET] /v1/graph/graphs
+   */
+  listViews = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = getUserIdFromRequest(req);
+      const query = listMacroViewsQuerySchema.parse(req.query);
+      const views = await this.graphManagementService.listMacroViews(userId, query);
+      res.status(200).json({ graphs: views });
+    } catch (e) { next(e); }
+  };
+
+  /**
+   * 매크로 뷰 단건 조회
+   * [GET] /v1/graph/graphs/:macroId
+   */
+  getView = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = getUserIdFromRequest(req);
+      const { macroId } = req.params;
+      const view = await this.graphManagementService.getMacroView(userId, macroId);
+      res.status(200).json({ graph: view });
+    } catch (e) { next(e); }
+  };
+
+  /**
+   * 매크로 뷰 메타데이터 수정
+   * [PATCH] /v1/graph/graphs/:macroId
+   */
+  updateView = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = getUserIdFromRequest(req);
+      const { macroId } = req.params;
+      const patch = updateMacroViewSchema.parse(req.body);
+      const updated = await this.graphManagementService.updateMacroView(userId, macroId, patch);
+      res.status(200).json({ graph: updated });
+    } catch (e) { next(e); }
+  };
+
+  /**
+   * 매크로 뷰 소프트 삭제
+   * [DELETE] /v1/graph/graphs/:macroId
+   */
+  deleteView = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = getUserIdFromRequest(req);
+      const { macroId } = req.params;
+      await this.graphManagementService.softDeleteMacroView(userId, macroId);
+      res.status(204).send();
+    } catch (e) { next(e); }
+  };
+
+  /**
+   * 매크로 뷰 복원
+   * [POST] /v1/graph/graphs/:macroId/restore
+   */
+  restoreView = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = getUserIdFromRequest(req);
+      const { macroId } = req.params;
+      await this.graphManagementService.restoreMacroView(userId, macroId);
+      res.status(200).json({ message: 'Graph restored' });
+    } catch (e) { next(e); }
+  };
+
+  /**
+   * 매크로 뷰 Deep Clone
+   * [POST] /v1/graph/graphs/:macroId/clone
+   */
+  cloneView = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = getUserIdFromRequest(req);
+      const { macroId } = req.params;
+      const cloned = await this.graphManagementService.cloneMacroView(userId, macroId);
+      res.status(201).json({ graph: cloned });
+    } catch (e) { next(e); }
+  };
 }

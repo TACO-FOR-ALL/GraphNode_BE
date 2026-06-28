@@ -31,6 +31,7 @@ export class MicroscopeApi {
    * - `201 Created`: 워크스페이스 생성 및 Ingest 파이프라인 시작 성공
    * - `400 Bad Request`: nodeId 또는 nodeType 누락
    * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `402 Payment Required`: BM/plan limit exceeded while creating the Microscope workspace (`PlanLimitExceededError`, `CreateWorkspacePlanLimitExceededError`). Frontends should show an upgrade CTA instead of retrying automatically.
    * - `502 Bad Gateway`: SQS 전송 또는 데이터베이스 오류
    *
    * @example
@@ -57,6 +58,7 @@ export class MicroscopeApi {
    * - `201 Created`: 워크스페이스 생성 및 Ingest 파이프라인 시작 성공
    * - `400 Bad Request`: nodeId 또는 nodeType 누락
    * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `402 Payment Required`: BM/plan limit exceeded while creating the Microscope workspace (`PlanLimitExceededError`, `CreateWorkspacePlanLimitExceededError`). Frontends should show an upgrade CTA instead of retrying automatically.
    * - `502 Bad Gateway`: SQS 전송 또는 데이터베이스 오류
    *
    * @example
@@ -169,20 +171,38 @@ export class MicroscopeApi {
   }
 
   /**
-   * 특정 노드(Note/Conversation) ID와 연계된 가장 최신의 Microscope 지식 그래프 데이터를 조회합니다.
-   * 
+   * 특정 노드(노트/대화) ID와 연계된 가장 최신의 Microscope 지식 그래프 데이터를 조회합니다.
+   *
    * @remarks
-   * 이 메서드는 현재 FE 개발 편의성을 위해 추가되었습니다. 
-   * 백엔드 및 AI 워커는 내부적으로 여러 노드를 하나의 워크스페이스(Workspace)로 묶어 관리할 수 있는 구조를 갖추고 있으나, 
-   * 현재 FE 시각화 테스트 코드가 "1개 노드 = 1개 Microscope" 매핑을 가정하고 있는 점을 고려하여, 
-   * 해당 노드가 포함된 가장 최근의 워크스페이스 결과물을 단일 객체로 반환하도록 구현되었습니다.
-   * Dual Pipeline 구조에 따라 block 파이프라인 처리가 완료되었다면 `blockView`가 결과에 함께 포함될 수 있습니다.
-   * 
+   * 이 메서드는 현재 FE 개발 편의성을 위해 추가되었습니다.
+   * 해당 노드가 포함된 가장 최근의 워크스페이스 결과물을 단일 객체로 반환합니다.
+   *
+   * **Dual Pipeline**: Ingest 요청 시 block 및 non-block SQS 작업이 각각 발행됩니다.
+   * - Non-block 파이프라인이 완료되면 `nodes`, `edges` 필드가 채워집니다.
+   * - Block 파이프라인이 완료되면 `blockView` 필드가 추가됩니다.
+   * - 두 파이프라인이 모두 완료되어야 문서의 `status`가 `COMPLETED`가 됩니다.
+   *
+   * **빈 그래프 vs 404 계약**:
+   * - `404 Not Found`: 해당 nodeId로 생성된 워크스페이스 자체가 존재하지 않습니다.
+   * - `200 OK` (빈 데이터): 워크스페이스는 존재하지만 아직 그래프 데이터가 준비되지 않았습니다.
+   *   이 경우 `nodes: []`, `edges: []`, `blockView: undefined`가 반환될 수 있습니다.
+   *
    * @param nodeId 조회할 대상 노드(노트/대화)의 고유 ID
-   * @returns {Promise<HttpResponse<MicroscopeGraphData>>} 최신 그래프 데이터
+   * @returns {Promise<HttpResponse<MicroscopeGraphData>>} 최신 그래프 데이터 (노드·엣지·블록뷰 포함)
+   *
+   * **응답 상태 코드:**
+   * - `200 OK`: 그래프 데이터 조회 성공. 파이프라인 진행 중인 경우 빈 nodes/edges가 반환될 수 있음
+   * - `401 Unauthorized`: 인증되지 않은 요청 (세션 없음 또는 만료)
+   * - `404 Not Found`: 해당 nodeId로 생성된 워크스페이스가 존재하지 않음
+   * - `502 Bad Gateway`: 데이터베이스 오류
+   *
    * @example
    * const res = await sdk.microscope.getLatestGraphByNodeId('note_123');
    * const { nodes, edges, blockView } = res.data;
+   * // blockView는 block 파이프라인 완료 후 제공됨
+   * if (blockView) {
+   *   console.log(`블록 수: ${blockView.blocks.length}`);
+   * }
    */
   async getLatestGraphByNodeId(nodeId: string): Promise<HttpResponse<MicroscopeGraphData>> {
     return this.rb.path(`/nodes/${nodeId}/latest-graph`).get<MicroscopeGraphData>();
@@ -204,6 +224,7 @@ export class MicroscopeApi {
    * - `201 Created`: 워크스페이스 생성 및 Ingest 파이프라인 시작 성공
    * - `400 Bad Request`: sources 배열이 비어있거나 nodeId/nodeType 누락
    * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `402 Payment Required`: BM/plan limit exceeded while creating the Microscope workspace (`PlanLimitExceededError`, `CreateWorkspacePlanLimitExceededError`). Frontends should show an upgrade CTA instead of retrying automatically.
    * - `502 Bad Gateway`: SQS 전송 또는 데이터베이스 오류
    *
    * @example
@@ -224,6 +245,47 @@ export class MicroscopeApi {
       sources,
       schemaName,
     });
+  }
+
+  /**
+   * 기존 워크스페이스에 raw file(PDF, DOCX, PPTX 등)을 업로드하고 Microscope Ingest 파이프라인을 시작합니다.
+   *
+   * @remarks
+   * 내부적으로 `multipart/form-data` 형식으로 서버에 전송합니다.
+   *
+   * @param microscopeWorkspaceId 파일들을 추가할 워크스페이스 ID
+   * @param files 업로드할 원시 파일 객체 배열 (`File[]` 또는 `Blob[]`)
+   * @param schemaName 추출에 사용할 커스텀 엔티티 스키마 명칭 (옵션)
+   * @param blockMode 블록 파이프라인 처리 여부 (옵션)
+   * @returns {Promise<HttpResponse<{ message: string; workspace: MicroscopeWorkspace }>>} 진행 메시지와 갱신된 워크스페이스 정보
+   *
+   * **응답 상태 코드:**
+   * - `202 Accepted`: 업로드 성공 및 파이프라인 큐 진입
+   * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `402 Payment Required`: 워크스페이스 생성/처리 시 플랜 한도 초과
+   * - `502 Bad Gateway`: 서버측 오류
+   *
+   * @example
+   * const files = fileInput.files;
+   * const res = await client.microscope.ingestDocuments('ws_123', Array.from(files));
+   */
+  async ingestDocuments(
+    microscopeWorkspaceId: string,
+    files: (File | Blob)[],
+    schemaName?: string,
+    blockMode?: boolean
+  ): Promise<HttpResponse<{ message: string; workspace: MicroscopeWorkspace }>> {
+    const formData = new FormData();
+    files.forEach(file => {
+      formData.append('files', file);
+    });
+    if (schemaName) {
+      formData.append('schemaName', schemaName);
+    }
+    if (blockMode !== undefined) {
+      formData.append('blockMode', blockMode.toString());
+    }
+    return this.rb.path(`/${microscopeWorkspaceId}/documents`).post<{ message: string; workspace: MicroscopeWorkspace }>(formData);
   }
 
   /**

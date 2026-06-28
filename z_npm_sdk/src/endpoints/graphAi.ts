@@ -43,6 +43,7 @@ export class GraphAiApi {
    * - `202 Accepted`: 그래프 생성 작업이 큐에 등록됨
    * - `200 OK`: 사용자의 대화 또는 노트 데이터가 없어 작업을 생성하지 않고 건너뜀 (`status: 'skipped'`)
    * - `401 Unauthorized`: 인증되지 않은 요청
+   * - `402 Payment Required`: BM/plan limit exceeded (`PlanLimitExceededError`, `GenerateGraphPlanLimitExceededError`). Frontends should show an upgrade CTA instead of retrying automatically.
    * - `409 Conflict`: 동일한 작업이 이미 진행 중임
    *
    * @example
@@ -114,8 +115,8 @@ export class GraphAiApi {
    * // Output: { message: "Task accepted", taskId: "summary_123", status: "queued" }
    * ```
    */
-  async requestSummary(): Promise<HttpResponse<GraphGenerationResponseDto>> {
-    return this.rb.path('/summary').post();
+  async requestSummary(macroId?: string): Promise<HttpResponse<GraphGenerationResponseDto>> {
+    return this.rb.path('/summary').query(macroId ? { macroId } : undefined).post();
   }
 
   /**
@@ -139,8 +140,8 @@ export class GraphAiApi {
    * console.log(response.data.overview.total_nodes);
    * ```
    */
-  async getSummary(): Promise<HttpResponse<GraphSummaryDto>> {
-    return this.rb.path('/summary').get();
+  async getSummary(macroId?: string): Promise<HttpResponse<GraphSummaryDto>> {
+    return this.rb.path('/summary').query(macroId ? { macroId } : undefined).get();
   }
 
   /**
@@ -172,35 +173,45 @@ export class GraphAiApi {
    * }
    * ```
    */
-  async addNode(): Promise<HttpResponse<GraphGenerationResponseDto>> {
-    return this.rb.path(`/add-node`).post();
+  async addNode(macroId?: string): Promise<HttpResponse<GraphGenerationResponseDto>> {
+    return this.rb.path(`/add-node`).query(macroId ? { macroId } : undefined).post();
   }
 
   /**
-   * 사용자의 전체 지식 그래프 데이터를 삭제합니다.
-   * 
-   * @remarks
-   * **주의:** 관련된 모든 노드, 엣지, 서브클러스터, 통계 등을 일괄 삭제합니다.
+   * @deprecated 이 메서드는 레거시 1:1 그래프(`macroId === userId`)만 Hard Delete하며, soft delete 및 restore를 지원하지 않습니다.
+   * 1:N 특정 뷰를 Soft/Hard Delete하려면 `client.graph.deleteGraph(macroId)` 를 사용하세요.
    *
-   * @param options - 옵션 (`permanent`가 true이면 영구 삭제, 아니면 소프트 삭제)
+   * 사용자의 레거시 1:1 지식 그래프를 영구(Hard) 삭제합니다.
+   *
+   * @remarks
+   * **주의:** 항상 Hard Delete로만 동작합니다. `permanent` 옵션은 무시됩니다.
+   * 복구가 불가능합니다. 1:N 뷰 관리는 `client.graph.*` API를 사용하세요.
+   *
+   * @param options - 옵션 (`permanent`, `macroId` 모두 무시됨 — 레거시 Hard Delete 전용)
    * @example
-   * await sdk.graphAi.deleteGraph({ permanent: true });
+   * // Legacy 1:1 그래프 하드 삭제 (복구 불가)
+   * await sdk.graphAi.deleteGraph();
+   *
+   * // 1:N 뷰 삭제는 아래 방식 사용:
+   * await client.graph.deleteGraph('view-id-to-delete');
    */
-  async deleteGraph(options?: { permanent?: boolean }): Promise<HttpResponse<void>> {
-    return this.rb.query(options?.permanent ? { permanent: true } : undefined).delete<void>();
+  async deleteGraph(options?: { permanent?: boolean; macroId?: string }): Promise<HttpResponse<void>> {
+    const q: Record<string, unknown> = {};
+    if (options?.permanent) q['permanent'] = true;
+    if (options?.macroId) q['macroId'] = options.macroId;
+    return this.rb.query(Object.keys(q).length > 0 ? q : undefined).delete<void>();
   }
 
   /**
-   * 휴지통에 있는(소프트 삭제된) 사용자의 전체 지식 그래프 데이터를 복원합니다.
-   * 
-   * @remarks
-   * 복원 시 연관된 클러스터 및 엣지 관계도 함께 복구됩니다.
-   * 
+   * @deprecated 이 메서드는 레거시 1:1 그래프 복원을 지원합니다.
+   * 1:N 뷰를 복원하려면 `client.graph.restoreGraph(macroId)` 를 사용하세요.
+   *
    * @example
-   * await client.graphAi.restoreGraph();
+   * // 1:N 뷰 복원은 아래 방식 사용:
+   * await client.graph.restoreGraph('view-id-to-restore');
    */
-  async restoreGraph(): Promise<HttpResponse<void>> {
-    return this.rb.path('/restore').post<void>();
+  async restoreGraph(macroId?: string): Promise<HttpResponse<void>> {
+    return this.rb.path('/restore').query(macroId ? { macroId } : undefined).post<void>();
   }
 
   /**
@@ -213,8 +224,11 @@ export class GraphAiApi {
    * @example
    * await sdk.graphAi.deleteSummary({ permanent: true });
    */
-  async deleteSummary(options?: { permanent?: boolean }): Promise<HttpResponse<void>> {
-    return this.rb.path('/summary').query(options?.permanent ? { permanent: true } : undefined).delete<void>();
+  async deleteSummary(options?: { permanent?: boolean; macroId?: string }): Promise<HttpResponse<void>> {
+    const q: Record<string, unknown> = {};
+    if (options?.permanent) q['permanent'] = true;
+    if (options?.macroId) q['macroId'] = options.macroId;
+    return this.rb.path('/summary').query(Object.keys(q).length > 0 ? q : undefined).delete<void>();
   }
 
   /**
@@ -223,7 +237,7 @@ export class GraphAiApi {
    * @example
    * await client.graphAi.restoreSummary();
    */
-  async restoreSummary(): Promise<HttpResponse<void>> {
-    return this.rb.path('/summary/restore').post<void>();
+  async restoreSummary(macroId?: string): Promise<HttpResponse<void>> {
+    return this.rb.path('/summary/restore').query(macroId ? { macroId } : undefined).post<void>();
   }
 }
