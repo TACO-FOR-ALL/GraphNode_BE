@@ -16,6 +16,7 @@ import { getCorrelationId } from '../../shared/context/requestStore';
 import { logger } from '../../shared/utils/logger';
 import { UpstreamTimeout } from '../../shared/errors/domain';
 import { mapFileServiceError } from './mapFileServiceError';
+import { parseFileServiceProblemDetail } from './fileServiceLog';
 
 export interface FileServiceClientConfig {
   baseURL: string;
@@ -47,20 +48,70 @@ export class FileServiceClient implements FileServicePort {
     return h;
   }
 
-  private async request<T>(fn: () => Promise<T>): Promise<T> {
+  private async request<T>(
+    path: string,
+    userId: string | undefined,
+    fn: () => Promise<T>,
+    opts?: { quietSuccess?: boolean }
+  ): Promise<T> {
+    const correlationId = getCorrelationId();
+    const started = Date.now();
+
     try {
-      return await fn();
+      const result = await fn();
+      if (!opts?.quietSuccess) {
+        logger.info(
+          {
+            event: 'be.fileservice.request.success',
+            correlationId,
+            userId,
+            path,
+            durationMs: Date.now() - started,
+          },
+          'File Service request succeeded'
+        );
+      }
+      return result;
     } catch (err) {
       const ax = err as AxiosError;
+      const durationMs = Date.now() - started;
+
       if (ax.code === 'ECONNABORTED' || ax.code === 'ETIMEDOUT') {
-        throw new UpstreamTimeout('File Service timeout', { service: 'FileService' });
+        logger.error(
+          {
+            event: 'be.fileservice.request.timeout',
+            correlationId,
+            userId,
+            path,
+            durationMs,
+            axiosCode: ax.code,
+          },
+          'File Service request timed out'
+        );
+        throw new UpstreamTimeout('File Service timeout', { service: 'FileService', path });
       }
+
+      const upstreamStatus = ax.response?.status;
+      const upstreamBody = ax.response?.data;
+      const upstreamDetail = parseFileServiceProblemDetail(upstreamBody, ax.message);
+      const upstreamCode =
+        upstreamBody && typeof upstreamBody === 'object'
+          ? (upstreamBody as { code?: string }).code
+          : undefined;
+
       const mapped = mapFileServiceError(ax);
       logger.error(
         {
-          status: ax.response?.status,
-          code: mapped.code,
-          detail: mapped.message,
+          event: 'be.fileservice.request.failed',
+          correlationId,
+          userId,
+          path,
+          durationMs,
+          upstreamStatus,
+          upstreamCode,
+          upstreamDetail,
+          errorCode: mapped.code,
+          axiosCode: ax.code,
           service: 'FileService',
         },
         'File Service request failed'
@@ -70,7 +121,7 @@ export class FileServiceClient implements FileServicePort {
   }
 
   async listProviders(userId: string): Promise<ImportProviderDescriptor[]> {
-    const data = await this.request(async () => {
+    const data = await this.request('/internal/import-providers', userId, async () => {
       const res = await this.client.get<{ providers: ImportProviderDescriptor[] }>(
         '/internal/import-providers',
         { headers: this.headers(userId) }
@@ -86,7 +137,7 @@ export class FileServiceClient implements FileServicePort {
     originalName: string,
     sizeBytes: number
   ): Promise<ImportUploadInitDto> {
-    return this.request(async () => {
+    return this.request('/internal/imports/init', userId, async () => {
       const res = await this.client.post<ImportUploadInitDto>(
         '/internal/imports/init',
         { provider, originalName, sizeBytes },
@@ -97,9 +148,10 @@ export class FileServiceClient implements FileServicePort {
   }
 
   async startImport(userId: string, jobId: string): Promise<{ jobId: string; status: string }> {
-    return this.request(async () => {
+    const path = `/internal/imports/${jobId}/start`;
+    return this.request(path, userId, async () => {
       const res = await this.client.post<{ jobId: string; status: string }>(
-        `/internal/imports/${jobId}/start`,
+        path,
         {},
         { headers: this.headers(userId) }
       );
@@ -108,17 +160,19 @@ export class FileServiceClient implements FileServicePort {
   }
 
   async getJob(userId: string, jobId: string): Promise<ImportJobStatusDto> {
-    return this.request(async () => {
-      const res = await this.client.get<ImportJobStatusDto>(`/internal/imports/${jobId}`, {
+    const path = `/internal/imports/${jobId}`;
+    return this.request(path, userId, async () => {
+      const res = await this.client.get<ImportJobStatusDto>(path, {
         headers: this.headers(userId),
       });
       return res.data;
-    });
+    }, { quietSuccess: true });
   }
 
   async getResult(userId: string, jobId: string): Promise<ImportCompleteDto> {
-    return this.request(async () => {
-      const res = await this.client.get<ImportCompleteDto>(`/internal/imports/${jobId}/result`, {
+    const path = `/internal/imports/${jobId}/result`;
+    return this.request(path, userId, async () => {
+      const res = await this.client.get<ImportCompleteDto>(path, {
         headers: this.headers(userId),
       });
       return res.data;
@@ -126,9 +180,10 @@ export class FileServiceClient implements FileServicePort {
   }
 
   async claimFinalize(userId: string, jobId: string): Promise<ImportFinalizeClaimDto> {
-    return this.request(async () => {
+    const path = `/internal/imports/${jobId}/finalize/claim`;
+    return this.request(path, userId, async () => {
       const res = await this.client.post<ImportFinalizeClaimDto>(
-        `/internal/imports/${jobId}/finalize/claim`,
+        path,
         {},
         { headers: this.headers(userId) }
       );
@@ -137,30 +192,23 @@ export class FileServiceClient implements FileServicePort {
   }
 
   async completeFinalize(userId: string, jobId: string, conversationIds: string[]): Promise<void> {
-    await this.request(async () => {
-      await this.client.post(
-        `/internal/imports/${jobId}/finalize/complete`,
-        { conversationIds },
-        { headers: this.headers(userId) }
-      );
+    const path = `/internal/imports/${jobId}/finalize/complete`;
+    await this.request(path, userId, async () => {
+      await this.client.post(path, { conversationIds }, { headers: this.headers(userId) });
     });
   }
 
   async failFinalize(userId: string, jobId: string, error: string): Promise<void> {
-    await this.request(async () => {
-      await this.client.post(
-        `/internal/imports/${jobId}/finalize/fail`,
-        { error },
-        { headers: this.headers(userId) }
-      );
+    const path = `/internal/imports/${jobId}/finalize/fail`;
+    await this.request(path, userId, async () => {
+      await this.client.post(path, { error }, { headers: this.headers(userId) });
     });
   }
 
   async cancelJob(userId: string, jobId: string): Promise<void> {
-    await this.request(async () => {
-      await this.client.delete(`/internal/imports/${jobId}`, {
-        headers: this.headers(userId),
-      });
+    const path = `/internal/imports/${jobId}`;
+    await this.request(path, userId, async () => {
+      await this.client.delete(path, { headers: this.headers(userId) });
     });
   }
 
@@ -169,8 +217,9 @@ export class FileServiceClient implements FileServicePort {
     fileId: string,
     options?: { disposition?: 'inline' | 'attachment' }
   ): Promise<PresignedFileAccessDto> {
-    return this.request(async () => {
-      const res = await this.client.get<PresignedFileAccessDto>(`/internal/files/${fileId}/presign`, {
+    const path = `/internal/files/${fileId}/presign`;
+    return this.request(path, userId, async () => {
+      const res = await this.client.get<PresignedFileAccessDto>(path, {
         headers: this.headers(userId),
         params: options?.disposition ? { disposition: options.disposition } : undefined,
       });
