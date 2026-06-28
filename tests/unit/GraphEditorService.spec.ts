@@ -302,6 +302,27 @@ describe('GraphEditorService', () => {
         service.createNode('', { label: 'X', clusterId: 'c1' })
       ).rejects.toThrow(ValidationError);
     });
+
+    // AC-3: createNode에서 nodeTitle 저장
+    it('AC-3: nodeTitle을 제공하면 노드에 저장된다', async () => {
+      await repo.upsertCluster(makeCluster('c1'));
+
+      const result = await service.createNode(USER, {
+        label: 'My Node',
+        clusterId: 'c1',
+        nodeTitle: '나의 첫 번째 노드',
+      });
+
+      expect(result.node.nodeTitle).toBe('나의 첫 번째 노드');
+    });
+
+    it('AC-3: nodeTitle을 생략하면 undefined로 저장된다', async () => {
+      await repo.upsertCluster(makeCluster('c1'));
+
+      const result = await service.createNode(USER, { label: 'My Node', clusterId: 'c1' });
+
+      expect(result.node.nodeTitle).toBeUndefined();
+    });
   });
 
   // ── updateNode ─────────────────────────────────────────────────────────────
@@ -319,6 +340,27 @@ describe('GraphEditorService', () => {
 
     it('존재하지 않는 노드이면 NotFoundError를 던진다', async () => {
       await expect(service.updateNode(USER, 999, { label: 'X' })).rejects.toThrow(NotFoundError);
+    });
+
+    // AC-4: updateNode에서 nodeTitle 수정
+    it('AC-4: nodeTitle을 제공하면 기존 값이 덮어씌워진다', async () => {
+      await repo.upsertCluster(makeCluster('c1'));
+      await repo.upsertNode({ ...makeNode(1, 'c1'), nodeTitle: '원래 제목' });
+
+      await service.updateNode(USER, 1, { nodeTitle: '새로운 제목' });
+
+      const updated = await repo.findNode(USER, 1);
+      expect(updated?.nodeTitle).toBe('새로운 제목');
+    });
+
+    it('AC-4: nodeTitle을 생략하면 기존 값이 유지된다', async () => {
+      await repo.upsertCluster(makeCluster('c1'));
+      await repo.upsertNode({ ...makeNode(1, 'c1'), nodeTitle: '원래 제목' });
+
+      await service.updateNode(USER, 1, { label: 'Changed' });
+
+      const updated = await repo.findNode(USER, 1);
+      expect(updated?.nodeTitle).toBe('원래 제목');
     });
   });
 
@@ -416,6 +458,18 @@ describe('GraphEditorService', () => {
       const result = await service.createEdge(USER, { source: 1, target: 3 });
       expect(result.edge.intraCluster).toBe(false);
     });
+
+    // AC-1: weight는 항상 1.0으로 고정
+    it('AC-1: weight를 제공하지 않아도 edge.weight는 1.0이다', async () => {
+      const result = await service.createEdge(USER, { source: 1, target: 2 });
+      expect(result.edge.weight).toBe(1.0);
+    });
+
+    // AC-1 + AC-5: weight를 명시적으로 전달해도 1.0으로 고정됨
+    it('AC-1/AC-5: weight를 전달해도 서버에서 1.0으로 고정한다', async () => {
+      const result = await service.createEdge(USER, { source: 1, target: 2, weight: 0.3 });
+      expect(result.edge.weight).toBe(1.0);
+    });
   });
 
   // ── updateEdge ─────────────────────────────────────────────────────────────
@@ -440,6 +494,16 @@ describe('GraphEditorService', () => {
 
     it('존재하지 않는 엣지이면 NotFoundError를 던진다', async () => {
       await expect(service.updateEdge(USER, 'ghost', { weight: 0.1 })).rejects.toThrow(NotFoundError);
+    });
+
+    // AC-2: updateEdge는 weight 변경을 허용한다 (createEdge의 고정 정책과 다름)
+    it('AC-2: updateEdge에서 weight를 변경할 수 있다', async () => {
+      await repo.upsertEdge(makeEdge('e2', 1, 2));
+
+      await service.updateEdge(USER, 'e2', { weight: 0.42 });
+
+      const e = await repo.findEdge(USER, 'e2');
+      expect(e?.weight).toBe(0.42);
     });
   });
 

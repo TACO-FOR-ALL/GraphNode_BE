@@ -1,6 +1,7 @@
 import type { ConversationService } from '../../core/services/ConversationService';
 import type { NoteService } from '../../core/services/NoteService';
 import type { UserFileService } from '../../core/services/UserFileService';
+import type { NotionCacheRepository } from '../../core/ports/NotionCacheRepository';
 import type { MacroFileType } from '../../core/types/neo4j/macro.neo4j';
 import type { UserFileDoc } from '../../core/types/persistence/userFile.persistence';
 import { normalizeAiOrigId } from '../../shared/utils/aiNodeId';
@@ -12,10 +13,11 @@ import { normalizeAiOrigId } from '../../shared/utils/aiNodeId';
  * - conversation 문서가 존재하면 `chat`
  * - note 문서가 존재하면 `markdown`
  * - user_files 문서가 존재하면 `file`
+ * - notion_page_caches 문서가 존재하면 `notion`
  *
  * 동일 origId에 대해 둘 이상이 존재하면 모호하므로 예외를 던집니다.
  */
-export type ResolvedGraphSourceType = 'chat' | 'markdown' | 'file';
+export type ResolvedGraphSourceType = 'chat' | 'markdown' | 'file' | 'notion';
 
 export interface SourceTypeResolverDeps {
   /** 대화(conversation) 존재 여부 조회 */
@@ -24,6 +26,8 @@ export interface SourceTypeResolverDeps {
   noteService: NoteService;
   /** 사용자 라이브러리 파일(user_files) 존재 여부 조회 */
   userFileService: UserFileService;
+  /** Notion 페이지 캐시 조회. notion origId 판별에 사용됩니다. */
+  notionCacheRepo: NotionCacheRepository;
 }
 
 /**
@@ -159,6 +163,13 @@ export async function resolveSourceTypeByOrigId(
         };
       }
     }
+  }
+
+  // Notion 캐시 조회: AI가 `src\d+_<NotionPageUUID>` 형식으로 전달한 origId는
+  // normalizeAiOrigId 후 Notion page UUID (하이픈 포함 36자)가 됩니다.
+  const notionCacheDoc = await deps.notionCacheRepo.findByPageId(normalizedOrigId, userId);
+  if (notionCacheDoc) {
+    return { origId, normalizedOrigId, sourceType: 'notion' };
   }
 
   return { origId, normalizedOrigId, sourceType: null };

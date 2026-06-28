@@ -116,12 +116,16 @@ export class MicroscopeApi {
    * @remarks
    * `listWorkspaces`나 `getWorkspace`와 달리 이 메서드는 화면 가운데 그려질 메인 시각화용 
    * 그래프 데이터를 가져오기 위한 목적으로 사용됩니다.
+   * Block 파이프라인 처리가 완료된 경우 `blockView` 필드가 반환 객체에 포함됩니다.
    * 
    * @param microscopeWorkspaceId - 조회할 워크스페이스 ID
    * @returns {Promise<HttpResponse<MicroscopeGraphData[]>>} 실제 그래프 데이터 목록
    * @example
    * const graphData = await client.microscope.getWorkspaceGraph('ws_123');
-   * console.log(graphData[0].nodes.length);
+   * const { nodes, edges, blockView } = graphData.data[0];
+   * if (blockView) {
+   *   console.log(`블록 개수: ${blockView.blocks.length}`);
+   * }
    */
   async getWorkspaceGraph(microscopeWorkspaceId: string): Promise<HttpResponse<MicroscopeGraphData[]>> {
     return this.rb.path(`/${microscopeWorkspaceId}/graph`).get<MicroscopeGraphData[]>();
@@ -172,12 +176,13 @@ export class MicroscopeApi {
    * 백엔드 및 AI 워커는 내부적으로 여러 노드를 하나의 워크스페이스(Workspace)로 묶어 관리할 수 있는 구조를 갖추고 있으나, 
    * 현재 FE 시각화 테스트 코드가 "1개 노드 = 1개 Microscope" 매핑을 가정하고 있는 점을 고려하여, 
    * 해당 노드가 포함된 가장 최근의 워크스페이스 결과물을 단일 객체로 반환하도록 구현되었습니다.
+   * Dual Pipeline 구조에 따라 block 파이프라인 처리가 완료되었다면 `blockView`가 결과에 함께 포함될 수 있습니다.
    * 
    * @param nodeId 조회할 대상 노드(노트/대화)의 고유 ID
    * @returns {Promise<HttpResponse<MicroscopeGraphData>>} 최신 그래프 데이터
    * @example
    * const res = await sdk.microscope.getLatestGraphByNodeId('note_123');
-   * const { nodes, edges } = res.data;
+   * const { nodes, edges, blockView } = res.data;
    */
   async getLatestGraphByNodeId(nodeId: string): Promise<HttpResponse<MicroscopeGraphData>> {
     return this.rb.path(`/nodes/${nodeId}/latest-graph`).get<MicroscopeGraphData>();

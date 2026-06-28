@@ -48,6 +48,11 @@
         "numMessages": {
           "type": "integer",
           "minimum": 0
+        },
+        "nodeTitle": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "노드의 실제 제목. label(사용자 지정 tag)과는 별개의 필드."
         }
       }
     },
@@ -80,6 +85,11 @@
         "numMessages": {
           "type": "integer",
           "minimum": 0
+        },
+        "nodeTitle": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "수정할 노드 제목. 제공 시 기존 nodeTitle을 덮어씀."
         }
       }
     },
